@@ -1,0 +1,7 @@
+[package]
+name = "zbus"
+version = "0.1.0"
+authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
+edition = "2018"
+
+[dependencies]
