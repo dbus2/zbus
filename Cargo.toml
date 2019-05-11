@@ -5,3 +5,5 @@ authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
 edition = "2018"
 
 [dependencies]
+nix = "0.13.0"
+byteorder = "1.3.1"
