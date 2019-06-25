@@ -22,7 +22,7 @@ Experimental. You've been warned!
 
 # License
 
-MIT license ([LICENSE-MIT](LICENSE-MIT)
+MIT license [LICENSE-MIT](LICENSE-MIT)
 
 # Dependencies
 
