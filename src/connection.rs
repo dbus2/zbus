@@ -140,7 +140,6 @@ impl Connection {
                     *f == message::MessageField::ReplySerial
                         && v.get_u32().unwrap_or(std::u32::MAX) == serial
                 }) {
-                    // TODO: Get string from reply body
                     if let Some((field, value)) = all_fields.iter().find(|element| {
                         let (f, v) = element;
 
