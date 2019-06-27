@@ -8,8 +8,9 @@ use crate::message;
 use crate::variant;
 
 pub struct Connection {
+    pub server_guid: String,
+
     socket: UnixStream,
-    server_guid: String,
     // Serial number for next outgoing message
     serial: u32,
 }
