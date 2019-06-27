@@ -109,7 +109,7 @@ impl Connection {
             // FIXME: We need to read incoming messages in a separate thread and maintain a queue
 
             let mut buf = [0; message::PRIMARY_HEADER_SIZE];
-            let bytes_read = connection
+            connection
                 .socket
                 .read(&mut buf[..])
                 .map_err(|e| ConnectionError::IO(e))?;
@@ -140,7 +140,7 @@ impl Connection {
                     *f == message::MessageField::ReplySerial
                         && v.get_u32().unwrap_or(std::u32::MAX) == serial
                 }) {
-                    if let Some((field, value)) = all_fields.iter().find(|element| {
+                    if let Some(_) = all_fields.iter().find(|element| {
                         let (f, v) = element;
 
                         *f == message::MessageField::Signature
