@@ -115,6 +115,7 @@ impl fmt::Display for MessageError {
     }
 }
 
+#[derive(Debug)]
 pub struct Message(Vec<u8>);
 
 impl Message {
