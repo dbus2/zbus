@@ -151,22 +151,60 @@ impl Connection {
         };
 
         // Now that daemon has approved us, we must send a hello as per specs
-        let serial = connection.next_serial();
-        let m = message::Message::method(
+        let reply = connection.call_method(
             Some("org.freedesktop.DBus"),
             "/org/freedesktop/DBus",
             Some("org.freedesktop.DBus"),
             "Hello",
             "",
             &[],
-        )
-        .map_err(|e| ConnectionError::Message(e))?
-        .set_serial(serial);
+        )?;
 
-        // FIXME: Separate out message sending & reply receiving/parsing into separate method
+        let all_fields = reply
+            .get_fields()
+            .map_err(|e| ConnectionError::Message(e))?;
+        if all_fields
+            .iter()
+            .find(|element| {
+                let (f, v) = element;
 
-        connection
-            .socket
+                *f == message::MessageField::Signature
+                    && v.get_string().unwrap_or(String::from("")) == "s"
+            })
+            .is_some()
+        {
+            let bus_name = variant::Variant::from_data(
+                &reply.get_body().map_err(|e| ConnectionError::Message(e))?,
+                "s",
+            )
+            .map_err(|e| ConnectionError::Variant(e))?
+            .get_string()
+            .map_err(|e| ConnectionError::Variant(e))?;
+
+            println!("bus name: {}", bus_name);
+        } else {
+            return Err(ConnectionError::InvalidReply);
+        }
+
+        Ok(connection)
+    }
+
+    pub fn call_method(
+        &mut self,
+        destination: Option<&str>,
+        path: &str,
+        iface: Option<&str>,
+        method_name: &str,
+        body_sig: &str,
+        body: &[u8],
+    ) -> Result<message::Message, ConnectionError> {
+        println!("Starting: {}", method_name);
+        let serial = self.next_serial();
+        let m = message::Message::method(destination, path, iface, method_name, body_sig, body)
+            .map_err(|e| ConnectionError::Message(e))?
+            .set_serial(serial);
+
+        self.socket
             .write(m.as_bytes())
             .map_err(|e| ConnectionError::IO(e))?;
 
@@ -174,8 +212,7 @@ impl Connection {
             // FIXME: We need to read incoming messages in a separate thread and maintain a queue
 
             let mut buf = [0; message::PRIMARY_HEADER_SIZE];
-            connection
-                .socket
+            self.socket
                 .read(&mut buf[..])
                 .map_err(|e| ConnectionError::IO(e))?;
 
@@ -186,7 +223,7 @@ impl Connection {
                 return Err(ConnectionError::Handshake);
             }
             let mut buf = vec![0; bytes_left as usize];
-            let bytes_read = connection
+            let bytes_read = self
                 .socket
                 .read(&mut buf[..])
                 .map_err(|e| ConnectionError::IO(e))?;
@@ -194,44 +231,34 @@ impl Connection {
                 .add_bytes(&buf[0..bytes_read])
                 .map_err(|e| ConnectionError::Message(e))?;
 
-            if incoming.message_type() == message::MessageType::MethodReturn {
+            if incoming.message_type() == message::MessageType::MethodReturn
+                || incoming.message_type() == message::MessageType::Error
+            {
                 let all_fields = incoming
                     .get_fields()
                     .map_err(|e| ConnectionError::Message(e))?;
 
-                if let Some(_) = all_fields.iter().find(|element| {
-                    let (f, v) = element;
-
-                    *f == message::MessageField::ReplySerial
-                        && v.get_u32().unwrap_or(std::u32::MAX) == serial
-                }) {
-                    if let Some(_) = all_fields.iter().find(|element| {
+                if all_fields
+                    .iter()
+                    .find(|element| {
                         let (f, v) = element;
 
-                        *f == message::MessageField::Signature
-                            && v.get_string().unwrap_or(String::from("")) == "s"
-                    }) {
-                        let bus_name = variant::Variant::from_data(
-                            &incoming
-                                .get_body()
-                                .map_err(|e| ConnectionError::Message(e))?,
-                            "s",
-                        )
-                        .map_err(|e| ConnectionError::Variant(e))?
-                        .get_string()
-                        .map_err(|e| ConnectionError::Variant(e))?;
-
-                        println!("bus name: {}", bus_name);
-                    } else {
-                        return Err(ConnectionError::InvalidReply);
+                        *f == message::MessageField::ReplySerial
+                            && v.get_u32().unwrap_or(std::u32::MAX) == serial
+                    })
+                    .is_some()
+                {
+                    match incoming.message_type() {
+                        message::MessageType::Error => return Err(incoming.into()),
+                        message::MessageType::MethodReturn => {
+                            println!("Returing from: {}", method_name);
+                            return Ok(incoming);
+                        }
+                        _ => (),
                     }
-
-                    break;
                 }
             }
         }
-
-        Ok(connection)
     }
 
     fn next_serial(&mut self) -> u32 {
