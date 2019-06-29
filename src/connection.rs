@@ -70,11 +70,10 @@ impl From<message::Message> for ConnectionError {
         match message.get_fields() {
             Ok(all_fields) => {
                 // First, get the error name
-                let name = match all_fields.iter().find(|element| {
-                    let (f, _) = element;
-
-                    *f == message::MessageField::ErrorName
-                }) {
+                let name = match all_fields
+                    .iter()
+                    .find(|(f, _)| *f == message::MessageField::ErrorName)
+                {
                     Some((_, v)) => match v.get_string() {
                         Ok(s) => s,
                         Err(e) => return ConnectionError::Variant(e),
@@ -85,9 +84,7 @@ impl From<message::Message> for ConnectionError {
                 // Then, try to get the optional description string
                 if all_fields
                     .iter()
-                    .find(|element| {
-                        let (f, v) = element;
-
+                    .find(|(f, v)| {
                         *f == message::MessageField::Signature
                             && v.get_string().unwrap_or(String::from("")) == "s"
                     })
@@ -165,9 +162,7 @@ impl Connection {
             .map_err(|e| ConnectionError::Message(e))?;
         if all_fields
             .iter()
-            .find(|element| {
-                let (f, v) = element;
-
+            .find(|(f, v)| {
                 *f == message::MessageField::Signature
                     && v.get_string().unwrap_or(String::from("")) == "s"
             })
@@ -240,9 +235,7 @@ impl Connection {
 
                 if all_fields
                     .iter()
-                    .find(|element| {
-                        let (f, v) = element;
-
+                    .find(|(f, v)| {
                         *f == message::MessageField::ReplySerial
                             && v.get_u32().unwrap_or(std::u32::MAX) == serial
                     })

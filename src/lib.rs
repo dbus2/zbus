@@ -47,9 +47,7 @@ mod tests {
         let all_fields = reply.get_fields().unwrap();
         all_fields
             .iter()
-            .find(|element| {
-                let (f, v) = element;
-
+            .find(|(f, v)| {
                 *f == crate::message::MessageField::Signature
                     && v.get_string().unwrap_or(String::from("")) == "s"
             })
