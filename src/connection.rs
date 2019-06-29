@@ -22,6 +22,9 @@ pub enum ConnectionError {
     Variant(variant::VariantError),
     Handshake,
     InvalidReply,
+    // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds anything more than a
+    // string description.
+    MethodError(String, Option<String>),
 }
 
 impl error::Error for ConnectionError {
@@ -32,6 +35,7 @@ impl error::Error for ConnectionError {
             ConnectionError::Message(e) => Some(e),
             ConnectionError::Variant(e) => Some(e),
             ConnectionError::InvalidReply => None,
+            ConnectionError::MethodError(_, _) => None,
         }
     }
 }
@@ -44,6 +48,66 @@ impl fmt::Display for ConnectionError {
             ConnectionError::Message(e) => write!(f, "Message creation error: {}", e),
             ConnectionError::Variant(e) => write!(f, "{}", e),
             ConnectionError::InvalidReply => write!(f, "Invalid D-Bus method reply"),
+            ConnectionError::MethodError(name, detail) => write!(
+                f,
+                "{}: {}",
+                name,
+                detail.as_ref().map(|s| s.as_str()).unwrap_or("no details")
+            ),
+        }
+    }
+}
+
+// For messages that are D-Bus error returns
+impl From<message::Message> for ConnectionError {
+    fn from(message: message::Message) -> ConnectionError {
+        // FIXME: Instead of checking this, we should have Method as trait and specific types for
+        // each message type.
+        if message.message_type() != message::MessageType::Error {
+            return ConnectionError::InvalidReply;
+        }
+
+        match message.get_fields() {
+            Ok(all_fields) => {
+                // First, get the error name
+                let name = match all_fields.iter().find(|element| {
+                    let (f, _) = element;
+
+                    *f == message::MessageField::ErrorName
+                }) {
+                    Some((_, v)) => match v.get_string() {
+                        Ok(s) => s,
+                        Err(e) => return ConnectionError::Variant(e),
+                    },
+                    None => return ConnectionError::InvalidReply,
+                };
+
+                // Then, try to get the optional description string
+                if all_fields
+                    .iter()
+                    .find(|element| {
+                        let (f, v) = element;
+
+                        *f == message::MessageField::Signature
+                            && v.get_string().unwrap_or(String::from("")) == "s"
+                    })
+                    .is_some()
+                {
+                    match message.get_body() {
+                        Ok(body) => match variant::Variant::from_data(&body, "s") {
+                            Ok(v) => match v.get_string() {
+                                Ok(detail) => ConnectionError::MethodError(name, Some(detail)),
+                                Err(e) => ConnectionError::Variant(e),
+                            },
+                            Err(e) => ConnectionError::Variant(e),
+                        },
+                        Err(e) => ConnectionError::Message(e),
+                    }
+                } else {
+                    ConnectionError::MethodError(name, None)
+                }
+            }
+            Err(e) => return ConnectionError::Message(e),
         }
     }
 }
