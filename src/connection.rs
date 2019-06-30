@@ -72,7 +72,7 @@ impl From<message::Message> for ConnectionError {
                 // First, get the error name
                 let name = match all_fields
                     .iter()
-                    .find(|(f, _)| *f == message::MessageField::ErrorName)
+                    .find(|(f, _)| *f == message::MessageFieldCode::ErrorName)
                 {
                     Some((_, v)) => match v.get_string() {
                         Ok(s) => s,
@@ -85,7 +85,7 @@ impl From<message::Message> for ConnectionError {
                 if all_fields
                     .iter()
                     .find(|(f, v)| {
-                        *f == message::MessageField::Signature
+                        *f == message::MessageFieldCode::Signature
                             && v.get_string().unwrap_or(String::from("")) == "s"
                     })
                     .is_some()
@@ -162,7 +162,7 @@ impl Connection {
         if all_fields
             .iter()
             .find(|(f, v)| {
-                *f == message::MessageField::Signature
+                *f == message::MessageFieldCode::Signature
                     && v.get_string().unwrap_or(String::from("")) == "s"
             })
             .is_some()
@@ -234,7 +234,7 @@ impl Connection {
                 if all_fields
                     .iter()
                     .find(|(f, v)| {
-                        *f == message::MessageField::ReplySerial
+                        *f == message::MessageFieldCode::ReplySerial
                             && v.get_u32().unwrap_or(std::u32::MAX) == serial
                     })
                     .is_some()

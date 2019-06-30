@@ -53,7 +53,7 @@ impl From<u8> for MessageType {
 
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq)]
-pub enum MessageField {
+pub enum MessageFieldCode {
     Invalid = 0,     // Not a valid field name.
     Path = 1,        // The object to send a call to, or the object a signal is emitted from.
     Interface = 2,   // The interface to invoke a method call on, or that a signal is emitted from.
@@ -66,19 +66,19 @@ pub enum MessageField {
     UnixFDs = 9,     // The number of Unix file descriptors that accompany the message.
 }
 
-impl From<u8> for MessageField {
-    fn from(val: u8) -> MessageField {
+impl From<u8> for MessageFieldCode {
+    fn from(val: u8) -> MessageFieldCode {
         match val {
-            1 => MessageField::Path,
-            2 => MessageField::Interface,
-            3 => MessageField::Member,
-            4 => MessageField::ErrorName,
-            5 => MessageField::ReplySerial,
-            6 => MessageField::Destination,
-            7 => MessageField::Sender,
-            8 => MessageField::Signature,
-            9 => MessageField::UnixFDs,
-            _ => MessageField::Invalid,
+            1 => MessageFieldCode::Path,
+            2 => MessageFieldCode::Interface,
+            3 => MessageFieldCode::Member,
+            4 => MessageFieldCode::ErrorName,
+            5 => MessageFieldCode::ReplySerial,
+            6 => MessageFieldCode::Destination,
+            7 => MessageFieldCode::Sender,
+            8 => MessageFieldCode::Signature,
+            9 => MessageFieldCode::UnixFDs,
+            _ => MessageFieldCode::Invalid,
         }
     }
 }
@@ -162,7 +162,7 @@ impl Message {
 
         if let Some(destination) = destination {
             array_len += m.push_field(
-                MessageField::Destination,
+                MessageFieldCode::Destination,
                 &Variant::from_string(destination),
                 0,
             )?;
@@ -170,7 +170,7 @@ impl Message {
         if let Some(iface) = iface {
             let padding = padding_for_8_bytes(array_len);
             array_len += m.push_field(
-                MessageField::Interface,
+                MessageFieldCode::Interface,
                 &Variant::from_string(iface),
                 padding,
             )?;
@@ -178,20 +178,20 @@ impl Message {
         if let Some(body) = body {
             let padding = padding_for_8_bytes(array_len);
             array_len += m.push_field(
-                MessageField::Signature,
+                MessageFieldCode::Signature,
                 &Variant::from_signature_string(&body.signature),
                 padding,
             )?;
         }
         let padding = padding_for_8_bytes(array_len);
         array_len += m.push_field(
-            MessageField::Path,
+            MessageFieldCode::Path,
             &Variant::from_object_path(path),
             padding,
         )?;
         let padding = padding_for_8_bytes(array_len);
         array_len += m.push_field(
-            MessageField::Member,
+            MessageFieldCode::Member,
             &Variant::from_string(method_name),
             padding,
         )?;
@@ -260,8 +260,8 @@ impl Message {
         MessageType::from(self.0[MESSAGE_TYPE_OFFSET])
     }
 
-    // TODO: Create a separate DS for fields (will need to rename MessageField enum probably)
-    pub fn get_fields(&self) -> Result<Vec<(MessageField, Variant)>, MessageError> {
+    // TODO: Create a separate DS for fields (will need to rename MessageFieldCode enum probably)
+    pub fn get_fields(&self) -> Result<Vec<(MessageFieldCode, Variant)>, MessageError> {
         if self.bytes_to_completion() != 0 {
             return Err(MessageError::InsufficientData);
         }
@@ -275,13 +275,13 @@ impl Message {
 
         let mut i = FIELDS_START_OFFSET;
         while i < FIELDS_START_OFFSET + fields_len {
-            let field = MessageField::from(self.0[i]);
+            let field = MessageFieldCode::from(self.0[i]);
             i += 2; // Signature len is always 1 here so no need to parse that
             let signature = String::from_utf8(self.0[i..i + 1].into())
                 .map_err(|_| MessageError::InvalidUtf8)?;
             i += 2; // Signature and null-byte
 
-            if field == MessageField::Invalid {
+            if field == MessageFieldCode::Invalid {
                 // According to the spec, we should ignore unkown fields.
                 continue;
             }
@@ -348,7 +348,7 @@ impl Message {
 
     fn push_field(
         &mut self,
-        field: MessageField,
+        field: MessageFieldCode,
         val: &Variant,
         padding: u32,
     ) -> Result<u32, MessageError> {

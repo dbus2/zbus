@@ -46,7 +46,7 @@ mod tests {
         all_fields
             .iter()
             .find(|(f, v)| {
-                *f == crate::message::MessageField::Signature
+                *f == crate::message::MessageFieldCode::Signature
                     && v.get_string().unwrap_or(String::from("")) == "s"
             })
             .unwrap();
@@ -70,7 +70,7 @@ mod tests {
         all_fields
             .iter()
             .find(|(f, v)| {
-                *f == crate::message::MessageField::Signature
+                *f == crate::message::MessageFieldCode::Signature
                     && v.get_string().unwrap_or(String::from("")) == "s"
             })
             .unwrap();
