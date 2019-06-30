@@ -1,6 +1,9 @@
 mod message;
 pub use message::*;
 
+mod message_field;
+pub use message_field::*;
+
 mod connection;
 pub use connection::*;
 
@@ -45,9 +48,9 @@ mod tests {
         let all_fields = reply.get_fields().unwrap();
         all_fields
             .iter()
-            .find(|(f, v)| {
-                *f == crate::message::MessageFieldCode::Signature
-                    && v.get_string().unwrap_or(String::from("")) == "s"
+            .find(|f| {
+                f.code == crate::message_field::MessageFieldCode::Signature
+                    && f.value.get_string().unwrap_or(String::from("")) == "s"
             })
             .unwrap();
         let id = crate::variant::Variant::from_data(&reply.get_body().unwrap(), "s")
@@ -69,9 +72,9 @@ mod tests {
         let all_fields = reply.get_fields().unwrap();
         all_fields
             .iter()
-            .find(|(f, v)| {
-                *f == crate::message::MessageFieldCode::Signature
-                    && v.get_string().unwrap_or(String::from("")) == "s"
+            .find(|f| {
+                f.code == crate::message_field::MessageFieldCode::Signature
+                    && f.value.get_string().unwrap_or(String::from("")) == "s"
             })
             .unwrap();
         let owner = crate::variant::Variant::from_data(&reply.get_body().unwrap(), "s")

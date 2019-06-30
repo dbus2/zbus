@@ -5,6 +5,7 @@ use std::{error, fmt, io};
 use nix::unistd::Uid;
 
 use crate::message;
+use crate::message_field;
 use crate::variant;
 
 pub struct Connection {
@@ -72,9 +73,9 @@ impl From<message::Message> for ConnectionError {
                 // First, get the error name
                 let name = match all_fields
                     .iter()
-                    .find(|(f, _)| *f == message::MessageFieldCode::ErrorName)
+                    .find(|f| f.code == message_field::MessageFieldCode::ErrorName)
                 {
-                    Some((_, v)) => match v.get_string() {
+                    Some(f) => match f.value.get_string() {
                         Ok(s) => s,
                         Err(e) => return ConnectionError::Variant(e),
                     },
@@ -84,9 +85,9 @@ impl From<message::Message> for ConnectionError {
                 // Then, try to get the optional description string
                 if all_fields
                     .iter()
-                    .find(|(f, v)| {
-                        *f == message::MessageFieldCode::Signature
-                            && v.get_string().unwrap_or(String::from("")) == "s"
+                    .find(|f| {
+                        f.code == message_field::MessageFieldCode::Signature
+                            && f.value.get_string().unwrap_or(String::from("")) == "s"
                     })
                     .is_some()
                 {
@@ -161,9 +162,9 @@ impl Connection {
             .map_err(|e| ConnectionError::Message(e))?;
         if all_fields
             .iter()
-            .find(|(f, v)| {
-                *f == message::MessageFieldCode::Signature
-                    && v.get_string().unwrap_or(String::from("")) == "s"
+            .find(|f| {
+                f.code == message_field::MessageFieldCode::Signature
+                    && f.value.get_string().unwrap_or(String::from("")) == "s"
             })
             .is_some()
         {
@@ -233,9 +234,9 @@ impl Connection {
 
                 if all_fields
                     .iter()
-                    .find(|(f, v)| {
-                        *f == message::MessageFieldCode::ReplySerial
-                            && v.get_u32().unwrap_or(std::u32::MAX) == serial
+                    .find(|f| {
+                        f.code == message_field::MessageFieldCode::ReplySerial
+                            && f.value.get_u32().unwrap_or(std::u32::MAX) == serial
                     })
                     .is_some()
                 {

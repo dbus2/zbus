@@ -2,7 +2,7 @@ use byteorder::ByteOrder;
 use std::{error, fmt, str};
 
 pub struct Variant {
-    pub signature: String,
+    signature: String,
     value: Vec<u8>,
 }
 
@@ -36,9 +36,9 @@ impl fmt::Display for VariantError {
 impl Variant {
     pub fn from_data(data: &[u8], signature: &str) -> Result<Self, VariantError> {
         let value = match signature {
-            "u" => decode_u32(data)?,
-            "s" | "o" => decode_string(data)?,
-            "g" => decode_signature(data)?,
+            "u" => copy_u32(data)?,
+            "s" | "o" => copy_string(data)?,
+            "g" => copy_signature(data)?,
             _ => return Err(VariantError::UnsupportedType),
         };
 
@@ -50,41 +50,51 @@ impl Variant {
 
     pub fn from_string(string: &str) -> Self {
         Self {
-            value: string.as_bytes().to_vec(),
+            value: encode_string(string),
             signature: String::from("s"),
         }
     }
 
     pub fn from_object_path(path: &str) -> Self {
         Self {
-            value: path.as_bytes().to_vec(),
+            value: encode_string(path),
             signature: String::from("o"),
         }
     }
 
     pub fn from_signature_string(signature_string: &str) -> Self {
         Self {
-            value: signature_string.as_bytes().to_vec(),
+            value: encode_signature(signature_string),
             signature: String::from("g"),
         }
     }
 
-    pub fn encode(&self) -> Result<Vec<u8>, VariantError> {
-        match self.signature.as_str() {
-            "u" => Ok(encode_u32(self.get_u32()?)),
-            "s" | "o" => Ok(encode_string(&self.get_string()?)),
-            "g" => Ok(encode_signature(&self.get_string()?)),
-            _ => Err(VariantError::UnsupportedType),
+    pub fn from_u32(value: u32) -> Self {
+        Self {
+            value: encode_u32(value),
+            signature: String::from("u"),
         }
     }
 
     // FIXME: Return an '&str'
-    pub fn get_string(&self) -> Result<String, VariantError> {
-        if self.signature != "s" && self.signature != "o" && self.signature != "g" {
-            return Err(VariantError::IncorrectType);
-        }
+    pub fn get_signature(&self) -> String {
+        self.signature.clone()
+    }
 
-        str::from_utf8(&self.value)
+    // FIXME: Return a slice
+    pub fn get_bytes(&self) -> Vec<u8> {
+        self.value.clone()
+    }
+
+    // FIXME: Return an '&str'
+    pub fn get_string(&self) -> Result<String, VariantError> {
+        let i = match self.signature.as_str() {
+            "s" | "o" => 4,
+            "g" => 1,
+            _ => return Err(VariantError::IncorrectType),
+        };
+
+        str::from_utf8(&self.value[i..])
             .map(|s| String::from(s))
             .map_err(|_| VariantError::InvalidUtf8)
     }
@@ -102,7 +112,7 @@ impl Variant {
     }
 }
 
-fn decode_u32(data: &[u8]) -> Result<Vec<u8>, VariantError> {
+fn copy_u32(data: &[u8]) -> Result<Vec<u8>, VariantError> {
     if data.len() < 4 {
         return Err(VariantError::InsufficientData);
     }
@@ -110,7 +120,7 @@ fn decode_u32(data: &[u8]) -> Result<Vec<u8>, VariantError> {
     Ok(data[0..4].into())
 }
 
-fn decode_string(data: &[u8]) -> Result<Vec<u8>, VariantError> {
+fn copy_string(data: &[u8]) -> Result<Vec<u8>, VariantError> {
     if data.len() < 4 {
         return Err(VariantError::InsufficientData);
     }
@@ -120,10 +130,10 @@ fn decode_string(data: &[u8]) -> Result<Vec<u8>, VariantError> {
         return Err(VariantError::InsufficientData);
     }
 
-    Ok(data[4..last_index].into())
+    Ok(data[0..last_index].into())
 }
 
-fn decode_signature(data: &[u8]) -> Result<Vec<u8>, VariantError> {
+fn copy_signature(data: &[u8]) -> Result<Vec<u8>, VariantError> {
     if data.len() < 1 {
         return Err(VariantError::InsufficientData);
     }
@@ -133,7 +143,7 @@ fn decode_signature(data: &[u8]) -> Result<Vec<u8>, VariantError> {
         return Err(VariantError::InsufficientData);
     }
 
-    Ok(data[1..last_index].into())
+    Ok(data[0..last_index].into())
 }
 
 fn encode_u32(value: u32) -> Vec<u8> {

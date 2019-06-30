@@ -2,6 +2,7 @@ use byteorder::ByteOrder;
 use std::error;
 use std::fmt;
 
+use crate::message_field::{MessageField, MessageFieldCode, MessageFieldError};
 use crate::variant::{Variant, VariantError};
 
 /// Size of primary message header
@@ -51,45 +52,13 @@ impl From<u8> for MessageType {
     }
 }
 
-#[repr(u8)]
-#[derive(Copy, Clone, PartialEq)]
-pub enum MessageFieldCode {
-    Invalid = 0,     // Not a valid field name.
-    Path = 1,        // The object to send a call to, or the object a signal is emitted from.
-    Interface = 2,   // The interface to invoke a method call on, or that a signal is emitted from.
-    Member = 3,      // The member, either the method name or signal name.
-    ErrorName = 4,   // The name of the error that occurred, for errors
-    ReplySerial = 5, //	The serial number of the message this message is a reply to.
-    Destination = 6, // The name of the connection this message is intended for.
-    Sender = 7,      // Unique name of the sending connection.
-    Signature = 8,   // The signature of the message body.
-    UnixFDs = 9,     // The number of Unix file descriptors that accompany the message.
-}
-
-impl From<u8> for MessageFieldCode {
-    fn from(val: u8) -> MessageFieldCode {
-        match val {
-            1 => MessageFieldCode::Path,
-            2 => MessageFieldCode::Interface,
-            3 => MessageFieldCode::Member,
-            4 => MessageFieldCode::ErrorName,
-            5 => MessageFieldCode::ReplySerial,
-            6 => MessageFieldCode::Destination,
-            7 => MessageFieldCode::Sender,
-            8 => MessageFieldCode::Signature,
-            9 => MessageFieldCode::UnixFDs,
-            _ => MessageFieldCode::Invalid,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum MessageError {
     StrTooLarge,
     InsufficientData,
     ExcessData,
     IncorrectEndian,
-    InvalidUtf8,
+    MessageField(MessageFieldError),
     Variant(VariantError),
 }
 
@@ -109,7 +78,7 @@ impl fmt::Display for MessageError {
             MessageError::InsufficientData => write!(f, "insufficient data"),
             MessageError::ExcessData => write!(f, "excess data"),
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
-            MessageError::InvalidUtf8 => write!(f, "invalid UTF-8"),
+            MessageError::MessageField(e) => write!(f, "{}", e),
             MessageError::Variant(e) => write!(f, "{}", e),
         }
     }
@@ -140,17 +109,8 @@ impl Message {
             return Err(MessageError::StrTooLarge);
         }
 
-        let (body_encoding, body_len) = match body {
-            Some(ref body) => {
-                let encoding = body.encode().map_err(|e| MessageError::Variant(e))?;
-                let len = encoding.len();
-
-                (Some(encoding), len)
-            }
-            None => (None, 0),
-        };
-
         // Length of message body
+        let body_len = body.as_ref().map(|b| b.len()).unwrap_or(0);
         m.0.extend(&(body_len as u32).to_ne_bytes());
 
         // Serial number. FIXME: managed by connection
@@ -161,40 +121,20 @@ impl Message {
         m.0.extend(&array_len.to_ne_bytes());
 
         if let Some(destination) = destination {
-            array_len += m.push_field(
-                MessageFieldCode::Destination,
-                &Variant::from_string(destination),
-                0,
-            )?;
+            array_len += m.push_field(&MessageField::destination(destination), 0)?;
         }
         if let Some(iface) = iface {
             let padding = padding_for_8_bytes(array_len);
-            array_len += m.push_field(
-                MessageFieldCode::Interface,
-                &Variant::from_string(iface),
-                padding,
-            )?;
+            array_len += m.push_field(&MessageField::interface(iface), padding)?;
         }
-        if let Some(body) = body {
+        if let Some(ref body) = body {
             let padding = padding_for_8_bytes(array_len);
-            array_len += m.push_field(
-                MessageFieldCode::Signature,
-                &Variant::from_signature_string(&body.signature),
-                padding,
-            )?;
+            array_len += m.push_field(&MessageField::signature(&body.get_signature()), padding)?;
         }
         let padding = padding_for_8_bytes(array_len);
-        array_len += m.push_field(
-            MessageFieldCode::Path,
-            &Variant::from_object_path(path),
-            padding,
-        )?;
+        array_len += m.push_field(&MessageField::path(path), padding)?;
         let padding = padding_for_8_bytes(array_len);
-        array_len += m.push_field(
-            MessageFieldCode::Member,
-            &Variant::from_string(method_name),
-            padding,
-        )?;
+        array_len += m.push_field(&MessageField::member(method_name), padding)?;
         byteorder::NativeEndian::write_u32(
             &mut m.0[FIELDS_LEN_START_OFFSET..FIELDS_LEN_END_OFFSET],
             array_len,
@@ -204,8 +144,8 @@ impl Message {
             m.push_padding(padding);
         }
 
-        if let Some(body_encoding) = body_encoding {
-            m.0.extend(body_encoding);
+        if let Some(body) = body {
+            m.0.extend(body.get_bytes());
         }
 
         Ok(m)
@@ -260,8 +200,7 @@ impl Message {
         MessageType::from(self.0[MESSAGE_TYPE_OFFSET])
     }
 
-    // TODO: Create a separate DS for fields (will need to rename MessageFieldCode enum probably)
-    pub fn get_fields(&self) -> Result<Vec<(MessageFieldCode, Variant)>, MessageError> {
+    pub fn get_fields(&self) -> Result<Vec<MessageField>, MessageError> {
         if self.bytes_to_completion() != 0 {
             return Err(MessageError::InsufficientData);
         }
@@ -275,23 +214,16 @@ impl Message {
 
         let mut i = FIELDS_START_OFFSET;
         while i < FIELDS_START_OFFSET + fields_len {
-            let field = MessageFieldCode::from(self.0[i]);
-            i += 2; // Signature len is always 1 here so no need to parse that
-            let signature = String::from_utf8(self.0[i..i + 1].into())
-                .map_err(|_| MessageError::InvalidUtf8)?;
-            i += 2; // Signature and null-byte
+            let (field, len) =
+                MessageField::from_data(&self.0[i..]).map_err(|e| MessageError::MessageField(e))?;
 
-            if field == MessageFieldCode::Invalid {
-                // According to the spec, we should ignore unkown fields.
-                continue;
+            // According to the spec, we should ignore unkown fields.
+            if field.code != MessageFieldCode::Invalid {
+                v.push(field);
             }
 
-            let value = Variant::from_data(&self.0[i..], &signature)
-                .map_err(|e| MessageError::Variant(e))?;
-            i += value.len();
+            i += len;
             i += padding_for_8_bytes(i as u32) as usize;
-
-            v.push((field, value));
         }
 
         Ok(v)
@@ -346,32 +278,15 @@ impl Message {
         self.0.extend(std::iter::repeat(0).take(len as usize));
     }
 
-    fn push_field(
-        &mut self,
-        field: MessageFieldCode,
-        val: &Variant,
-        padding: u32,
-    ) -> Result<u32, MessageError> {
+    fn push_field(&mut self, field: &MessageField, padding: u32) -> Result<u32, MessageError> {
         if padding > 0 {
             self.push_padding(padding);
         }
 
-        // Signature
-        self.0.push(field as u8);
-        self.0.push(1);
-        self.0.push(
-            val.signature
-                .chars()
-                .nth(0)
-                .ok_or_else(|| MessageError::InsufficientData)? as u8,
-        );
-        self.0.push(b'\0');
-
-        // Value
-        let encoded = val.encode().map_err(|e| MessageError::Variant(e))?;
+        let encoded = field.encode().map_err(|e| MessageError::MessageField(e))?;
         self.0.extend(&encoded);
 
-        Ok(4 + encoded.len() as u32 + padding)
+        Ok(encoded.len() as u32 + padding)
     }
 }
 
