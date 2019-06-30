@@ -140,22 +140,18 @@ impl Message {
             return Err(MessageError::StrTooLarge);
         }
 
-        let body_encoding = match body {
+        let (body_encoding, body_len) = match body {
             Some(ref body) => {
                 let encoding = body.encode().map_err(|e| MessageError::Variant(e))?;
+                let len = encoding.len();
 
-                // Length of message body
-                m.0.extend(&(encoding.len() as u32).to_ne_bytes());
-
-                Some(encoding)
+                (Some(encoding), len)
             }
-            None => {
-                // Length of message body
-                m.0.extend(&0u32.to_ne_bytes());
-
-                None
-            }
+            None => (None, 0),
         };
+
+        // Length of message body
+        m.0.extend(&(body_len as u32).to_ne_bytes());
 
         // Serial number. FIXME: managed by connection
         m.0.extend(&1u32.to_ne_bytes());
