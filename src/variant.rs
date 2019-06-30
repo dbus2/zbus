@@ -69,6 +69,15 @@ impl Variant {
         }
     }
 
+    pub fn encode(&self) -> Result<Vec<u8>, VariantError> {
+        match self.signature.as_str() {
+            "u" => Ok(encode_u32(self.get_u32()?)),
+            "s" | "o" => Ok(encode_string(&self.get_string()?)),
+            "g" => Ok(encode_signature(&self.get_string()?)),
+            _ => Err(VariantError::UnsupportedType),
+        }
+    }
+
     // FIXME: Return an '&str'
     pub fn get_string(&self) -> Result<String, VariantError> {
         if self.signature != "s" && self.signature != "o" && self.signature != "g" {
@@ -125,4 +134,34 @@ fn decode_signature(data: &[u8]) -> Result<Vec<u8>, VariantError> {
     }
 
     Ok(data[1..last_index].into())
+}
+
+fn encode_u32(value: u32) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(4);
+
+    bytes.extend(&value.to_ne_bytes());
+
+    bytes
+}
+
+fn encode_string(value: &str) -> Vec<u8> {
+    let len = value.len();
+    let mut bytes = Vec::with_capacity(5 + len);
+
+    bytes.extend(&(len as u32).to_ne_bytes());
+    bytes.extend(value.as_bytes());
+    bytes.push(b'\0');
+
+    bytes
+}
+
+fn encode_signature(value: &str) -> Vec<u8> {
+    let len = value.len();
+    let mut bytes = Vec::with_capacity(2 + len);
+
+    bytes.push(len as u8);
+    bytes.extend(value.as_bytes());
+    bytes.push(b'\0');
+
+    bytes
 }
