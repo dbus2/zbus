@@ -152,16 +152,32 @@ impl Message {
         m.0.extend(&array_len.to_ne_bytes());
 
         if let Some(destination) = destination {
-            array_len += m.push_field(MessageField::Destination, b's', destination, 0);
+            array_len += m.push_field(
+                MessageField::Destination,
+                &Variant::from_string(destination),
+                0,
+            )?;
         }
         if let Some(iface) = iface {
             let padding = padding_for_8_bytes(array_len);
-            array_len += m.push_field(MessageField::Interface, b's', iface, padding);
+            array_len += m.push_field(
+                MessageField::Interface,
+                &Variant::from_string(iface),
+                padding,
+            )?;
         }
         let padding = padding_for_8_bytes(array_len);
-        array_len += m.push_field(MessageField::Path, b'o', path, padding);
+        array_len += m.push_field(
+            MessageField::Path,
+            &Variant::from_object_path(path),
+            padding,
+        )?;
         let padding = padding_for_8_bytes(array_len);
-        array_len += m.push_field(MessageField::Member, b's', method_name, padding);
+        array_len += m.push_field(
+            MessageField::Member,
+            &Variant::from_string(method_name),
+            padding,
+        )?;
         let padding = padding_for_8_bytes(array_len);
         if padding > 0 {
             m.push_padding(padding);
@@ -310,13 +326,12 @@ impl Message {
         self.0.extend(std::iter::repeat(0).take(len as usize));
     }
 
-    fn push_u32(&mut self, val: u32) {
-        self.0.extend(&val.to_ne_bytes());
-    }
-
-    // FIXME: Assuming all fields are string type (we've 2 of u32 type). Also caller shoulnd't need
-    //        to specify signature.
-    fn push_field(&mut self, field: MessageField, signature: u8, val: &str, padding: u32) -> u32 {
+    fn push_field(
+        &mut self,
+        field: MessageField,
+        val: &Variant,
+        padding: u32,
+    ) -> Result<u32, MessageError> {
         if padding > 0 {
             self.push_padding(padding);
         }
@@ -324,16 +339,19 @@ impl Message {
         // Signature
         self.0.push(field as u8);
         self.0.push(1);
-        self.0.push(signature);
+        self.0.push(
+            val.signature
+                .chars()
+                .nth(0)
+                .ok_or_else(|| MessageError::InsufficientData)? as u8,
+        );
         self.0.push(b'\0');
 
-        // String
-        let val_len = val.len() as u32;
-        self.push_u32(val_len);
-        self.0.extend(val.as_bytes());
-        self.0.push(b'\0');
+        // Value
+        let encoded = val.encode().map_err(|e| MessageError::Variant(e))?;
+        self.0.extend(&encoded);
 
-        9 + val_len + padding
+        Ok(4 + encoded.len() as u32 + padding)
     }
 }
 
