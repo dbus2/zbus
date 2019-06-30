@@ -124,8 +124,7 @@ impl Message {
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        _body_sig: &str,
-        _body: &[u8],
+        _body: Option<Variant>,
     ) -> Result<Self, MessageError> {
         let mut m = Message::new(MessageType::MethodCall);
 

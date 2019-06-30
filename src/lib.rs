@@ -26,8 +26,7 @@ mod tests {
             "/org/freedesktop/DBus",
             Some("org.freedesktop.DBus"),
             "Hello",
-            "",
-            &[],
+            None,
         ) {
             Err(crate::ConnectionError::MethodError(_, _)) => (),
             _ => panic!(),
@@ -39,8 +38,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus.Peer"),
                 "GetMachineId",
-                "",
-                &[],
+                None,
             )
             .unwrap();
 

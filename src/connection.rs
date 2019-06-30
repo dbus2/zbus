@@ -153,8 +153,7 @@ impl Connection {
             "/org/freedesktop/DBus",
             Some("org.freedesktop.DBus"),
             "Hello",
-            "",
-            &[],
+            None,
         )?;
 
         let all_fields = reply
@@ -190,12 +189,11 @@ impl Connection {
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        body_sig: &str,
-        body: &[u8],
+        body: Option<variant::Variant>,
     ) -> Result<message::Message, ConnectionError> {
         println!("Starting: {}", method_name);
         let serial = self.next_serial();
-        let m = message::Message::method(destination, path, iface, method_name, body_sig, body)
+        let m = message::Message::method(destination, path, iface, method_name, body)
             .map_err(|e| ConnectionError::Message(e))?
             .set_serial(serial);
 
