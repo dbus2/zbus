@@ -48,6 +48,27 @@ impl Variant {
         })
     }
 
+    pub fn from_string(string: &str) -> Self {
+        Self {
+            value: string.as_bytes().to_vec(),
+            signature: String::from("s"),
+        }
+    }
+
+    pub fn from_object_path(path: &str) -> Self {
+        Self {
+            value: path.as_bytes().to_vec(),
+            signature: String::from("o"),
+        }
+    }
+
+    pub fn from_signature_string(signature_string: &str) -> Self {
+        Self {
+            value: signature_string.as_bytes().to_vec(),
+            signature: String::from("g"),
+        }
+    }
+
     // FIXME: Return an '&str'
     pub fn get_string(&self) -> Result<String, VariantError> {
         if self.signature != "s" && self.signature != "o" && self.signature != "g" {
