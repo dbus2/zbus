@@ -36,9 +36,9 @@ impl fmt::Display for VariantError {
 impl Variant {
     pub fn from_data(data: &[u8], signature: &str) -> Result<Self, VariantError> {
         let value = match signature {
-            "u" => copy_u32(data)?,
-            "s" | "o" => copy_string(data)?,
-            "g" => copy_signature(data)?,
+            "u" => decode_u32(data)?,
+            "s" | "o" => decode_string(data)?,
+            "g" => decode_signature(data)?,
             _ => return Err(VariantError::UnsupportedType),
         };
 
@@ -72,7 +72,7 @@ impl Variant {
     }
 }
 
-fn copy_u32(data: &[u8]) -> Result<Vec<u8>, VariantError> {
+fn decode_u32(data: &[u8]) -> Result<Vec<u8>, VariantError> {
     if data.len() < 4 {
         return Err(VariantError::InsufficientData);
     }
@@ -80,7 +80,7 @@ fn copy_u32(data: &[u8]) -> Result<Vec<u8>, VariantError> {
     Ok(data[0..4].into())
 }
 
-fn copy_string(data: &[u8]) -> Result<Vec<u8>, VariantError> {
+fn decode_string(data: &[u8]) -> Result<Vec<u8>, VariantError> {
     if data.len() < 4 {
         return Err(VariantError::InsufficientData);
     }
@@ -93,7 +93,7 @@ fn copy_string(data: &[u8]) -> Result<Vec<u8>, VariantError> {
     Ok(data[4..last_index].into())
 }
 
-fn copy_signature(data: &[u8]) -> Result<Vec<u8>, VariantError> {
+fn decode_signature(data: &[u8]) -> Result<Vec<u8>, VariantError> {
     if data.len() < 1 {
         return Err(VariantError::InsufficientData);
     }
