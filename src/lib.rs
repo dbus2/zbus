@@ -54,7 +54,30 @@ mod tests {
             .unwrap()
             .get_string()
             .unwrap();
-
         println!("Machine ID: {}", id);
+
+        let reply = connection
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "GetNameOwner",
+                Some(crate::variant::Variant::from_string("org.freedesktop.DBus")),
+            )
+            .unwrap();
+
+        let all_fields = reply.get_fields().unwrap();
+        all_fields
+            .iter()
+            .find(|(f, v)| {
+                *f == crate::message::MessageField::Signature
+                    && v.get_string().unwrap_or(String::from("")) == "s"
+            })
+            .unwrap();
+        let owner = crate::variant::Variant::from_data(&reply.get_body().unwrap(), "s")
+            .unwrap()
+            .get_string()
+            .unwrap();
+        println!("Owner of 'org.freedesktop.DBus' is: {}", owner);
     }
 }

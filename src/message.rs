@@ -124,7 +124,7 @@ impl Message {
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        _body: Option<Variant>,
+        body: Option<Variant>,
     ) -> Result<Self, MessageError> {
         let mut m = Message::new(MessageType::MethodCall);
 
@@ -140,8 +140,22 @@ impl Message {
             return Err(MessageError::StrTooLarge);
         }
 
-        // Length of message body
-        m.0.extend(&0u32.to_ne_bytes());
+        let body_encoding = match body {
+            Some(ref body) => {
+                let encoding = body.encode().map_err(|e| MessageError::Variant(e))?;
+
+                // Length of message body
+                m.0.extend(&(encoding.len() as u32).to_ne_bytes());
+
+                Some(encoding)
+            }
+            None => {
+                // Length of message body
+                m.0.extend(&0u32.to_ne_bytes());
+
+                None
+            }
+        };
 
         // Serial number. FIXME: managed by connection
         m.0.extend(&1u32.to_ne_bytes());
@@ -165,6 +179,14 @@ impl Message {
                 padding,
             )?;
         }
+        if let Some(body) = body {
+            let padding = padding_for_8_bytes(array_len);
+            array_len += m.push_field(
+                MessageField::Signature,
+                &Variant::from_signature_string(&body.signature),
+                padding,
+            )?;
+        }
         let padding = padding_for_8_bytes(array_len);
         array_len += m.push_field(
             MessageField::Path,
@@ -177,15 +199,18 @@ impl Message {
             &Variant::from_string(method_name),
             padding,
         )?;
+        byteorder::NativeEndian::write_u32(
+            &mut m.0[FIELDS_LEN_START_OFFSET..FIELDS_LEN_END_OFFSET],
+            array_len,
+        );
         let padding = padding_for_8_bytes(array_len);
         if padding > 0 {
             m.push_padding(padding);
         }
 
-        byteorder::NativeEndian::write_u32(
-            &mut m.0[FIELDS_LEN_START_OFFSET..FIELDS_LEN_END_OFFSET],
-            array_len,
-        );
+        if let Some(body_encoding) = body_encoding {
+            m.0.extend(body_encoding);
+        }
 
         Ok(m)
     }
