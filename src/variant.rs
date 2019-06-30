@@ -2,8 +2,8 @@ use byteorder::ByteOrder;
 use std::{error, fmt, str};
 
 pub struct Variant {
+    pub signature: String,
     value: Vec<u8>,
-    signature: String,
 }
 
 #[derive(Debug)]
