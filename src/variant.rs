@@ -1,10 +1,6 @@
 use byteorder::ByteOrder;
+use std::borrow::Cow;
 use std::{error, fmt, str};
-
-pub struct Variant {
-    signature: String,
-    value: Vec<u8>,
-}
 
 #[derive(Debug)]
 pub enum VariantError {
@@ -31,147 +27,228 @@ impl fmt::Display for VariantError {
     }
 }
 
-// FIXME: Perhaps it'd be great not to copy here but that'd mean dealing with
-//        lifetimes so let's do it later. :)
-impl Variant {
-    pub fn from_data(data: &[u8], signature: &str) -> Result<Self, VariantError> {
+pub trait VariantType<'a>: Sized {
+    const SIGNATURE: char;
+    const SIGNATURE_STR: &'static str;
+    fn encode(&self) -> Vec<u8>;
+    fn extract_slice(data: &'a [u8]) -> Result<&'a [u8], VariantError>;
+
+    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    where
+        Self: 'a;
+}
+
+impl<'a> VariantType<'a> for u32 {
+    const SIGNATURE: char = 'u';
+    const SIGNATURE_STR: &'static str = "u";
+
+    fn encode(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(4);
+        bytes.extend(&self.to_ne_bytes());
+
+        bytes
+    }
+
+    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+        if bytes.len() < 4 {
+            return Err(VariantError::InsufficientData);
+        }
+
+        Ok(&bytes[0..4])
+    }
+
+    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    where
+        Self: 'a,
+    {
+        if bytes.len() < 4 {
+            return Err(VariantError::InsufficientData);
+        }
+
+        Ok(byteorder::NativeEndian::read_u32(bytes))
+    }
+}
+
+impl<'a> VariantType<'a> for &'a str {
+    const SIGNATURE: char = 's';
+    const SIGNATURE_STR: &'static str = "s";
+
+    fn encode(&self) -> Vec<u8> {
+        let len = self.len();
+        let mut bytes = Vec::with_capacity(5 + len);
+
+        bytes.extend(&(len as u32).to_ne_bytes());
+        bytes.extend(self.as_bytes());
+        bytes.push(b'\0');
+
+        bytes
+    }
+
+    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+        if bytes.len() < 4 {
+            return Err(VariantError::InsufficientData);
+        }
+
+        let last_index = byteorder::NativeEndian::read_u32(bytes) as usize + 5;
+        if bytes.len() < last_index {
+            return Err(VariantError::InsufficientData);
+        }
+
+        Ok(&bytes[0..last_index])
+    }
+
+    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    where
+        Self: 'a,
+    {
+        if bytes.len() < 4 {
+            return Err(VariantError::InsufficientData);
+        }
+
+        str::from_utf8(&bytes[4..]).map_err(|_| VariantError::InvalidUtf8)
+    }
+}
+
+pub struct ObjectPath<'a>(pub &'a str);
+
+// FIXME: Find a way to share code with &str implementation above
+impl<'a> VariantType<'a> for ObjectPath<'a> {
+    const SIGNATURE: char = 'o';
+    const SIGNATURE_STR: &'static str = "o";
+
+    fn encode(&self) -> Vec<u8> {
+        let len = self.0.len();
+        let mut bytes = Vec::with_capacity(5 + len);
+
+        bytes.extend(&(len as u32).to_ne_bytes());
+        bytes.extend(self.0.as_bytes());
+        bytes.push(b'\0');
+
+        bytes
+    }
+
+    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+        if bytes.len() < 4 {
+            return Err(VariantError::InsufficientData);
+        }
+
+        let last_index = byteorder::NativeEndian::read_u32(bytes) as usize + 5;
+        if bytes.len() < last_index {
+            return Err(VariantError::InsufficientData);
+        }
+
+        Ok(&bytes[0..last_index])
+    }
+
+    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    where
+        Self: 'a,
+    {
+        if bytes.len() < 4 {
+            return Err(VariantError::InsufficientData);
+        }
+
+        str::from_utf8(&bytes[4..])
+            .map(|s| Self(s))
+            .map_err(|_| VariantError::InvalidUtf8)
+    }
+}
+
+pub struct Signature<'a>(pub &'a str);
+
+// FIXME: Find a way to share code with &str implementation above
+impl<'a> VariantType<'a> for Signature<'a> {
+    const SIGNATURE: char = 'g';
+    const SIGNATURE_STR: &'static str = "g";
+
+    fn encode(&self) -> Vec<u8> {
+        let len = self.0.len();
+        let mut bytes = Vec::with_capacity(2 + len);
+
+        bytes.push(len as u8);
+        bytes.extend(self.0.as_bytes());
+        bytes.push(b'\0');
+
+        bytes
+    }
+
+    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+        if bytes.len() < 1 {
+            return Err(VariantError::InsufficientData);
+        }
+
+        let last_index = bytes[0] as usize + 1;
+        if bytes.len() < last_index {
+            return Err(VariantError::InsufficientData);
+        }
+
+        Ok(&bytes[0..last_index])
+    }
+
+    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    where
+        Self: 'a,
+    {
+        if bytes.len() < 1 {
+            return Err(VariantError::InsufficientData);
+        }
+
+        str::from_utf8(&bytes[1..])
+            .map(|s| Self(s))
+            .map_err(|_| VariantError::InvalidUtf8)
+    }
+}
+
+pub struct Variant<'a> {
+    // FIXME: This should be an `&str`
+    signature: String,
+    value: Cow<'a, [u8]>,
+}
+
+impl<'a> Variant<'a> {
+    pub fn from_data(data: &'a [u8], signature: &str) -> Result<Self, VariantError>
+    where
+        Self: 'a,
+    {
         let value = match signature {
-            "u" => copy_u32(data)?,
-            "s" | "o" => copy_string(data)?,
-            "g" => copy_signature(data)?,
+            // FIXME: There has to be a shorter way to do this
+            u32::SIGNATURE_STR => u32::extract_slice(data)?,
+            <(&str)>::SIGNATURE_STR => <(&str)>::extract_slice(data)?,
+            ObjectPath::SIGNATURE_STR => ObjectPath::extract_slice(data)?,
+            Signature::SIGNATURE_STR => Signature::extract_slice(data)?,
             _ => return Err(VariantError::UnsupportedType),
         };
 
         Ok(Self {
-            value,
+            value: Cow::from(value),
             signature: String::from(signature),
         })
     }
 
-    pub fn from_string(string: &str) -> Self {
+    pub fn from<T: 'a + VariantType<'a>>(value: T) -> Self
+    where
+        Self: 'a,
+    {
         Self {
-            value: encode_string(string),
-            signature: String::from("s"),
+            value: Cow::from(value.encode()),
+            signature: String::from(T::SIGNATURE_STR),
         }
     }
 
-    pub fn from_object_path(path: &str) -> Self {
-        Self {
-            value: encode_string(path),
-            signature: String::from("o"),
-        }
+    pub fn get_signature(&self) -> &str {
+        &self.signature
     }
 
-    pub fn from_signature_string(signature_string: &str) -> Self {
-        Self {
-            value: encode_signature(signature_string),
-            signature: String::from("g"),
-        }
-    }
-
-    pub fn from_u32(value: u32) -> Self {
-        Self {
-            value: encode_u32(value),
-            signature: String::from("u"),
-        }
-    }
-
-    // FIXME: Return an '&str'
-    pub fn get_signature(&self) -> String {
-        self.signature.clone()
+    pub fn get<T: 'a + VariantType<'a>>(&'a self) -> Result<T, VariantError> {
+        VariantType::extract(&self.value)
     }
 
     // FIXME: Return a slice
-    pub fn get_bytes(&self) -> Vec<u8> {
-        self.value.clone()
-    }
-
-    // FIXME: Return an '&str'
-    pub fn get_string(&self) -> Result<String, VariantError> {
-        let i = match self.signature.as_str() {
-            "s" | "o" => 4,
-            "g" => 1,
-            _ => return Err(VariantError::IncorrectType),
-        };
-
-        str::from_utf8(&self.value[i..])
-            .map(|s| String::from(s))
-            .map_err(|_| VariantError::InvalidUtf8)
-    }
-
-    pub fn get_u32(&self) -> Result<u32, VariantError> {
-        if self.signature != "u" || self.value.len() < 4 {
-            return Err(VariantError::IncorrectType);
-        }
-
-        Ok(byteorder::NativeEndian::read_u32(&self.value))
+    pub fn get_bytes(&self) -> &[u8] {
+        &self.value
     }
 
     pub fn len(&self) -> usize {
         self.value.len()
     }
-}
-
-fn copy_u32(data: &[u8]) -> Result<Vec<u8>, VariantError> {
-    if data.len() < 4 {
-        return Err(VariantError::InsufficientData);
-    }
-
-    Ok(data[0..4].into())
-}
-
-fn copy_string(data: &[u8]) -> Result<Vec<u8>, VariantError> {
-    if data.len() < 4 {
-        return Err(VariantError::InsufficientData);
-    }
-
-    let last_index = byteorder::NativeEndian::read_u32(data) as usize + 5;
-    if data.len() < last_index {
-        return Err(VariantError::InsufficientData);
-    }
-
-    Ok(data[0..last_index].into())
-}
-
-fn copy_signature(data: &[u8]) -> Result<Vec<u8>, VariantError> {
-    if data.len() < 1 {
-        return Err(VariantError::InsufficientData);
-    }
-
-    let last_index = data[0] as usize + 1;
-    if data.len() < last_index {
-        return Err(VariantError::InsufficientData);
-    }
-
-    Ok(data[0..last_index].into())
-}
-
-fn encode_u32(value: u32) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity(4);
-
-    bytes.extend(&value.to_ne_bytes());
-
-    bytes
-}
-
-fn encode_string(value: &str) -> Vec<u8> {
-    let len = value.len();
-    let mut bytes = Vec::with_capacity(5 + len);
-
-    bytes.extend(&(len as u32).to_ne_bytes());
-    bytes.extend(value.as_bytes());
-    bytes.push(b'\0');
-
-    bytes
-}
-
-fn encode_signature(value: &str) -> Vec<u8> {
-    let len = value.len();
-    let mut bytes = Vec::with_capacity(2 + len);
-
-    bytes.push(len as u8);
-    bytes.extend(value.as_bytes());
-    bytes.push(b'\0');
-
-    bytes
 }

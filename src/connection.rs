@@ -7,6 +7,7 @@ use nix::unistd::Uid;
 use crate::message;
 use crate::message_field;
 use crate::variant;
+use crate::variant::{Signature, VariantType};
 
 pub struct Connection {
     pub server_guid: String,
@@ -75,8 +76,8 @@ impl From<message::Message> for ConnectionError {
                     .iter()
                     .find(|f| f.code == message_field::MessageFieldCode::ErrorName)
                 {
-                    Some(f) => match f.value.get_string() {
-                        Ok(s) => s,
+                    Some(f) => match f.value.get::<(&str)>() {
+                        Ok(s) => String::from(s),
                         Err(e) => return ConnectionError::Variant(e),
                     },
                     None => return ConnectionError::InvalidReply,
@@ -87,15 +88,17 @@ impl From<message::Message> for ConnectionError {
                     .iter()
                     .find(|f| {
                         f.code == message_field::MessageFieldCode::Signature
-                            && f.value.get_string().unwrap_or(String::from("")) == "s"
+                            && f.value.get().unwrap_or(Signature("")).0 == <(&str)>::SIGNATURE_STR
                     })
                     .is_some()
                 {
                     match message.get_body() {
                         Ok(body) => match variant::Variant::from_data(&body, "s") {
-                            Ok(v) => match v.get_string() {
-                                Ok(detail) => ConnectionError::MethodError(name, Some(detail)),
-                                Err(e) => ConnectionError::Variant(e),
+                            Ok(v) => match v.get::<(&str)>() {
+                                Ok(detail) => {
+                                    ConnectionError::MethodError(name, Some(String::from(detail)))
+                                }
+                                Err(e) => return ConnectionError::Variant(e),
                             },
                             Err(e) => ConnectionError::Variant(e),
                         },
@@ -164,17 +167,14 @@ impl Connection {
             .iter()
             .find(|f| {
                 f.code == message_field::MessageFieldCode::Signature
-                    && f.value.get_string().unwrap_or(String::from("")) == "s"
+                    && f.value.get().unwrap_or(Signature("")).0 == <(&str)>::SIGNATURE_STR
             })
             .is_some()
         {
-            let bus_name = variant::Variant::from_data(
-                &reply.get_body().map_err(|e| ConnectionError::Message(e))?,
-                "s",
-            )
-            .map_err(|e| ConnectionError::Variant(e))?
-            .get_string()
-            .map_err(|e| ConnectionError::Variant(e))?;
+            let body = reply.get_body().map_err(|e| ConnectionError::Message(e))?;
+            let v =
+                variant::Variant::from_data(&body, "s").map_err(|e| ConnectionError::Variant(e))?;
+            let bus_name = v.get::<(&str)>().map_err(|e| ConnectionError::Variant(e))?;
 
             println!("bus name: {}", bus_name);
         } else {
@@ -236,7 +236,7 @@ impl Connection {
                     .iter()
                     .find(|f| {
                         f.code == message_field::MessageFieldCode::ReplySerial
-                            && f.value.get_u32().unwrap_or(std::u32::MAX) == serial
+                            && f.value.get().unwrap_or(std::u32::MAX) == serial
                     })
                     .is_some()
                 {

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::variant::{Variant, VariantError};
+use crate::variant::{ObjectPath, Signature, Variant, VariantError};
 
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq)]
@@ -53,76 +53,103 @@ impl fmt::Display for MessageFieldError {
     }
 }
 
-pub struct MessageField {
+pub struct MessageField<'a> {
     pub code: MessageFieldCode,
-    pub value: Variant,
+    pub value: Variant<'a>,
 }
 
-impl MessageField {
-    pub fn path(path: &str) -> Self {
+impl<'a> MessageField<'a> {
+    pub fn path(path: &'a str) -> Self
+    where
+        Self: 'a,
+    {
         Self {
             code: MessageFieldCode::Path,
-            value: Variant::from_object_path(path),
+            value: Variant::from(ObjectPath(path)),
         }
     }
 
-    pub fn interface(interface: &str) -> Self {
+    pub fn interface(interface: &'a str) -> Self
+    where
+        Self: 'a,
+    {
         Self {
             code: MessageFieldCode::Interface,
-            value: Variant::from_string(interface),
+            value: Variant::from(interface),
         }
     }
 
-    pub fn member(member: &str) -> Self {
+    pub fn member(member: &'a str) -> Self
+    where
+        Self: 'a,
+    {
         Self {
             code: MessageFieldCode::Member,
-            value: Variant::from_string(member),
+            value: Variant::from(member),
         }
     }
 
-    pub fn error_name(error_name: &str) -> Self {
+    pub fn error_name(error_name: &'a str) -> Self
+    where
+        Self: 'a,
+    {
         Self {
             code: MessageFieldCode::ErrorName,
-            value: Variant::from_string(error_name),
+            value: Variant::from(error_name),
         }
     }
 
-    pub fn reply_serial(serial: u32) -> Self {
+    pub fn reply_serial(serial: u32) -> Self
+    where
+        Self: 'a,
+    {
         Self {
             code: MessageFieldCode::ReplySerial,
-            value: Variant::from_u32(serial),
+            value: Variant::from(serial),
         }
     }
 
-    pub fn destination(destination: &str) -> Self {
+    pub fn destination(destination: &'a str) -> Self
+    where
+        Self: 'a,
+    {
         Self {
             code: MessageFieldCode::Destination,
-            value: Variant::from_string(destination),
+            value: Variant::from(destination),
         }
     }
 
-    pub fn sender(sender: &str) -> Self {
+    pub fn sender(sender: &'a str) -> Self
+    where
+        Self: 'a,
+    {
         Self {
             code: MessageFieldCode::Sender,
-            value: Variant::from_string(sender),
+            value: Variant::from(sender),
         }
     }
 
-    pub fn signature(signature: &str) -> Self {
+    pub fn signature(signature: &'a str) -> Self
+    where
+        Self: 'a,
+    {
         Self {
             code: MessageFieldCode::Signature,
-            value: Variant::from_signature_string(signature),
+            value: Variant::from(Signature(signature)),
         }
     }
 
-    pub fn unix_fds(fd: u32) -> Self {
+    pub fn unix_fds(fd: u32) -> Self
+    where
+        Self: 'a,
+    {
         Self {
             code: MessageFieldCode::UnixFDs,
-            value: Variant::from_u32(fd),
+            value: Variant::from(fd),
         }
     }
 
-    pub fn from_data(data: &[u8]) -> Result<(Self, usize), MessageFieldError> {
+    pub fn from_data(data: &'a [u8]) -> Result<(Self, usize), MessageFieldError> {
         let code = MessageFieldCode::from(data[0]);
         let signature =
             String::from_utf8(data[2..3].into()).map_err(|_| MessageFieldError::InvalidUtf8)?;
@@ -150,7 +177,7 @@ impl MessageField {
         bytes.push(b'\0');
 
         // Value
-        bytes.extend(&self.value.get_bytes());
+        bytes.extend(self.value.get_bytes());
 
         Ok(bytes)
     }
