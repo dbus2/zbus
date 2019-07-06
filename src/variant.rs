@@ -46,7 +46,6 @@ impl<'a> Variant<'a> {
         VariantType::extract(&self.value)
     }
 
-    // FIXME: Return a slice
     pub fn get_bytes(&self) -> &[u8] {
         &self.value
     }
