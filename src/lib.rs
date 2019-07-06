@@ -10,9 +10,12 @@ pub use connection::*;
 mod variant;
 pub use variant::*;
 
+mod variant_type;
+pub use variant_type::*;
+
 #[cfg(test)]
 mod tests {
-    use crate::variant::{Signature, VariantType};
+    use crate::variant_type::{Signature, VariantType};
 
     #[test]
     fn it_works() {

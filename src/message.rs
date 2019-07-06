@@ -3,7 +3,8 @@ use std::error;
 use std::fmt;
 
 use crate::message_field::{MessageField, MessageFieldCode, MessageFieldError};
-use crate::variant::{Variant, VariantError};
+use crate::variant::Variant;
+use crate::variant_type::VariantError;
 
 /// Size of primary message header
 pub const PRIMARY_HEADER_SIZE: usize = 16;

@@ -7,7 +7,7 @@ use nix::unistd::Uid;
 use crate::message;
 use crate::message_field;
 use crate::variant;
-use crate::variant::{Signature, VariantType};
+use crate::variant_type::{Signature, VariantError, VariantType};
 
 pub struct Connection {
     pub server_guid: String,
@@ -21,7 +21,7 @@ pub struct Connection {
 pub enum ConnectionError {
     IO(io::Error),
     Message(message::MessageError),
-    Variant(variant::VariantError),
+    Variant(VariantError),
     Handshake,
     InvalidReply,
     // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds anything more than a
