@@ -4,7 +4,6 @@ use std::str;
 use crate::variant_type::{ObjectPath, Signature, VariantError, VariantType};
 
 pub struct Variant<'a> {
-    // FIXME: This should be an `&str`
     signature: String,
     value: Cow<'a, [u8]>,
 }
