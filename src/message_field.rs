@@ -1,7 +1,7 @@
 use std::fmt;
 
-use crate::variant::Variant;
-use crate::variant_type::{ObjectPath, Signature, VariantError};
+use crate::Variant;
+use crate::{ObjectPath, Signature, VariantError};
 
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq)]

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::str;
 
-use crate::variant_type::{ObjectPath, Signature, VariantError, VariantType};
+use crate::{ObjectPath, Signature, VariantError, VariantType};
 
 pub struct Variant<'a> {
     signature: String,

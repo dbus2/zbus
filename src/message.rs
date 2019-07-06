@@ -2,9 +2,9 @@ use byteorder::ByteOrder;
 use std::error;
 use std::fmt;
 
-use crate::message_field::{MessageField, MessageFieldCode, MessageFieldError};
-use crate::variant::Variant;
-use crate::variant_type::VariantError;
+use crate::Variant;
+use crate::VariantError;
+use crate::{MessageField, MessageFieldCode, MessageFieldError};
 
 /// Size of primary message header
 pub const PRIMARY_HEADER_SIZE: usize = 16;

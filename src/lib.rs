@@ -15,7 +15,7 @@ pub use variant_type::*;
 
 #[cfg(test)]
 mod tests {
-    use crate::variant_type::{Signature, VariantType};
+    use crate::{Signature, VariantType};
 
     #[test]
     fn it_works() {
@@ -54,12 +54,12 @@ mod tests {
         all_fields
             .iter()
             .find(|f| {
-                f.code == crate::message_field::MessageFieldCode::Signature
+                f.code == crate::MessageFieldCode::Signature
                     && f.value.get().unwrap_or(Signature("")).0 == <(&str)>::SIGNATURE_STR
             })
             .unwrap();
         let body = reply.get_body().unwrap();
-        let v = crate::variant::Variant::from_data(&body, "s").unwrap();
+        let v = crate::Variant::from_data(&body, "s").unwrap();
         let id = v.get::<(&str)>().unwrap();
         println!("Machine ID: {}", id);
 
@@ -69,7 +69,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "GetNameOwner",
-                Some(crate::variant::Variant::from("org.freedesktop.DBus")),
+                Some(crate::Variant::from("org.freedesktop.DBus")),
             )
             .unwrap();
 
@@ -77,12 +77,12 @@ mod tests {
         all_fields
             .iter()
             .find(|f| {
-                f.code == crate::message_field::MessageFieldCode::Signature
+                f.code == crate::MessageFieldCode::Signature
                     && f.value.get().unwrap_or(Signature("")).0 == <(&str)>::SIGNATURE_STR
             })
             .unwrap();
         let body = reply.get_body().unwrap();
-        let v = crate::variant::Variant::from_data(&body, "s").unwrap();
+        let v = crate::Variant::from_data(&body, "s").unwrap();
         let owner = v.get::<(&str)>().unwrap();
         println!("Owner of 'org.freedesktop.DBus' is: {}", owner);
     }

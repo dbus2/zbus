@@ -6,8 +6,8 @@ use nix::unistd::Uid;
 
 use crate::message;
 use crate::message_field;
-use crate::variant;
-use crate::variant_type::{Signature, VariantError, VariantType};
+use crate::Variant;
+use crate::{Signature, VariantError, VariantType};
 
 pub struct Connection {
     pub server_guid: String,
@@ -93,7 +93,7 @@ impl From<message::Message> for ConnectionError {
                     .is_some()
                 {
                     match message.get_body() {
-                        Ok(body) => match variant::Variant::from_data(&body, "s") {
+                        Ok(body) => match Variant::from_data(&body, "s") {
                             Ok(v) => match v.get::<(&str)>() {
                                 Ok(detail) => {
                                     ConnectionError::MethodError(name, Some(String::from(detail)))
@@ -172,8 +172,7 @@ impl Connection {
             .is_some()
         {
             let body = reply.get_body().map_err(|e| ConnectionError::Message(e))?;
-            let v =
-                variant::Variant::from_data(&body, "s").map_err(|e| ConnectionError::Variant(e))?;
+            let v = Variant::from_data(&body, "s").map_err(|e| ConnectionError::Variant(e))?;
             let bus_name = v.get::<(&str)>().map_err(|e| ConnectionError::Variant(e))?;
 
             println!("bus name: {}", bus_name);
@@ -190,7 +189,7 @@ impl Connection {
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        body: Option<variant::Variant>,
+        body: Option<Variant>,
     ) -> Result<message::Message, ConnectionError> {
         println!("Starting: {}", method_name);
         let serial = self.next_serial();
