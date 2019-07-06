@@ -54,4 +54,23 @@ impl<'a> Variant<'a> {
     pub fn len(&self) -> usize {
         self.value.len()
     }
+
+    /// Checks if contained value is of the generic type `T`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = zbus::Variant::from("hello");
+    /// assert!(!v.is::<u32>());
+    /// assert!(v.is::<(&str)>());
+    /// ```
+    ///
+    /// ```
+    /// let v = zbus::Variant::from(147u32);
+    /// assert!(!v.is::<(&str)>());
+    /// assert!(v.is::<u32>());
+    /// ```
+    pub fn is<T: 'a + VariantType<'a>>(&self) -> bool {
+        T::SIGNATURE_STR == self.signature
+    }
 }
