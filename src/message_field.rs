@@ -165,8 +165,11 @@ impl<'a> MessageField<'a> {
     pub fn encode(&self) -> Result<Vec<u8>, MessageFieldError> {
         let mut bytes = Vec::with_capacity(4 + self.value.len());
 
-        // Signature
+        // Code
         bytes.push(self.code as u8);
+
+        // FIXME: Variant should be encoded by Variant (da!)
+        // Now the Variant, starting with the signature
         bytes.push(1);
         bytes.push(
             self.value
@@ -177,7 +180,7 @@ impl<'a> MessageField<'a> {
         );
         bytes.push(b'\0');
 
-        // Value
+        // and then the value
         bytes.extend(self.value.get_bytes());
 
         Ok(bytes)
