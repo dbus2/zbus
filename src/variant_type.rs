@@ -108,7 +108,17 @@ impl<'a> VariantType<'a> for &'a str {
     }
 }
 
-pub struct ObjectPath<'a>(pub &'a str);
+pub struct ObjectPath<'a>(&'a str);
+
+impl<'a> ObjectPath<'a> {
+    pub fn new(path: &'a str) -> Self {
+        Self(path)
+    }
+
+    pub fn as_str(&'a self) -> &str {
+        self.0
+    }
+}
 
 impl<'a> VariantType<'a> for ObjectPath<'a> {
     const SIGNATURE: char = 'o';
@@ -130,7 +140,17 @@ impl<'a> VariantType<'a> for ObjectPath<'a> {
     }
 }
 
-pub struct Signature<'a>(pub &'a str);
+pub struct Signature<'a>(&'a str);
+
+impl<'a> Signature<'a> {
+    pub fn new(signature: &'a str) -> Self {
+        Self(signature)
+    }
+
+    pub fn as_str(&'a self) -> &str {
+        self.0
+    }
+}
 
 // FIXME: Find a way to share code with &str implementation above
 impl<'a> VariantType<'a> for Signature<'a> {

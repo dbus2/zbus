@@ -66,7 +66,7 @@ impl<'a> MessageField<'a> {
     {
         Self {
             code: MessageFieldCode::Path,
-            value: Variant::from(ObjectPath(path)),
+            value: Variant::from(ObjectPath::new(path)),
         }
     }
 
@@ -136,7 +136,7 @@ impl<'a> MessageField<'a> {
     {
         Self {
             code: MessageFieldCode::Signature,
-            value: Variant::from(Signature(signature)),
+            value: Variant::from(Signature::new(signature)),
         }
     }
 

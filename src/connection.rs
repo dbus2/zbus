@@ -88,7 +88,8 @@ impl From<message::Message> for ConnectionError {
                     .iter()
                     .find(|f| {
                         f.code == message_field::MessageFieldCode::Signature
-                            && f.value.get().unwrap_or(Signature("")).0 == <(&str)>::SIGNATURE_STR
+                            && f.value.get().unwrap_or(Signature::new("")).as_str()
+                                == <(&str)>::SIGNATURE_STR
                     })
                     .is_some()
                 {
@@ -167,7 +168,8 @@ impl Connection {
             .iter()
             .find(|f| {
                 f.code == message_field::MessageFieldCode::Signature
-                    && f.value.get().unwrap_or(Signature("")).0 == <(&str)>::SIGNATURE_STR
+                    && f.value.get().unwrap_or(Signature::new("")).as_str()
+                        == <(&str)>::SIGNATURE_STR
             })
             .is_some()
         {

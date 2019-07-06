@@ -55,7 +55,8 @@ mod tests {
             .iter()
             .find(|f| {
                 f.code == crate::MessageFieldCode::Signature
-                    && f.value.get().unwrap_or(Signature("")).0 == <(&str)>::SIGNATURE_STR
+                    && f.value.get().unwrap_or(Signature::new("")).as_str()
+                        == <(&str)>::SIGNATURE_STR
             })
             .unwrap();
         let body = reply.get_body().unwrap();
@@ -78,7 +79,8 @@ mod tests {
             .iter()
             .find(|f| {
                 f.code == crate::MessageFieldCode::Signature
-                    && f.value.get().unwrap_or(Signature("")).0 == <(&str)>::SIGNATURE_STR
+                    && f.value.get().unwrap_or(Signature::new("")).as_str()
+                        == <(&str)>::SIGNATURE_STR
             })
             .unwrap();
         let body = reply.get_body().unwrap();
