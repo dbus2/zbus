@@ -46,7 +46,7 @@ impl<'a> VariantType<'a> for u8 {
     const SIGNATURE_STR: &'static str = "y";
 
     fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().iter().cloned().collect()
+        self.to_ne_bytes().iter().cloned().collect::<Vec<u8>>()
     }
 
     fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
