@@ -213,6 +213,30 @@ impl<'a> VariantType<'a> for i64 {
     }
 }
 
+impl<'a> VariantType<'a> for u64 {
+    const SIGNATURE: char = 't';
+    const SIGNATURE_STR: &'static str = "t";
+
+    fn encode(&self) -> Vec<u8> {
+        self.to_ne_bytes().iter().cloned().collect()
+    }
+
+    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+        ensure_sufficient_bytes(bytes, 8)?;
+
+        Ok(&bytes[0..8])
+    }
+
+    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    where
+        Self: 'a,
+    {
+        ensure_sufficient_bytes(bytes, 8)?;
+
+        Ok(byteorder::NativeEndian::read_u64(bytes))
+    }
+}
+
 impl<'a> VariantType<'a> for f64 {
     const SIGNATURE: char = 'd';
     const SIGNATURE_STR: &'static str = "d";
