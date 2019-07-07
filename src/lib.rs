@@ -13,6 +13,12 @@ pub use variant::*;
 mod variant_type;
 pub use variant_type::*;
 
+mod object_path;
+pub use object_path::*;
+
+mod signature;
+pub use signature::*;
+
 #[cfg(test)]
 mod tests {
     use crate::{Signature, VariantType};
