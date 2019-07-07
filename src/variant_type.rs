@@ -242,7 +242,7 @@ impl<'a> VariantType<'a> for f64 {
     const SIGNATURE_STR: &'static str = "d";
 
     fn encode(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(8);
+        let mut bytes = vec![0; 8];
         byteorder::NativeEndian::write_f64(&mut bytes, *self);
 
         bytes
