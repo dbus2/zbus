@@ -200,7 +200,7 @@ impl<'a> VariantType<'a> for i64 {
     fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
         ensure_sufficient_bytes(bytes, 8)?;
 
-        Ok(&bytes[0..4])
+        Ok(&bytes[0..8])
     }
 
     fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
