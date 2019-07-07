@@ -86,6 +86,28 @@ mod tests {
                 Some("org.freedesktop.DBus"),
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
+                "NameHasOwner",
+                Some(crate::Variant::from("org.freedesktop.DBus")),
+            )
+            .unwrap();
+
+        let all_fields = reply.get_fields().unwrap();
+        all_fields
+            .iter()
+            .find(|f| {
+                f.code == crate::MessageFieldCode::Signature
+                    && f.value.get().unwrap_or(Signature::new("")).as_str() == bool::SIGNATURE_STR
+            })
+            .unwrap();
+        let body = reply.get_body().unwrap();
+        let v = crate::Variant::from_data(&body, bool::SIGNATURE_STR).unwrap();
+        assert!(v.get::<bool>().unwrap());
+
+        let reply = connection
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
                 "GetNameOwner",
                 Some(crate::Variant::from("org.freedesktop.DBus")),
             )
