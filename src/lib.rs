@@ -24,7 +24,7 @@ mod tests {
     use crate::{Signature, VariantType};
 
     #[test]
-    fn it_works() {
+    fn basic_connection() {
         let mut connection = crate::Connection::new_session()
             .map_err(|e| {
                 println!("error: {}", e);
@@ -45,6 +45,17 @@ mod tests {
             Err(crate::ConnectionError::MethodError(_, _)) => (),
             _ => panic!(),
         };
+    }
+
+    #[test]
+    fn freedesktop_api() {
+        let mut connection = crate::Connection::new_session()
+            .map_err(|e| {
+                println!("error: {}", e);
+
+                e
+            })
+            .unwrap();
 
         let reply = connection
             .call_method(
