@@ -15,7 +15,15 @@ impl<'a> Variant<'a> {
     {
         let value = match signature {
             // FIXME: There has to be a shorter way to do this
+            u8::SIGNATURE_STR => u8::extract_slice(data)?,
+            bool::SIGNATURE_STR => bool::extract_slice(data)?,
+            i16::SIGNATURE_STR => i16::extract_slice(data)?,
+            u16::SIGNATURE_STR => u16::extract_slice(data)?,
+            i32::SIGNATURE_STR => i32::extract_slice(data)?,
             u32::SIGNATURE_STR => u32::extract_slice(data)?,
+            i64::SIGNATURE_STR => i64::extract_slice(data)?,
+            u64::SIGNATURE_STR => u64::extract_slice(data)?,
+            f64::SIGNATURE_STR => f64::extract_slice(data)?,
             <(&str)>::SIGNATURE_STR => <(&str)>::extract_slice(data)?,
             ObjectPath::SIGNATURE_STR => ObjectPath::extract_slice(data)?,
             Signature::SIGNATURE_STR => Signature::extract_slice(data)?,
