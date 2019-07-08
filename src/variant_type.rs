@@ -280,9 +280,7 @@ impl<'a> VariantType<'a> for &'a str {
     }
 
     fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
-        if bytes.len() < 4 {
-            return Err(VariantError::InsufficientData);
-        }
+        ensure_sufficient_bytes(bytes, 4)?;
 
         let last_index = byteorder::NativeEndian::read_u32(bytes) as usize + 5;
         if bytes.len() < last_index {
@@ -296,9 +294,7 @@ impl<'a> VariantType<'a> for &'a str {
     where
         Self: 'a,
     {
-        if bytes.len() < 4 {
-            return Err(VariantError::InsufficientData);
-        }
+        ensure_sufficient_bytes(bytes, 4)?;
 
         str::from_utf8(&bytes[4..]).map_err(|_| VariantError::InvalidUtf8)
     }
