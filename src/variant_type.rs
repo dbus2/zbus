@@ -296,7 +296,8 @@ impl<'a> VariantType<'a> for &'a str {
     {
         ensure_sufficient_bytes(bytes, 4)?;
 
-        str::from_utf8(&bytes[4..]).map_err(|_| VariantError::InvalidUtf8)
+        let last_index = bytes.len() - 1;
+        str::from_utf8(&bytes[4..last_index]).map_err(|_| VariantError::InvalidUtf8)
     }
 }
 
