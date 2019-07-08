@@ -43,7 +43,7 @@ impl<'a> VariantType<'a> for Signature<'a> {
         Ok(&bytes[0..last_index])
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {

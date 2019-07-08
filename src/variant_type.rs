@@ -36,7 +36,7 @@ pub trait VariantType<'a>: Sized {
     fn encode(&self) -> Vec<u8>;
     fn extract_slice(data: &'a [u8]) -> Result<&'a [u8], VariantError>;
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a;
 }
@@ -55,7 +55,7 @@ impl<'a> VariantType<'a> for u8 {
         Ok(&bytes[0..1])
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
@@ -79,7 +79,7 @@ impl<'a> VariantType<'a> for bool {
         Ok(&bytes[0..4])
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
@@ -107,7 +107,7 @@ impl<'a> VariantType<'a> for i16 {
         Ok(&bytes[0..2])
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
@@ -131,7 +131,7 @@ impl<'a> VariantType<'a> for u16 {
         Ok(&bytes[0..2])
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
@@ -155,7 +155,7 @@ impl<'a> VariantType<'a> for i32 {
         Ok(&bytes[0..4])
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
@@ -179,7 +179,7 @@ impl<'a> VariantType<'a> for u32 {
         Ok(&bytes[0..4])
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
@@ -203,7 +203,7 @@ impl<'a> VariantType<'a> for i64 {
         Ok(&bytes[0..8])
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
@@ -227,7 +227,7 @@ impl<'a> VariantType<'a> for u64 {
         Ok(&bytes[0..8])
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
@@ -254,7 +254,7 @@ impl<'a> VariantType<'a> for f64 {
         Ok(&bytes[0..8])
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
@@ -290,7 +290,7 @@ impl<'a> VariantType<'a> for &'a str {
         Ok(&bytes[0..last_index])
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {

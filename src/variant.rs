@@ -51,7 +51,7 @@ impl<'a> Variant<'a> {
     }
 
     pub fn get<T: 'a + VariantType<'a>>(&'a self) -> Result<T, VariantError> {
-        VariantType::extract(&self.value)
+        VariantType::decode(&self.value)
     }
 
     pub fn get_bytes(&self) -> &[u8] {

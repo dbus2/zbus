@@ -27,10 +27,10 @@ impl<'a> VariantType<'a> for ObjectPath<'a> {
         <(&str)>::extract_slice(bytes)
     }
 
-    fn extract(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
-        <(&str)>::extract(bytes).map(|s| Self(s))
+        <(&str)>::decode(bytes).map(|s| Self(s))
     }
 }
