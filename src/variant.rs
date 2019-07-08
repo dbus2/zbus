@@ -191,4 +191,16 @@ mod tests {
         assert!(v.len() == 8);
         assert!(v.get::<f64>().unwrap() == 117.112);
     }
+
+    #[test]
+    fn str_variant() {
+        let v = crate::Variant::from("Hello world!");
+        assert!(v.len() == 17);
+        assert!(v.get::<(&str)>().unwrap() == "Hello world!");
+        assert!(v.is::<(&str)>());
+
+        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        assert!(v.len() == 17);
+        assert!(v.get::<(&str)>().unwrap() == "Hello world!");
+    }
 }
