@@ -51,7 +51,8 @@ impl<'a> VariantType<'a> for Signature<'a> {
             return Err(VariantError::InsufficientData);
         }
 
-        str::from_utf8(&bytes[1..])
+        let last_index = bytes.len() - 1;
+        str::from_utf8(&bytes[1..last_index])
             .map(|s| Self(s))
             .map_err(|_| VariantError::InvalidUtf8)
     }
