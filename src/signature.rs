@@ -35,7 +35,7 @@ impl<'a> VariantType<'a> for Signature<'a> {
             return Err(VariantError::InsufficientData);
         }
 
-        let last_index = bytes[0] as usize + 1;
+        let last_index = bytes[0] as usize + 2;
         if bytes.len() < last_index {
             return Err(VariantError::InsufficientData);
         }
