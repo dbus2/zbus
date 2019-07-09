@@ -1,7 +1,7 @@
 use std::fmt;
 
-use crate::Variant;
 use crate::{ObjectPath, Signature, VariantError};
+use crate::{Variant, VariantType};
 
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq)]
@@ -168,20 +168,8 @@ impl<'a> MessageField<'a> {
         // Code
         bytes.push(self.code as u8);
 
-        // FIXME: Variant should be encoded by Variant (da!)
-        // Now the Variant, starting with the signature
-        bytes.push(1);
-        bytes.push(
-            self.value
-                .get_signature()
-                .chars()
-                .nth(0)
-                .ok_or_else(|| MessageFieldError::InsufficientData)? as u8,
-        );
-        bytes.push(b'\0');
-
-        // and then the value
-        bytes.extend(self.value.get_bytes());
+        // Now the Variant
+        bytes.extend(self.value.encode());
 
         Ok(bytes)
     }

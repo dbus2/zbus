@@ -13,22 +13,7 @@ impl<'a> Variant<'a> {
     where
         Self: 'a,
     {
-        let value = match signature {
-            // FIXME: There has to be a shorter way to do this
-            u8::SIGNATURE_STR => u8::extract_slice(data)?,
-            bool::SIGNATURE_STR => bool::extract_slice(data)?,
-            i16::SIGNATURE_STR => i16::extract_slice(data)?,
-            u16::SIGNATURE_STR => u16::extract_slice(data)?,
-            i32::SIGNATURE_STR => i32::extract_slice(data)?,
-            u32::SIGNATURE_STR => u32::extract_slice(data)?,
-            i64::SIGNATURE_STR => i64::extract_slice(data)?,
-            u64::SIGNATURE_STR => u64::extract_slice(data)?,
-            f64::SIGNATURE_STR => f64::extract_slice(data)?,
-            <(&str)>::SIGNATURE_STR => <(&str)>::extract_slice(data)?,
-            ObjectPath::SIGNATURE_STR => ObjectPath::extract_slice(data)?,
-            Signature::SIGNATURE_STR => Signature::extract_slice(data)?,
-            _ => return Err(VariantError::UnsupportedType),
-        };
+        let value = extract_slice_from_data(data, signature)?;
 
         Ok(Self {
             value: Cow::from(value),
@@ -82,8 +67,66 @@ impl<'a> Variant<'a> {
     }
 }
 
+impl<'a> VariantType<'a> for Variant<'a> {
+    const SIGNATURE: char = 'v';
+    const SIGNATURE_STR: &'static str = "v";
+
+    fn encode(&self) -> Vec<u8> {
+        let mut bytes = Signature::new(&self.signature).encode();
+        bytes.extend_from_slice(&self.value);
+
+        bytes
+    }
+
+    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+        // Variant is made of signature of the value followed by the actual value. So we gotta
+        // extract the signature slice first and then the value slice. Once we know the sizes of
+        // both, we can just slice the whole thing.
+        let sign_slice = Signature::extract_slice(bytes)?;
+        let sign_size = sign_slice.len();
+        let sign = Signature::decode(sign_slice)?;
+
+        let value_slice = extract_slice_from_data(&bytes[sign_size..], sign.as_str())?;
+        let total_size = sign_size + value_slice.len();
+
+        Ok(&bytes[0..total_size])
+    }
+
+    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    where
+        Self: 'a,
+    {
+        let sign_slice = Signature::extract_slice(bytes)?;
+        let sign_size = sign_slice.len();
+        let sign = Signature::decode(sign_slice)?;
+
+        Variant::from_data(&bytes[sign_size..], sign.as_str())
+    }
+}
+
+fn extract_slice_from_data<'a>(data: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    match signature {
+        // FIXME: There has to be a shorter way to do this
+        u8::SIGNATURE_STR => u8::extract_slice(data),
+        bool::SIGNATURE_STR => bool::extract_slice(data),
+        i16::SIGNATURE_STR => i16::extract_slice(data),
+        u16::SIGNATURE_STR => u16::extract_slice(data),
+        i32::SIGNATURE_STR => i32::extract_slice(data),
+        u32::SIGNATURE_STR => u32::extract_slice(data),
+        i64::SIGNATURE_STR => i64::extract_slice(data),
+        u64::SIGNATURE_STR => u64::extract_slice(data),
+        f64::SIGNATURE_STR => f64::extract_slice(data),
+        <(&str)>::SIGNATURE_STR => <(&str)>::extract_slice(data),
+        ObjectPath::SIGNATURE_STR => ObjectPath::extract_slice(data),
+        Signature::SIGNATURE_STR => Signature::extract_slice(data),
+        _ => return Err(VariantError::UnsupportedType),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::VariantType;
+
     #[test]
     fn u8_variant() {
         let v = crate::Variant::from(u8::max_value());
@@ -202,5 +245,23 @@ mod tests {
         let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
         assert!(v.len() == 17);
         assert!(v.get::<(&str)>().unwrap() == "Hello world!");
+    }
+
+    #[test]
+    fn variant_variant() {
+        let v = crate::Variant::from(7u8);
+        let mut encoded = v.encode();
+        assert!(encoded.len() == 4);
+
+        // Add some extra bytes to the encoded data to test the slicing
+        encoded.push(0);
+        encoded.push(1);
+        encoded.push(7);
+
+        let slice = crate::Variant::extract_slice(&encoded).unwrap();
+
+        let decoded = crate::Variant::decode(slice).unwrap();
+        assert!(decoded.get_signature() == u8::SIGNATURE_STR);
+        assert!(decoded.get::<u8>().unwrap() == 7u8);
     }
 }
