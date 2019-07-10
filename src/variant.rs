@@ -248,6 +248,30 @@ mod tests {
     }
 
     #[test]
+    fn object_path_variant() {
+        let v = crate::Variant::from(crate::ObjectPath::new("Hello world!"));
+        assert!(v.len() == 17);
+        assert!(v.get::<crate::ObjectPath>().unwrap().as_str() == "Hello world!");
+        assert!(v.is::<crate::ObjectPath>());
+
+        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        assert!(v.len() == 17);
+        assert!(v.get::<crate::ObjectPath>().unwrap().as_str() == "Hello world!");
+    }
+
+    #[test]
+    fn signature_variant() {
+        let v = crate::Variant::from(crate::Signature::new("Hello world!"));
+        assert!(v.len() == 14);
+        assert!(v.get::<crate::Signature>().unwrap().as_str() == "Hello world!");
+        assert!(v.is::<crate::Signature>());
+
+        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        assert!(v.len() == 14);
+        assert!(v.get::<crate::Signature>().unwrap().as_str() == "Hello world!");
+    }
+
+    #[test]
     fn variant_variant() {
         let v = crate::Variant::from(7u8);
         let mut encoded = v.encode();
