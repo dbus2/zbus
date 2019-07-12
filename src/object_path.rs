@@ -28,11 +28,12 @@ impl<'a> VariantType<'a> for ObjectPath<'a> {
         <(&str)>::extract_slice_simple(bytes)
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
-        <(&str)>::decode(bytes).map(|s| Self(s))
+        Self::ensure_correct_signature(signature)?;
+        <(&str)>::decode(bytes, <(&str)>::SIGNATURE_STR).map(|s| Self(s))
     }
 }
 impl<'a> SimpleVariantType<'a> for ObjectPath<'a> {}

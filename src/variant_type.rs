@@ -43,7 +43,7 @@ pub trait VariantType<'a>: Sized {
         Ok(())
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a;
 }
@@ -51,6 +51,13 @@ pub trait VariantType<'a>: Sized {
 pub trait SimpleVariantType<'a>: VariantType<'a> {
     fn extract_slice_simple(data: &'a [u8]) -> Result<&'a [u8], VariantError> {
         Self::extract_slice(data, Self::SIGNATURE_STR)
+    }
+
+    fn decode_simple(bytes: &'a [u8]) -> Result<Self, VariantError>
+    where
+        Self: 'a,
+    {
+        Self::decode(bytes, Self::SIGNATURE_STR)
     }
 }
 
@@ -69,10 +76,11 @@ impl<'a> VariantType<'a> for u8 {
         Ok(&bytes[0..1])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 1)?;
 
         Ok(bytes[0])
@@ -95,10 +103,11 @@ impl<'a> VariantType<'a> for bool {
         Ok(&bytes[0..4])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
         match byteorder::NativeEndian::read_u32(bytes) {
@@ -125,10 +134,11 @@ impl<'a> VariantType<'a> for i16 {
         Ok(&bytes[0..2])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 2)?;
 
         Ok(byteorder::NativeEndian::read_i16(bytes))
@@ -151,10 +161,11 @@ impl<'a> VariantType<'a> for u16 {
         Ok(&bytes[0..2])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 2)?;
 
         Ok(byteorder::NativeEndian::read_u16(bytes))
@@ -177,10 +188,11 @@ impl<'a> VariantType<'a> for i32 {
         Ok(&bytes[0..4])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
         Ok(byteorder::NativeEndian::read_i32(bytes))
@@ -203,10 +215,11 @@ impl<'a> VariantType<'a> for u32 {
         Ok(&bytes[0..4])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
         Ok(byteorder::NativeEndian::read_u32(bytes))
@@ -229,10 +242,11 @@ impl<'a> VariantType<'a> for i64 {
         Ok(&bytes[0..8])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 
         Ok(byteorder::NativeEndian::read_i64(bytes))
@@ -255,10 +269,11 @@ impl<'a> VariantType<'a> for u64 {
         Ok(&bytes[0..8])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 
         Ok(byteorder::NativeEndian::read_u64(bytes))
@@ -284,10 +299,11 @@ impl<'a> VariantType<'a> for f64 {
         Ok(&bytes[0..8])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 
         Ok(byteorder::NativeEndian::read_f64(bytes))
@@ -322,10 +338,11 @@ impl<'a> VariantType<'a> for &'a str {
         Ok(&bytes[0..last_index])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
         let last_index = bytes.len() - 1;

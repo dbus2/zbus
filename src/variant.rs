@@ -36,7 +36,7 @@ impl<'a> Variant<'a> {
     }
 
     pub fn get<T: 'a + VariantType<'a>>(&'a self) -> Result<T, VariantError> {
-        VariantType::decode(&self.value)
+        T::decode(&self.value, &self.signature)
     }
 
     pub fn get_bytes(&self) -> &[u8] {
@@ -86,7 +86,7 @@ impl<'a> VariantType<'a> for Variant<'a> {
         // both, we can just slice the whole thing.
         let sign_slice = Signature::extract_slice_simple(bytes)?;
         let sign_size = sign_slice.len();
-        let sign = Signature::decode(sign_slice)?;
+        let sign = Signature::decode_simple(sign_slice)?;
 
         let value_slice = extract_slice_from_data(&bytes[sign_size..], sign.as_str())?;
         let total_size = sign_size + value_slice.len();
@@ -94,13 +94,15 @@ impl<'a> VariantType<'a> for Variant<'a> {
         Ok(&bytes[0..total_size])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
+
         let sign_slice = Signature::extract_slice_simple(bytes)?;
         let sign_size = sign_slice.len();
-        let sign = Signature::decode(sign_slice)?;
+        let sign = Signature::decode_simple(sign_slice)?;
 
         Variant::from_data(&bytes[sign_size..], sign.as_str())
     }
@@ -287,7 +289,7 @@ mod tests {
 
         let slice = crate::Variant::extract_slice_simple(&encoded).unwrap();
 
-        let decoded = crate::Variant::decode(slice).unwrap();
+        let decoded = crate::Variant::decode_simple(slice).unwrap();
         assert!(decoded.get_signature() == u8::SIGNATURE_STR);
         assert!(decoded.get::<u8>().unwrap() == 7u8);
     }

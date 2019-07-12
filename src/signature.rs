@@ -44,10 +44,11 @@ impl<'a> VariantType<'a> for Signature<'a> {
         Ok(&bytes[0..last_index])
     }
 
-    fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a,
     {
+        Self::ensure_correct_signature(signature)?;
         if bytes.len() < 1 {
             return Err(VariantError::InsufficientData);
         }
