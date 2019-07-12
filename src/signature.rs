@@ -1,6 +1,6 @@
 use std::str;
 
-use crate::{VariantError, VariantType};
+use crate::{SimpleVariantType, VariantError, VariantType};
 
 pub struct Signature<'a>(&'a str);
 
@@ -30,7 +30,8 @@ impl<'a> VariantType<'a> for Signature<'a> {
         bytes
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
         if bytes.len() < 1 {
             return Err(VariantError::InsufficientData);
         }
@@ -57,3 +58,4 @@ impl<'a> VariantType<'a> for Signature<'a> {
             .map_err(|_| VariantError::InvalidUtf8)
     }
 }
+impl<'a> SimpleVariantType<'a> for Signature<'a> {}

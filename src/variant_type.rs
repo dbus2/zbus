@@ -34,11 +34,24 @@ pub trait VariantType<'a>: Sized {
 
     // FIXME: Would be nice if this returned a slice
     fn encode(&self) -> Vec<u8>;
-    fn extract_slice(data: &'a [u8]) -> Result<&'a [u8], VariantError>;
+    fn extract_slice(data: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError>;
+    fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
+        if signature != Self::SIGNATURE_STR {
+            return Err(VariantError::IncorrectType);
+        }
+
+        Ok(())
+    }
 
     fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
     where
         Self: 'a;
+}
+
+pub trait SimpleVariantType<'a>: VariantType<'a> {
+    fn extract_slice_simple(data: &'a [u8]) -> Result<&'a [u8], VariantError> {
+        Self::extract_slice(data, Self::SIGNATURE_STR)
+    }
 }
 
 impl<'a> VariantType<'a> for u8 {
@@ -49,7 +62,8 @@ impl<'a> VariantType<'a> for u8 {
         self.to_ne_bytes().iter().cloned().collect::<Vec<u8>>()
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 1)?;
 
         Ok(&bytes[0..1])
@@ -64,6 +78,7 @@ impl<'a> VariantType<'a> for u8 {
         Ok(bytes[0])
     }
 }
+impl<'a> SimpleVariantType<'a> for u8 {}
 
 impl<'a> VariantType<'a> for bool {
     const SIGNATURE: char = 'b';
@@ -73,7 +88,8 @@ impl<'a> VariantType<'a> for bool {
         (*self as u32).to_ne_bytes().iter().cloned().collect()
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
         Ok(&bytes[0..4])
@@ -92,6 +108,7 @@ impl<'a> VariantType<'a> for bool {
         }
     }
 }
+impl<'a> SimpleVariantType<'a> for bool {}
 
 impl<'a> VariantType<'a> for i16 {
     const SIGNATURE: char = 'n';
@@ -101,7 +118,8 @@ impl<'a> VariantType<'a> for i16 {
         self.to_ne_bytes().iter().cloned().collect()
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 2)?;
 
         Ok(&bytes[0..2])
@@ -116,6 +134,7 @@ impl<'a> VariantType<'a> for i16 {
         Ok(byteorder::NativeEndian::read_i16(bytes))
     }
 }
+impl<'a> SimpleVariantType<'a> for i16 {}
 
 impl<'a> VariantType<'a> for u16 {
     const SIGNATURE: char = 'q';
@@ -125,7 +144,8 @@ impl<'a> VariantType<'a> for u16 {
         self.to_ne_bytes().iter().cloned().collect()
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 2)?;
 
         Ok(&bytes[0..2])
@@ -140,6 +160,7 @@ impl<'a> VariantType<'a> for u16 {
         Ok(byteorder::NativeEndian::read_u16(bytes))
     }
 }
+impl<'a> SimpleVariantType<'a> for u16 {}
 
 impl<'a> VariantType<'a> for i32 {
     const SIGNATURE: char = 'i';
@@ -149,7 +170,8 @@ impl<'a> VariantType<'a> for i32 {
         self.to_ne_bytes().iter().cloned().collect()
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
         Ok(&bytes[0..4])
@@ -164,6 +186,7 @@ impl<'a> VariantType<'a> for i32 {
         Ok(byteorder::NativeEndian::read_i32(bytes))
     }
 }
+impl<'a> SimpleVariantType<'a> for i32 {}
 
 impl<'a> VariantType<'a> for u32 {
     const SIGNATURE: char = 'u';
@@ -173,7 +196,8 @@ impl<'a> VariantType<'a> for u32 {
         self.to_ne_bytes().iter().cloned().collect()
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
         Ok(&bytes[0..4])
@@ -188,6 +212,7 @@ impl<'a> VariantType<'a> for u32 {
         Ok(byteorder::NativeEndian::read_u32(bytes))
     }
 }
+impl<'a> SimpleVariantType<'a> for u32 {}
 
 impl<'a> VariantType<'a> for i64 {
     const SIGNATURE: char = 'x';
@@ -197,7 +222,8 @@ impl<'a> VariantType<'a> for i64 {
         self.to_ne_bytes().iter().cloned().collect()
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 
         Ok(&bytes[0..8])
@@ -212,6 +238,7 @@ impl<'a> VariantType<'a> for i64 {
         Ok(byteorder::NativeEndian::read_i64(bytes))
     }
 }
+impl<'a> SimpleVariantType<'a> for i64 {}
 
 impl<'a> VariantType<'a> for u64 {
     const SIGNATURE: char = 't';
@@ -221,7 +248,8 @@ impl<'a> VariantType<'a> for u64 {
         self.to_ne_bytes().iter().cloned().collect()
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 
         Ok(&bytes[0..8])
@@ -236,6 +264,7 @@ impl<'a> VariantType<'a> for u64 {
         Ok(byteorder::NativeEndian::read_u64(bytes))
     }
 }
+impl<'a> SimpleVariantType<'a> for u64 {}
 
 impl<'a> VariantType<'a> for f64 {
     const SIGNATURE: char = 'd';
@@ -248,7 +277,8 @@ impl<'a> VariantType<'a> for f64 {
         bytes
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 
         Ok(&bytes[0..8])
@@ -263,6 +293,7 @@ impl<'a> VariantType<'a> for f64 {
         Ok(byteorder::NativeEndian::read_f64(bytes))
     }
 }
+impl<'a> SimpleVariantType<'a> for f64 {}
 
 impl<'a> VariantType<'a> for &'a str {
     const SIGNATURE: char = 's';
@@ -279,7 +310,8 @@ impl<'a> VariantType<'a> for &'a str {
         bytes
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
         let last_index = byteorder::NativeEndian::read_u32(bytes) as usize + 5;
@@ -300,6 +332,7 @@ impl<'a> VariantType<'a> for &'a str {
         str::from_utf8(&bytes[4..last_index]).map_err(|_| VariantError::InvalidUtf8)
     }
 }
+impl<'a> SimpleVariantType<'a> for &'a str {}
 
 fn ensure_sufficient_bytes(bytes: &[u8], size: usize) -> Result<(), VariantError> {
     if bytes.len() < size {

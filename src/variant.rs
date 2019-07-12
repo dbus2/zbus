@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::str;
 
-use crate::{ObjectPath, Signature, VariantError, VariantType};
+use crate::{ObjectPath, Signature, SimpleVariantType, VariantError, VariantType};
 
 pub struct Variant<'a> {
     signature: Cow<'a, str>,
@@ -78,11 +78,13 @@ impl<'a> VariantType<'a> for Variant<'a> {
         bytes
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
+
         // Variant is made of signature of the value followed by the actual value. So we gotta
         // extract the signature slice first and then the value slice. Once we know the sizes of
         // both, we can just slice the whole thing.
-        let sign_slice = Signature::extract_slice(bytes)?;
+        let sign_slice = Signature::extract_slice_simple(bytes)?;
         let sign_size = sign_slice.len();
         let sign = Signature::decode(sign_slice)?;
 
@@ -96,36 +98,37 @@ impl<'a> VariantType<'a> for Variant<'a> {
     where
         Self: 'a,
     {
-        let sign_slice = Signature::extract_slice(bytes)?;
+        let sign_slice = Signature::extract_slice_simple(bytes)?;
         let sign_size = sign_slice.len();
         let sign = Signature::decode(sign_slice)?;
 
         Variant::from_data(&bytes[sign_size..], sign.as_str())
     }
 }
+impl<'a> SimpleVariantType<'a> for Variant<'a> {}
 
 fn extract_slice_from_data<'a>(data: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
     match signature {
         // FIXME: There has to be a shorter way to do this
-        u8::SIGNATURE_STR => u8::extract_slice(data),
-        bool::SIGNATURE_STR => bool::extract_slice(data),
-        i16::SIGNATURE_STR => i16::extract_slice(data),
-        u16::SIGNATURE_STR => u16::extract_slice(data),
-        i32::SIGNATURE_STR => i32::extract_slice(data),
-        u32::SIGNATURE_STR => u32::extract_slice(data),
-        i64::SIGNATURE_STR => i64::extract_slice(data),
-        u64::SIGNATURE_STR => u64::extract_slice(data),
-        f64::SIGNATURE_STR => f64::extract_slice(data),
-        <(&str)>::SIGNATURE_STR => <(&str)>::extract_slice(data),
-        ObjectPath::SIGNATURE_STR => ObjectPath::extract_slice(data),
-        Signature::SIGNATURE_STR => Signature::extract_slice(data),
+        u8::SIGNATURE_STR => u8::extract_slice_simple(data),
+        bool::SIGNATURE_STR => bool::extract_slice_simple(data),
+        i16::SIGNATURE_STR => i16::extract_slice_simple(data),
+        u16::SIGNATURE_STR => u16::extract_slice_simple(data),
+        i32::SIGNATURE_STR => i32::extract_slice_simple(data),
+        u32::SIGNATURE_STR => u32::extract_slice_simple(data),
+        i64::SIGNATURE_STR => i64::extract_slice_simple(data),
+        u64::SIGNATURE_STR => u64::extract_slice_simple(data),
+        f64::SIGNATURE_STR => f64::extract_slice_simple(data),
+        <(&str)>::SIGNATURE_STR => <(&str)>::extract_slice_simple(data),
+        ObjectPath::SIGNATURE_STR => ObjectPath::extract_slice_simple(data),
+        Signature::SIGNATURE_STR => Signature::extract_slice_simple(data),
         _ => return Err(VariantError::UnsupportedType),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::VariantType;
+    use crate::{SimpleVariantType, VariantType};
 
     #[test]
     fn u8_variant() {
@@ -282,7 +285,7 @@ mod tests {
         encoded.push(1);
         encoded.push(7);
 
-        let slice = crate::Variant::extract_slice(&encoded).unwrap();
+        let slice = crate::Variant::extract_slice_simple(&encoded).unwrap();
 
         let decoded = crate::Variant::decode(slice).unwrap();
         assert!(decoded.get_signature() == u8::SIGNATURE_STR);

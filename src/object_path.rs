@@ -1,6 +1,6 @@
 use std::str;
 
-use crate::{VariantError, VariantType};
+use crate::{SimpleVariantType, VariantError, VariantType};
 
 pub struct ObjectPath<'a>(&'a str);
 
@@ -23,8 +23,9 @@ impl<'a> VariantType<'a> for ObjectPath<'a> {
         self.0.encode()
     }
 
-    fn extract_slice(bytes: &'a [u8]) -> Result<&'a [u8], VariantError> {
-        <(&str)>::extract_slice(bytes)
+    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
+        <(&str)>::extract_slice_simple(bytes)
     }
 
     fn decode(bytes: &'a [u8]) -> Result<Self, VariantError>
@@ -34,3 +35,4 @@ impl<'a> VariantType<'a> for ObjectPath<'a> {
         <(&str)>::decode(bytes).map(|s| Self(s))
     }
 }
+impl<'a> SimpleVariantType<'a> for ObjectPath<'a> {}
