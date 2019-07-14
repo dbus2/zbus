@@ -63,7 +63,7 @@ impl<'a> Variant<'a> {
     /// assert!(v.is::<u32>());
     /// ```
     pub fn is<T: 'a + VariantType<'a>>(&self) -> bool {
-        T::SIGNATURE_STR == self.signature
+        self.signature.starts_with(T::SIGNATURE_STR)
     }
 }
 
