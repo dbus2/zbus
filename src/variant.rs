@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::str;
 
-use crate::{ObjectPath, Signature, SimpleVariantType, VariantError, VariantType};
+use crate::{Signature, SimpleVariantType, VariantError, VariantType};
 
 pub struct Variant<'a> {
     signature: Cow<'a, str>,
@@ -13,7 +13,7 @@ impl<'a> Variant<'a> {
     where
         Self: 'a,
     {
-        let value = extract_slice_from_data(data, signature)?;
+        let value = crate::variant_type::extract_slice_from_data(data, signature)?;
 
         Ok(Self {
             value: Cow::from(value),
@@ -88,7 +88,8 @@ impl<'a> VariantType<'a> for Variant<'a> {
         let sign_size = sign_slice.len();
         let sign = Signature::decode_simple(sign_slice)?;
 
-        let value_slice = extract_slice_from_data(&bytes[sign_size..], sign.as_str())?;
+        let value_slice =
+            crate::variant_type::extract_slice_from_data(&bytes[sign_size..], sign.as_str())?;
         let total_size = sign_size + value_slice.len();
 
         Ok(&bytes[0..total_size])
@@ -108,25 +109,6 @@ impl<'a> VariantType<'a> for Variant<'a> {
     }
 }
 impl<'a> SimpleVariantType<'a> for Variant<'a> {}
-
-fn extract_slice_from_data<'a>(data: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
-    match signature {
-        // FIXME: There has to be a shorter way to do this
-        u8::SIGNATURE_STR => u8::extract_slice_simple(data),
-        bool::SIGNATURE_STR => bool::extract_slice_simple(data),
-        i16::SIGNATURE_STR => i16::extract_slice_simple(data),
-        u16::SIGNATURE_STR => u16::extract_slice_simple(data),
-        i32::SIGNATURE_STR => i32::extract_slice_simple(data),
-        u32::SIGNATURE_STR => u32::extract_slice_simple(data),
-        i64::SIGNATURE_STR => i64::extract_slice_simple(data),
-        u64::SIGNATURE_STR => u64::extract_slice_simple(data),
-        f64::SIGNATURE_STR => f64::extract_slice_simple(data),
-        <(&str)>::SIGNATURE_STR => <(&str)>::extract_slice_simple(data),
-        ObjectPath::SIGNATURE_STR => ObjectPath::extract_slice_simple(data),
-        Signature::SIGNATURE_STR => Signature::extract_slice_simple(data),
-        _ => return Err(VariantError::UnsupportedType),
-    }
-}
 
 #[cfg(test)]
 mod tests {

@@ -1,6 +1,8 @@
 use byteorder::ByteOrder;
 use std::{error, fmt, str};
 
+use crate::{ObjectPath, Signature};
+
 #[derive(Debug)]
 pub enum VariantError {
     IncorrectType,
@@ -357,4 +359,27 @@ fn ensure_sufficient_bytes(bytes: &[u8], size: usize) -> Result<(), VariantError
     }
 
     Ok(())
+}
+
+// FIXME: This shouldn't be directly exposed on public API.
+pub fn extract_slice_from_data<'a>(
+    data: &'a [u8],
+    signature: &str,
+) -> Result<&'a [u8], VariantError> {
+    match signature {
+        // FIXME: There has to be a shorter way to do this
+        u8::SIGNATURE_STR => u8::extract_slice_simple(data),
+        bool::SIGNATURE_STR => bool::extract_slice_simple(data),
+        i16::SIGNATURE_STR => i16::extract_slice_simple(data),
+        u16::SIGNATURE_STR => u16::extract_slice_simple(data),
+        i32::SIGNATURE_STR => i32::extract_slice_simple(data),
+        u32::SIGNATURE_STR => u32::extract_slice_simple(data),
+        i64::SIGNATURE_STR => i64::extract_slice_simple(data),
+        u64::SIGNATURE_STR => u64::extract_slice_simple(data),
+        f64::SIGNATURE_STR => f64::extract_slice_simple(data),
+        <(&str)>::SIGNATURE_STR => <(&str)>::extract_slice_simple(data),
+        ObjectPath::SIGNATURE_STR => ObjectPath::extract_slice_simple(data),
+        Signature::SIGNATURE_STR => Signature::extract_slice_simple(data),
+        _ => return Err(VariantError::UnsupportedType),
+    }
 }
