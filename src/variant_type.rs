@@ -5,6 +5,7 @@ use crate::{ObjectPath, Signature};
 
 #[derive(Debug)]
 pub enum VariantError {
+    ExcessData,
     IncorrectType,
     IncorrectValue,
     InvalidUtf8,
@@ -21,6 +22,7 @@ impl error::Error for VariantError {
 impl fmt::Display for VariantError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            VariantError::ExcessData => write!(f, "excess data"),
             VariantError::IncorrectType => write!(f, "incorrect type"),
             VariantError::IncorrectValue => write!(f, "incorrect value"),
             VariantError::InvalidUtf8 => write!(f, "invalid UTF-8"),
