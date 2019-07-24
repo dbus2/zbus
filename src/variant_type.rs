@@ -70,7 +70,7 @@ impl<'a> VariantType<'a> for u8 {
     const SIGNATURE_STR: &'static str = "y";
 
     fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().iter().cloned().collect::<Vec<u8>>()
+        self.to_ne_bytes().to_vec()
     }
 
     fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
@@ -97,7 +97,7 @@ impl<'a> VariantType<'a> for bool {
     const SIGNATURE_STR: &'static str = "b";
 
     fn encode(&self) -> Vec<u8> {
-        (*self as u32).to_ne_bytes().iter().cloned().collect()
+        (*self as u32).to_ne_bytes().to_vec()
     }
 
     fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
@@ -128,7 +128,7 @@ impl<'a> VariantType<'a> for i16 {
     const SIGNATURE_STR: &'static str = "n";
 
     fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().iter().cloned().collect()
+        self.to_ne_bytes().to_vec()
     }
 
     fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
@@ -155,7 +155,7 @@ impl<'a> VariantType<'a> for u16 {
     const SIGNATURE_STR: &'static str = "q";
 
     fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().iter().cloned().collect()
+        self.to_ne_bytes().to_vec()
     }
 
     fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
@@ -182,7 +182,7 @@ impl<'a> VariantType<'a> for i32 {
     const SIGNATURE_STR: &'static str = "i";
 
     fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().iter().cloned().collect()
+        self.to_ne_bytes().to_vec()
     }
 
     fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
@@ -209,7 +209,7 @@ impl<'a> VariantType<'a> for u32 {
     const SIGNATURE_STR: &'static str = "u";
 
     fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().iter().cloned().collect()
+        self.to_ne_bytes().to_vec()
     }
 
     fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
@@ -236,7 +236,7 @@ impl<'a> VariantType<'a> for i64 {
     const SIGNATURE_STR: &'static str = "x";
 
     fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().iter().cloned().collect()
+        self.to_ne_bytes().to_vec()
     }
 
     fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
@@ -263,7 +263,7 @@ impl<'a> VariantType<'a> for u64 {
     const SIGNATURE_STR: &'static str = "t";
 
     fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().iter().cloned().collect()
+        self.to_ne_bytes().to_vec()
     }
 
     fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
