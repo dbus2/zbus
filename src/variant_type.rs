@@ -50,6 +50,10 @@ pub trait VariantType<'a>: Sized {
     fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
     where
         Self: 'a;
+
+    fn get_signature(&self) -> &'a str {
+        Self::SIGNATURE_STR
+    }
 }
 
 pub trait SimpleVariantType<'a>: VariantType<'a> {

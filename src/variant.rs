@@ -27,7 +27,7 @@ impl<'a> Variant<'a> {
     {
         Self {
             value: Cow::from(value.encode()),
-            signature: Cow::from(T::SIGNATURE_STR),
+            signature: Cow::from(value.get_signature()),
         }
     }
 
