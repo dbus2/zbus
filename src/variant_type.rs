@@ -367,8 +367,7 @@ fn ensure_sufficient_bytes(bytes: &[u8], size: usize) -> Result<(), VariantError
     Ok(())
 }
 
-// FIXME: This shouldn't be directly exposed on public API.
-pub fn extract_slice_from_data<'a>(
+pub(crate) fn extract_slice_from_data<'a>(
     data: &'a [u8],
     signature: &str,
 ) -> Result<&'a [u8], VariantError> {
