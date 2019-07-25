@@ -19,6 +19,8 @@ pub use object_path::*;
 mod signature;
 pub use signature::*;
 
+mod utils;
+
 #[cfg(test)]
 mod tests {
     use crate::{Signature, VariantType};
