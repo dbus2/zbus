@@ -281,9 +281,7 @@ impl Message {
     }
 
     fn push_field(&mut self, field: &MessageField, padding: u32) -> Result<u32, MessageError> {
-        if padding > 0 {
-            self.push_padding(padding);
-        }
+        self.push_padding(padding);
 
         let encoded = field.encode().map_err(|e| MessageError::MessageField(e))?;
         self.0.extend(&encoded);
