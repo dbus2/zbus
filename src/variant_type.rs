@@ -399,3 +399,22 @@ pub(crate) fn extract_slice_from_data<'a>(
         _ => return Err(VariantError::UnsupportedType),
     }
 }
+
+pub(crate) fn get_alignment_for_signature(signature: &str) -> Result<u32, VariantError> {
+    match signature {
+        // FIXME: There has to be a shorter way to do this
+        u8::SIGNATURE_STR => Ok(u8::ALIGNMENT),
+        bool::SIGNATURE_STR => Ok(bool::ALIGNMENT),
+        i16::SIGNATURE_STR => Ok(i16::ALIGNMENT),
+        u16::SIGNATURE_STR => Ok(u16::ALIGNMENT),
+        i32::SIGNATURE_STR => Ok(i32::ALIGNMENT),
+        u32::SIGNATURE_STR => Ok(u32::ALIGNMENT),
+        i64::SIGNATURE_STR => Ok(i64::ALIGNMENT),
+        u64::SIGNATURE_STR => Ok(u64::ALIGNMENT),
+        f64::SIGNATURE_STR => Ok(f64::ALIGNMENT),
+        <(&str)>::SIGNATURE_STR => Ok(<(&str)>::ALIGNMENT),
+        ObjectPath::SIGNATURE_STR => Ok(ObjectPath::ALIGNMENT),
+        Signature::SIGNATURE_STR => Ok(Signature::ALIGNMENT),
+        _ => return Err(VariantError::UnsupportedType),
+    }
+}
