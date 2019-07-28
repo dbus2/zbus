@@ -13,6 +13,7 @@ impl<'a> Variant<'a> {
     where
         Self: 'a,
     {
+        // extract_slice_from_data() ensures a valid signature
         let value = crate::variant_type::extract_slice_from_data(data, signature)?;
 
         Ok(Self {
