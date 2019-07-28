@@ -10,7 +10,7 @@ pub enum VariantError {
     IncorrectValue,
     InvalidUtf8,
     InsufficientData,
-    UnsupportedType,
+    UnsupportedType(String),
 }
 
 impl error::Error for VariantError {
@@ -27,7 +27,9 @@ impl fmt::Display for VariantError {
             VariantError::IncorrectValue => write!(f, "incorrect value"),
             VariantError::InvalidUtf8 => write!(f, "invalid UTF-8"),
             VariantError::InsufficientData => write!(f, "insufficient data"),
-            VariantError::UnsupportedType => write!(f, "unsupported type"),
+            VariantError::UnsupportedType(s) => {
+                write!(f, "unsupported type (signature: \"{}\")", s)
+            }
         }
     }
 }
@@ -396,7 +398,7 @@ pub(crate) fn extract_slice_from_data<'a>(
         <(&str)>::SIGNATURE_STR => <(&str)>::extract_slice_simple(data),
         ObjectPath::SIGNATURE_STR => ObjectPath::extract_slice_simple(data),
         Signature::SIGNATURE_STR => Signature::extract_slice_simple(data),
-        _ => return Err(VariantError::UnsupportedType),
+        _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
 
@@ -415,6 +417,6 @@ pub(crate) fn get_alignment_for_signature(signature: &str) -> Result<u32, Varian
         <(&str)>::SIGNATURE_STR => Ok(<(&str)>::ALIGNMENT),
         ObjectPath::SIGNATURE_STR => Ok(ObjectPath::ALIGNMENT),
         Signature::SIGNATURE_STR => Ok(Signature::ALIGNMENT),
-        _ => return Err(VariantError::UnsupportedType),
+        _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
