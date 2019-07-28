@@ -70,6 +70,7 @@ impl<'a> Variant<'a> {
 impl<'a> VariantType<'a> for Variant<'a> {
     const SIGNATURE: char = 'v';
     const SIGNATURE_STR: &'static str = "v";
+    const ALIGNMENT: u32 = Signature::ALIGNMENT;
 
     fn encode(&self) -> Vec<u8> {
         let mut bytes = Signature::new(&self.signature).encode();

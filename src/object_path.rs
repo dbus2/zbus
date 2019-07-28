@@ -18,6 +18,7 @@ impl<'a> ObjectPath<'a> {
 impl<'a> VariantType<'a> for ObjectPath<'a> {
     const SIGNATURE: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
+    const ALIGNMENT: u32 = 4;
 
     fn encode(&self) -> Vec<u8> {
         self.0.encode()

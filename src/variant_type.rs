@@ -35,6 +35,7 @@ impl fmt::Display for VariantError {
 pub trait VariantType<'a>: Sized {
     const SIGNATURE: char;
     const SIGNATURE_STR: &'static str;
+    const ALIGNMENT: u32;
 
     // FIXME: Would be nice if this returned a slice
     fn encode(&self) -> Vec<u8>;
@@ -72,6 +73,7 @@ pub trait SimpleVariantType<'a>: VariantType<'a> {
 impl<'a> VariantType<'a> for u8 {
     const SIGNATURE: char = 'y';
     const SIGNATURE_STR: &'static str = "y";
+    const ALIGNMENT: u32 = 1;
 
     fn encode(&self) -> Vec<u8> {
         self.to_ne_bytes().to_vec()
@@ -99,6 +101,7 @@ impl<'a> SimpleVariantType<'a> for u8 {}
 impl<'a> VariantType<'a> for bool {
     const SIGNATURE: char = 'b';
     const SIGNATURE_STR: &'static str = "b";
+    const ALIGNMENT: u32 = 4;
 
     fn encode(&self) -> Vec<u8> {
         (*self as u32).to_ne_bytes().to_vec()
@@ -130,6 +133,7 @@ impl<'a> SimpleVariantType<'a> for bool {}
 impl<'a> VariantType<'a> for i16 {
     const SIGNATURE: char = 'n';
     const SIGNATURE_STR: &'static str = "n";
+    const ALIGNMENT: u32 = 2;
 
     fn encode(&self) -> Vec<u8> {
         self.to_ne_bytes().to_vec()
@@ -157,6 +161,7 @@ impl<'a> SimpleVariantType<'a> for i16 {}
 impl<'a> VariantType<'a> for u16 {
     const SIGNATURE: char = 'q';
     const SIGNATURE_STR: &'static str = "q";
+    const ALIGNMENT: u32 = 2;
 
     fn encode(&self) -> Vec<u8> {
         self.to_ne_bytes().to_vec()
@@ -184,6 +189,7 @@ impl<'a> SimpleVariantType<'a> for u16 {}
 impl<'a> VariantType<'a> for i32 {
     const SIGNATURE: char = 'i';
     const SIGNATURE_STR: &'static str = "i";
+    const ALIGNMENT: u32 = 4;
 
     fn encode(&self) -> Vec<u8> {
         self.to_ne_bytes().to_vec()
@@ -211,6 +217,7 @@ impl<'a> SimpleVariantType<'a> for i32 {}
 impl<'a> VariantType<'a> for u32 {
     const SIGNATURE: char = 'u';
     const SIGNATURE_STR: &'static str = "u";
+    const ALIGNMENT: u32 = 4;
 
     fn encode(&self) -> Vec<u8> {
         self.to_ne_bytes().to_vec()
@@ -238,6 +245,7 @@ impl<'a> SimpleVariantType<'a> for u32 {}
 impl<'a> VariantType<'a> for i64 {
     const SIGNATURE: char = 'x';
     const SIGNATURE_STR: &'static str = "x";
+    const ALIGNMENT: u32 = 8;
 
     fn encode(&self) -> Vec<u8> {
         self.to_ne_bytes().to_vec()
@@ -265,6 +273,7 @@ impl<'a> SimpleVariantType<'a> for i64 {}
 impl<'a> VariantType<'a> for u64 {
     const SIGNATURE: char = 't';
     const SIGNATURE_STR: &'static str = "t";
+    const ALIGNMENT: u32 = 8;
 
     fn encode(&self) -> Vec<u8> {
         self.to_ne_bytes().to_vec()
@@ -292,6 +301,7 @@ impl<'a> SimpleVariantType<'a> for u64 {}
 impl<'a> VariantType<'a> for f64 {
     const SIGNATURE: char = 'd';
     const SIGNATURE_STR: &'static str = "d";
+    const ALIGNMENT: u32 = 8;
 
     fn encode(&self) -> Vec<u8> {
         let mut bytes = vec![0; 8];
@@ -322,6 +332,7 @@ impl<'a> SimpleVariantType<'a> for f64 {}
 impl<'a> VariantType<'a> for &'a str {
     const SIGNATURE: char = 's';
     const SIGNATURE_STR: &'static str = "s";
+    const ALIGNMENT: u32 = 4;
 
     fn encode(&self) -> Vec<u8> {
         let len = self.len();

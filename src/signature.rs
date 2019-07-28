@@ -18,6 +18,7 @@ impl<'a> Signature<'a> {
 impl<'a> VariantType<'a> for Signature<'a> {
     const SIGNATURE: char = 'g';
     const SIGNATURE_STR: &'static str = "g";
+    const ALIGNMENT: u32 = 1;
 
     fn encode(&self) -> Vec<u8> {
         let len = self.0.len();
