@@ -19,6 +19,9 @@ pub use object_path::*;
 mod signature;
 pub use signature::*;
 
+mod structure;
+pub use structure::*;
+
 mod utils;
 
 #[cfg(test)]

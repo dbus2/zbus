@@ -120,7 +120,7 @@ impl<'a> SimpleVariantType<'a> for Variant<'a> {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{SimpleVariantType, VariantType};
+    use crate::{SimpleVariantType, Structure, VariantType};
 
     #[test]
     fn u8_variant() {
@@ -282,5 +282,39 @@ mod tests {
         let decoded = crate::Variant::decode_simple(slice).unwrap();
         assert!(decoded.get_signature() == u8::SIGNATURE_STR);
         assert!(decoded.get::<u8>().unwrap() == 7u8);
+    }
+
+    #[test]
+    fn struct_variant() {
+        let s = Structure::new(vec![
+            crate::Variant::from(u8::max_value()),
+            crate::Variant::from(u32::max_value()),
+            crate::Variant::from("hello"),
+        ]);
+        let v = crate::Variant::from(s);
+        assert!(v.len() == 18);
+
+        assert!(v.is::<Structure>());
+        let s = v.get::<Structure>().unwrap();
+        let fields = s.as_slice();
+        assert!(fields[0].is::<u8>());
+        assert!(fields[0].get::<u8>().unwrap() == u8::max_value());
+        assert!(fields[1].is::<u32>());
+        assert!(fields[1].get::<u32>().unwrap() == u32::max_value());
+        assert!(fields[2].is::<&str>());
+        assert!(fields[2].get::<&str>().unwrap() == "hello");
+
+        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        assert!(v.len() == 18);
+
+        assert!(v.is::<Structure>());
+        let s = v.get::<Structure>().unwrap();
+        let fields = s.as_slice();
+        assert!(fields[0].get::<u8>().unwrap() == u8::max_value());
+        assert!(fields[0].is::<u8>());
+        assert!(fields[1].get::<u32>().unwrap() == u32::max_value());
+        assert!(fields[1].is::<u32>());
+        assert!(fields[2].get::<&str>().unwrap() == "hello");
+        assert!(fields[2].is::<&str>());
     }
 }
