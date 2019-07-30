@@ -54,7 +54,7 @@ pub trait VariantType<'a>: Sized {
     where
         Self: 'a;
 
-    fn get_signature(&self) -> &'a str {
+    fn get_signature<'b>(&'b self) -> &'b str {
         Self::SIGNATURE_STR
     }
 }
