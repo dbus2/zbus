@@ -289,10 +289,14 @@ mod tests {
         let s = Structure::new(vec![
             crate::Variant::from(u8::max_value()),
             crate::Variant::from(u32::max_value()),
+            crate::Variant::from(Structure::new(vec![
+                crate::Variant::from(i64::max_value()),
+                crate::Variant::from(true),
+            ])),
             crate::Variant::from("hello"),
         ]);
         let v = crate::Variant::from(s);
-        assert!(v.len() == 18);
+        assert!(v.len() == 30);
 
         assert!(v.is::<Structure>());
         let s = v.get::<Structure>().unwrap();
@@ -301,11 +305,20 @@ mod tests {
         assert!(fields[0].get::<u8>().unwrap() == u8::max_value());
         assert!(fields[1].is::<u32>());
         assert!(fields[1].get::<u32>().unwrap() == u32::max_value());
-        assert!(fields[2].is::<&str>());
-        assert!(fields[2].get::<&str>().unwrap() == "hello");
+
+        assert!(fields[2].is::<Structure>());
+        let inner = fields[2].get::<Structure>().unwrap();
+        let inner_fields = inner.as_slice();
+        assert!(inner_fields[0].is::<i64>());
+        assert!(inner_fields[0].get::<i64>().unwrap() == i64::max_value());
+        assert!(inner_fields[1].is::<bool>());
+        assert!(inner_fields[1].get::<bool>().unwrap());
+
+        assert!(fields[3].is::<&str>());
+        assert!(fields[3].get::<&str>().unwrap() == "hello");
 
         let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
-        assert!(v.len() == 18);
+        assert!(v.len() == 30);
 
         assert!(v.is::<Structure>());
         let s = v.get::<Structure>().unwrap();
@@ -314,7 +327,16 @@ mod tests {
         assert!(fields[0].is::<u8>());
         assert!(fields[1].get::<u32>().unwrap() == u32::max_value());
         assert!(fields[1].is::<u32>());
-        assert!(fields[2].get::<&str>().unwrap() == "hello");
-        assert!(fields[2].is::<&str>());
+
+        assert!(fields[2].is::<Structure>());
+        let inner = fields[2].get::<Structure>().unwrap();
+        let inner_fields = inner.as_slice();
+        assert!(inner_fields[0].is::<i64>());
+        assert!(inner_fields[0].get::<i64>().unwrap() == i64::max_value());
+        assert!(inner_fields[1].is::<bool>());
+        assert!(inner_fields[1].get::<bool>().unwrap());
+
+        assert!(fields[3].get::<&str>().unwrap() == "hello");
+        assert!(fields[3].is::<&str>());
     }
 }

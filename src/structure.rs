@@ -52,9 +52,27 @@ impl<'a> VariantType<'a> for Structure<'a> {
 
         let mut extracted = 0;
         let mut i = 1;
+        let mut open_brace_index = None;
         while i < signature.len() - 1 {
-            // FIXME: Assuming simple types
-            let child_signature = &signature[i..i + 1];
+            match open_brace_index {
+                Some(_) => {
+                    if &signature[i..i + 1] != ")" {
+                        i += 1;
+
+                        continue;
+                    }
+                }
+                None => {
+                    if &signature[i..i + 1] == "(" {
+                        open_brace_index = Some(i);
+                        i += 1;
+
+                        continue;
+                    }
+                }
+            }
+            let child_signature = &signature[open_brace_index.unwrap_or(i)..i + 1];
+            open_brace_index = None;
 
             // Parse padding
             let alignment = crate::variant_type::get_alignment_for_signature(child_signature)?;
@@ -71,7 +89,6 @@ impl<'a> VariantType<'a> for Structure<'a> {
                 return Err(VariantError::InsufficientData);
             }
 
-            // FIXME: Assuming simple types
             i += 1;
         }
         if extracted == 0 {
@@ -94,9 +111,27 @@ impl<'a> VariantType<'a> for Structure<'a> {
         let mut variants = Vec::with_capacity(signature.len());
         let mut extracted = 0;
         let mut i = 1;
+        let mut open_brace_index = None;
         while i < signature.len() - 1 {
-            // FIXME: Assuming simple types
-            let child_signature = &signature[i..i + 1];
+            match open_brace_index {
+                Some(_) => {
+                    if &signature[i..i + 1] != ")" {
+                        i += 1;
+
+                        continue;
+                    }
+                }
+                None => {
+                    if &signature[i..i + 1] == "(" {
+                        open_brace_index = Some(i);
+                        i += 1;
+
+                        continue;
+                    }
+                }
+            }
+            let child_signature = &signature[open_brace_index.unwrap_or(i)..i + 1];
+            open_brace_index = None;
 
             // Parse padding
             let alignment = crate::variant_type::get_alignment_for_signature(child_signature)?;
@@ -113,7 +148,6 @@ impl<'a> VariantType<'a> for Structure<'a> {
             }
             variants.push(variant);
 
-            // FIXME: Assuming simple types
             i += 1;
         }
         if extracted == 0 {
@@ -130,6 +164,11 @@ impl<'a> VariantType<'a> for Structure<'a> {
 
         let mut i = 1;
         while i < signature.len() - 1 {
+            if &signature[i..i + 1] == ")" {
+                i += 1;
+
+                continue;
+            }
             // We don't need the alignment but not getting an error here means it's a supported type
             let _ = crate::variant_type::get_alignment_for_signature(&signature[i..])?;
 
