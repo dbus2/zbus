@@ -4,7 +4,7 @@ use std::str;
 use crate::{Signature, SimpleVariantType, VariantError, VariantType};
 
 pub struct Variant<'a> {
-    signature: Cow<'a, str>,
+    signature: String,
     value: Cow<'a, [u8]>,
 }
 
@@ -18,7 +18,7 @@ impl<'a> Variant<'a> {
 
         Ok(Self {
             value: Cow::from(value),
-            signature: Cow::from(String::from(signature)),
+            signature: String::from(signature),
         })
     }
 
@@ -28,7 +28,7 @@ impl<'a> Variant<'a> {
     {
         Self {
             value: Cow::from(value.encode()),
-            signature: Cow::from(value.get_signature()),
+            signature: String::from(value.get_signature()),
         }
     }
 
