@@ -384,39 +384,47 @@ pub(crate) fn extract_slice_from_data<'a>(
     data: &'a [u8],
     signature: &str,
 ) -> Result<&'a [u8], VariantError> {
-    match signature {
+    match signature
+        .chars()
+        .next()
+        .ok_or(VariantError::InsufficientData)?
+    {
         // FIXME: There has to be a shorter way to do this
-        u8::SIGNATURE_STR => u8::extract_slice_simple(data),
-        bool::SIGNATURE_STR => bool::extract_slice_simple(data),
-        i16::SIGNATURE_STR => i16::extract_slice_simple(data),
-        u16::SIGNATURE_STR => u16::extract_slice_simple(data),
-        i32::SIGNATURE_STR => i32::extract_slice_simple(data),
-        u32::SIGNATURE_STR => u32::extract_slice_simple(data),
-        i64::SIGNATURE_STR => i64::extract_slice_simple(data),
-        u64::SIGNATURE_STR => u64::extract_slice_simple(data),
-        f64::SIGNATURE_STR => f64::extract_slice_simple(data),
-        <(&str)>::SIGNATURE_STR => <(&str)>::extract_slice_simple(data),
-        ObjectPath::SIGNATURE_STR => ObjectPath::extract_slice_simple(data),
-        Signature::SIGNATURE_STR => Signature::extract_slice_simple(data),
+        u8::SIGNATURE => u8::extract_slice_simple(data),
+        bool::SIGNATURE => bool::extract_slice_simple(data),
+        i16::SIGNATURE => i16::extract_slice_simple(data),
+        u16::SIGNATURE => u16::extract_slice_simple(data),
+        i32::SIGNATURE => i32::extract_slice_simple(data),
+        u32::SIGNATURE => u32::extract_slice_simple(data),
+        i64::SIGNATURE => i64::extract_slice_simple(data),
+        u64::SIGNATURE => u64::extract_slice_simple(data),
+        f64::SIGNATURE => f64::extract_slice_simple(data),
+        <(&str)>::SIGNATURE => <(&str)>::extract_slice_simple(data),
+        ObjectPath::SIGNATURE => ObjectPath::extract_slice_simple(data),
+        Signature::SIGNATURE => Signature::extract_slice_simple(data),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
 
 pub(crate) fn get_alignment_for_signature(signature: &str) -> Result<u32, VariantError> {
-    match signature {
+    match signature
+        .chars()
+        .next()
+        .ok_or(VariantError::InsufficientData)?
+    {
         // FIXME: There has to be a shorter way to do this
-        u8::SIGNATURE_STR => Ok(u8::ALIGNMENT),
-        bool::SIGNATURE_STR => Ok(bool::ALIGNMENT),
-        i16::SIGNATURE_STR => Ok(i16::ALIGNMENT),
-        u16::SIGNATURE_STR => Ok(u16::ALIGNMENT),
-        i32::SIGNATURE_STR => Ok(i32::ALIGNMENT),
-        u32::SIGNATURE_STR => Ok(u32::ALIGNMENT),
-        i64::SIGNATURE_STR => Ok(i64::ALIGNMENT),
-        u64::SIGNATURE_STR => Ok(u64::ALIGNMENT),
-        f64::SIGNATURE_STR => Ok(f64::ALIGNMENT),
-        <(&str)>::SIGNATURE_STR => Ok(<(&str)>::ALIGNMENT),
-        ObjectPath::SIGNATURE_STR => Ok(ObjectPath::ALIGNMENT),
-        Signature::SIGNATURE_STR => Ok(Signature::ALIGNMENT),
+        u8::SIGNATURE => Ok(u8::ALIGNMENT),
+        bool::SIGNATURE => Ok(bool::ALIGNMENT),
+        i16::SIGNATURE => Ok(i16::ALIGNMENT),
+        u16::SIGNATURE => Ok(u16::ALIGNMENT),
+        i32::SIGNATURE => Ok(i32::ALIGNMENT),
+        u32::SIGNATURE => Ok(u32::ALIGNMENT),
+        i64::SIGNATURE => Ok(i64::ALIGNMENT),
+        u64::SIGNATURE => Ok(u64::ALIGNMENT),
+        f64::SIGNATURE => Ok(f64::ALIGNMENT),
+        <(&str)>::SIGNATURE => Ok(<(&str)>::ALIGNMENT),
+        ObjectPath::SIGNATURE => Ok(ObjectPath::ALIGNMENT),
+        Signature::SIGNATURE => Ok(Signature::ALIGNMENT),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
