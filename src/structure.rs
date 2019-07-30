@@ -18,7 +18,7 @@ impl<'a> Structure<'a> {
         Self { fields, signature }
     }
 
-    pub fn as_slice(&'a self) -> &'a [Variant] {
+    pub fn as_slice<'b>(&'b self) -> &'b [Variant<'b>] {
         &self.fields
     }
 }
