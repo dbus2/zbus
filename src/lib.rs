@@ -62,29 +62,31 @@ mod tests {
             })
             .unwrap();
 
-        let reply = connection
-            .call_method(
-                Some("org.freedesktop.DBus"),
-                "/org/freedesktop/DBus",
-                Some("org.freedesktop.DBus.Peer"),
-                "GetMachineId",
-                None,
-            )
-            .unwrap();
+        if std::env::var("GET_MACHINE_ID").unwrap_or(String::from("1")) == "1" {
+            let reply = connection
+                .call_method(
+                    Some("org.freedesktop.DBus"),
+                    "/org/freedesktop/DBus",
+                    Some("org.freedesktop.DBus.Peer"),
+                    "GetMachineId",
+                    None,
+                )
+                .unwrap();
 
-        let all_fields = reply.get_fields().unwrap();
-        all_fields
-            .iter()
-            .find(|f| {
-                f.code == crate::MessageFieldCode::Signature
-                    && f.value.get().unwrap_or(Signature::new("")).as_str()
-                        == <(&str)>::SIGNATURE_STR
-            })
-            .unwrap();
-        let body = reply.get_body().unwrap();
-        let v = crate::Variant::from_data(&body, "s").unwrap();
-        let id = v.get::<(&str)>().unwrap();
-        println!("Machine ID: {}", id);
+            let all_fields = reply.get_fields().unwrap();
+            all_fields
+                .iter()
+                .find(|f| {
+                    f.code == crate::MessageFieldCode::Signature
+                        && f.value.get().unwrap_or(Signature::new("")).as_str()
+                            == <(&str)>::SIGNATURE_STR
+                })
+                .unwrap();
+            let body = reply.get_body().unwrap();
+            let v = crate::Variant::from_data(&body, "s").unwrap();
+            let id = v.get::<(&str)>().unwrap();
+            println!("Machine ID: {}", id);
+        }
 
         let reply = connection
             .call_method(
