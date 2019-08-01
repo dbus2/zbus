@@ -39,7 +39,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
             v.extend(std::iter::repeat(0).take(padding as usize));
 
             // Deep copying, nice!!! 🙈
-            v.extend(variant.get_bytes());
+            v.extend(variant.bytes());
         }
 
         v

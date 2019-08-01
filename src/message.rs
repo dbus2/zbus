@@ -147,7 +147,7 @@ impl Message {
         }
 
         if let Some(body) = body {
-            m.0.extend(body.get_bytes());
+            m.0.extend(body.bytes());
         }
 
         Ok(m)
