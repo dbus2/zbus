@@ -72,7 +72,7 @@ impl From<message::Message> for ConnectionError {
             return ConnectionError::InvalidReply;
         }
 
-        match message.get_fields() {
+        match message.fields() {
             Ok(all_fields) => {
                 // First, get the error name
                 let name = match all_fields
@@ -172,9 +172,7 @@ impl Connection {
             None,
         )?;
 
-        let all_fields = reply
-            .get_fields()
-            .map_err(|e| ConnectionError::Message(e))?;
+        let all_fields = reply.fields().map_err(|e| ConnectionError::Message(e))?;
         if all_fields
             .iter()
             .find(|f| {
@@ -245,9 +243,7 @@ impl Connection {
             if incoming.message_type() == message::MessageType::MethodReturn
                 || incoming.message_type() == message::MessageType::Error
             {
-                let all_fields = incoming
-                    .get_fields()
-                    .map_err(|e| ConnectionError::Message(e))?;
+                let all_fields = incoming.fields().map_err(|e| ConnectionError::Message(e))?;
 
                 if all_fields
                     .iter()

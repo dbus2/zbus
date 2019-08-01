@@ -73,7 +73,7 @@ mod tests {
                 )
                 .unwrap();
 
-            let all_fields = reply.get_fields().unwrap();
+            let all_fields = reply.fields().unwrap();
             all_fields
                 .iter()
                 .find(|f| {
@@ -103,7 +103,7 @@ mod tests {
             )
             .unwrap();
 
-        let all_fields = reply.get_fields().unwrap();
+        let all_fields = reply.fields().unwrap();
         all_fields
             .iter()
             .find(|f| {
@@ -131,7 +131,7 @@ mod tests {
             )
             .unwrap();
 
-        let all_fields = reply.get_fields().unwrap();
+        let all_fields = reply.fields().unwrap();
         all_fields
             .iter()
             .find(|f| {

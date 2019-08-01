@@ -202,7 +202,7 @@ impl Message {
         MessageType::from(self.0[MESSAGE_TYPE_OFFSET])
     }
 
-    pub fn get_fields(&self) -> Result<Vec<MessageField>, MessageError> {
+    pub fn fields(&self) -> Result<Vec<MessageField>, MessageError> {
         if self.bytes_to_completion() != 0 {
             return Err(MessageError::InsufficientData);
         }
