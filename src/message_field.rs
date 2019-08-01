@@ -1,7 +1,7 @@
 use std::error;
 use std::fmt;
 
-use crate::{ObjectPath, Signature, VariantError};
+use crate::{ObjectPath, Signature, Structure, VariantError};
 use crate::{Variant, VariantType};
 
 #[repr(u8)]
@@ -64,123 +64,123 @@ impl fmt::Display for MessageFieldError {
     }
 }
 
-pub struct MessageField<'a> {
-    pub code: MessageFieldCode,
-    pub value: Variant<'a>,
-}
+pub struct MessageField<'a>(Structure<'a>);
 
 impl<'a> MessageField<'a> {
+    pub fn code(&self) -> MessageFieldCode {
+        self.0.as_slice()[0]
+            .get::<u8>()
+            .map(|c| MessageFieldCode::from(c))
+            .unwrap_or(MessageFieldCode::Invalid)
+    }
+
+    pub fn value<'b>(&'b self) -> Result<Variant<'b>, MessageFieldError> {
+        self.0.as_slice()[1]
+            .get::<Variant>()
+            .map_err(|e| MessageFieldError::Variant(e))
+    }
+
     pub fn path(path: &'a str) -> Self
     where
         Self: 'a,
     {
-        Self {
-            code: MessageFieldCode::Path,
-            value: Variant::from(ObjectPath::new(path)),
-        }
+        Self(Structure::new(vec![
+            Variant::from(MessageFieldCode::Path as u8),
+            Variant::from(Variant::from(ObjectPath::new(path))),
+        ]))
     }
 
     pub fn interface(interface: &'a str) -> Self
     where
         Self: 'a,
     {
-        Self {
-            code: MessageFieldCode::Interface,
-            value: Variant::from(interface),
-        }
+        Self(Structure::new(vec![
+            Variant::from(MessageFieldCode::Interface as u8),
+            Variant::from(Variant::from(interface)),
+        ]))
     }
 
     pub fn member(member: &'a str) -> Self
     where
         Self: 'a,
     {
-        Self {
-            code: MessageFieldCode::Member,
-            value: Variant::from(member),
-        }
+        Self(Structure::new(vec![
+            Variant::from(MessageFieldCode::Member as u8),
+            Variant::from(Variant::from(member)),
+        ]))
     }
 
     pub fn error_name(error_name: &'a str) -> Self
     where
         Self: 'a,
     {
-        Self {
-            code: MessageFieldCode::ErrorName,
-            value: Variant::from(error_name),
-        }
+        Self(Structure::new(vec![
+            Variant::from(MessageFieldCode::ErrorName as u8),
+            Variant::from(Variant::from(error_name)),
+        ]))
     }
 
     pub fn reply_serial(serial: u32) -> Self
     where
         Self: 'a,
     {
-        Self {
-            code: MessageFieldCode::ReplySerial,
-            value: Variant::from(serial),
-        }
+        Self(Structure::new(vec![
+            Variant::from(MessageFieldCode::ReplySerial as u8),
+            Variant::from(Variant::from(serial)),
+        ]))
     }
 
     pub fn destination(destination: &'a str) -> Self
     where
         Self: 'a,
     {
-        Self {
-            code: MessageFieldCode::Destination,
-            value: Variant::from(destination),
-        }
+        Self(Structure::new(vec![
+            Variant::from(MessageFieldCode::Destination as u8),
+            Variant::from(Variant::from(destination)),
+        ]))
     }
 
     pub fn sender(sender: &'a str) -> Self
     where
         Self: 'a,
     {
-        Self {
-            code: MessageFieldCode::Sender,
-            value: Variant::from(sender),
-        }
+        Self(Structure::new(vec![
+            Variant::from(MessageFieldCode::Sender as u8),
+            Variant::from(Variant::from(sender)),
+        ]))
     }
 
     pub fn signature(signature: &'a str) -> Self
     where
         Self: 'a,
     {
-        Self {
-            code: MessageFieldCode::Signature,
-            value: Variant::from(Signature::new(signature)),
-        }
+        Self(Structure::new(vec![
+            Variant::from(MessageFieldCode::Signature as u8),
+            Variant::from(Variant::from(Signature::new(signature))),
+        ]))
     }
 
     pub fn unix_fds(fd: u32) -> Self
     where
         Self: 'a,
     {
-        Self {
-            code: MessageFieldCode::UnixFDs,
-            value: Variant::from(fd),
-        }
+        Self(Structure::new(vec![
+            Variant::from(MessageFieldCode::UnixFDs as u8),
+            Variant::from(Variant::from(fd)),
+        ]))
     }
 
     pub fn from_data(data: &'a [u8]) -> Result<(Self, usize), MessageFieldError> {
-        let code = MessageFieldCode::from(data[0]);
-        let signature =
-            String::from_utf8(data[2..3].into()).map_err(|_| MessageFieldError::InvalidUtf8)?;
+        let slice =
+            Structure::extract_slice(data, "(yv)").map_err(|e| MessageFieldError::Variant(e))?;
 
-        let value = Variant::from_data(&data[4..], &signature)
-            .map_err(|e| MessageFieldError::Variant(e))?;
-        let len = 4 + value.len();
-
-        Ok((Self { code, value }, len))
+        Ok((
+            Self(Structure::decode(slice, "(yv)").map_err(|e| MessageFieldError::Variant(e))?),
+            slice.len(),
+        ))
     }
 
-    pub fn encode(&self) -> Result<Vec<u8>, MessageFieldError> {
-        let mut bytes = Vec::with_capacity(4 + self.value.len());
-
-        // Code
-        bytes.push(self.code as u8);
-
-        // Now the Variant
-        bytes.extend(self.value.encode());
-
-        Ok(bytes)
+    pub fn encode(&self) -> Vec<u8> {
+        self.0.encode()
     }
 }

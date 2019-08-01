@@ -77,11 +77,14 @@ impl From<message::Message> for ConnectionError {
                 // First, get the error name
                 let name = match all_fields
                     .iter()
-                    .find(|f| f.code == message_field::MessageFieldCode::ErrorName)
+                    .find(|f| f.code() == message_field::MessageFieldCode::ErrorName)
                 {
-                    Some(f) => match f.value.get::<(&str)>() {
-                        Ok(s) => String::from(s),
-                        Err(e) => return ConnectionError::Variant(e),
+                    Some(f) => match f.value() {
+                        Ok(v) => match v.get::<(&str)>() {
+                            Ok(s) => String::from(s),
+                            Err(e) => return ConnectionError::Variant(e),
+                        },
+                        Err(e) => return ConnectionError::MessageField(e),
                     },
                     None => return ConnectionError::InvalidReply,
                 };
@@ -90,9 +93,14 @@ impl From<message::Message> for ConnectionError {
                 if all_fields
                     .iter()
                     .find(|f| {
-                        f.code == message_field::MessageFieldCode::Signature
-                            && f.value.get().unwrap_or(Signature::new("")).as_str()
-                                == <(&str)>::SIGNATURE_STR
+                        f.code() == message_field::MessageFieldCode::Signature
+                            && f.value()
+                                .map(|v| {
+                                    v.get::<Signature>()
+                                        .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
+                                        .unwrap_or(false)
+                                })
+                                .unwrap_or(false)
                     })
                     .is_some()
                 {
@@ -170,9 +178,14 @@ impl Connection {
         if all_fields
             .iter()
             .find(|f| {
-                f.code == message_field::MessageFieldCode::Signature
-                    && f.value.get().unwrap_or(Signature::new("")).as_str()
-                        == <(&str)>::SIGNATURE_STR
+                f.code() == message_field::MessageFieldCode::Signature
+                    && f.value()
+                        .map(|v| {
+                            v.get::<Signature>()
+                                .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
+                                .unwrap_or(false)
+                        })
+                        .unwrap_or(false)
             })
             .is_some()
         {
@@ -239,8 +252,10 @@ impl Connection {
                 if all_fields
                     .iter()
                     .find(|f| {
-                        f.code == message_field::MessageFieldCode::ReplySerial
-                            && f.value.get().unwrap_or(std::u32::MAX) == serial
+                        f.code() == message_field::MessageFieldCode::ReplySerial
+                            && f.value()
+                                .map(|v| v.get::<u32>().map(|u| u == serial).unwrap_or(false))
+                                .unwrap_or(false)
                     })
                     .is_some()
                 {

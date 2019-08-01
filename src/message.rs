@@ -220,7 +220,7 @@ impl Message {
                 MessageField::from_data(&self.0[i..]).map_err(|e| MessageError::MessageField(e))?;
 
             // According to the spec, we should ignore unkown fields.
-            if field.code != MessageFieldCode::Invalid {
+            if field.code() != MessageFieldCode::Invalid {
                 v.push(field);
             }
 
@@ -283,7 +283,7 @@ impl Message {
     fn push_field(&mut self, field: &MessageField, padding: u32) -> Result<u32, MessageError> {
         self.push_padding(padding);
 
-        let encoded = field.encode().map_err(|e| MessageError::MessageField(e))?;
+        let encoded = field.encode();
         self.0.extend(&encoded);
 
         Ok(encoded.len() as u32 + padding)
