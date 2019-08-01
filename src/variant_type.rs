@@ -1,7 +1,7 @@
 use byteorder::ByteOrder;
 use std::{error, fmt, str};
 
-use crate::{ObjectPath, Signature, Structure};
+use crate::{ObjectPath, Signature, Structure, Variant};
 
 #[derive(Debug)]
 pub enum VariantError {
@@ -403,6 +403,7 @@ pub(crate) fn extract_slice_from_data<'a>(
         ObjectPath::SIGNATURE => ObjectPath::extract_slice_simple(data),
         Signature::SIGNATURE => Signature::extract_slice_simple(data),
         Structure::SIGNATURE => Structure::extract_slice(data, signature),
+        Variant::SIGNATURE => Variant::extract_slice(data, signature),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
@@ -427,6 +428,7 @@ pub(crate) fn get_alignment_for_signature(signature: &str) -> Result<u32, Varian
         ObjectPath::SIGNATURE => Ok(ObjectPath::ALIGNMENT),
         Signature::SIGNATURE => Ok(Signature::ALIGNMENT),
         Structure::SIGNATURE => Ok(Structure::ALIGNMENT),
+        Variant::SIGNATURE => Ok(Variant::ALIGNMENT),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
