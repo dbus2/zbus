@@ -1,3 +1,4 @@
+use std::error;
 use std::fmt;
 
 use crate::{ObjectPath, Signature, VariantError};
@@ -41,6 +42,15 @@ pub enum MessageFieldError {
     InvalidCode,
     InvalidUtf8,
     Variant(VariantError),
+}
+
+impl error::Error for MessageFieldError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            MessageFieldError::Variant(e) => Some(e),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for MessageFieldError {
