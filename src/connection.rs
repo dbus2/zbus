@@ -21,6 +21,7 @@ pub struct Connection {
 pub enum ConnectionError {
     IO(io::Error),
     Message(message::MessageError),
+    MessageField(message_field::MessageFieldError),
     Variant(VariantError),
     Handshake,
     InvalidReply,
@@ -35,6 +36,7 @@ impl error::Error for ConnectionError {
             ConnectionError::IO(e) => Some(e),
             ConnectionError::Handshake => None,
             ConnectionError::Message(e) => Some(e),
+            ConnectionError::MessageField(e) => Some(e),
             ConnectionError::Variant(e) => Some(e),
             ConnectionError::InvalidReply => None,
             ConnectionError::MethodError(_, _) => None,
@@ -48,6 +50,7 @@ impl fmt::Display for ConnectionError {
             ConnectionError::IO(e) => write!(f, "I/O error: {}", e),
             ConnectionError::Handshake => write!(f, "D-Bus handshake failed"),
             ConnectionError::Message(e) => write!(f, "Message creation error: {}", e),
+            ConnectionError::MessageField(e) => write!(f, "Message field parsing error: {}", e),
             ConnectionError::Variant(e) => write!(f, "{}", e),
             ConnectionError::InvalidReply => write!(f, "Invalid D-Bus method reply"),
             ConnectionError::MethodError(name, detail) => write!(
