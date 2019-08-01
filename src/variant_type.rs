@@ -331,48 +331,7 @@ impl<'a> VariantType<'a> for f64 {
 }
 impl<'a> SimpleVariantType<'a> for f64 {}
 
-impl<'a> VariantType<'a> for &'a str {
-    const SIGNATURE: char = 's';
-    const SIGNATURE_STR: &'static str = "s";
-    const ALIGNMENT: u32 = 4;
-
-    fn encode(&self) -> Vec<u8> {
-        let len = self.len();
-        let mut bytes = Vec::with_capacity(5 + len);
-
-        bytes.extend(&(len as u32).to_ne_bytes());
-        bytes.extend(self.as_bytes());
-        bytes.push(b'\0');
-
-        bytes
-    }
-
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 4)?;
-
-        let last_index = byteorder::NativeEndian::read_u32(bytes) as usize + 5;
-        if bytes.len() < last_index {
-            return Err(VariantError::InsufficientData);
-        }
-
-        Ok(&bytes[0..last_index])
-    }
-
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 4)?;
-
-        let last_index = bytes.len() - 1;
-        str::from_utf8(&bytes[4..last_index]).map_err(|_| VariantError::InvalidUtf8)
-    }
-}
-impl<'a> SimpleVariantType<'a> for &'a str {}
-
-fn ensure_sufficient_bytes(bytes: &[u8], size: usize) -> Result<(), VariantError> {
+pub(crate) fn ensure_sufficient_bytes(bytes: &[u8], size: usize) -> Result<(), VariantError> {
     if bytes.len() < size {
         return Err(VariantError::InsufficientData);
     }

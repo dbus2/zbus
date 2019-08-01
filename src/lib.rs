@@ -13,11 +13,8 @@ pub use variant::*;
 mod variant_type;
 pub use variant_type::*;
 
-mod object_path;
-pub use object_path::*;
-
-mod signature;
-pub use signature::*;
+mod str;
+pub use crate::str::*;
 
 mod structure;
 pub use structure::*;
