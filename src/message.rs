@@ -131,7 +131,7 @@ impl Message {
         }
         if let Some(ref body) = body {
             let padding = padding_for_8_bytes(array_len);
-            array_len += m.push_field(&MessageField::signature(&body.get_signature()), padding)?;
+            array_len += m.push_field(&MessageField::signature(&body.signature()), padding)?;
         }
         let padding = padding_for_8_bytes(array_len);
         array_len += m.push_field(&MessageField::path(path), padding)?;

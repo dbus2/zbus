@@ -28,11 +28,11 @@ impl<'a> Variant<'a> {
     {
         Self {
             value: Cow::from(value.encode()),
-            signature: String::from(value.get_signature()),
+            signature: String::from(value.signature()),
         }
     }
 
-    pub fn get_signature(&self) -> &str {
+    pub fn signature(&self) -> &str {
         &self.signature
     }
 
@@ -129,7 +129,7 @@ mod tests {
         assert!(v.get::<u8>().unwrap() == u8::max_value());
         assert!(v.is::<u8>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 1);
         assert!(v.get::<u8>().unwrap() == u8::max_value());
     }
@@ -141,7 +141,7 @@ mod tests {
         assert!(v.get::<bool>().unwrap());
         assert!(v.is::<bool>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 4);
         assert!(v.get::<bool>().unwrap());
     }
@@ -153,7 +153,7 @@ mod tests {
         assert!(v.get::<i16>().unwrap() == i16::max_value());
         assert!(v.is::<i16>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 2);
         assert!(v.get::<i16>().unwrap() == i16::max_value());
     }
@@ -165,7 +165,7 @@ mod tests {
         assert!(v.get::<u16>().unwrap() == u16::max_value());
         assert!(v.is::<u16>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 2);
         assert!(v.get::<u16>().unwrap() == u16::max_value());
     }
@@ -177,7 +177,7 @@ mod tests {
         assert!(v.get::<i32>().unwrap() == i32::max_value());
         assert!(v.is::<i32>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 4);
         assert!(v.get::<i32>().unwrap() == i32::max_value());
     }
@@ -189,7 +189,7 @@ mod tests {
         assert!(v.get::<u32>().unwrap() == u32::max_value());
         assert!(v.is::<u32>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 4);
         assert!(v.get::<u32>().unwrap() == u32::max_value());
     }
@@ -201,7 +201,7 @@ mod tests {
         assert!(v.get::<i64>().unwrap() == i64::max_value());
         assert!(v.is::<i64>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 8);
         assert!(v.get::<i64>().unwrap() == i64::max_value());
     }
@@ -213,7 +213,7 @@ mod tests {
         assert!(v.get::<u64>().unwrap() == u64::max_value());
         assert!(v.is::<u64>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 8);
         assert!(v.get::<u64>().unwrap() == u64::max_value());
     }
@@ -225,7 +225,7 @@ mod tests {
         assert!(v.get::<f64>().unwrap() == 117.112);
         assert!(v.is::<f64>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 8);
         assert!(v.get::<f64>().unwrap() == 117.112);
     }
@@ -237,7 +237,7 @@ mod tests {
         assert!(v.get::<(&str)>().unwrap() == "Hello world!");
         assert!(v.is::<(&str)>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 17);
         assert!(v.get::<(&str)>().unwrap() == "Hello world!");
     }
@@ -249,7 +249,7 @@ mod tests {
         assert!(v.get::<crate::ObjectPath>().unwrap().as_str() == "Hello world!");
         assert!(v.is::<crate::ObjectPath>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 17);
         assert!(v.get::<crate::ObjectPath>().unwrap().as_str() == "Hello world!");
     }
@@ -261,7 +261,7 @@ mod tests {
         assert!(v.get::<crate::Signature>().unwrap().as_str() == "Hello world!");
         assert!(v.is::<crate::Signature>());
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 14);
         assert!(v.get::<crate::Signature>().unwrap().as_str() == "Hello world!");
     }
@@ -280,7 +280,7 @@ mod tests {
         let slice = crate::Variant::extract_slice_simple(&encoded).unwrap();
 
         let decoded = crate::Variant::decode_simple(slice).unwrap();
-        assert!(decoded.get_signature() == u8::SIGNATURE_STR);
+        assert!(decoded.signature() == u8::SIGNATURE_STR);
         assert!(decoded.get::<u8>().unwrap() == 7u8);
     }
 
@@ -317,7 +317,7 @@ mod tests {
         assert!(fields[3].is::<&str>());
         assert!(fields[3].get::<&str>().unwrap() == "hello");
 
-        let v = crate::Variant::from_data(v.get_bytes(), v.get_signature()).unwrap();
+        let v = crate::Variant::from_data(v.get_bytes(), v.signature()).unwrap();
         assert!(v.len() == 30);
 
         assert!(v.is::<Structure>());

@@ -11,7 +11,7 @@ impl<'a> Structure<'a> {
         let mut signature = String::with_capacity(fields.len() + 2);
         signature.push('(');
         for field in &fields {
-            signature.push_str(field.get_signature());
+            signature.push_str(field.signature());
         }
         signature.push(')');
 
@@ -178,7 +178,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
         Ok(())
     }
 
-    fn get_signature<'b>(&'b self) -> &'b str {
+    fn signature<'b>(&'b self) -> &'b str {
         &self.signature
     }
 }
