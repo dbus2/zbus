@@ -408,7 +408,7 @@ pub(crate) fn extract_slice_from_data<'a>(
     }
 }
 
-pub(crate) fn get_alignment_for_signature(signature: &str) -> Result<u32, VariantError> {
+pub(crate) fn alignment_for_signature(signature: &str) -> Result<u32, VariantError> {
     match signature
         .chars()
         .next()

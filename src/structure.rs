@@ -75,7 +75,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
             open_brace_index = None;
 
             // Parse padding
-            let alignment = crate::variant_type::get_alignment_for_signature(child_signature)?;
+            let alignment = crate::variant_type::alignment_for_signature(child_signature)?;
             extracted += padding_for_n_bytes(extracted as u32, alignment) as usize;
             if extracted > bytes.len() {
                 return Err(VariantError::InsufficientData);
@@ -134,7 +134,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
             open_brace_index = None;
 
             // Parse padding
-            let alignment = crate::variant_type::get_alignment_for_signature(child_signature)?;
+            let alignment = crate::variant_type::alignment_for_signature(child_signature)?;
             extracted += padding_for_n_bytes(extracted as u32, alignment) as usize;
             if extracted > bytes.len() {
                 return Err(VariantError::InsufficientData);
@@ -170,7 +170,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
                 continue;
             }
             // We don't need the alignment but not getting an error here means it's a supported type
-            let _ = crate::variant_type::get_alignment_for_signature(&signature[i..])?;
+            let _ = crate::variant_type::alignment_for_signature(&signature[i..])?;
 
             i += 1;
         }

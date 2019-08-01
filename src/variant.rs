@@ -70,7 +70,7 @@ impl<'a> Variant<'a> {
     // Should this be part of public API?
     pub(crate) fn inner_alignment(&self) -> u32 {
         // Constructors ensure that we always have a valid `signature` so `unwrap()` should be fine here.
-        crate::variant_type::get_alignment_for_signature(&self.signature).unwrap()
+        crate::variant_type::alignment_for_signature(&self.signature).unwrap()
     }
 }
 
