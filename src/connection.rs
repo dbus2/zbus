@@ -104,7 +104,7 @@ impl From<message::Message> for ConnectionError {
                     })
                     .is_some()
                 {
-                    match message.get_body() {
+                    match message.body() {
                         Ok(body) => match Variant::from_data(&body, "s") {
                             Ok(v) => match v.get::<(&str)>() {
                                 Ok(detail) => {
@@ -187,7 +187,7 @@ impl Connection {
             })
             .is_some()
         {
-            let body = reply.get_body().map_err(|e| ConnectionError::Message(e))?;
+            let body = reply.body().map_err(|e| ConnectionError::Message(e))?;
             let v = Variant::from_data(&body, "s").map_err(|e| ConnectionError::Variant(e))?;
             let bus_name = v.get::<(&str)>().map_err(|e| ConnectionError::Variant(e))?;
 

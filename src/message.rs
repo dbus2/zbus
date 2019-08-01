@@ -231,7 +231,7 @@ impl Message {
         Ok(v)
     }
 
-    pub fn get_body(&self) -> Result<Vec<u8>, MessageError> {
+    pub fn body(&self) -> Result<Vec<u8>, MessageError> {
         if self.bytes_to_completion() != 0 {
             return Err(MessageError::InsufficientData);
         }

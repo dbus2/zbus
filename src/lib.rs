@@ -87,7 +87,7 @@ mod tests {
                             .unwrap_or(false)
                 })
                 .unwrap();
-            let body = reply.get_body().unwrap();
+            let body = reply.body().unwrap();
             let v = crate::Variant::from_data(&body, "s").unwrap();
             let id = v.get::<(&str)>().unwrap();
             println!("Machine ID: {}", id);
@@ -117,7 +117,7 @@ mod tests {
                         .unwrap_or(false)
             })
             .unwrap();
-        let body = reply.get_body().unwrap();
+        let body = reply.body().unwrap();
         let v = crate::Variant::from_data(&body, bool::SIGNATURE_STR).unwrap();
         assert!(v.get::<bool>().unwrap());
 
@@ -145,7 +145,7 @@ mod tests {
                         .unwrap_or(false)
             })
             .unwrap();
-        let body = reply.get_body().unwrap();
+        let body = reply.body().unwrap();
         let v = crate::Variant::from_data(&body, "s").unwrap();
         let owner = v.get::<(&str)>().unwrap();
         println!("Owner of 'org.freedesktop.DBus' is: {}", owner);
