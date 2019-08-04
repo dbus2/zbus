@@ -49,6 +49,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
         if bytes.len() == 0 || signature.len() < 3 {
             return Err(VariantError::InsufficientData);
         }
+        Self::ensure_correct_signature(signature)?;
 
         let mut extracted = 0;
         let mut i = 1;
@@ -106,6 +107,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
         if bytes.len() == 0 || signature.len() < 3 {
             return Err(VariantError::InsufficientData);
         }
+        Self::ensure_correct_signature(signature)?;
 
         // Assuming simple types here but it's OK to have more capacity than needed
         let mut variants = Vec::with_capacity(signature.len());
