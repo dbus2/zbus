@@ -398,3 +398,28 @@ pub(crate) fn alignment_for_signature(signature: &str) -> Result<u32, VariantErr
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
+
+pub(crate) fn slice_signature(signature: &str) -> Result<&str, VariantError> {
+    match signature
+        .chars()
+        .next()
+        .ok_or(VariantError::InsufficientData)?
+    {
+        // FIXME: There has to be a shorter way to do this
+        u8::SIGNATURE => u8::slice_signature(signature),
+        bool::SIGNATURE => bool::slice_signature(signature),
+        i16::SIGNATURE => i16::slice_signature(signature),
+        u16::SIGNATURE => u16::slice_signature(signature),
+        i32::SIGNATURE => i32::slice_signature(signature),
+        u32::SIGNATURE => u32::slice_signature(signature),
+        i64::SIGNATURE => i64::slice_signature(signature),
+        u64::SIGNATURE => u64::slice_signature(signature),
+        f64::SIGNATURE => f64::slice_signature(signature),
+        <(&str)>::SIGNATURE => <(&str)>::slice_signature(signature),
+        ObjectPath::SIGNATURE => ObjectPath::slice_signature(signature),
+        Signature::SIGNATURE => Signature::slice_signature(signature),
+        Structure::SIGNATURE => Structure::slice_signature(signature),
+        Variant::SIGNATURE => Variant::slice_signature(signature),
+        _ => return Err(VariantError::UnsupportedType(String::from(signature))),
+    }
+}
