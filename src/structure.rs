@@ -183,4 +183,31 @@ impl<'a> VariantType<'a> for Structure<'a> {
     fn signature<'b>(&'b self) -> &'b str {
         &self.signature
     }
+
+    fn slice_signature(signature: &str) -> Result<&str, VariantError> {
+        if !signature.starts_with("(") {
+            return Err(VariantError::IncorrectType);
+        }
+
+        let mut open_braces = 1;
+        let mut i = 1;
+        while i < signature.len() {
+            if &signature[i..i + 1] == ")" {
+                open_braces -= 1;
+
+                if open_braces == 0 {
+                    break;
+                }
+            } else if &signature[i..i + 1] == "(" {
+                open_braces += 1;
+            }
+
+            i += 1;
+        }
+        if &signature[i..i + 1] != ")" {
+            return Err(VariantError::IncorrectType);
+        }
+
+        Ok(&signature[0..i + 1])
+    }
 }

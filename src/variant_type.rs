@@ -57,6 +57,13 @@ pub trait VariantType<'a>: Sized {
     fn signature<'b>(&'b self) -> &'b str {
         Self::SIGNATURE_STR
     }
+
+    fn slice_signature(signature: &str) -> Result<&str, VariantError> {
+        let slice = &signature[0..1];
+        Self::ensure_correct_signature(slice)?;
+
+        Ok(slice)
+    }
 }
 
 pub trait SimpleVariantType<'a>: VariantType<'a> {
