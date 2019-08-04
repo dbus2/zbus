@@ -53,27 +53,9 @@ impl<'a> VariantType<'a> for Structure<'a> {
 
         let mut extracted = 0;
         let mut i = 1;
-        let mut open_brace_index = None;
-        while i < signature.len() - 1 {
-            match open_brace_index {
-                Some(_) => {
-                    if &signature[i..i + 1] != ")" {
-                        i += 1;
-
-                        continue;
-                    }
-                }
-                None => {
-                    if &signature[i..i + 1] == "(" {
-                        open_brace_index = Some(i);
-                        i += 1;
-
-                        continue;
-                    }
-                }
-            }
-            let child_signature = &signature[open_brace_index.unwrap_or(i)..i + 1];
-            open_brace_index = None;
+        let last_index = signature.len() - 1;
+        while i < last_index {
+            let child_signature = crate::variant_type::slice_signature(&signature[i..last_index])?;
 
             // Parse padding
             let alignment = crate::variant_type::alignment_for_signature(child_signature)?;
@@ -90,7 +72,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
                 return Err(VariantError::InsufficientData);
             }
 
-            i += 1;
+            i += child_signature.len();
         }
         if extracted == 0 {
             return Err(VariantError::ExcessData);
@@ -113,27 +95,9 @@ impl<'a> VariantType<'a> for Structure<'a> {
         let mut variants = Vec::with_capacity(signature.len());
         let mut extracted = 0;
         let mut i = 1;
-        let mut open_brace_index = None;
-        while i < signature.len() - 1 {
-            match open_brace_index {
-                Some(_) => {
-                    if &signature[i..i + 1] != ")" {
-                        i += 1;
-
-                        continue;
-                    }
-                }
-                None => {
-                    if &signature[i..i + 1] == "(" {
-                        open_brace_index = Some(i);
-                        i += 1;
-
-                        continue;
-                    }
-                }
-            }
-            let child_signature = &signature[open_brace_index.unwrap_or(i)..i + 1];
-            open_brace_index = None;
+        let last_index = signature.len() - 1;
+        while i < last_index {
+            let child_signature = crate::variant_type::slice_signature(&signature[i..last_index])?;
 
             // Parse padding
             let alignment = crate::variant_type::alignment_for_signature(child_signature)?;
@@ -150,7 +114,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
             }
             variants.push(variant);
 
-            i += 1;
+            i += child_signature.len();
         }
         if extracted == 0 {
             return Err(VariantError::ExcessData);
