@@ -18,7 +18,7 @@ humble beginning and a lot has to be done for this to be actually useful to anyo
 
 # Status
 
-Experimental. You've been warned!
+Early development. You've been warned!
 
 # License
 
