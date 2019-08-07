@@ -64,6 +64,12 @@ impl fmt::Display for MessageFieldError {
     }
 }
 
+impl From<VariantError> for MessageFieldError {
+    fn from(val: VariantError) -> MessageFieldError {
+        MessageFieldError::Variant(val)
+    }
+}
+
 pub struct MessageField<'a>(Structure<'a>);
 
 impl<'a> MessageField<'a> {
@@ -75,9 +81,7 @@ impl<'a> MessageField<'a> {
     }
 
     pub fn value<'b>(&'b self) -> Result<Variant<'b>, MessageFieldError> {
-        self.0.as_slice()[1]
-            .get::<Variant>()
-            .map_err(|e| MessageFieldError::Variant(e))
+        self.0.as_slice()[1].get::<Variant>().map_err(|e| e.into())
     }
 
     pub fn path(path: &'a str) -> Self
@@ -171,13 +175,9 @@ impl<'a> MessageField<'a> {
     }
 
     pub fn from_data(data: &'a [u8]) -> Result<(Self, usize), MessageFieldError> {
-        let slice =
-            Structure::extract_slice(data, "(yv)").map_err(|e| MessageFieldError::Variant(e))?;
+        let slice = Structure::extract_slice(data, "(yv)")?;
 
-        Ok((
-            Self(Structure::decode(slice, "(yv)").map_err(|e| MessageFieldError::Variant(e))?),
-            slice.len(),
-        ))
+        Ok((Self(Structure::decode(slice, "(yv)")?), slice.len()))
     }
 
     pub fn encode(&self) -> Vec<u8> {

@@ -63,6 +63,30 @@ impl fmt::Display for ConnectionError {
     }
 }
 
+impl From<io::Error> for ConnectionError {
+    fn from(val: io::Error) -> Self {
+        ConnectionError::IO(val)
+    }
+}
+
+impl From<message::MessageError> for ConnectionError {
+    fn from(val: message::MessageError) -> Self {
+        ConnectionError::Message(val)
+    }
+}
+
+impl From<message_field::MessageFieldError> for ConnectionError {
+    fn from(val: message_field::MessageFieldError) -> Self {
+        ConnectionError::MessageField(val)
+    }
+}
+
+impl From<VariantError> for ConnectionError {
+    fn from(val: VariantError) -> Self {
+        ConnectionError::Variant(val)
+    }
+}
+
 // For messages that are D-Bus error returns
 impl From<message::Message> for ConnectionError {
     fn from(message: message::Message) -> ConnectionError {
@@ -130,7 +154,7 @@ impl Connection {
         // FIXME: Currently just assume a path
         let uid = Uid::current();
         let path = format!("/run/user/{}/bus", uid);
-        let mut socket = UnixStream::connect(path).map_err(|e| ConnectionError::IO(e))?;
+        let mut socket = UnixStream::connect(path)?;
 
         // SASL Handshake
         let uid_str = uid
@@ -138,14 +162,10 @@ impl Connection {
             .chars()
             .map(|c| format!("{:x}", c as u32))
             .collect::<String>();
-        socket
-            .write(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())
-            .map_err(|e| ConnectionError::IO(e))?;
+        socket.write(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
         let mut buf_reader = BufReader::new(&socket);
         let mut buf = String::new();
-        let bytes_read = buf_reader
-            .read_line(&mut buf)
-            .map_err(|e| ConnectionError::IO(e))?;
+        let bytes_read = buf_reader.read_line(&mut buf)?;
         let mut components = buf.split_whitespace();
         if bytes_read < 3 || components.next() != Some("OK") {
             return Err(ConnectionError::Handshake);
@@ -153,9 +173,7 @@ impl Connection {
 
         let server_guid = String::from(components.next().ok_or(ConnectionError::Handshake)?);
 
-        socket
-            .write(b"BEGIN\r\n")
-            .map_err(|e| ConnectionError::IO(e))?;
+        socket.write(b"BEGIN\r\n")?;
 
         let mut connection = Self {
             socket,
@@ -172,7 +190,7 @@ impl Connection {
             None,
         )?;
 
-        let all_fields = reply.fields().map_err(|e| ConnectionError::Message(e))?;
+        let all_fields = reply.fields()?;
         if all_fields
             .iter()
             .find(|f| {
@@ -187,9 +205,9 @@ impl Connection {
             })
             .is_some()
         {
-            let body = reply.body().map_err(|e| ConnectionError::Message(e))?;
-            let v = Variant::from_data(&body, "s").map_err(|e| ConnectionError::Variant(e))?;
-            let bus_name = v.get::<(&str)>().map_err(|e| ConnectionError::Variant(e))?;
+            let body = reply.body()?;
+            let v = Variant::from_data(&body, "s")?;
+            let bus_name = v.get::<(&str)>()?;
 
             println!("bus name: {}", bus_name);
         } else {
@@ -209,41 +227,30 @@ impl Connection {
     ) -> Result<message::Message, ConnectionError> {
         println!("Starting: {}", method_name);
         let serial = self.next_serial();
-        let m = message::Message::method(destination, path, iface, method_name, body)
-            .map_err(|e| ConnectionError::Message(e))?
+        let m = message::Message::method(destination, path, iface, method_name, body)?
             .set_serial(serial);
 
-        self.socket
-            .write(m.as_bytes())
-            .map_err(|e| ConnectionError::IO(e))?;
+        self.socket.write(m.as_bytes())?;
 
         loop {
             // FIXME: We need to read incoming messages in a separate thread and maintain a queue
 
             let mut buf = [0; message::PRIMARY_HEADER_SIZE];
-            self.socket
-                .read(&mut buf[..])
-                .map_err(|e| ConnectionError::IO(e))?;
+            self.socket.read(&mut buf[..])?;
 
-            let mut incoming =
-                message::Message::from_bytes(&buf).map_err(|e| ConnectionError::Message(e))?;
+            let mut incoming = message::Message::from_bytes(&buf)?;
             let bytes_left = incoming.bytes_to_completion();
             if bytes_left == 0 {
                 return Err(ConnectionError::Handshake);
             }
             let mut buf = vec![0; bytes_left as usize];
-            let bytes_read = self
-                .socket
-                .read(&mut buf[..])
-                .map_err(|e| ConnectionError::IO(e))?;
-            incoming
-                .add_bytes(&buf[0..bytes_read])
-                .map_err(|e| ConnectionError::Message(e))?;
+            let bytes_read = self.socket.read(&mut buf[..])?;
+            incoming.add_bytes(&buf[0..bytes_read])?;
 
             if incoming.message_type() == message::MessageType::MethodReturn
                 || incoming.message_type() == message::MessageType::Error
             {
-                let all_fields = incoming.fields().map_err(|e| ConnectionError::Message(e))?;
+                let all_fields = incoming.fields()?;
 
                 if all_fields
                     .iter()

@@ -86,6 +86,18 @@ impl fmt::Display for MessageError {
     }
 }
 
+impl From<MessageFieldError> for MessageError {
+    fn from(val: MessageFieldError) -> MessageError {
+        MessageError::MessageField(val)
+    }
+}
+
+impl From<VariantError> for MessageError {
+    fn from(val: VariantError) -> MessageError {
+        MessageError::Variant(val)
+    }
+}
+
 #[derive(Debug)]
 pub struct Message(Vec<u8>);
 
@@ -216,8 +228,7 @@ impl Message {
 
         let mut i = FIELDS_START_OFFSET;
         while i < FIELDS_START_OFFSET + fields_len {
-            let (field, len) =
-                MessageField::from_data(&self.0[i..]).map_err(|e| MessageError::MessageField(e))?;
+            let (field, len) = MessageField::from_data(&self.0[i..])?;
 
             // According to the spec, we should ignore unkown fields.
             if field.code() != MessageFieldCode::Invalid {
