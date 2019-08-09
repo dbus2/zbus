@@ -3,6 +3,7 @@ use std::error;
 use std::fmt;
 
 use crate::utils::padding_for_8_bytes;
+use crate::Signature;
 use crate::Variant;
 use crate::VariantError;
 use crate::{MessageField, MessageFieldCode, MessageFieldError};
@@ -60,6 +61,7 @@ pub enum MessageError {
     InsufficientData,
     ExcessData,
     IncorrectEndian,
+    NoBodySignature,
     MessageField(MessageFieldError),
     Variant(VariantError),
 }
@@ -80,6 +82,7 @@ impl fmt::Display for MessageError {
             MessageError::InsufficientData => write!(f, "insufficient data"),
             MessageError::ExcessData => write!(f, "excess data"),
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
+            MessageError::NoBodySignature => write!(f, "missing body signature"),
             MessageError::MessageField(e) => write!(f, "{}", e),
             MessageError::Variant(e) => write!(f, "{}", e),
         }
@@ -208,6 +211,19 @@ impl Message {
 
     pub fn body_len(&self) -> u32 {
         byteorder::NativeEndian::read_u32(&self.0[BODY_LEN_START_OFFSET..BODY_LEN_END_OFFSET])
+    }
+
+    pub fn body_signature(&self) -> Result<String, MessageError> {
+        for field in self.fields()? {
+            if field.code() == MessageFieldCode::Signature {
+                let value = field.value()?;
+                let sig = value.get::<Signature>()?;
+
+                return Ok(String::from(sig.as_str()));
+            }
+        }
+
+        Err(MessageError::NoBodySignature)
     }
 
     pub fn message_type(&self) -> MessageType {

@@ -23,7 +23,7 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::{Signature, VariantType};
+    use crate::VariantType;
 
     #[test]
     fn basic_connection() {
@@ -70,19 +70,9 @@ mod tests {
                 )
                 .unwrap();
 
-            let all_fields = reply.fields().unwrap();
-            all_fields
-                .iter()
-                .find(|f| {
-                    f.code() == crate::MessageFieldCode::Signature
-                        && f.value()
-                            .map(|v| {
-                                v.get::<Signature>()
-                                    .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
-                                    .unwrap_or(false)
-                            })
-                            .unwrap_or(false)
-                })
+            reply
+                .body_signature()
+                .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
                 .unwrap();
             let body = reply.body().unwrap();
             let v = crate::Variant::from_data(&body, "s").unwrap();
@@ -100,19 +90,9 @@ mod tests {
             )
             .unwrap();
 
-        let all_fields = reply.fields().unwrap();
-        all_fields
-            .iter()
-            .find(|f| {
-                f.code() == crate::MessageFieldCode::Signature
-                    && f.value()
-                        .map(|v| {
-                            v.get::<Signature>()
-                                .map(|s| s.as_str() == bool::SIGNATURE_STR)
-                                .unwrap_or(false)
-                        })
-                        .unwrap_or(false)
-            })
+        reply
+            .body_signature()
+            .map(|s| s.as_str() == bool::SIGNATURE_STR)
             .unwrap();
         let body = reply.body().unwrap();
         let v = crate::Variant::from_data(&body, bool::SIGNATURE_STR).unwrap();
@@ -128,19 +108,9 @@ mod tests {
             )
             .unwrap();
 
-        let all_fields = reply.fields().unwrap();
-        all_fields
-            .iter()
-            .find(|f| {
-                f.code() == crate::MessageFieldCode::Signature
-                    && f.value()
-                        .map(|v| {
-                            v.get::<Signature>()
-                                .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
-                                .unwrap_or(false)
-                        })
-                        .unwrap_or(false)
-            })
+        reply
+            .body_signature()
+            .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
             .unwrap();
         let body = reply.body().unwrap();
         let v = crate::Variant::from_data(&body, "s").unwrap();

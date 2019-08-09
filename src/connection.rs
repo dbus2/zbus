@@ -7,7 +7,7 @@ use nix::unistd::Uid;
 use crate::message;
 use crate::message_field;
 use crate::Variant;
-use crate::{Signature, VariantError, VariantType};
+use crate::{VariantError, VariantType};
 
 pub struct Connection {
     pub server_guid: String,
@@ -114,19 +114,10 @@ impl From<message::Message> for ConnectionError {
                 };
 
                 // Then, try to get the optional description string
-                if all_fields
-                    .iter()
-                    .find(|f| {
-                        f.code() == message_field::MessageFieldCode::Signature
-                            && f.value()
-                                .map(|v| {
-                                    v.get::<Signature>()
-                                        .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
-                                        .unwrap_or(false)
-                                })
-                                .unwrap_or(false)
-                    })
-                    .is_some()
+                if message
+                    .body_signature()
+                    .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
+                    .unwrap_or(false)
                 {
                     match message.body() {
                         Ok(body) => match Variant::from_data(&body, "s") {
@@ -190,20 +181,10 @@ impl Connection {
             None,
         )?;
 
-        let all_fields = reply.fields()?;
-        if all_fields
-            .iter()
-            .find(|f| {
-                f.code() == message_field::MessageFieldCode::Signature
-                    && f.value()
-                        .map(|v| {
-                            v.get::<Signature>()
-                                .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
-                                .unwrap_or(false)
-                        })
-                        .unwrap_or(false)
-            })
-            .is_some()
+        if reply
+            .body_signature()
+            .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
+            .unwrap_or(false)
         {
             let body = reply.body()?;
             let v = Variant::from_data(&body, "s")?;
