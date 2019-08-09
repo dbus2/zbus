@@ -221,6 +221,7 @@ impl Message {
 
         let fields_len = self.fields_len() as usize;
         if fields_len == 0 {
+            // FIXME: Should this be an error? Can there be a message w/o any fields?
             return Ok(vec![]);
         }
 
@@ -242,6 +243,7 @@ impl Message {
         Ok(v)
     }
 
+    // FIXME: Return a &[Vec<VariantType>] here
     pub fn body(&self) -> Result<Vec<u8>, MessageError> {
         if self.bytes_to_completion() != 0 {
             return Err(MessageError::InsufficientData);
