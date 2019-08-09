@@ -9,10 +9,7 @@ pub struct Variant<'a> {
 }
 
 impl<'a> Variant<'a> {
-    pub fn from_data(data: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    pub fn from_data(data: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         // extract_slice_from_data() ensures a valid signature
         let value = crate::variant_type::extract_slice_from_data(data, signature)?;
 
@@ -22,10 +19,7 @@ impl<'a> Variant<'a> {
         })
     }
 
-    pub fn from<T: 'a + VariantType<'a>>(value: T) -> Self
-    where
-        Self: 'a,
-    {
+    pub fn from<T: 'a + VariantType<'a>>(value: T) -> Self {
         Self {
             value: Cow::from(value.encode()),
             signature: String::from(value.signature()),
@@ -103,10 +97,7 @@ impl<'a> VariantType<'a> for Variant<'a> {
         Ok(&bytes[0..total_size])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
         let sign_slice = Signature::extract_slice_simple(bytes)?;

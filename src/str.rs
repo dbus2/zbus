@@ -31,10 +31,7 @@ impl<'a> VariantType<'a> for &'a str {
         Ok(&bytes[0..last_index])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         crate::ensure_sufficient_bytes(bytes, 4)?;
 
@@ -71,10 +68,7 @@ impl<'a> VariantType<'a> for ObjectPath<'a> {
         <(&str)>::extract_slice_simple(bytes)
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         <(&str)>::decode(bytes, <(&str)>::SIGNATURE_STR).map(|s| Self(s))
     }
@@ -124,10 +118,7 @@ impl<'a> VariantType<'a> for Signature<'a> {
         Ok(&bytes[0..last_index])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         if bytes.len() < 1 {
             return Err(VariantError::InsufficientData);

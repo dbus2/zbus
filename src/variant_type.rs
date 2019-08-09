@@ -50,9 +50,7 @@ pub trait VariantType<'a>: Sized {
         Ok(())
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a;
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>;
 
     fn signature<'b>(&'b self) -> &'b str {
         Self::SIGNATURE_STR
@@ -71,10 +69,7 @@ pub trait SimpleVariantType<'a>: VariantType<'a> {
         Self::extract_slice(data, Self::SIGNATURE_STR)
     }
 
-    fn decode_simple(bytes: &'a [u8]) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode_simple(bytes: &'a [u8]) -> Result<Self, VariantError> {
         Self::decode(bytes, Self::SIGNATURE_STR)
     }
 }
@@ -95,10 +90,7 @@ impl<'a> VariantType<'a> for u8 {
         Ok(&bytes[0..1])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 1)?;
 
@@ -123,10 +115,7 @@ impl<'a> VariantType<'a> for bool {
         Ok(&bytes[0..4])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
@@ -155,10 +144,7 @@ impl<'a> VariantType<'a> for i16 {
         Ok(&bytes[0..2])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 2)?;
 
@@ -183,10 +169,7 @@ impl<'a> VariantType<'a> for u16 {
         Ok(&bytes[0..2])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 2)?;
 
@@ -211,10 +194,7 @@ impl<'a> VariantType<'a> for i32 {
         Ok(&bytes[0..4])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
@@ -239,10 +219,7 @@ impl<'a> VariantType<'a> for u32 {
         Ok(&bytes[0..4])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
@@ -267,10 +244,7 @@ impl<'a> VariantType<'a> for i64 {
         Ok(&bytes[0..8])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 
@@ -295,10 +269,7 @@ impl<'a> VariantType<'a> for u64 {
         Ok(&bytes[0..8])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 
@@ -326,10 +297,7 @@ impl<'a> VariantType<'a> for f64 {
         Ok(&bytes[0..8])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 

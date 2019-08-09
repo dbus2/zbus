@@ -82,10 +82,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
         Ok(&bytes[0..extracted])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>
-    where
-        Self: 'a,
-    {
+    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         // Similar to extract_slice, except we create variants.
         if bytes.len() == 0 || signature.len() < 3 {
             return Err(VariantError::InsufficientData);
