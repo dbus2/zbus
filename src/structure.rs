@@ -46,7 +46,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
         v
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         if bytes.len() == 0 || signature.len() < 3 {
             return Err(VariantError::InsufficientData);
         }

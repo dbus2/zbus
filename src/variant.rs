@@ -80,7 +80,7 @@ impl<'a> VariantType<'a> for Variant<'a> {
         bytes
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
 
         // Variant is made of signature of the value followed by the actual value. So we gotta

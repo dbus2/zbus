@@ -19,7 +19,7 @@ impl<'a> VariantType<'a> for &'a str {
         bytes
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         crate::ensure_sufficient_bytes(bytes, 4)?;
 
@@ -48,7 +48,7 @@ impl<'a> ObjectPath<'a> {
         Self(path)
     }
 
-    pub fn as_str(&'a self) -> &str {
+    pub fn as_str(&self) -> &str {
         self.0
     }
 }
@@ -63,7 +63,7 @@ impl<'a> VariantType<'a> for ObjectPath<'a> {
         self.0.encode()
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         <(&str)>::extract_slice_simple(bytes)
     }
@@ -82,7 +82,7 @@ impl<'a> Signature<'a> {
         Self(signature)
     }
 
-    pub fn as_str(&'a self) -> &str {
+    pub fn as_str(&self) -> &str {
         self.0
     }
 }
@@ -104,7 +104,7 @@ impl<'a> VariantType<'a> for Signature<'a> {
         bytes
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         if bytes.len() < 1 {
             return Err(VariantError::InsufficientData);

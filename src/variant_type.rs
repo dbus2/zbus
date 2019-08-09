@@ -41,7 +41,7 @@ pub trait VariantType<'a>: Sized {
 
     // FIXME: Would be nice if this returned a slice
     fn encode(&self) -> Vec<u8>;
-    fn extract_slice(data: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError>;
+    fn extract_slice<'b>(data: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError>;
     fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
         if signature != Self::SIGNATURE_STR {
             return Err(VariantError::IncorrectType);
@@ -65,7 +65,7 @@ pub trait VariantType<'a>: Sized {
 }
 
 pub trait SimpleVariantType<'a>: VariantType<'a> {
-    fn extract_slice_simple(data: &'a [u8]) -> Result<&'a [u8], VariantError> {
+    fn extract_slice_simple<'b>(data: &'b [u8]) -> Result<&'b [u8], VariantError> {
         Self::extract_slice(data, Self::SIGNATURE_STR)
     }
 
@@ -83,7 +83,7 @@ impl<'a> VariantType<'a> for u8 {
         self.to_ne_bytes().to_vec()
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 1)?;
 
@@ -108,7 +108,7 @@ impl<'a> VariantType<'a> for bool {
         (*self as u32).to_ne_bytes().to_vec()
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
@@ -137,7 +137,7 @@ impl<'a> VariantType<'a> for i16 {
         self.to_ne_bytes().to_vec()
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 2)?;
 
@@ -162,7 +162,7 @@ impl<'a> VariantType<'a> for u16 {
         self.to_ne_bytes().to_vec()
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 2)?;
 
@@ -187,7 +187,7 @@ impl<'a> VariantType<'a> for i32 {
         self.to_ne_bytes().to_vec()
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
@@ -212,7 +212,7 @@ impl<'a> VariantType<'a> for u32 {
         self.to_ne_bytes().to_vec()
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 4)?;
 
@@ -237,7 +237,7 @@ impl<'a> VariantType<'a> for i64 {
         self.to_ne_bytes().to_vec()
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 
@@ -262,7 +262,7 @@ impl<'a> VariantType<'a> for u64 {
         self.to_ne_bytes().to_vec()
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 
@@ -290,7 +290,7 @@ impl<'a> VariantType<'a> for f64 {
         bytes
     }
 
-    fn extract_slice(bytes: &'a [u8], signature: &str) -> Result<&'a [u8], VariantError> {
+    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         ensure_sufficient_bytes(bytes, 8)?;
 
