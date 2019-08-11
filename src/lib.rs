@@ -86,7 +86,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "NameHasOwner",
-                Some(crate::Variant::from("org.freedesktop.DBus")),
+                Some(vec![crate::Variant::from("org.freedesktop.DBus")]),
             )
             .unwrap();
 
@@ -104,7 +104,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "GetNameOwner",
-                Some(crate::Variant::from("org.freedesktop.DBus")),
+                Some(vec![crate::Variant::from("org.freedesktop.DBus")]),
             )
             .unwrap();
 

@@ -203,7 +203,7 @@ impl Connection {
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        body: Option<Variant>,
+        body: Option<Vec<Variant>>,
     ) -> Result<message::Message, ConnectionError> {
         println!("Starting: {}", method_name);
         let serial = self.next_serial();

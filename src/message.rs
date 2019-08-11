@@ -4,8 +4,9 @@ use std::fmt;
 
 use crate::utils::padding_for_8_bytes;
 use crate::Signature;
+use crate::Structure;
 use crate::{MessageField, MessageFieldCode, MessageFieldError};
-use crate::{Variant, VariantError};
+use crate::{Variant, VariantError, VariantType};
 
 /// Size of primary message header
 pub const PRIMARY_HEADER_SIZE: usize = 16;
@@ -109,7 +110,7 @@ impl Message {
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        body: Option<Variant>,
+        body: Option<Vec<Variant>>,
     ) -> Result<Self, MessageError> {
         let mut m = Message::new(MessageType::MethodCall);
 
@@ -125,9 +126,15 @@ impl Message {
             return Err(MessageError::StrTooLarge);
         }
 
-        // Length of message body
-        let body_len = body.as_ref().map(|b| b.len()).unwrap_or(0);
-        m.0.extend(&(body_len as u32).to_ne_bytes());
+        // Message body structure and its encoding
+        let (body_encoding, body_structure) = body
+            .map(|variants| {
+                let structure = Structure::new(variants);
+
+                (structure.encode(), Some(structure))
+            })
+            .unwrap_or((vec![], None));
+        m.0.extend(&(body_encoding.len() as u32).to_ne_bytes());
 
         // Serial number. FIXME: managed by connection
         m.0.extend(&1u32.to_ne_bytes());
@@ -143,9 +150,12 @@ impl Message {
             let padding = padding_for_8_bytes(array_len);
             array_len += m.push_field(&MessageField::interface(iface), padding)?;
         }
-        if let Some(ref body) = body {
+        if let Some(structure) = body_structure {
             let padding = padding_for_8_bytes(array_len);
-            array_len += m.push_field(&MessageField::signature(&body.signature()), padding)?;
+            let signature = structure.signature();
+            // Remove the leading and trailing STRUCT delimiter
+            let signature = &signature[1..signature.len() - 1];
+            array_len += m.push_field(&MessageField::signature(signature), padding)?;
         }
         let padding = padding_for_8_bytes(array_len);
         array_len += m.push_field(&MessageField::path(path), padding)?;
@@ -160,8 +170,8 @@ impl Message {
             m.push_padding(padding);
         }
 
-        if let Some(body) = body {
-            m.0.extend(body.bytes());
+        if body_encoding.len() > 0 {
+            m.0.extend(body_encoding);
         }
 
         Ok(m)
