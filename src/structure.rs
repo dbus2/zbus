@@ -22,6 +22,10 @@ impl<'a> Structure<'a> {
     pub fn fields<'b>(&'b self) -> &'b [Variant<'b>] {
         &self.fields
     }
+
+    pub fn take_fields(self) -> Vec<Variant<'a>> {
+        self.fields
+    }
 }
 
 impl<'a> VariantType<'a> for Structure<'a> {
