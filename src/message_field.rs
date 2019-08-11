@@ -74,14 +74,14 @@ pub struct MessageField<'a>(Structure<'a>);
 
 impl<'a> MessageField<'a> {
     pub fn code(&self) -> MessageFieldCode {
-        self.0.as_slice()[0]
+        self.0.fields()[0]
             .get::<u8>()
             .map(|c| MessageFieldCode::from(c))
             .unwrap_or(MessageFieldCode::Invalid)
     }
 
     pub fn value<'b>(&'b self) -> Result<Variant<'b>, MessageFieldError> {
-        self.0.as_slice()[1].get::<Variant>().map_err(|e| e.into())
+        self.0.fields()[1].get::<Variant>().map_err(|e| e.into())
     }
 
     pub fn path(path: &'a str) -> Self

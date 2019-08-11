@@ -19,7 +19,7 @@ impl<'a> Structure<'a> {
     }
 
     // FIXME: Can't we just use 'a here?
-    pub fn as_slice<'b>(&'b self) -> &'b [Variant<'b>] {
+    pub fn fields<'b>(&'b self) -> &'b [Variant<'b>] {
         &self.fields
     }
 }

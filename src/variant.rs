@@ -295,7 +295,7 @@ mod tests {
 
         assert!(v.is::<Structure>());
         let s = v.get::<Structure>().unwrap();
-        let fields = s.as_slice();
+        let fields = s.fields();
         assert!(fields[0].is::<u8>());
         assert!(fields[0].get::<u8>().unwrap() == u8::max_value());
         assert!(fields[1].is::<u32>());
@@ -303,14 +303,14 @@ mod tests {
 
         assert!(fields[2].is::<Structure>());
         let inner = fields[2].get::<Structure>().unwrap();
-        let inner_fields = inner.as_slice();
+        let inner_fields = inner.fields();
         assert!(inner_fields[0].is::<i64>());
         assert!(inner_fields[0].get::<i64>().unwrap() == i64::max_value());
         assert!(inner_fields[1].is::<bool>());
         assert!(inner_fields[1].get::<bool>().unwrap());
         assert!(inner_fields[2].is::<Structure>());
         let inner = inner_fields[2].get::<Structure>().unwrap();
-        let inner_fields = inner.as_slice();
+        let inner_fields = inner.fields();
         assert!(inner_fields[0].is::<i64>());
         assert!(inner_fields[0].get::<i64>().unwrap() == i64::max_value());
         assert!(inner_fields[1].is::<f64>());
@@ -324,7 +324,7 @@ mod tests {
 
         assert!(v.is::<Structure>());
         let s = v.get::<Structure>().unwrap();
-        let fields = s.as_slice();
+        let fields = s.fields();
         assert!(fields[0].get::<u8>().unwrap() == u8::max_value());
         assert!(fields[0].is::<u8>());
         assert!(fields[1].get::<u32>().unwrap() == u32::max_value());
@@ -332,7 +332,7 @@ mod tests {
 
         assert!(fields[2].is::<Structure>());
         let inner = fields[2].get::<Structure>().unwrap();
-        let inner_fields = inner.as_slice();
+        let inner_fields = inner.fields();
         assert!(inner_fields[0].is::<i64>());
         assert!(inner_fields[0].get::<i64>().unwrap() == i64::max_value());
         assert!(inner_fields[1].is::<bool>());
