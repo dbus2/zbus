@@ -4,9 +4,8 @@ use std::fmt;
 
 use crate::utils::padding_for_8_bytes;
 use crate::Signature;
-use crate::Variant;
-use crate::VariantError;
 use crate::{MessageField, MessageFieldCode, MessageFieldError};
+use crate::{Variant, VariantError};
 
 /// Size of primary message header
 pub const PRIMARY_HEADER_SIZE: usize = 16;

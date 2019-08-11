@@ -6,8 +6,7 @@ use nix::unistd::Uid;
 
 use crate::message;
 use crate::message_field;
-use crate::Variant;
-use crate::{VariantError, VariantType};
+use crate::{Variant, VariantError, VariantType};
 
 pub struct Connection {
     pub server_guid: String,
