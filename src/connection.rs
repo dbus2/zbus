@@ -113,28 +113,24 @@ impl From<message::Message> for ConnectionError {
                 };
 
                 // Then, try to get the optional description string
-                if message
-                    .body_signature()
-                    .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
-                    .unwrap_or(false)
-                {
-                    match message.body() {
-                        Ok(body) => match Variant::from_data(&body, "s") {
-                            Ok(v) => match v.get::<(&str)>() {
+                if message.body_len() > 0u32 {
+                    match message.body(Some(<(&str)>::SIGNATURE_STR)) {
+                        Ok(body) => match body.get(0) {
+                            Some(v) => match v.get::<(&str)>() {
                                 Ok(detail) => {
                                     ConnectionError::MethodError(name, Some(String::from(detail)))
                                 }
-                                Err(e) => return ConnectionError::Variant(e),
+                                Err(e) => ConnectionError::Variant(e),
                             },
-                            Err(e) => ConnectionError::Variant(e),
+                            None => ConnectionError::MethodError(name, None),
                         },
                         Err(e) => ConnectionError::Message(e),
                     }
                 } else {
-                    ConnectionError::MethodError(name, None)
+                    return ConnectionError::MethodError(name, None);
                 }
             }
-            Err(e) => return ConnectionError::Message(e),
+            Err(e) => ConnectionError::Message(e),
         }
     }
 }
@@ -180,19 +176,11 @@ impl Connection {
             None,
         )?;
 
-        if reply
-            .body_signature()
-            .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
-            .unwrap_or(false)
-        {
-            let body = reply.body()?;
-            let v = Variant::from_data(&body, "s")?;
-            let bus_name = v.get::<(&str)>()?;
+        let body = reply.body(Some(<&str>::SIGNATURE_STR))?;
+        let v = body.get(0).ok_or(ConnectionError::InvalidReply)?;
+        let bus_name = v.get::<(&str)>()?;
 
-            println!("bus name: {}", bus_name);
-        } else {
-            return Err(ConnectionError::InvalidReply);
-        }
+        println!("bus name: {}", bus_name);
 
         Ok(connection)
     }

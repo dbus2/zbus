@@ -74,8 +74,8 @@ mod tests {
                 .body_signature()
                 .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
                 .unwrap();
-            let body = reply.body().unwrap();
-            let v = crate::Variant::from_data(&body, "s").unwrap();
+            let body = reply.body(Some(<(&str)>::SIGNATURE_STR)).unwrap();
+            let v = body.get(0).unwrap();
             let id = v.get::<(&str)>().unwrap();
             println!("Machine ID: {}", id);
         }
@@ -94,8 +94,8 @@ mod tests {
             .body_signature()
             .map(|s| s.as_str() == bool::SIGNATURE_STR)
             .unwrap();
-        let body = reply.body().unwrap();
-        let v = crate::Variant::from_data(&body, bool::SIGNATURE_STR).unwrap();
+        let body = reply.body(Some(bool::SIGNATURE_STR)).unwrap();
+        let v = body.get(0).unwrap();
         assert!(v.get::<bool>().unwrap());
 
         let reply = connection
@@ -112,8 +112,8 @@ mod tests {
             .body_signature()
             .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
             .unwrap();
-        let body = reply.body().unwrap();
-        let v = crate::Variant::from_data(&body, "s").unwrap();
+        let body = reply.body(None).unwrap();
+        let v = body.get(0).unwrap();
         let owner = v.get::<(&str)>().unwrap();
         println!("Owner of 'org.freedesktop.DBus' is: {}", owner);
     }

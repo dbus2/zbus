@@ -1,6 +1,6 @@
 use byteorder::ByteOrder;
 use std::error;
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 use crate::utils::padding_for_8_bytes;
 use crate::Signature;
@@ -268,8 +268,7 @@ impl Message {
         Ok(v)
     }
 
-    // FIXME: Return a &[Vec<VariantType>] here
-    pub fn body(&self) -> Result<Vec<u8>, MessageError> {
+    pub fn body(&self, body_signature: Option<&str>) -> Result<Vec<Variant>, MessageError> {
         if self.bytes_to_completion() != 0 {
             return Err(MessageError::InsufficientData);
         }
@@ -280,7 +279,14 @@ impl Message {
             return Ok(vec![]);
         }
 
-        Ok(self.0[(header_len as usize)..].to_vec())
+        let signature = body_signature
+            .map(|s| Cow::from(s))
+            .unwrap_or(Cow::from(self.body_signature()?));
+        // Add () for Structure
+        let signature = format!("({})", signature);
+        let structure = Structure::decode(&self.0[(header_len as usize)..], &signature)?;
+
+        Ok(structure.take_fields())
     }
 
     pub fn no_reply_expected(mut self) -> Self {
