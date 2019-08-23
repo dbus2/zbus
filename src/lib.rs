@@ -73,10 +73,10 @@ mod tests {
                 )
                 .unwrap();
 
-            reply
+            assert!(reply
                 .body_signature()
                 .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
-                .unwrap();
+                .unwrap());
             let body = reply.body(Some(<(&str)>::SIGNATURE_STR)).unwrap();
             let v = body.get(0).unwrap();
             let id = v.get::<(&str)>().unwrap();
@@ -93,10 +93,10 @@ mod tests {
             )
             .unwrap();
 
-        reply
+        assert!(reply
             .body_signature()
             .map(|s| s.as_str() == bool::SIGNATURE_STR)
-            .unwrap();
+            .unwrap());
         let body = reply.body(Some(bool::SIGNATURE_STR)).unwrap();
         let v = body.get(0).unwrap();
         assert!(v.get::<bool>().unwrap());
@@ -111,10 +111,10 @@ mod tests {
             )
             .unwrap();
 
-        reply
+        assert!(reply
             .body_signature()
             .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
-            .unwrap();
+            .unwrap());
         let body = reply.body(None).unwrap();
         let v = body.get(0).unwrap();
         let owner = v.get::<(&str)>().unwrap();
