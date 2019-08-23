@@ -1,7 +1,7 @@
 use byteorder::ByteOrder;
 use std::{borrow::Cow, error, fmt, str};
 
-use crate::{Array, ObjectPath, Signature, Structure, Variant};
+use crate::{ObjectPath, Signature, Structure, Variant};
 
 #[derive(Debug)]
 pub enum VariantError {
@@ -336,7 +336,7 @@ pub(crate) fn extract_slice_from_data<'a>(
         <(&str)>::SIGNATURE => <(&str)>::extract_slice_simple(data),
         // Doesn't matter what type for T we use here, signature is the same but we're also assuming `extract_slice` to
         // be independent of `T` (an internal detail).
-        Array::<bool>::SIGNATURE => Array::<bool>::extract_slice(data, signature),
+        Vec::<bool>::SIGNATURE => Vec::<bool>::extract_slice(data, signature),
         ObjectPath::SIGNATURE => ObjectPath::extract_slice_simple(data),
         Signature::SIGNATURE => Signature::extract_slice_simple(data),
         Structure::SIGNATURE => Structure::extract_slice(data, signature),
@@ -363,7 +363,7 @@ pub(crate) fn alignment_for_signature(signature: &str) -> Result<u32, VariantErr
         f64::SIGNATURE => Ok(f64::ALIGNMENT),
         <(&str)>::SIGNATURE => Ok(<(&str)>::ALIGNMENT),
         // Doesn't matter what type for T we use here, alignment is the same
-        Array::<bool>::SIGNATURE => Ok(Array::<bool>::ALIGNMENT),
+        Vec::<bool>::SIGNATURE => Ok(Vec::<bool>::ALIGNMENT),
         ObjectPath::SIGNATURE => Ok(ObjectPath::ALIGNMENT),
         Signature::SIGNATURE => Ok(Signature::ALIGNMENT),
         Structure::SIGNATURE => Ok(Structure::ALIGNMENT),
@@ -391,7 +391,7 @@ pub(crate) fn slice_signature(signature: &str) -> Result<&str, VariantError> {
         <(&str)>::SIGNATURE => <(&str)>::slice_signature(signature),
         // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_signature`
         // to be independent of `T` (an internal detail).
-        Array::<bool>::SIGNATURE => Array::<bool>::slice_signature(signature),
+        Vec::<bool>::SIGNATURE => Vec::<bool>::slice_signature(signature),
         ObjectPath::SIGNATURE => ObjectPath::slice_signature(signature),
         Signature::SIGNATURE => Signature::slice_signature(signature),
         Structure::SIGNATURE => Structure::slice_signature(signature),

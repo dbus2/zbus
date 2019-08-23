@@ -111,7 +111,7 @@ impl<'a> SimpleVariantType<'a> for Variant<'a> {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{Array, SimpleVariantType, Structure, VariantType};
+    use crate::{SimpleVariantType, Structure, VariantType};
 
     #[test]
     fn u8_variant() {
@@ -347,37 +347,36 @@ mod tests {
         // Let's use D-Bus/GVariant terms
 
         // Array of u8
-        let ay = Array::new(vec![u8::max_value(), 0u8, 47u8]).unwrap();
+        let ay = vec![u8::max_value(), 0u8, 47u8];
         assert!(ay.signature() == "ay");
         let v = crate::Variant::from(ay);
         assert!(v.len() == 7);
 
         // Array of strings
         // Can't use 'as' as it's a keyword
-        let as_ = Array::new(vec!["Hello", "World", "Now", "Bye!"]).unwrap();
+        let as_ = vec!["Hello", "World", "Now", "Bye!"];
         assert!(as_.signature() == "as");
         let v = crate::Variant::from(as_);
         assert!(v.len() == 45);
 
         // Array of Struct, which in turn containin an Array (We gotta go deeper!)
-        let ar = Array::new(vec![Structure::new(vec![
+        let ar = vec![Structure::new(vec![
             crate::Variant::from(u8::max_value()),
             crate::Variant::from(u32::max_value()),
             crate::Variant::from(Structure::new(vec![
                 crate::Variant::from(i64::max_value()),
                 crate::Variant::from(true),
-                crate::Variant::from(Array::new(vec!["Hello", "World"]).unwrap()),
+                crate::Variant::from(vec!["Hello", "World"]),
             ])),
             crate::Variant::from("hello"),
-        ])])
-        .unwrap();
+        ])];
         assert!(ar.signature() == "a(yu(xbas)s)");
         let v = crate::Variant::from(ar);
         assert!(v.len() == 66);
 
-        assert!(v.is::<Array::<Structure>>());
-        let ar = v.get::<Array<Structure>>().unwrap();
-        let s = &ar.elements()[0];
+        assert!(v.is::<Vec::<Structure>>());
+        let ar = v.get::<Vec<Structure>>().unwrap();
+        let s = &ar[0];
         let fields = s.fields();
         assert!(fields[0].is::<u8>());
         assert!(fields[0].get::<u8>().unwrap() == u8::max_value());
@@ -390,16 +389,16 @@ mod tests {
         assert!(inner_fields[0].get::<i64>().unwrap() == i64::max_value());
         assert!(inner_fields[1].is::<bool>());
         assert!(inner_fields[1].get::<bool>().unwrap() == true);
-        assert!(inner_fields[2].is::<Array::<&str>>());
-        let as_ = inner_fields[2].get::<Array<&str>>().unwrap();
-        assert!(as_.elements() == ["Hello", "World"]);
+        assert!(inner_fields[2].is::<Vec::<&str>>());
+        let as_ = inner_fields[2].get::<Vec<&str>>().unwrap();
+        assert!(as_ == ["Hello", "World"]);
 
         let v = crate::Variant::from_data(v.bytes(), v.signature()).unwrap();
         assert!(v.len() == 66);
 
-        assert!(v.is::<Array::<Structure>>());
-        let ar = v.get::<Array<Structure>>().unwrap();
-        let s = &ar.elements()[0];
+        assert!(v.is::<Vec::<Structure>>());
+        let ar = v.get::<Vec<Structure>>().unwrap();
+        let s = &ar[0];
         let fields = s.fields();
         assert!(fields[0].is::<u8>());
         assert!(fields[0].get::<u8>().unwrap() == u8::max_value());
@@ -412,8 +411,8 @@ mod tests {
         assert!(inner_fields[0].get::<i64>().unwrap() == i64::max_value());
         assert!(inner_fields[1].is::<bool>());
         assert!(inner_fields[1].get::<bool>().unwrap() == true);
-        assert!(inner_fields[2].is::<Array::<&str>>());
-        let as_ = inner_fields[2].get::<Array<&str>>().unwrap();
-        assert!(as_.elements() == ["Hello", "World"]);
+        assert!(inner_fields[2].is::<Vec::<&str>>());
+        let as_ = inner_fields[2].get::<Vec<&str>>().unwrap();
+        assert!(as_ == ["Hello", "World"]);
     }
 }

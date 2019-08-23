@@ -5,30 +5,7 @@ use crate::utils::padding_for_n_bytes;
 use crate::SimpleVariantType;
 use crate::{VariantError, VariantType};
 
-pub struct Array<T> {
-    elements: Vec<T>,
-}
-
-impl<'a, T: VariantType<'a>> Array<T> {
-    pub fn new(elements: Vec<T>) -> Result<Self, VariantError> {
-        if elements.len() == 0 {
-            return Err(VariantError::InsufficientData);
-        }
-
-        Ok(Self { elements })
-    }
-
-    // FIXME: Can't we just use 'a here?
-    pub fn elements<'b>(&'b self) -> &'b [T] {
-        &self.elements
-    }
-
-    pub fn take_elements(self) -> Vec<T> {
-        self.elements
-    }
-}
-
-impl<'a, T: VariantType<'a>> VariantType<'a> for Array<T> {
+impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
     const SIGNATURE: char = 'a';
     const SIGNATURE_STR: &'static str = "a";
     const ALIGNMENT: u32 = 4;
@@ -36,7 +13,7 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Array<T> {
     fn encode(&self) -> Vec<u8> {
         let mut v = vec![];
         v.extend(&0u32.to_ne_bytes());
-        for element in &self.elements {
+        for element in self {
             let padding = padding_for_n_bytes(v.len() as u32, T::ALIGNMENT);
             v.extend(std::iter::repeat(0).take(padding as usize));
 
@@ -127,7 +104,7 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Array<T> {
             return Err(VariantError::ExcessData);
         }
 
-        Self::new(elements)
+        Ok(elements)
     }
 
     fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
@@ -140,7 +117,7 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Array<T> {
     }
 
     fn signature<'b>(&'b self) -> Cow<'b, str> {
-        let signature = format!("a{}", self.elements[0].signature());
+        let signature = format!("a{}", self[0].signature());
 
         Cow::from(signature)
     }
