@@ -1,4 +1,5 @@
 use byteorder::ByteOrder;
+use std::borrow::Cow;
 
 use crate::utils::padding_for_n_bytes;
 use crate::SimpleVariantType;
@@ -6,7 +7,6 @@ use crate::{VariantError, VariantType};
 
 pub struct Array<T> {
     elements: Vec<T>,
-    signature: String,
 }
 
 impl<'a, T: VariantType<'a>> Array<T> {
@@ -15,12 +15,7 @@ impl<'a, T: VariantType<'a>> Array<T> {
             return Err(VariantError::InsufficientData);
         }
 
-        let signature = format!("a{}", elements[0].signature());
-
-        Ok(Self {
-            elements,
-            signature,
-        })
+        Ok(Self { elements })
     }
 
     // FIXME: Can't we just use 'a here?
@@ -144,8 +139,10 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Array<T> {
         Ok(())
     }
 
-    fn signature<'b>(&'b self) -> &'b str {
-        &self.signature
+    fn signature<'b>(&'b self) -> Cow<'b, str> {
+        let signature = format!("a{}", self.elements[0].signature());
+
+        Cow::from(signature)
     }
 
     fn slice_signature(signature: &str) -> Result<&str, VariantError> {

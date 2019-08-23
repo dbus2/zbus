@@ -1,21 +1,15 @@
+use std::borrow::Cow;
+
 use crate::utils::padding_for_n_bytes;
 use crate::{Variant, VariantError, VariantType};
 
 pub struct Structure<'a> {
     fields: Vec<Variant<'a>>,
-    signature: String,
 }
 
 impl<'a> Structure<'a> {
     pub fn new(fields: Vec<Variant<'a>>) -> Self {
-        let mut signature = String::with_capacity(fields.len() + 2);
-        signature.push('(');
-        for field in &fields {
-            signature.push_str(field.signature());
-        }
-        signature.push(')');
-
-        Self { fields, signature }
+        Self { fields }
     }
 
     // FIXME: Can't we just use 'a here?
@@ -146,8 +140,15 @@ impl<'a> VariantType<'a> for Structure<'a> {
         Ok(())
     }
 
-    fn signature<'b>(&'b self) -> &'b str {
-        &self.signature
+    fn signature<'b>(&'b self) -> Cow<'b, str> {
+        let mut signature = String::with_capacity(self.fields.len() + 2);
+        signature.push('(');
+        for field in &self.fields {
+            signature.push_str(field.signature());
+        }
+        signature.push(')');
+
+        Cow::from(signature)
     }
 
     fn slice_signature(signature: &str) -> Result<&str, VariantError> {

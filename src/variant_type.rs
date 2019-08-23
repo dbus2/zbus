@@ -1,5 +1,5 @@
 use byteorder::ByteOrder;
-use std::{error, fmt, str};
+use std::{borrow::Cow, error, fmt, str};
 
 use crate::{Array, ObjectPath, Signature, Structure, Variant};
 
@@ -52,8 +52,8 @@ pub trait VariantType<'a>: Sized {
 
     fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>;
 
-    fn signature<'b>(&'b self) -> &'b str {
-        Self::SIGNATURE_STR
+    fn signature<'b>(&'b self) -> Cow<'b, str> {
+        Cow::from(Self::SIGNATURE_STR)
     }
 
     fn slice_signature(signature: &str) -> Result<&str, VariantError> {
