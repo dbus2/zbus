@@ -3,22 +3,20 @@ use std::borrow::Cow;
 use crate::utils::padding_for_n_bytes;
 use crate::{Variant, VariantError, VariantType};
 
-pub struct Structure<'a> {
-    fields: Vec<Variant<'a>>,
-}
+pub struct Structure<'a>(Vec<Variant<'a>>);
 
 impl<'a> Structure<'a> {
     pub fn new(fields: Vec<Variant<'a>>) -> Self {
-        Self { fields }
+        Self(fields)
     }
 
     // FIXME: Can't we just use 'a here?
     pub fn fields<'b>(&'b self) -> &'b [Variant<'b>] {
-        &self.fields
+        &self.0
     }
 
     pub fn take_fields(self) -> Vec<Variant<'a>> {
-        self.fields
+        self.0
     }
 }
 
@@ -32,7 +30,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
 
     fn encode(&self) -> Vec<u8> {
         let mut v = vec![];
-        for variant in &self.fields {
+        for variant in &self.0 {
             let alignment = variant.inner_alignment();
             let padding = padding_for_n_bytes(v.len() as u32, alignment);
             v.extend(std::iter::repeat(0).take(padding as usize));
@@ -141,9 +139,9 @@ impl<'a> VariantType<'a> for Structure<'a> {
     }
 
     fn signature<'b>(&'b self) -> Cow<'b, str> {
-        let mut signature = String::with_capacity(self.fields.len() + 2);
+        let mut signature = String::with_capacity(self.0.len() + 2);
         signature.push('(');
-        for field in &self.fields {
+        for field in &self.0 {
             signature.push_str(field.signature());
         }
         signature.push(')');
