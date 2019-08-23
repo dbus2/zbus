@@ -19,6 +19,9 @@ pub use crate::str::*;
 mod structure;
 pub use structure::*;
 
+mod array;
+pub use array::*;
+
 mod utils;
 
 #[cfg(test)]
