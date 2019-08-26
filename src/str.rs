@@ -53,7 +53,7 @@ impl<'a> ObjectPath<'a> {
     }
 }
 
-// FIXME: Find a way to share code with &str implementation in `variant_type.rs`
+// FIXME: Find a way to share code with &str implementation above
 impl<'a> VariantType<'a> for ObjectPath<'a> {
     const SIGNATURE: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
