@@ -1,6 +1,7 @@
 use byteorder::ByteOrder;
 use std::str;
 
+use crate::utils::padding_for_n_bytes;
 use crate::{SimpleVariantType, VariantError, VariantType};
 
 impl<'a> VariantType<'a> for &'a str {
@@ -8,9 +9,12 @@ impl<'a> VariantType<'a> for &'a str {
     const SIGNATURE_STR: &'static str = "s";
     const ALIGNMENT: u32 = 4;
 
-    fn encode(&self) -> Vec<u8> {
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let len = self.len();
-        let mut bytes = Vec::with_capacity(5 + len);
+        let padding = padding_for_n_bytes(n_bytes_before as u32, Self::ALIGNMENT);
+        let mut bytes = Vec::with_capacity(padding as usize + 5 + len);
+
+        bytes.extend(std::iter::repeat(0).take(padding as usize));
 
         bytes.extend(&(len as u32).to_ne_bytes());
         bytes.extend(self.as_bytes());
@@ -59,8 +63,8 @@ impl<'a> VariantType<'a> for ObjectPath<'a> {
     const SIGNATURE_STR: &'static str = "o";
     const ALIGNMENT: u32 = 4;
 
-    fn encode(&self) -> Vec<u8> {
-        self.0.encode()
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        self.0.encode(n_bytes_before)
     }
 
     fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
@@ -93,7 +97,8 @@ impl<'a> VariantType<'a> for Signature<'a> {
     const SIGNATURE_STR: &'static str = "g";
     const ALIGNMENT: u32 = 1;
 
-    fn encode(&self) -> Vec<u8> {
+    // No padding needed because of 1-byte alignment and hence number of bytes before don't matter
+    fn encode(&self, _n_bytes_before: usize) -> Vec<u8> {
         let len = self.0.len();
         let mut bytes = Vec::with_capacity(2 + len);
 

@@ -131,7 +131,7 @@ impl Message {
             .map(|variants| {
                 let structure = Structure::new(variants);
 
-                (structure.encode(), Some(structure))
+                (structure.encode(0), Some(structure))
             })
             .unwrap_or((vec![], None));
         m.0.extend(&(body_encoding.len() as u32).to_ne_bytes());

@@ -21,7 +21,7 @@ impl<'a> Variant<'a> {
 
     pub fn from<T: 'a + VariantType<'a>>(value: T) -> Self {
         Self {
-            value: Cow::from(value.encode()),
+            value: Cow::from(value.encode(0)),
             signature: String::from(value.signature()),
         }
     }
@@ -73,8 +73,8 @@ impl<'a> VariantType<'a> for Variant<'a> {
     const SIGNATURE_STR: &'static str = "v";
     const ALIGNMENT: u32 = Signature::ALIGNMENT;
 
-    fn encode(&self) -> Vec<u8> {
-        let mut bytes = Signature::new(&self.signature).encode();
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut bytes = Signature::new(&self.signature).encode(n_bytes_before);
         bytes.extend_from_slice(&self.value);
 
         bytes
@@ -260,7 +260,10 @@ mod tests {
     #[test]
     fn variant_variant() {
         let v = crate::Variant::from(7u8);
-        let mut encoded = v.encode();
+        // The argument to encode here shouln't matter cause variants are 1-byte aligned so just
+        // pass an arbitrary odd number and encoding shouldn't have any padding (i-e we should get
+        // 4 bytes only).
+        let mut encoded = v.encode(3);
         assert!(encoded.len() == 4);
 
         // Add some extra bytes to the encoded data to test the slicing

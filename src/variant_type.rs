@@ -1,6 +1,7 @@
 use byteorder::ByteOrder;
 use std::{borrow::Cow, error, fmt, str};
 
+use crate::utils::padding_for_n_bytes;
 use crate::{ObjectPath, Signature, Structure, Variant};
 
 #[derive(Debug)]
@@ -40,7 +41,7 @@ pub trait VariantType<'a>: Sized {
     const ALIGNMENT: u32;
 
     // FIXME: Would be nice if this returned a slice
-    fn encode(&self) -> Vec<u8>;
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8>;
     fn extract_slice<'b>(data: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError>;
     fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
         if signature != Self::SIGNATURE_STR {
@@ -62,6 +63,12 @@ pub trait VariantType<'a>: Sized {
 
         Ok(slice)
     }
+
+    fn create_bytes_vec(n_bytes_before: usize) -> Vec<u8> {
+        let padding = padding_for_n_bytes(n_bytes_before as u32, Self::ALIGNMENT);
+
+        std::iter::repeat(0).take((padding) as usize).collect()
+    }
 }
 
 pub trait SimpleVariantType<'a>: VariantType<'a> {
@@ -79,8 +86,11 @@ impl<'a> VariantType<'a> for u8 {
     const SIGNATURE_STR: &'static str = "y";
     const ALIGNMENT: u32 = 1;
 
-    fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().to_vec()
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut v = Self::create_bytes_vec(n_bytes_before);
+        v.extend(&self.to_ne_bytes());
+
+        v
     }
 
     fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
@@ -104,8 +114,11 @@ impl<'a> VariantType<'a> for bool {
     const SIGNATURE_STR: &'static str = "b";
     const ALIGNMENT: u32 = 4;
 
-    fn encode(&self) -> Vec<u8> {
-        (*self as u32).to_ne_bytes().to_vec()
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut v = Self::create_bytes_vec(n_bytes_before);
+        v.extend(&(*self as u32).to_ne_bytes());
+
+        v
     }
 
     fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
@@ -133,8 +146,11 @@ impl<'a> VariantType<'a> for i16 {
     const SIGNATURE_STR: &'static str = "n";
     const ALIGNMENT: u32 = 2;
 
-    fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().to_vec()
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut v = Self::create_bytes_vec(n_bytes_before);
+        v.extend(&self.to_ne_bytes());
+
+        v
     }
 
     fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
@@ -158,8 +174,11 @@ impl<'a> VariantType<'a> for u16 {
     const SIGNATURE_STR: &'static str = "q";
     const ALIGNMENT: u32 = 2;
 
-    fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().to_vec()
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut v = Self::create_bytes_vec(n_bytes_before);
+        v.extend(&self.to_ne_bytes());
+
+        v
     }
 
     fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
@@ -183,8 +202,11 @@ impl<'a> VariantType<'a> for i32 {
     const SIGNATURE_STR: &'static str = "i";
     const ALIGNMENT: u32 = 4;
 
-    fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().to_vec()
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut v = Self::create_bytes_vec(n_bytes_before);
+        v.extend(&self.to_ne_bytes());
+
+        v
     }
 
     fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
@@ -208,8 +230,11 @@ impl<'a> VariantType<'a> for u32 {
     const SIGNATURE_STR: &'static str = "u";
     const ALIGNMENT: u32 = 4;
 
-    fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().to_vec()
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut v = Self::create_bytes_vec(n_bytes_before);
+        v.extend(&self.to_ne_bytes());
+
+        v
     }
 
     fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
@@ -233,8 +258,11 @@ impl<'a> VariantType<'a> for i64 {
     const SIGNATURE_STR: &'static str = "x";
     const ALIGNMENT: u32 = 8;
 
-    fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().to_vec()
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut v = Self::create_bytes_vec(n_bytes_before);
+        v.extend(&self.to_ne_bytes());
+
+        v
     }
 
     fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
@@ -258,8 +286,11 @@ impl<'a> VariantType<'a> for u64 {
     const SIGNATURE_STR: &'static str = "t";
     const ALIGNMENT: u32 = 8;
 
-    fn encode(&self) -> Vec<u8> {
-        self.to_ne_bytes().to_vec()
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut v = Self::create_bytes_vec(n_bytes_before);
+        v.extend(&self.to_ne_bytes());
+
+        v
     }
 
     fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
@@ -283,11 +314,13 @@ impl<'a> VariantType<'a> for f64 {
     const SIGNATURE_STR: &'static str = "d";
     const ALIGNMENT: u32 = 8;
 
-    fn encode(&self) -> Vec<u8> {
-        let mut bytes = vec![0; 8];
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut v = Self::create_bytes_vec(n_bytes_before);
+        let mut bytes = [0; 8];
         byteorder::NativeEndian::write_f64(&mut bytes, *self);
+        v.extend(&bytes);
 
-        bytes
+        v
     }
 
     fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {

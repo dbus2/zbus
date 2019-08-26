@@ -28,11 +28,13 @@ impl<'a> VariantType<'a> for Structure<'a> {
     const SIGNATURE_STR: &'static str = "(";
     const ALIGNMENT: u32 = 8;
 
-    fn encode(&self) -> Vec<u8> {
-        let mut v = vec![];
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut v = Self::create_bytes_vec(n_bytes_before);
+
         for variant in &self.0 {
+            // Variant doesn't have the padding so we need to add it
             let alignment = variant.inner_alignment();
-            let padding = padding_for_n_bytes(v.len() as u32, alignment);
+            let padding = padding_for_n_bytes((v.len() + n_bytes_before) as u32, alignment);
             v.extend(std::iter::repeat(0).take(padding as usize));
 
             // Deep copying, nice!!! 🙈

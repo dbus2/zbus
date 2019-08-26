@@ -10,15 +10,13 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
     const SIGNATURE_STR: &'static str = "a";
     const ALIGNMENT: u32 = 4;
 
-    fn encode(&self) -> Vec<u8> {
-        let mut v = vec![];
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        let mut v = Self::create_bytes_vec(n_bytes_before);
+
         v.extend(&0u32.to_ne_bytes());
         for element in self {
-            let padding = padding_for_n_bytes(v.len() as u32, T::ALIGNMENT);
-            v.extend(std::iter::repeat(0).take(padding as usize));
-
             // Deep copying, nice!!! 🙈
-            v.extend(element.encode());
+            v.extend(element.encode(v.len() + n_bytes_before));
         }
 
         // Set size of array in bytes
