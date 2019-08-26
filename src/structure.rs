@@ -44,28 +44,27 @@ impl<'a> VariantType<'a> for Structure<'a> {
         v
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
-        if bytes.len() == 0 || signature.len() < 3 {
+    fn extract_slice<'b>(
+        bytes: &'b [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<&'b [u8], VariantError> {
+        let padding = Self::padding(n_bytes_before);
+        if bytes.len() < padding || signature.len() < 3 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
 
-        let mut extracted = 0;
+        let mut extracted = padding;
         let mut i = 1;
         let last_index = signature.len() - 1;
         while i < last_index {
             let child_signature = crate::variant_type::slice_signature(&signature[i..last_index])?;
-
-            // Parse padding
-            let alignment = crate::variant_type::alignment_for_signature(child_signature)?;
-            extracted += padding_for_n_bytes(extracted as u32, alignment) as usize;
-            if extracted > bytes.len() {
-                return Err(VariantError::InsufficientData);
-            }
-
-            // Parse data
-            let slice =
-                crate::variant_type::extract_slice_from_data(&bytes[extracted..], child_signature)?;
+            let slice = crate::variant_type::extract_slice_from_data(
+                &bytes[(extracted as usize)..],
+                child_signature,
+                n_bytes_before + extracted,
+            )?;
             extracted += slice.len();
             if extracted > bytes.len() {
                 return Err(VariantError::InsufficientData);
@@ -80,24 +79,31 @@ impl<'a> VariantType<'a> for Structure<'a> {
         Ok(&bytes[0..extracted])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
         // Similar to extract_slice, except we create variants.
-        if bytes.len() == 0 || signature.len() < 3 {
+        let padding = Self::padding(n_bytes_before);
+        if bytes.len() < padding || signature.len() < 3 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
 
         // Assuming simple types here but it's OK to have more capacity than needed
         let mut variants = Vec::with_capacity(signature.len());
-        let mut extracted = 0;
+        let mut extracted = padding;
         let mut i = 1;
         let last_index = signature.len() - 1;
         while i < last_index {
             let child_signature = crate::variant_type::slice_signature(&signature[i..last_index])?;
 
-            // Parse padding
+            // Parse child padding ourselves since we'll create Varint from it and Variant doesn't
+            // handle padding.
             let alignment = crate::variant_type::alignment_for_signature(child_signature)?;
-            extracted += padding_for_n_bytes(extracted as u32, alignment) as usize;
+            extracted +=
+                padding_for_n_bytes((n_bytes_before + extracted) as u32, alignment) as usize;
             if extracted > bytes.len() {
                 return Err(VariantError::InsufficientData);
             }

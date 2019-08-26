@@ -175,9 +175,9 @@ impl<'a> MessageField<'a> {
     }
 
     pub fn from_data(data: &'a [u8]) -> Result<(Self, usize), MessageFieldError> {
-        let slice = Structure::extract_slice(data, "(yv)")?;
+        let slice = Structure::extract_slice(data, "(yv)", 0)?;
 
-        Ok((Self(Structure::decode(slice, "(yv)")?), slice.len()))
+        Ok((Self(Structure::decode(slice, "(yv)", 0)?), slice.len()))
     }
 
     pub fn encode(&self) -> Vec<u8> {

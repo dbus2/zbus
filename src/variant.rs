@@ -11,7 +11,7 @@ pub struct Variant<'a> {
 impl<'a> Variant<'a> {
     pub fn from_data(data: &'a [u8], signature: &str) -> Result<Self, VariantError> {
         // extract_slice_from_data() ensures a valid signature
-        let value = crate::variant_type::extract_slice_from_data(data, signature)?;
+        let value = crate::variant_type::extract_slice_from_data(data, signature, 0)?;
 
         Ok(Self {
             value: Cow::from(value),
@@ -31,7 +31,7 @@ impl<'a> Variant<'a> {
     }
 
     pub fn get<T: 'a + VariantType<'a>>(&'a self) -> Result<T, VariantError> {
-        T::decode(&self.value, &self.signature)
+        T::decode(&self.value, &self.signature, 0)
     }
 
     pub fn bytes(&self) -> &[u8] {
@@ -73,36 +73,46 @@ impl<'a> VariantType<'a> for Variant<'a> {
     const SIGNATURE_STR: &'static str = "v";
     const ALIGNMENT: u32 = Signature::ALIGNMENT;
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut bytes = Signature::new(&self.signature).encode(n_bytes_before);
+    // Like Signature, no padding needed because of 1-byte alignment and hence n_bytes_before is ignored everywhere.
+
+    fn encode(&self, _n_bytes_before: usize) -> Vec<u8> {
+        let mut bytes = Signature::new(&self.signature).encode(0);
         bytes.extend_from_slice(&self.value);
 
         bytes
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
+    fn extract_slice<'b>(
+        bytes: &'b [u8],
+        signature: &str,
+        _n_bytes_before: usize,
+    ) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
 
         // Variant is made of signature of the value followed by the actual value. So we gotta
         // extract the signature slice first and then the value slice. Once we know the sizes of
         // both, we can just slice the whole thing.
-        let sign_slice = Signature::extract_slice_simple(bytes)?;
+        let sign_slice = Signature::extract_slice_simple(bytes, 0)?;
         let sign_size = sign_slice.len();
-        let sign = Signature::decode_simple(sign_slice)?;
+        let sign = Signature::decode_simple(sign_slice, 0)?;
 
         let value_slice =
-            crate::variant_type::extract_slice_from_data(&bytes[sign_size..], sign.as_str())?;
+            crate::variant_type::extract_slice_from_data(&bytes[sign_size..], sign.as_str(), 0)?;
         let total_size = sign_size + value_slice.len();
 
         Ok(&bytes[0..total_size])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        _n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
-        let sign_slice = Signature::extract_slice_simple(bytes)?;
+        let sign_slice = Signature::extract_slice_simple(bytes, 0)?;
         let sign_size = sign_slice.len();
-        let sign = Signature::decode_simple(sign_slice)?;
+        let sign = Signature::decode_simple(sign_slice, 0)?;
 
         Variant::from_data(&bytes[sign_size..], sign.as_str())
     }
@@ -271,9 +281,9 @@ mod tests {
         encoded.push(1);
         encoded.push(7);
 
-        let slice = crate::Variant::extract_slice_simple(&encoded).unwrap();
+        let slice = crate::Variant::extract_slice_simple(&encoded, 0).unwrap();
 
-        let decoded = crate::Variant::decode_simple(slice).unwrap();
+        let decoded = crate::Variant::decode_simple(slice, 0).unwrap();
         assert!(decoded.signature() == u8::SIGNATURE_STR);
         assert!(decoded.get::<u8>().unwrap() == 7u8);
     }

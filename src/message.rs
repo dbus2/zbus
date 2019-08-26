@@ -273,8 +273,8 @@ impl Message {
             return Err(MessageError::InsufficientData);
         }
 
-        let mut header_len = PRIMARY_HEADER_SIZE as u32 + self.fields_len();
-        header_len = header_len + padding_for_8_bytes(header_len);
+        let mut header_len = PRIMARY_HEADER_SIZE + self.fields_len() as usize;
+        header_len = header_len + padding_for_8_bytes(header_len as u32) as usize;
         if self.body_len() == 0 {
             return Ok(vec![]);
         }
@@ -284,7 +284,8 @@ impl Message {
             .unwrap_or(Cow::from(self.body_signature()?));
         // Add () for Structure
         let signature = format!("({})", signature);
-        let structure = Structure::decode(&self.0[(header_len as usize)..], &signature)?;
+        let structure =
+            Structure::decode(&self.0[(header_len as usize)..], &signature, header_len)?;
 
         Ok(structure.take_fields())
     }

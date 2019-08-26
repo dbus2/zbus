@@ -42,7 +42,21 @@ pub trait VariantType<'a>: Sized {
 
     // FIXME: Would be nice if this returned a slice
     fn encode(&self, n_bytes_before: usize) -> Vec<u8>;
-    fn extract_slice<'b>(data: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError>;
+
+    // Default implementation works for constant-sized types where size is the same as their
+    // alignment
+    fn extract_slice<'b>(
+        bytes: &'b [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<&'b [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
+        let len = (Self::ALIGNMENT + padding_for_n_bytes(n_bytes_before as u32, Self::ALIGNMENT))
+            as usize;
+        ensure_sufficient_bytes(bytes, len)?;
+
+        Ok(&bytes[0..len])
+    }
     fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
         if signature != Self::SIGNATURE_STR {
             return Err(VariantError::IncorrectType);
@@ -51,7 +65,11 @@ pub trait VariantType<'a>: Sized {
         Ok(())
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError>;
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError>;
 
     fn signature<'b>(&'b self) -> Cow<'b, str> {
         Cow::from(Self::SIGNATURE_STR)
@@ -69,15 +87,36 @@ pub trait VariantType<'a>: Sized {
 
         std::iter::repeat(0).take((padding) as usize).collect()
     }
+
+    // Helper for decode() implementation
+    fn slice_for_decoding<'b>(
+        bytes: &'b [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<&'b [u8], VariantError> {
+        Self::ensure_correct_signature(signature)?;
+        let padding = Self::padding(n_bytes_before);
+        let len = Self::ALIGNMENT as usize + padding;
+        ensure_sufficient_bytes(bytes, len)?;
+
+        Ok(&bytes[padding..])
+    }
+
+    fn padding(n_bytes_before: usize) -> usize {
+        padding_for_n_bytes(n_bytes_before as u32, Self::ALIGNMENT) as usize
+    }
 }
 
 pub trait SimpleVariantType<'a>: VariantType<'a> {
-    fn extract_slice_simple<'b>(data: &'b [u8]) -> Result<&'b [u8], VariantError> {
-        Self::extract_slice(data, Self::SIGNATURE_STR)
+    fn extract_slice_simple<'b>(
+        data: &'b [u8],
+        n_bytes_before: usize,
+    ) -> Result<&'b [u8], VariantError> {
+        Self::extract_slice(data, Self::SIGNATURE_STR, n_bytes_before)
     }
 
-    fn decode_simple(bytes: &'a [u8]) -> Result<Self, VariantError> {
-        Self::decode(bytes, Self::SIGNATURE_STR)
+    fn decode_simple(bytes: &'a [u8], n_bytes_before: usize) -> Result<Self, VariantError> {
+        Self::decode(bytes, Self::SIGNATURE_STR, n_bytes_before)
     }
 }
 
@@ -93,18 +132,14 @@ impl<'a> VariantType<'a> for u8 {
         v
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 1)?;
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
 
-        Ok(&bytes[0..1])
-    }
-
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 1)?;
-
-        Ok(bytes[0])
+        Ok(slice[0])
     }
 }
 impl<'a> SimpleVariantType<'a> for u8 {}
@@ -121,18 +156,14 @@ impl<'a> VariantType<'a> for bool {
         v
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 4)?;
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
 
-        Ok(&bytes[0..4])
-    }
-
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 4)?;
-
-        match byteorder::NativeEndian::read_u32(bytes) {
+        match byteorder::NativeEndian::read_u32(&slice) {
             0 => Ok(false),
             1 => Ok(true),
             _ => Err(VariantError::IncorrectValue),
@@ -153,18 +184,14 @@ impl<'a> VariantType<'a> for i16 {
         v
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 2)?;
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
 
-        Ok(&bytes[0..2])
-    }
-
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 2)?;
-
-        Ok(byteorder::NativeEndian::read_i16(bytes))
+        Ok(byteorder::NativeEndian::read_i16(slice))
     }
 }
 impl<'a> SimpleVariantType<'a> for i16 {}
@@ -181,18 +208,14 @@ impl<'a> VariantType<'a> for u16 {
         v
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 2)?;
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
 
-        Ok(&bytes[0..2])
-    }
-
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 2)?;
-
-        Ok(byteorder::NativeEndian::read_u16(bytes))
+        Ok(byteorder::NativeEndian::read_u16(slice))
     }
 }
 impl<'a> SimpleVariantType<'a> for u16 {}
@@ -209,18 +232,14 @@ impl<'a> VariantType<'a> for i32 {
         v
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 4)?;
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
 
-        Ok(&bytes[0..4])
-    }
-
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 4)?;
-
-        Ok(byteorder::NativeEndian::read_i32(bytes))
+        Ok(byteorder::NativeEndian::read_i32(slice))
     }
 }
 impl<'a> SimpleVariantType<'a> for i32 {}
@@ -237,18 +256,14 @@ impl<'a> VariantType<'a> for u32 {
         v
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 4)?;
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
 
-        Ok(&bytes[0..4])
-    }
-
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 4)?;
-
-        Ok(byteorder::NativeEndian::read_u32(bytes))
+        Ok(byteorder::NativeEndian::read_u32(slice))
     }
 }
 impl<'a> SimpleVariantType<'a> for u32 {}
@@ -265,18 +280,14 @@ impl<'a> VariantType<'a> for i64 {
         v
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 8)?;
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
 
-        Ok(&bytes[0..8])
-    }
-
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 8)?;
-
-        Ok(byteorder::NativeEndian::read_i64(bytes))
+        Ok(byteorder::NativeEndian::read_i64(slice))
     }
 }
 impl<'a> SimpleVariantType<'a> for i64 {}
@@ -293,18 +304,14 @@ impl<'a> VariantType<'a> for u64 {
         v
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 8)?;
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
 
-        Ok(&bytes[0..8])
-    }
-
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 8)?;
-
-        Ok(byteorder::NativeEndian::read_u64(bytes))
+        Ok(byteorder::NativeEndian::read_u64(slice))
     }
 }
 impl<'a> SimpleVariantType<'a> for u64 {}
@@ -323,18 +330,14 @@ impl<'a> VariantType<'a> for f64 {
         v
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 8)?;
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
 
-        Ok(&bytes[0..8])
-    }
-
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        ensure_sufficient_bytes(bytes, 8)?;
-
-        Ok(byteorder::NativeEndian::read_f64(bytes))
+        Ok(byteorder::NativeEndian::read_f64(slice))
     }
 }
 impl<'a> SimpleVariantType<'a> for f64 {}
@@ -350,6 +353,7 @@ pub(crate) fn ensure_sufficient_bytes(bytes: &[u8], size: usize) -> Result<(), V
 pub(crate) fn extract_slice_from_data<'a>(
     data: &'a [u8],
     signature: &str,
+    n_bytes_before: usize,
 ) -> Result<&'a [u8], VariantError> {
     match signature
         .chars()
@@ -357,23 +361,23 @@ pub(crate) fn extract_slice_from_data<'a>(
         .ok_or(VariantError::InsufficientData)?
     {
         // FIXME: There has to be a shorter way to do this
-        u8::SIGNATURE => u8::extract_slice_simple(data),
-        bool::SIGNATURE => bool::extract_slice_simple(data),
-        i16::SIGNATURE => i16::extract_slice_simple(data),
-        u16::SIGNATURE => u16::extract_slice_simple(data),
-        i32::SIGNATURE => i32::extract_slice_simple(data),
-        u32::SIGNATURE => u32::extract_slice_simple(data),
-        i64::SIGNATURE => i64::extract_slice_simple(data),
-        u64::SIGNATURE => u64::extract_slice_simple(data),
-        f64::SIGNATURE => f64::extract_slice_simple(data),
-        <(&str)>::SIGNATURE => <(&str)>::extract_slice_simple(data),
+        u8::SIGNATURE => u8::extract_slice_simple(data, n_bytes_before),
+        bool::SIGNATURE => bool::extract_slice_simple(data, n_bytes_before),
+        i16::SIGNATURE => i16::extract_slice_simple(data, n_bytes_before),
+        u16::SIGNATURE => u16::extract_slice_simple(data, n_bytes_before),
+        i32::SIGNATURE => i32::extract_slice_simple(data, n_bytes_before),
+        u32::SIGNATURE => u32::extract_slice_simple(data, n_bytes_before),
+        i64::SIGNATURE => i64::extract_slice_simple(data, n_bytes_before),
+        u64::SIGNATURE => u64::extract_slice_simple(data, n_bytes_before),
+        f64::SIGNATURE => f64::extract_slice_simple(data, n_bytes_before),
+        <(&str)>::SIGNATURE => <(&str)>::extract_slice_simple(data, n_bytes_before),
         // Doesn't matter what type for T we use here, signature is the same but we're also assuming `extract_slice` to
         // be independent of `T` (an internal detail).
-        Vec::<bool>::SIGNATURE => Vec::<bool>::extract_slice(data, signature),
-        ObjectPath::SIGNATURE => ObjectPath::extract_slice_simple(data),
-        Signature::SIGNATURE => Signature::extract_slice_simple(data),
-        Structure::SIGNATURE => Structure::extract_slice(data, signature),
-        Variant::SIGNATURE => Variant::extract_slice(data, signature),
+        Vec::<bool>::SIGNATURE => Vec::<bool>::extract_slice(data, signature, n_bytes_before),
+        ObjectPath::SIGNATURE => ObjectPath::extract_slice_simple(data, n_bytes_before),
+        Signature::SIGNATURE => Signature::extract_slice_simple(data, n_bytes_before),
+        Structure::SIGNATURE => Structure::extract_slice(data, signature, n_bytes_before),
+        Variant::SIGNATURE => Variant::extract_slice(data, signature, n_bytes_before),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }

@@ -1,7 +1,6 @@
 use byteorder::ByteOrder;
 use std::borrow::Cow;
 
-use crate::utils::padding_for_n_bytes;
 use crate::SimpleVariantType;
 use crate::{VariantError, VariantType};
 
@@ -26,32 +25,30 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         v
     }
 
-    fn extract_slice<'b>(bytes: &'b [u8], signature: &str) -> Result<&'b [u8], VariantError> {
-        if bytes.len() < 4 || signature.len() < 2 {
+    fn extract_slice<'b>(
+        bytes: &'b [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<&'b [u8], VariantError> {
+        let padding = Self::padding(n_bytes_before);
+        if bytes.len() < padding + 4 || signature.len() < 2 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
 
-        // Child signature & alignement
+        // Child signature
         let child_signature = crate::variant_type::slice_signature(&signature[1..])?;
-        let alignment = crate::variant_type::alignment_for_signature(child_signature)?;
 
         // Array size in bytes
-        let len = u32::decode_simple(&bytes[0..4])? + 4;
-        let mut extracted = 4;
+        let len = u32::decode_simple(&bytes[padding..4], 0)? as usize + 4;
+        let mut extracted = padding + 4;
         while extracted < len {
-            // Parse padding
-            extracted += padding_for_n_bytes(extracted as u32, alignment);
-            if extracted > len {
-                return Err(VariantError::InsufficientData);
-            }
-
-            // Parse data
             let slice = crate::variant_type::extract_slice_from_data(
                 &bytes[(extracted as usize)..],
                 child_signature,
+                n_bytes_before + extracted,
             )?;
-            extracted += slice.len() as u32;
+            extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
             }
@@ -63,39 +60,37 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         Ok(&bytes[0..(extracted as usize)])
     }
 
-    fn decode(bytes: &'a [u8], signature: &str) -> Result<Self, VariantError> {
-        if bytes.len() < 4 || signature.len() < 2 {
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
+        let padding = Self::padding(n_bytes_before);
+        if bytes.len() < padding + 4 || signature.len() < 2 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
 
-        // Child signature & alignement
+        // Child signature
         let child_signature = crate::variant_type::slice_signature(&signature[1..])?;
-        let alignment = crate::variant_type::alignment_for_signature(child_signature)?;
 
         // Array size in bytes
-        let len = u32::decode_simple(&bytes[0..4])? + 4;
-        let mut extracted = 4;
+        let len = u32::decode_simple(&bytes[padding..4], 0)? as usize + 4;
+        let mut extracted = padding + 4;
         let mut elements = vec![];
 
         while extracted < len {
-            // Parse padding
-            extracted += padding_for_n_bytes(extracted as u32, alignment);
-            if extracted > len {
-                return Err(VariantError::InsufficientData);
-            }
-
-            // Parse data
             let slice = crate::variant_type::extract_slice_from_data(
                 &bytes[(extracted as usize)..],
                 child_signature,
+                n_bytes_before + extracted,
             )?;
-            extracted += slice.len() as u32;
             if extracted > len {
                 return Err(VariantError::InsufficientData);
             }
 
-            let element = T::decode(slice, child_signature)?;
+            let element = T::decode(slice, child_signature, n_bytes_before + extracted)?;
+            extracted += slice.len();
             elements.push(element);
         }
         if extracted == 0 {
