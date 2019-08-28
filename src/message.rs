@@ -22,8 +22,6 @@ const SERIAL_END_OFFSET: usize = 12;
 const FIELDS_LEN_START_OFFSET: usize = 12;
 const FIELDS_LEN_END_OFFSET: usize = 16;
 
-const FIELDS_START_OFFSET: usize = 16;
-
 #[cfg(target_endian = "big")]
 const ENDIAN_SIG: u8 = b'B';
 #[cfg(target_endian = "little")]
@@ -139,33 +137,31 @@ impl Message {
         // Serial number. FIXME: managed by connection
         m.0.extend(&1u32.to_ne_bytes());
 
-        // Now array of fields, which starts with length of the array (but lets start with 0)
-        let mut array_len = 0u32;
-        m.0.extend(&array_len.to_ne_bytes());
+        // Now array of fields
+        let mut fields = Vec::with_capacity(MAX_FIELDS_IN_MESSAGE);
 
         if let Some(destination) = destination {
-            array_len += m.push_field(&MessageField::destination(destination), 0)?;
+            fields.push(MessageField::destination(destination));
         }
         if let Some(iface) = iface {
-            let padding = padding_for_8_bytes(array_len);
-            array_len += m.push_field(&MessageField::interface(iface), padding)?;
+            fields.push(MessageField::interface(iface));
         }
-        if let Some(structure) = body_structure {
-            let padding = padding_for_8_bytes(array_len);
+        let body_signature = body_structure.map(|structure| {
             let signature = structure.signature();
             // Remove the leading and trailing STRUCT delimiter
             let signature = &signature[1..signature.len() - 1];
-            array_len += m.push_field(&MessageField::signature(signature), padding)?;
+
+            String::from(signature)
+        });
+        if let Some(signature) = &body_signature {
+            fields.push(MessageField::signature(signature));
         }
-        let padding = padding_for_8_bytes(array_len);
-        array_len += m.push_field(&MessageField::path(path), padding)?;
-        let padding = padding_for_8_bytes(array_len);
-        array_len += m.push_field(&MessageField::member(method_name), padding)?;
-        byteorder::NativeEndian::write_u32(
-            &mut m.0[FIELDS_LEN_START_OFFSET..FIELDS_LEN_END_OFFSET],
-            array_len,
-        );
-        let padding = padding_for_8_bytes(array_len);
+        fields.push(MessageField::path(path));
+        fields.push(MessageField::member(method_name));
+        m.0.extend(&fields.encode(m.0.len()));
+
+        // Do we need to do this if body is None?
+        let padding = padding_for_8_bytes(m.0.len() as u32);
         if padding > 0 {
             m.push_padding(padding);
         }
@@ -244,28 +240,13 @@ impl Message {
             return Err(MessageError::InsufficientData);
         }
 
-        let fields_len = self.fields_len() as usize;
-        if fields_len == 0 {
-            // FIXME: Should this be an error? Can there be a message w/o any fields?
-            return Ok(vec![]);
-        }
+        let slice = Vec::<MessageField>::extract_slice(
+            &self.0[FIELDS_LEN_START_OFFSET..],
+            "a(yv)",
+            FIELDS_LEN_START_OFFSET,
+        )?;
 
-        let mut v = Vec::with_capacity(MAX_FIELDS_IN_MESSAGE);
-
-        let mut i = FIELDS_START_OFFSET;
-        while i < FIELDS_START_OFFSET + fields_len {
-            let (field, len) = MessageField::from_data(&self.0[i..])?;
-
-            // According to the spec, we should ignore unkown fields.
-            if field.code() != MessageFieldCode::Invalid {
-                v.push(field);
-            }
-
-            i += len;
-            i += padding_for_8_bytes(i as u32) as usize;
-        }
-
-        Ok(v)
+        Vec::<MessageField>::decode(slice, "a(yv)", FIELDS_LEN_START_OFFSET).map_err(|e| e.into())
     }
 
     pub fn body(&self, body_signature: Option<&str>) -> Result<Vec<Variant>, MessageError> {
@@ -323,14 +304,5 @@ impl Message {
 
     fn push_padding(&mut self, len: u32) {
         self.0.extend(std::iter::repeat(0).take(len as usize));
-    }
-
-    fn push_field(&mut self, field: &MessageField, padding: u32) -> Result<u32, MessageError> {
-        self.push_padding(padding);
-
-        let encoded = field.encode();
-        self.0.extend(&encoded);
-
-        Ok(encoded.len() as u32 + padding)
     }
 }
