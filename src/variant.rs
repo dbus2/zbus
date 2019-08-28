@@ -365,6 +365,9 @@ mod tests {
         assert!(ay.signature() == "ay");
         let v = crate::Variant::from(ay);
         assert!(v.len() == 7);
+        assert!(v.is::<Vec::<u8>>());
+        let v = v.get::<Vec<u8>>().unwrap();
+        assert!(v == [u8::max_value(), 0u8, 47u8]);
 
         // Array of strings
         // Can't use 'as' as it's a keyword
@@ -372,6 +375,8 @@ mod tests {
         assert!(as_.signature() == "as");
         let v = crate::Variant::from(as_);
         assert!(v.len() == 45);
+        let v = v.get::<Vec<&str>>().unwrap();
+        assert!(v == ["Hello", "World", "Now", "Bye!"]);
 
         // Array of Struct, which in turn containin an Array (We gotta go deeper!)
         let ar = vec![Structure::new(vec![
