@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use crate::utils::padding_for_n_bytes;
 use crate::{Variant, VariantError, VariantType};
 
+#[derive(Debug)]
 pub struct Structure<'a>(Vec<Variant<'a>>);
 
 impl<'a> Structure<'a> {

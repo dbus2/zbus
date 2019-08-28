@@ -35,7 +35,7 @@ impl fmt::Display for VariantError {
     }
 }
 
-pub trait VariantType<'a>: Sized {
+pub trait VariantType<'a>: Sized + std::fmt::Debug {
     const SIGNATURE: char;
     const SIGNATURE_STR: &'static str;
     const ALIGNMENT: u32;

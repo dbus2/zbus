@@ -3,6 +3,7 @@ use std::str;
 
 use crate::{Signature, SimpleVariantType, VariantError, VariantType};
 
+#[derive(Debug)]
 pub struct Variant<'a> {
     signature: String,
     value: Cow<'a, [u8]>,

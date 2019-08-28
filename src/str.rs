@@ -54,6 +54,7 @@ impl<'a> VariantType<'a> for &'a str {
 }
 impl<'a> SimpleVariantType<'a> for &'a str {}
 
+#[derive(Debug)]
 pub struct ObjectPath<'a>(&'a str);
 
 impl<'a> ObjectPath<'a> {
@@ -96,6 +97,7 @@ impl<'a> VariantType<'a> for ObjectPath<'a> {
 }
 impl<'a> SimpleVariantType<'a> for ObjectPath<'a> {}
 
+#[derive(Debug)]
 pub struct Signature<'a>(&'a str);
 
 impl<'a> Signature<'a> {

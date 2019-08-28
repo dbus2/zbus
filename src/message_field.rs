@@ -70,6 +70,7 @@ impl From<VariantError> for MessageFieldError {
     }
 }
 
+#[derive(Debug)]
 pub struct MessageField<'a>(Structure<'a>);
 
 impl<'a> MessageField<'a> {
