@@ -126,10 +126,10 @@ impl<'a> VariantType<'a> for u8 {
     const ALIGNMENT: u32 = 1;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut v = Self::create_bytes_vec(n_bytes_before);
-        v.extend(&self.to_ne_bytes());
+        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+        bytes.extend(&self.to_ne_bytes());
 
-        v
+        bytes
     }
 
     fn decode(
@@ -150,10 +150,10 @@ impl<'a> VariantType<'a> for bool {
     const ALIGNMENT: u32 = 4;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut v = Self::create_bytes_vec(n_bytes_before);
-        v.extend(&(*self as u32).to_ne_bytes());
+        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+        bytes.extend(&(*self as u32).to_ne_bytes());
 
-        v
+        bytes
     }
 
     fn decode(
@@ -178,10 +178,10 @@ impl<'a> VariantType<'a> for i16 {
     const ALIGNMENT: u32 = 2;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut v = Self::create_bytes_vec(n_bytes_before);
-        v.extend(&self.to_ne_bytes());
+        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+        bytes.extend(&self.to_ne_bytes());
 
-        v
+        bytes
     }
 
     fn decode(
@@ -202,10 +202,10 @@ impl<'a> VariantType<'a> for u16 {
     const ALIGNMENT: u32 = 2;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut v = Self::create_bytes_vec(n_bytes_before);
-        v.extend(&self.to_ne_bytes());
+        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+        bytes.extend(&self.to_ne_bytes());
 
-        v
+        bytes
     }
 
     fn decode(
@@ -226,10 +226,10 @@ impl<'a> VariantType<'a> for i32 {
     const ALIGNMENT: u32 = 4;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut v = Self::create_bytes_vec(n_bytes_before);
-        v.extend(&self.to_ne_bytes());
+        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+        bytes.extend(&self.to_ne_bytes());
 
-        v
+        bytes
     }
 
     fn decode(
@@ -250,10 +250,10 @@ impl<'a> VariantType<'a> for u32 {
     const ALIGNMENT: u32 = 4;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut v = Self::create_bytes_vec(n_bytes_before);
-        v.extend(&self.to_ne_bytes());
+        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+        bytes.extend(&self.to_ne_bytes());
 
-        v
+        bytes
     }
 
     fn decode(
@@ -274,10 +274,10 @@ impl<'a> VariantType<'a> for i64 {
     const ALIGNMENT: u32 = 8;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut v = Self::create_bytes_vec(n_bytes_before);
-        v.extend(&self.to_ne_bytes());
+        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+        bytes.extend(&self.to_ne_bytes());
 
-        v
+        bytes
     }
 
     fn decode(
@@ -298,10 +298,10 @@ impl<'a> VariantType<'a> for u64 {
     const ALIGNMENT: u32 = 8;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut v = Self::create_bytes_vec(n_bytes_before);
-        v.extend(&self.to_ne_bytes());
+        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+        bytes.extend(&self.to_ne_bytes());
 
-        v
+        bytes
     }
 
     fn decode(

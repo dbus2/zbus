@@ -152,6 +152,7 @@ impl<'a> VariantType<'a> for Signature<'a> {
         crate::ensure_sufficient_bytes(bytes, 1)?;
 
         let last_index = bytes.len() - 1;
+        crate::ensure_sufficient_bytes(bytes, last_index)?;
         str::from_utf8(&bytes[1..last_index])
             .map(|s| Self(s))
             .map_err(|_| VariantError::InvalidUtf8)
