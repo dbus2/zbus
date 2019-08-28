@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::error;
 use std::fmt;
 
@@ -183,5 +184,44 @@ impl<'a> MessageField<'a> {
 
     pub fn encode(&self) -> Vec<u8> {
         self.0.encode(0)
+    }
+}
+
+// FIXME: Try automating this when we've delegation: https://github.com/rust-lang/rfcs/pull/2393
+impl<'a> VariantType<'a> for MessageField<'a> {
+    const SIGNATURE: char = Structure::SIGNATURE;
+    const SIGNATURE_STR: &'static str = Structure::SIGNATURE_STR;
+    const ALIGNMENT: u32 = Structure::ALIGNMENT;
+
+    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+        self.0.encode(n_bytes_before)
+    }
+
+    fn extract_slice<'b>(
+        bytes: &'b [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<&'b [u8], VariantError> {
+        Structure::extract_slice(bytes, signature, n_bytes_before)
+    }
+
+    fn decode(
+        bytes: &'a [u8],
+        signature: &str,
+        n_bytes_before: usize,
+    ) -> Result<Self, VariantError> {
+        Structure::decode(bytes, signature, n_bytes_before).map(|s| MessageField(s))
+    }
+
+    fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
+        Structure::ensure_correct_signature(signature)
+    }
+
+    fn signature<'b>(&'b self) -> Cow<'b, str> {
+        self.0.signature()
+    }
+
+    fn slice_signature(signature: &str) -> Result<&str, VariantError> {
+        Structure::slice_signature(signature)
     }
 }
