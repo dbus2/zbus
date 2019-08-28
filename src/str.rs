@@ -34,9 +34,7 @@ impl<'a> VariantType<'a> for &'a str {
         crate::ensure_sufficient_bytes(bytes, len)?;
 
         let last_index = len + byteorder::NativeEndian::read_u32(&bytes[padding..]) as usize + 1;
-        if bytes.len() < last_index {
-            return Err(VariantError::InsufficientData);
-        }
+        crate::ensure_sufficient_bytes(bytes, last_index)?;
 
         Ok(&bytes[0..last_index])
     }
@@ -140,9 +138,7 @@ impl<'a> VariantType<'a> for Signature<'a> {
         }
 
         let last_index = bytes[0] as usize + 2;
-        if bytes.len() < last_index {
-            return Err(VariantError::InsufficientData);
-        }
+        crate::ensure_sufficient_bytes(bytes, last_index)?;
 
         Ok(&bytes[0..last_index])
     }
@@ -153,9 +149,7 @@ impl<'a> VariantType<'a> for Signature<'a> {
         _n_bytes_before: usize,
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        if bytes.len() < 1 {
-            return Err(VariantError::InsufficientData);
-        }
+        crate::ensure_sufficient_bytes(bytes, 1)?;
 
         let last_index = bytes.len() - 1;
         str::from_utf8(&bytes[1..last_index])
