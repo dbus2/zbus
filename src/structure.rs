@@ -45,7 +45,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
         v
     }
 
-    fn extract_slice<'b>(
+    fn slice_data<'b>(
         bytes: &'b [u8],
         signature: &str,
         n_bytes_before: usize,
@@ -61,7 +61,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
         let last_index = signature.len() - 1;
         while i < last_index {
             let child_signature = crate::variant_type::slice_signature(&signature[i..last_index])?;
-            let slice = crate::variant_type::extract_slice_from_data(
+            let slice = crate::variant_type::slice_data(
                 &bytes[(extracted as usize)..],
                 child_signature,
                 n_bytes_before + extracted,
@@ -85,7 +85,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
         signature: &str,
         n_bytes_before: usize,
     ) -> Result<Self, VariantError> {
-        // Similar to extract_slice, except we create variants.
+        // Similar to slice_data, except we create variants.
         let padding = Self::padding(n_bytes_before);
         if bytes.len() < padding || signature.len() < 3 {
             return Err(VariantError::InsufficientData);

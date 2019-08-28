@@ -187,12 +187,12 @@ impl<'a> VariantType<'a> for MessageField<'a> {
         self.0.encode(n_bytes_before)
     }
 
-    fn extract_slice<'b>(
+    fn slice_data<'b>(
         bytes: &'b [u8],
         signature: &str,
         n_bytes_before: usize,
     ) -> Result<&'b [u8], VariantError> {
-        Structure::extract_slice(bytes, signature, n_bytes_before)
+        Structure::slice_data(bytes, signature, n_bytes_before)
     }
 
     fn decode(

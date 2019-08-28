@@ -23,7 +23,7 @@ impl<'a> VariantType<'a> for &'a str {
         bytes
     }
 
-    fn extract_slice<'b>(
+    fn slice_data<'b>(
         bytes: &'b [u8],
         signature: &str,
         n_bytes_before: usize,
@@ -77,13 +77,13 @@ impl<'a> VariantType<'a> for ObjectPath<'a> {
         self.0.encode(n_bytes_before)
     }
 
-    fn extract_slice<'b>(
+    fn slice_data<'b>(
         bytes: &'b [u8],
         signature: &str,
         n_bytes_before: usize,
     ) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
-        <(&str)>::extract_slice_simple(bytes, n_bytes_before)
+        <(&str)>::slice_data_simple(bytes, n_bytes_before)
     }
 
     fn decode(
@@ -129,7 +129,7 @@ impl<'a> VariantType<'a> for Signature<'a> {
         bytes
     }
 
-    fn extract_slice<'b>(
+    fn slice_data<'b>(
         bytes: &'b [u8],
         signature: &str,
         _n_bytes_before: usize,

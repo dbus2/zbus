@@ -240,7 +240,7 @@ impl Message {
             return Err(MessageError::InsufficientData);
         }
 
-        let slice = Vec::<MessageField>::extract_slice(
+        let slice = Vec::<MessageField>::slice_data(
             &self.0[FIELDS_LEN_START_OFFSET..],
             "a(yv)",
             FIELDS_LEN_START_OFFSET,

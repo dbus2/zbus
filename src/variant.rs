@@ -11,8 +11,8 @@ pub struct Variant<'a> {
 
 impl<'a> Variant<'a> {
     pub fn from_data(data: &'a [u8], signature: &str) -> Result<Self, VariantError> {
-        // extract_slice_from_data() ensures a valid signature
-        let value = crate::variant_type::extract_slice_from_data(data, signature, 0)?;
+        // slice_data() ensures a valid signature
+        let value = crate::variant_type::slice_data(data, signature, 0)?;
 
         Ok(Self {
             value: Cow::from(value),
@@ -83,7 +83,7 @@ impl<'a> VariantType<'a> for Variant<'a> {
         bytes
     }
 
-    fn extract_slice<'b>(
+    fn slice_data<'b>(
         bytes: &'b [u8],
         signature: &str,
         _n_bytes_before: usize,
@@ -93,12 +93,11 @@ impl<'a> VariantType<'a> for Variant<'a> {
         // Variant is made of signature of the value followed by the actual value. So we gotta
         // extract the signature slice first and then the value slice. Once we know the sizes of
         // both, we can just slice the whole thing.
-        let sign_slice = Signature::extract_slice_simple(bytes, 0)?;
+        let sign_slice = Signature::slice_data_simple(bytes, 0)?;
         let sign_size = sign_slice.len();
         let sign = Signature::decode_simple(sign_slice, 0)?;
 
-        let value_slice =
-            crate::variant_type::extract_slice_from_data(&bytes[sign_size..], sign.as_str(), 0)?;
+        let value_slice = crate::variant_type::slice_data(&bytes[sign_size..], sign.as_str(), 0)?;
         let total_size = sign_size + value_slice.len();
 
         Ok(&bytes[0..total_size])
@@ -111,7 +110,7 @@ impl<'a> VariantType<'a> for Variant<'a> {
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
-        let sign_slice = Signature::extract_slice_simple(bytes, 0)?;
+        let sign_slice = Signature::slice_data_simple(bytes, 0)?;
         let sign_size = sign_slice.len();
         let sign = Signature::decode_simple(sign_slice, 0)?;
 
@@ -282,7 +281,7 @@ mod tests {
         encoded.push(1);
         encoded.push(7);
 
-        let slice = crate::Variant::extract_slice_simple(&encoded, 0).unwrap();
+        let slice = crate::Variant::slice_data_simple(&encoded, 0).unwrap();
 
         let decoded = crate::Variant::decode_simple(slice, 0).unwrap();
         assert!(decoded.signature() == u8::SIGNATURE_STR);

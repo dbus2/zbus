@@ -45,7 +45,7 @@ pub trait VariantType<'a>: Sized + std::fmt::Debug {
 
     // Default implementation works for constant-sized types where size is the same as their
     // alignment
-    fn extract_slice<'b>(
+    fn slice_data<'b>(
         bytes: &'b [u8],
         signature: &str,
         n_bytes_before: usize,
@@ -108,11 +108,11 @@ pub trait VariantType<'a>: Sized + std::fmt::Debug {
 }
 
 pub trait SimpleVariantType<'a>: VariantType<'a> {
-    fn extract_slice_simple<'b>(
+    fn slice_data_simple<'b>(
         data: &'b [u8],
         n_bytes_before: usize,
     ) -> Result<&'b [u8], VariantError> {
-        Self::extract_slice(data, Self::SIGNATURE_STR, n_bytes_before)
+        Self::slice_data(data, Self::SIGNATURE_STR, n_bytes_before)
     }
 
     fn decode_simple(bytes: &'a [u8], n_bytes_before: usize) -> Result<Self, VariantError> {
@@ -350,7 +350,7 @@ pub(crate) fn ensure_sufficient_bytes(bytes: &[u8], size: usize) -> Result<(), V
     Ok(())
 }
 
-pub(crate) fn extract_slice_from_data<'a>(
+pub(crate) fn slice_data<'a>(
     data: &'a [u8],
     signature: &str,
     n_bytes_before: usize,
@@ -361,23 +361,23 @@ pub(crate) fn extract_slice_from_data<'a>(
         .ok_or(VariantError::InsufficientData)?
     {
         // FIXME: There has to be a shorter way to do this
-        u8::SIGNATURE => u8::extract_slice_simple(data, n_bytes_before),
-        bool::SIGNATURE => bool::extract_slice_simple(data, n_bytes_before),
-        i16::SIGNATURE => i16::extract_slice_simple(data, n_bytes_before),
-        u16::SIGNATURE => u16::extract_slice_simple(data, n_bytes_before),
-        i32::SIGNATURE => i32::extract_slice_simple(data, n_bytes_before),
-        u32::SIGNATURE => u32::extract_slice_simple(data, n_bytes_before),
-        i64::SIGNATURE => i64::extract_slice_simple(data, n_bytes_before),
-        u64::SIGNATURE => u64::extract_slice_simple(data, n_bytes_before),
-        f64::SIGNATURE => f64::extract_slice_simple(data, n_bytes_before),
-        <(&str)>::SIGNATURE => <(&str)>::extract_slice_simple(data, n_bytes_before),
-        // Doesn't matter what type for T we use here, signature is the same but we're also assuming `extract_slice` to
+        u8::SIGNATURE => u8::slice_data_simple(data, n_bytes_before),
+        bool::SIGNATURE => bool::slice_data_simple(data, n_bytes_before),
+        i16::SIGNATURE => i16::slice_data_simple(data, n_bytes_before),
+        u16::SIGNATURE => u16::slice_data_simple(data, n_bytes_before),
+        i32::SIGNATURE => i32::slice_data_simple(data, n_bytes_before),
+        u32::SIGNATURE => u32::slice_data_simple(data, n_bytes_before),
+        i64::SIGNATURE => i64::slice_data_simple(data, n_bytes_before),
+        u64::SIGNATURE => u64::slice_data_simple(data, n_bytes_before),
+        f64::SIGNATURE => f64::slice_data_simple(data, n_bytes_before),
+        <(&str)>::SIGNATURE => <(&str)>::slice_data_simple(data, n_bytes_before),
+        // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_data` to
         // be independent of `T` (an internal detail).
-        Vec::<bool>::SIGNATURE => Vec::<bool>::extract_slice(data, signature, n_bytes_before),
-        ObjectPath::SIGNATURE => ObjectPath::extract_slice_simple(data, n_bytes_before),
-        Signature::SIGNATURE => Signature::extract_slice_simple(data, n_bytes_before),
-        Structure::SIGNATURE => Structure::extract_slice(data, signature, n_bytes_before),
-        Variant::SIGNATURE => Variant::extract_slice(data, signature, n_bytes_before),
+        Vec::<bool>::SIGNATURE => Vec::<bool>::slice_data(data, signature, n_bytes_before),
+        ObjectPath::SIGNATURE => ObjectPath::slice_data_simple(data, n_bytes_before),
+        Signature::SIGNATURE => Signature::slice_data_simple(data, n_bytes_before),
+        Structure::SIGNATURE => Structure::slice_data(data, signature, n_bytes_before),
+        Variant::SIGNATURE => Variant::slice_data(data, signature, n_bytes_before),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }

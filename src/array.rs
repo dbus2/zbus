@@ -25,7 +25,7 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         v
     }
 
-    fn extract_slice<'b>(
+    fn slice_data<'b>(
         bytes: &'b [u8],
         signature: &str,
         n_bytes_before: usize,
@@ -43,7 +43,7 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         let len = u32::decode_simple(&bytes[padding..4], 0)? as usize + 4;
         let mut extracted = padding + 4;
         while extracted < len {
-            let slice = crate::variant_type::extract_slice_from_data(
+            let slice = crate::variant_type::slice_data(
                 &bytes[(extracted as usize)..],
                 child_signature,
                 n_bytes_before + extracted,
@@ -80,7 +80,7 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         let mut elements = vec![];
 
         while extracted < len {
-            let slice = crate::variant_type::extract_slice_from_data(
+            let slice = crate::variant_type::slice_data(
                 &bytes[(extracted as usize)..],
                 child_signature,
                 n_bytes_before + extracted,
