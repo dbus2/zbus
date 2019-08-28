@@ -63,7 +63,7 @@ impl<'a> Variant<'a> {
     }
 
     // Should this be part of public API?
-    pub(crate) fn inner_alignment(&self) -> u32 {
+    pub(crate) fn inner_alignment(&self) -> usize {
         // Constructors ensure that we always have a valid `signature` so `unwrap()` should be fine here.
         crate::variant_type::alignment_for_signature(&self.signature).unwrap()
     }
@@ -72,7 +72,7 @@ impl<'a> Variant<'a> {
 impl<'a> VariantType<'a> for Variant<'a> {
     const SIGNATURE: char = 'v';
     const SIGNATURE_STR: &'static str = "v";
-    const ALIGNMENT: u32 = Signature::ALIGNMENT;
+    const ALIGNMENT: usize = Signature::ALIGNMENT;
 
     // Like Signature, no padding needed because of 1-byte alignment and hence n_bytes_before is ignored everywhere.
 

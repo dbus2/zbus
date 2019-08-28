@@ -113,7 +113,7 @@ impl From<message::Message> for ConnectionError {
                 };
 
                 // Then, try to get the optional description string
-                if message.body_len() > 0u32 {
+                if message.body_len() > 0 {
                     match message.body(Some(<(&str)>::SIGNATURE_STR)) {
                         Ok(body) => match body.get(0) {
                             Some(v) => match v.get::<(&str)>() {

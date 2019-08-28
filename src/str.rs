@@ -7,11 +7,11 @@ use crate::{SimpleVariantType, VariantError, VariantType};
 impl<'a> VariantType<'a> for &'a str {
     const SIGNATURE: char = 's';
     const SIGNATURE_STR: &'static str = "s";
-    const ALIGNMENT: u32 = 4;
+    const ALIGNMENT: usize = 4;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let len = self.len();
-        let padding = padding_for_n_bytes(n_bytes_before as u32, Self::ALIGNMENT);
+        let padding = padding_for_n_bytes(n_bytes_before, Self::ALIGNMENT);
         let mut bytes = Vec::with_capacity(padding as usize + 5 + len);
 
         bytes.extend(std::iter::repeat(0).take(padding as usize));
@@ -69,7 +69,7 @@ impl<'a> ObjectPath<'a> {
 impl<'a> VariantType<'a> for ObjectPath<'a> {
     const SIGNATURE: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
-    const ALIGNMENT: u32 = 4;
+    const ALIGNMENT: usize = 4;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         self.0.encode(n_bytes_before)
@@ -112,7 +112,7 @@ impl<'a> Signature<'a> {
 impl<'a> VariantType<'a> for Signature<'a> {
     const SIGNATURE: char = 'g';
     const SIGNATURE_STR: &'static str = "g";
-    const ALIGNMENT: u32 = 1;
+    const ALIGNMENT: usize = 1;
 
     // No padding needed because of 1-byte alignment and hence n_bytes_before is ignored everywhere.
 

@@ -181,7 +181,7 @@ impl<'a> MessageField<'a> {
 impl<'a> VariantType<'a> for MessageField<'a> {
     const SIGNATURE: char = Structure::SIGNATURE;
     const SIGNATURE_STR: &'static str = Structure::SIGNATURE_STR;
-    const ALIGNMENT: u32 = Structure::ALIGNMENT;
+    const ALIGNMENT: usize = Structure::ALIGNMENT;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         self.0.encode(n_bytes_before)

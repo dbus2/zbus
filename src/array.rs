@@ -7,7 +7,7 @@ use crate::{VariantError, VariantType};
 impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
     const SIGNATURE: char = 'a';
     const SIGNATURE_STR: &'static str = "a";
-    const ALIGNMENT: u32 = 4;
+    const ALIGNMENT: usize = 4;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut v = Self::create_bytes_vec(n_bytes_before);

@@ -38,7 +38,7 @@ impl fmt::Display for VariantError {
 pub trait VariantType<'a>: Sized + std::fmt::Debug {
     const SIGNATURE: char;
     const SIGNATURE_STR: &'static str;
-    const ALIGNMENT: u32;
+    const ALIGNMENT: usize;
 
     // FIXME: Would be nice if this returned a slice
     fn encode(&self, n_bytes_before: usize) -> Vec<u8>;
@@ -51,8 +51,7 @@ pub trait VariantType<'a>: Sized + std::fmt::Debug {
         n_bytes_before: usize,
     ) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
-        let len = (Self::ALIGNMENT + padding_for_n_bytes(n_bytes_before as u32, Self::ALIGNMENT))
-            as usize;
+        let len = Self::ALIGNMENT + padding_for_n_bytes(n_bytes_before, Self::ALIGNMENT);
         ensure_sufficient_bytes(bytes, len)?;
 
         Ok(&bytes[0..len])
@@ -83,9 +82,9 @@ pub trait VariantType<'a>: Sized + std::fmt::Debug {
     }
 
     fn create_bytes_vec(n_bytes_before: usize) -> Vec<u8> {
-        let padding = padding_for_n_bytes(n_bytes_before as u32, Self::ALIGNMENT);
+        let padding = padding_for_n_bytes(n_bytes_before, Self::ALIGNMENT);
 
-        std::iter::repeat(0).take((padding) as usize).collect()
+        std::iter::repeat(0).take(padding).collect()
     }
 
     // Helper for decode() implementation
@@ -96,14 +95,14 @@ pub trait VariantType<'a>: Sized + std::fmt::Debug {
     ) -> Result<&'b [u8], VariantError> {
         Self::ensure_correct_signature(signature)?;
         let padding = Self::padding(n_bytes_before);
-        let len = Self::ALIGNMENT as usize + padding;
+        let len = Self::ALIGNMENT + padding;
         ensure_sufficient_bytes(bytes, len)?;
 
         Ok(&bytes[padding..])
     }
 
     fn padding(n_bytes_before: usize) -> usize {
-        padding_for_n_bytes(n_bytes_before as u32, Self::ALIGNMENT) as usize
+        padding_for_n_bytes(n_bytes_before, Self::ALIGNMENT)
     }
 }
 
@@ -123,7 +122,7 @@ pub trait SimpleVariantType<'a>: VariantType<'a> {
 impl<'a> VariantType<'a> for u8 {
     const SIGNATURE: char = 'y';
     const SIGNATURE_STR: &'static str = "y";
-    const ALIGNMENT: u32 = 1;
+    const ALIGNMENT: usize = 1;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut bytes = Self::create_bytes_vec(n_bytes_before);
@@ -147,7 +146,7 @@ impl<'a> SimpleVariantType<'a> for u8 {}
 impl<'a> VariantType<'a> for bool {
     const SIGNATURE: char = 'b';
     const SIGNATURE_STR: &'static str = "b";
-    const ALIGNMENT: u32 = 4;
+    const ALIGNMENT: usize = 4;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut bytes = Self::create_bytes_vec(n_bytes_before);
@@ -175,7 +174,7 @@ impl<'a> SimpleVariantType<'a> for bool {}
 impl<'a> VariantType<'a> for i16 {
     const SIGNATURE: char = 'n';
     const SIGNATURE_STR: &'static str = "n";
-    const ALIGNMENT: u32 = 2;
+    const ALIGNMENT: usize = 2;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut bytes = Self::create_bytes_vec(n_bytes_before);
@@ -199,7 +198,7 @@ impl<'a> SimpleVariantType<'a> for i16 {}
 impl<'a> VariantType<'a> for u16 {
     const SIGNATURE: char = 'q';
     const SIGNATURE_STR: &'static str = "q";
-    const ALIGNMENT: u32 = 2;
+    const ALIGNMENT: usize = 2;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut bytes = Self::create_bytes_vec(n_bytes_before);
@@ -223,7 +222,7 @@ impl<'a> SimpleVariantType<'a> for u16 {}
 impl<'a> VariantType<'a> for i32 {
     const SIGNATURE: char = 'i';
     const SIGNATURE_STR: &'static str = "i";
-    const ALIGNMENT: u32 = 4;
+    const ALIGNMENT: usize = 4;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut bytes = Self::create_bytes_vec(n_bytes_before);
@@ -247,7 +246,7 @@ impl<'a> SimpleVariantType<'a> for i32 {}
 impl<'a> VariantType<'a> for u32 {
     const SIGNATURE: char = 'u';
     const SIGNATURE_STR: &'static str = "u";
-    const ALIGNMENT: u32 = 4;
+    const ALIGNMENT: usize = 4;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut bytes = Self::create_bytes_vec(n_bytes_before);
@@ -271,7 +270,7 @@ impl<'a> SimpleVariantType<'a> for u32 {}
 impl<'a> VariantType<'a> for i64 {
     const SIGNATURE: char = 'x';
     const SIGNATURE_STR: &'static str = "x";
-    const ALIGNMENT: u32 = 8;
+    const ALIGNMENT: usize = 8;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut bytes = Self::create_bytes_vec(n_bytes_before);
@@ -295,7 +294,7 @@ impl<'a> SimpleVariantType<'a> for i64 {}
 impl<'a> VariantType<'a> for u64 {
     const SIGNATURE: char = 't';
     const SIGNATURE_STR: &'static str = "t";
-    const ALIGNMENT: u32 = 8;
+    const ALIGNMENT: usize = 8;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut bytes = Self::create_bytes_vec(n_bytes_before);
@@ -319,7 +318,7 @@ impl<'a> SimpleVariantType<'a> for u64 {}
 impl<'a> VariantType<'a> for f64 {
     const SIGNATURE: char = 'd';
     const SIGNATURE_STR: &'static str = "d";
-    const ALIGNMENT: u32 = 8;
+    const ALIGNMENT: usize = 8;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut v = Self::create_bytes_vec(n_bytes_before);
@@ -382,7 +381,7 @@ pub(crate) fn slice_data<'a>(
     }
 }
 
-pub(crate) fn alignment_for_signature(signature: &str) -> Result<u32, VariantError> {
+pub(crate) fn alignment_for_signature(signature: &str) -> Result<usize, VariantError> {
     match signature
         .chars()
         .next()

@@ -27,7 +27,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
     // used in practice and that's why we'll declare the opening brace as the signature for this type.
     const SIGNATURE: char = '(';
     const SIGNATURE_STR: &'static str = "(";
-    const ALIGNMENT: u32 = 8;
+    const ALIGNMENT: usize = 8;
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut v = Self::create_bytes_vec(n_bytes_before);
@@ -35,8 +35,8 @@ impl<'a> VariantType<'a> for Structure<'a> {
         for variant in &self.0 {
             // Variant doesn't have the padding so we need to add it
             let alignment = variant.inner_alignment();
-            let padding = padding_for_n_bytes((v.len() + n_bytes_before) as u32, alignment);
-            v.extend(std::iter::repeat(0).take(padding as usize));
+            let padding = padding_for_n_bytes(v.len() + n_bytes_before, alignment);
+            v.extend(std::iter::repeat(0).take(padding));
 
             // Deep copying, nice!!! 🙈
             v.extend(variant.bytes());
@@ -103,8 +103,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
             // Parse child padding ourselves since we'll create Varint from it and Variant doesn't
             // handle padding.
             let alignment = crate::variant_type::alignment_for_signature(child_signature)?;
-            extracted +=
-                padding_for_n_bytes((n_bytes_before + extracted) as u32, alignment) as usize;
+            extracted += padding_for_n_bytes(n_bytes_before + extracted, alignment);
             if extracted > bytes.len() {
                 return Err(VariantError::InsufficientData);
             }

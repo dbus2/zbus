@@ -161,7 +161,7 @@ impl Message {
         m.0.extend(&fields.encode(m.0.len()));
 
         // Do we need to do this if body is None?
-        let padding = padding_for_8_bytes(m.0.len() as u32);
+        let padding = padding_for_8_bytes(m.0.len());
         if padding > 0 {
             m.push_padding(padding);
         }
@@ -204,18 +204,20 @@ impl Message {
         Ok(())
     }
 
-    pub fn bytes_to_completion(&self) -> u32 {
-        let header_len = PRIMARY_HEADER_SIZE as u32 + self.fields_len();
+    pub fn bytes_to_completion(&self) -> usize {
+        let header_len = PRIMARY_HEADER_SIZE + self.fields_len();
 
-        (header_len + padding_for_8_bytes(header_len) + self.body_len()) - (self.0.len() as u32)
+        (header_len + padding_for_8_bytes(header_len) + self.body_len()) - self.0.len()
     }
 
-    pub fn fields_len(&self) -> u32 {
+    pub fn fields_len(&self) -> usize {
         byteorder::NativeEndian::read_u32(&self.0[FIELDS_LEN_START_OFFSET..FIELDS_LEN_END_OFFSET])
+            as usize
     }
 
-    pub fn body_len(&self) -> u32 {
+    pub fn body_len(&self) -> usize {
         byteorder::NativeEndian::read_u32(&self.0[BODY_LEN_START_OFFSET..BODY_LEN_END_OFFSET])
+            as usize
     }
 
     pub fn body_signature(&self) -> Result<String, MessageError> {
@@ -254,8 +256,8 @@ impl Message {
             return Err(MessageError::InsufficientData);
         }
 
-        let mut header_len = PRIMARY_HEADER_SIZE + self.fields_len() as usize;
-        header_len = header_len + padding_for_8_bytes(header_len as u32) as usize;
+        let mut header_len = PRIMARY_HEADER_SIZE + self.fields_len();
+        header_len = header_len + padding_for_8_bytes(header_len);
         if self.body_len() == 0 {
             return Ok(vec![]);
         }
@@ -302,7 +304,7 @@ impl Message {
         ])
     }
 
-    fn push_padding(&mut self, len: u32) {
-        self.0.extend(std::iter::repeat(0).take(len as usize));
+    fn push_padding(&mut self, len: usize) {
+        self.0.extend(std::iter::repeat(0).take(len));
     }
 }
