@@ -175,16 +175,6 @@ impl<'a> MessageField<'a> {
             Variant::from(Variant::from(fd)),
         ]))
     }
-
-    pub fn from_data(data: &'a [u8]) -> Result<(Self, usize), MessageFieldError> {
-        let slice = Structure::extract_slice(data, "(yv)", 0)?;
-
-        Ok((Self(Structure::decode(slice, "(yv)", 0)?), slice.len()))
-    }
-
-    pub fn encode(&self) -> Vec<u8> {
-        self.0.encode(0)
-    }
 }
 
 // FIXME: Try automating this when we've delegation: https://github.com/rust-lang/rfcs/pull/2393
