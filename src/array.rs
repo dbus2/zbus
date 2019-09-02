@@ -19,7 +19,7 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         }
 
         // Set size of array in bytes
-        let len = (v.len() - 4) as u32;
+        let len = crate::utils::usize_to_u32(v.len() - 4);
         byteorder::NativeEndian::write_u32(&mut v[0..4], len);
 
         v

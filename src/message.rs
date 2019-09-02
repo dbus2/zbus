@@ -132,7 +132,7 @@ impl Message {
                 (structure.encode(0), Some(structure))
             })
             .unwrap_or((vec![], None));
-        m.0.extend(&(body_encoding.len() as u32).to_ne_bytes());
+        m.0.extend(&crate::utils::usize_to_u32(body_encoding.len()).to_ne_bytes());
 
         // Serial number. FIXME: managed by connection
         m.0.extend(&1u32.to_ne_bytes());

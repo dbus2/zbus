@@ -16,7 +16,7 @@ impl<'a> VariantType<'a> for &'a str {
 
         bytes.extend(std::iter::repeat(0).take(padding as usize));
 
-        bytes.extend(&(len as u32).to_ne_bytes());
+        bytes.extend(&crate::utils::usize_to_u32(len).to_ne_bytes());
         bytes.extend(self.as_bytes());
         bytes.push(b'\0');
 
