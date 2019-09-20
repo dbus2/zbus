@@ -2,7 +2,7 @@ use byteorder::ByteOrder;
 use std::{borrow::Cow, error, fmt, str};
 
 use crate::utils::padding_for_n_bytes;
-use crate::{ObjectPath, Signature, Structure, Variant};
+use crate::{DictEntry, ObjectPath, Signature, Structure, Variant};
 
 #[derive(Debug)]
 pub enum VariantError {
@@ -377,6 +377,11 @@ pub(crate) fn slice_data<'a>(
         Signature::SIGNATURE => Signature::slice_data_simple(data, n_bytes_before),
         Structure::SIGNATURE => Structure::slice_data(data, signature, n_bytes_before),
         Variant::SIGNATURE => Variant::slice_data(data, signature, n_bytes_before),
+        // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_data` to
+        // be independent of `T` (an internal detail).
+        DictEntry::<bool, bool>::SIGNATURE => {
+            DictEntry::<bool, bool>::slice_data(data, signature, n_bytes_before)
+        }
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
@@ -404,6 +409,8 @@ pub(crate) fn alignment_for_signature(signature: &str) -> Result<usize, VariantE
         Signature::SIGNATURE => Ok(Signature::ALIGNMENT),
         Structure::SIGNATURE => Ok(Structure::ALIGNMENT),
         Variant::SIGNATURE => Ok(Variant::ALIGNMENT),
+        // Doesn't matter what type for T we use here, alignment is the same
+        DictEntry::<bool, bool>::SIGNATURE => Ok(DictEntry::<bool, bool>::ALIGNMENT),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
@@ -432,6 +439,9 @@ pub(crate) fn slice_signature(signature: &str) -> Result<&str, VariantError> {
         Signature::SIGNATURE => Signature::slice_signature(signature),
         Structure::SIGNATURE => Structure::slice_signature(signature),
         Variant::SIGNATURE => Variant::slice_signature(signature),
+        // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_signature`
+        // to be independent of `T` (an internal detail).
+        DictEntry::<bool, bool>::SIGNATURE => DictEntry::<bool, bool>::slice_signature(signature),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }

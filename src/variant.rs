@@ -121,7 +121,7 @@ impl<'a> SimpleVariantType<'a> for Variant<'a> {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{SimpleVariantType, Structure, VariantType};
+    use crate::{DictEntry, SimpleVariantType, Structure, VariantType};
 
     #[test]
     fn u8_variant() {
@@ -432,5 +432,38 @@ mod tests {
         assert!(inner_fields[2].is::<Vec::<&str>>());
         let as_ = inner_fields[2].get::<Vec<&str>>().unwrap();
         assert!(as_ == ["Hello", "World"]);
+    }
+
+    #[test]
+    fn dict_entry_variant() {
+        // Simple type value
+        let entry = DictEntry::new(2u8, "world");
+        assert!(entry.signature() == "{ys}");
+        let v = crate::Variant::from(entry);
+        assert!(v.len() == 14);
+        assert!(v.is::<DictEntry::<u8, &str>>());
+        let entry = v.get::<DictEntry<u8, &str>>().unwrap();
+        assert!(*entry.key() == 2u8);
+        assert!(*entry.value() == "world");
+
+        // STRUCT value
+        let entry = DictEntry::new(
+            "hello",
+            Structure::new(vec![
+                crate::Variant::from(u8::max_value()),
+                crate::Variant::from(u32::max_value()),
+            ]),
+        );
+        assert!(entry.signature() == "{s(yu)}");
+        let v = crate::Variant::from(entry);
+        assert!(v.len() == 24);
+        assert!(v.is::<DictEntry::<&str, Structure>>());
+        let entry = v.get::<DictEntry<&str, Structure>>().unwrap();
+        assert!(*entry.key() == "hello");
+        let s = entry.value();
+        assert!(s.fields()[0].is::<u8>());
+        assert!(s.fields()[0].get::<u8>().unwrap() == u8::max_value());
+        assert!(s.fields()[1].is::<u32>());
+        assert!(s.fields()[1].get::<u32>().unwrap() == u32::max_value());
     }
 }

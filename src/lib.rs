@@ -25,6 +25,9 @@ pub use structure::*;
 mod array;
 pub use array::*;
 
+mod dict_entry;
+pub use dict_entry::*;
+
 mod utils;
 
 #[cfg(test)]
