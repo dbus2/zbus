@@ -28,6 +28,9 @@ pub use array::*;
 mod dict_entry;
 pub use dict_entry::*;
 
+mod dict;
+pub use dict::*;
+
 mod utils;
 
 #[cfg(test)]
