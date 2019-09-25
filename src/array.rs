@@ -30,8 +30,7 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         signature: &str,
         n_bytes_before: usize,
     ) -> Result<&'b [u8], VariantError> {
-        let padding = Self::padding(n_bytes_before);
-        if bytes.len() < padding + 4 || signature.len() < 2 {
+        if signature.len() < 2 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
@@ -40,8 +39,9 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         let child_signature = crate::variant_type::slice_signature(&signature[1..])?;
 
         // Array size in bytes
-        let len = u32::decode_simple(&bytes[padding..4], 0)? as usize + 4;
-        let mut extracted = padding + 4;
+        let len_slice = u32::slice_data_simple(bytes, n_bytes_before)?;
+        let mut extracted = len_slice.len();
+        let len = u32::decode_simple(len_slice, n_bytes_before)? as usize + 4;
         while extracted < len {
             let slice = crate::variant_type::slice_data(
                 &bytes[(extracted as usize)..],
