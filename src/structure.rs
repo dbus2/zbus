@@ -132,15 +132,9 @@ impl<'a> VariantType<'a> for Structure<'a> {
 
         let mut i = 1;
         while i < signature.len() - 1 {
-            if &signature[i..i + 1] == ")" {
-                i += 1;
-
-                continue;
-            }
-            // We don't need the alignment but not getting an error here means it's a supported type
-            let _ = crate::variant_type::alignment_for_signature(&signature[i..])?;
-
-            i += 1;
+            // Ensure we've only valid child signatures
+            let child_signature = crate::variant_type::slice_signature(&signature[i..])?;
+            i += child_signature.len();
         }
 
         Ok(())
