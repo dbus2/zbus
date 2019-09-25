@@ -5,7 +5,7 @@ use crate::SimpleVariantType;
 use crate::{VariantError, VariantType};
 
 impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
-    const SIGNATURE: char = 'a';
+    const SIGNATURE_CHAR: char = 'a';
     const SIGNATURE_STR: &'static str = "a";
     const ALIGNMENT: usize = 4;
 

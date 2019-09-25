@@ -179,7 +179,7 @@ impl<'a> MessageField<'a> {
 
 // FIXME: Try automating this when we've delegation: https://github.com/rust-lang/rfcs/pull/2393
 impl<'a> VariantType<'a> for MessageField<'a> {
-    const SIGNATURE: char = Structure::SIGNATURE;
+    const SIGNATURE_CHAR: char = Structure::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = Structure::SIGNATURE_STR;
     const ALIGNMENT: usize = Structure::ALIGNMENT;
 

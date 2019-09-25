@@ -70,7 +70,7 @@ impl<'a> Variant<'a> {
 }
 
 impl<'a> VariantType<'a> for Variant<'a> {
-    const SIGNATURE: char = 'v';
+    const SIGNATURE_CHAR: char = 'v';
     const SIGNATURE_STR: &'static str = "v";
     const ALIGNMENT: usize = Signature::ALIGNMENT;
 

@@ -5,7 +5,7 @@ use crate::utils::padding_for_n_bytes;
 use crate::{SimpleVariantType, VariantError, VariantType};
 
 impl<'a> VariantType<'a> for &'a str {
-    const SIGNATURE: char = 's';
+    const SIGNATURE_CHAR: char = 's';
     const SIGNATURE_STR: &'static str = "s";
     const ALIGNMENT: usize = 4;
 
@@ -67,7 +67,7 @@ impl<'a> ObjectPath<'a> {
 
 // FIXME: Find a way to share code with &str implementation above
 impl<'a> VariantType<'a> for ObjectPath<'a> {
-    const SIGNATURE: char = 'o';
+    const SIGNATURE_CHAR: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
     const ALIGNMENT: usize = 4;
 
@@ -110,7 +110,7 @@ impl<'a> Signature<'a> {
 
 // FIXME: Find a way to share code with &str implementation in `variant_type.rs`
 impl<'a> VariantType<'a> for Signature<'a> {
-    const SIGNATURE: char = 'g';
+    const SIGNATURE_CHAR: char = 'g';
     const SIGNATURE_STR: &'static str = "g";
     const ALIGNMENT: usize = 1;
 

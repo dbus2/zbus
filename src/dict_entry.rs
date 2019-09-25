@@ -32,7 +32,7 @@ impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> Variant
     // The real single character signature for DICT_ENTRY is `e` but that's not actually used in practice for D-Bus at
     // least (the spec clearly states that this signature must never appear on the bus). The openning and closing curly
     // braces are used in practice and that's why we'll declare the opening curly brace as the signature for this type.
-    const SIGNATURE: char = '{';
+    const SIGNATURE_CHAR: char = '{';
     const SIGNATURE_STR: &'static str = "{";
     const ALIGNMENT: usize = 8;
 

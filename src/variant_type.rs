@@ -36,7 +36,7 @@ impl fmt::Display for VariantError {
 }
 
 pub trait VariantType<'a>: Sized + std::fmt::Debug {
-    const SIGNATURE: char;
+    const SIGNATURE_CHAR: char;
     const SIGNATURE_STR: &'static str;
     const ALIGNMENT: usize;
 
@@ -120,7 +120,7 @@ pub trait SimpleVariantType<'a>: VariantType<'a> {
 }
 
 impl<'a> VariantType<'a> for u8 {
-    const SIGNATURE: char = 'y';
+    const SIGNATURE_CHAR: char = 'y';
     const SIGNATURE_STR: &'static str = "y";
     const ALIGNMENT: usize = 1;
 
@@ -144,7 +144,7 @@ impl<'a> VariantType<'a> for u8 {
 impl<'a> SimpleVariantType<'a> for u8 {}
 
 impl<'a> VariantType<'a> for bool {
-    const SIGNATURE: char = 'b';
+    const SIGNATURE_CHAR: char = 'b';
     const SIGNATURE_STR: &'static str = "b";
     const ALIGNMENT: usize = 4;
 
@@ -172,7 +172,7 @@ impl<'a> VariantType<'a> for bool {
 impl<'a> SimpleVariantType<'a> for bool {}
 
 impl<'a> VariantType<'a> for i16 {
-    const SIGNATURE: char = 'n';
+    const SIGNATURE_CHAR: char = 'n';
     const SIGNATURE_STR: &'static str = "n";
     const ALIGNMENT: usize = 2;
 
@@ -196,7 +196,7 @@ impl<'a> VariantType<'a> for i16 {
 impl<'a> SimpleVariantType<'a> for i16 {}
 
 impl<'a> VariantType<'a> for u16 {
-    const SIGNATURE: char = 'q';
+    const SIGNATURE_CHAR: char = 'q';
     const SIGNATURE_STR: &'static str = "q";
     const ALIGNMENT: usize = 2;
 
@@ -220,7 +220,7 @@ impl<'a> VariantType<'a> for u16 {
 impl<'a> SimpleVariantType<'a> for u16 {}
 
 impl<'a> VariantType<'a> for i32 {
-    const SIGNATURE: char = 'i';
+    const SIGNATURE_CHAR: char = 'i';
     const SIGNATURE_STR: &'static str = "i";
     const ALIGNMENT: usize = 4;
 
@@ -244,7 +244,7 @@ impl<'a> VariantType<'a> for i32 {
 impl<'a> SimpleVariantType<'a> for i32 {}
 
 impl<'a> VariantType<'a> for u32 {
-    const SIGNATURE: char = 'u';
+    const SIGNATURE_CHAR: char = 'u';
     const SIGNATURE_STR: &'static str = "u";
     const ALIGNMENT: usize = 4;
 
@@ -268,7 +268,7 @@ impl<'a> VariantType<'a> for u32 {
 impl<'a> SimpleVariantType<'a> for u32 {}
 
 impl<'a> VariantType<'a> for i64 {
-    const SIGNATURE: char = 'x';
+    const SIGNATURE_CHAR: char = 'x';
     const SIGNATURE_STR: &'static str = "x";
     const ALIGNMENT: usize = 8;
 
@@ -292,7 +292,7 @@ impl<'a> VariantType<'a> for i64 {
 impl<'a> SimpleVariantType<'a> for i64 {}
 
 impl<'a> VariantType<'a> for u64 {
-    const SIGNATURE: char = 't';
+    const SIGNATURE_CHAR: char = 't';
     const SIGNATURE_STR: &'static str = "t";
     const ALIGNMENT: usize = 8;
 
@@ -316,7 +316,7 @@ impl<'a> VariantType<'a> for u64 {
 impl<'a> SimpleVariantType<'a> for u64 {}
 
 impl<'a> VariantType<'a> for f64 {
-    const SIGNATURE: char = 'd';
+    const SIGNATURE_CHAR: char = 'd';
     const SIGNATURE_STR: &'static str = "d";
     const ALIGNMENT: usize = 8;
 
@@ -360,26 +360,26 @@ pub(crate) fn slice_data<'a>(
         .ok_or(VariantError::InsufficientData)?
     {
         // FIXME: There has to be a shorter way to do this
-        u8::SIGNATURE => u8::slice_data_simple(data, n_bytes_before),
-        bool::SIGNATURE => bool::slice_data_simple(data, n_bytes_before),
-        i16::SIGNATURE => i16::slice_data_simple(data, n_bytes_before),
-        u16::SIGNATURE => u16::slice_data_simple(data, n_bytes_before),
-        i32::SIGNATURE => i32::slice_data_simple(data, n_bytes_before),
-        u32::SIGNATURE => u32::slice_data_simple(data, n_bytes_before),
-        i64::SIGNATURE => i64::slice_data_simple(data, n_bytes_before),
-        u64::SIGNATURE => u64::slice_data_simple(data, n_bytes_before),
-        f64::SIGNATURE => f64::slice_data_simple(data, n_bytes_before),
-        <(&str)>::SIGNATURE => <(&str)>::slice_data_simple(data, n_bytes_before),
+        u8::SIGNATURE_CHAR => u8::slice_data_simple(data, n_bytes_before),
+        bool::SIGNATURE_CHAR => bool::slice_data_simple(data, n_bytes_before),
+        i16::SIGNATURE_CHAR => i16::slice_data_simple(data, n_bytes_before),
+        u16::SIGNATURE_CHAR => u16::slice_data_simple(data, n_bytes_before),
+        i32::SIGNATURE_CHAR => i32::slice_data_simple(data, n_bytes_before),
+        u32::SIGNATURE_CHAR => u32::slice_data_simple(data, n_bytes_before),
+        i64::SIGNATURE_CHAR => i64::slice_data_simple(data, n_bytes_before),
+        u64::SIGNATURE_CHAR => u64::slice_data_simple(data, n_bytes_before),
+        f64::SIGNATURE_CHAR => f64::slice_data_simple(data, n_bytes_before),
+        <(&str)>::SIGNATURE_CHAR => <(&str)>::slice_data_simple(data, n_bytes_before),
         // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_data` to
         // be independent of `T` (an internal detail).
-        Vec::<bool>::SIGNATURE => Vec::<bool>::slice_data(data, signature, n_bytes_before),
-        ObjectPath::SIGNATURE => ObjectPath::slice_data_simple(data, n_bytes_before),
-        Signature::SIGNATURE => Signature::slice_data_simple(data, n_bytes_before),
-        Structure::SIGNATURE => Structure::slice_data(data, signature, n_bytes_before),
-        Variant::SIGNATURE => Variant::slice_data(data, signature, n_bytes_before),
+        Vec::<bool>::SIGNATURE_CHAR => Vec::<bool>::slice_data(data, signature, n_bytes_before),
+        ObjectPath::SIGNATURE_CHAR => ObjectPath::slice_data_simple(data, n_bytes_before),
+        Signature::SIGNATURE_CHAR => Signature::slice_data_simple(data, n_bytes_before),
+        Structure::SIGNATURE_CHAR => Structure::slice_data(data, signature, n_bytes_before),
+        Variant::SIGNATURE_CHAR => Variant::slice_data(data, signature, n_bytes_before),
         // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_data` to
         // be independent of `T` (an internal detail).
-        DictEntry::<bool, bool>::SIGNATURE => {
+        DictEntry::<bool, bool>::SIGNATURE_CHAR => {
             DictEntry::<bool, bool>::slice_data(data, signature, n_bytes_before)
         }
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
@@ -393,24 +393,24 @@ pub(crate) fn alignment_for_signature(signature: &str) -> Result<usize, VariantE
         .ok_or(VariantError::InsufficientData)?
     {
         // FIXME: There has to be a shorter way to do this
-        u8::SIGNATURE => Ok(u8::ALIGNMENT),
-        bool::SIGNATURE => Ok(bool::ALIGNMENT),
-        i16::SIGNATURE => Ok(i16::ALIGNMENT),
-        u16::SIGNATURE => Ok(u16::ALIGNMENT),
-        i32::SIGNATURE => Ok(i32::ALIGNMENT),
-        u32::SIGNATURE => Ok(u32::ALIGNMENT),
-        i64::SIGNATURE => Ok(i64::ALIGNMENT),
-        u64::SIGNATURE => Ok(u64::ALIGNMENT),
-        f64::SIGNATURE => Ok(f64::ALIGNMENT),
-        <(&str)>::SIGNATURE => Ok(<(&str)>::ALIGNMENT),
+        u8::SIGNATURE_CHAR => Ok(u8::ALIGNMENT),
+        bool::SIGNATURE_CHAR => Ok(bool::ALIGNMENT),
+        i16::SIGNATURE_CHAR => Ok(i16::ALIGNMENT),
+        u16::SIGNATURE_CHAR => Ok(u16::ALIGNMENT),
+        i32::SIGNATURE_CHAR => Ok(i32::ALIGNMENT),
+        u32::SIGNATURE_CHAR => Ok(u32::ALIGNMENT),
+        i64::SIGNATURE_CHAR => Ok(i64::ALIGNMENT),
+        u64::SIGNATURE_CHAR => Ok(u64::ALIGNMENT),
+        f64::SIGNATURE_CHAR => Ok(f64::ALIGNMENT),
+        <(&str)>::SIGNATURE_CHAR => Ok(<(&str)>::ALIGNMENT),
         // Doesn't matter what type for T we use here, alignment is the same
-        Vec::<bool>::SIGNATURE => Ok(Vec::<bool>::ALIGNMENT),
-        ObjectPath::SIGNATURE => Ok(ObjectPath::ALIGNMENT),
-        Signature::SIGNATURE => Ok(Signature::ALIGNMENT),
-        Structure::SIGNATURE => Ok(Structure::ALIGNMENT),
-        Variant::SIGNATURE => Ok(Variant::ALIGNMENT),
+        Vec::<bool>::SIGNATURE_CHAR => Ok(Vec::<bool>::ALIGNMENT),
+        ObjectPath::SIGNATURE_CHAR => Ok(ObjectPath::ALIGNMENT),
+        Signature::SIGNATURE_CHAR => Ok(Signature::ALIGNMENT),
+        Structure::SIGNATURE_CHAR => Ok(Structure::ALIGNMENT),
+        Variant::SIGNATURE_CHAR => Ok(Variant::ALIGNMENT),
         // Doesn't matter what type for T we use here, alignment is the same
-        DictEntry::<bool, bool>::SIGNATURE => Ok(DictEntry::<bool, bool>::ALIGNMENT),
+        DictEntry::<bool, bool>::SIGNATURE_CHAR => Ok(DictEntry::<bool, bool>::ALIGNMENT),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
@@ -422,26 +422,28 @@ pub(crate) fn slice_signature(signature: &str) -> Result<&str, VariantError> {
         .ok_or(VariantError::InsufficientData)?
     {
         // FIXME: There has to be a shorter way to do this
-        u8::SIGNATURE => u8::slice_signature(signature),
-        bool::SIGNATURE => bool::slice_signature(signature),
-        i16::SIGNATURE => i16::slice_signature(signature),
-        u16::SIGNATURE => u16::slice_signature(signature),
-        i32::SIGNATURE => i32::slice_signature(signature),
-        u32::SIGNATURE => u32::slice_signature(signature),
-        i64::SIGNATURE => i64::slice_signature(signature),
-        u64::SIGNATURE => u64::slice_signature(signature),
-        f64::SIGNATURE => f64::slice_signature(signature),
-        <(&str)>::SIGNATURE => <(&str)>::slice_signature(signature),
+        u8::SIGNATURE_CHAR => u8::slice_signature(signature),
+        bool::SIGNATURE_CHAR => bool::slice_signature(signature),
+        i16::SIGNATURE_CHAR => i16::slice_signature(signature),
+        u16::SIGNATURE_CHAR => u16::slice_signature(signature),
+        i32::SIGNATURE_CHAR => i32::slice_signature(signature),
+        u32::SIGNATURE_CHAR => u32::slice_signature(signature),
+        i64::SIGNATURE_CHAR => i64::slice_signature(signature),
+        u64::SIGNATURE_CHAR => u64::slice_signature(signature),
+        f64::SIGNATURE_CHAR => f64::slice_signature(signature),
+        <(&str)>::SIGNATURE_CHAR => <(&str)>::slice_signature(signature),
         // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_signature`
         // to be independent of `T` (an internal detail).
-        Vec::<bool>::SIGNATURE => Vec::<bool>::slice_signature(signature),
-        ObjectPath::SIGNATURE => ObjectPath::slice_signature(signature),
-        Signature::SIGNATURE => Signature::slice_signature(signature),
-        Structure::SIGNATURE => Structure::slice_signature(signature),
-        Variant::SIGNATURE => Variant::slice_signature(signature),
+        Vec::<bool>::SIGNATURE_CHAR => Vec::<bool>::slice_signature(signature),
+        ObjectPath::SIGNATURE_CHAR => ObjectPath::slice_signature(signature),
+        Signature::SIGNATURE_CHAR => Signature::slice_signature(signature),
+        Structure::SIGNATURE_CHAR => Structure::slice_signature(signature),
+        Variant::SIGNATURE_CHAR => Variant::slice_signature(signature),
         // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_signature`
         // to be independent of `T` (an internal detail).
-        DictEntry::<bool, bool>::SIGNATURE => DictEntry::<bool, bool>::slice_signature(signature),
+        DictEntry::<bool, bool>::SIGNATURE_CHAR => {
+            DictEntry::<bool, bool>::slice_signature(signature)
+        }
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
