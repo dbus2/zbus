@@ -121,7 +121,7 @@ impl<'a> SimpleVariantType<'a> for Variant<'a> {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{DictEntry, SimpleVariantType, Structure, VariantType};
+    use crate::{Dict, DictEntry, SimpleVariantType, Structure, VariantType};
 
     #[test]
     fn u8_variant() {
@@ -290,6 +290,10 @@ mod tests {
 
     #[test]
     fn struct_variant() {
+        let mut dict: Dict<i64, &str> = Dict::new();
+        dict.insert(1, "123");
+        dict.insert(2, "456");
+
         let s = Structure::new(vec![
             crate::Variant::from(u8::max_value()),
             crate::Variant::from(u32::max_value()),
@@ -302,9 +306,12 @@ mod tests {
                 ])),
             ])),
             crate::Variant::from("hello"),
+            crate::Variant::from::<Vec<DictEntry<i64, &str>>>(dict.into()),
         ]);
         let v = crate::Variant::from(s);
-        assert!(v.len() == 50);
+        // The HashMap is unordered so we can't rely on items to be in a specific order during the transformation to
+        // Vec, and size depends on the order of items because of padding rules.
+        assert!(v.len() == 88 || v.len() == 92);
 
         assert!(v.is::<Structure>());
         let s = v.get::<Structure>().unwrap();
@@ -333,7 +340,7 @@ mod tests {
         assert!(fields[3].get::<&str>().unwrap() == "hello");
 
         let v = crate::Variant::from_data(v.bytes(), v.signature()).unwrap();
-        assert!(v.len() == 50);
+        assert!(v.len() == 88 || v.len() == 92);
 
         assert!(v.is::<Structure>());
         let s = v.get::<Structure>().unwrap();
