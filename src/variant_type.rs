@@ -35,7 +35,7 @@ impl fmt::Display for VariantError {
     }
 }
 
-pub trait VariantType<'a>: Sized + std::fmt::Debug {
+pub trait VariantType<'a>: std::fmt::Debug {
     const SIGNATURE_CHAR: char;
     const SIGNATURE_STR: &'static str;
     const ALIGNMENT: usize;
@@ -49,14 +49,20 @@ pub trait VariantType<'a>: Sized + std::fmt::Debug {
         bytes: &'b [u8],
         signature: &str,
         n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError> {
+    ) -> Result<&'b [u8], VariantError>
+    where
+        Self: Sized,
+    {
         Self::ensure_correct_signature(signature)?;
         let len = Self::ALIGNMENT + padding_for_n_bytes(n_bytes_before, Self::ALIGNMENT);
         ensure_sufficient_bytes(bytes, len)?;
 
         Ok(&bytes[0..len])
     }
-    fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
+    fn ensure_correct_signature(signature: &str) -> Result<(), VariantError>
+    where
+        Self: Sized,
+    {
         if signature != Self::SIGNATURE_STR {
             return Err(VariantError::IncorrectType);
         }
@@ -68,20 +74,31 @@ pub trait VariantType<'a>: Sized + std::fmt::Debug {
         bytes: &'a [u8],
         signature: &str,
         n_bytes_before: usize,
-    ) -> Result<Self, VariantError>;
+    ) -> Result<Self, VariantError>
+    where
+        Self: Sized;
 
-    fn signature<'b>(&'b self) -> Cow<'b, str> {
+    fn signature<'b>(&'b self) -> Cow<'b, str>
+    where
+        Self: Sized,
+    {
         Cow::from(Self::SIGNATURE_STR)
     }
 
-    fn slice_signature(signature: &str) -> Result<&str, VariantError> {
+    fn slice_signature(signature: &str) -> Result<&str, VariantError>
+    where
+        Self: Sized,
+    {
         let slice = &signature[0..1];
         Self::ensure_correct_signature(slice)?;
 
         Ok(slice)
     }
 
-    fn create_bytes_vec(n_bytes_before: usize) -> Vec<u8> {
+    fn create_bytes_vec(n_bytes_before: usize) -> Vec<u8>
+    where
+        Self: Sized,
+    {
         let padding = padding_for_n_bytes(n_bytes_before, Self::ALIGNMENT);
 
         std::iter::repeat(0).take(padding).collect()
@@ -92,7 +109,10 @@ pub trait VariantType<'a>: Sized + std::fmt::Debug {
         bytes: &'b [u8],
         signature: &str,
         n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError> {
+    ) -> Result<&'b [u8], VariantError>
+    where
+        Self: Sized,
+    {
         Self::ensure_correct_signature(signature)?;
         let padding = Self::padding(n_bytes_before);
         let len = Self::ALIGNMENT + padding;
@@ -101,7 +121,10 @@ pub trait VariantType<'a>: Sized + std::fmt::Debug {
         Ok(&bytes[padding..])
     }
 
-    fn padding(n_bytes_before: usize) -> usize {
+    fn padding(n_bytes_before: usize) -> usize
+    where
+        Self: Sized,
+    {
         padding_for_n_bytes(n_bytes_before, Self::ALIGNMENT)
     }
 }
@@ -110,11 +133,17 @@ pub trait SimpleVariantType<'a>: VariantType<'a> {
     fn slice_data_simple<'b>(
         data: &'b [u8],
         n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError> {
+    ) -> Result<&'b [u8], VariantError>
+    where
+        Self: Sized,
+    {
         Self::slice_data(data, Self::SIGNATURE_STR, n_bytes_before)
     }
 
-    fn decode_simple(bytes: &'a [u8], n_bytes_before: usize) -> Result<Self, VariantError> {
+    fn decode_simple(bytes: &'a [u8], n_bytes_before: usize) -> Result<Self, VariantError>
+    where
+        Self: Sized,
+    {
         Self::decode(bytes, Self::SIGNATURE_STR, n_bytes_before)
     }
 }
