@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{SimpleVariantType, VariantError, VariantType};
+use crate::{SimpleVariantType, VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug)]
 pub struct DictEntry<K, V> {
@@ -26,7 +26,7 @@ impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> DictEnt
     }
 }
 
-impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> VariantType<'a>
+impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> VariantTypeConstants
     for DictEntry<K, V>
 {
     // The real single character signature for DICT_ENTRY is `e` but that's not actually used in practice for D-Bus at
@@ -35,6 +35,20 @@ impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> Variant
     const SIGNATURE_CHAR: char = '{';
     const SIGNATURE_STR: &'static str = "{";
     const ALIGNMENT: usize = 8;
+}
+
+impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> VariantType<'a>
+    for DictEntry<K, V>
+{
+    fn signature_char() -> char {
+        Self::SIGNATURE_CHAR
+    }
+    fn signature_str() -> &'static str {
+        Self::SIGNATURE_STR
+    }
+    fn alignment() -> usize {
+        Self::ALIGNMENT
+    }
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut v = Self::create_bytes_vec(n_bytes_before);
@@ -126,9 +140,9 @@ impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> Variant
         }
 
         // Don't need the alignments but no errors here means we've valid signatures
-        let _ = crate::variant_type::alignment_for_signature(&signature[1..2])?;
+        let _ = crate::alignment_for_signature(&signature[1..2])?;
         let value_signature = crate::variant_type::slice_signature(&signature[2..])?;
-        let _ = crate::variant_type::alignment_for_signature(value_signature)?;
+        let _ = crate::alignment_for_signature(value_signature)?;
 
         Ok(())
     }

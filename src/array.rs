@@ -2,12 +2,24 @@ use byteorder::ByteOrder;
 use std::borrow::Cow;
 
 use crate::SimpleVariantType;
-use crate::{VariantError, VariantType};
+use crate::{VariantError, VariantType, VariantTypeConstants};
 
-impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
+impl<'a, T: VariantType<'a>> VariantTypeConstants for Vec<T> {
     const SIGNATURE_CHAR: char = 'a';
     const SIGNATURE_STR: &'static str = "a";
     const ALIGNMENT: usize = 4;
+}
+
+impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
+    fn signature_char() -> char {
+        'a'
+    }
+    fn signature_str() -> &'static str {
+        Self::SIGNATURE_STR
+    }
+    fn alignment() -> usize {
+        Self::ALIGNMENT
+    }
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut v = Self::create_bytes_vec(n_bytes_before);

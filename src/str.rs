@@ -2,12 +2,24 @@ use byteorder::ByteOrder;
 use std::str;
 
 use crate::utils::padding_for_n_bytes;
-use crate::{SimpleVariantType, VariantError, VariantType};
+use crate::{SimpleVariantType, VariantError, VariantType, VariantTypeConstants};
 
-impl<'a> VariantType<'a> for &'a str {
+impl VariantTypeConstants for &str {
     const SIGNATURE_CHAR: char = 's';
     const SIGNATURE_STR: &'static str = "s";
     const ALIGNMENT: usize = 4;
+}
+
+impl<'a> VariantType<'a> for &'a str {
+    fn signature_char() -> char {
+        Self::SIGNATURE_CHAR
+    }
+    fn signature_str() -> &'static str {
+        Self::SIGNATURE_STR
+    }
+    fn alignment() -> usize {
+        Self::ALIGNMENT
+    }
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let len = self.len();
@@ -65,11 +77,23 @@ impl<'a> ObjectPath<'a> {
     }
 }
 
-// FIXME: Find a way to share code with &str implementation above
-impl<'a> VariantType<'a> for ObjectPath<'a> {
+impl<'a> VariantTypeConstants for ObjectPath<'a> {
     const SIGNATURE_CHAR: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
     const ALIGNMENT: usize = 4;
+}
+
+// FIXME: Find a way to share code with &str implementation above
+impl<'a> VariantType<'a> for ObjectPath<'a> {
+    fn signature_char() -> char {
+        Self::SIGNATURE_CHAR
+    }
+    fn signature_str() -> &'static str {
+        Self::SIGNATURE_STR
+    }
+    fn alignment() -> usize {
+        Self::ALIGNMENT
+    }
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         self.0.encode(n_bytes_before)
@@ -108,11 +132,23 @@ impl<'a> Signature<'a> {
     }
 }
 
-// FIXME: Find a way to share code with &str implementation in `variant_type.rs`
-impl<'a> VariantType<'a> for Signature<'a> {
+impl<'a> VariantTypeConstants for Signature<'a> {
     const SIGNATURE_CHAR: char = 'g';
     const SIGNATURE_STR: &'static str = "g";
     const ALIGNMENT: usize = 1;
+}
+
+// FIXME: Find a way to share code with &str implementation in `variant_type.rs`
+impl<'a> VariantType<'a> for Signature<'a> {
+    fn signature_char() -> char {
+        Self::SIGNATURE_CHAR
+    }
+    fn signature_str() -> &'static str {
+        Self::SIGNATURE_STR
+    }
+    fn alignment() -> usize {
+        Self::ALIGNMENT
+    }
 
     // No padding needed because of 1-byte alignment and hence n_bytes_before is ignored everywhere.
 

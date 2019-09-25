@@ -3,7 +3,7 @@ use std::error;
 use std::fmt;
 
 use crate::{ObjectPath, Signature, Structure, VariantError};
-use crate::{Variant, VariantType};
+use crate::{Variant, VariantType, VariantTypeConstants};
 
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq)]
@@ -177,11 +177,23 @@ impl<'a> MessageField<'a> {
     }
 }
 
-// FIXME: Try automating this when we've delegation: https://github.com/rust-lang/rfcs/pull/2393
-impl<'a> VariantType<'a> for MessageField<'a> {
+impl<'a> VariantTypeConstants for MessageField<'a> {
     const SIGNATURE_CHAR: char = Structure::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = Structure::SIGNATURE_STR;
     const ALIGNMENT: usize = Structure::ALIGNMENT;
+}
+
+// FIXME: Try automating this when we've delegation: https://github.com/rust-lang/rfcs/pull/2393
+impl<'a> VariantType<'a> for MessageField<'a> {
+    fn signature_char() -> char {
+        Self::SIGNATURE_CHAR
+    }
+    fn signature_str() -> &'static str {
+        Self::SIGNATURE_STR
+    }
+    fn alignment() -> usize {
+        Self::ALIGNMENT
+    }
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         self.0.encode(n_bytes_before)

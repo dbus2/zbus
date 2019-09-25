@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use crate::utils::padding_for_n_bytes;
-use crate::{Variant, VariantError, VariantType};
+use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug)]
 pub struct Structure<'a>(Vec<Variant<'a>>);
@@ -21,13 +21,25 @@ impl<'a> Structure<'a> {
     }
 }
 
-impl<'a> VariantType<'a> for Structure<'a> {
+impl<'a> VariantTypeConstants for Structure<'a> {
     // The real single character signature for STRUCT is `r` but that's not actually used in practice for D-Bus at least
     // (the spec clearly states that this signature must never appear on the bus). The openning and closing braces are
     // used in practice and that's why we'll declare the opening brace as the signature for this type.
     const SIGNATURE_CHAR: char = '(';
     const SIGNATURE_STR: &'static str = "(";
     const ALIGNMENT: usize = 8;
+}
+
+impl<'a> VariantType<'a> for Structure<'a> {
+    fn signature_char() -> char {
+        Self::SIGNATURE_CHAR
+    }
+    fn signature_str() -> &'static str {
+        Self::SIGNATURE_STR
+    }
+    fn alignment() -> usize {
+        Self::ALIGNMENT
+    }
 
     fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
         let mut v = Self::create_bytes_vec(n_bytes_before);
@@ -102,7 +114,7 @@ impl<'a> VariantType<'a> for Structure<'a> {
 
             // Parse child padding ourselves since we'll create Varint from it and Variant doesn't
             // handle padding.
-            let alignment = crate::variant_type::alignment_for_signature(child_signature)?;
+            let alignment = crate::alignment_for_signature(child_signature)?;
             extracted += padding_for_n_bytes(n_bytes_before + extracted, alignment);
             if extracted > bytes.len() {
                 return Err(VariantError::InsufficientData);

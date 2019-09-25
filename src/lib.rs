@@ -16,6 +16,9 @@ pub use variant::*;
 mod variant_type;
 pub use variant_type::*;
 
+mod variant_type_constants;
+pub use variant_type_constants::*;
+
 mod str;
 pub use crate::str::*;
 
@@ -35,7 +38,7 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::VariantType;
+    use crate::VariantTypeConstants;
 
     #[test]
     fn basic_connection() {

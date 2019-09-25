@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::str;
 
-use crate::{Signature, SimpleVariantType, VariantError, VariantType};
+use crate::{Signature, SimpleVariantType, VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug)]
 pub struct Variant<'a> {
@@ -59,20 +59,32 @@ impl<'a> Variant<'a> {
     /// assert!(v.is::<u32>());
     /// ```
     pub fn is<T: 'a + VariantType<'a>>(&self) -> bool {
-        self.signature.starts_with(T::SIGNATURE_STR)
+        self.signature.starts_with(T::signature_str())
     }
 
     // Should this be part of public API?
     pub(crate) fn inner_alignment(&self) -> usize {
         // Constructors ensure that we always have a valid `signature` so `unwrap()` should be fine here.
-        crate::variant_type::alignment_for_signature(&self.signature).unwrap()
+        crate::alignment_for_signature(&self.signature).unwrap()
     }
 }
 
-impl<'a> VariantType<'a> for Variant<'a> {
+impl<'a> VariantTypeConstants for Variant<'a> {
     const SIGNATURE_CHAR: char = 'v';
     const SIGNATURE_STR: &'static str = "v";
     const ALIGNMENT: usize = Signature::ALIGNMENT;
+}
+
+impl<'a> VariantType<'a> for Variant<'a> {
+    fn signature_char() -> char {
+        Self::SIGNATURE_CHAR
+    }
+    fn signature_str() -> &'static str {
+        Self::SIGNATURE_STR
+    }
+    fn alignment() -> usize {
+        Self::ALIGNMENT
+    }
 
     // Like Signature, no padding needed because of 1-byte alignment and hence n_bytes_before is ignored everywhere.
 
@@ -121,7 +133,7 @@ impl<'a> SimpleVariantType<'a> for Variant<'a> {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{Dict, DictEntry, SimpleVariantType, Structure, VariantType};
+    use crate::{Dict, DictEntry, SimpleVariantType, Structure, VariantType, VariantTypeConstants};
 
     #[test]
     fn u8_variant() {
