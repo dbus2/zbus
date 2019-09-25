@@ -128,5 +128,25 @@ mod tests {
         let v = body.get(0).unwrap();
         let owner = v.get::<(&str)>().unwrap();
         println!("Owner of 'org.freedesktop.DBus' is: {}", owner);
+
+        let reply = connection
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus.Properties"),
+                "GetAll",
+                Some(vec![crate::Variant::from("org.freedesktop.DBus")]),
+            )
+            .unwrap();
+
+        assert!(reply
+            .body_signature()
+            .map(|s| s.as_str() == "a{sv}")
+            .unwrap());
+        let body = reply.body(Some("a{sv}")).unwrap();
+        let variant = body.get(0).unwrap();
+        let v: Vec<crate::DictEntry<&str, crate::Variant>> = variant.get().unwrap();
+        let dict: crate::Dict<&str, crate::Variant> = v.into();
+        let hashmap = dict.inner();
     }
 }
