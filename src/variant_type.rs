@@ -2,7 +2,8 @@ use byteorder::ByteOrder;
 use std::{borrow::Cow, error, fmt, str};
 
 use crate::utils::padding_for_n_bytes;
-use crate::{DictEntry, ObjectPath, Signature, Structure, Variant, VariantTypeConstants};
+use crate::{DictEntry, ObjectPath, Signature, Structure};
+use crate::{SimpleVariantType, Variant, VariantTypeConstants};
 
 #[derive(Debug)]
 pub enum VariantError {
@@ -137,25 +138,6 @@ pub trait VariantType<'a>: std::fmt::Debug {
     }
 }
 
-pub trait SimpleVariantType<'a>: VariantType<'a> {
-    fn slice_data_simple<'b>(
-        data: &'b [u8],
-        n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError>
-    where
-        Self: Sized,
-    {
-        Self::slice_data(data, Self::signature_str(), n_bytes_before)
-    }
-
-    fn decode_simple(bytes: &'a [u8], n_bytes_before: usize) -> Result<Self, VariantError>
-    where
-        Self: Sized,
-    {
-        Self::decode(bytes, Self::signature_str(), n_bytes_before)
-    }
-}
-
 impl<'a> VariantType<'a> for u8 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
@@ -184,7 +166,6 @@ impl<'a> VariantType<'a> for u8 {
         Ok(slice[0])
     }
 }
-impl<'a> SimpleVariantType<'a> for u8 {}
 
 impl<'a> VariantType<'a> for bool {
     fn signature_char() -> char {
@@ -218,7 +199,6 @@ impl<'a> VariantType<'a> for bool {
         }
     }
 }
-impl<'a> SimpleVariantType<'a> for bool {}
 
 impl<'a> VariantType<'a> for i16 {
     fn signature_char() -> char {
@@ -248,7 +228,6 @@ impl<'a> VariantType<'a> for i16 {
         Ok(byteorder::NativeEndian::read_i16(slice))
     }
 }
-impl<'a> SimpleVariantType<'a> for i16 {}
 
 impl<'a> VariantType<'a> for u16 {
     fn signature_char() -> char {
@@ -278,7 +257,6 @@ impl<'a> VariantType<'a> for u16 {
         Ok(byteorder::NativeEndian::read_u16(slice))
     }
 }
-impl<'a> SimpleVariantType<'a> for u16 {}
 
 impl<'a> VariantType<'a> for i32 {
     fn signature_char() -> char {
@@ -308,7 +286,6 @@ impl<'a> VariantType<'a> for i32 {
         Ok(byteorder::NativeEndian::read_i32(slice))
     }
 }
-impl<'a> SimpleVariantType<'a> for i32 {}
 
 impl<'a> VariantType<'a> for u32 {
     fn signature_char() -> char {
@@ -338,7 +315,6 @@ impl<'a> VariantType<'a> for u32 {
         Ok(byteorder::NativeEndian::read_u32(slice))
     }
 }
-impl<'a> SimpleVariantType<'a> for u32 {}
 
 impl<'a> VariantType<'a> for i64 {
     fn signature_char() -> char {
@@ -368,7 +344,6 @@ impl<'a> VariantType<'a> for i64 {
         Ok(byteorder::NativeEndian::read_i64(slice))
     }
 }
-impl<'a> SimpleVariantType<'a> for i64 {}
 
 impl<'a> VariantType<'a> for u64 {
     fn signature_char() -> char {
@@ -398,7 +373,6 @@ impl<'a> VariantType<'a> for u64 {
         Ok(byteorder::NativeEndian::read_u64(slice))
     }
 }
-impl<'a> SimpleVariantType<'a> for u64 {}
 
 impl<'a> VariantType<'a> for f64 {
     fn signature_char() -> char {
@@ -430,7 +404,6 @@ impl<'a> VariantType<'a> for f64 {
         Ok(byteorder::NativeEndian::read_f64(slice))
     }
 }
-impl<'a> SimpleVariantType<'a> for f64 {}
 
 pub(crate) fn ensure_sufficient_bytes(bytes: &[u8], size: usize) -> Result<(), VariantError> {
     if bytes.len() < size {

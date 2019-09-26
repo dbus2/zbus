@@ -22,6 +22,9 @@ pub use variant_type_constants::*;
 mod str;
 pub use crate::str::*;
 
+mod simple_variant_type;
+pub use simple_variant_type::*;
+
 mod structure;
 pub use structure::*;
 
