@@ -509,3 +509,21 @@ pub(crate) fn slice_signature(signature: &str) -> Result<&str, VariantError> {
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{SimpleVariantType, VariantType};
+
+    // Ensure VariantType can be used as Boxed type
+    #[test]
+    fn trait_object() {
+        let boxed = Box::new(42u8);
+
+        let encoded = encode_u8(boxed);
+        assert!(u8::decode_simple(&encoded, 0).unwrap() == 42u8);
+    }
+
+    fn encode_u8(boxed: Box<dyn VariantType>) -> Vec<u8> {
+        boxed.encode(0)
+    }
+}
