@@ -60,12 +60,6 @@ impl Variant {
     pub fn is<'a, T: 'a + VariantType<'a>>(&self) -> bool {
         self.signature.starts_with(T::signature_str())
     }
-
-    // Should this be part of public API?
-    pub(crate) fn inner_alignment(&self) -> usize {
-        // Constructors ensure that we always have a valid `signature` so `unwrap()` should be fine here.
-        crate::alignment_for_signature(&self.signature).unwrap()
-    }
 }
 
 impl<'a> VariantTypeConstants for Variant {
@@ -132,7 +126,8 @@ impl<'a> SimpleVariantType<'a> for Variant {}
 
 #[cfg(test)]
 mod tests {
-    use crate::{Dict, DictEntry, SimpleVariantType, Structure, VariantType, VariantTypeConstants};
+    use crate::{Dict, DictEntry, SimpleVariantType};
+    use crate::{Structure, StructureBuilder, VariantType, VariantTypeConstants};
 
     #[test]
     fn u8_variant() {
@@ -304,21 +299,26 @@ mod tests {
         let mut dict: Dict<i64, &str> = Dict::new();
         dict.insert(1, "123");
         dict.insert(2, "456");
+        let dict_vec: Vec<DictEntry<i64, &str>> = dict.into();
 
-        let s = Structure::new(vec![
-            crate::Variant::from(u8::max_value()),
-            crate::Variant::from(u32::max_value()),
-            crate::Variant::from(Structure::new(vec![
-                crate::Variant::from(i64::max_value()),
-                crate::Variant::from(true),
-                crate::Variant::from(Structure::new(vec![
-                    crate::Variant::from(i64::max_value()),
-                    crate::Variant::from(std::f64::MAX),
-                ])),
-            ])),
-            crate::Variant::from("hello"),
-            crate::Variant::from::<Vec<DictEntry<i64, &str>>>(dict.into()),
-        ]);
+        let s = StructureBuilder::new()
+            .add_field(u8::max_value())
+            .add_field(u32::max_value())
+            .add_field(
+                StructureBuilder::new()
+                    .add_field(i64::max_value())
+                    .add_field(true)
+                    .add_field(
+                        StructureBuilder::new()
+                            .add_field(i64::max_value())
+                            .add_field(std::f64::MAX)
+                            .create(),
+                    )
+                    .create(),
+            )
+            .add_field("hello")
+            .add_field(dict_vec)
+            .create();
         let v = crate::Variant::from(s);
         // The HashMap is unordered so we can't rely on items to be in a specific order during the transformation to
         // Vec, and size depends on the order of items because of padding rules.
@@ -396,16 +396,18 @@ mod tests {
         assert!(v == ["Hello", "World", "Now", "Bye!"]);
 
         // Array of Struct, which in turn containin an Array (We gotta go deeper!)
-        let ar = vec![Structure::new(vec![
-            crate::Variant::from(u8::max_value()),
-            crate::Variant::from(u32::max_value()),
-            crate::Variant::from(Structure::new(vec![
-                crate::Variant::from(i64::max_value()),
-                crate::Variant::from(true),
-                crate::Variant::from(vec!["Hello", "World"]),
-            ])),
-            crate::Variant::from("hello"),
-        ])];
+        let ar = vec![StructureBuilder::new()
+            .add_field(u8::max_value())
+            .add_field(u32::max_value())
+            .add_field(
+                StructureBuilder::new()
+                    .add_field(i64::max_value())
+                    .add_field(true)
+                    .add_field(vec!["Hello", "World"])
+                    .create(),
+            )
+            .add_field("hello")
+            .create()];
         assert!(ar.signature() == "a(yu(xbas)s)");
         let v = crate::Variant::from(ar);
         assert!(v.len() == 66);
@@ -467,10 +469,10 @@ mod tests {
         // STRUCT value
         let entry = DictEntry::new(
             "hello",
-            Structure::new(vec![
-                crate::Variant::from(u8::max_value()),
-                crate::Variant::from(u32::max_value()),
-            ]),
+            StructureBuilder::new()
+                .add_field(u8::max_value())
+                .add_field(u32::max_value())
+                .create(),
         );
         assert!(entry.signature() == "{s(yu)}");
         let v = crate::Variant::from(entry);
@@ -479,9 +481,10 @@ mod tests {
         let entry = v.get::<DictEntry<&str, Structure>>().unwrap();
         assert!(*entry.key() == "hello");
         let s = entry.value();
-        assert!(s.fields()[0].is::<u8>());
-        assert!(s.fields()[0].get::<u8>().unwrap() == u8::max_value());
-        assert!(s.fields()[1].is::<u32>());
-        assert!(s.fields()[1].get::<u32>().unwrap() == u32::max_value());
+        let fields = s.fields();
+        assert!(fields[0].is::<u8>());
+        assert!(fields[0].get::<u8>().unwrap() == u8::max_value());
+        assert!(fields[1].is::<u32>());
+        assert!(fields[1].get::<u32>().unwrap() == u32::max_value());
     }
 }

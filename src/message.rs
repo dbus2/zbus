@@ -4,9 +4,9 @@ use std::{borrow::Cow, fmt};
 
 use crate::utils::padding_for_8_bytes;
 use crate::Signature;
-use crate::Structure;
 use crate::{MessageField, MessageFieldCode, MessageFieldError};
-use crate::{Variant, VariantError, VariantType};
+use crate::{Structure, StructureBuilder};
+use crate::{VariantError, VariantType};
 
 /// Size of primary message header
 pub const PRIMARY_HEADER_SIZE: usize = 16;
@@ -108,7 +108,7 @@ impl Message {
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        body: Option<Vec<Variant>>,
+        body: Option<Structure>,
     ) -> Result<Self, MessageError> {
         let mut m = Message::new(MessageType::MethodCall);
 
@@ -125,13 +125,7 @@ impl Message {
         }
 
         // Message body structure and its encoding
-        let (body_encoding, body_structure) = body
-            .map(|variants| {
-                let structure = Structure::new(variants);
-
-                (structure.encode(0), Some(structure))
-            })
-            .unwrap_or((vec![], None));
+        let body_encoding = body.as_ref().map(|s| s.encode(0)).unwrap_or(vec![]);
         m.0.extend(&crate::utils::usize_to_u32(body_encoding.len()).to_ne_bytes());
 
         // Serial number. FIXME: managed by connection
@@ -146,16 +140,17 @@ impl Message {
         if let Some(iface) = iface {
             fields.push(MessageField::interface(iface));
         }
-        let body_signature = body_structure.map(|structure| {
+        let body_signature = body.map(|structure| {
             let signature = structure.signature();
             // Remove the leading and trailing STRUCT delimiter
             let signature = &signature[1..signature.len() - 1];
 
             String::from(signature)
         });
-        if let Some(signature) = &body_signature {
-            fields.push(MessageField::signature(signature));
+        if let Some(body_signature) = &body_signature {
+            fields.push(MessageField::signature(&body_signature));
         }
+
         fields.push(MessageField::path(path));
         fields.push(MessageField::member(method_name));
         m.0.extend(&fields.encode(m.0.len()));
@@ -222,7 +217,7 @@ impl Message {
 
     pub fn body_signature(&self) -> Result<String, MessageError> {
         for field in self.fields()? {
-            if field.code() == MessageFieldCode::Signature {
+            if field.code()? == MessageFieldCode::Signature {
                 let value = field.value()?;
                 let sig = value.get::<Signature>()?;
 
@@ -251,7 +246,7 @@ impl Message {
         Vec::<MessageField>::decode(slice, "a(yv)", FIELDS_LEN_START_OFFSET).map_err(|e| e.into())
     }
 
-    pub fn body(&self, body_signature: Option<&str>) -> Result<Vec<Variant>, MessageError> {
+    pub fn body(&self, body_signature: Option<&str>) -> Result<Structure, MessageError> {
         if self.bytes_to_completion() != 0 {
             return Err(MessageError::InsufficientData);
         }
@@ -259,7 +254,7 @@ impl Message {
         let mut header_len = PRIMARY_HEADER_SIZE + self.fields_len();
         header_len = header_len + padding_for_8_bytes(header_len);
         if self.body_len() == 0 {
-            return Ok(vec![]);
+            return Ok(StructureBuilder::new().create());
         }
 
         let signature = body_signature
@@ -270,7 +265,7 @@ impl Message {
         let structure =
             Structure::decode(&self.0[(header_len as usize)..], &signature, header_len)?;
 
-        Ok(structure.take_fields())
+        Ok(structure)
     }
 
     pub fn no_reply_expected(mut self) -> Self {

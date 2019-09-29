@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::error;
 use std::fmt;
 
-use crate::{ObjectPath, Signature, Structure, VariantError};
+use crate::{ObjectPath, Signature, Structure, StructureBuilder, VariantError};
 use crate::{Variant, VariantType, VariantTypeConstants};
 
 #[repr(u8)]
@@ -72,92 +72,115 @@ impl From<VariantError> for MessageFieldError {
 }
 
 #[derive(Debug)]
-pub struct MessageField(Structure);
+pub struct MessageField<'a>(Structure<'a>);
 
-impl MessageField {
-    pub fn code(&self) -> MessageFieldCode {
-        self.0.fields()[0]
+impl<'a> MessageField<'a> {
+    pub fn code(&self) -> Result<MessageFieldCode, MessageFieldError> {
+        let fields = self.0.fields();
+        if fields.len() < 2 {
+            return Err(MessageFieldError::InsufficientData);
+        }
+
+        Ok(fields[0]
             .get::<u8>()
             .map(|c| MessageFieldCode::from(c))
-            .unwrap_or(MessageFieldCode::Invalid)
+            .unwrap_or(MessageFieldCode::Invalid))
     }
 
-    pub fn value<'b>(&'b self) -> Result<Variant, MessageFieldError> {
+    pub fn value(&self) -> Result<Variant, MessageFieldError> {
         self.0.fields()[1].get::<Variant>().map_err(|e| e.into())
     }
 
     pub fn path(path: &str) -> Self {
-        Self(Structure::new(vec![
-            Variant::from(MessageFieldCode::Path as u8),
-            Variant::from(Variant::from(ObjectPath::new(path))),
-        ]))
+        Self(
+            StructureBuilder::new()
+                .add_field(MessageFieldCode::Path as u8)
+                .add_field(Variant::from(ObjectPath::new(path)))
+                .create(),
+        )
     }
 
     pub fn interface(interface: &str) -> Self {
-        Self(Structure::new(vec![
-            Variant::from(MessageFieldCode::Interface as u8),
-            Variant::from(Variant::from(interface)),
-        ]))
+        Self(
+            StructureBuilder::new()
+                .add_field(MessageFieldCode::Interface as u8)
+                .add_field(Variant::from(interface))
+                .create(),
+        )
     }
 
     pub fn member(member: &str) -> Self {
-        Self(Structure::new(vec![
-            Variant::from(MessageFieldCode::Member as u8),
-            Variant::from(Variant::from(member)),
-        ]))
+        Self(
+            StructureBuilder::new()
+                .add_field(MessageFieldCode::Member as u8)
+                .add_field(Variant::from(member))
+                .create(),
+        )
     }
 
     pub fn error_name(error_name: &str) -> Self {
-        Self(Structure::new(vec![
-            Variant::from(MessageFieldCode::ErrorName as u8),
-            Variant::from(Variant::from(error_name)),
-        ]))
+        Self(
+            StructureBuilder::new()
+                .add_field(MessageFieldCode::ErrorName as u8)
+                .add_field(Variant::from(error_name))
+                .create(),
+        )
     }
 
     pub fn reply_serial(serial: u32) -> Self {
-        Self(Structure::new(vec![
-            Variant::from(MessageFieldCode::ReplySerial as u8),
-            Variant::from(Variant::from(serial)),
-        ]))
+        Self(
+            StructureBuilder::new()
+                .add_field(MessageFieldCode::ReplySerial as u8)
+                .add_field(Variant::from(serial))
+                .create(),
+        )
     }
 
     pub fn destination(destination: &str) -> Self {
-        Self(Structure::new(vec![
-            Variant::from(MessageFieldCode::Destination as u8),
-            Variant::from(Variant::from(destination)),
-        ]))
+        Self(
+            StructureBuilder::new()
+                .add_field(MessageFieldCode::Destination as u8)
+                .add_field(Variant::from(destination))
+                .create(),
+        )
     }
 
     pub fn sender(sender: &str) -> Self {
-        Self(Structure::new(vec![
-            Variant::from(MessageFieldCode::Sender as u8),
-            Variant::from(Variant::from(sender)),
-        ]))
+        Self(
+            StructureBuilder::new()
+                .add_field(MessageFieldCode::Sender as u8)
+                .add_field(Variant::from(sender))
+                .create(),
+        )
     }
 
     pub fn signature(signature: &str) -> Self {
-        Self(Structure::new(vec![
-            Variant::from(MessageFieldCode::Signature as u8),
-            Variant::from(Variant::from(Signature::new(signature))),
-        ]))
+        Self(
+            StructureBuilder::new()
+                .add_field(MessageFieldCode::Signature as u8)
+                .add_field(Variant::from(Signature::new(signature)))
+                .create(),
+        )
     }
 
     pub fn unix_fds(fd: u32) -> Self {
-        Self(Structure::new(vec![
-            Variant::from(MessageFieldCode::UnixFDs as u8),
-            Variant::from(Variant::from(fd)),
-        ]))
+        Self(
+            StructureBuilder::new()
+                .add_field(MessageFieldCode::UnixFDs as u8)
+                .add_field(Variant::from(fd))
+                .create(),
+        )
     }
 }
 
-impl VariantTypeConstants for MessageField {
+impl<'a> VariantTypeConstants for MessageField<'a> {
     const SIGNATURE_CHAR: char = Structure::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = Structure::SIGNATURE_STR;
     const ALIGNMENT: usize = Structure::ALIGNMENT;
 }
 
 // FIXME: Try automating this when we've delegation: https://github.com/rust-lang/rfcs/pull/2393
-impl<'a> VariantType<'a> for MessageField {
+impl<'a> VariantType<'a> for MessageField<'a> {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }

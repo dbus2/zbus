@@ -41,7 +41,7 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::VariantTypeConstants;
+    use crate::{StructureBuilder, VariantTypeConstants};
 
     #[test]
     fn basic_connection() {
@@ -93,8 +93,7 @@ mod tests {
                 .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
                 .unwrap());
             let body = reply.body(Some(<(&str)>::SIGNATURE_STR)).unwrap();
-            let v = body.get(0).unwrap();
-            let id = v.get::<(&str)>().unwrap();
+            let id = body.fields()[0].get::<(&str)>().unwrap();
             println!("Machine ID: {}", id);
         }
 
@@ -104,7 +103,11 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "NameHasOwner",
-                Some(vec![crate::Variant::from("org.freedesktop.DBus")]),
+                Some(
+                    StructureBuilder::new()
+                        .add_field("org.freedesktop.DBus")
+                        .create(),
+                ),
             )
             .unwrap();
 
@@ -113,8 +116,7 @@ mod tests {
             .map(|s| s.as_str() == bool::SIGNATURE_STR)
             .unwrap());
         let body = reply.body(Some(bool::SIGNATURE_STR)).unwrap();
-        let v = body.get(0).unwrap();
-        assert!(v.get::<bool>().unwrap());
+        assert!(body.fields()[0].get::<bool>().unwrap());
 
         let reply = connection
             .call_method(
@@ -122,7 +124,11 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "GetNameOwner",
-                Some(vec![crate::Variant::from("org.freedesktop.DBus")]),
+                Some(
+                    StructureBuilder::new()
+                        .add_field("org.freedesktop.DBus")
+                        .create(),
+                ),
             )
             .unwrap();
 
@@ -131,8 +137,7 @@ mod tests {
             .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
             .unwrap());
         let body = reply.body(None).unwrap();
-        let v = body.get(0).unwrap();
-        let owner = v.get::<(&str)>().unwrap();
+        let owner = body.fields()[0].get::<(&str)>().unwrap();
         println!("Owner of 'org.freedesktop.DBus' is: {}", owner);
 
         let reply = connection
@@ -141,7 +146,11 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus.Properties"),
                 "GetAll",
-                Some(vec![crate::Variant::from("org.freedesktop.DBus")]),
+                Some(
+                    StructureBuilder::new()
+                        .add_field("org.freedesktop.DBus")
+                        .create(),
+                ),
             )
             .unwrap();
 
@@ -150,7 +159,7 @@ mod tests {
             .map(|s| s.as_str() == "a{sv}")
             .unwrap());
         let body = reply.body(Some("a{sv}")).unwrap();
-        let variant = body.get(0).unwrap();
+        let variant = &body.fields()[0];
         let v: Vec<crate::DictEntry<&str, crate::Variant>> = variant.get().unwrap();
         let dict: crate::Dict<&str, crate::Variant> = v.into();
         let hashmap = dict.inner();

@@ -7,7 +7,7 @@ use nix::unistd::Uid;
 use crate::address::{self, Address};
 use crate::message;
 use crate::message_field;
-use crate::{Variant, VariantError, VariantTypeConstants};
+use crate::{VariantError, VariantTypeConstants};
 
 pub struct Connection {
     pub server_guid: String,
@@ -108,10 +108,11 @@ impl From<message::Message> for ConnectionError {
         match message.fields() {
             Ok(all_fields) => {
                 // First, get the error name
-                let name = match all_fields
-                    .iter()
-                    .find(|f| f.code() == message_field::MessageFieldCode::ErrorName)
-                {
+                let name = match all_fields.iter().find(|f| {
+                    f.code()
+                        .map(|c| c == message_field::MessageFieldCode::ErrorName)
+                        .unwrap_or(false)
+                }) {
                     Some(f) => match f.value() {
                         Ok(v) => match v.get::<(&str)>() {
                             Ok(s) => String::from(s),
@@ -125,14 +126,11 @@ impl From<message::Message> for ConnectionError {
                 // Then, try to get the optional description string
                 if message.body_len() > 0 {
                     match message.body(Some(<(&str)>::SIGNATURE_STR)) {
-                        Ok(body) => match body.get(0) {
-                            Some(v) => match v.get::<(&str)>() {
-                                Ok(detail) => {
-                                    ConnectionError::MethodError(name, Some(String::from(detail)))
-                                }
-                                Err(e) => ConnectionError::Variant(e),
-                            },
-                            None => ConnectionError::MethodError(name, None),
+                        Ok(body) => match body.fields()[0].get::<(&str)>() {
+                            Ok(detail) => {
+                                ConnectionError::MethodError(name, Some(String::from(detail)))
+                            }
+                            Err(e) => ConnectionError::Variant(e),
                         },
                         Err(e) => ConnectionError::Message(e),
                     }
@@ -206,8 +204,7 @@ impl Connection {
         )?;
 
         let body = reply.body(Some(<&str>::SIGNATURE_STR))?;
-        let v = body.get(0).ok_or(ConnectionError::InvalidReply)?;
-        let bus_name = v.get::<(&str)>()?;
+        let bus_name = body.fields()[0].get::<(&str)>()?;
 
         println!("bus name: {}", bus_name);
 
@@ -220,7 +217,7 @@ impl Connection {
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        body: Option<Vec<Variant>>,
+        body: Option<crate::Structure>,
     ) -> Result<message::Message, ConnectionError> {
         println!("Starting: {}", method_name);
         let serial = self.next_serial();
@@ -252,7 +249,9 @@ impl Connection {
                 if all_fields
                     .iter()
                     .find(|f| {
-                        f.code() == message_field::MessageFieldCode::ReplySerial
+                        f.code()
+                            .map(|c| c == message_field::MessageFieldCode::ReplySerial)
+                            .unwrap_or(false)
                             && f.value()
                                 .map(|v| v.get::<u32>().map(|u| u == serial).unwrap_or(false))
                                 .unwrap_or(false)
