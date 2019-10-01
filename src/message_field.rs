@@ -72,9 +72,9 @@ impl From<VariantError> for MessageFieldError {
 }
 
 #[derive(Debug)]
-pub struct MessageField<'a>(Structure<'a>);
+pub struct MessageField(Structure);
 
-impl<'a> MessageField<'a> {
+impl MessageField {
     pub fn code(&self) -> MessageFieldCode {
         self.0.fields()[0]
             .get::<u8>()
@@ -82,94 +82,67 @@ impl<'a> MessageField<'a> {
             .unwrap_or(MessageFieldCode::Invalid)
     }
 
-    pub fn value<'b>(&'b self) -> Result<Variant<'b>, MessageFieldError> {
+    pub fn value<'b>(&'b self) -> Result<Variant, MessageFieldError> {
         self.0.fields()[1].get::<Variant>().map_err(|e| e.into())
     }
 
-    pub fn path(path: &'a str) -> Self
-    where
-        Self: 'a,
-    {
+    pub fn path(path: &str) -> Self {
         Self(Structure::new(vec![
             Variant::from(MessageFieldCode::Path as u8),
             Variant::from(Variant::from(ObjectPath::new(path))),
         ]))
     }
 
-    pub fn interface(interface: &'a str) -> Self
-    where
-        Self: 'a,
-    {
+    pub fn interface(interface: &str) -> Self {
         Self(Structure::new(vec![
             Variant::from(MessageFieldCode::Interface as u8),
             Variant::from(Variant::from(interface)),
         ]))
     }
 
-    pub fn member(member: &'a str) -> Self
-    where
-        Self: 'a,
-    {
+    pub fn member(member: &str) -> Self {
         Self(Structure::new(vec![
             Variant::from(MessageFieldCode::Member as u8),
             Variant::from(Variant::from(member)),
         ]))
     }
 
-    pub fn error_name(error_name: &'a str) -> Self
-    where
-        Self: 'a,
-    {
+    pub fn error_name(error_name: &str) -> Self {
         Self(Structure::new(vec![
             Variant::from(MessageFieldCode::ErrorName as u8),
             Variant::from(Variant::from(error_name)),
         ]))
     }
 
-    pub fn reply_serial(serial: u32) -> Self
-    where
-        Self: 'a,
-    {
+    pub fn reply_serial(serial: u32) -> Self {
         Self(Structure::new(vec![
             Variant::from(MessageFieldCode::ReplySerial as u8),
             Variant::from(Variant::from(serial)),
         ]))
     }
 
-    pub fn destination(destination: &'a str) -> Self
-    where
-        Self: 'a,
-    {
+    pub fn destination(destination: &str) -> Self {
         Self(Structure::new(vec![
             Variant::from(MessageFieldCode::Destination as u8),
             Variant::from(Variant::from(destination)),
         ]))
     }
 
-    pub fn sender(sender: &'a str) -> Self
-    where
-        Self: 'a,
-    {
+    pub fn sender(sender: &str) -> Self {
         Self(Structure::new(vec![
             Variant::from(MessageFieldCode::Sender as u8),
             Variant::from(Variant::from(sender)),
         ]))
     }
 
-    pub fn signature(signature: &'a str) -> Self
-    where
-        Self: 'a,
-    {
+    pub fn signature(signature: &str) -> Self {
         Self(Structure::new(vec![
             Variant::from(MessageFieldCode::Signature as u8),
             Variant::from(Variant::from(Signature::new(signature))),
         ]))
     }
 
-    pub fn unix_fds(fd: u32) -> Self
-    where
-        Self: 'a,
-    {
+    pub fn unix_fds(fd: u32) -> Self {
         Self(Structure::new(vec![
             Variant::from(MessageFieldCode::UnixFDs as u8),
             Variant::from(Variant::from(fd)),
@@ -177,14 +150,14 @@ impl<'a> MessageField<'a> {
     }
 }
 
-impl<'a> VariantTypeConstants for MessageField<'a> {
+impl VariantTypeConstants for MessageField {
     const SIGNATURE_CHAR: char = Structure::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = Structure::SIGNATURE_STR;
     const ALIGNMENT: usize = Structure::ALIGNMENT;
 }
 
 // FIXME: Try automating this when we've delegation: https://github.com/rust-lang/rfcs/pull/2393
-impl<'a> VariantType<'a> for MessageField<'a> {
+impl<'a> VariantType<'a> for MessageField {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }

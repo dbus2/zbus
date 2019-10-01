@@ -1,28 +1,27 @@
-use std::borrow::Cow;
 use std::str;
 
 use crate::{Signature, SimpleVariantType, VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug)]
-pub struct Variant<'a> {
+pub struct Variant {
     signature: String,
-    value: Cow<'a, [u8]>,
+    value: Vec<u8>,
 }
 
-impl<'a> Variant<'a> {
-    pub fn from_data(data: &'a [u8], signature: &str) -> Result<Self, VariantError> {
+impl Variant {
+    pub fn from_data(data: &[u8], signature: &str) -> Result<Self, VariantError> {
         // slice_data() ensures a valid signature
-        let value = crate::variant_type::slice_data(data, signature, 0)?;
+        let value = crate::variant_type::slice_data(data, signature, 0)?.to_vec();
 
         Ok(Self {
-            value: Cow::from(value),
+            value: value,
             signature: String::from(signature),
         })
     }
 
-    pub fn from<T: 'a + VariantType<'a>>(value: T) -> Self {
+    pub fn from<'a, T: 'a + VariantType<'a>>(value: T) -> Self {
         Self {
-            value: Cow::from(value.encode(0)),
+            value: value.encode(0),
             signature: String::from(value.signature()),
         }
     }
@@ -31,7 +30,7 @@ impl<'a> Variant<'a> {
         &self.signature
     }
 
-    pub fn get<T: 'a + VariantType<'a>>(&'a self) -> Result<T, VariantError> {
+    pub fn get<'a, T: 'a + VariantType<'a>>(&'a self) -> Result<T, VariantError> {
         T::decode(&self.value, &self.signature, 0)
     }
 
@@ -58,7 +57,7 @@ impl<'a> Variant<'a> {
     /// assert!(!v.is::<(&str)>());
     /// assert!(v.is::<u32>());
     /// ```
-    pub fn is<T: 'a + VariantType<'a>>(&self) -> bool {
+    pub fn is<'a, T: 'a + VariantType<'a>>(&self) -> bool {
         self.signature.starts_with(T::signature_str())
     }
 
@@ -69,13 +68,13 @@ impl<'a> Variant<'a> {
     }
 }
 
-impl<'a> VariantTypeConstants for Variant<'a> {
+impl<'a> VariantTypeConstants for Variant {
     const SIGNATURE_CHAR: char = 'v';
     const SIGNATURE_STR: &'static str = "v";
     const ALIGNMENT: usize = Signature::ALIGNMENT;
 }
 
-impl<'a> VariantType<'a> for Variant<'a> {
+impl<'a> VariantType<'a> for Variant {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -129,7 +128,7 @@ impl<'a> VariantType<'a> for Variant<'a> {
         Variant::from_data(&bytes[sign_size..], sign.as_str())
     }
 }
-impl<'a> SimpleVariantType<'a> for Variant<'a> {}
+impl<'a> SimpleVariantType<'a> for Variant {}
 
 #[cfg(test)]
 mod tests {

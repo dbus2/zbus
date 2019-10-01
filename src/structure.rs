@@ -4,24 +4,24 @@ use crate::utils::padding_for_n_bytes;
 use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug)]
-pub struct Structure<'a>(Vec<Variant<'a>>);
+pub struct Structure(Vec<Variant>);
 
-impl<'a> Structure<'a> {
-    pub fn new(fields: Vec<Variant<'a>>) -> Self {
+impl Structure {
+    pub fn new(fields: Vec<Variant>) -> Self {
         Self(fields)
     }
 
     // FIXME: Can't we just use 'a here?
-    pub fn fields<'b>(&'b self) -> &'b [Variant<'b>] {
+    pub fn fields<'b>(&'b self) -> &'b [Variant] {
         &self.0
     }
 
-    pub fn take_fields(self) -> Vec<Variant<'a>> {
+    pub fn take_fields(self) -> Vec<Variant> {
         self.0
     }
 }
 
-impl<'a> VariantTypeConstants for Structure<'a> {
+impl VariantTypeConstants for Structure {
     // The real single character signature for STRUCT is `r` but that's not actually used in practice for D-Bus at least
     // (the spec clearly states that this signature must never appear on the bus). The openning and closing braces are
     // used in practice and that's why we'll declare the opening brace as the signature for this type.
@@ -30,7 +30,7 @@ impl<'a> VariantTypeConstants for Structure<'a> {
     const ALIGNMENT: usize = 8;
 }
 
-impl<'a> VariantType<'a> for Structure<'a> {
+impl<'a> VariantType<'a> for Structure {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
