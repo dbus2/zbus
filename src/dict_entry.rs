@@ -83,7 +83,7 @@ impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> Variant
 
         let value_signature = crate::variant_type::slice_signature(&signature[2..])?;
         let value_slice = crate::variant_type::slice_data(
-            &bytes[(extracted as usize)..],
+            &bytes[extracted..],
             value_signature,
             n_bytes_before + extracted,
         )?;

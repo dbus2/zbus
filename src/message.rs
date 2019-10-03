@@ -262,8 +262,7 @@ impl Message {
             .unwrap_or(Cow::from(self.body_signature()?));
         // Add () for Structure
         let signature = format!("({})", signature);
-        let structure =
-            Structure::decode(&self.0[(header_len as usize)..], &signature, header_len)?;
+        let structure = Structure::decode(&self.0[header_len..], &signature, header_len)?;
 
         Ok(structure)
     }

@@ -56,7 +56,7 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         let len = u32::decode_simple(len_slice, n_bytes_before)? as usize + 4;
         while extracted < len {
             let slice = crate::variant_type::slice_data(
-                &bytes[(extracted as usize)..],
+                &bytes[extracted..],
                 child_signature,
                 n_bytes_before + extracted,
             )?;
