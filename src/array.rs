@@ -87,8 +87,8 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         let child_signature = crate::variant_type::slice_signature(&signature[1..])?;
 
         // Array size in bytes
-        let len = u32::decode_simple(&bytes[padding..4], 0)? as usize + 4;
         let mut extracted = padding + 4;
+        let len = u32::decode_simple(&bytes[padding..extracted], 0)? as usize + 4;
         let mut elements = vec![];
 
         while extracted < len {
