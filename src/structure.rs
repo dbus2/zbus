@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use crate::utils::padding_for_n_bytes;
-use crate::SharedData;
+use crate::{EncodingContext, SharedData};
 use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug)]
@@ -20,6 +20,7 @@ impl Structure {
 fn variants_from_struct_data(
     data: &SharedData,
     signature: &str,
+    context: EncodingContext,
 ) -> Result<Vec<Variant>, VariantError> {
     // Assuming simple types here but it's OK to have more capacity than needed
     let mut fields = Vec::with_capacity(signature.len());
@@ -38,7 +39,7 @@ fn variants_from_struct_data(
         }
 
         // Parse data
-        let variant = Variant::from_data(&data.tail(extracted), child_signature)?;
+        let variant = Variant::from_data(&data.tail(extracted), child_signature, context)?;
         extracted += variant.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
@@ -72,17 +73,18 @@ impl StructureBuilder {
     where
         T: VariantType,
     {
-        field.encode_into(&mut self.encoding);
+        let context = EncodingContext::default();
+        field.encode_into(&mut self.encoding, context);
         self.signature
             .insert_str(self.signature.len() - 1, &field.signature());
 
         self
     }
 
-    pub fn create(self) -> Structure {
+    pub fn create(self, context: EncodingContext) -> Structure {
         let (encoding, signature) = (self.encoding, self.signature);
         let encoding = SharedData::new(encoding);
-        let fields = variants_from_struct_data(&encoding, &signature)
+        let fields = variants_from_struct_data(&encoding, &signature, context)
             .unwrap_or_else(|e| {
                 eprintln!("An error occured getting fields from a Structure (signature: '{}'). This should NOT happen \
                            since this structure is created manually. Here is the error: {}", signature, e);
@@ -117,28 +119,36 @@ impl VariantType for Structure {
         Self::ALIGNMENT
     }
 
-    fn encode_into(&self, bytes: &mut Vec<u8>) {
-        Self::add_padding(bytes);
+    fn encode_into(&self, bytes: &mut Vec<u8>, context: EncodingContext) {
+        Self::add_padding(bytes, context);
 
         // Since a Structure always starts at 8-byte boundry, the fields and their children are
         // already aligned correctly.
         self.encoding.apply_mut(|b| bytes.extend_from_slice(b));
     }
 
-    fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
-        let padding = Self::padding(data.position());
+    fn slice_data(
+        data: &SharedData,
+        signature: &str,
+        context: EncodingContext,
+    ) -> Result<SharedData, VariantError> {
+        let padding = Self::padding(data.position(), context);
         if data.len() < padding || signature.len() < 3 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
 
         let mut extracted = padding;
+        let child_enc_ctxt = context.copy_for_child();
         let mut i = 1;
         let last_index = signature.len() - 1;
         while i < last_index {
             let child_signature = crate::variant_type::slice_signature(&signature[i..last_index])?;
-            let slice =
-                crate::variant_type::slice_data(&data.tail(extracted as usize), child_signature)?;
+            let slice = crate::variant_type::slice_data(
+                &data.tail(extracted as usize),
+                child_signature,
+                child_enc_ctxt,
+            )?;
             extracted += slice.len();
             if extracted > data.len() {
                 return Err(VariantError::InsufficientData);
@@ -153,16 +163,20 @@ impl VariantType for Structure {
         Ok(data.head(extracted))
     }
 
-    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+    fn decode(
+        data: &SharedData,
+        signature: &str,
+        context: EncodingContext,
+    ) -> Result<Self, VariantError> {
         // Similar to slice_data, except we create variants.
-        let padding = Self::padding(data.position());
+        let padding = Self::padding(data.position(), context);
         if data.len() < padding || signature.len() < 3 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
 
         let encoding = data.tail(padding);
-        let fields = variants_from_struct_data(&encoding, signature)?;
+        let fields = variants_from_struct_data(&encoding, signature, context)?;
 
         Ok(Self {
             encoding: encoding,

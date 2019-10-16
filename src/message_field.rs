@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::error;
 use std::fmt;
 
+use crate::{EncodingContext, EncodingFormat};
 use crate::{ObjectPath, SharedData, Signature, Structure, StructureBuilder};
 use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
@@ -96,7 +97,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Path as u8)
                 .add_field(Variant::from(ObjectPath::new(path)))
-                .create(),
+                .create(EncodingContext::default()),
         )
     }
 
@@ -105,7 +106,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Interface as u8)
                 .add_field(Variant::from(String::from(interface)))
-                .create(),
+                .create(EncodingContext::default()),
         )
     }
 
@@ -114,7 +115,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Member as u8)
                 .add_field(Variant::from(String::from(member)))
-                .create(),
+                .create(EncodingContext::default()),
         )
     }
 
@@ -123,7 +124,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::ErrorName as u8)
                 .add_field(Variant::from(String::from(error_name)))
-                .create(),
+                .create(EncodingContext::default()),
         )
     }
 
@@ -132,7 +133,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::ReplySerial as u8)
                 .add_field(Variant::from(serial))
-                .create(),
+                .create(EncodingContext::default()),
         )
     }
 
@@ -141,7 +142,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Destination as u8)
                 .add_field(Variant::from(String::from(destination)))
-                .create(),
+                .create(EncodingContext::default()),
         )
     }
 
@@ -150,7 +151,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Sender as u8)
                 .add_field(Variant::from(String::from(sender)))
-                .create(),
+                .create(EncodingContext::default()),
         )
     }
 
@@ -159,7 +160,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Signature as u8)
                 .add_field(Variant::from(Signature::new(signature)))
-                .create(),
+                .create(EncodingContext::default()),
         )
     }
 
@@ -168,7 +169,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::UnixFDs as u8)
                 .add_field(Variant::from(fd))
-                .create(),
+                .create(EncodingContext::default()),
         )
     }
 }
@@ -191,16 +192,27 @@ impl VariantType for MessageField {
         Self::ALIGNMENT
     }
 
-    fn encode_into(&self, bytes: &mut Vec<u8>) {
-        self.0.encode_into(bytes)
+    fn encode_into(&self, bytes: &mut Vec<u8>, context: EncodingContext) {
+        assert!(context.format == EncodingFormat::DBus);
+        self.0.encode_into(bytes, context)
     }
 
-    fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
-        Structure::slice_data(data, signature)
+    fn slice_data(
+        data: &SharedData,
+        signature: &str,
+        context: EncodingContext,
+    ) -> Result<SharedData, VariantError> {
+        assert!(context.format == EncodingFormat::DBus);
+        Structure::slice_data(data, signature, context)
     }
 
-    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
-        Structure::decode(data, signature).map(|s| MessageField(s))
+    fn decode(
+        data: &SharedData,
+        signature: &str,
+        context: EncodingContext,
+    ) -> Result<Self, VariantError> {
+        assert!(context.format == EncodingFormat::DBus);
+        Structure::decode(data, signature, context).map(|s| MessageField(s))
     }
 
     fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {

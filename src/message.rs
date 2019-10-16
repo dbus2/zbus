@@ -3,6 +3,7 @@ use std::error;
 use std::{borrow::Cow, fmt};
 
 use crate::utils::padding_for_8_bytes;
+use crate::EncodingContext;
 use crate::Signature;
 use crate::{MessageField, MessageFieldCode, MessageFieldError};
 use crate::{SharedData, Structure, StructureBuilder};
@@ -153,7 +154,9 @@ impl Message {
 
         fields.push(MessageField::path(path));
         fields.push(MessageField::member(method_name));
-        fields.encode_into(&mut m.0);
+
+        let context = EncodingContext::default();
+        fields.encode_into(&mut m.0, context);
 
         // Do we need to do this if body is None?
         let padding = padding_for_8_bytes(m.0.len());
@@ -163,7 +166,7 @@ impl Message {
 
         if let Some(body) = body {
             let n_bytes_before = m.0.len();
-            body.encode_into(&mut m.0);
+            body.encode_into(&mut m.0, context);
 
             let len = crate::utils::usize_to_u32(m.0.len() - n_bytes_before);
             byteorder::NativeEndian::write_u32(
@@ -246,10 +249,14 @@ impl Message {
 
         // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
         let encoding = SharedData::new(self.0.clone());
-        let slice =
-            Vec::<MessageField>::slice_data(&encoding.tail(FIELDS_LEN_START_OFFSET), "a(yv)")?;
+        let context = EncodingContext::default();
+        let slice = Vec::<MessageField>::slice_data(
+            &encoding.tail(FIELDS_LEN_START_OFFSET),
+            "a(yv)",
+            context,
+        )?;
 
-        Vec::<MessageField>::decode(&slice, "a(yv)").map_err(|e| e.into())
+        Vec::<MessageField>::decode(&slice, "a(yv)", context).map_err(|e| e.into())
     }
 
     pub fn body(&self, body_signature: Option<&str>) -> Result<Structure, MessageError> {
@@ -259,8 +266,9 @@ impl Message {
 
         let mut header_len = PRIMARY_HEADER_SIZE + self.fields_len();
         header_len = header_len + padding_for_8_bytes(header_len);
+        let context = EncodingContext::default();
         if self.body_len() == 0 {
-            return Ok(StructureBuilder::new().create());
+            return Ok(StructureBuilder::new().create(context));
         }
 
         let signature = body_signature
@@ -271,7 +279,7 @@ impl Message {
 
         // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
         let encoding = SharedData::new(self.0.clone());
-        let structure = Structure::decode(&encoding.tail(header_len), &signature)?;
+        let structure = Structure::decode(&encoding.tail(header_len), &signature, context)?;
 
         Ok(structure)
     }

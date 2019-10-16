@@ -44,7 +44,7 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::{StructureBuilder, VariantTypeConstants};
+    use crate::{EncodingContext, StructureBuilder, VariantTypeConstants};
 
     #[test]
     fn basic_connection() {
@@ -109,7 +109,7 @@ mod tests {
                 Some(
                     StructureBuilder::new()
                         .add_field(String::from("org.freedesktop.DBus"))
-                        .create(),
+                        .create(EncodingContext::default()),
                 ),
             )
             .unwrap();
@@ -130,7 +130,7 @@ mod tests {
                 Some(
                     StructureBuilder::new()
                         .add_field(String::from("org.freedesktop.DBus"))
-                        .create(),
+                        .create(EncodingContext::default()),
                 ),
             )
             .unwrap();
@@ -152,7 +152,7 @@ mod tests {
                 Some(
                     StructureBuilder::new()
                         .add_field(String::from("org.freedesktop.DBus"))
-                        .create(),
+                        .create(EncodingContext::default()),
                 ),
             )
             .unwrap();

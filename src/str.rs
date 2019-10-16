@@ -1,7 +1,7 @@
 use byteorder::ByteOrder;
 use std::str;
 
-use crate::{SharedData, SimpleVariantType};
+use crate::{EncodingContext, SharedData, SimpleVariantType};
 use crate::{VariantError, VariantType, VariantTypeConstants};
 
 impl VariantTypeConstants for String {
@@ -22,18 +22,22 @@ impl VariantType for String {
         Self::ALIGNMENT
     }
 
-    fn encode_into(&self, bytes: &mut Vec<u8>) {
+    fn encode_into(&self, bytes: &mut Vec<u8>, context: EncodingContext) {
         let len = self.len();
-        Self::add_padding(bytes);
+        Self::add_padding(bytes, context);
 
         bytes.extend(&crate::utils::usize_to_u32(len).to_ne_bytes());
         bytes.extend(self.as_bytes());
         bytes.push(b'\0');
     }
 
-    fn slice_data<'b>(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
+    fn slice_data<'b>(
+        data: &SharedData,
+        signature: &str,
+        context: EncodingContext,
+    ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        let padding = Self::padding(data.position());
+        let padding = Self::padding(data.position(), context);
         let len = Self::ALIGNMENT as usize + padding;
         data.apply(|bytes| crate::ensure_sufficient_bytes(bytes, len))?;
 
@@ -48,8 +52,12 @@ impl VariantType for String {
         Ok(data.head(last_index))
     }
 
-    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(data, signature)?;
+    fn decode(
+        data: &SharedData,
+        signature: &str,
+        context: EncodingContext,
+    ) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(data, signature, context)?;
 
         let last_index = slice.len() - 1;
         slice.apply(|bytes| {
@@ -92,18 +100,26 @@ impl VariantType for ObjectPath {
         Self::ALIGNMENT
     }
 
-    fn encode_into(&self, bytes: &mut Vec<u8>) {
-        self.0.encode_into(bytes);
+    fn encode_into(&self, bytes: &mut Vec<u8>, context: EncodingContext) {
+        self.0.encode_into(bytes, context);
     }
 
-    fn slice_data<'b>(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
+    fn slice_data<'b>(
+        data: &SharedData,
+        signature: &str,
+        context: EncodingContext,
+    ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        String::slice_data_simple(data)
+        String::slice_data_simple(data, context)
     }
 
-    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+    fn decode(
+        data: &SharedData,
+        signature: &str,
+        context: EncodingContext,
+    ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        String::decode(data, String::SIGNATURE_STR).map(|s| Self(s))
+        String::decode(data, String::SIGNATURE_STR, context).map(|s| Self(s))
     }
 }
 impl SimpleVariantType for ObjectPath {}
@@ -139,7 +155,9 @@ impl VariantType for Signature {
         Self::ALIGNMENT
     }
 
-    fn encode_into(&self, bytes: &mut Vec<u8>) {
+    // No padding needed because of 1-byte context and hence encoding context is ignored everywhere.
+
+    fn encode_into(&self, bytes: &mut Vec<u8>, _context: EncodingContext) {
         let len = self.0.len();
 
         bytes.push(len as u8);
@@ -147,7 +165,11 @@ impl VariantType for Signature {
         bytes.push(b'\0');
     }
 
-    fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
+    fn slice_data(
+        data: &SharedData,
+        signature: &str,
+        _context: EncodingContext,
+    ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
         if data.len() < 1 {
             return Err(VariantError::InsufficientData);
@@ -163,7 +185,11 @@ impl VariantType for Signature {
         Ok(data.head(last_index))
     }
 
-    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+    fn decode(
+        data: &SharedData,
+        signature: &str,
+        _context: EncodingContext,
+    ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
         let last_index = data.len() - 1;

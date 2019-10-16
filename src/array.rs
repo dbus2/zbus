@@ -1,6 +1,7 @@
 use byteorder::ByteOrder;
 use std::borrow::Cow;
 
+use crate::EncodingContext;
 use crate::{SharedData, SimpleVariantType};
 use crate::{VariantError, VariantType, VariantTypeConstants};
 
@@ -21,15 +22,16 @@ impl<T: VariantType> VariantType for Vec<T> {
         Self::ALIGNMENT
     }
 
-    fn encode_into(&self, bytes: &mut Vec<u8>) {
-        Self::add_padding(bytes);
+    fn encode_into(&self, bytes: &mut Vec<u8>, context: EncodingContext) {
+        Self::add_padding(bytes, context);
 
         let len_position = bytes.len();
         bytes.extend(&0u32.to_ne_bytes());
         let n_bytes_before = bytes.len();
+        let child_enc_context = context.copy_for_child();
         for element in self {
             // Deep copying, nice!!! 🙈
-            element.encode_into(bytes);
+            element.encode_into(bytes, child_enc_context);
         }
 
         // Set size of array in bytes
@@ -37,7 +39,11 @@ impl<T: VariantType> VariantType for Vec<T> {
         byteorder::NativeEndian::write_u32(&mut bytes[len_position..len_position + 4], len);
     }
 
-    fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
+    fn slice_data(
+        data: &SharedData,
+        signature: &str,
+        context: EncodingContext,
+    ) -> Result<SharedData, VariantError> {
         if signature.len() < 2 {
             return Err(VariantError::InsufficientData);
         }
@@ -47,11 +53,16 @@ impl<T: VariantType> VariantType for Vec<T> {
         let child_signature = crate::variant_type::slice_signature(&signature[1..])?;
 
         // Array size in bytes
-        let len_slice = u32::slice_data_simple(&data)?;
+        let len_slice = u32::slice_data_simple(&data, context)?;
         let mut extracted = len_slice.len();
-        let len = u32::decode_simple(&len_slice)? as usize + 4;
+        let len = u32::decode_simple(&len_slice, context)? as usize + 4;
+        let child_enc_context = context.copy_for_child();
         while extracted < len {
-            let slice = crate::variant_type::slice_data(&data.tail(extracted), child_signature)?;
+            let slice = crate::variant_type::slice_data(
+                &data.tail(extracted),
+                child_signature,
+                child_enc_context,
+            )?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
@@ -64,8 +75,12 @@ impl<T: VariantType> VariantType for Vec<T> {
         Ok(data.head(extracted as usize))
     }
 
-    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
-        let padding = Self::padding(data.position());
+    fn decode(
+        data: &SharedData,
+        signature: &str,
+        context: EncodingContext,
+    ) -> Result<Self, VariantError> {
+        let padding = Self::padding(data.position(), context);
         if data.len() < padding + 4 || signature.len() < 2 {
             return Err(VariantError::InsufficientData);
         }
@@ -76,18 +91,22 @@ impl<T: VariantType> VariantType for Vec<T> {
 
         // Array size in bytes
         let mut extracted = padding + 4;
-        let len = u32::decode_simple(&data.subset(padding, extracted))? as usize + 4;
+        let len = u32::decode_simple(&data.subset(padding, extracted), context)? as usize + 4;
+        let child_enc_context = context.copy_for_child();
         let mut elements = vec![];
 
         while extracted < len {
-            let slice =
-                crate::variant_type::slice_data(&data.tail(extracted as usize), child_signature)?;
+            let slice = crate::variant_type::slice_data(
+                &data.tail(extracted as usize),
+                child_signature,
+                child_enc_context,
+            )?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
             }
 
-            let element = T::decode(&slice, child_signature)?;
+            let element = T::decode(&slice, child_signature, child_enc_context)?;
             elements.push(element);
         }
         if extracted == 0 {
