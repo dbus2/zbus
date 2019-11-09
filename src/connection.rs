@@ -148,7 +148,7 @@ impl Connection {
             .chars()
             .map(|c| format!("{:x}", c as u32))
             .collect::<String>();
-        socket.write(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
+        socket.write_all(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
         let mut buf_reader = BufReader::new(&socket);
         let mut buf = String::new();
         let bytes_read = buf_reader.read_line(&mut buf)?;
@@ -159,7 +159,7 @@ impl Connection {
 
         let server_guid = String::from(components.next().ok_or(ConnectionError::Handshake)?);
 
-        socket.write(b"BEGIN\r\n")?;
+        socket.write_all(b"BEGIN\r\n")?;
 
         let mut connection = Self {
             socket,
@@ -198,13 +198,13 @@ impl Connection {
         let m = message::Message::method(destination, path, iface, method_name, body)?
             .set_serial(serial);
 
-        self.socket.write(m.as_bytes())?;
+        self.socket.write_all(m.as_bytes())?;
 
         loop {
             // FIXME: We need to read incoming messages in a separate thread and maintain a queue
 
             let mut buf = [0; message::PRIMARY_HEADER_SIZE];
-            self.socket.read(&mut buf[..])?;
+            self.socket.read_exact(&mut buf[..])?;
 
             let mut incoming = message::Message::from_bytes(&buf)?;
             let bytes_left = incoming.bytes_to_completion();
