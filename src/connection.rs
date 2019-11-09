@@ -1,6 +1,6 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
-use std::{error, fmt, io};
+use std::{env, error, fmt, io};
 
 use nix::unistd::Uid;
 
@@ -135,12 +135,32 @@ impl From<message::Message> for ConnectionError {
     }
 }
 
+/// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
+/// variable. If we don't recognize the value (or it's not set) we fall back to
+/// /run/user/UID/bus
+fn session_socket() -> Result<UnixStream, ConnectionError> {
+    match env::var("DBUS_SESSION_BUS_ADDRESS") {
+        Ok(val) if val.starts_with("unix:path=") => {
+            let path = val.trim_start_matches("unix:path=").to_owned();
+            Ok(UnixStream::connect(path)?)
+        }
+        Ok(val) if val.starts_with("unix:abstract=") => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "abstract sockets are not currently supported",
+        )
+        .into()),
+        _ => {
+            let uid = Uid::current();
+            let path = format!("/run/user/{}/bus", uid);
+            Ok(UnixStream::connect(path)?)
+        }
+    }
+}
+
 impl Connection {
     pub fn new_session() -> Result<Self, ConnectionError> {
-        // FIXME: Currently just assume a path
+        let mut socket = session_socket()?;
         let uid = Uid::current();
-        let path = format!("/run/user/{}/bus", uid);
-        let mut socket = UnixStream::connect(path)?;
 
         // SASL Handshake
         let uid_str = uid
