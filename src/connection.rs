@@ -212,8 +212,8 @@ impl Connection {
                 return Err(ConnectionError::Handshake);
             }
             let mut buf = vec![0; bytes_left as usize];
-            let bytes_read = self.socket.read(&mut buf[..])?;
-            incoming.add_bytes(&buf[0..bytes_read])?;
+            self.socket.read_exact(&mut buf[..])?;
+            incoming.add_bytes(&buf[..])?;
 
             if incoming.message_type() == message::MessageType::MethodReturn
                 || incoming.message_type() == message::MessageType::Error
