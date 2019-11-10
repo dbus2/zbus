@@ -4,6 +4,7 @@ use std::{env, error, fmt, io};
 
 use nix::unistd::Uid;
 
+use crate::address;
 use crate::message;
 use crate::message_field;
 use crate::{Variant, VariantError, VariantType};
@@ -18,6 +19,7 @@ pub struct Connection {
 
 #[derive(Debug)]
 pub enum ConnectionError {
+    Address(address::AddressError),
     IO(io::Error),
     Message(message::MessageError),
     MessageField(message_field::MessageFieldError),
@@ -32,6 +34,7 @@ pub enum ConnectionError {
 impl error::Error for ConnectionError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
+            ConnectionError::Address(e) => Some(e),
             ConnectionError::IO(e) => Some(e),
             ConnectionError::Handshake => None,
             ConnectionError::Message(e) => Some(e),
@@ -46,6 +49,7 @@ impl error::Error for ConnectionError {
 impl fmt::Display for ConnectionError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            ConnectionError::Address(e) => write!(f, "address error: {}", e),
             ConnectionError::IO(e) => write!(f, "I/O error: {}", e),
             ConnectionError::Handshake => write!(f, "D-Bus handshake failed"),
             ConnectionError::Message(e) => write!(f, "Message creation error: {}", e),
@@ -59,6 +63,12 @@ impl fmt::Display for ConnectionError {
                 detail.as_ref().map(|s| s.as_str()).unwrap_or("no details")
             ),
         }
+    }
+}
+
+impl From<address::AddressError> for ConnectionError {
+    fn from(val: address::AddressError) -> Self {
+        ConnectionError::Address(val)
     }
 }
 
