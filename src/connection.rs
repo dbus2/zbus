@@ -4,7 +4,7 @@ use std::{env, error, fmt, io};
 
 use nix::unistd::Uid;
 
-use crate::address;
+use crate::address::{self, Address};
 use crate::message;
 use crate::message_field;
 use crate::{Variant, VariantError, VariantType};
@@ -150,15 +150,14 @@ impl From<message::Message> for ConnectionError {
 /// /run/user/UID/bus
 fn session_socket() -> Result<UnixStream, ConnectionError> {
     match env::var("DBUS_SESSION_BUS_ADDRESS") {
-        Ok(val) if val.starts_with("unix:path=") => {
-            let path = val.trim_start_matches("unix:path=").to_owned();
-            Ok(UnixStream::connect(path)?)
-        }
-        Ok(val) if val.starts_with("unix:abstract=") => Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "abstract sockets are not currently supported",
-        )
-        .into()),
+        Ok(val) => match address::parse_dbus_address(&val)? {
+            Address::Path(p) => Ok(UnixStream::connect(p)?),
+            Address::Abstract(_) => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "abstract sockets are not currently supported",
+            )
+            .into()),
+        },
         _ => {
             let uid = Uid::current();
             let path = format!("/run/user/{}/bus", uid);
