@@ -37,6 +37,9 @@ pub use dict_entry::*;
 mod dict;
 pub use dict::*;
 
+mod shared_data;
+pub use shared_data::*;
+
 mod utils;
 
 #[cfg(test)]
