@@ -5,7 +5,7 @@ use std::{borrow::Cow, fmt};
 use crate::utils::padding_for_8_bytes;
 use crate::Signature;
 use crate::{MessageField, MessageFieldCode, MessageFieldError};
-use crate::{Structure, StructureBuilder};
+use crate::{SharedData, Structure, StructureBuilder};
 use crate::{VariantError, VariantType};
 
 /// Size of primary message header
@@ -124,9 +124,9 @@ impl Message {
             return Err(MessageError::StrTooLarge);
         }
 
-        // Message body structure and its encoding
-        let body_encoding = body.as_ref().map(|s| s.encode(0)).unwrap_or(vec![]);
-        m.0.extend(&crate::utils::usize_to_u32(body_encoding.len()).to_ne_bytes());
+        // Message body encoding set to 0 at first
+        let body_len_position = m.0.len();
+        m.0.extend(&0u32.to_ne_bytes());
 
         // Serial number. FIXME: managed by connection
         m.0.extend(&1u32.to_ne_bytes());
@@ -140,7 +140,7 @@ impl Message {
         if let Some(iface) = iface {
             fields.push(MessageField::interface(iface));
         }
-        let body_signature = body.map(|structure| {
+        let body_signature = body.as_ref().map(|structure| {
             let signature = structure.signature();
             // Remove the leading and trailing STRUCT delimiter
             let signature = &signature[1..signature.len() - 1];
@@ -153,7 +153,7 @@ impl Message {
 
         fields.push(MessageField::path(path));
         fields.push(MessageField::member(method_name));
-        m.0.extend(&fields.encode(m.0.len()));
+        fields.encode_into(&mut m.0);
 
         // Do we need to do this if body is None?
         let padding = padding_for_8_bytes(m.0.len());
@@ -161,8 +161,15 @@ impl Message {
             m.push_padding(padding);
         }
 
-        if body_encoding.len() > 0 {
-            m.0.extend(body_encoding);
+        if let Some(body) = body {
+            let n_bytes_before = m.0.len();
+            body.encode_into(&mut m.0);
+
+            let len = crate::utils::usize_to_u32(m.0.len() - n_bytes_before);
+            byteorder::NativeEndian::write_u32(
+                &mut m.0[body_len_position..body_len_position + 4],
+                len,
+            );
         }
 
         Ok(m)
@@ -237,13 +244,12 @@ impl Message {
             return Err(MessageError::InsufficientData);
         }
 
-        let slice = Vec::<MessageField>::slice_data(
-            &self.0[FIELDS_LEN_START_OFFSET..],
-            "a(yv)",
-            FIELDS_LEN_START_OFFSET,
-        )?;
+        // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
+        let encoding = SharedData::new(self.0.clone());
+        let slice =
+            Vec::<MessageField>::slice_data(&encoding.tail(FIELDS_LEN_START_OFFSET), "a(yv)")?;
 
-        Vec::<MessageField>::decode(slice, "a(yv)", FIELDS_LEN_START_OFFSET).map_err(|e| e.into())
+        Vec::<MessageField>::decode(&slice, "a(yv)").map_err(|e| e.into())
     }
 
     pub fn body(&self, body_signature: Option<&str>) -> Result<Structure, MessageError> {
@@ -262,7 +268,10 @@ impl Message {
             .unwrap_or(Cow::from(self.body_signature()?));
         // Add () for Structure
         let signature = format!("({})", signature);
-        let structure = Structure::decode(&self.0[header_len..], &signature, header_len)?;
+
+        // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
+        let encoding = SharedData::new(self.0.clone());
+        let structure = Structure::decode(&encoding.tail(header_len), &signature)?;
 
         Ok(structure)
     }

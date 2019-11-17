@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use std::error;
 use std::fmt;
 
-use crate::{ObjectPath, Signature, Structure, StructureBuilder, VariantError};
-use crate::{Variant, VariantType, VariantTypeConstants};
+use crate::{ObjectPath, SharedData, Signature, Structure, StructureBuilder};
+use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq)]
@@ -72,9 +72,9 @@ impl From<VariantError> for MessageFieldError {
 }
 
 #[derive(Debug)]
-pub struct MessageField<'a>(Structure<'a>);
+pub struct MessageField(Structure);
 
-impl<'a> MessageField<'a> {
+impl MessageField {
     pub fn code(&self) -> Result<MessageFieldCode, MessageFieldError> {
         let fields = self.0.fields();
         if fields.len() < 2 {
@@ -104,7 +104,7 @@ impl<'a> MessageField<'a> {
         Self(
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Interface as u8)
-                .add_field(Variant::from(interface))
+                .add_field(Variant::from(String::from(interface)))
                 .create(),
         )
     }
@@ -113,7 +113,7 @@ impl<'a> MessageField<'a> {
         Self(
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Member as u8)
-                .add_field(Variant::from(member))
+                .add_field(Variant::from(String::from(member)))
                 .create(),
         )
     }
@@ -122,7 +122,7 @@ impl<'a> MessageField<'a> {
         Self(
             StructureBuilder::new()
                 .add_field(MessageFieldCode::ErrorName as u8)
-                .add_field(Variant::from(error_name))
+                .add_field(Variant::from(String::from(error_name)))
                 .create(),
         )
     }
@@ -140,7 +140,7 @@ impl<'a> MessageField<'a> {
         Self(
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Destination as u8)
-                .add_field(Variant::from(destination))
+                .add_field(Variant::from(String::from(destination)))
                 .create(),
         )
     }
@@ -149,7 +149,7 @@ impl<'a> MessageField<'a> {
         Self(
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Sender as u8)
-                .add_field(Variant::from(sender))
+                .add_field(Variant::from(String::from(sender)))
                 .create(),
         )
     }
@@ -173,14 +173,14 @@ impl<'a> MessageField<'a> {
     }
 }
 
-impl<'a> VariantTypeConstants for MessageField<'a> {
+impl VariantTypeConstants for MessageField {
     const SIGNATURE_CHAR: char = Structure::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = Structure::SIGNATURE_STR;
     const ALIGNMENT: usize = Structure::ALIGNMENT;
 }
 
 // FIXME: Try automating this when we've delegation: https://github.com/rust-lang/rfcs/pull/2393
-impl<'a> VariantType<'a> for MessageField<'a> {
+impl VariantType for MessageField {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -191,24 +191,16 @@ impl<'a> VariantType<'a> for MessageField<'a> {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        self.0.encode(n_bytes_before)
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        self.0.encode_into(bytes)
     }
 
-    fn slice_data<'b>(
-        bytes: &'b [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError> {
-        Structure::slice_data(bytes, signature, n_bytes_before)
+    fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
+        Structure::slice_data(data, signature)
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        Structure::decode(bytes, signature, n_bytes_before).map(|s| MessageField(s))
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        Structure::decode(data, signature).map(|s| MessageField(s))
     }
 
     fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {

@@ -80,7 +80,7 @@ pub(crate) fn alignment_for_signature(signature: &str) -> Result<usize, VariantE
         i64::SIGNATURE_CHAR => Ok(i64::ALIGNMENT),
         u64::SIGNATURE_CHAR => Ok(u64::ALIGNMENT),
         f64::SIGNATURE_CHAR => Ok(f64::ALIGNMENT),
-        <(&str)>::SIGNATURE_CHAR => Ok(<(&str)>::ALIGNMENT),
+        <String>::SIGNATURE_CHAR => Ok(<String>::ALIGNMENT),
         // Doesn't matter what type for T we use here, alignment is the same
         Vec::<bool>::SIGNATURE_CHAR => Ok(Vec::<bool>::ALIGNMENT),
         ObjectPath::SIGNATURE_CHAR => Ok(ObjectPath::ALIGNMENT),

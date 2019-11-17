@@ -2,6 +2,7 @@ use byteorder::ByteOrder;
 use std::{borrow::Cow, error, fmt, str};
 
 use crate::utils::padding_for_n_bytes;
+use crate::SharedData;
 use crate::{DictEntry, ObjectPath, Signature, Structure};
 use crate::{SimpleVariantType, Variant, VariantTypeConstants};
 
@@ -38,7 +39,7 @@ impl fmt::Display for VariantError {
 
 // As trait-object, you can only use the `encode` method but you can downcast it to the concrete
 // type to get the full API back.
-pub trait VariantType<'a>: std::fmt::Debug {
+pub trait VariantType: std::fmt::Debug {
     fn signature_char() -> char
     where
         Self: Sized;
@@ -49,25 +50,29 @@ pub trait VariantType<'a>: std::fmt::Debug {
     where
         Self: Sized;
 
-    // FIXME: Would be nice if this returned a slice
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8>;
+    // Only use for the first data in a message
+    fn encode(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+        self.encode_into(&mut bytes);
+
+        bytes
+    }
+
+    fn encode_into(&self, bytes: &mut Vec<u8>);
 
     // Default implementation works for constant-sized types where size is the same as their
     // alignment
-    fn slice_data<'b>(
-        bytes: &'b [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError>
+    fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError>
     where
         Self: Sized,
     {
         Self::ensure_correct_signature(signature)?;
-        let len = Self::alignment() + padding_for_n_bytes(n_bytes_before, Self::alignment());
-        ensure_sufficient_bytes(bytes, len)?;
+        let len = Self::alignment() + padding_for_n_bytes(data.position(), Self::alignment());
+        data.apply(|bytes| ensure_sufficient_bytes(bytes, len))?;
 
-        Ok(&bytes[0..len])
+        Ok(data.subset(0, len))
     }
+
     fn ensure_correct_signature(signature: &str) -> Result<(), VariantError>
     where
         Self: Sized,
@@ -79,15 +84,11 @@ pub trait VariantType<'a>: std::fmt::Debug {
         Ok(())
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError>
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError>
     where
         Self: Sized;
 
-    fn signature<'b>(&'b self) -> Cow<'b, str>
+    fn signature<'a>(&'a self) -> Cow<'a, str>
     where
         Self: Sized,
     {
@@ -104,30 +105,26 @@ pub trait VariantType<'a>: std::fmt::Debug {
         Ok(slice)
     }
 
-    fn create_bytes_vec(n_bytes_before: usize) -> Vec<u8>
+    fn add_padding(bytes: &mut Vec<u8>)
     where
         Self: Sized,
     {
-        let padding = padding_for_n_bytes(n_bytes_before, Self::alignment());
+        let padding = padding_for_n_bytes(bytes.len(), Self::alignment());
 
-        std::iter::repeat(0).take(padding).collect()
+        bytes.resize(bytes.len() + padding, 0);
     }
 
     // Helper for decode() implementation
-    fn slice_for_decoding<'b>(
-        bytes: &'b [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError>
+    fn slice_for_decoding(data: &SharedData, signature: &str) -> Result<SharedData, VariantError>
     where
         Self: Sized,
     {
         Self::ensure_correct_signature(signature)?;
-        let padding = Self::padding(n_bytes_before);
+        let padding = Self::padding(data.position());
         let len = Self::alignment() + padding;
-        ensure_sufficient_bytes(bytes, len)?;
+        data.apply(|bytes| ensure_sufficient_bytes(bytes, len))?;
 
-        Ok(&bytes[padding..])
+        Ok(data.tail(padding))
     }
 
     fn padding(n_bytes_before: usize) -> usize
@@ -138,7 +135,7 @@ pub trait VariantType<'a>: std::fmt::Debug {
     }
 }
 
-impl<'a> VariantType<'a> for u8 {
+impl VariantType for u8 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -149,25 +146,19 @@ impl<'a> VariantType<'a> for u8 {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
         bytes.extend(&self.to_ne_bytes());
-
-        bytes
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(data, signature)?;
 
-        Ok(slice[0])
+        slice.apply(|bytes| Ok(bytes[0]))
     }
 }
 
-impl<'a> VariantType<'a> for bool {
+impl VariantType for bool {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -178,29 +169,23 @@ impl<'a> VariantType<'a> for bool {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
         bytes.extend(&(*self as u32).to_ne_bytes());
-
-        bytes
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(data, signature)?;
 
-        match byteorder::NativeEndian::read_u32(&slice) {
+        slice.apply(|bytes| match byteorder::NativeEndian::read_u32(bytes) {
             0 => Ok(false),
             1 => Ok(true),
             _ => Err(VariantError::IncorrectValue),
-        }
+        })
     }
 }
 
-impl<'a> VariantType<'a> for i16 {
+impl VariantType for i16 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -211,25 +196,19 @@ impl<'a> VariantType<'a> for i16 {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
         bytes.extend(&self.to_ne_bytes());
-
-        bytes
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(data, signature)?;
 
-        Ok(byteorder::NativeEndian::read_i16(slice))
+        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_i16(bytes)))
     }
 }
 
-impl<'a> VariantType<'a> for u16 {
+impl VariantType for u16 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -240,25 +219,19 @@ impl<'a> VariantType<'a> for u16 {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
         bytes.extend(&self.to_ne_bytes());
-
-        bytes
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(data, signature)?;
 
-        Ok(byteorder::NativeEndian::read_u16(slice))
+        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_u16(bytes)))
     }
 }
 
-impl<'a> VariantType<'a> for i32 {
+impl VariantType for i32 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -269,25 +242,19 @@ impl<'a> VariantType<'a> for i32 {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
         bytes.extend(&self.to_ne_bytes());
-
-        bytes
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(data, signature)?;
 
-        Ok(byteorder::NativeEndian::read_i32(slice))
+        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_i32(bytes)))
     }
 }
 
-impl<'a> VariantType<'a> for u32 {
+impl VariantType for u32 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -298,25 +265,19 @@ impl<'a> VariantType<'a> for u32 {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
         bytes.extend(&self.to_ne_bytes());
-
-        bytes
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(data, signature)?;
 
-        Ok(byteorder::NativeEndian::read_u32(slice))
+        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_u32(bytes)))
     }
 }
 
-impl<'a> VariantType<'a> for i64 {
+impl VariantType for i64 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -327,25 +288,19 @@ impl<'a> VariantType<'a> for i64 {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
         bytes.extend(&self.to_ne_bytes());
-
-        bytes
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(data, signature)?;
 
-        Ok(byteorder::NativeEndian::read_i64(slice))
+        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_i64(bytes)))
     }
 }
 
-impl<'a> VariantType<'a> for u64 {
+impl VariantType for u64 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -356,25 +311,19 @@ impl<'a> VariantType<'a> for u64 {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut bytes = Self::create_bytes_vec(n_bytes_before);
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
         bytes.extend(&self.to_ne_bytes());
-
-        bytes
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(data, signature)?;
 
-        Ok(byteorder::NativeEndian::read_u64(slice))
+        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_u64(bytes)))
     }
 }
 
-impl<'a> VariantType<'a> for f64 {
+impl VariantType for f64 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -385,23 +334,17 @@ impl<'a> VariantType<'a> for f64 {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut v = Self::create_bytes_vec(n_bytes_before);
-        let mut bytes = [0; 8];
-        byteorder::NativeEndian::write_f64(&mut bytes, *self);
-        v.extend(&bytes);
-
-        v
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
+        let mut buf = [0; 8];
+        byteorder::NativeEndian::write_f64(&mut buf, *self);
+        bytes.extend_from_slice(&buf);
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(data, signature)?;
 
-        Ok(byteorder::NativeEndian::read_f64(slice))
+        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_f64(bytes)))
     }
 }
 
@@ -413,38 +356,34 @@ pub(crate) fn ensure_sufficient_bytes(bytes: &[u8], size: usize) -> Result<(), V
     Ok(())
 }
 
-pub(crate) fn slice_data<'a>(
-    data: &'a [u8],
-    signature: &str,
-    n_bytes_before: usize,
-) -> Result<&'a [u8], VariantError> {
+pub(crate) fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
     match signature
         .chars()
         .next()
         .ok_or(VariantError::InsufficientData)?
     {
         // FIXME: There has to be a shorter way to do this
-        u8::SIGNATURE_CHAR => u8::slice_data_simple(data, n_bytes_before),
-        bool::SIGNATURE_CHAR => bool::slice_data_simple(data, n_bytes_before),
-        i16::SIGNATURE_CHAR => i16::slice_data_simple(data, n_bytes_before),
-        u16::SIGNATURE_CHAR => u16::slice_data_simple(data, n_bytes_before),
-        i32::SIGNATURE_CHAR => i32::slice_data_simple(data, n_bytes_before),
-        u32::SIGNATURE_CHAR => u32::slice_data_simple(data, n_bytes_before),
-        i64::SIGNATURE_CHAR => i64::slice_data_simple(data, n_bytes_before),
-        u64::SIGNATURE_CHAR => u64::slice_data_simple(data, n_bytes_before),
-        f64::SIGNATURE_CHAR => f64::slice_data_simple(data, n_bytes_before),
-        <(&str)>::SIGNATURE_CHAR => <(&str)>::slice_data_simple(data, n_bytes_before),
+        u8::SIGNATURE_CHAR => u8::slice_data_simple(data),
+        bool::SIGNATURE_CHAR => bool::slice_data_simple(data),
+        i16::SIGNATURE_CHAR => i16::slice_data_simple(data),
+        u16::SIGNATURE_CHAR => u16::slice_data_simple(data),
+        i32::SIGNATURE_CHAR => i32::slice_data_simple(data),
+        u32::SIGNATURE_CHAR => u32::slice_data_simple(data),
+        i64::SIGNATURE_CHAR => i64::slice_data_simple(data),
+        u64::SIGNATURE_CHAR => u64::slice_data_simple(data),
+        f64::SIGNATURE_CHAR => f64::slice_data_simple(data),
+        String::SIGNATURE_CHAR => String::slice_data_simple(data),
         // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_data` to
         // be independent of `T` (an internal detail).
-        Vec::<bool>::SIGNATURE_CHAR => Vec::<bool>::slice_data(data, signature, n_bytes_before),
-        ObjectPath::SIGNATURE_CHAR => ObjectPath::slice_data_simple(data, n_bytes_before),
-        Signature::SIGNATURE_CHAR => Signature::slice_data_simple(data, n_bytes_before),
-        Structure::SIGNATURE_CHAR => Structure::slice_data(data, signature, n_bytes_before),
-        Variant::SIGNATURE_CHAR => Variant::slice_data(data, signature, n_bytes_before),
+        Vec::<bool>::SIGNATURE_CHAR => Vec::<bool>::slice_data(data, signature),
+        ObjectPath::SIGNATURE_CHAR => ObjectPath::slice_data_simple(data),
+        Signature::SIGNATURE_CHAR => Signature::slice_data_simple(data),
+        Structure::SIGNATURE_CHAR => Structure::slice_data(data, signature),
+        Variant::SIGNATURE_CHAR => Variant::slice_data(data, signature),
         // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_data` to
         // be independent of `T` (an internal detail).
         DictEntry::<bool, bool>::SIGNATURE_CHAR => {
-            DictEntry::<bool, bool>::slice_data(data, signature, n_bytes_before)
+            DictEntry::<bool, bool>::slice_data(data, signature)
         }
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
@@ -466,7 +405,7 @@ pub(crate) fn slice_signature(signature: &str) -> Result<&str, VariantError> {
         i64::SIGNATURE_CHAR => i64::slice_signature(signature),
         u64::SIGNATURE_CHAR => u64::slice_signature(signature),
         f64::SIGNATURE_CHAR => f64::slice_signature(signature),
-        <(&str)>::SIGNATURE_CHAR => <(&str)>::slice_signature(signature),
+        String::SIGNATURE_CHAR => String::slice_signature(signature),
         // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_signature`
         // to be independent of `T` (an internal detail).
         Vec::<bool>::SIGNATURE_CHAR => Vec::<bool>::slice_signature(signature),
@@ -485,18 +424,18 @@ pub(crate) fn slice_signature(signature: &str) -> Result<&str, VariantError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{SimpleVariantType, VariantType};
+    use crate::{SharedData, SimpleVariantType, VariantType};
 
     // Ensure VariantType can be used as Boxed type
     #[test]
     fn trait_object() {
         let boxed = Box::new(42u8);
 
-        let encoded = encode_u8(boxed);
-        assert!(u8::decode_simple(&encoded, 0).unwrap() == 42u8);
+        let encoded = SharedData::new(encode_u8(boxed));
+        assert!(u8::decode_simple(&encoded).unwrap() == 42u8);
     }
 
     fn encode_u8(boxed: Box<dyn VariantType>) -> Vec<u8> {
-        boxed.encode(0)
+        boxed.encode()
     }
 }

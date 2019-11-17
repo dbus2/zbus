@@ -93,10 +93,10 @@ mod tests {
 
             assert!(reply
                 .body_signature()
-                .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
+                .map(|s| s.as_str() == <String>::SIGNATURE_STR)
                 .unwrap());
-            let body = reply.body(Some(<(&str)>::SIGNATURE_STR)).unwrap();
-            let id = body.fields()[0].get::<(&str)>().unwrap();
+            let body = reply.body(Some(<String>::SIGNATURE_STR)).unwrap();
+            let id = body.fields()[0].get::<String>().unwrap();
             println!("Machine ID: {}", id);
         }
 
@@ -108,7 +108,7 @@ mod tests {
                 "NameHasOwner",
                 Some(
                     StructureBuilder::new()
-                        .add_field("org.freedesktop.DBus")
+                        .add_field(String::from("org.freedesktop.DBus"))
                         .create(),
                 ),
             )
@@ -129,7 +129,7 @@ mod tests {
                 "GetNameOwner",
                 Some(
                     StructureBuilder::new()
-                        .add_field("org.freedesktop.DBus")
+                        .add_field(String::from("org.freedesktop.DBus"))
                         .create(),
                 ),
             )
@@ -137,10 +137,10 @@ mod tests {
 
         assert!(reply
             .body_signature()
-            .map(|s| s.as_str() == <(&str)>::SIGNATURE_STR)
+            .map(|s| s.as_str() == <String>::SIGNATURE_STR)
             .unwrap());
         let body = reply.body(None).unwrap();
-        let owner = body.fields()[0].get::<(&str)>().unwrap();
+        let owner = body.fields()[0].get::<String>().unwrap();
         println!("Owner of 'org.freedesktop.DBus' is: {}", owner);
 
         let reply = connection
@@ -151,7 +151,7 @@ mod tests {
                 "GetAll",
                 Some(
                     StructureBuilder::new()
-                        .add_field("org.freedesktop.DBus")
+                        .add_field(String::from("org.freedesktop.DBus"))
                         .create(),
                 ),
             )
@@ -163,8 +163,8 @@ mod tests {
             .unwrap());
         let body = reply.body(Some("a{sv}")).unwrap();
         let variant = &body.fields()[0];
-        let v: Vec<crate::DictEntry<&str, crate::Variant>> = variant.get().unwrap();
-        let dict: crate::Dict<&str, crate::Variant> = v.into();
+        let v: Vec<crate::DictEntry<String, crate::Variant>> = variant.get().unwrap();
+        let dict: crate::Dict<String, crate::Variant> = v.into();
         let hashmap = dict.inner();
     }
 }

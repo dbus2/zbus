@@ -1,22 +1,26 @@
 use std::borrow::Cow;
 
 use crate::utils::padding_for_n_bytes;
+use crate::SharedData;
 use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug)]
-pub struct Structure<'a> {
-    encoding: Cow<'a, [u8]>,
+pub struct Structure {
+    encoding: SharedData,
     signature: String,
     fields: Vec<Variant>,
 }
 
-impl<'a> Structure<'a> {
+impl Structure {
     pub fn fields(&self) -> &[Variant] {
         &self.fields
     }
 }
 
-fn variants_from_struct_data(bytes: &[u8], signature: &str) -> Result<Vec<Variant>, VariantError> {
+fn variants_from_struct_data(
+    data: &SharedData,
+    signature: &str,
+) -> Result<Vec<Variant>, VariantError> {
     // Assuming simple types here but it's OK to have more capacity than needed
     let mut fields = Vec::with_capacity(signature.len());
     let mut extracted = 0;
@@ -29,14 +33,14 @@ fn variants_from_struct_data(bytes: &[u8], signature: &str) -> Result<Vec<Varian
         // handle padding.
         let alignment = crate::alignment_for_signature(child_signature)?;
         extracted += padding_for_n_bytes(extracted, alignment);
-        if extracted > bytes.len() {
+        if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
 
         // Parse data
-        let variant = Variant::from_data(&bytes[extracted..], child_signature)?;
+        let variant = Variant::from_data(&data.tail(extracted), child_signature)?;
         extracted += variant.len();
-        if extracted > bytes.len() {
+        if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
         fields.push(variant);
@@ -64,35 +68,36 @@ impl StructureBuilder {
         }
     }
 
-    pub fn add_field<'b, T>(mut self, field: T) -> Self
+    pub fn add_field<T>(mut self, field: T) -> Self
     where
-        T: VariantType<'b>,
+        T: VariantType,
     {
-        let encoding = field.encode(self.encoding.len());
-        self.encoding.extend(encoding);
+        field.encode_into(&mut self.encoding);
         self.signature
             .insert_str(self.signature.len() - 1, &field.signature());
 
         self
     }
 
-    pub fn create(self) -> Structure<'static> {
-        let fields = variants_from_struct_data(&self.encoding, &self.signature)
+    pub fn create(self) -> Structure {
+        let (encoding, signature) = (self.encoding, self.signature);
+        let encoding = SharedData::new(encoding);
+        let fields = variants_from_struct_data(&encoding, &signature)
             .unwrap_or_else(|e| {
                 eprintln!("An error occured getting fields from a Structure (signature: '{}'). This should NOT happen \
-                           since this structure is created manually. Here is the error: {}", self.signature, e);
+                           since this structure is created manually. Here is the error: {}", signature, e);
 
                 vec![]
             });
         Structure {
-            encoding: Cow::from(self.encoding),
-            signature: self.signature,
+            encoding: encoding,
+            signature: signature,
             fields: fields,
         }
     }
 }
 
-impl<'a> VariantTypeConstants for Structure<'a> {
+impl VariantTypeConstants for Structure {
     // The real single character signature for STRUCT is `r` but that's not actually used in practice for D-Bus at least
     // (the spec clearly states that this signature must never appear on the bus). The openning and closing braces are
     // used in practice and that's why we'll declare the opening brace as the signature for this type.
@@ -101,7 +106,7 @@ impl<'a> VariantTypeConstants for Structure<'a> {
     const ALIGNMENT: usize = 8;
 }
 
-impl<'a> VariantType<'a> for Structure<'a> {
+impl VariantType for Structure {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -112,27 +117,17 @@ impl<'a> VariantType<'a> for Structure<'a> {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let padding = Self::padding(n_bytes_before);
-        if padding == 0 {
-            return self.encoding.to_vec();
-        }
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
 
-        let mut v: Vec<u8> = std::iter::repeat(0).take(padding).collect();
         // Since a Structure always starts at 8-byte boundry, the fields and their children are
         // already aligned correctly.
-        v.extend_from_slice(&self.encoding);
-
-        v
+        self.encoding.apply_mut(|b| bytes.extend_from_slice(b));
     }
 
-    fn slice_data<'b>(
-        bytes: &'b [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError> {
-        let padding = Self::padding(n_bytes_before);
-        if bytes.len() < padding || signature.len() < 3 {
+    fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
+        let padding = Self::padding(data.position());
+        if data.len() < padding || signature.len() < 3 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
@@ -142,13 +137,10 @@ impl<'a> VariantType<'a> for Structure<'a> {
         let last_index = signature.len() - 1;
         while i < last_index {
             let child_signature = crate::variant_type::slice_signature(&signature[i..last_index])?;
-            let slice = crate::variant_type::slice_data(
-                &bytes[(extracted as usize)..],
-                child_signature,
-                n_bytes_before + extracted,
-            )?;
+            let slice =
+                crate::variant_type::slice_data(&data.tail(extracted as usize), child_signature)?;
             extracted += slice.len();
-            if extracted > bytes.len() {
+            if extracted > data.len() {
                 return Err(VariantError::InsufficientData);
             }
 
@@ -158,26 +150,22 @@ impl<'a> VariantType<'a> for Structure<'a> {
             return Err(VariantError::ExcessData);
         }
 
-        Ok(&bytes[0..extracted])
+        Ok(data.head(extracted))
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
         // Similar to slice_data, except we create variants.
-        let padding = Self::padding(n_bytes_before);
-        if bytes.len() < padding || signature.len() < 3 {
+        let padding = Self::padding(data.position());
+        if data.len() < padding || signature.len() < 3 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
 
-        let encoding = &bytes[padding..];
-        let fields = variants_from_struct_data(encoding, signature)?;
+        let encoding = data.tail(padding);
+        let fields = variants_from_struct_data(&encoding, signature)?;
 
         Ok(Self {
-            encoding: Cow::from(encoding),
+            encoding: encoding,
             signature: String::from(signature),
             fields: fields,
         })

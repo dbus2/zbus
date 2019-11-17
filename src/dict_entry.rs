@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
-use crate::{SimpleVariantType, VariantError, VariantType, VariantTypeConstants};
+use crate::{SharedData, SimpleVariantType};
+use crate::{VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug)]
 pub struct DictEntry<K, V> {
@@ -8,7 +9,7 @@ pub struct DictEntry<K, V> {
     value: V,
 }
 
-impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> DictEntry<K, V> {
+impl<K: SimpleVariantType + std::hash::Hash, V: VariantType> DictEntry<K, V> {
     pub fn new(key: K, value: V) -> Self {
         Self { key, value }
     }
@@ -26,7 +27,7 @@ impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> DictEnt
     }
 }
 
-impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> VariantTypeConstants
+impl<K: SimpleVariantType + std::hash::Hash, V: VariantType> VariantTypeConstants
     for DictEntry<K, V>
 {
     // The real single character signature for DICT_ENTRY is `e` but that's not actually used in practice for D-Bus at
@@ -37,9 +38,7 @@ impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> Variant
     const ALIGNMENT: usize = 8;
 }
 
-impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> VariantType<'a>
-    for DictEntry<K, V>
-{
+impl<K: SimpleVariantType + std::hash::Hash, V: VariantType> VariantType for DictEntry<K, V> {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -50,23 +49,17 @@ impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> Variant
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut v = Self::create_bytes_vec(n_bytes_before);
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
 
-        v.extend(self.key.encode(v.len() + n_bytes_before));
-        v.extend(self.value.encode(v.len() + n_bytes_before));
-
-        v
+        self.key.encode_into(bytes);
+        self.value.encode_into(bytes);
     }
 
     // Kept independent of K and V so that it can be used from generic code
-    fn slice_data<'b>(
-        bytes: &'b [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError> {
-        let padding = Self::padding(n_bytes_before);
-        if bytes.len() < padding || signature.len() < 4 {
+    fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
+        let padding = Self::padding(data.position());
+        if data.len() < padding || signature.len() < 4 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
@@ -74,56 +67,42 @@ impl<'a, K: SimpleVariantType<'a> + std::hash::Hash, V: VariantType<'a>> Variant
         let mut extracted = padding;
         // Key's signature will always be just 1 character so no need to slice for that.
         let key_signature = &signature[1..2];
-        let key_slice = crate::variant_type::slice_data(
-            &bytes[(extracted as usize)..],
-            key_signature,
-            n_bytes_before + extracted,
-        )?;
+        let key_slice =
+            crate::variant_type::slice_data(&data.tail(extracted as usize), key_signature)?;
         extracted += key_slice.len();
 
         let value_signature = crate::variant_type::slice_signature(&signature[2..])?;
-        let value_slice = crate::variant_type::slice_data(
-            &bytes[extracted..],
-            value_signature,
-            n_bytes_before + extracted,
-        )?;
+        let value_slice =
+            crate::variant_type::slice_data(&data.tail(extracted as usize), value_signature)?;
         extracted += value_slice.len();
-        if extracted > bytes.len() {
+        if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
 
-        Ok(&bytes[0..extracted])
+        Ok(data.head(extracted))
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
         // Similar to slice_data, except we create variants.
-        let padding = Self::padding(n_bytes_before);
-        if bytes.len() < padding || signature.len() < 4 {
+        let padding = Self::padding(data.position());
+        if data.len() < padding || signature.len() < 4 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
 
         let mut extracted = padding;
-        let slice = K::slice_data_simple(&bytes[extracted..], n_bytes_before + extracted)?;
-        let key = K::decode_simple(slice, n_bytes_before + extracted)?;
+        let slice = K::slice_data_simple(&data.tail(extracted))?;
+        let key = K::decode_simple(&slice)?;
         extracted += slice.len();
-        if extracted > bytes.len() {
+        if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
 
         let value_signature = V::slice_signature(&signature[2..])?;
-        let slice = V::slice_data(
-            &bytes[extracted..],
-            value_signature,
-            n_bytes_before + extracted,
-        )?;
-        let value = V::decode(slice, value_signature, n_bytes_before + extracted)?;
+        let slice = V::slice_data(&data.tail(extracted as usize), value_signature)?;
+        let value = V::decode(&slice, value_signature)?;
         extracted += slice.len();
-        if extracted > bytes.len() {
+        if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
 

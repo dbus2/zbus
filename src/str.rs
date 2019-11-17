@@ -1,16 +1,17 @@
 use byteorder::ByteOrder;
 use std::str;
 
-use crate::utils::padding_for_n_bytes;
-use crate::{SimpleVariantType, VariantError, VariantType, VariantTypeConstants};
+use crate::{SharedData, SimpleVariantType};
+use crate::{VariantError, VariantType, VariantTypeConstants};
 
-impl VariantTypeConstants for &str {
+impl VariantTypeConstants for String {
     const SIGNATURE_CHAR: char = 's';
     const SIGNATURE_STR: &'static str = "s";
     const ALIGNMENT: usize = 4;
 }
 
-impl<'a> VariantType<'a> for &'a str {
+// FIXME: Implement for owned string cause decode() needs that. Let's make it efficient later.
+impl VariantType for String {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -21,70 +22,66 @@ impl<'a> VariantType<'a> for &'a str {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
         let len = self.len();
-        let padding = padding_for_n_bytes(n_bytes_before, Self::ALIGNMENT);
-        let mut bytes = Vec::with_capacity(padding as usize + 5 + len);
-
-        bytes.extend(std::iter::repeat(0).take(padding as usize));
+        Self::add_padding(bytes);
 
         bytes.extend(&crate::utils::usize_to_u32(len).to_ne_bytes());
         bytes.extend(self.as_bytes());
         bytes.push(b'\0');
-
-        bytes
     }
 
-    fn slice_data<'b>(
-        bytes: &'b [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError> {
+    fn slice_data<'b>(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        let padding = Self::padding(n_bytes_before);
+        let padding = Self::padding(data.position());
         let len = Self::ALIGNMENT as usize + padding;
-        crate::ensure_sufficient_bytes(bytes, len)?;
+        data.apply(|bytes| crate::ensure_sufficient_bytes(bytes, len))?;
 
-        let last_index = len + byteorder::NativeEndian::read_u32(&bytes[padding..]) as usize + 1;
-        crate::ensure_sufficient_bytes(bytes, last_index)?;
+        let last_index = data.apply(|bytes| {
+            let last_index =
+                len + byteorder::NativeEndian::read_u32(&bytes[padding..]) as usize + 1;
+            crate::ensure_sufficient_bytes(bytes, last_index)?;
 
-        Ok(&bytes[0..last_index])
+            Ok(last_index)
+        })?;
+
+        Ok(data.head(last_index))
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(bytes, signature, n_bytes_before)?;
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        let slice = Self::slice_for_decoding(data, signature)?;
 
         let last_index = slice.len() - 1;
-        str::from_utf8(&slice[4..last_index]).map_err(|_| VariantError::InvalidUtf8)
+        slice.apply(|bytes| {
+            str::from_utf8(&bytes[4..last_index])
+                .map(|s| s.to_owned())
+                .map_err(|_| VariantError::InvalidUtf8)
+        })
     }
 }
-impl<'a> SimpleVariantType<'a> for &'a str {}
+impl SimpleVariantType for String {}
 
 #[derive(Debug)]
-pub struct ObjectPath<'a>(&'a str);
+pub struct ObjectPath(String);
 
-impl<'a> ObjectPath<'a> {
-    pub fn new(path: &'a str) -> Self {
-        Self(path)
+impl ObjectPath {
+    pub fn new(path: &str) -> Self {
+        Self(String::from(path))
     }
 
     pub fn as_str(&self) -> &str {
-        self.0
+        &self.0
     }
 }
 
-impl<'a> VariantTypeConstants for ObjectPath<'a> {
+impl VariantTypeConstants for ObjectPath {
     const SIGNATURE_CHAR: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
     const ALIGNMENT: usize = 4;
 }
 
 // FIXME: Find a way to share code with &str implementation above
-impl<'a> VariantType<'a> for ObjectPath<'a> {
+impl VariantType for ObjectPath {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -95,51 +92,43 @@ impl<'a> VariantType<'a> for ObjectPath<'a> {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        self.0.encode(n_bytes_before)
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        self.0.encode_into(bytes);
     }
 
-    fn slice_data<'b>(
-        bytes: &'b [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError> {
+    fn slice_data<'b>(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        <(&str)>::slice_data_simple(bytes, n_bytes_before)
+        String::slice_data_simple(data)
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        <(&str)>::decode(bytes, <(&str)>::SIGNATURE_STR, n_bytes_before).map(|s| Self(s))
+        String::decode(data, String::SIGNATURE_STR).map(|s| Self(s))
     }
 }
-impl<'a> SimpleVariantType<'a> for ObjectPath<'a> {}
+impl SimpleVariantType for ObjectPath {}
 
 #[derive(Debug)]
-pub struct Signature<'a>(&'a str);
+pub struct Signature(String);
 
-impl<'a> Signature<'a> {
-    pub fn new(signature: &'a str) -> Self {
-        Self(signature)
+impl Signature {
+    pub fn new(signature: &str) -> Self {
+        Self(String::from(signature))
     }
 
     pub fn as_str(&self) -> &str {
-        self.0
+        &self.0
     }
 }
 
-impl<'a> VariantTypeConstants for Signature<'a> {
+impl VariantTypeConstants for Signature {
     const SIGNATURE_CHAR: char = 'g';
     const SIGNATURE_STR: &'static str = "g";
     const ALIGNMENT: usize = 1;
 }
 
 // FIXME: Find a way to share code with &str implementation in `variant_type.rs`
-impl<'a> VariantType<'a> for Signature<'a> {
+impl VariantType for Signature {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -150,48 +139,41 @@ impl<'a> VariantType<'a> for Signature<'a> {
         Self::ALIGNMENT
     }
 
-    // No padding needed because of 1-byte alignment and hence n_bytes_before is ignored everywhere.
-
-    fn encode(&self, _n_bytes_before: usize) -> Vec<u8> {
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
         let len = self.0.len();
-        let mut bytes = Vec::with_capacity(2 + len);
 
         bytes.push(len as u8);
         bytes.extend(self.0.as_bytes());
         bytes.push(b'\0');
-
-        bytes
     }
 
-    fn slice_data<'b>(
-        bytes: &'b [u8],
-        signature: &str,
-        _n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError> {
+    fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        if bytes.len() < 1 {
+        if data.len() < 1 {
             return Err(VariantError::InsufficientData);
         }
 
-        let last_index = bytes[0] as usize + 2;
-        crate::ensure_sufficient_bytes(bytes, last_index)?;
+        let last_index = data.apply(|bytes| {
+            let last_index = bytes[0] as usize + 2;
+            crate::ensure_sufficient_bytes(bytes, last_index)?;
 
-        Ok(&bytes[0..last_index])
+            Ok(last_index)
+        })?;
+
+        Ok(data.head(last_index))
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        _n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        crate::ensure_sufficient_bytes(bytes, 1)?;
 
-        let last_index = bytes.len() - 1;
-        crate::ensure_sufficient_bytes(bytes, last_index)?;
-        str::from_utf8(&bytes[1..last_index])
-            .map(|s| Self(s))
-            .map_err(|_| VariantError::InvalidUtf8)
+        let last_index = data.len() - 1;
+        data.apply(|bytes| {
+            crate::ensure_sufficient_bytes(bytes, last_index)?;
+
+            str::from_utf8(&bytes[1..last_index])
+                .map(|s| Self::new(s))
+                .map_err(|_| VariantError::InvalidUtf8)
+        })
     }
 }
-impl<'a> SimpleVariantType<'a> for Signature<'a> {}
+impl SimpleVariantType for Signature {}

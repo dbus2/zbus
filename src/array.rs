@@ -1,16 +1,16 @@
 use byteorder::ByteOrder;
 use std::borrow::Cow;
 
-use crate::SimpleVariantType;
+use crate::{SharedData, SimpleVariantType};
 use crate::{VariantError, VariantType, VariantTypeConstants};
 
-impl<'a, T: VariantType<'a>> VariantTypeConstants for Vec<T> {
+impl<T: VariantType> VariantTypeConstants for Vec<T> {
     const SIGNATURE_CHAR: char = 'a';
     const SIGNATURE_STR: &'static str = "a";
     const ALIGNMENT: usize = 4;
 }
 
-impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
+impl<T: VariantType> VariantType for Vec<T> {
     fn signature_char() -> char {
         'a'
     }
@@ -21,27 +21,23 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         Self::ALIGNMENT
     }
 
-    fn encode(&self, n_bytes_before: usize) -> Vec<u8> {
-        let mut v = Self::create_bytes_vec(n_bytes_before);
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Self::add_padding(bytes);
 
-        v.extend(&0u32.to_ne_bytes());
+        let len_position = bytes.len();
+        bytes.extend(&0u32.to_ne_bytes());
+        let n_bytes_before = bytes.len();
         for element in self {
             // Deep copying, nice!!! 🙈
-            v.extend(element.encode(v.len() + n_bytes_before));
+            element.encode_into(bytes);
         }
 
         // Set size of array in bytes
-        let len = crate::utils::usize_to_u32(v.len() - 4);
-        byteorder::NativeEndian::write_u32(&mut v[0..4], len);
-
-        v
+        let len = crate::utils::usize_to_u32(bytes.len() - n_bytes_before);
+        byteorder::NativeEndian::write_u32(&mut bytes[len_position..len_position + 4], len);
     }
 
-    fn slice_data<'b>(
-        bytes: &'b [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError> {
+    fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
         if signature.len() < 2 {
             return Err(VariantError::InsufficientData);
         }
@@ -51,15 +47,11 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
         let child_signature = crate::variant_type::slice_signature(&signature[1..])?;
 
         // Array size in bytes
-        let len_slice = u32::slice_data_simple(bytes, n_bytes_before)?;
+        let len_slice = u32::slice_data_simple(&data)?;
         let mut extracted = len_slice.len();
-        let len = u32::decode_simple(len_slice, n_bytes_before)? as usize + 4;
+        let len = u32::decode_simple(&len_slice)? as usize + 4;
         while extracted < len {
-            let slice = crate::variant_type::slice_data(
-                &bytes[extracted..],
-                child_signature,
-                n_bytes_before + extracted,
-            )?;
+            let slice = crate::variant_type::slice_data(&data.tail(extracted), child_signature)?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
@@ -69,16 +61,12 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
             return Err(VariantError::ExcessData);
         }
 
-        Ok(&bytes[0..(extracted as usize)])
+        Ok(data.head(extracted as usize))
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
-        let padding = Self::padding(n_bytes_before);
-        if bytes.len() < padding + 4 || signature.len() < 2 {
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
+        let padding = Self::padding(data.position());
+        if data.len() < padding + 4 || signature.len() < 2 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
@@ -88,21 +76,18 @@ impl<'a, T: VariantType<'a>> VariantType<'a> for Vec<T> {
 
         // Array size in bytes
         let mut extracted = padding + 4;
-        let len = u32::decode_simple(&bytes[padding..extracted], 0)? as usize + 4;
+        let len = u32::decode_simple(&data.subset(padding, extracted))? as usize + 4;
         let mut elements = vec![];
 
         while extracted < len {
-            let slice = crate::variant_type::slice_data(
-                &bytes[(extracted as usize)..],
-                child_signature,
-                n_bytes_before + extracted,
-            )?;
+            let slice =
+                crate::variant_type::slice_data(&data.tail(extracted as usize), child_signature)?;
+            extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
             }
 
-            let element = T::decode(slice, child_signature, n_bytes_before + extracted)?;
-            extracted += slice.len();
+            let element = T::decode(&slice, child_signature)?;
             elements.push(element);
         }
         if extracted == 0 {

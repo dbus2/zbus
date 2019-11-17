@@ -10,7 +10,7 @@ use crate::{SimpleVariantType, VariantType};
 // We can't implement `Into` either as `Vec` isn't our type either.
 pub struct Dict<K, V>(HashMap<K, V>);
 
-impl<'a, K: SimpleVariantType<'a> + Hash + Eq, V: VariantType<'a>> Dict<K, V> {
+impl<K: SimpleVariantType + Hash + Eq, V: VariantType> Dict<K, V> {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
@@ -28,7 +28,7 @@ impl<'a, K: SimpleVariantType<'a> + Hash + Eq, V: VariantType<'a>> Dict<K, V> {
     }
 }
 
-impl<'a, K: SimpleVariantType<'a> + Hash + Eq, V: VariantType<'a>> Deref for Dict<K, V> {
+impl<K: SimpleVariantType + Hash + Eq, V: VariantType> Deref for Dict<K, V> {
     type Target = HashMap<K, V>;
 
     fn deref(&self) -> &Self::Target {
@@ -36,16 +36,14 @@ impl<'a, K: SimpleVariantType<'a> + Hash + Eq, V: VariantType<'a>> Deref for Dic
     }
 }
 
-impl<'a, K: SimpleVariantType<'a> + Hash + Eq, V: VariantType<'a>> DerefMut for Dict<K, V> {
+impl<K: SimpleVariantType + Hash + Eq, V: VariantType> DerefMut for Dict<K, V> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner_mut()
     }
 }
 
 // Conversion of ARRAY of DICT_ENTRY to DICT
-impl<'a, K: SimpleVariantType<'a> + Hash + Eq, V: VariantType<'a>> From<Vec<DictEntry<K, V>>>
-    for Dict<K, V>
-{
+impl<K: SimpleVariantType + Hash + Eq, V: VariantType> From<Vec<DictEntry<K, V>>> for Dict<K, V> {
     fn from(val: Vec<DictEntry<K, V>>) -> Self {
         let mut map = HashMap::new();
 
@@ -60,9 +58,7 @@ impl<'a, K: SimpleVariantType<'a> + Hash + Eq, V: VariantType<'a>> From<Vec<Dict
 }
 
 // Conversion of DICT to ARRAY of DICT_ENTRY
-impl<'a, K: SimpleVariantType<'a> + Hash + Eq, V: VariantType<'a>> Into<Vec<DictEntry<K, V>>>
-    for Dict<K, V>
-{
+impl<K: SimpleVariantType + Hash + Eq, V: VariantType> Into<Vec<DictEntry<K, V>>> for Dict<K, V> {
     fn into(self) -> Vec<DictEntry<K, V>> {
         let mut vec = Vec::new();
 
@@ -80,12 +76,12 @@ mod tests {
 
     #[test]
     fn hashmap_to_vec() {
-        let mut dict: Dict<i64, &str> = Dict::new();
-        dict.insert(1, "123");
-        dict.insert(2, "456");
-        dict.insert(3, "789");
+        let mut dict: Dict<i64, String> = Dict::new();
+        dict.insert(1, String::from("123"));
+        dict.insert(2, String::from("456"));
+        dict.insert(3, String::from("789"));
 
-        let v: Vec<DictEntry<i64, &str>> = dict.into();
+        let v: Vec<DictEntry<i64, String>> = dict.into();
         for entry in v {
             match entry.key() {
                 1 => assert!(*entry.value() == "123"),
@@ -98,12 +94,12 @@ mod tests {
 
     #[test]
     fn vec_to_hashmap() {
-        let mut v: Vec<DictEntry<i64, &str>> = Vec::new();
-        v.push(DictEntry::new(1, "123"));
-        v.push(DictEntry::new(2, "456"));
-        v.push(DictEntry::new(3, "789"));
+        let mut v: Vec<DictEntry<i64, String>> = Vec::new();
+        v.push(DictEntry::new(1, String::from("123")));
+        v.push(DictEntry::new(2, String::from("456")));
+        v.push(DictEntry::new(3, String::from("789")));
 
-        let dict: Dict<i64, &str> = v.into();
+        let dict: Dict<i64, String> = v.into();
         for (key, value) in dict.iter() {
             match key {
                 1 => assert!(*value == "123"),

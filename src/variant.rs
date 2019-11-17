@@ -1,17 +1,18 @@
 use std::str;
 
-use crate::{Signature, SimpleVariantType, VariantError, VariantType, VariantTypeConstants};
+use crate::{SharedData, Signature, SimpleVariantType};
+use crate::{VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug)]
 pub struct Variant {
     signature: String,
-    value: Vec<u8>,
+    value: SharedData,
 }
 
 impl Variant {
-    pub fn from_data(data: &[u8], signature: &str) -> Result<Self, VariantError> {
+    pub fn from_data(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
         // slice_data() ensures a valid signature
-        let value = crate::variant_type::slice_data(data, signature, 0)?.to_vec();
+        let value = crate::variant_type::slice_data(data, signature)?;
 
         Ok(Self {
             value: value,
@@ -19,9 +20,9 @@ impl Variant {
         })
     }
 
-    pub fn from<'a, T: 'a + VariantType<'a>>(value: T) -> Self {
+    pub fn from<T: VariantType>(value: T) -> Self {
         Self {
-            value: value.encode(0),
+            value: SharedData::new(value.encode()),
             signature: String::from(value.signature()),
         }
     }
@@ -30,11 +31,11 @@ impl Variant {
         &self.signature
     }
 
-    pub fn get<'a, T: 'a + VariantType<'a>>(&'a self) -> Result<T, VariantError> {
-        T::decode(&self.value, &self.signature, 0)
+    pub fn get<T: VariantType>(&self) -> Result<T, VariantError> {
+        T::decode(&self.value, &self.signature)
     }
 
-    pub fn bytes(&self) -> &[u8] {
+    pub fn bytes(&self) -> &SharedData {
         &self.value
     }
 
@@ -47,28 +48,28 @@ impl Variant {
     /// # Examples
     ///
     /// ```
-    /// let v = zbus::Variant::from("hello");
+    /// let v = zbus::Variant::from(String::froM("hello"));
     /// assert!(!v.is::<u32>());
-    /// assert!(v.is::<(&str)>());
+    /// assert!(v.is::<String>());
     /// ```
     ///
     /// ```
     /// let v = zbus::Variant::from(147u32);
-    /// assert!(!v.is::<(&str)>());
+    /// assert!(!v.is::<String>());
     /// assert!(v.is::<u32>());
     /// ```
-    pub fn is<'a, T: 'a + VariantType<'a>>(&self) -> bool {
+    pub fn is<T: VariantType>(&self) -> bool {
         self.signature.starts_with(T::signature_str())
     }
 }
 
-impl<'a> VariantTypeConstants for Variant {
+impl VariantTypeConstants for Variant {
     const SIGNATURE_CHAR: char = 'v';
     const SIGNATURE_STR: &'static str = "v";
     const ALIGNMENT: usize = Signature::ALIGNMENT;
 }
 
-impl<'a> VariantType<'a> for Variant {
+impl VariantType for Variant {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -79,55 +80,44 @@ impl<'a> VariantType<'a> for Variant {
         Self::ALIGNMENT
     }
 
-    // Like Signature, no padding needed because of 1-byte alignment and hence n_bytes_before is ignored everywhere.
-
-    fn encode(&self, _n_bytes_before: usize) -> Vec<u8> {
-        let mut bytes = Signature::new(&self.signature).encode(0);
-        bytes.extend_from_slice(&self.value);
-
-        bytes
+    fn encode_into(&self, bytes: &mut Vec<u8>) {
+        Signature::new(&self.signature).encode_into(bytes);
+        self.value.apply_mut(|b| bytes.extend_from_slice(b));
     }
 
-    fn slice_data<'b>(
-        bytes: &'b [u8],
-        signature: &str,
-        _n_bytes_before: usize,
-    ) -> Result<&'b [u8], VariantError> {
+    fn slice_data(data: &SharedData, signature: &str) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
         // Variant is made of signature of the value followed by the actual value. So we gotta
         // extract the signature slice first and then the value slice. Once we know the sizes of
         // both, we can just slice the whole thing.
-        let sign_slice = Signature::slice_data_simple(bytes, 0)?;
+        let sign_slice = Signature::slice_data_simple(&data)?;
         let sign_size = sign_slice.len();
-        let sign = Signature::decode_simple(sign_slice, 0)?;
+        let sign = Signature::decode_simple(&sign_slice)?;
 
-        let value_slice = crate::variant_type::slice_data(&bytes[sign_size..], sign.as_str(), 0)?;
+        let value_slice = crate::variant_type::slice_data(&data.tail(sign_size), sign.as_str())?;
         let total_size = sign_size + value_slice.len();
 
-        Ok(&bytes[0..total_size])
+        Ok(data.head(total_size))
     }
 
-    fn decode(
-        bytes: &'a [u8],
-        signature: &str,
-        _n_bytes_before: usize,
-    ) -> Result<Self, VariantError> {
+    fn decode(data: &SharedData, signature: &str) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
-        let sign_slice = Signature::slice_data_simple(bytes, 0)?;
+        let sign_slice = Signature::slice_data_simple(&data)?;
         let sign_size = sign_slice.len();
-        let sign = Signature::decode_simple(sign_slice, 0)?;
+        let sign = Signature::decode_simple(&sign_slice)?;
 
-        Variant::from_data(&bytes[sign_size..], sign.as_str())
+        Variant::from_data(&data.tail(sign_size), sign.as_str())
     }
 }
-impl<'a> SimpleVariantType<'a> for Variant {}
+impl SimpleVariantType for Variant {}
 
 #[cfg(test)]
 mod tests {
     use crate::{Dict, DictEntry, SimpleVariantType};
-    use crate::{Structure, StructureBuilder, VariantType, VariantTypeConstants};
+    use crate::{SharedData, Structure, StructureBuilder};
+    use crate::{VariantType, VariantTypeConstants};
 
     #[test]
     fn u8_variant() {
@@ -239,14 +229,14 @@ mod tests {
 
     #[test]
     fn str_variant() {
-        let v = crate::Variant::from("Hello world!");
+        let v = crate::Variant::from(String::from("Hello world!"));
         assert!(v.len() == 17);
-        assert!(v.get::<(&str)>().unwrap() == "Hello world!");
-        assert!(v.is::<(&str)>());
+        assert!(v.get::<String>().unwrap() == "Hello world!");
+        assert!(v.is::<String>());
 
         let v = crate::Variant::from_data(v.bytes(), v.signature()).unwrap();
         assert!(v.len() == 17);
-        assert!(v.get::<(&str)>().unwrap() == "Hello world!");
+        assert!(v.get::<String>().unwrap() == "Hello world!");
     }
 
     #[test]
@@ -277,29 +267,31 @@ mod tests {
     fn variant_variant() {
         let v = crate::Variant::from(7u8);
         // The argument to encode here shouln't matter cause variants are 1-byte aligned so just
-        // pass an arbitrary odd number and encoding shouldn't have any padding (i-e we should get
-        // 4 bytes only).
-        let mut encoded = v.encode(3);
-        assert!(encoded.len() == 4);
+        // keep an arbitrary odd number of bytes before the variant and encoding shouldn't add
+        // any padding (i-e we should end up with 7 bytes only).
+        let mut encoded = vec![0u8; 3];
+        v.encode_into(&mut encoded);
+        assert!(encoded.len() == 7);
 
         // Add some extra bytes to the encoded data to test the slicing
         encoded.push(0);
         encoded.push(1);
         encoded.push(7);
 
-        let slice = crate::Variant::slice_data_simple(&encoded, 0).unwrap();
+        let encoded = SharedData::new(encoded).tail(3);
+        let slice = crate::Variant::slice_data_simple(&encoded).unwrap();
 
-        let decoded = crate::Variant::decode_simple(slice, 0).unwrap();
+        let decoded = crate::Variant::decode_simple(&slice).unwrap();
         assert!(decoded.signature() == u8::SIGNATURE_STR);
         assert!(decoded.get::<u8>().unwrap() == 7u8);
     }
 
     #[test]
     fn struct_variant() {
-        let mut dict: Dict<i64, &str> = Dict::new();
-        dict.insert(1, "123");
-        dict.insert(2, "456");
-        let dict_vec: Vec<DictEntry<i64, &str>> = dict.into();
+        let mut dict: Dict<i64, String> = Dict::new();
+        dict.insert(1, String::from("123"));
+        dict.insert(2, String::from("456"));
+        let dict_vec: Vec<DictEntry<i64, String>> = dict.into();
 
         let s = StructureBuilder::new()
             .add_field(u8::max_value())
@@ -316,7 +308,7 @@ mod tests {
                     )
                     .create(),
             )
-            .add_field("hello")
+            .add_field(String::from("hello"))
             .add_field(dict_vec)
             .create();
         let v = crate::Variant::from(s);
@@ -347,8 +339,8 @@ mod tests {
         assert!(inner_fields[1].is::<f64>());
         assert!(inner_fields[1].get::<f64>().unwrap() == std::f64::MAX);
 
-        assert!(fields[3].is::<&str>());
-        assert!(fields[3].get::<&str>().unwrap() == "hello");
+        assert!(fields[3].is::<String>());
+        assert!(fields[3].get::<String>().unwrap() == "hello");
 
         let v = crate::Variant::from_data(v.bytes(), v.signature()).unwrap();
         assert!(v.len() == 88 || v.len() == 92);
@@ -369,8 +361,8 @@ mod tests {
         assert!(inner_fields[1].is::<bool>());
         assert!(inner_fields[1].get::<bool>().unwrap());
 
-        assert!(fields[3].get::<&str>().unwrap() == "hello");
-        assert!(fields[3].is::<&str>());
+        assert!(fields[3].get::<String>().unwrap() == "hello");
+        assert!(fields[3].is::<String>());
     }
 
     #[test]
@@ -388,11 +380,16 @@ mod tests {
 
         // Array of strings
         // Can't use 'as' as it's a keyword
-        let as_ = vec!["Hello", "World", "Now", "Bye!"];
+        let as_ = vec![
+            String::from("Hello"),
+            String::from("World"),
+            String::from("Now"),
+            String::from("Bye!"),
+        ];
         assert!(as_.signature() == "as");
         let v = crate::Variant::from(as_);
         assert!(v.len() == 45);
-        let v = v.get::<Vec<&str>>().unwrap();
+        let v = v.get::<Vec<String>>().unwrap();
         assert!(v == ["Hello", "World", "Now", "Bye!"]);
 
         // Array of Struct, which in turn containin an Array (We gotta go deeper!)
@@ -403,10 +400,10 @@ mod tests {
                 StructureBuilder::new()
                     .add_field(i64::max_value())
                     .add_field(true)
-                    .add_field(vec!["Hello", "World"])
+                    .add_field(vec![String::from("Hello"), String::from("World")])
                     .create(),
             )
-            .add_field("hello")
+            .add_field(String::from("hello"))
             .create()];
         assert!(ar.signature() == "a(yu(xbas)s)");
         let v = crate::Variant::from(ar);
@@ -427,9 +424,9 @@ mod tests {
         assert!(inner_fields[0].get::<i64>().unwrap() == i64::max_value());
         assert!(inner_fields[1].is::<bool>());
         assert!(inner_fields[1].get::<bool>().unwrap() == true);
-        assert!(inner_fields[2].is::<Vec::<&str>>());
-        let as_ = inner_fields[2].get::<Vec<&str>>().unwrap();
-        assert!(as_ == ["Hello", "World"]);
+        assert!(inner_fields[2].is::<Vec::<String>>());
+        let as_ = inner_fields[2].get::<Vec<String>>().unwrap();
+        assert!(as_ == [String::from("Hello"), String::from("World")]);
 
         let v = crate::Variant::from_data(v.bytes(), v.signature()).unwrap();
         assert!(v.len() == 66);
@@ -449,26 +446,26 @@ mod tests {
         assert!(inner_fields[0].get::<i64>().unwrap() == i64::max_value());
         assert!(inner_fields[1].is::<bool>());
         assert!(inner_fields[1].get::<bool>().unwrap() == true);
-        assert!(inner_fields[2].is::<Vec::<&str>>());
-        let as_ = inner_fields[2].get::<Vec<&str>>().unwrap();
-        assert!(as_ == ["Hello", "World"]);
+        assert!(inner_fields[2].is::<Vec::<String>>());
+        let as_ = inner_fields[2].get::<Vec<String>>().unwrap();
+        assert!(as_ == [String::from("Hello"), String::from("World")]);
     }
 
     #[test]
     fn dict_entry_variant() {
         // Simple type value
-        let entry = DictEntry::new(2u8, "world");
+        let entry = DictEntry::new(2u8, String::from("world"));
         assert!(entry.signature() == "{ys}");
         let v = crate::Variant::from(entry);
         assert!(v.len() == 14);
-        assert!(v.is::<DictEntry::<u8, &str>>());
-        let entry = v.get::<DictEntry<u8, &str>>().unwrap();
+        assert!(v.is::<DictEntry::<u8, String>>());
+        let entry = v.get::<DictEntry<u8, String>>().unwrap();
         assert!(*entry.key() == 2u8);
         assert!(*entry.value() == "world");
 
         // STRUCT value
         let entry = DictEntry::new(
-            "hello",
+            String::from("hello"),
             StructureBuilder::new()
                 .add_field(u8::max_value())
                 .add_field(u32::max_value())
@@ -477,8 +474,8 @@ mod tests {
         assert!(entry.signature() == "{s(yu)}");
         let v = crate::Variant::from(entry);
         assert!(v.len() == 24);
-        assert!(v.is::<DictEntry::<&str, Structure>>());
-        let entry = v.get::<DictEntry<&str, Structure>>().unwrap();
+        assert!(v.is::<DictEntry::<String, Structure>>());
+        let entry = v.get::<DictEntry<String, Structure>>().unwrap();
         assert!(*entry.key() == "hello");
         let s = entry.value();
         let fields = s.fields();
