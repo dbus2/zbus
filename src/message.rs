@@ -5,7 +5,7 @@ use std::{borrow::Cow, fmt};
 
 use crate::utils::padding_for_8_bytes;
 use crate::Signature;
-use crate::{Array, EncodingContext};
+use crate::{Array, EncodingFormat};
 use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
 use crate::{SharedData, Structure, StructureBuilder};
 use crate::{VariantError, VariantType};
@@ -153,9 +153,9 @@ impl Message {
         fields.add(MessageField::path(path));
         fields.add(MessageField::member(method_name));
 
-        let context = EncodingContext::default();
+        let format = EncodingFormat::default();
         let array = Array::from(fields);
-        array.encode_into(&mut m.0, context);
+        array.encode_into(&mut m.0, format);
 
         // Do we need to do this if body is None?
         let padding = padding_for_8_bytes(m.0.len());
@@ -165,7 +165,7 @@ impl Message {
 
         if let Some(body) = body {
             let n_bytes_before = m.0.len();
-            body.encode_into(&mut m.0, context);
+            body.encode_into(&mut m.0, format);
 
             let len = crate::utils::usize_to_u32(m.0.len() - n_bytes_before);
             byteorder::NativeEndian::write_u32(
@@ -248,10 +248,10 @@ impl Message {
 
         // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
         let encoding = SharedData::new(self.0.clone());
-        let context = EncodingContext::default();
-        let slice = Array::slice_data(&encoding.tail(FIELDS_LEN_START_OFFSET), "a(yv)", context)?;
+        let format = EncodingFormat::default();
+        let slice = Array::slice_data(&encoding.tail(FIELDS_LEN_START_OFFSET), "a(yv)", format)?;
 
-        let array = Array::decode(&slice, "a(yv)", context).map_err(|e| MessageError::from(e))?;
+        let array = Array::decode(&slice, "a(yv)", format).map_err(|e| MessageError::from(e))?;
 
         array.try_into().map_err(|e| MessageError::from(e))
     }
@@ -263,9 +263,9 @@ impl Message {
 
         let mut header_len = PRIMARY_HEADER_SIZE + self.fields_len();
         header_len = header_len + padding_for_8_bytes(header_len);
-        let context = EncodingContext::default();
+        let format = EncodingFormat::default();
         if self.body_len() == 0 {
-            return Ok(StructureBuilder::new().create(context));
+            return Ok(StructureBuilder::new().create(format));
         }
 
         let signature = body_signature
@@ -276,7 +276,7 @@ impl Message {
 
         // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
         let encoding = SharedData::new(self.0.clone());
-        let structure = Structure::decode(&encoding.tail(header_len), &signature, context)?;
+        let structure = Structure::decode(&encoding.tail(header_len), &signature, format)?;
 
         Ok(structure)
     }

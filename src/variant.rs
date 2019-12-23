@@ -1,6 +1,6 @@
 use std::str;
 
-use crate::{AlignmentKind, Array, DictEntry, EncodingContext, ObjectPath};
+use crate::{Array, DictEntry, EncodingFormat, ObjectPath};
 use crate::{SharedData, Signature, SimpleVariantType, Structure};
 use crate::{VariantError, VariantType, VariantTypeConstants};
 
@@ -31,120 +31,118 @@ impl Variant {
     pub fn from_data(
         data: &SharedData,
         signature: &str,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         // slice_data() ensures a valid signature
-        let slice = crate::variant_type::slice_data(data, signature, context)?;
+        let slice = crate::variant_type::slice_data(data, signature, format)?;
         match signature
             .chars()
             .next()
             .ok_or(VariantError::InsufficientData)?
         {
             // FIXME: There has to be a shorter way to do this
-            u8::SIGNATURE_CHAR => {
-                u8::decode_simple(&slice, context).map(|value| Variant::U8(value))
-            }
+            u8::SIGNATURE_CHAR => u8::decode_simple(&slice, format).map(|value| Variant::U8(value)),
             bool::SIGNATURE_CHAR => {
-                bool::decode_simple(&slice, context).map(|value| Variant::Bool(value))
+                bool::decode_simple(&slice, format).map(|value| Variant::Bool(value))
             }
             i16::SIGNATURE_CHAR => {
-                i16::decode_simple(&slice, context).map(|value| Variant::I16(value))
+                i16::decode_simple(&slice, format).map(|value| Variant::I16(value))
             }
             u16::SIGNATURE_CHAR => {
-                u16::decode_simple(&slice, context).map(|value| Variant::U16(value))
+                u16::decode_simple(&slice, format).map(|value| Variant::U16(value))
             }
             i32::SIGNATURE_CHAR => {
-                i32::decode_simple(&slice, context).map(|value| Variant::I32(value))
+                i32::decode_simple(&slice, format).map(|value| Variant::I32(value))
             }
             u32::SIGNATURE_CHAR => {
-                u32::decode_simple(&slice, context).map(|value| Variant::U32(value))
+                u32::decode_simple(&slice, format).map(|value| Variant::U32(value))
             }
             i64::SIGNATURE_CHAR => {
-                i64::decode_simple(&slice, context).map(|value| Variant::I64(value))
+                i64::decode_simple(&slice, format).map(|value| Variant::I64(value))
             }
             u64::SIGNATURE_CHAR => {
-                u64::decode_simple(&slice, context).map(|value| Variant::U64(value))
+                u64::decode_simple(&slice, format).map(|value| Variant::U64(value))
             }
             f64::SIGNATURE_CHAR => {
-                f64::decode_simple(&slice, context).map(|value| Variant::F64(value))
+                f64::decode_simple(&slice, format).map(|value| Variant::F64(value))
             }
             String::SIGNATURE_CHAR => {
-                String::decode_simple(&slice, context).map(|value| Variant::Str(value))
+                String::decode_simple(&slice, format).map(|value| Variant::Str(value))
             }
             Array::SIGNATURE_CHAR => {
-                Array::decode(&slice, signature, context).map(|value| Variant::Array(value))
+                Array::decode(&slice, signature, format).map(|value| Variant::Array(value))
             }
             ObjectPath::SIGNATURE_CHAR => {
-                ObjectPath::decode_simple(&slice, context).map(|value| Variant::ObjectPath(value))
+                ObjectPath::decode_simple(&slice, format).map(|value| Variant::ObjectPath(value))
             }
             Signature::SIGNATURE_CHAR => {
-                Signature::decode_simple(&slice, context).map(|value| Variant::Signature(value))
+                Signature::decode_simple(&slice, format).map(|value| Variant::Signature(value))
             }
             Structure::SIGNATURE_CHAR => {
-                Structure::decode(&slice, signature, context).map(|value| Variant::Structure(value))
+                Structure::decode(&slice, signature, format).map(|value| Variant::Structure(value))
             }
-            Variant::SIGNATURE_CHAR => Variant::decode_simple(&slice, context)
+            Variant::SIGNATURE_CHAR => Variant::decode_simple(&slice, format)
                 .map(|value| Variant::Variant(Box::new(value))),
             DictEntry::SIGNATURE_CHAR => {
-                DictEntry::decode(&slice, signature, context).map(|value| Variant::DictEntry(value))
+                DictEntry::decode(&slice, signature, format).map(|value| Variant::DictEntry(value))
             }
             _ => return Err(VariantError::UnsupportedType(String::from(signature))),
         }
     }
 
     // Only use for standalone or the first data in a message
-    pub fn encode_value(&self, context: EncodingContext) -> Vec<u8> {
+    pub fn encode_value(&self, format: EncodingFormat) -> Vec<u8> {
         let mut bytes = vec![];
-        self.encode_value_into(&mut bytes, context);
+        self.encode_value_into(&mut bytes, format);
 
         bytes
     }
 
-    pub fn encode_value_into(&self, bytes: &mut Vec<u8>, context: EncodingContext) {
+    pub fn encode_value_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         match self {
             // Simple types
-            Variant::U8(value) => value.encode_into(bytes, context),
-            Variant::Bool(value) => value.encode_into(bytes, context),
-            Variant::I16(value) => value.encode_into(bytes, context),
-            Variant::U16(value) => value.encode_into(bytes, context),
-            Variant::I32(value) => value.encode_into(bytes, context),
-            Variant::U32(value) => value.encode_into(bytes, context),
-            Variant::I64(value) => value.encode_into(bytes, context),
-            Variant::U64(value) => value.encode_into(bytes, context),
-            Variant::F64(value) => value.encode_into(bytes, context),
-            Variant::Str(value) => value.encode_into(bytes, context), // TODO: Optimize later!
-            Variant::Signature(value) => value.encode_into(bytes, context),
-            Variant::ObjectPath(value) => value.encode_into(bytes, context),
-            Variant::Variant(value) => value.encode_into(bytes, context),
+            Variant::U8(value) => value.encode_into(bytes, format),
+            Variant::Bool(value) => value.encode_into(bytes, format),
+            Variant::I16(value) => value.encode_into(bytes, format),
+            Variant::U16(value) => value.encode_into(bytes, format),
+            Variant::I32(value) => value.encode_into(bytes, format),
+            Variant::U32(value) => value.encode_into(bytes, format),
+            Variant::I64(value) => value.encode_into(bytes, format),
+            Variant::U64(value) => value.encode_into(bytes, format),
+            Variant::F64(value) => value.encode_into(bytes, format),
+            Variant::Str(value) => value.encode_into(bytes, format), // TODO: Optimize later!
+            Variant::Signature(value) => value.encode_into(bytes, format),
+            Variant::ObjectPath(value) => value.encode_into(bytes, format),
+            Variant::Variant(value) => value.encode_into(bytes, format),
 
             // Container types
-            Variant::Array(value) => value.encode_into(bytes, context),
-            Variant::DictEntry(value) => value.encode_into(bytes, context),
-            Variant::Structure(value) => value.encode_into(bytes, context),
+            Variant::Array(value) => value.encode_into(bytes, format),
+            Variant::DictEntry(value) => value.encode_into(bytes, format),
+            Variant::Structure(value) => value.encode_into(bytes, format),
         }
     }
 
-    pub fn value_padding(&self, n_bytes_before: usize, context: EncodingContext) -> usize {
+    pub fn value_padding(&self, n_bytes_before: usize, format: EncodingFormat) -> usize {
         match self {
             // Simple types
-            Variant::U8(_) => u8::padding(n_bytes_before, context),
-            Variant::Bool(_) => bool::padding(n_bytes_before, context),
-            Variant::I16(_) => i16::padding(n_bytes_before, context),
-            Variant::U16(_) => u16::padding(n_bytes_before, context),
-            Variant::I32(_) => i32::padding(n_bytes_before, context),
-            Variant::U32(_) => u32::padding(n_bytes_before, context),
-            Variant::I64(_) => i64::padding(n_bytes_before, context),
-            Variant::U64(_) => u64::padding(n_bytes_before, context),
-            Variant::F64(_) => f64::padding(n_bytes_before, context),
-            Variant::Str(_) => String::padding(n_bytes_before, context),
-            Variant::Signature(_) => Signature::padding(n_bytes_before, context),
-            Variant::ObjectPath(_) => ObjectPath::padding(n_bytes_before, context),
-            Variant::Variant(_) => Variant::padding(n_bytes_before, context),
+            Variant::U8(_) => u8::padding(n_bytes_before, format),
+            Variant::Bool(_) => bool::padding(n_bytes_before, format),
+            Variant::I16(_) => i16::padding(n_bytes_before, format),
+            Variant::U16(_) => u16::padding(n_bytes_before, format),
+            Variant::I32(_) => i32::padding(n_bytes_before, format),
+            Variant::U32(_) => u32::padding(n_bytes_before, format),
+            Variant::I64(_) => i64::padding(n_bytes_before, format),
+            Variant::U64(_) => u64::padding(n_bytes_before, format),
+            Variant::F64(_) => f64::padding(n_bytes_before, format),
+            Variant::Str(_) => String::padding(n_bytes_before, format),
+            Variant::Signature(_) => Signature::padding(n_bytes_before, format),
+            Variant::ObjectPath(_) => ObjectPath::padding(n_bytes_before, format),
+            Variant::Variant(_) => Variant::padding(n_bytes_before, format),
 
             // Container types
-            Variant::Array(_) => Array::padding(n_bytes_before, context),
-            Variant::DictEntry(_) => DictEntry::padding(n_bytes_before, context),
-            Variant::Structure(_) => Structure::padding(n_bytes_before, context),
+            Variant::Array(_) => Array::padding(n_bytes_before, format),
+            Variant::DictEntry(_) => DictEntry::padding(n_bytes_before, format),
+            Variant::Structure(_) => Structure::padding(n_bytes_before, format),
         }
     }
 
@@ -189,38 +187,29 @@ impl VariantType for Variant {
         Self::ALIGNMENT
     }
 
-    fn encode_into(&self, bytes: &mut Vec<u8>, context: EncodingContext) {
+    fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         let value_signature = Signature::new(&self.value_signature());
-        value_signature.encode_into(bytes, context);
+        value_signature.encode_into(bytes, format);
 
-        let value_context = EncodingContext {
-            alignment: AlignmentKind::ChildOnly,
-            format: context.format,
-        };
-
-        self.encode_value_into(bytes, value_context)
+        self.encode_value_into(bytes, format)
     }
 
     fn slice_data(
         data: &SharedData,
         signature: &str,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
         // Variant is made of signature of the value followed by the actual value. So we gotta
         // extract the signature slice first and then the value slice. Once we know the sizes of
         // both, we can just slice the whole thing.
-        let sign_slice = Signature::slice_data_simple(&data, context)?;
+        let sign_slice = Signature::slice_data_simple(&data, format)?;
         let sign_size = sign_slice.len();
-        let sign = Signature::decode_simple(&sign_slice, context)?;
+        let sign = Signature::decode_simple(&sign_slice, format)?;
 
-        let value_context = EncodingContext {
-            alignment: AlignmentKind::ChildOnly,
-            format: context.format,
-        };
         let value_slice =
-            crate::variant_type::slice_data(&data.tail(sign_size), sign.as_str(), value_context)?;
+            crate::variant_type::slice_data(&data.tail(sign_size), sign.as_str(), format)?;
         let total_size = sign_size + value_slice.len();
 
         Ok(data.head(total_size))
@@ -229,19 +218,15 @@ impl VariantType for Variant {
     fn decode(
         data: &SharedData,
         signature: &str,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
-        let sign_slice = Signature::slice_data_simple(&data, context)?;
+        let sign_slice = Signature::slice_data_simple(&data, format)?;
         let sign_size = sign_slice.len();
-        let sign = Signature::decode_simple(&sign_slice, context)?;
+        let sign = Signature::decode_simple(&sign_slice, format)?;
 
-        let value_context = EncodingContext {
-            alignment: AlignmentKind::ChildOnly,
-            format: context.format,
-        };
-        Variant::from_data(&data.tail(sign_size), sign.as_str(), value_context)
+        Variant::from_data(&data.tail(sign_size), sign.as_str(), format)
     }
 
     fn is(variant: &Variant) -> bool {
@@ -281,7 +266,7 @@ mod tests {
     use core::convert::{TryFrom, TryInto};
     use std::collections::HashMap;
 
-    use crate::{Array, Dict, DictEntry, EncodingContext, SimpleVariantType};
+    use crate::{Array, Dict, DictEntry, EncodingFormat, SimpleVariantType};
     use crate::{SharedData, Structure, StructureBuilder};
     use crate::{VariantType, VariantTypeConstants};
 
@@ -291,10 +276,10 @@ mod tests {
         assert!(u8::is(&v));
         assert!(*u8::from_variant(&v).unwrap() == u8::max_value());
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 1);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(*u8::from_variant(&v).unwrap() == u8::max_value());
     }
 
@@ -304,10 +289,10 @@ mod tests {
         assert!(bool::from_variant(&v).unwrap());
         assert!(bool::is(&v));
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 4);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(bool::from_variant(&v).unwrap());
     }
 
@@ -317,10 +302,10 @@ mod tests {
         assert!(*i16::from_variant(&v).unwrap() == i16::max_value());
         assert!(i16::is(&v));
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 2);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(*i16::from_variant(&v).unwrap() == i16::max_value());
     }
 
@@ -330,10 +315,10 @@ mod tests {
         assert!(*u16::from_variant(&v).unwrap() == u16::max_value());
         assert!(u16::is(&v));
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 2);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(*u16::from_variant(&v).unwrap() == u16::max_value());
     }
 
@@ -343,10 +328,10 @@ mod tests {
         assert!(*i32::from_variant(&v).unwrap() == i32::max_value());
         assert!(i32::is(&v));
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 4);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(*i32::from_variant(&v).unwrap() == i32::max_value());
     }
 
@@ -356,10 +341,10 @@ mod tests {
         assert!(*u32::from_variant(&v).unwrap() == u32::max_value());
         assert!(u32::is(&v));
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 4);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(*u32::from_variant(&v).unwrap() == u32::max_value());
     }
 
@@ -369,10 +354,10 @@ mod tests {
         assert!(*i64::from_variant(&v).unwrap() == i64::max_value());
         assert!(i64::is(&v));
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 8);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(*i64::from_variant(&v).unwrap() == i64::max_value());
     }
 
@@ -382,10 +367,10 @@ mod tests {
         assert!(*u64::from_variant(&v).unwrap() == u64::max_value());
         assert!(u64::is(&v));
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 8);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(*u64::from_variant(&v).unwrap() == u64::max_value());
     }
 
@@ -395,10 +380,10 @@ mod tests {
         assert!(*f64::from_variant(&v).unwrap() == 117.112);
         assert!(f64::is(&v));
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 8);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(*f64::from_variant(&v).unwrap() == 117.112);
     }
 
@@ -408,10 +393,10 @@ mod tests {
         assert!(*String::from_variant(&v).unwrap() == "Hello world!");
         assert!(String::is(&v));
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 17);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(*String::from_variant(&v).unwrap() == "Hello world!");
     }
 
@@ -421,10 +406,10 @@ mod tests {
         assert!(crate::ObjectPath::from_variant(&v).unwrap().as_str() == "Hello world!");
         assert!(crate::ObjectPath::is(&v));
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 17);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(crate::ObjectPath::from_variant(&v).unwrap().as_str() == "Hello world!");
     }
 
@@ -434,10 +419,10 @@ mod tests {
         assert!(crate::Signature::from_variant(&v).unwrap().as_str() == "Hello world!");
         assert!(crate::Signature::is(&v));
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 14);
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(crate::Signature::from_variant(&v).unwrap().as_str() == "Hello world!");
     }
 
@@ -448,8 +433,8 @@ mod tests {
         // keep an arbitrary odd number of bytes before the variant and encoding shouldn't add
         // any padding (i-e we should end up with 7 bytes only).
         let mut encoded = vec![0u8; 3];
-        let c = EncodingContext::default();
-        v.encode_into(&mut encoded, c);
+        let format = EncodingFormat::default();
+        v.encode_into(&mut encoded, format);
         assert!(encoded.len() == 7);
 
         // Add some extra bytes to the encoded data to test the slicing
@@ -458,9 +443,9 @@ mod tests {
         encoded.push(7);
 
         let encoded = SharedData::new(encoded).tail(3);
-        let slice = crate::Variant::slice_data_simple(&encoded, c).unwrap();
+        let slice = crate::Variant::slice_data_simple(&encoded, format).unwrap();
 
-        let decoded = crate::Variant::decode_simple(&slice, c).unwrap();
+        let decoded = crate::Variant::decode_simple(&slice, format).unwrap();
         assert!(decoded.signature() == crate::Variant::SIGNATURE_STR);
         assert!(decoded.value_signature() == u8::SIGNATURE_STR);
         assert!(*u8::from_variant(&decoded).unwrap() == 7u8);
@@ -474,7 +459,7 @@ mod tests {
         let dict: Dict = map.into();
         let array = Array::try_from(dict).unwrap();
 
-        let c = EncodingContext::default();
+        let format = EncodingFormat::default();
         let s = StructureBuilder::new()
             .add_field(u8::max_value())
             .add_field(u32::max_value())
@@ -486,13 +471,13 @@ mod tests {
                         StructureBuilder::new()
                             .add_field(i64::max_value())
                             .add_field(std::f64::MAX)
-                            .create(c),
+                            .create(format),
                     )
-                    .create(c),
+                    .create(format),
             )
             .add_field(String::from("hello"))
             .add_field(array)
-            .create(c);
+            .create(format);
         let v = s.to_variant();
         assert!(Structure::is(&v));
         let s = Structure::from_variant(&v).unwrap();
@@ -520,12 +505,12 @@ mod tests {
         assert!(String::is(&fields[3]));
         assert!(String::from_variant(&fields[3]).unwrap() == "hello");
 
-        let encoding = SharedData::new(v.encode_value(c));
+        let encoding = SharedData::new(v.encode_value(format));
         // The HashMap is unordered so we can't rely on items to be in a specific order during the transformation to
         // Vec, and size depends on the order of items because of padding rules.
         assert!(encoding.len() == 88 || encoding.len() == 92);
 
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(Structure::is(&v));
         let s = Structure::from_variant(&v).unwrap();
         let fields = s.fields();
@@ -558,10 +543,10 @@ mod tests {
             assert!(u8::is(&element));
         }
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(array.encode(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(array.encode(format));
         assert!(encoding.len() == 7);
-        let v = crate::Variant::from_data(&encoding, &array.signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &array.signature(), format).unwrap();
         let array = Array::take_from_variant(v).unwrap();
         let ay: Vec<u8> = array.try_into().unwrap();
         assert!(ay == [u8::max_value(), 0u8, 47u8]);
@@ -580,9 +565,9 @@ mod tests {
             assert!(String::is(&element));
         }
 
-        let encoding = SharedData::new(array.encode(c));
+        let encoding = SharedData::new(array.encode(format));
         assert!(encoding.len() == 45);
-        let v = crate::Variant::from_data(&encoding, &array.signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &array.signature(), format).unwrap();
         let array = Array::take_from_variant(v).unwrap();
         let as_: Vec<String> = array.try_into().unwrap();
         assert!(as_ == ["Hello", "World", "Now", "Bye!"]);
@@ -604,20 +589,20 @@ mod tests {
                         String::from("Hello"),
                         String::from("World"),
                     ]))
-                    .create(c),
+                    .create(format),
             )
             // one more top-most simple field
             .add_field(String::from("hello"))
-            .create(c)];
+            .create(format)];
         let array = Array::from(ar);
         assert!(array.signature() == "a(yu(xbxas)s)");
         for element in array.inner() {
             assert!(Structure::is(&element));
         }
 
-        let encoding = SharedData::new(array.encode(c));
+        let encoding = SharedData::new(array.encode(format));
         assert!(encoding.len() == 78);
-        let v = crate::Variant::from_data(&encoding, &array.signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &array.signature(), format).unwrap();
         let array = Array::take_from_variant(v).unwrap();
         let mut ar: Vec<Structure> = array.try_into().unwrap();
 
@@ -656,29 +641,29 @@ mod tests {
         assert!(entry.signature() == "{ys}");
         let v = entry.to_variant();
 
-        let c = EncodingContext::default();
-        let encoding = SharedData::new(v.encode_value(c));
+        let format = EncodingFormat::default();
+        let encoding = SharedData::new(v.encode_value(format));
 
-        let v = crate::Variant::from_data(&encoding, &v.value_signature(), c).unwrap();
+        let v = crate::Variant::from_data(&encoding, &v.value_signature(), format).unwrap();
         assert!(encoding.len() == 14);
         assert!(DictEntry::is(&v));
         let entry = DictEntry::from_variant(&v).unwrap();
         assert!(*entry.key::<u8>().unwrap() == 2u8);
         assert!(entry.value::<String>().unwrap() == "world");
 
-        let c = EncodingContext::default();
+        let format = EncodingFormat::default();
         // STRUCT value
         let entry = DictEntry::new(
             String::from("hello"),
             StructureBuilder::new()
                 .add_field(u8::max_value())
                 .add_field(u32::max_value())
-                .create(c),
+                .create(format),
         );
         assert!(entry.signature() == "{s(yu)}");
         let v = entry.to_variant();
 
-        let encoding = SharedData::new(v.encode_value(c));
+        let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 24);
         assert!(DictEntry::is(&v));
         let entry = DictEntry::from_variant(&v).unwrap();

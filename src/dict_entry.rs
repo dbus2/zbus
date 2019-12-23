@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::EncodingContext;
+use crate::EncodingFormat;
 use crate::Variant;
 use crate::{SharedData, SimpleVariantType};
 use crate::{VariantError, VariantType, VariantTypeConstants};
@@ -70,41 +70,36 @@ impl VariantType for DictEntry {
         Self::ALIGNMENT
     }
 
-    fn encode_into(&self, bytes: &mut Vec<u8>, context: EncodingContext) {
-        Self::add_padding(bytes, context);
+    fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
+        Self::add_padding(bytes, format);
 
-        let child_enc_context = context.copy_for_child();
-        self.key.encode_value_into(bytes, child_enc_context);
-        self.value.encode_value_into(bytes, child_enc_context);
+        self.key.encode_value_into(bytes, format);
+        self.value.encode_value_into(bytes, format);
     }
 
     fn slice_data(
         data: &SharedData,
         signature: &str,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
-        let padding = Self::padding(data.position(), context);
+        let padding = Self::padding(data.position(), format);
         if data.len() < padding || signature.len() < 4 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
 
         let mut extracted = padding;
-        let child_enc_context = context.copy_for_child();
         // Key's signature will always be just 1 character so no need to slice for that.
         let key_signature = &signature[1..2];
-        let key_slice = crate::variant_type::slice_data(
-            &data.tail(extracted as usize),
-            key_signature,
-            child_enc_context,
-        )?;
+        let key_slice =
+            crate::variant_type::slice_data(&data.tail(extracted as usize), key_signature, format)?;
         extracted += key_slice.len();
 
         let value_signature = crate::variant_type::slice_signature(&signature[2..])?;
         let value_slice = crate::variant_type::slice_data(
             &data.tail(extracted as usize),
             value_signature,
-            child_enc_context,
+            format,
         )?;
         extracted += value_slice.len();
         if extracted > data.len() {
@@ -117,25 +112,21 @@ impl VariantType for DictEntry {
     fn decode(
         data: &SharedData,
         signature: &str,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         // Similar to slice_data, except we create variants.
-        let padding = Self::padding(data.position(), context);
+        let padding = Self::padding(data.position(), format);
         if data.len() < padding || signature.len() < 4 {
             return Err(VariantError::InsufficientData);
         }
         Self::ensure_correct_signature(signature)?;
 
         let mut extracted = padding;
-        let child_enc_context = context.copy_for_child();
         // Key's signature will always be just 1 character so no need to slice for that.
         let key_signature = &signature[1..2];
-        let key_slice = crate::variant_type::slice_data(
-            &data.tail(extracted as usize),
-            key_signature,
-            child_enc_context,
-        )?;
-        let key = Variant::from_data(&key_slice, key_signature, child_enc_context)?;
+        let key_slice =
+            crate::variant_type::slice_data(&data.tail(extracted as usize), key_signature, format)?;
+        let key = Variant::from_data(&key_slice, key_signature, format)?;
         extracted += key_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
@@ -145,9 +136,9 @@ impl VariantType for DictEntry {
         let value_slice = crate::variant_type::slice_data(
             &data.tail(extracted as usize),
             value_signature,
-            child_enc_context,
+            format,
         )?;
-        let value = Variant::from_data(&value_slice, value_signature, child_enc_context)?;
+        let value = Variant::from_data(&value_slice, value_signature, format)?;
         extracted += value_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);

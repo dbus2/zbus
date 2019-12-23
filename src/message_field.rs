@@ -3,7 +3,7 @@ use core::convert::TryFrom;
 use std::error;
 use std::fmt;
 
-use crate::EncodingContext;
+use crate::EncodingFormat;
 use crate::{ObjectPath, Signature, Structure, StructureBuilder};
 use crate::{Variant, VariantError, VariantType};
 
@@ -109,7 +109,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Path as u8)
                 .add_field(ObjectPath::new(path).to_variant())
-                .create(EncodingContext::default()),
+                .create(EncodingFormat::default()),
         )
     }
 
@@ -118,7 +118,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Interface as u8)
                 .add_field(String::from(interface).to_variant())
-                .create(EncodingContext::default()),
+                .create(EncodingFormat::default()),
         )
     }
 
@@ -127,7 +127,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Member as u8)
                 .add_field(String::from(member).to_variant())
-                .create(EncodingContext::default()),
+                .create(EncodingFormat::default()),
         )
     }
 
@@ -136,7 +136,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::ErrorName as u8)
                 .add_field(String::from(error_name).to_variant())
-                .create(EncodingContext::default()),
+                .create(EncodingFormat::default()),
         )
     }
 
@@ -145,7 +145,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::ReplySerial as u8)
                 .add_field(serial.to_variant())
-                .create(EncodingContext::default()),
+                .create(EncodingFormat::default()),
         )
     }
 
@@ -154,7 +154,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Destination as u8)
                 .add_field(String::from(destination).to_variant())
-                .create(EncodingContext::default()),
+                .create(EncodingFormat::default()),
         )
     }
 
@@ -163,7 +163,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Sender as u8)
                 .add_field(String::from(sender).to_variant())
-                .create(EncodingContext::default()),
+                .create(EncodingFormat::default()),
         )
     }
 
@@ -172,7 +172,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::Signature as u8)
                 .add_field(Signature::new(signature).to_variant())
-                .create(EncodingContext::default()),
+                .create(EncodingFormat::default()),
         )
     }
 
@@ -181,7 +181,7 @@ impl MessageField {
             StructureBuilder::new()
                 .add_field(MessageFieldCode::UnixFDs as u8)
                 .add_field(fd.to_variant())
-                .create(EncodingContext::default()),
+                .create(EncodingFormat::default()),
         )
     }
 }

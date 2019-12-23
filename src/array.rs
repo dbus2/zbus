@@ -2,7 +2,7 @@ use byteorder::ByteOrder;
 use core::convert::TryInto;
 use std::borrow::Cow;
 
-use crate::EncodingContext;
+use crate::EncodingFormat;
 use crate::{SharedData, SimpleVariantType};
 use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
@@ -50,25 +50,24 @@ impl VariantType for Array {
         Self::ALIGNMENT
     }
 
-    fn encode_into(&self, bytes: &mut Vec<u8>, context: EncodingContext) {
-        Self::add_padding(bytes, context);
+    fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
+        Self::add_padding(bytes, format);
 
         let len_position = bytes.len();
         bytes.extend(&0u32.to_ne_bytes());
         let n_bytes_before = bytes.len();
-        let child_enc_context = context.copy_for_child();
         let mut first_element = true;
         let mut first_padding = 0;
 
         for element in self.inner() {
             if first_element {
                 // Length we report doesn't include padding for the first element
-                first_padding = element.value_padding(bytes.len(), child_enc_context);
+                first_padding = element.value_padding(bytes.len(), format);
                 first_element = false;
             }
 
             // Deep copying, nice!!! 🙈
-            element.encode_value_into(bytes, child_enc_context);
+            element.encode_value_into(bytes, format);
         }
 
         // Set size of array in bytes
@@ -79,7 +78,7 @@ impl VariantType for Array {
     fn slice_data(
         data: &SharedData,
         signature: &str,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         if signature.len() < 2 {
             return Err(VariantError::InsufficientData);
@@ -90,10 +89,9 @@ impl VariantType for Array {
         let child_signature = crate::variant_type::slice_signature(&signature[1..])?;
 
         // Array size in bytes
-        let len_slice = u32::slice_data_simple(&data, context)?;
+        let len_slice = u32::slice_data_simple(&data, format)?;
         let mut extracted = len_slice.len();
-        let mut len = u32::decode_simple(&len_slice, context)? as usize + extracted;
-        let child_enc_context = context.copy_for_child();
+        let mut len = u32::decode_simple(&len_slice, format)? as usize + extracted;
         let mut first_element = true;
         while extracted < len {
             let element_data = data.tail(extracted);
@@ -103,13 +101,12 @@ impl VariantType for Array {
                 len += crate::variant_type::padding_for_signature(
                     element_data.position(),
                     child_signature,
-                    child_enc_context,
+                    format,
                 );
                 first_element = false;
             }
 
-            let slice =
-                crate::variant_type::slice_data(&element_data, child_signature, child_enc_context)?;
+            let slice = crate::variant_type::slice_data(&element_data, child_signature, format)?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
@@ -125,9 +122,9 @@ impl VariantType for Array {
     fn decode(
         data: &SharedData,
         signature: &str,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<Self, VariantError> {
-        let padding = Self::padding(data.position(), context);
+        let padding = Self::padding(data.position(), format);
         if data.len() < padding + 4 || signature.len() < 2 {
             return Err(VariantError::InsufficientData);
         }
@@ -139,8 +136,7 @@ impl VariantType for Array {
         // Array size in bytes
         let mut extracted = padding + 4;
         let mut len =
-            u32::decode_simple(&data.subset(padding, extracted), context)? as usize + extracted;
-        let child_enc_context = context.copy_for_child();
+            u32::decode_simple(&data.subset(padding, extracted), format)? as usize + extracted;
         let mut elements = vec![];
 
         let mut first_element = true;
@@ -152,19 +148,18 @@ impl VariantType for Array {
                 len += crate::variant_type::padding_for_signature(
                     element_data.position(),
                     child_signature,
-                    child_enc_context,
+                    format,
                 );
                 first_element = false;
             }
 
-            let slice =
-                crate::variant_type::slice_data(&element_data, child_signature, child_enc_context)?;
+            let slice = crate::variant_type::slice_data(&element_data, child_signature, format)?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
             }
 
-            let element = Variant::from_data(&slice, child_signature, child_enc_context)?;
+            let element = Variant::from_data(&slice, child_signature, format)?;
             elements.push(element);
         }
         if extracted == 0 {

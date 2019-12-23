@@ -1,6 +1,6 @@
 use std::str;
 
-use crate::{EncodingContext, SharedData, SimpleVariantType};
+use crate::{EncodingFormat, SharedData, SimpleVariantType};
 use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
 impl VariantTypeConstants for String {
@@ -21,9 +21,9 @@ impl VariantType for String {
         Self::ALIGNMENT
     }
 
-    fn encode_into(&self, bytes: &mut Vec<u8>, context: EncodingContext) {
+    fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         let len = self.len();
-        Self::add_padding(bytes, context);
+        Self::add_padding(bytes, format);
 
         bytes.extend(&crate::utils::usize_to_u32(len).to_ne_bytes());
         bytes.extend(self.as_bytes());
@@ -33,12 +33,12 @@ impl VariantType for String {
     fn slice_data(
         data: &SharedData,
         signature: &str,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
-        let len_slice = u32::slice_data_simple(&data, context)?;
-        let last_index = u32::decode_simple(&len_slice, context)? as usize + len_slice.len() + 1;
+        let len_slice = u32::slice_data_simple(&data, format)?;
+        let last_index = u32::decode_simple(&len_slice, format)? as usize + len_slice.len() + 1;
 
         Ok(data.head(last_index))
     }
@@ -46,9 +46,9 @@ impl VariantType for String {
     fn decode(
         data: &SharedData,
         signature: &str,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<Self, VariantError> {
-        let slice = Self::slice_for_decoding(data, signature, context)?;
+        let slice = Self::slice_for_decoding(data, signature, format)?;
 
         let last_index = slice.len() - 1;
         slice.apply(|bytes| {
@@ -119,26 +119,26 @@ impl VariantType for ObjectPath {
         Self::ALIGNMENT
     }
 
-    fn encode_into(&self, bytes: &mut Vec<u8>, context: EncodingContext) {
-        self.0.encode_into(bytes, context);
+    fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
+        self.0.encode_into(bytes, format);
     }
 
     fn slice_data<'b>(
         data: &SharedData,
         signature: &str,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        String::slice_data_simple(data, context)
+        String::slice_data_simple(data, format)
     }
 
     fn decode(
         data: &SharedData,
         signature: &str,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        String::decode(data, String::SIGNATURE_STR, context).map(|s| Self(s))
+        String::decode(data, String::SIGNATURE_STR, format).map(|s| Self(s))
     }
 
     fn is(variant: &Variant) -> bool {
@@ -202,9 +202,9 @@ impl VariantType for Signature {
         Self::ALIGNMENT
     }
 
-    // No padding needed because of 1-byte context and hence encoding context is ignored everywhere.
+    // No padding needed because of 1-byte format and hence encoding format is ignored everywhere.
 
-    fn encode_into(&self, bytes: &mut Vec<u8>, _context: EncodingContext) {
+    fn encode_into(&self, bytes: &mut Vec<u8>, _context: EncodingFormat) {
         let len = self.0.len();
 
         bytes.push(len as u8);
@@ -215,7 +215,7 @@ impl VariantType for Signature {
     fn slice_data(
         data: &SharedData,
         signature: &str,
-        _context: EncodingContext,
+        _context: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
         if data.len() < 1 {
@@ -235,7 +235,7 @@ impl VariantType for Signature {
     fn decode(
         data: &SharedData,
         signature: &str,
-        _context: EncodingContext,
+        _context: EncodingFormat,
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
 

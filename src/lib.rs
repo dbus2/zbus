@@ -50,7 +50,7 @@ mod tests {
     use core::convert::{TryFrom, TryInto};
     use std::collections::HashMap;
 
-    use crate::{Array, Dict, EncodingContext, StructureBuilder};
+    use crate::{Array, Dict, EncodingFormat, StructureBuilder};
     use crate::{Variant, VariantType, VariantTypeConstants};
 
     #[test]
@@ -116,7 +116,7 @@ mod tests {
                 Some(
                     StructureBuilder::new()
                         .add_field(String::from("org.freedesktop.DBus"))
-                        .create(EncodingContext::default()),
+                        .create(EncodingFormat::default()),
                 ),
             )
             .unwrap();
@@ -137,7 +137,7 @@ mod tests {
                 Some(
                     StructureBuilder::new()
                         .add_field(String::from("org.freedesktop.DBus"))
-                        .create(EncodingContext::default()),
+                        .create(EncodingFormat::default()),
                 ),
             )
             .unwrap();
@@ -159,7 +159,7 @@ mod tests {
                 Some(
                     StructureBuilder::new()
                         .add_field(String::from("org.freedesktop.DBus"))
-                        .create(EncodingContext::default()),
+                        .create(EncodingFormat::default()),
                 ),
             )
             .unwrap();

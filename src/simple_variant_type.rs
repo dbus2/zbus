@@ -1,21 +1,21 @@
-use crate::{EncodingContext, SharedData, VariantError, VariantType};
+use crate::{EncodingFormat, SharedData, VariantError, VariantType};
 
 pub trait SimpleVariantType: VariantType {
     fn slice_data_simple(
         data: &SharedData,
-        context: EncodingContext,
+        format: EncodingFormat,
     ) -> Result<SharedData, VariantError>
     where
         Self: Sized,
     {
-        Self::slice_data(data, Self::signature_str(), context)
+        Self::slice_data(data, Self::signature_str(), format)
     }
 
-    fn decode_simple(bytes: &SharedData, context: EncodingContext) -> Result<Self, VariantError>
+    fn decode_simple(bytes: &SharedData, format: EncodingFormat) -> Result<Self, VariantError>
     where
         Self: Sized,
     {
-        Self::decode(bytes, Self::signature_str(), context)
+        Self::decode(bytes, Self::signature_str(), format)
     }
 }
 
