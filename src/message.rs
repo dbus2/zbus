@@ -32,7 +32,7 @@ const ENDIAN_SIG: u8 = b'l';
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
 
 #[repr(u8)]
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MessageType {
     Invalid = 0,
     MethodCall = 1,
