@@ -172,6 +172,29 @@ mod tests {
         let mut fields = body.take_fields();
         let array = Array::take_from_variant(fields.remove(0)).unwrap();
         let dict = Dict::try_from(array).unwrap();
-        let hashmap: HashMap<String, Variant> = dict.try_into().unwrap();
+        let mut hashmap: HashMap<String, Variant> = dict.try_into().unwrap();
+
+        // "Features" property
+        let features: Vec<String> = Array::take_from_variant(hashmap.remove("Features").unwrap())
+            .unwrap()
+            .try_into()
+            .unwrap();
+        println!("org.freedesktop.DBus.Features on /org/freedesktop/DBus:");
+        for feature in features {
+            print!(" {}", feature);
+        }
+        println!("");
+
+        // "Interfaces" property
+        let interfaces: Vec<String> =
+            Array::take_from_variant(hashmap.remove("Interfaces").unwrap())
+                .unwrap()
+                .try_into()
+                .unwrap();
+        println!("org.freedesktop.DBus.Interfaces on /org/freedesktop/DBus:");
+        for interface in interfaces {
+            print!(" {}", interface);
+        }
+        println!("");
     }
 }
