@@ -31,7 +31,7 @@ impl VariantType for String {
         bytes.push(b'\0');
     }
 
-    fn slice_data<'b>(
+    fn slice_data(
         data: &SharedData,
         signature: &str,
         context: EncodingContext,
