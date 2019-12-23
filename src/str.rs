@@ -69,7 +69,7 @@ impl VariantType for String {
 }
 impl SimpleVariantType for String {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ObjectPath(String);
 
 impl ObjectPath {
@@ -124,7 +124,7 @@ impl VariantType for ObjectPath {
 }
 impl SimpleVariantType for ObjectPath {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Signature(String);
 
 impl Signature {

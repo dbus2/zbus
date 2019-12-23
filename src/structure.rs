@@ -4,7 +4,7 @@ use crate::utils::padding_for_n_bytes;
 use crate::{EncodingContext, SharedData};
 use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Structure {
     encoding: SharedData,
     signature: String,
