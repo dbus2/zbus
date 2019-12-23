@@ -57,13 +57,22 @@ impl VariantType for Array {
         bytes.extend(&0u32.to_ne_bytes());
         let n_bytes_before = bytes.len();
         let child_enc_context = context.copy_for_child();
+        let mut first_element = true;
+        let mut first_padding = 0;
+
         for element in self.inner() {
+            if first_element {
+                // Length we report doesn't include padding for the first element
+                first_padding = element.value_padding(bytes.len(), child_enc_context);
+                first_element = false;
+            }
+
             // Deep copying, nice!!! 🙈
             element.encode_value_into(bytes, child_enc_context);
         }
 
         // Set size of array in bytes
-        let len = crate::utils::usize_to_u32(bytes.len() - n_bytes_before);
+        let len = crate::utils::usize_to_u32(bytes.len() - n_bytes_before - first_padding);
         byteorder::NativeEndian::write_u32(&mut bytes[len_position..len_position + 4], len);
     }
 
@@ -83,14 +92,24 @@ impl VariantType for Array {
         // Array size in bytes
         let len_slice = u32::slice_data_simple(&data, context)?;
         let mut extracted = len_slice.len();
-        let len = u32::decode_simple(&len_slice, context)? as usize + 4;
+        let mut len = u32::decode_simple(&len_slice, context)? as usize + extracted;
         let child_enc_context = context.copy_for_child();
+        let mut first_element = true;
         while extracted < len {
-            let slice = crate::variant_type::slice_data(
-                &data.tail(extracted),
-                child_signature,
-                child_enc_context,
-            )?;
+            let element_data = data.tail(extracted);
+
+            if first_element {
+                // Length we got from array doesn't include padding for the first element
+                len += crate::variant_type::padding_for_signature(
+                    element_data.position(),
+                    child_signature,
+                    child_enc_context,
+                );
+                first_element = false;
+            }
+
+            let slice =
+                crate::variant_type::slice_data(&element_data, child_signature, child_enc_context)?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
@@ -119,16 +138,27 @@ impl VariantType for Array {
 
         // Array size in bytes
         let mut extracted = padding + 4;
-        let len = u32::decode_simple(&data.subset(padding, extracted), context)? as usize + 4;
+        let mut len =
+            u32::decode_simple(&data.subset(padding, extracted), context)? as usize + extracted;
         let child_enc_context = context.copy_for_child();
         let mut elements = vec![];
 
+        let mut first_element = true;
         while extracted < len {
-            let slice = crate::variant_type::slice_data(
-                &data.tail(extracted as usize),
-                child_signature,
-                child_enc_context,
-            )?;
+            let element_data = data.tail(extracted);
+
+            if first_element {
+                // Length we got from array doesn't include padding for the first element
+                len += crate::variant_type::padding_for_signature(
+                    element_data.position(),
+                    child_signature,
+                    child_enc_context,
+                );
+                first_element = false;
+            }
+
+            let slice =
+                crate::variant_type::slice_data(&element_data, child_signature, child_enc_context)?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
