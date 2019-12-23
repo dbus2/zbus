@@ -7,7 +7,7 @@ use nix::unistd::Uid;
 use crate::address::{self, Address};
 use crate::message;
 use crate::message_field;
-use crate::{VariantError, VariantTypeConstants};
+use crate::{VariantError, VariantType, VariantTypeConstants};
 
 pub struct Connection {
     pub server_guid: String,
@@ -114,7 +114,7 @@ impl From<message::Message> for ConnectionError {
                         .unwrap_or(false)
                 }) {
                     Some(f) => match f.value() {
-                        Ok(v) => match v.get::<String>() {
+                        Ok(v) => match String::from_variant(v) {
                             Ok(s) => String::from(s),
                             Err(e) => return ConnectionError::Variant(e),
                         },
@@ -126,7 +126,7 @@ impl From<message::Message> for ConnectionError {
                 // Then, try to get the optional description string
                 if message.body_len() > 0 {
                     match message.body(Some(<String>::SIGNATURE_STR)) {
-                        Ok(body) => match body.fields()[0].get::<String>() {
+                        Ok(body) => match String::from_variant(&body.fields()[0]) {
                             Ok(detail) => {
                                 ConnectionError::MethodError(name, Some(String::from(detail)))
                             }
@@ -204,7 +204,7 @@ impl Connection {
         )?;
 
         let body = reply.body(Some(<String>::SIGNATURE_STR))?;
-        let bus_name = body.fields()[0].get::<String>()?;
+        let bus_name = String::from_variant(&body.fields()[0])?;
 
         println!("bus name: {}", bus_name);
 
@@ -253,17 +253,16 @@ impl Connection {
                             .map(|c| c == message_field::MessageFieldCode::ReplySerial)
                             .unwrap_or(false)
                             && f.value()
-                                .map(|v| v.get::<u32>().map(|u| u == serial).unwrap_or(false))
-                                .unwrap_or(false)
+                                .map(|v| {
+                                    u32::from_variant(v).map(|u| *u == serial).unwrap_or(false)
+                                })
+                                .unwrap()
                     })
                     .is_some()
                 {
                     match incoming.message_type() {
                         message::MessageType::Error => return Err(incoming.into()),
-                        message::MessageType::MethodReturn => {
-                            println!("Returing from: {}", method_name);
-                            return Ok(incoming);
-                        }
+                        message::MessageType::MethodReturn => return Ok(incoming),
                         _ => (),
                     }
                 }

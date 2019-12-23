@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 
-use crate::utils::padding_for_n_bytes;
 use crate::{EncodingContext, SharedData};
 use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
@@ -12,6 +11,10 @@ pub struct Structure {
 }
 
 impl Structure {
+    pub fn take_fields(self) -> Vec<Variant> {
+        self.fields
+    }
+
     pub fn fields(&self) -> &[Variant] {
         &self.fields
     }
@@ -30,20 +33,15 @@ fn variants_from_struct_data(
     while i < last_index {
         let child_signature = crate::slice_signature(&signature[i..last_index])?;
 
-        // Parse child padding ourselves since we'll create Variant from it and Variant doesn't
-        // handle padding.
-        let alignment = crate::alignment_for_signature(child_signature)?;
-        extracted += padding_for_n_bytes(extracted, alignment);
+        // FIXME: Redundant slicing since Variant::from_data() does slicing too (maybe that function should return the
+        // len or slice as well?)
+        let child_slice =
+            crate::variant_type::slice_data(&data.tail(extracted), child_signature, context)?;
+        extracted += child_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
-
-        // Parse data
-        let variant = Variant::from_data(&data.tail(extracted), child_signature, context)?;
-        extracted += variant.len();
-        if extracted > data.len() {
-            return Err(VariantError::InsufficientData);
-        }
+        let variant = Variant::from_data(&child_slice, child_signature, context)?;
         fields.push(variant);
 
         i += child_signature.len();
@@ -229,5 +227,33 @@ impl VariantType for Structure {
         }
 
         Ok(&signature[0..i + 1])
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::Structure(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::Structure(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::Structure(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::Structure(self)
     }
 }

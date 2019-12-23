@@ -1,4 +1,4 @@
-use crate::{DictEntry, ObjectPath, Signature, Structure, Variant, VariantError};
+use crate::{Array, DictEntry, ObjectPath, Signature, Structure, Variant, VariantError};
 
 // We've to keep a separate trait for associated constants since they are incompatible with
 // trait-objects, and we need and want VariantType to be trait-object compatible.
@@ -81,14 +81,12 @@ pub(crate) fn alignment_for_signature(signature: &str) -> Result<usize, VariantE
         u64::SIGNATURE_CHAR => Ok(u64::ALIGNMENT),
         f64::SIGNATURE_CHAR => Ok(f64::ALIGNMENT),
         <String>::SIGNATURE_CHAR => Ok(<String>::ALIGNMENT),
-        // Doesn't matter what type for T we use here, alignment is the same
-        Vec::<bool>::SIGNATURE_CHAR => Ok(Vec::<bool>::ALIGNMENT),
+        Array::SIGNATURE_CHAR => Ok(Array::ALIGNMENT),
         ObjectPath::SIGNATURE_CHAR => Ok(ObjectPath::ALIGNMENT),
         Signature::SIGNATURE_CHAR => Ok(Signature::ALIGNMENT),
         Structure::SIGNATURE_CHAR => Ok(Structure::ALIGNMENT),
         Variant::SIGNATURE_CHAR => Ok(Variant::ALIGNMENT),
-        // Doesn't matter what type for T we use here, alignment is the same
-        DictEntry::<bool, bool>::SIGNATURE_CHAR => Ok(DictEntry::<bool, bool>::ALIGNMENT),
+        DictEntry::SIGNATURE_CHAR => Ok(DictEntry::ALIGNMENT),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }

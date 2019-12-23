@@ -3,7 +3,7 @@ use std::{borrow::Cow, error, fmt, str};
 
 use crate::utils::padding_for_n_bytes;
 use crate::SharedData;
-use crate::{DictEntry, ObjectPath, Signature, Structure};
+use crate::{Array, DictEntry, ObjectPath, Signature, Structure};
 use crate::{SimpleVariantType, Variant, VariantTypeConstants};
 
 #[derive(Debug)]
@@ -165,7 +165,7 @@ pub trait VariantType: std::fmt::Debug {
         }
     }
 
-    // Helper for decode() implementation
+    // Mostly a helper for decode() implementation. Removes any leading padding bytes.
     fn slice_for_decoding(
         data: &SharedData,
         signature: &str,
@@ -191,6 +191,47 @@ pub trait VariantType: std::fmt::Debug {
             AlignmentKind::ChildOnly => 0,
         }
     }
+
+    /// Checks if variant value is of the generic type `T`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zbus::VariantType;
+    ///
+    /// let v = String::from("hello").to_variant();
+    /// assert!(!u32::is(&v));
+    /// assert!(String::is(&v));
+    /// ```
+    ///
+    /// ```
+    /// use zbus::VariantType;
+    ///
+    /// let v = 147u32.to_variant();
+    /// assert!(u32::is(&v));
+    /// assert!(!String::is(&v));
+    /// ```
+    fn is(variant: &Variant) -> bool
+    where
+        Self: Sized;
+
+    // `TryFrom<Variant>` trait bound would have been better but we can't use that unfortunately
+    // since Variant implements VariantType.
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError>
+    where
+        Self: Sized;
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError>
+    where
+        Self: Sized;
+
+    // Into<Variant> trait bound would have been better and it's possible but since `Into<T> for T`
+    // is provided implicitly, the default no-op implementation for `Variant` won't do the right
+    // thing: unflatten it.
+    // `TryFrom<Variant>`.
+    fn to_variant(self) -> Variant
+    where
+        Self: Sized;
 }
 
 impl VariantType for u8 {
@@ -217,6 +258,34 @@ impl VariantType for u8 {
         let slice = Self::slice_for_decoding(data, signature, context)?;
 
         slice.apply(|bytes| Ok(bytes[0]))
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::U8(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::U8(u) = variant {
+            Ok(u)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::U8(ref u) = variant {
+            Ok(u)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::U8(self)
     }
 }
 
@@ -249,6 +318,34 @@ impl VariantType for bool {
             _ => Err(VariantError::IncorrectValue),
         })
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::Bool(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::Bool(u) = variant {
+            Ok(u)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::Bool(u) = variant {
+            Ok(u)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::Bool(self)
+    }
 }
 
 impl VariantType for i16 {
@@ -275,6 +372,34 @@ impl VariantType for i16 {
         let slice = Self::slice_for_decoding(data, signature, context)?;
 
         slice.apply(|bytes| Ok(byteorder::NativeEndian::read_i16(bytes)))
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::I16(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::I16(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::I16(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::I16(self)
     }
 }
 
@@ -303,6 +428,34 @@ impl VariantType for u16 {
 
         slice.apply(|bytes| Ok(byteorder::NativeEndian::read_u16(bytes)))
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::U16(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::U16(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::U16(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::U16(self)
+    }
 }
 
 impl VariantType for i32 {
@@ -329,6 +482,34 @@ impl VariantType for i32 {
         let slice = Self::slice_for_decoding(data, signature, context)?;
 
         slice.apply(|bytes| Ok(byteorder::NativeEndian::read_i32(bytes)))
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::I32(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::I32(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::I32(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::I32(self)
     }
 }
 
@@ -357,6 +538,34 @@ impl VariantType for u32 {
 
         slice.apply(|bytes| Ok(byteorder::NativeEndian::read_u32(bytes)))
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::U32(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::U32(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::U32(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::U32(self)
+    }
 }
 
 impl VariantType for i64 {
@@ -384,6 +593,34 @@ impl VariantType for i64 {
 
         slice.apply(|bytes| Ok(byteorder::NativeEndian::read_i64(bytes)))
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::I64(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::I64(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::I64(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::I64(self)
+    }
 }
 
 impl VariantType for u64 {
@@ -410,6 +647,34 @@ impl VariantType for u64 {
         let slice = Self::slice_for_decoding(data, signature, context)?;
 
         slice.apply(|bytes| Ok(byteorder::NativeEndian::read_u64(bytes)))
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::U64(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::U64(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::U64(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::U64(self)
     }
 }
 
@@ -439,6 +704,34 @@ impl VariantType for f64 {
         let slice = Self::slice_for_decoding(data, signature, context)?;
 
         slice.apply(|bytes| Ok(byteorder::NativeEndian::read_f64(bytes)))
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::F64(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::F64(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::F64(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::F64(self)
     }
 }
 
@@ -471,19 +764,44 @@ pub(crate) fn slice_data(
         u64::SIGNATURE_CHAR => u64::slice_data_simple(data, context),
         f64::SIGNATURE_CHAR => f64::slice_data_simple(data, context),
         String::SIGNATURE_CHAR => String::slice_data_simple(data, context),
-        // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_data` to
-        // be independent of `T` (an internal detail).
-        Vec::<bool>::SIGNATURE_CHAR => Vec::<bool>::slice_data(data, signature, context),
+        Array::SIGNATURE_CHAR => Array::slice_data(data, signature, context),
         ObjectPath::SIGNATURE_CHAR => ObjectPath::slice_data_simple(data, context),
         Signature::SIGNATURE_CHAR => Signature::slice_data_simple(data, context),
         Structure::SIGNATURE_CHAR => Structure::slice_data(data, signature, context),
         Variant::SIGNATURE_CHAR => Variant::slice_data(data, signature, context),
-        // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_data` to
-        // be independent of `T` (an internal detail).
-        DictEntry::<bool, bool>::SIGNATURE_CHAR => {
-            DictEntry::<bool, bool>::slice_data(data, signature, context)
-        }
+        DictEntry::SIGNATURE_CHAR => DictEntry::slice_data(data, signature, context),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
+    }
+}
+
+pub(crate) fn padding_for_signature(
+    n_bytes_before: usize,
+    signature: &str,
+    context: EncodingContext,
+) -> usize {
+    match signature.chars().next().unwrap_or('\0') {
+        // FIXME: There has to be a shorter way to do this
+        u8::SIGNATURE_CHAR => u8::padding(n_bytes_before, context),
+        bool::SIGNATURE_CHAR => bool::padding(n_bytes_before, context),
+        i16::SIGNATURE_CHAR => i16::padding(n_bytes_before, context),
+        u16::SIGNATURE_CHAR => u16::padding(n_bytes_before, context),
+        i32::SIGNATURE_CHAR => i32::padding(n_bytes_before, context),
+        u32::SIGNATURE_CHAR => u32::padding(n_bytes_before, context),
+        i64::SIGNATURE_CHAR => i64::padding(n_bytes_before, context),
+        u64::SIGNATURE_CHAR => u64::padding(n_bytes_before, context),
+        f64::SIGNATURE_CHAR => f64::padding(n_bytes_before, context),
+        String::SIGNATURE_CHAR => String::padding(n_bytes_before, context),
+        Array::SIGNATURE_CHAR => Array::padding(n_bytes_before, context),
+        ObjectPath::SIGNATURE_CHAR => ObjectPath::padding(n_bytes_before, context),
+        Signature::SIGNATURE_CHAR => Signature::padding(n_bytes_before, context),
+        Structure::SIGNATURE_CHAR => Structure::padding(n_bytes_before, context),
+        Variant::SIGNATURE_CHAR => Variant::padding(n_bytes_before, context),
+        DictEntry::SIGNATURE_CHAR => DictEntry::padding(n_bytes_before, context),
+        _ => {
+            println!("WARNING: Unsupported signature: {}", signature);
+
+            0
+        }
     }
 }
 
@@ -504,18 +822,12 @@ pub(crate) fn slice_signature(signature: &str) -> Result<&str, VariantError> {
         u64::SIGNATURE_CHAR => u64::slice_signature(signature),
         f64::SIGNATURE_CHAR => f64::slice_signature(signature),
         String::SIGNATURE_CHAR => String::slice_signature(signature),
-        // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_signature`
-        // to be independent of `T` (an internal detail).
-        Vec::<bool>::SIGNATURE_CHAR => Vec::<bool>::slice_signature(signature),
+        Array::SIGNATURE_CHAR => Array::slice_signature(signature),
         ObjectPath::SIGNATURE_CHAR => ObjectPath::slice_signature(signature),
         Signature::SIGNATURE_CHAR => Signature::slice_signature(signature),
         Structure::SIGNATURE_CHAR => Structure::slice_signature(signature),
         Variant::SIGNATURE_CHAR => Variant::slice_signature(signature),
-        // Doesn't matter what type for T we use here, signature is the same but we're also assuming `slice_signature`
-        // to be independent of `T` (an internal detail).
-        DictEntry::<bool, bool>::SIGNATURE_CHAR => {
-            DictEntry::<bool, bool>::slice_signature(signature)
-        }
+        DictEntry::SIGNATURE_CHAR => DictEntry::slice_signature(signature),
         _ => return Err(VariantError::UnsupportedType(String::from(signature))),
     }
 }

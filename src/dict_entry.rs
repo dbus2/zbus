@@ -1,36 +1,56 @@
 use std::borrow::Cow;
 
 use crate::EncodingContext;
+use crate::Variant;
 use crate::{SharedData, SimpleVariantType};
 use crate::{VariantError, VariantType, VariantTypeConstants};
 
-#[derive(Debug)]
-pub struct DictEntry<K, V> {
-    key: K,
-    value: V,
+#[derive(Debug, Clone)]
+pub struct DictEntry {
+    key: Box<Variant>,
+    value: Box<Variant>,
 }
 
-impl<K: SimpleVariantType + std::hash::Hash, V: VariantType> DictEntry<K, V> {
-    pub fn new(key: K, value: V) -> Self {
-        Self { key, value }
+impl DictEntry {
+    pub fn new<K, V>(key: K, value: V) -> Self
+    where
+        K: SimpleVariantType + std::hash::Hash,
+        V: VariantType,
+    {
+        Self {
+            key: Box::new(key.to_variant()),
+            value: Box::new(value.to_variant()),
+        }
     }
 
-    pub fn key(&self) -> &K {
-        &self.key
+    // FIXME: Tryo to optimize (this should be returing a reference ideally
+    pub fn key<K>(&self) -> Result<&K, VariantError>
+    where
+        K: SimpleVariantType + std::hash::Hash,
+    {
+        K::from_variant(&self.key)
     }
 
-    pub fn value(&self) -> &V {
-        &self.value
+    pub fn value<V>(&self) -> Result<&V, VariantError>
+    where
+        V: VariantType,
+    {
+        V::from_variant(&self.value)
     }
 
-    pub fn take_inner(self) -> (K, V) {
-        (self.key, self.value)
+    pub fn take_inner<K, V>(self) -> Result<(K, V), VariantError>
+    where
+        K: SimpleVariantType + std::hash::Hash,
+        V: VariantType,
+    {
+        Ok((
+            K::take_from_variant(*self.key)?,
+            V::take_from_variant(*self.value)?,
+        ))
     }
 }
 
-impl<K: SimpleVariantType + std::hash::Hash, V: VariantType> VariantTypeConstants
-    for DictEntry<K, V>
-{
+impl VariantTypeConstants for DictEntry {
     // The real single character signature for DICT_ENTRY is `e` but that's not actually used in practice for D-Bus at
     // least (the spec clearly states that this signature must never appear on the bus). The openning and closing curly
     // braces are used in practice and that's why we'll declare the opening curly brace as the signature for this type.
@@ -39,7 +59,7 @@ impl<K: SimpleVariantType + std::hash::Hash, V: VariantType> VariantTypeConstant
     const ALIGNMENT: usize = 8;
 }
 
-impl<K: SimpleVariantType + std::hash::Hash, V: VariantType> VariantType for DictEntry<K, V> {
+impl VariantType for DictEntry {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -54,11 +74,10 @@ impl<K: SimpleVariantType + std::hash::Hash, V: VariantType> VariantType for Dic
         Self::add_padding(bytes, context);
 
         let child_enc_context = context.copy_for_child();
-        self.key.encode_into(bytes, child_enc_context);
-        self.value.encode_into(bytes, child_enc_context);
+        self.key.encode_value_into(bytes, child_enc_context);
+        self.value.encode_value_into(bytes, child_enc_context);
     }
 
-    // Kept independent of K and V so that it can be used from generic code
     fn slice_data(
         data: &SharedData,
         signature: &str,
@@ -109,26 +128,35 @@ impl<K: SimpleVariantType + std::hash::Hash, V: VariantType> VariantType for Dic
 
         let mut extracted = padding;
         let child_enc_context = context.copy_for_child();
-        let slice = K::slice_data_simple(&data.tail(extracted), child_enc_context)?;
-        let key = K::decode_simple(&slice, child_enc_context)?;
-        extracted += slice.len();
+        // Key's signature will always be just 1 character so no need to slice for that.
+        let key_signature = &signature[1..2];
+        let key_slice = crate::variant_type::slice_data(
+            &data.tail(extracted as usize),
+            key_signature,
+            child_enc_context,
+        )?;
+        let key = Variant::from_data(&key_slice, key_signature, child_enc_context)?;
+        extracted += key_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
 
-        let value_signature = V::slice_signature(&signature[2..])?;
-        let slice = V::slice_data(
+        let value_signature = crate::variant_type::slice_signature(&signature[2..])?;
+        let value_slice = crate::variant_type::slice_data(
             &data.tail(extracted as usize),
             value_signature,
             child_enc_context,
         )?;
-        let value = V::decode(&slice, value_signature, child_enc_context)?;
-        extracted += slice.len();
+        let value = Variant::from_data(&value_slice, value_signature, child_enc_context)?;
+        extracted += value_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
 
-        Ok(Self::new(key, value))
+        Ok(Self {
+            key: Box::new(key),
+            value: Box::new(value),
+        })
     }
 
     // Kept independent of K and V so that it can be used from generic code
@@ -151,8 +179,8 @@ impl<K: SimpleVariantType + std::hash::Hash, V: VariantType> VariantType for Dic
     fn signature<'b>(&'b self) -> Cow<'b, str> {
         Cow::from(format!(
             "{{{}{}}}",
-            self.key.signature(),
-            self.value.signature()
+            self.key.value_signature(),
+            self.value.value_signature()
         ))
     }
 
@@ -171,5 +199,33 @@ impl<K: SimpleVariantType + std::hash::Hash, V: VariantType> VariantType for Dic
 
         // signature of value + `{` + 1 char of the key signature + `}`
         Ok(&signature[0..slice.len() + 3])
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::DictEntry(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::DictEntry(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::DictEntry(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::DictEntry(self)
     }
 }

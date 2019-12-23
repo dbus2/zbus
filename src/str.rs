@@ -1,8 +1,7 @@
-use byteorder::ByteOrder;
 use std::str;
 
 use crate::{EncodingContext, SharedData, SimpleVariantType};
-use crate::{VariantError, VariantType, VariantTypeConstants};
+use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
 impl VariantTypeConstants for String {
     const SIGNATURE_CHAR: char = 's';
@@ -37,17 +36,9 @@ impl VariantType for String {
         context: EncodingContext,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        let padding = Self::padding(data.position(), context);
-        let len = Self::ALIGNMENT as usize + padding;
-        data.apply(|bytes| crate::ensure_sufficient_bytes(bytes, len))?;
 
-        let last_index = data.apply(|bytes| {
-            let last_index =
-                len + byteorder::NativeEndian::read_u32(&bytes[padding..]) as usize + 1;
-            crate::ensure_sufficient_bytes(bytes, last_index)?;
-
-            Ok(last_index)
-        })?;
+        let len_slice = u32::slice_data_simple(&data, context)?;
+        let last_index = u32::decode_simple(&len_slice, context)? as usize + len_slice.len() + 1;
 
         Ok(data.head(last_index))
     }
@@ -65,6 +56,34 @@ impl VariantType for String {
                 .map(|s| s.to_owned())
                 .map_err(|_| VariantError::InvalidUtf8)
         })
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::Str(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::Str(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::Str(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::Str(self)
     }
 }
 impl SimpleVariantType for String {}
@@ -120,6 +139,34 @@ impl VariantType for ObjectPath {
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         String::decode(data, String::SIGNATURE_STR, context).map(|s| Self(s))
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::ObjectPath(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::ObjectPath(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::ObjectPath(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::ObjectPath(self)
     }
 }
 impl SimpleVariantType for ObjectPath {}
@@ -200,6 +247,34 @@ impl VariantType for Signature {
                 .map(|s| Self::new(s))
                 .map_err(|_| VariantError::InvalidUtf8)
         })
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::Signature(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
+        if let Variant::Signature(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
+        if let Variant::Signature(value) = variant {
+            Ok(value)
+        } else {
+            Err(VariantError::IncorrectType)
+        }
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::Signature(self)
     }
 }
 impl SimpleVariantType for Signature {}

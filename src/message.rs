@@ -1,11 +1,12 @@
 use byteorder::ByteOrder;
+use core::convert::TryInto;
 use std::error;
 use std::{borrow::Cow, fmt};
 
 use crate::utils::padding_for_8_bytes;
-use crate::EncodingContext;
 use crate::Signature;
-use crate::{MessageField, MessageFieldCode, MessageFieldError};
+use crate::{Array, EncodingContext};
+use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
 use crate::{SharedData, Structure, StructureBuilder};
 use crate::{VariantError, VariantType};
 
@@ -27,9 +28,6 @@ const FIELDS_LEN_END_OFFSET: usize = 16;
 const ENDIAN_SIG: u8 = b'B';
 #[cfg(target_endian = "little")]
 const ENDIAN_SIG: u8 = b'l';
-
-// It's actually 10 (and even not that) but let's round it to next 8-byte alignment
-const MAX_FIELDS_IN_MESSAGE: usize = 16;
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -133,13 +131,13 @@ impl Message {
         m.0.extend(&1u32.to_ne_bytes());
 
         // Now array of fields
-        let mut fields = Vec::with_capacity(MAX_FIELDS_IN_MESSAGE);
+        let mut fields = MessageFields::new();
 
         if let Some(destination) = destination {
-            fields.push(MessageField::destination(destination));
+            fields.add(MessageField::destination(destination));
         }
         if let Some(iface) = iface {
-            fields.push(MessageField::interface(iface));
+            fields.add(MessageField::interface(iface));
         }
         let body_signature = body.as_ref().map(|structure| {
             let signature = structure.signature();
@@ -149,14 +147,15 @@ impl Message {
             String::from(signature)
         });
         if let Some(body_signature) = &body_signature {
-            fields.push(MessageField::signature(&body_signature));
+            fields.add(MessageField::signature(&body_signature));
         }
 
-        fields.push(MessageField::path(path));
-        fields.push(MessageField::member(method_name));
+        fields.add(MessageField::path(path));
+        fields.add(MessageField::member(method_name));
 
         let context = EncodingContext::default();
-        fields.encode_into(&mut m.0, context);
+        let array = Array::from(fields);
+        array.encode_into(&mut m.0, context);
 
         // Do we need to do this if body is None?
         let padding = padding_for_8_bytes(m.0.len());
@@ -226,10 +225,10 @@ impl Message {
     }
 
     pub fn body_signature(&self) -> Result<String, MessageError> {
-        for field in self.fields()? {
+        for field in self.fields()?.inner() {
             if field.code()? == MessageFieldCode::Signature {
                 let value = field.value()?;
-                let sig = value.get::<Signature>()?;
+                let sig = Signature::from_variant(value)?;
 
                 return Ok(String::from(sig.as_str()));
             }
@@ -242,7 +241,7 @@ impl Message {
         MessageType::from(self.0[MESSAGE_TYPE_OFFSET])
     }
 
-    pub fn fields(&self) -> Result<Vec<MessageField>, MessageError> {
+    pub fn fields(&self) -> Result<MessageFields, MessageError> {
         if self.bytes_to_completion() != 0 {
             return Err(MessageError::InsufficientData);
         }
@@ -250,13 +249,11 @@ impl Message {
         // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
         let encoding = SharedData::new(self.0.clone());
         let context = EncodingContext::default();
-        let slice = Vec::<MessageField>::slice_data(
-            &encoding.tail(FIELDS_LEN_START_OFFSET),
-            "a(yv)",
-            context,
-        )?;
+        let slice = Array::slice_data(&encoding.tail(FIELDS_LEN_START_OFFSET), "a(yv)", context)?;
 
-        Vec::<MessageField>::decode(&slice, "a(yv)", context).map_err(|e| e.into())
+        let array = Array::decode(&slice, "a(yv)", context).map_err(|e| MessageError::from(e))?;
+
+        array.try_into().map_err(|e| MessageError::from(e))
     }
 
     pub fn body(&self, body_signature: Option<&str>) -> Result<Structure, MessageError> {

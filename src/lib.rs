@@ -7,6 +7,9 @@ pub use message::*;
 mod message_field;
 pub use message_field::*;
 
+mod message_fields;
+pub use message_fields::*;
+
 mod connection;
 pub use connection::*;
 
@@ -44,7 +47,11 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::{EncodingContext, StructureBuilder, VariantTypeConstants};
+    use core::convert::{TryFrom, TryInto};
+    use std::collections::HashMap;
+
+    use crate::{Array, Dict, EncodingContext, StructureBuilder};
+    use crate::{Variant, VariantType, VariantTypeConstants};
 
     #[test]
     fn basic_connection() {
@@ -96,7 +103,7 @@ mod tests {
                 .map(|s| s.as_str() == <String>::SIGNATURE_STR)
                 .unwrap());
             let body = reply.body(Some(<String>::SIGNATURE_STR)).unwrap();
-            let id = body.fields()[0].get::<String>().unwrap();
+            let id = String::from_variant(&body.fields()[0]).unwrap();
             println!("Machine ID: {}", id);
         }
 
@@ -119,7 +126,7 @@ mod tests {
             .map(|s| s.as_str() == bool::SIGNATURE_STR)
             .unwrap());
         let body = reply.body(Some(bool::SIGNATURE_STR)).unwrap();
-        assert!(body.fields()[0].get::<bool>().unwrap());
+        assert!(bool::from_variant(&body.fields()[0]).unwrap());
 
         let reply = connection
             .call_method(
@@ -140,7 +147,7 @@ mod tests {
             .map(|s| s.as_str() == <String>::SIGNATURE_STR)
             .unwrap());
         let body = reply.body(None).unwrap();
-        let owner = body.fields()[0].get::<String>().unwrap();
+        let owner = String::from_variant(&body.fields()[0]).unwrap();
         println!("Owner of 'org.freedesktop.DBus' is: {}", owner);
 
         let reply = connection
@@ -162,9 +169,9 @@ mod tests {
             .map(|s| s.as_str() == "a{sv}")
             .unwrap());
         let body = reply.body(Some("a{sv}")).unwrap();
-        let variant = &body.fields()[0];
-        let v: Vec<crate::DictEntry<String, crate::Variant>> = variant.get().unwrap();
-        let dict: crate::Dict<String, crate::Variant> = v.into();
-        let hashmap = dict.inner();
+        let mut fields = body.take_fields();
+        let array = Array::take_from_variant(fields.remove(0)).unwrap();
+        let dict = Dict::try_from(array).unwrap();
+        let hashmap: HashMap<String, Variant> = dict.try_into().unwrap();
     }
 }
