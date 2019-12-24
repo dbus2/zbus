@@ -160,7 +160,7 @@ pub trait VariantType: std::fmt::Debug {
         padding_for_n_bytes(n_bytes_before, Self::alignment())
     }
 
-    /// Checks if variant value is of the generic type `T`
+    /// Checks if variant value is of the generic type `T`.
     ///
     /// # Examples
     ///
