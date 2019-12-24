@@ -16,7 +16,38 @@ impl Array {
         Array(vec![])
     }
 
-    pub fn new_from_vec(vec: Vec<Variant>) -> Self {
+    /// Creates an `Array` from given variants.
+    ///
+    /// All variants must all contain the same `VariantType`.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// use zbus::{Array, Variant, VariantType};
+    ///
+    /// let variants = vec![42u8.to_variant(), 45u8.to_variant()];
+    /// let array = Array::new_from_vec(variants).unwrap();
+    ///
+    /// let variants = vec![42u8.to_variant(), 45u32.to_variant()];
+    /// assert!(Array::new_from_vec(variants).is_err());
+    /// ```
+    pub fn new_from_vec(vec: Vec<Variant>) -> Result<Self, VariantError> {
+        // Ensure all elements are of the same type
+        if let Some(first) = vec.first() {
+            let first_sig = first.value_signature();
+
+            for element in &vec[1..] {
+                if element.value_signature() != first_sig {
+                    return Err(VariantError::IncorrectType);
+                }
+            }
+        }
+
+        Ok(Array(vec))
+    }
+
+    // Caller ensures all variants in the `vec` are of the same type
+    pub(crate) fn new_from_vec_unchecked(vec: Vec<Variant>) -> Self {
         Array(vec)
     }
 
@@ -166,7 +197,9 @@ impl VariantType for Array {
             return Err(VariantError::ExcessData);
         }
 
-        Ok(Array::new_from_vec(elements))
+        // Not using Array::new_from_vec() as that will entail redundant (in this context) type
+        // checks
+        Ok(Array::new_from_vec_unchecked(elements))
     }
 
     fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
@@ -246,7 +279,7 @@ impl<T: VariantType> From<Vec<T>> for Array {
             v.push(value.to_variant());
         }
 
-        Array::new_from_vec(v)
+        Array::new_from_vec_unchecked(v)
     }
 }
 

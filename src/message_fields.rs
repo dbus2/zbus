@@ -43,7 +43,7 @@ impl From<MessageFields> for Array {
             v.push(field.take_inner().to_variant());
         }
 
-        Array::new_from_vec(v)
+        Array::new_from_vec_unchecked(v)
     }
 }
 
