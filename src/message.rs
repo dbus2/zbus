@@ -153,7 +153,7 @@ impl Message {
         fields.add(MessageField::path(path));
         fields.add(MessageField::member(method_name));
 
-        let format = EncodingFormat::default();
+        let format = EncodingFormat::DBus;
         let array = Array::from(fields);
         array.encode_into(&mut m.0, format);
 
@@ -248,7 +248,7 @@ impl Message {
 
         // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
         let encoding = SharedData::new(self.0.clone());
-        let format = EncodingFormat::default();
+        let format = EncodingFormat::DBus;
         let slice = Array::slice_data(&encoding.tail(FIELDS_LEN_START_OFFSET), "a(yv)", format)?;
 
         let array = Array::decode(&slice, "a(yv)", format).map_err(|e| MessageError::from(e))?;
@@ -275,8 +275,8 @@ impl Message {
 
         // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
         let encoding = SharedData::new(self.0.clone());
-        let format = EncodingFormat::default();
-        let structure = Structure::decode(&encoding.tail(header_len), &signature, format)?;
+        let structure =
+            Structure::decode(&encoding.tail(header_len), &signature, EncodingFormat::DBus)?;
 
         Ok(structure)
     }
