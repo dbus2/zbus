@@ -50,7 +50,7 @@ mod tests {
     use core::convert::{TryFrom, TryInto};
     use std::collections::HashMap;
 
-    use crate::{Array, Dict, EncodingFormat, StructureBuilder};
+    use crate::{Array, Dict, Structure};
     use crate::{Variant, VariantType, VariantTypeConstants};
 
     #[test]
@@ -113,11 +113,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "NameHasOwner",
-                Some(
-                    StructureBuilder::new()
-                        .add_field(String::from("org.freedesktop.DBus"))
-                        .create(EncodingFormat::default()),
-                ),
+                Some(Structure::new().add_field(String::from("org.freedesktop.DBus"))),
             )
             .unwrap();
 
@@ -134,11 +130,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "GetNameOwner",
-                Some(
-                    StructureBuilder::new()
-                        .add_field(String::from("org.freedesktop.DBus"))
-                        .create(EncodingFormat::default()),
-                ),
+                Some(Structure::new().add_field(String::from("org.freedesktop.DBus"))),
             )
             .unwrap();
 
@@ -156,11 +148,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus.Properties"),
                 "GetAll",
-                Some(
-                    StructureBuilder::new()
-                        .add_field(String::from("org.freedesktop.DBus"))
-                        .create(EncodingFormat::default()),
-                ),
+                Some(Structure::new().add_field(String::from("org.freedesktop.DBus"))),
             )
             .unwrap();
 

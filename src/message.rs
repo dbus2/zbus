@@ -7,7 +7,7 @@ use crate::utils::padding_for_8_bytes;
 use crate::Signature;
 use crate::{Array, EncodingFormat};
 use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
-use crate::{SharedData, Structure, StructureBuilder};
+use crate::{SharedData, Structure};
 use crate::{VariantError, VariantType};
 
 /// Size of primary message header
@@ -263,9 +263,8 @@ impl Message {
 
         let mut header_len = PRIMARY_HEADER_SIZE + self.fields_len();
         header_len = header_len + padding_for_8_bytes(header_len);
-        let format = EncodingFormat::default();
         if self.body_len() == 0 {
-            return Ok(StructureBuilder::new().create(format));
+            return Ok(Structure::new());
         }
 
         let signature = body_signature
@@ -276,6 +275,7 @@ impl Message {
 
         // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
         let encoding = SharedData::new(self.0.clone());
+        let format = EncodingFormat::default();
         let structure = Structure::decode(&encoding.tail(header_len), &signature, format)?;
 
         Ok(structure)

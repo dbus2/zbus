@@ -267,7 +267,7 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::{Array, Dict, DictEntry, EncodingFormat, SimpleVariantType};
-    use crate::{SharedData, Structure, StructureBuilder};
+    use crate::{SharedData, Structure};
     use crate::{VariantType, VariantTypeConstants};
 
     #[test]
@@ -459,25 +459,21 @@ mod tests {
         let dict: Dict = map.into();
         let array = Array::try_from(dict).unwrap();
 
-        let format = EncodingFormat::default();
-        let s = StructureBuilder::new()
+        let s = Structure::new()
             .add_field(u8::max_value())
             .add_field(u32::max_value())
             .add_field(
-                StructureBuilder::new()
+                Structure::new()
                     .add_field(i64::max_value())
                     .add_field(true)
                     .add_field(
-                        StructureBuilder::new()
+                        Structure::new()
                             .add_field(i64::max_value())
-                            .add_field(std::f64::MAX)
-                            .create(format),
-                    )
-                    .create(format),
+                            .add_field(std::f64::MAX),
+                    ),
             )
             .add_field(String::from("hello"))
-            .add_field(array)
-            .create(format);
+            .add_field(array);
         let v = s.to_variant();
         assert!(Structure::is(&v));
         let s = Structure::from_variant(&v).unwrap();
@@ -505,6 +501,7 @@ mod tests {
         assert!(String::is(&fields[3]));
         assert!(String::from_variant(&fields[3]).unwrap() == "hello");
 
+        let format = EncodingFormat::default();
         let encoding = SharedData::new(v.encode_value(format));
         // The HashMap is unordered so we can't rely on items to be in a specific order during the transformation to
         // Vec, and size depends on the order of items because of padding rules.
@@ -573,13 +570,13 @@ mod tests {
         assert!(as_ == ["Hello", "World", "Now", "Bye!"]);
 
         // Array of Struct, which in turn containin an Array (We gotta go deeper!)
-        let ar = vec![StructureBuilder::new()
+        let ar = vec![Structure::new()
             // top-most simple fields
             .add_field(u8::max_value())
             .add_field(u32::max_value())
             // top-most inner structure
             .add_field(
-                StructureBuilder::new()
+                Structure::new()
                     // 2nd level simple fields
                     .add_field(i64::max_value())
                     .add_field(true)
@@ -588,12 +585,10 @@ mod tests {
                     .add_field(Array::from(vec![
                         String::from("Hello"),
                         String::from("World"),
-                    ]))
-                    .create(format),
+                    ])),
             )
             // one more top-most simple field
-            .add_field(String::from("hello"))
-            .create(format)];
+            .add_field(String::from("hello"))];
         let array = Array::from(ar);
         assert!(array.signature() == "a(yu(xbxas)s)");
         for element in array.inner() {
@@ -651,18 +646,17 @@ mod tests {
         assert!(*entry.key::<u8>().unwrap() == 2u8);
         assert!(entry.value::<String>().unwrap() == "world");
 
-        let format = EncodingFormat::default();
         // STRUCT value
         let entry = DictEntry::new(
             String::from("hello"),
-            StructureBuilder::new()
+            Structure::new()
                 .add_field(u8::max_value())
-                .add_field(u32::max_value())
-                .create(format),
+                .add_field(u32::max_value()),
         );
         assert!(entry.signature() == "{s(yu)}");
         let v = entry.to_variant();
 
+        let format = EncodingFormat::default();
         let encoding = SharedData::new(v.encode_value(format));
         assert!(encoding.len() == 24);
         assert!(DictEntry::is(&v));

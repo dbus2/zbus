@@ -4,96 +4,28 @@ use crate::{EncodingFormat, SharedData};
 use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug, Clone)]
-pub struct Structure {
-    encoding: SharedData,
-    signature: String,
-    fields: Vec<Variant>,
-}
+pub struct Structure(Vec<Variant>);
 
 impl Structure {
     pub fn take_fields(self) -> Vec<Variant> {
-        self.fields
+        self.0
     }
 
     pub fn fields(&self) -> &[Variant] {
-        &self.fields
-    }
-}
-
-fn variants_from_struct_data(
-    data: &SharedData,
-    signature: &str,
-    format: EncodingFormat,
-) -> Result<Vec<Variant>, VariantError> {
-    // Assuming simple types here but it's OK to have more capacity than needed
-    let mut fields = Vec::with_capacity(signature.len());
-    let mut extracted = 0;
-    let mut i = 1;
-    let last_index = signature.len() - 1;
-    while i < last_index {
-        let child_signature = crate::slice_signature(&signature[i..last_index])?;
-
-        // FIXME: Redundant slicing since Variant::from_data() does slicing too (maybe that function should return the
-        // len or slice as well?)
-        let child_slice =
-            crate::variant_type::slice_data(&data.tail(extracted), child_signature, format)?;
-        extracted += child_slice.len();
-        if extracted > data.len() {
-            return Err(VariantError::InsufficientData);
-        }
-        let variant = Variant::from_data(&child_slice, child_signature, format)?;
-        fields.push(variant);
-
-        i += child_signature.len();
-    }
-    if extracted == 0 {
-        return Err(VariantError::ExcessData);
+        &self.0
     }
 
-    Ok(fields)
-}
-
-#[derive(Debug)]
-pub struct StructureBuilder {
-    encoding: Vec<u8>,
-    signature: String,
-}
-
-impl StructureBuilder {
     pub fn new() -> Self {
-        Self {
-            encoding: vec![],
-            signature: String::from("()"),
-        }
+        Self(vec![])
     }
 
     pub fn add_field<T>(mut self, field: T) -> Self
     where
         T: VariantType,
     {
-        let format = EncodingFormat::default();
-        field.encode_into(&mut self.encoding, format);
-        self.signature
-            .insert_str(self.signature.len() - 1, &field.signature());
+        self.0.push(field.to_variant());
 
         self
-    }
-
-    pub fn create(self, format: EncodingFormat) -> Structure {
-        let (encoding, signature) = (self.encoding, self.signature);
-        let encoding = SharedData::new(encoding);
-        let fields = variants_from_struct_data(&encoding, &signature, format)
-            .unwrap_or_else(|e| {
-                eprintln!("An error occured getting fields from a Structure (signature: '{}'). This should NOT happen \
-                           since this structure is created manually. Here is the error: {}", signature, e);
-
-                vec![]
-            });
-        Structure {
-            encoding: encoding,
-            signature: signature,
-            fields: fields,
-        }
     }
 }
 
@@ -122,7 +54,9 @@ impl VariantType for Structure {
 
         // Since a Structure always starts at 8-byte boundry, the fields and their children are
         // already aligned correctly.
-        self.encoding.apply_mut(|b| bytes.extend_from_slice(b));
+        for field in &self.0 {
+            field.encode_value_into(bytes, format);
+        }
     }
 
     fn slice_data(
@@ -175,11 +109,7 @@ impl VariantType for Structure {
         let encoding = data.tail(padding);
         let fields = variants_from_struct_data(&encoding, signature, format)?;
 
-        Ok(Self {
-            encoding: encoding,
-            signature: String::from(signature),
-            fields: fields,
-        })
+        Ok(Self(fields))
     }
 
     fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
@@ -198,7 +128,12 @@ impl VariantType for Structure {
     }
 
     fn signature<'b>(&'b self) -> Cow<'b, str> {
-        Cow::from(&self.signature)
+        let mut signature = String::from("(");
+        for field in &self.0 {
+            signature.push_str(&field.value_signature());
+        }
+        signature.push_str(")");
+        Cow::from(signature)
     }
 
     fn slice_signature(signature: &str) -> Result<&str, VariantError> {
@@ -255,4 +190,37 @@ impl VariantType for Structure {
     fn to_variant(self) -> Variant {
         Variant::Structure(self)
     }
+}
+
+fn variants_from_struct_data(
+    data: &SharedData,
+    signature: &str,
+    format: EncodingFormat,
+) -> Result<Vec<Variant>, VariantError> {
+    // Assuming simple types here but it's OK to have more capacity than needed
+    let mut fields = Vec::with_capacity(signature.len());
+    let mut extracted = 0;
+    let mut i = 1;
+    let last_index = signature.len() - 1;
+    while i < last_index {
+        let child_signature = crate::slice_signature(&signature[i..last_index])?;
+
+        // FIXME: Redundant slicing since Variant::from_data() does slicing too (maybe that function should return the
+        // len or slice as well?)
+        let child_slice =
+            crate::variant_type::slice_data(&data.tail(extracted), child_signature, format)?;
+        extracted += child_slice.len();
+        if extracted > data.len() {
+            return Err(VariantError::InsufficientData);
+        }
+        let variant = Variant::from_data(&child_slice, child_signature, format)?;
+        fields.push(variant);
+
+        i += child_signature.len();
+    }
+    if extracted == 0 {
+        return Err(VariantError::ExcessData);
+    }
+
+    Ok(fields)
 }
