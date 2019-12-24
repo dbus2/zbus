@@ -61,11 +61,10 @@ where
     V: VariantType,
 {
     fn from(value: HashMap<K, V>) -> Self {
-        let mut vec = Vec::new();
-
-        for (key, value) in value {
-            vec.push(DictEntry::new(key, value));
-        }
+        let vec = value
+            .into_iter()
+            .map(|(key, value)| DictEntry::new(key, value))
+            .collect();
 
         Dict(vec)
     }

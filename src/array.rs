@@ -297,11 +297,7 @@ impl<T: VariantType> TryInto<Vec<T>> for Array {
 
 impl<T: VariantType> From<Vec<T>> for Array {
     fn from(values: Vec<T>) -> Self {
-        let mut v: Vec<Variant> = vec![];
-
-        for value in values {
-            v.push(value.to_variant());
-        }
+        let v = values.into_iter().map(|value| value.to_variant()).collect();
 
         Array::new_from_vec_unchecked(v)
     }
