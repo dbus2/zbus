@@ -51,6 +51,30 @@ impl Array {
         Array(vec)
     }
 
+    /// Adds the given `element` to `self`.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// use zbus::{Array, Variant, VariantType};
+    ///
+    /// let mut array = Array::new();
+    /// array.add_element(42u8).unwrap();
+    /// assert!(array.add_element(String::from("hi")).is_err());
+    /// array.add_element(45u8).unwrap();
+    /// assert!(array.add_element(42u32).is_err());
+    /// ```
+    pub fn add_element<T: VariantType>(&mut self, element: T) -> Result<(), VariantError> {
+        // Ensure we only add elements of the same type
+        if self.0.last().map(|v| !T::is(v)).unwrap_or(false) {
+            return Err(VariantError::IncorrectType);
+        }
+
+        self.0.push(element.to_variant());
+
+        Ok(())
+    }
+
     pub fn inner(&self) -> &Vec<Variant> {
         &self.0
     }
