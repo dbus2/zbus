@@ -49,13 +49,12 @@ impl VariantType for String {
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
-
         let last_index = slice.len() - 1;
-        slice.apply(|bytes| {
-            str::from_utf8(&bytes[4..last_index])
-                .map(|s| s.to_owned())
-                .map_err(|_| VariantError::InvalidUtf8)
-        })
+        let bytes = slice.bytes();
+
+        str::from_utf8(&bytes[4..last_index])
+            .map(|s| s.to_owned())
+            .map_err(|_| VariantError::InvalidUtf8)
     }
 
     fn is(variant: &Variant) -> bool {
@@ -222,12 +221,9 @@ impl VariantType for Signature {
             return Err(VariantError::InsufficientData);
         }
 
-        let last_index = data.apply(|bytes| {
-            let last_index = bytes[0] as usize + 2;
-            crate::ensure_sufficient_bytes(bytes, last_index)?;
-
-            Ok(last_index)
-        })?;
+        let bytes = data.bytes();
+        let last_index = bytes[0] as usize + 2;
+        crate::ensure_sufficient_bytes(bytes, last_index)?;
 
         Ok(data.head(last_index))
     }
@@ -240,13 +236,12 @@ impl VariantType for Signature {
         Self::ensure_correct_signature(signature)?;
 
         let last_index = data.len() - 1;
-        data.apply(|bytes| {
-            crate::ensure_sufficient_bytes(bytes, last_index)?;
+        let bytes = data.bytes();
+        crate::ensure_sufficient_bytes(bytes, last_index)?;
 
-            str::from_utf8(&bytes[1..last_index])
-                .map(|s| Self::new(s))
-                .map_err(|_| VariantError::InvalidUtf8)
-        })
+        str::from_utf8(&bytes[1..last_index])
+            .map(|s| Self::new(s))
+            .map_err(|_| VariantError::InvalidUtf8)
     }
 
     fn is(variant: &Variant) -> bool {

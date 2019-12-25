@@ -1,12 +1,11 @@
-use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
 // More like shared slice since you can only increment position & decrement len.
-// structure itself immutable but data can be borrowed mutably
+// This structure and its data is immutable.
 #[derive(Debug, Clone)]
 pub struct SharedData {
-    data: Rc<RefCell<Vec<u8>>>,
+    data: Rc<Vec<u8>>,
     position: usize,
     end: usize,
 }
@@ -14,20 +13,17 @@ pub struct SharedData {
 impl fmt::Display for SharedData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{")?;
-        self.apply_mut(|bytes| -> fmt::Result {
-            let mut first = true;
+        let bytes = self.bytes();
+        let mut first = true;
 
-            for byte in bytes {
-                if first {
-                    first = false;
-                } else {
-                    write!(f, ", ")?;
-                }
-                write!(f, "{}", byte)?;
+        for byte in bytes {
+            if first {
+                first = false;
+            } else {
+                write!(f, ", ")?;
             }
-
-            Ok(())
-        })?;
+            write!(f, "{}", byte)?;
+        }
         write!(f, "}}")
     }
 }
@@ -36,7 +32,7 @@ impl SharedData {
     pub fn new(data: Vec<u8>) -> Self {
         let end = data.len();
         Self {
-            data: Rc::new(RefCell::new(data)),
+            data: Rc::new(data),
             position: 0,
             end: end,
         }
@@ -74,18 +70,8 @@ impl SharedData {
         self.end - self.position
     }
 
-    pub fn apply<T, F>(&self, func: F) -> T
-    where
-        F: Fn(&[u8]) -> T,
-    {
-        func(&self.data.borrow()[self.position..self.end])
-    }
-
-    pub fn apply_mut<T, F>(&self, mut func: F) -> T
-    where
-        F: FnMut(&mut [u8]) -> T,
-    {
-        func(&mut self.data.borrow_mut()[self.position..self.end])
+    pub fn bytes(&self) -> &[u8] {
+        &self.data[self.position..self.end]
     }
 }
 

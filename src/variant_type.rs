@@ -85,7 +85,7 @@ pub trait VariantType: std::fmt::Debug {
         Self::ensure_correct_signature(signature)?;
         let padding = Self::padding(data.position(), format);
         let len = Self::alignment() + padding;
-        data.apply(|bytes| ensure_sufficient_bytes(bytes, len))?;
+        ensure_sufficient_bytes(data.bytes(), len)?;
 
         Ok(data.subset(0, len))
     }
@@ -148,7 +148,7 @@ pub trait VariantType: std::fmt::Debug {
         Self::ensure_correct_signature(signature)?;
         let padding = Self::padding(data.position(), format);
         let len = Self::alignment() + padding;
-        data.apply(|bytes| ensure_sufficient_bytes(bytes, len))?;
+        ensure_sufficient_bytes(data.bytes(), len)?;
 
         Ok(data.tail(padding))
     }
@@ -225,7 +225,7 @@ impl VariantType for u8 {
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
-        slice.apply(|bytes| Ok(bytes[0]))
+        Ok(slice.bytes()[0])
     }
 
     fn is(variant: &Variant) -> bool {
@@ -280,11 +280,11 @@ impl VariantType for bool {
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
-        slice.apply(|bytes| match byteorder::NativeEndian::read_u32(bytes) {
+        match byteorder::NativeEndian::read_u32(slice.bytes()) {
             0 => Ok(false),
             1 => Ok(true),
             _ => Err(VariantError::IncorrectValue),
-        })
+        }
     }
 
     fn is(variant: &Variant) -> bool {
@@ -339,7 +339,7 @@ impl VariantType for i16 {
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
-        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_i16(bytes)))
+        Ok(byteorder::NativeEndian::read_i16(slice.bytes()))
     }
 
     fn is(variant: &Variant) -> bool {
@@ -394,7 +394,7 @@ impl VariantType for u16 {
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
-        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_u16(bytes)))
+        Ok(byteorder::NativeEndian::read_u16(slice.bytes()))
     }
 
     fn is(variant: &Variant) -> bool {
@@ -449,7 +449,7 @@ impl VariantType for i32 {
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
-        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_i32(bytes)))
+        Ok(byteorder::NativeEndian::read_i32(slice.bytes()))
     }
 
     fn is(variant: &Variant) -> bool {
@@ -504,7 +504,7 @@ impl VariantType for u32 {
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
-        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_u32(bytes)))
+        Ok(byteorder::NativeEndian::read_u32(slice.bytes()))
     }
 
     fn is(variant: &Variant) -> bool {
@@ -559,7 +559,7 @@ impl VariantType for i64 {
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
-        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_i64(bytes)))
+        Ok(byteorder::NativeEndian::read_i64(slice.bytes()))
     }
 
     fn is(variant: &Variant) -> bool {
@@ -614,7 +614,7 @@ impl VariantType for u64 {
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
-        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_u64(bytes)))
+        Ok(byteorder::NativeEndian::read_u64(slice.bytes()))
     }
 
     fn is(variant: &Variant) -> bool {
@@ -671,7 +671,7 @@ impl VariantType for f64 {
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
-        slice.apply(|bytes| Ok(byteorder::NativeEndian::read_f64(bytes)))
+        Ok(byteorder::NativeEndian::read_f64(slice.bytes()))
     }
 
     fn is(variant: &Variant) -> bool {
