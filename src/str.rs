@@ -189,7 +189,7 @@ impl VariantTypeConstants for Signature {
     const ALIGNMENT: usize = 1;
 }
 
-// FIXME: Find a way to share code with &str implementation in `variant_type.rs`
+// FIXME: Find a way to share code with String implementation.
 impl VariantType for Signature {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
