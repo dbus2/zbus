@@ -203,7 +203,7 @@ impl VariantType for Signature {
 
     // No padding needed because of 1-byte format and hence encoding format is ignored everywhere.
 
-    fn encode_into(&self, bytes: &mut Vec<u8>, _context: EncodingFormat) {
+    fn encode_into(&self, bytes: &mut Vec<u8>, _format: EncodingFormat) {
         let len = self.0.len();
 
         bytes.push(len as u8);
@@ -214,7 +214,7 @@ impl VariantType for Signature {
     fn slice_data(
         data: &SharedData,
         signature: &str,
-        _context: EncodingFormat,
+        _format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
         if data.len() < 1 {
@@ -231,7 +231,7 @@ impl VariantType for Signature {
     fn decode(
         data: &SharedData,
         signature: &str,
-        _context: EncodingFormat,
+        _format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
