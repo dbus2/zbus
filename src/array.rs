@@ -281,7 +281,10 @@ impl VariantType for Array {
     }
 }
 
-impl<T: VariantType> TryInto<Vec<T>> for Array {
+impl<T> TryInto<Vec<T>> for Array
+where
+    T: VariantType,
+{
     type Error = VariantError;
 
     fn try_into(self) -> Result<Vec<T>, VariantError> {
@@ -295,7 +298,10 @@ impl<T: VariantType> TryInto<Vec<T>> for Array {
     }
 }
 
-impl<T: VariantType> From<Vec<T>> for Array {
+impl<T> From<Vec<T>> for Array
+where
+    T: VariantType,
+{
     fn from(values: Vec<T>) -> Self {
         let v = values.into_iter().map(|value| value.to_variant()).collect();
 
