@@ -288,7 +288,7 @@ where
     type Error = VariantError;
 
     fn try_into(self) -> Result<Vec<T>, VariantError> {
-        let mut v: Vec<T> = vec![];
+        let mut v = vec![];
 
         for value in self.take_inner() {
             v.push(T::take_from_variant(value)?);
