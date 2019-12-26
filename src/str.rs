@@ -91,8 +91,8 @@ impl SimpleVariantType for String {}
 pub struct ObjectPath(String);
 
 impl ObjectPath {
-    pub fn new(path: &str) -> Self {
-        Self(String::from(path))
+    pub fn new(path: impl Into<ObjectPath>) -> Self {
+        path.into()
     }
 
     pub fn as_str(&self) -> &str {
@@ -170,12 +170,24 @@ impl VariantType for ObjectPath {
 }
 impl SimpleVariantType for ObjectPath {}
 
+impl From<&str> for ObjectPath {
+    fn from(value: &str) -> Self {
+        Self(String::from(value))
+    }
+}
+
+impl From<String> for ObjectPath {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signature(String);
 
 impl Signature {
-    pub fn new(signature: &str) -> Self {
-        Self(String::from(signature))
+    pub fn new(signature: impl Into<Signature>) -> Self {
+        signature.into()
     }
 
     pub fn as_str(&self) -> &str {
@@ -273,3 +285,15 @@ impl VariantType for Signature {
     }
 }
 impl SimpleVariantType for Signature {}
+
+impl From<&str> for Signature {
+    fn from(value: &str) -> Self {
+        Self(String::from(value))
+    }
+}
+
+impl From<String> for Signature {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
