@@ -182,6 +182,14 @@ impl From<String> for ObjectPath {
     }
 }
 
+impl std::ops::Deref for ObjectPath {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signature(String);
 
@@ -295,5 +303,13 @@ impl From<&str> for Signature {
 impl From<String> for Signature {
     fn from(value: String) -> Self {
         Self(value)
+    }
+}
+
+impl std::ops::Deref for Signature {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
     }
 }
