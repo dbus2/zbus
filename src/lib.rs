@@ -25,6 +25,9 @@ pub use encode::*;
 mod variant_type_constants;
 pub use variant_type_constants::*;
 
+mod variant_error;
+pub use variant_error::*;
+
 mod str;
 pub use crate::str::*;
 
