@@ -2,25 +2,13 @@ use std::str;
 
 use crate::{Decode, Encode, EncodingFormat};
 use crate::{SharedData, SimpleDecode};
-use crate::{Variant, VariantError, VariantTypeConstants};
-
-impl VariantTypeConstants for String {
-    const SIGNATURE_CHAR: char = 's';
-    const SIGNATURE_STR: &'static str = "s";
-    const ALIGNMENT: usize = 4;
-}
+use crate::{Variant, VariantError};
 
 // FIXME: Implement for owned string cause decode() needs that. Let's make it efficient later.
 impl Encode for String {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
+    const SIGNATURE_CHAR: char = 's';
+    const SIGNATURE_STR: &'static str = "s";
+    const ALIGNMENT: usize = 4;
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         let len = self.len();
@@ -103,23 +91,11 @@ impl ObjectPath {
     }
 }
 
-impl VariantTypeConstants for ObjectPath {
+// FIXME: Find a way to share code with &str implementation above
+impl Encode for ObjectPath {
     const SIGNATURE_CHAR: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
     const ALIGNMENT: usize = 4;
-}
-
-// FIXME: Find a way to share code with &str implementation above
-impl Encode for ObjectPath {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         self.0.encode_into(bytes, format);
@@ -214,23 +190,11 @@ impl Signature {
     }
 }
 
-impl VariantTypeConstants for Signature {
+// FIXME: Find a way to share code with String implementation.
+impl Encode for Signature {
     const SIGNATURE_CHAR: char = 'g';
     const SIGNATURE_STR: &'static str = "g";
     const ALIGNMENT: usize = 1;
-}
-
-// FIXME: Find a way to share code with String implementation.
-impl Encode for Signature {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
 
     // No padding needed because of 1-byte format and hence encoding format is ignored everywhere.
 

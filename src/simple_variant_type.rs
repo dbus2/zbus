@@ -8,14 +8,14 @@ pub trait SimpleDecode: Decode {
     where
         Self: Sized,
     {
-        Self::slice_data(data, Self::signature_str(), format)
+        Self::slice_data(data, Self::SIGNATURE_STR, format)
     }
 
     fn decode_simple(bytes: &SharedData, format: EncodingFormat) -> Result<Self, VariantError>
     where
         Self: Sized,
     {
-        Self::decode(bytes, Self::signature_str(), format)
+        Self::decode(bytes, Self::SIGNATURE_STR, format)
     }
 }
 

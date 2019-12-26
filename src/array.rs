@@ -3,7 +3,7 @@ use core::convert::TryInto;
 
 use crate::{Decode, Encode, EncodingFormat};
 use crate::{SharedData, Signature, SimpleDecode};
-use crate::{Variant, VariantError, VariantTypeConstants};
+use crate::{Variant, VariantError};
 
 // Since neither `From` trait nor `Vec` is from this crate, we need this intermediate type.
 //
@@ -87,22 +87,10 @@ impl Array {
     }
 }
 
-impl VariantTypeConstants for Array {
+impl Encode for Array {
     const SIGNATURE_CHAR: char = 'a';
     const SIGNATURE_STR: &'static str = "a";
     const ALIGNMENT: usize = 4;
-}
-
-impl Encode for Array {
-    fn signature_char() -> char {
-        'a'
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         Self::add_padding(bytes, format);

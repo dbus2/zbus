@@ -2,8 +2,8 @@ use byteorder::ByteOrder;
 use std::str;
 
 use crate::utils::padding_for_n_bytes;
-use crate::{Array, DictEntry, ObjectPath, Signature, Structure};
-use crate::{Variant, VariantTypeConstants};
+use crate::{Array, DictEntry, ObjectPath};
+use crate::{Signature, Structure, Variant, VariantError};
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EncodingFormat {
@@ -18,15 +18,9 @@ impl Default for EncodingFormat {
 }
 
 pub trait Encode: std::fmt::Debug {
-    fn signature_char() -> char
-    where
-        Self: Sized;
-    fn signature_str() -> &'static str
-    where
-        Self: Sized;
-    fn alignment() -> usize
-    where
-        Self: Sized;
+    const SIGNATURE_CHAR: char;
+    const SIGNATURE_STR: &'static str;
+    const ALIGNMENT: usize;
 
     // Only use for the first data in a message
     fn encode(&self, format: EncodingFormat) -> Vec<u8> {
@@ -42,7 +36,7 @@ pub trait Encode: std::fmt::Debug {
     where
         Self: Sized,
     {
-        Signature::new(Self::signature_str())
+        Signature::new(Self::SIGNATURE_STR)
     }
 
     fn add_padding(bytes: &mut Vec<u8>, format: EncodingFormat)
@@ -59,7 +53,7 @@ pub trait Encode: std::fmt::Debug {
     where
         Self: Sized,
     {
-        padding_for_n_bytes(n_bytes_before, Self::alignment())
+        padding_for_n_bytes(n_bytes_before, Self::ALIGNMENT)
     }
 
     // Into<Variant> trait bound would have been better and it's possible but since `Into<T> for T`
@@ -72,15 +66,9 @@ pub trait Encode: std::fmt::Debug {
 }
 
 impl Encode for u8 {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
+    const SIGNATURE_CHAR: char = 'y';
+    const SIGNATURE_STR: &'static str = "y";
+    const ALIGNMENT: usize = 1;
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         Self::add_padding(bytes, format);
@@ -93,15 +81,9 @@ impl Encode for u8 {
 }
 
 impl Encode for bool {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
+    const SIGNATURE_CHAR: char = 'b';
+    const SIGNATURE_STR: &'static str = "b";
+    const ALIGNMENT: usize = 4;
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         Self::add_padding(bytes, format);
@@ -114,15 +96,9 @@ impl Encode for bool {
 }
 
 impl Encode for i16 {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
+    const SIGNATURE_CHAR: char = 'n';
+    const SIGNATURE_STR: &'static str = "n";
+    const ALIGNMENT: usize = 2;
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         Self::add_padding(bytes, format);
@@ -135,15 +111,9 @@ impl Encode for i16 {
 }
 
 impl Encode for u16 {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
+    const SIGNATURE_CHAR: char = 'q';
+    const SIGNATURE_STR: &'static str = "q";
+    const ALIGNMENT: usize = 2;
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         Self::add_padding(bytes, format);
@@ -156,15 +126,9 @@ impl Encode for u16 {
 }
 
 impl Encode for i32 {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
+    const SIGNATURE_CHAR: char = 'i';
+    const SIGNATURE_STR: &'static str = "i";
+    const ALIGNMENT: usize = 4;
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         Self::add_padding(bytes, format);
@@ -177,15 +141,9 @@ impl Encode for i32 {
 }
 
 impl Encode for u32 {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
+    const SIGNATURE_CHAR: char = 'u';
+    const SIGNATURE_STR: &'static str = "u";
+    const ALIGNMENT: usize = 4;
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         Self::add_padding(bytes, format);
@@ -198,15 +156,9 @@ impl Encode for u32 {
 }
 
 impl Encode for i64 {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
+    const SIGNATURE_CHAR: char = 'x';
+    const SIGNATURE_STR: &'static str = "x";
+    const ALIGNMENT: usize = 8;
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         Self::add_padding(bytes, format);
@@ -219,15 +171,9 @@ impl Encode for i64 {
 }
 
 impl Encode for u64 {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
+    const SIGNATURE_CHAR: char = 't';
+    const SIGNATURE_STR: &'static str = "t";
+    const ALIGNMENT: usize = 8;
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         Self::add_padding(bytes, format);
@@ -240,15 +186,9 @@ impl Encode for u64 {
 }
 
 impl Encode for f64 {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
+    const SIGNATURE_CHAR: char = 'd';
+    const SIGNATURE_STR: &'static str = "d";
+    const ALIGNMENT: usize = 8;
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         Self::add_padding(bytes, format);
@@ -295,21 +235,34 @@ pub(crate) fn padding_for_signature(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{Encode, EncodingFormat, SharedData, SimpleDecode};
+pub(crate) fn alignment_for_signature(
+    signature: impl Into<Signature>,
+) -> Result<usize, VariantError> {
+    let signature = signature.into();
 
-    // Ensure Encode can be used as Boxed type
-    #[test]
-    fn trait_object() {
-        let boxed = Box::new(42u8);
-
-        let format = EncodingFormat::default();
-        let encoded = SharedData::new(encode_u8(boxed, format));
-        assert!(u8::decode_simple(&encoded, format).unwrap() == 42u8);
-    }
-
-    fn encode_u8(boxed: Box<dyn Encode>, format: EncodingFormat) -> Vec<u8> {
-        boxed.encode(format)
+    match signature
+        .as_str()
+        .chars()
+        .next()
+        .ok_or(VariantError::InsufficientData)?
+    {
+        // FIXME: There has to be a shorter way to do this
+        u8::SIGNATURE_CHAR => Ok(u8::ALIGNMENT),
+        bool::SIGNATURE_CHAR => Ok(bool::ALIGNMENT),
+        i16::SIGNATURE_CHAR => Ok(i16::ALIGNMENT),
+        u16::SIGNATURE_CHAR => Ok(u16::ALIGNMENT),
+        i32::SIGNATURE_CHAR => Ok(i32::ALIGNMENT),
+        u32::SIGNATURE_CHAR => Ok(u32::ALIGNMENT),
+        i64::SIGNATURE_CHAR => Ok(i64::ALIGNMENT),
+        u64::SIGNATURE_CHAR => Ok(u64::ALIGNMENT),
+        f64::SIGNATURE_CHAR => Ok(f64::ALIGNMENT),
+        <String>::SIGNATURE_CHAR => Ok(<String>::ALIGNMENT),
+        Array::SIGNATURE_CHAR => Ok(Array::ALIGNMENT),
+        ObjectPath::SIGNATURE_CHAR => Ok(ObjectPath::ALIGNMENT),
+        Signature::SIGNATURE_CHAR => Ok(Signature::ALIGNMENT),
+        Structure::SIGNATURE_CHAR => Ok(Structure::ALIGNMENT),
+        Variant::SIGNATURE_CHAR => Ok(Variant::ALIGNMENT),
+        DictEntry::SIGNATURE_CHAR => Ok(DictEntry::ALIGNMENT),
+        _ => return Err(VariantError::UnsupportedType(signature)),
     }
 }

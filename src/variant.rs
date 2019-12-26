@@ -1,9 +1,9 @@
 use std::str;
 
+use crate::VariantError;
 use crate::{Array, DictEntry, Encode, EncodingFormat};
 use crate::{Decode, ObjectPath};
 use crate::{SharedData, Signature, SimpleDecode, Structure};
-use crate::{VariantError, VariantTypeConstants};
 
 #[derive(Debug, Clone)]
 pub enum Variant {
@@ -173,22 +173,10 @@ impl Variant {
     }
 }
 
-impl VariantTypeConstants for Variant {
+impl Encode for Variant {
     const SIGNATURE_CHAR: char = 'v';
     const SIGNATURE_STR: &'static str = "v";
     const ALIGNMENT: usize = Signature::ALIGNMENT;
-}
-
-impl Encode for Variant {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         self.value_signature().encode_into(bytes, format);
@@ -271,7 +259,7 @@ mod tests {
 
     use crate::{Array, Dict, DictEntry};
     use crate::{Decode, Encode, EncodingFormat, SimpleDecode};
-    use crate::{SharedData, Structure, VariantTypeConstants};
+    use crate::{SharedData, Structure};
 
     #[test]
     fn u8_variant() {

@@ -22,9 +22,6 @@ pub use decode::*;
 mod encode;
 pub use encode::*;
 
-mod variant_type_constants;
-pub use variant_type_constants::*;
-
 mod variant_error;
 pub use variant_error::*;
 
@@ -56,8 +53,8 @@ mod tests {
     use core::convert::{TryFrom, TryInto};
     use std::collections::HashMap;
 
-    use crate::{Array, Decode, Dict};
-    use crate::{Structure, Variant, VariantTypeConstants};
+    use crate::{Array, Decode, Dict, Encode};
+    use crate::{Structure, Variant};
 
     #[test]
     fn basic_connection() {

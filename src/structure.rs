@@ -1,6 +1,6 @@
 use crate::{Decode, Encode, EncodingFormat};
 use crate::{SharedData, Signature};
-use crate::{Variant, VariantError, VariantTypeConstants};
+use crate::{Variant, VariantError};
 
 #[derive(Debug, Clone)]
 pub struct Structure(Vec<Variant>);
@@ -28,25 +28,13 @@ impl Structure {
     }
 }
 
-impl VariantTypeConstants for Structure {
+impl Encode for Structure {
     // The real single character signature for STRUCT is `r` but that's not actually used in practice for D-Bus at least
     // (the spec clearly states that this signature must never appear on the bus). The openning and closing braces are
     // used in practice and that's why we'll declare the opening brace as the signature for this type.
     const SIGNATURE_CHAR: char = '(';
     const SIGNATURE_STR: &'static str = "(";
     const ALIGNMENT: usize = 8;
-}
-
-impl Encode for Structure {
-    fn signature_char() -> char {
-        Self::SIGNATURE_CHAR
-    }
-    fn signature_str() -> &'static str {
-        Self::SIGNATURE_STR
-    }
-    fn alignment() -> usize {
-        Self::ALIGNMENT
-    }
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         Self::add_padding(bytes, format);

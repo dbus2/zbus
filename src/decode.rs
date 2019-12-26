@@ -3,7 +3,7 @@ use byteorder::ByteOrder;
 use crate::SharedData;
 use crate::{Array, DictEntry, Encode, EncodingFormat};
 use crate::{ObjectPath, Signature, SimpleDecode, Structure};
-use crate::{Variant, VariantError, VariantTypeConstants};
+use crate::{Variant, VariantError};
 
 pub trait Decode: Encode + std::fmt::Debug {
     // Default implementation works for constant-sized types where size is the same as their
@@ -18,7 +18,7 @@ pub trait Decode: Encode + std::fmt::Debug {
     {
         Self::ensure_correct_signature(signature)?;
         let padding = Self::padding(data.position(), format);
-        let len = Self::alignment() + padding;
+        let len = Self::ALIGNMENT + padding;
         ensure_sufficient_bytes(data.bytes(), len)?;
 
         Ok(data.subset(0, len))
@@ -30,7 +30,7 @@ pub trait Decode: Encode + std::fmt::Debug {
     {
         let signature = signature.into();
 
-        if signature != Self::signature_str() {
+        if signature != Self::SIGNATURE_STR {
             return Err(VariantError::IncorrectType);
         }
 
@@ -65,7 +65,7 @@ pub trait Decode: Encode + std::fmt::Debug {
     {
         Self::ensure_correct_signature(signature)?;
         let padding = Self::padding(data.position(), format);
-        let len = Self::alignment() + padding;
+        let len = Self::ALIGNMENT + padding;
         ensure_sufficient_bytes(data.bytes(), len)?;
 
         Ok(data.tail(padding))
@@ -500,24 +500,5 @@ pub(crate) fn slice_signature(signature: impl Into<Signature>) -> Result<Signatu
         Variant::SIGNATURE_CHAR => Variant::slice_signature(signature),
         DictEntry::SIGNATURE_CHAR => DictEntry::slice_signature(signature),
         _ => return Err(VariantError::UnsupportedType(signature)),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{Encode, EncodingFormat, SharedData, SimpleDecode};
-
-    // Ensure Encode can be used as Boxed type
-    #[test]
-    fn trait_object() {
-        let boxed = Box::new(42u8);
-
-        let format = EncodingFormat::default();
-        let encoded = SharedData::new(encode_u8(boxed, format));
-        assert!(u8::decode_simple(&encoded, format).unwrap() == 42u8);
-    }
-
-    fn encode_u8(boxed: Box<dyn Encode>, format: EncodingFormat) -> Vec<u8> {
-        boxed.encode(format)
     }
 }
