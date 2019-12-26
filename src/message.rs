@@ -1,7 +1,7 @@
 use byteorder::ByteOrder;
 use core::convert::TryInto;
 use std::error;
-use std::{borrow::Cow, fmt};
+use std::fmt;
 
 use crate::utils::padding_for_8_bytes;
 use crate::Signature;
@@ -146,8 +146,8 @@ impl Message {
 
             String::from(signature)
         });
-        if let Some(body_signature) = &body_signature {
-            fields.add(MessageField::signature(&body_signature));
+        if let Some(body_signature) = body_signature {
+            fields.add(MessageField::signature(body_signature));
         }
 
         fields.add(MessageField::path(path));
@@ -224,13 +224,13 @@ impl Message {
             as usize
     }
 
-    pub fn body_signature(&self) -> Result<String, MessageError> {
+    pub fn body_signature(&self) -> Result<Signature, MessageError> {
         for field in self.fields()?.inner() {
             if field.code()? == MessageFieldCode::Signature {
                 let value = field.value()?;
                 let sig = Signature::from_variant(value)?;
 
-                return Ok(String::from(sig.as_str()));
+                return Ok(Signature::from(sig.as_str()));
             }
         }
 
@@ -256,7 +256,7 @@ impl Message {
         array.try_into().map_err(|e| MessageError::from(e))
     }
 
-    pub fn body(&self, body_signature: Option<&str>) -> Result<Structure, MessageError> {
+    pub fn body(&self, body_signature: Option<Signature>) -> Result<Structure, MessageError> {
         if self.bytes_to_completion() != 0 {
             return Err(MessageError::InsufficientData);
         }
@@ -267,16 +267,14 @@ impl Message {
             return Ok(Structure::new());
         }
 
-        let signature = body_signature
-            .map(|s| Cow::from(s))
-            .unwrap_or(Cow::from(self.body_signature()?));
+        let signature = body_signature.unwrap_or(self.body_signature()?);
         // Add () for Structure
-        let signature = format!("({})", signature);
+        let signature = format!("({})", signature.as_str());
 
         // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
         let encoding = SharedData::new(self.0.clone());
         let structure =
-            Structure::decode(&encoding.tail(header_len), &signature, EncodingFormat::DBus)?;
+            Structure::decode(&encoding.tail(header_len), signature, EncodingFormat::DBus)?;
 
         Ok(structure)
     }

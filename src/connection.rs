@@ -125,7 +125,7 @@ impl From<message::Message> for ConnectionError {
 
                 // Then, try to get the optional description string
                 if message.body_len() > 0 {
-                    match message.body(Some(<String>::SIGNATURE_STR)) {
+                    match message.body(Some(<String>::SIGNATURE_STR.into())) {
                         Ok(body) => match String::from_variant(&body.fields()[0]) {
                             Ok(detail) => {
                                 ConnectionError::MethodError(name, Some(String::from(detail)))
@@ -203,7 +203,7 @@ impl Connection {
             None,
         )?;
 
-        let body = reply.body(Some(<String>::SIGNATURE_STR))?;
+        let body = reply.body(Some(<String>::SIGNATURE_STR.into()))?;
         let bus_name = String::from_variant(&body.fields()[0])?;
 
         println!("bus name: {}", bus_name);

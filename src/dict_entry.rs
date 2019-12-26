@@ -1,8 +1,6 @@
-use std::borrow::Cow;
-
 use crate::EncodingFormat;
 use crate::Variant;
-use crate::{SharedData, SimpleVariantType};
+use crate::{SharedData, Signature, SimpleVariantType};
 use crate::{VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug, Clone)]
@@ -79,14 +77,14 @@ impl VariantType for DictEntry {
 
     fn slice_data(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         let padding = Self::padding(data.position(), format);
-        if data.len() < padding || signature.len() < 4 {
+        if data.len() < padding {
             return Err(VariantError::InsufficientData);
         }
-        Self::ensure_correct_signature(signature)?;
+        let signature = Self::ensure_correct_signature(signature)?;
 
         let mut extracted = padding;
         // Key's signature will always be just 1 character so no need to slice for that.
@@ -111,15 +109,15 @@ impl VariantType for DictEntry {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         // Similar to slice_data, except we create variants.
         let padding = Self::padding(data.position(), format);
-        if data.len() < padding || signature.len() < 4 {
+        if data.len() < padding {
             return Err(VariantError::InsufficientData);
         }
-        Self::ensure_correct_signature(signature)?;
+        let signature = Self::ensure_correct_signature(signature)?;
 
         let mut extracted = padding;
         // Key's signature will always be just 1 character so no need to slice for that.
@@ -135,7 +133,7 @@ impl VariantType for DictEntry {
         let value_signature = crate::variant_type::slice_signature(&signature[2..])?;
         let value_slice = crate::variant_type::slice_data(
             &data.tail(extracted as usize),
-            value_signature,
+            value_signature.as_str(),
             format,
         )?;
         let value = Variant::from_data(&value_slice, value_signature, format)?;
@@ -151,7 +149,10 @@ impl VariantType for DictEntry {
     }
 
     // Kept independent of K and V so that it can be used from generic code
-    fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
+    fn ensure_correct_signature(
+        signature: impl Into<Signature>,
+    ) -> Result<Signature, VariantError> {
+        let signature = signature.into();
         if !signature.starts_with("{") || !signature.ends_with("}") {
             return Err(VariantError::IncorrectType);
         }
@@ -164,19 +165,21 @@ impl VariantType for DictEntry {
         let value_signature = crate::variant_type::slice_signature(&signature[2..])?;
         let _ = crate::alignment_for_signature(value_signature)?;
 
-        Ok(())
+        Ok(signature)
     }
 
-    fn signature<'b>(&'b self) -> Cow<'b, str> {
-        Cow::from(format!(
+    fn signature(&self) -> Signature {
+        Signature::from(format!(
             "{{{}{}}}",
-            self.key.value_signature(),
-            self.value.value_signature()
+            self.key.value_signature().as_str(),
+            self.value.value_signature().as_str(),
         ))
     }
 
     // Kept independent of K and V so that it can be used from generic code
-    fn slice_signature(signature: &str) -> Result<&str, VariantError> {
+    fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
+        let signature = signature.into();
+
         if !signature.starts_with("{") {
             return Err(VariantError::IncorrectType);
         }
@@ -189,7 +192,7 @@ impl VariantType for DictEntry {
         let slice = crate::variant_type::slice_signature(&signature[2..])?;
 
         // signature of value + `{` + 1 char of the key signature + `}`
-        Ok(&signature[0..slice.len() + 3])
+        Ok((&signature[0..slice.len() + 3]).into())
     }
 
     fn is(variant: &Variant) -> bool {

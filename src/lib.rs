@@ -102,7 +102,7 @@ mod tests {
                 .body_signature()
                 .map(|s| s.as_str() == <String>::SIGNATURE_STR)
                 .unwrap());
-            let body = reply.body(Some(<String>::SIGNATURE_STR)).unwrap();
+            let body = reply.body(Some(<String>::SIGNATURE_STR.into())).unwrap();
             let id = String::from_variant(&body.fields()[0]).unwrap();
             println!("Machine ID: {}", id);
         }
@@ -121,7 +121,7 @@ mod tests {
             .body_signature()
             .map(|s| s.as_str() == bool::SIGNATURE_STR)
             .unwrap());
-        let body = reply.body(Some(bool::SIGNATURE_STR)).unwrap();
+        let body = reply.body(Some(bool::SIGNATURE_STR.into())).unwrap();
         assert!(bool::from_variant(&body.fields()[0]).unwrap());
 
         let reply = connection
@@ -156,7 +156,7 @@ mod tests {
             .body_signature()
             .map(|s| s.as_str() == "a{sv}")
             .unwrap());
-        let body = reply.body(Some("a{sv}")).unwrap();
+        let body = reply.body(Some("a{sv}".into())).unwrap();
         let mut fields = body.take_fields();
         let array = Array::take_from_variant(fields.remove(0)).unwrap();
         let dict = Dict::try_from(array).unwrap();

@@ -64,8 +64,13 @@ impl VariantTypeConstants for f64 {
     const ALIGNMENT: usize = 8;
 }
 
-pub(crate) fn alignment_for_signature(signature: &str) -> Result<usize, VariantError> {
+pub(crate) fn alignment_for_signature(
+    signature: impl Into<Signature>,
+) -> Result<usize, VariantError> {
+    let signature = signature.into();
+
     match signature
+        .as_str()
         .chars()
         .next()
         .ok_or(VariantError::InsufficientData)?
@@ -87,6 +92,6 @@ pub(crate) fn alignment_for_signature(signature: &str) -> Result<usize, VariantE
         Structure::SIGNATURE_CHAR => Ok(Structure::ALIGNMENT),
         Variant::SIGNATURE_CHAR => Ok(Variant::ALIGNMENT),
         DictEntry::SIGNATURE_CHAR => Ok(DictEntry::ALIGNMENT),
-        _ => return Err(VariantError::UnsupportedType(String::from(signature))),
+        _ => return Err(VariantError::UnsupportedType(signature)),
     }
 }

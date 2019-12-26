@@ -1,5 +1,5 @@
 use byteorder::ByteOrder;
-use std::{borrow::Cow, error, fmt, str};
+use std::{error, fmt, str};
 
 use crate::utils::padding_for_n_bytes;
 use crate::SharedData;
@@ -13,7 +13,7 @@ pub enum VariantError {
     IncorrectValue,
     InvalidUtf8,
     InsufficientData,
-    UnsupportedType(String),
+    UnsupportedType(Signature),
 }
 
 impl error::Error for VariantError {
@@ -31,7 +31,7 @@ impl fmt::Display for VariantError {
             VariantError::InvalidUtf8 => write!(f, "invalid UTF-8"),
             VariantError::InsufficientData => write!(f, "insufficient data"),
             VariantError::UnsupportedType(s) => {
-                write!(f, "unsupported type (signature: \"{}\")", s)
+                write!(f, "unsupported type (signature: \"{}\")", s.as_str())
             }
         }
     }
@@ -76,7 +76,7 @@ pub trait VariantType: std::fmt::Debug {
     // alignment
     fn slice_data(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError>
     where
@@ -90,40 +90,41 @@ pub trait VariantType: std::fmt::Debug {
         Ok(data.subset(0, len))
     }
 
-    fn ensure_correct_signature(signature: &str) -> Result<(), VariantError>
+    fn ensure_correct_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError>
     where
         Self: Sized,
     {
+        let signature = signature.into();
+
         if signature != Self::signature_str() {
             return Err(VariantError::IncorrectType);
         }
 
-        Ok(())
+        Ok(signature)
     }
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError>
     where
         Self: Sized;
 
-    fn signature<'a>(&'a self) -> Cow<'a, str>
+    fn signature(&self) -> Signature
     where
         Self: Sized,
     {
-        Cow::from(Self::signature_str())
+        Signature::new(Self::signature_str())
     }
 
-    fn slice_signature(signature: &str) -> Result<&str, VariantError>
+    fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError>
     where
         Self: Sized,
     {
-        let slice = &signature[0..1];
-        Self::ensure_correct_signature(slice)?;
+        let slice: Signature = signature.into()[0..1].into();
 
-        Ok(slice)
+        Self::ensure_correct_signature(slice)
     }
 
     fn add_padding(bytes: &mut Vec<u8>, format: EncodingFormat)
@@ -139,7 +140,7 @@ pub trait VariantType: std::fmt::Debug {
     // Mostly a helper for decode() implementation. Removes any leading padding bytes.
     fn slice_for_decoding(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError>
     where
@@ -220,7 +221,7 @@ impl VariantType for u8 {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
@@ -275,7 +276,7 @@ impl VariantType for bool {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
@@ -334,7 +335,7 @@ impl VariantType for i16 {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
@@ -389,7 +390,7 @@ impl VariantType for u16 {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
@@ -444,7 +445,7 @@ impl VariantType for i32 {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
@@ -499,7 +500,7 @@ impl VariantType for u32 {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
@@ -554,7 +555,7 @@ impl VariantType for i64 {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
@@ -609,7 +610,7 @@ impl VariantType for u64 {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
@@ -666,7 +667,7 @@ impl VariantType for f64 {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
@@ -713,9 +714,11 @@ pub(crate) fn ensure_sufficient_bytes(bytes: &[u8], size: usize) -> Result<(), V
 
 pub(crate) fn slice_data(
     data: &SharedData,
-    signature: &str,
+    signature: impl Into<Signature>,
     format: EncodingFormat,
 ) -> Result<SharedData, VariantError> {
+    let signature = signature.into();
+
     match signature
         .chars()
         .next()
@@ -738,15 +741,17 @@ pub(crate) fn slice_data(
         Structure::SIGNATURE_CHAR => Structure::slice_data(data, signature, format),
         Variant::SIGNATURE_CHAR => Variant::slice_data(data, signature, format),
         DictEntry::SIGNATURE_CHAR => DictEntry::slice_data(data, signature, format),
-        _ => return Err(VariantError::UnsupportedType(String::from(signature))),
+        _ => return Err(VariantError::UnsupportedType(signature)),
     }
 }
 
 pub(crate) fn padding_for_signature(
     n_bytes_before: usize,
-    signature: &str,
+    signature: impl Into<Signature>,
     format: EncodingFormat,
 ) -> usize {
+    let signature = signature.into();
+
     match signature.chars().next().unwrap_or('\0') {
         // FIXME: There has to be a shorter way to do this
         u8::SIGNATURE_CHAR => u8::padding(n_bytes_before, format),
@@ -766,14 +771,16 @@ pub(crate) fn padding_for_signature(
         Variant::SIGNATURE_CHAR => Variant::padding(n_bytes_before, format),
         DictEntry::SIGNATURE_CHAR => DictEntry::padding(n_bytes_before, format),
         _ => {
-            println!("WARNING: Unsupported signature: {}", signature);
+            println!("WARNING: Unsupported signature: {}", signature.as_str());
 
             0
         }
     }
 }
 
-pub(crate) fn slice_signature(signature: &str) -> Result<&str, VariantError> {
+pub(crate) fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
+    let signature = signature.into();
+
     match signature
         .chars()
         .next()
@@ -796,7 +803,7 @@ pub(crate) fn slice_signature(signature: &str) -> Result<&str, VariantError> {
         Structure::SIGNATURE_CHAR => Structure::slice_signature(signature),
         Variant::SIGNATURE_CHAR => Variant::slice_signature(signature),
         DictEntry::SIGNATURE_CHAR => DictEntry::slice_signature(signature),
-        _ => return Err(VariantError::UnsupportedType(String::from(signature))),
+        _ => return Err(VariantError::UnsupportedType(signature)),
     }
 }
 

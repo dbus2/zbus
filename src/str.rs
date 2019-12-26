@@ -32,7 +32,7 @@ impl VariantType for String {
 
     fn slice_data(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
@@ -45,7 +45,7 @@ impl VariantType for String {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let slice = Self::slice_for_decoding(data, signature, format)?;
@@ -124,7 +124,7 @@ impl VariantType for ObjectPath {
 
     fn slice_data<'b>(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
@@ -133,7 +133,7 @@ impl VariantType for ObjectPath {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
@@ -239,7 +239,7 @@ impl VariantType for Signature {
 
     fn slice_data(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         _format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
@@ -256,7 +256,7 @@ impl VariantType for Signature {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         _format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;

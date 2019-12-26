@@ -1,6 +1,4 @@
-use std::borrow::Cow;
-
-use crate::{EncodingFormat, SharedData};
+use crate::{EncodingFormat, SharedData, Signature};
 use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
 #[derive(Debug, Clone)]
@@ -61,14 +59,14 @@ impl VariantType for Structure {
 
     fn slice_data(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         let padding = Self::padding(data.position(), format);
-        if data.len() < padding || signature.len() < 3 {
+        if data.len() < padding {
             return Err(VariantError::InsufficientData);
         }
-        Self::ensure_correct_signature(signature)?;
+        let signature = Self::ensure_correct_signature(signature)?;
 
         let mut extracted = padding;
         let mut i = 1;
@@ -77,7 +75,7 @@ impl VariantType for Structure {
             let child_signature = crate::variant_type::slice_signature(&signature[i..last_index])?;
             let slice = crate::variant_type::slice_data(
                 &data.tail(extracted as usize),
-                child_signature,
+                child_signature.as_str(),
                 format,
             )?;
             extracted += slice.len();
@@ -96,15 +94,16 @@ impl VariantType for Structure {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         // Similar to slice_data, except we create variants.
         let padding = Self::padding(data.position(), format);
+        let signature = signature.into();
         if data.len() < padding || signature.len() < 3 {
             return Err(VariantError::InsufficientData);
         }
-        Self::ensure_correct_signature(signature)?;
+        let signature = Self::ensure_correct_signature(signature)?;
 
         let encoding = data.tail(padding);
         let fields = variants_from_struct_data(&encoding, signature, format)?;
@@ -112,7 +111,13 @@ impl VariantType for Structure {
         Ok(Self(fields))
     }
 
-    fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
+    fn ensure_correct_signature(
+        signature: impl Into<Signature>,
+    ) -> Result<Signature, VariantError> {
+        let signature = signature.into();
+        if signature.len() < 3 {
+            return Err(VariantError::InsufficientData);
+        }
         if !signature.starts_with("(") || !signature.ends_with(")") {
             return Err(VariantError::IncorrectType);
         }
@@ -124,19 +129,20 @@ impl VariantType for Structure {
             i += child_signature.len();
         }
 
-        Ok(())
+        Ok(signature)
     }
 
-    fn signature<'b>(&'b self) -> Cow<'b, str> {
+    fn signature(&self) -> Signature {
         let mut signature = String::from("(");
         for field in &self.0 {
             signature.push_str(&field.value_signature());
         }
         signature.push_str(")");
-        Cow::from(signature)
+        Signature::from(signature)
     }
 
-    fn slice_signature(signature: &str) -> Result<&str, VariantError> {
+    fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
+        let signature = signature.into();
         if !signature.starts_with("(") {
             return Err(VariantError::IncorrectType);
         }
@@ -160,7 +166,7 @@ impl VariantType for Structure {
             return Err(VariantError::IncorrectType);
         }
 
-        Ok(&signature[0..i + 1])
+        Ok(Signature::from(&signature[0..i + 1]))
     }
 
     fn is(variant: &Variant) -> bool {
@@ -194,10 +200,11 @@ impl VariantType for Structure {
 
 fn variants_from_struct_data(
     data: &SharedData,
-    signature: &str,
+    signature: impl Into<Signature>,
     format: EncodingFormat,
 ) -> Result<Vec<Variant>, VariantError> {
     // Assuming simple types here but it's OK to have more capacity than needed
+    let signature = signature.into();
     let mut fields = Vec::with_capacity(signature.len());
     let mut extracted = 0;
     let mut i = 1;
@@ -207,13 +214,16 @@ fn variants_from_struct_data(
 
         // FIXME: Redundant slicing since Variant::from_data() does slicing too (maybe that function should return the
         // len or slice as well?)
-        let child_slice =
-            crate::variant_type::slice_data(&data.tail(extracted), child_signature, format)?;
+        let child_slice = crate::variant_type::slice_data(
+            &data.tail(extracted),
+            child_signature.as_str(),
+            format,
+        )?;
         extracted += child_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
-        let variant = Variant::from_data(&child_slice, child_signature, format)?;
+        let variant = Variant::from_data(&child_slice, child_signature.as_str(), format)?;
         fields.push(variant);
 
         i += child_signature.len();

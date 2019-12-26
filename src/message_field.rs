@@ -103,11 +103,11 @@ impl MessageField {
         self.0
     }
 
-    pub fn path(path: &str) -> Self {
+    pub fn path(path: impl Into<ObjectPath>) -> Self {
         Self(
             Structure::new()
                 .add_field(MessageFieldCode::Path as u8)
-                .add_field(ObjectPath::new(path).to_variant()),
+                .add_field(path.into().to_variant()),
         )
     }
 
@@ -159,11 +159,11 @@ impl MessageField {
         )
     }
 
-    pub fn signature(signature: &str) -> Self {
+    pub fn signature(signature: impl Into<Signature>) -> Self {
         Self(
             Structure::new()
                 .add_field(MessageFieldCode::Signature as u8)
-                .add_field(Signature::new(signature).to_variant()),
+                .add_field(signature.into().to_variant()),
         )
     }
 

@@ -1,9 +1,8 @@
 use byteorder::ByteOrder;
 use core::convert::TryInto;
-use std::borrow::Cow;
 
 use crate::EncodingFormat;
-use crate::{SharedData, SimpleVariantType};
+use crate::{SharedData, Signature, SimpleVariantType};
 use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
 
 // Since neither `From` trait nor `Vec` is from this crate, we need this intermediate type.
@@ -132,13 +131,10 @@ impl VariantType for Array {
 
     fn slice_data(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
-        if signature.len() < 2 {
-            return Err(VariantError::InsufficientData);
-        }
-        Self::ensure_correct_signature(signature)?;
+        let signature = Self::ensure_correct_signature(signature)?;
 
         // Child signature
         let child_signature = crate::variant_type::slice_signature(&signature[1..])?;
@@ -155,13 +151,14 @@ impl VariantType for Array {
                 // Length we got from array doesn't include padding for the first element
                 len += crate::variant_type::padding_for_signature(
                     element_data.position(),
-                    child_signature,
+                    child_signature.as_str(),
                     format,
                 );
                 first_element = false;
             }
 
-            let slice = crate::variant_type::slice_data(&element_data, child_signature, format)?;
+            let slice =
+                crate::variant_type::slice_data(&element_data, child_signature.as_str(), format)?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
@@ -176,14 +173,14 @@ impl VariantType for Array {
 
     fn decode(
         data: &SharedData,
-        signature: &str,
+        signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let padding = Self::padding(data.position(), format);
-        if data.len() < padding + 4 || signature.len() < 2 {
+        if data.len() < padding + 4 {
             return Err(VariantError::InsufficientData);
         }
-        Self::ensure_correct_signature(signature)?;
+        let signature = Self::ensure_correct_signature(signature)?;
 
         // Child signature
         let child_signature = crate::variant_type::slice_signature(&signature[1..])?;
@@ -202,19 +199,20 @@ impl VariantType for Array {
                 // Length we got from array doesn't include padding for the first element
                 len += crate::variant_type::padding_for_signature(
                     element_data.position(),
-                    child_signature,
+                    child_signature.as_str(),
                     format,
                 );
                 first_element = false;
             }
 
-            let slice = crate::variant_type::slice_data(&element_data, child_signature, format)?;
+            let slice =
+                crate::variant_type::slice_data(&element_data, child_signature.as_str(), format)?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
             }
 
-            let element = Variant::from_data(&slice, child_signature, format)?;
+            let element = Variant::from_data(&slice, child_signature.as_str(), format)?;
             elements.push(element);
         }
         if extracted == 0 {
@@ -226,22 +224,30 @@ impl VariantType for Array {
         Ok(Array::new_from_vec_unchecked(elements))
     }
 
-    fn ensure_correct_signature(signature: &str) -> Result<(), VariantError> {
-        let slice = Self::slice_signature(&signature)?;
-        if slice.len() != signature.len() {
+    fn ensure_correct_signature(
+        signature: impl Into<Signature>,
+    ) -> Result<Signature, VariantError> {
+        let signature = signature.into();
+        let len = signature.len();
+        let slice = Self::slice_signature(signature)?;
+        if slice.len() != len {
             return Err(VariantError::IncorrectType);
         }
 
-        Ok(())
+        Ok(slice)
     }
 
-    fn signature<'b>(&'b self) -> Cow<'b, str> {
-        let signature = format!("a{}", self.inner()[0].value_signature());
+    fn signature(&self) -> Signature {
+        let signature = format!("a{}", self.inner()[0].value_signature().as_str());
 
-        Cow::from(signature)
+        Signature::from(signature)
     }
 
-    fn slice_signature(signature: &str) -> Result<&str, VariantError> {
+    fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
+        let signature = signature.into();
+        if signature.len() < 2 {
+            return Err(VariantError::InsufficientData);
+        }
         if !signature.starts_with("a") {
             return Err(VariantError::IncorrectType);
         }
@@ -249,7 +255,7 @@ impl VariantType for Array {
         // There should be a valid complete signature after 'a' but not more than 1
         let slice = crate::variant_type::slice_signature(&signature[1..])?;
 
-        Ok(&signature[0..slice.len() + 1])
+        Ok(Signature::from(&signature[0..slice.len() + 1]))
     }
 
     fn is(variant: &Variant) -> bool {
