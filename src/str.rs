@@ -190,6 +190,12 @@ impl std::ops::Deref for ObjectPath {
     }
 }
 
+impl PartialEq<&str> for ObjectPath {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signature(String);
 
@@ -311,5 +317,11 @@ impl std::ops::Deref for Signature {
 
     fn deref(&self) -> &Self::Target {
         self.as_str()
+    }
+}
+
+impl PartialEq<&str> for Signature {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
     }
 }
