@@ -50,8 +50,8 @@ mod tests {
     use core::convert::{TryFrom, TryInto};
     use std::collections::HashMap;
 
-    use crate::{Array, Dict, Structure};
-    use crate::{Variant, VariantType, VariantTypeConstants};
+    use crate::{Array, Decode, Dict};
+    use crate::{Structure, Variant, VariantTypeConstants};
 
     #[test]
     fn basic_connection() {

@@ -3,8 +3,8 @@ use std::cmp::Eq;
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use crate::{Array, DictEntry};
-use crate::{SimpleVariantType, VariantError, VariantType};
+use crate::{Array, Decode, DictEntry, Encode};
+use crate::{SimpleDecode, VariantError};
 
 // Since neither `From` trait nor `HashMap` is from this crate, we need this intermediate type.
 // We can't implement `Into` either as `Vec` isn't our type either.
@@ -36,8 +36,8 @@ impl Dict {
 // Conversion of Dict to HashMap
 impl<K, V> TryInto<HashMap<K, V>> for Dict
 where
-    K: SimpleVariantType + Hash + Eq,
-    V: VariantType,
+    K: SimpleDecode + Hash + Eq,
+    V: Decode,
 {
     type Error = VariantError;
 
@@ -57,8 +57,8 @@ where
 // Conversion of Hashmap to Dict
 impl<K, V> From<HashMap<K, V>> for Dict
 where
-    K: SimpleVariantType + Hash + Eq,
-    V: VariantType,
+    K: SimpleDecode + Hash + Eq,
+    V: Encode,
 {
     fn from(value: HashMap<K, V>) -> Self {
         let vec = value

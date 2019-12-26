@@ -1,6 +1,6 @@
-use crate::{EncodingFormat, SharedData, VariantError, VariantType};
+use crate::{Decode, EncodingFormat, SharedData, VariantError};
 
-pub trait SimpleVariantType: VariantType {
+pub trait SimpleDecode: Decode {
     fn slice_data_simple(
         data: &SharedData,
         format: EncodingFormat,
@@ -19,12 +19,12 @@ pub trait SimpleVariantType: VariantType {
     }
 }
 
-impl SimpleVariantType for u8 {}
-impl SimpleVariantType for bool {}
-impl SimpleVariantType for i16 {}
-impl SimpleVariantType for u16 {}
-impl SimpleVariantType for i32 {}
-impl SimpleVariantType for u32 {}
-impl SimpleVariantType for i64 {}
-impl SimpleVariantType for u64 {}
-impl SimpleVariantType for f64 {}
+impl SimpleDecode for u8 {}
+impl SimpleDecode for bool {}
+impl SimpleDecode for i16 {}
+impl SimpleDecode for u16 {}
+impl SimpleDecode for i32 {}
+impl SimpleDecode for u32 {}
+impl SimpleDecode for i64 {}
+impl SimpleDecode for u64 {}
+impl SimpleDecode for f64 {}

@@ -4,7 +4,7 @@ use std::{error, fmt, str};
 use crate::utils::padding_for_n_bytes;
 use crate::SharedData;
 use crate::{Array, DictEntry, ObjectPath, Signature, Structure};
-use crate::{SimpleVariantType, Variant, VariantTypeConstants};
+use crate::{SimpleDecode, Variant, VariantTypeConstants};
 
 #[derive(Debug)]
 pub enum VariantError {
@@ -49,9 +49,7 @@ impl Default for EncodingFormat {
     }
 }
 
-// As trait-object, you can only use the `encode` method but you can downcast it to the concrete
-// type to get the full API back.
-pub trait VariantType: std::fmt::Debug {
+pub trait Encode: std::fmt::Debug {
     fn signature_char() -> char
     where
         Self: Sized;
@@ -72,6 +70,40 @@ pub trait VariantType: std::fmt::Debug {
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat);
 
+    fn signature(&self) -> Signature
+    where
+        Self: Sized,
+    {
+        Signature::new(Self::signature_str())
+    }
+
+    fn add_padding(bytes: &mut Vec<u8>, format: EncodingFormat)
+    where
+        Self: Sized,
+    {
+        let padding = Self::padding(bytes.len(), format);
+        if padding > 0 {
+            bytes.resize(bytes.len() + padding, 0);
+        }
+    }
+
+    fn padding(n_bytes_before: usize, _format: EncodingFormat) -> usize
+    where
+        Self: Sized,
+    {
+        padding_for_n_bytes(n_bytes_before, Self::alignment())
+    }
+
+    // Into<Variant> trait bound would have been better and it's possible but since `Into<T> for T`
+    // is provided implicitly, the default no-op implementation for `Variant` won't do the right
+    // thing: unflatten it.
+    // `TryFrom<Variant>`.
+    fn to_variant(self) -> Variant
+    where
+        Self: Sized;
+}
+
+pub trait Decode: Encode + std::fmt::Debug {
     // Default implementation works for constant-sized types where size is the same as their
     // alignment
     fn slice_data(
@@ -111,13 +143,6 @@ pub trait VariantType: std::fmt::Debug {
     where
         Self: Sized;
 
-    fn signature(&self) -> Signature
-    where
-        Self: Sized,
-    {
-        Signature::new(Self::signature_str())
-    }
-
     fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError>
     where
         Self: Sized,
@@ -125,16 +150,6 @@ pub trait VariantType: std::fmt::Debug {
         let slice: Signature = signature.into()[0..1].into();
 
         Self::ensure_correct_signature(slice)
-    }
-
-    fn add_padding(bytes: &mut Vec<u8>, format: EncodingFormat)
-    where
-        Self: Sized,
-    {
-        let padding = Self::padding(bytes.len(), format);
-        if padding > 0 {
-            bytes.resize(bytes.len() + padding, 0);
-        }
     }
 
     // Mostly a helper for decode() implementation. Removes any leading padding bytes.
@@ -154,19 +169,12 @@ pub trait VariantType: std::fmt::Debug {
         Ok(data.tail(padding))
     }
 
-    fn padding(n_bytes_before: usize, _format: EncodingFormat) -> usize
-    where
-        Self: Sized,
-    {
-        padding_for_n_bytes(n_bytes_before, Self::alignment())
-    }
-
     /// Checks if variant value is of the generic type `T`.
     ///
     /// # Examples
     ///
     /// ```
-    /// use zbus::VariantType;
+    /// use zbus::{Encode, Decode};
     ///
     /// let v = String::from("hello").to_variant();
     /// assert!(!u32::is(&v));
@@ -174,7 +182,7 @@ pub trait VariantType: std::fmt::Debug {
     /// ```
     ///
     /// ```
-    /// use zbus::VariantType;
+    /// use zbus::{Encode, Decode};
     ///
     /// let v = 147u32.to_variant();
     /// assert!(u32::is(&v));
@@ -185,7 +193,7 @@ pub trait VariantType: std::fmt::Debug {
         Self: Sized;
 
     // `TryFrom<Variant>` trait bound would have been better but we can't use that unfortunately
-    // since Variant implements VariantType.
+    // since Variant implements Decode.
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError>
     where
         Self: Sized;
@@ -193,17 +201,9 @@ pub trait VariantType: std::fmt::Debug {
     fn from_variant(variant: &Variant) -> Result<&Self, VariantError>
     where
         Self: Sized;
-
-    // Into<Variant> trait bound would have been better and it's possible but since `Into<T> for T`
-    // is provided implicitly, the default no-op implementation for `Variant` won't do the right
-    // thing: unflatten it.
-    // `TryFrom<Variant>`.
-    fn to_variant(self) -> Variant
-    where
-        Self: Sized;
 }
 
-impl VariantType for u8 {
+impl Encode for u8 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -219,6 +219,12 @@ impl VariantType for u8 {
         bytes.extend(&self.to_ne_bytes());
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::U8(self)
+    }
+}
+
+impl Decode for u8 {
     fn decode(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -252,13 +258,9 @@ impl VariantType for u8 {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::U8(self)
-    }
 }
 
-impl VariantType for bool {
+impl Encode for bool {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -274,6 +276,12 @@ impl VariantType for bool {
         bytes.extend(&(*self as u32).to_ne_bytes());
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::Bool(self)
+    }
+}
+
+impl Decode for bool {
     fn decode(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -311,13 +319,9 @@ impl VariantType for bool {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::Bool(self)
-    }
 }
 
-impl VariantType for i16 {
+impl Encode for i16 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -333,6 +337,12 @@ impl VariantType for i16 {
         bytes.extend(&self.to_ne_bytes());
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::I16(self)
+    }
+}
+
+impl Decode for i16 {
     fn decode(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -366,13 +376,9 @@ impl VariantType for i16 {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::I16(self)
-    }
 }
 
-impl VariantType for u16 {
+impl Encode for u16 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -388,6 +394,12 @@ impl VariantType for u16 {
         bytes.extend(&self.to_ne_bytes());
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::U16(self)
+    }
+}
+
+impl Decode for u16 {
     fn decode(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -421,13 +433,9 @@ impl VariantType for u16 {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::U16(self)
-    }
 }
 
-impl VariantType for i32 {
+impl Encode for i32 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -443,6 +451,12 @@ impl VariantType for i32 {
         bytes.extend(&self.to_ne_bytes());
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::I32(self)
+    }
+}
+
+impl Decode for i32 {
     fn decode(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -476,13 +490,9 @@ impl VariantType for i32 {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::I32(self)
-    }
 }
 
-impl VariantType for u32 {
+impl Encode for u32 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -498,6 +508,12 @@ impl VariantType for u32 {
         bytes.extend(&self.to_ne_bytes());
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::U32(self)
+    }
+}
+
+impl Decode for u32 {
     fn decode(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -531,13 +547,9 @@ impl VariantType for u32 {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::U32(self)
-    }
 }
 
-impl VariantType for i64 {
+impl Encode for i64 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -553,6 +565,12 @@ impl VariantType for i64 {
         bytes.extend(&self.to_ne_bytes());
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::I64(self)
+    }
+}
+
+impl Decode for i64 {
     fn decode(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -586,13 +604,9 @@ impl VariantType for i64 {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::I64(self)
-    }
 }
 
-impl VariantType for u64 {
+impl Encode for u64 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -608,6 +622,12 @@ impl VariantType for u64 {
         bytes.extend(&self.to_ne_bytes());
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::U64(self)
+    }
+}
+
+impl Decode for u64 {
     fn decode(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -641,13 +661,9 @@ impl VariantType for u64 {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::U64(self)
-    }
 }
 
-impl VariantType for f64 {
+impl Encode for f64 {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -665,6 +681,12 @@ impl VariantType for f64 {
         bytes.extend_from_slice(&buf);
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::F64(self)
+    }
+}
+
+impl Decode for f64 {
     fn decode(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -697,10 +719,6 @@ impl VariantType for f64 {
         } else {
             Err(VariantError::IncorrectType)
         }
-    }
-
-    fn to_variant(self) -> Variant {
-        Variant::F64(self)
     }
 }
 
@@ -809,9 +827,9 @@ pub(crate) fn slice_signature(signature: impl Into<Signature>) -> Result<Signatu
 
 #[cfg(test)]
 mod tests {
-    use crate::{EncodingFormat, SharedData, SimpleVariantType, VariantType};
+    use crate::{Encode, EncodingFormat, SharedData, SimpleDecode};
 
-    // Ensure VariantType can be used as Boxed type
+    // Ensure Encode can be used as Boxed type
     #[test]
     fn trait_object() {
         let boxed = Box::new(42u8);
@@ -821,7 +839,7 @@ mod tests {
         assert!(u8::decode_simple(&encoded, format).unwrap() == 42u8);
     }
 
-    fn encode_u8(boxed: Box<dyn VariantType>, format: EncodingFormat) -> Vec<u8> {
+    fn encode_u8(boxed: Box<dyn Encode>, format: EncodingFormat) -> Vec<u8> {
         boxed.encode(format)
     }
 }

@@ -3,8 +3,9 @@ use core::convert::TryFrom;
 use std::error;
 use std::fmt;
 
+use crate::{Decode, Encode};
 use crate::{ObjectPath, Signature, Structure};
-use crate::{Variant, VariantError, VariantType};
+use crate::{Variant, VariantError};
 
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq)]

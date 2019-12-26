@@ -1,7 +1,7 @@
-use crate::EncodingFormat;
 use crate::Variant;
-use crate::{SharedData, Signature, SimpleVariantType};
-use crate::{VariantError, VariantType, VariantTypeConstants};
+use crate::{Decode, Encode, EncodingFormat};
+use crate::{SharedData, Signature, SimpleDecode};
+use crate::{VariantError, VariantTypeConstants};
 
 #[derive(Debug, Clone)]
 pub struct DictEntry {
@@ -12,8 +12,8 @@ pub struct DictEntry {
 impl DictEntry {
     pub fn new<K, V>(key: K, value: V) -> Self
     where
-        K: SimpleVariantType + std::hash::Hash,
-        V: VariantType,
+        K: SimpleDecode + std::hash::Hash,
+        V: Encode,
     {
         Self {
             key: Box::new(key.to_variant()),
@@ -24,22 +24,22 @@ impl DictEntry {
     // FIXME: Tryo to optimize (this should be returing a reference ideally
     pub fn key<K>(&self) -> Result<&K, VariantError>
     where
-        K: SimpleVariantType + std::hash::Hash,
+        K: SimpleDecode + std::hash::Hash,
     {
         K::from_variant(&self.key)
     }
 
     pub fn value<V>(&self) -> Result<&V, VariantError>
     where
-        V: VariantType,
+        V: Decode,
     {
         V::from_variant(&self.value)
     }
 
     pub fn take_inner<K, V>(self) -> Result<(K, V), VariantError>
     where
-        K: SimpleVariantType + std::hash::Hash,
-        V: VariantType,
+        K: SimpleDecode + std::hash::Hash,
+        V: Decode,
     {
         Ok((
             K::take_from_variant(*self.key)?,
@@ -57,7 +57,7 @@ impl VariantTypeConstants for DictEntry {
     const ALIGNMENT: usize = 8;
 }
 
-impl VariantType for DictEntry {
+impl Encode for DictEntry {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -75,6 +75,20 @@ impl VariantType for DictEntry {
         self.value.encode_value_into(bytes, format);
     }
 
+    fn signature(&self) -> Signature {
+        Signature::from(format!(
+            "{{{}{}}}",
+            self.key.value_signature().as_str(),
+            self.value.value_signature().as_str(),
+        ))
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::DictEntry(self)
+    }
+}
+
+impl Decode for DictEntry {
     fn slice_data(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -168,14 +182,6 @@ impl VariantType for DictEntry {
         Ok(signature)
     }
 
-    fn signature(&self) -> Signature {
-        Signature::from(format!(
-            "{{{}{}}}",
-            self.key.value_signature().as_str(),
-            self.value.value_signature().as_str(),
-        ))
-    }
-
     // Kept independent of K and V so that it can be used from generic code
     fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
         let signature = signature.into();
@@ -217,9 +223,5 @@ impl VariantType for DictEntry {
         } else {
             Err(VariantError::IncorrectType)
         }
-    }
-
-    fn to_variant(self) -> Variant {
-        Variant::DictEntry(self)
     }
 }

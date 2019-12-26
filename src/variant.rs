@@ -1,8 +1,9 @@
 use std::str;
 
-use crate::{Array, DictEntry, EncodingFormat, ObjectPath};
-use crate::{SharedData, Signature, SimpleVariantType, Structure};
-use crate::{VariantError, VariantType, VariantTypeConstants};
+use crate::{Array, DictEntry, Encode, EncodingFormat};
+use crate::{Decode, ObjectPath};
+use crate::{SharedData, Signature, SimpleDecode, Structure};
+use crate::{VariantError, VariantTypeConstants};
 
 #[derive(Debug, Clone)]
 pub enum Variant {
@@ -178,7 +179,7 @@ impl VariantTypeConstants for Variant {
     const ALIGNMENT: usize = Signature::ALIGNMENT;
 }
 
-impl VariantType for Variant {
+impl Encode for Variant {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -195,6 +196,13 @@ impl VariantType for Variant {
         self.encode_value_into(bytes, format)
     }
 
+    // In case of Variant, this create a Variant::Variant(self) (i-e deflattens)
+    fn to_variant(self) -> Variant {
+        Variant::Variant(Box::new(self))
+    }
+}
+
+impl Decode for Variant {
     fn slice_data(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -253,22 +261,17 @@ impl VariantType for Variant {
             Err(VariantError::IncorrectType)
         }
     }
-
-    // In case of Variant, this create a Variant::Variant(self) (i-e deflattens)
-    fn to_variant(self) -> Variant {
-        Variant::Variant(Box::new(self))
-    }
 }
-impl SimpleVariantType for Variant {}
+impl SimpleDecode for Variant {}
 
 #[cfg(test)]
 mod tests {
     use core::convert::{TryFrom, TryInto};
     use std::collections::HashMap;
 
-    use crate::{Array, Dict, DictEntry, EncodingFormat, SimpleVariantType};
-    use crate::{SharedData, Structure};
-    use crate::{VariantType, VariantTypeConstants};
+    use crate::{Array, Dict, DictEntry};
+    use crate::{Decode, Encode, EncodingFormat, SimpleDecode};
+    use crate::{SharedData, Structure, VariantTypeConstants};
 
     #[test]
     fn u8_variant() {

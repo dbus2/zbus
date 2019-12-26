@@ -5,10 +5,10 @@ use std::fmt;
 
 use crate::utils::padding_for_8_bytes;
 use crate::Signature;
-use crate::{Array, EncodingFormat};
+use crate::VariantError;
+use crate::{Array, Decode, Encode, EncodingFormat};
 use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
 use crate::{SharedData, Structure};
-use crate::{VariantError, VariantType};
 
 /// Size of primary message header
 pub const PRIMARY_HEADER_SIZE: usize = 16;

@@ -1,5 +1,6 @@
-use crate::{EncodingFormat, SharedData, Signature};
-use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
+use crate::{Decode, Encode, EncodingFormat};
+use crate::{SharedData, Signature};
+use crate::{Variant, VariantError, VariantTypeConstants};
 
 #[derive(Debug, Clone)]
 pub struct Structure(Vec<Variant>);
@@ -19,7 +20,7 @@ impl Structure {
 
     pub fn add_field<T>(mut self, field: T) -> Self
     where
-        T: VariantType,
+        T: Encode,
     {
         self.0.push(field.to_variant());
 
@@ -36,7 +37,7 @@ impl VariantTypeConstants for Structure {
     const ALIGNMENT: usize = 8;
 }
 
-impl VariantType for Structure {
+impl Encode for Structure {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -57,6 +58,21 @@ impl VariantType for Structure {
         }
     }
 
+    fn signature(&self) -> Signature {
+        let mut signature = String::from("(");
+        for field in &self.0 {
+            signature.push_str(&field.value_signature());
+        }
+        signature.push_str(")");
+        Signature::from(signature)
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::Structure(self)
+    }
+}
+
+impl Decode for Structure {
     fn slice_data(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -132,15 +148,6 @@ impl VariantType for Structure {
         Ok(signature)
     }
 
-    fn signature(&self) -> Signature {
-        let mut signature = String::from("(");
-        for field in &self.0 {
-            signature.push_str(&field.value_signature());
-        }
-        signature.push_str(")");
-        Signature::from(signature)
-    }
-
     fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
         let signature = signature.into();
         if !signature.starts_with("(") {
@@ -191,10 +198,6 @@ impl VariantType for Structure {
         } else {
             Err(VariantError::IncorrectType)
         }
-    }
-
-    fn to_variant(self) -> Variant {
-        Variant::Structure(self)
     }
 }
 

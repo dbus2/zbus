@@ -1,9 +1,9 @@
 use byteorder::ByteOrder;
 use core::convert::TryInto;
 
-use crate::EncodingFormat;
-use crate::{SharedData, Signature, SimpleVariantType};
-use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
+use crate::{Decode, Encode, EncodingFormat};
+use crate::{SharedData, Signature, SimpleDecode};
+use crate::{Variant, VariantError, VariantTypeConstants};
 
 // Since neither `From` trait nor `Vec` is from this crate, we need this intermediate type.
 //
@@ -22,7 +22,7 @@ impl Array {
     /// # Examples:
     ///
     /// ```
-    /// use zbus::{Array, Variant, VariantType};
+    /// use zbus::{Array, Encode, Variant};
     ///
     /// let variants = vec![42u8.to_variant(), 45u8.to_variant()];
     /// let array = Array::new_from_vec(variants).unwrap();
@@ -55,7 +55,7 @@ impl Array {
     /// # Examples:
     ///
     /// ```
-    /// use zbus::{Array, Variant, VariantType};
+    /// use zbus::{Array, Decode, Variant};
     ///
     /// let mut array = Array::new();
     /// array.add_element(42u8).unwrap();
@@ -63,7 +63,7 @@ impl Array {
     /// array.add_element(45u8).unwrap();
     /// assert!(array.add_element(42u32).is_err());
     /// ```
-    pub fn add_element<T: VariantType>(&mut self, element: T) -> Result<(), VariantError> {
+    pub fn add_element<T: Decode>(&mut self, element: T) -> Result<(), VariantError> {
         // Ensure we only add elements of the same type
         if self.0.last().map(|v| !T::is(v)).unwrap_or(false) {
             return Err(VariantError::IncorrectType);
@@ -93,7 +93,7 @@ impl VariantTypeConstants for Array {
     const ALIGNMENT: usize = 4;
 }
 
-impl VariantType for Array {
+impl Encode for Array {
     fn signature_char() -> char {
         'a'
     }
@@ -129,6 +129,18 @@ impl VariantType for Array {
         byteorder::NativeEndian::write_u32(&mut bytes[len_position..len_position + 4], len);
     }
 
+    fn signature(&self) -> Signature {
+        let signature = format!("a{}", self.inner()[0].value_signature().as_str());
+
+        Signature::from(signature)
+    }
+
+    fn to_variant(self) -> Variant {
+        Variant::Array(self)
+    }
+}
+
+impl Decode for Array {
     fn slice_data(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -237,12 +249,6 @@ impl VariantType for Array {
         Ok(slice)
     }
 
-    fn signature(&self) -> Signature {
-        let signature = format!("a{}", self.inner()[0].value_signature().as_str());
-
-        Signature::from(signature)
-    }
-
     fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
         let signature = signature.into();
         if signature.len() < 2 {
@@ -281,15 +287,11 @@ impl VariantType for Array {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::Array(self)
-    }
 }
 
 impl<T> TryInto<Vec<T>> for Array
 where
-    T: VariantType,
+    T: Decode,
 {
     type Error = VariantError;
 
@@ -306,7 +308,7 @@ where
 
 impl<T> From<Vec<T>> for Array
 where
-    T: VariantType,
+    T: Encode,
 {
     fn from(values: Vec<T>) -> Self {
         let v = values.into_iter().map(|value| value.to_variant()).collect();

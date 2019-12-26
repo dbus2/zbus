@@ -1,7 +1,8 @@
 use std::str;
 
-use crate::{EncodingFormat, SharedData, SimpleVariantType};
-use crate::{Variant, VariantError, VariantType, VariantTypeConstants};
+use crate::{Decode, Encode, EncodingFormat};
+use crate::{SharedData, SimpleDecode};
+use crate::{Variant, VariantError, VariantTypeConstants};
 
 impl VariantTypeConstants for String {
     const SIGNATURE_CHAR: char = 's';
@@ -10,7 +11,7 @@ impl VariantTypeConstants for String {
 }
 
 // FIXME: Implement for owned string cause decode() needs that. Let's make it efficient later.
-impl VariantType for String {
+impl Encode for String {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -30,6 +31,12 @@ impl VariantType for String {
         bytes.push(b'\0');
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::Str(self)
+    }
+}
+
+impl Decode for String {
     fn slice_data(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -80,12 +87,8 @@ impl VariantType for String {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::Str(self)
-    }
 }
-impl SimpleVariantType for String {}
+impl SimpleDecode for String {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectPath(String);
@@ -107,7 +110,7 @@ impl VariantTypeConstants for ObjectPath {
 }
 
 // FIXME: Find a way to share code with &str implementation above
-impl VariantType for ObjectPath {
+impl Encode for ObjectPath {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -122,6 +125,12 @@ impl VariantType for ObjectPath {
         self.0.encode_into(bytes, format);
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::ObjectPath(self)
+    }
+}
+
+impl Decode for ObjectPath {
     fn slice_data<'b>(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -163,12 +172,8 @@ impl VariantType for ObjectPath {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::ObjectPath(self)
-    }
 }
-impl SimpleVariantType for ObjectPath {}
+impl SimpleDecode for ObjectPath {}
 
 impl From<&str> for ObjectPath {
     fn from(value: &str) -> Self {
@@ -216,7 +221,7 @@ impl VariantTypeConstants for Signature {
 }
 
 // FIXME: Find a way to share code with String implementation.
-impl VariantType for Signature {
+impl Encode for Signature {
     fn signature_char() -> char {
         Self::SIGNATURE_CHAR
     }
@@ -237,6 +242,12 @@ impl VariantType for Signature {
         bytes.push(b'\0');
     }
 
+    fn to_variant(self) -> Variant {
+        Variant::Signature(self)
+    }
+}
+
+impl Decode for Signature {
     fn slice_data(
         data: &SharedData,
         signature: impl Into<Signature>,
@@ -293,12 +304,8 @@ impl VariantType for Signature {
             Err(VariantError::IncorrectType)
         }
     }
-
-    fn to_variant(self) -> Variant {
-        Variant::Signature(self)
-    }
 }
-impl SimpleVariantType for Signature {}
+impl SimpleDecode for Signature {}
 
 impl From<&str> for Signature {
     fn from(value: &str) -> Self {
