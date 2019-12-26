@@ -88,8 +88,8 @@ impl Decode for Structure {
         let mut i = 1;
         let last_index = signature.len() - 1;
         while i < last_index {
-            let child_signature = crate::variant_type::slice_signature(&signature[i..last_index])?;
-            let slice = crate::variant_type::slice_data(
+            let child_signature = crate::decode::slice_signature(&signature[i..last_index])?;
+            let slice = crate::decode::slice_data(
                 &data.tail(extracted as usize),
                 child_signature.as_str(),
                 format,
@@ -141,7 +141,7 @@ impl Decode for Structure {
         let mut i = 1;
         while i < signature.len() - 1 {
             // Ensure we've only valid child signatures
-            let child_signature = crate::variant_type::slice_signature(&signature[i..])?;
+            let child_signature = crate::decode::slice_signature(&signature[i..])?;
             i += child_signature.len();
         }
 
@@ -217,11 +217,8 @@ fn variants_from_struct_data(
 
         // FIXME: Redundant slicing since Variant::from_data() does slicing too (maybe that function should return the
         // len or slice as well?)
-        let child_slice = crate::variant_type::slice_data(
-            &data.tail(extracted),
-            child_signature.as_str(),
-            format,
-        )?;
+        let child_slice =
+            crate::decode::slice_data(&data.tail(extracted), child_signature.as_str(), format)?;
         extracted += child_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);

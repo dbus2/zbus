@@ -104,15 +104,12 @@ impl Decode for DictEntry {
         // Key's signature will always be just 1 character so no need to slice for that.
         let key_signature = &signature[1..2];
         let key_slice =
-            crate::variant_type::slice_data(&data.tail(extracted as usize), key_signature, format)?;
+            crate::decode::slice_data(&data.tail(extracted as usize), key_signature, format)?;
         extracted += key_slice.len();
 
-        let value_signature = crate::variant_type::slice_signature(&signature[2..])?;
-        let value_slice = crate::variant_type::slice_data(
-            &data.tail(extracted as usize),
-            value_signature,
-            format,
-        )?;
+        let value_signature = crate::decode::slice_signature(&signature[2..])?;
+        let value_slice =
+            crate::decode::slice_data(&data.tail(extracted as usize), value_signature, format)?;
         extracted += value_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
@@ -137,15 +134,15 @@ impl Decode for DictEntry {
         // Key's signature will always be just 1 character so no need to slice for that.
         let key_signature = &signature[1..2];
         let key_slice =
-            crate::variant_type::slice_data(&data.tail(extracted as usize), key_signature, format)?;
+            crate::decode::slice_data(&data.tail(extracted as usize), key_signature, format)?;
         let key = Variant::from_data(&key_slice, key_signature, format)?;
         extracted += key_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
 
-        let value_signature = crate::variant_type::slice_signature(&signature[2..])?;
-        let value_slice = crate::variant_type::slice_data(
+        let value_signature = crate::decode::slice_signature(&signature[2..])?;
+        let value_slice = crate::decode::slice_data(
             &data.tail(extracted as usize),
             value_signature.as_str(),
             format,
@@ -176,7 +173,7 @@ impl Decode for DictEntry {
 
         // Don't need the alignments but no errors here means we've valid signatures
         let _ = crate::alignment_for_signature(&signature[1..2])?;
-        let value_signature = crate::variant_type::slice_signature(&signature[2..])?;
+        let value_signature = crate::decode::slice_signature(&signature[2..])?;
         let _ = crate::alignment_for_signature(value_signature)?;
 
         Ok(signature)
@@ -195,7 +192,7 @@ impl Decode for DictEntry {
 
         // Key's signature will always be just 1 character so no need to slice for that.
         // There should be one valid complete signature for value.
-        let slice = crate::variant_type::slice_signature(&signature[2..])?;
+        let slice = crate::decode::slice_signature(&signature[2..])?;
 
         // signature of value + `{` + 1 char of the key signature + `}`
         Ok((&signature[0..slice.len() + 3]).into())

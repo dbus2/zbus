@@ -149,7 +149,7 @@ impl Decode for Array {
         let signature = Self::ensure_correct_signature(signature)?;
 
         // Child signature
-        let child_signature = crate::variant_type::slice_signature(&signature[1..])?;
+        let child_signature = crate::decode::slice_signature(&signature[1..])?;
 
         // Array size in bytes
         let len_slice = u32::slice_data_simple(&data, format)?;
@@ -161,7 +161,7 @@ impl Decode for Array {
 
             if first_element {
                 // Length we got from array doesn't include padding for the first element
-                len += crate::variant_type::padding_for_signature(
+                len += crate::encode::padding_for_signature(
                     element_data.position(),
                     child_signature.as_str(),
                     format,
@@ -169,8 +169,7 @@ impl Decode for Array {
                 first_element = false;
             }
 
-            let slice =
-                crate::variant_type::slice_data(&element_data, child_signature.as_str(), format)?;
+            let slice = crate::decode::slice_data(&element_data, child_signature.as_str(), format)?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
@@ -195,7 +194,7 @@ impl Decode for Array {
         let signature = Self::ensure_correct_signature(signature)?;
 
         // Child signature
-        let child_signature = crate::variant_type::slice_signature(&signature[1..])?;
+        let child_signature = crate::decode::slice_signature(&signature[1..])?;
 
         // Array size in bytes
         let mut extracted = padding + 4;
@@ -209,7 +208,7 @@ impl Decode for Array {
 
             if first_element {
                 // Length we got from array doesn't include padding for the first element
-                len += crate::variant_type::padding_for_signature(
+                len += crate::encode::padding_for_signature(
                     element_data.position(),
                     child_signature.as_str(),
                     format,
@@ -217,8 +216,7 @@ impl Decode for Array {
                 first_element = false;
             }
 
-            let slice =
-                crate::variant_type::slice_data(&element_data, child_signature.as_str(), format)?;
+            let slice = crate::decode::slice_data(&element_data, child_signature.as_str(), format)?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
@@ -259,7 +257,7 @@ impl Decode for Array {
         }
 
         // There should be a valid complete signature after 'a' but not more than 1
-        let slice = crate::variant_type::slice_signature(&signature[1..])?;
+        let slice = crate::decode::slice_signature(&signature[1..])?;
 
         Ok(Signature::from(&signature[0..slice.len() + 1]))
     }

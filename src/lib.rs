@@ -16,8 +16,11 @@ pub use connection::*;
 mod variant;
 pub use variant::*;
 
-mod variant_type;
-pub use variant_type::*;
+mod decode;
+pub use decode::*;
+
+mod encode;
+pub use encode::*;
 
 mod variant_type_constants;
 pub use variant_type_constants::*;

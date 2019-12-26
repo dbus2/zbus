@@ -36,7 +36,7 @@ impl Variant {
     ) -> Result<Self, VariantError> {
         let signature = signature.into();
         // slice_data() ensures a valid signature
-        let slice = crate::variant_type::slice_data(data, signature.clone(), format)?;
+        let slice = crate::decode::slice_data(data, signature.clone(), format)?;
 
         match signature
             .chars()
@@ -217,7 +217,7 @@ impl Decode for Variant {
         let sign_size = sign_slice.len();
         let sign = Signature::decode_simple(&sign_slice, format)?;
 
-        let value_slice = crate::variant_type::slice_data(&data.tail(sign_size), sign, format)?;
+        let value_slice = crate::decode::slice_data(&data.tail(sign_size), sign, format)?;
         let total_size = sign_size + value_slice.len();
 
         Ok(data.head(total_size))
