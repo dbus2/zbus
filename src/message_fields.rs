@@ -12,7 +12,7 @@ pub struct MessageFields(Vec<MessageField>);
 
 impl MessageFields {
     pub fn new() -> Self {
-        Self(Vec::with_capacity(MAX_FIELDS_IN_MESSAGE))
+        Self::default()
     }
 
     pub fn new_from_vec(fields: Vec<MessageField>) -> Self {
@@ -33,6 +33,12 @@ impl MessageFields {
 
     pub fn take_inner(self) -> Vec<MessageField> {
         self.0
+    }
+}
+
+impl Default for MessageFields {
+    fn default() -> Self {
+        Self(Vec::with_capacity(MAX_FIELDS_IN_MESSAGE))
     }
 }
 

@@ -7,12 +7,12 @@ use crate::{Variant, VariantError};
 
 // Since neither `From` trait nor `Vec` is from this crate, we need this intermediate type.
 //
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Array(Vec<Variant>);
 
 impl Array {
     pub fn new() -> Self {
-        Array(vec![])
+        Self::default()
     }
 
     /// Creates an `Array` from given variants.

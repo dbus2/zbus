@@ -2,7 +2,7 @@ use crate::{Decode, Encode, EncodingFormat};
 use crate::{SharedData, Signature};
 use crate::{Variant, VariantError};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Structure(Vec<Variant>);
 
 impl Structure {
@@ -15,7 +15,7 @@ impl Structure {
     }
 
     pub fn new() -> Self {
-        Self(vec![])
+        Self::default()
     }
 
     pub fn add_field<T>(mut self, field: T) -> Self

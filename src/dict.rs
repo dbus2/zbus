@@ -6,12 +6,12 @@ use crate::{Array, Basic, Decode, DictEntry, Encode};
 
 // Since neither `From` trait nor `HashMap` is from this crate, we need this intermediate type.
 // We can't implement `Into` either as `Vec` isn't our type either.
-//
+#[derive(Default)]
 pub struct Dict(Vec<DictEntry>);
 
 impl Dict {
     pub fn new() -> Self {
-        Dict(vec![])
+        Dict::default()
     }
 
     pub fn new_from_vec(vec: Vec<DictEntry>) -> Self {
