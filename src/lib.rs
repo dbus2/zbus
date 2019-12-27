@@ -37,8 +37,8 @@ pub use crate::signature::*;
 mod object_path;
 pub use crate::object_path::*;
 
-mod simple_variant_type;
-pub use simple_variant_type::*;
+mod simple_decode;
+pub use simple_decode::*;
 
 mod structure;
 pub use structure::*;
