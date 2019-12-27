@@ -4,7 +4,7 @@ use std::{env, error, fmt, io};
 
 use nix::unistd::Uid;
 
-use crate::address::{self, Address};
+use crate::address::{self, Address, AddressError};
 use crate::message;
 use crate::message_field;
 use crate::VariantError;
@@ -20,7 +20,7 @@ pub struct Connection {
 
 #[derive(Debug)]
 pub enum ConnectionError {
-    Address(address::AddressError),
+    Address(AddressError),
     IO(io::Error),
     Message(message::MessageError),
     MessageField(message_field::MessageFieldError),
@@ -67,8 +67,8 @@ impl fmt::Display for ConnectionError {
     }
 }
 
-impl From<address::AddressError> for ConnectionError {
-    fn from(val: address::AddressError) -> Self {
+impl From<AddressError> for ConnectionError {
+    fn from(val: AddressError) -> Self {
         ConnectionError::Address(val)
     }
 }
