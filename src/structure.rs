@@ -145,23 +145,23 @@ impl Decode for Structure {
         let mut open_braces = 1;
         let mut i = 1;
         while i < signature.len() {
-            if &signature[i..i + 1] == ")" {
+            if &signature[i..=i] == ")" {
                 open_braces -= 1;
 
                 if open_braces == 0 {
                     break;
                 }
-            } else if &signature[i..i + 1] == "(" {
+            } else if &signature[i..=i] == "(" {
                 open_braces += 1;
             }
 
             i += 1;
         }
-        if &signature[i..i + 1] != ")" {
+        if &signature[i..=i] != ")" {
             return Err(VariantError::IncorrectType);
         }
 
-        Ok(Signature::from(&signature[0..i + 1]))
+        Ok(Signature::from(&signature[0..=i]))
     }
 
     fn is(variant: &Variant) -> bool {

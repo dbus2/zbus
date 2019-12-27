@@ -247,7 +247,7 @@ impl Decode for Array {
         // There should be a valid complete signature after 'a' but not more than 1
         let slice = crate::decode::slice_signature(&signature[1..])?;
 
-        Ok(Signature::from(&signature[0..slice.len() + 1]))
+        Ok(Signature::from(&signature[0..=slice.len()]))
     }
 
     fn is(variant: &Variant) -> bool {
