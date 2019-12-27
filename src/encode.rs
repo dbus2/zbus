@@ -32,27 +32,18 @@ pub trait Encode: std::fmt::Debug {
 
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat);
 
-    fn signature(&self) -> Signature
-    where
-        Self: Sized,
-    {
+    fn signature(&self) -> Signature {
         Signature::new(Self::SIGNATURE_STR)
     }
 
-    fn add_padding(bytes: &mut Vec<u8>, format: EncodingFormat)
-    where
-        Self: Sized,
-    {
+    fn add_padding(bytes: &mut Vec<u8>, format: EncodingFormat) {
         let padding = Self::padding(bytes.len(), format);
         if padding > 0 {
             bytes.resize(bytes.len() + padding, 0);
         }
     }
 
-    fn padding(n_bytes_before: usize, _format: EncodingFormat) -> usize
-    where
-        Self: Sized,
-    {
+    fn padding(n_bytes_before: usize, _format: EncodingFormat) -> usize {
         padding_for_n_bytes(n_bytes_before, Self::ALIGNMENT)
     }
 
@@ -60,9 +51,7 @@ pub trait Encode: std::fmt::Debug {
     // is provided implicitly, the default no-op implementation for `Variant` won't do the right
     // thing: unflatten it.
     // `TryFrom<Variant>`.
-    fn to_variant(self) -> Variant
-    where
-        Self: Sized;
+    fn to_variant(self) -> Variant;
 }
 
 impl Encode for u8 {

@@ -24,10 +24,9 @@ pub trait Decode: Encode + std::fmt::Debug {
         Ok(data.subset(0, len))
     }
 
-    fn ensure_correct_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError>
-    where
-        Self: Sized,
-    {
+    fn ensure_correct_signature(
+        signature: impl Into<Signature>,
+    ) -> Result<Signature, VariantError> {
         let signature = signature.into();
 
         if signature != Self::SIGNATURE_STR {
@@ -45,10 +44,7 @@ pub trait Decode: Encode + std::fmt::Debug {
     where
         Self: Sized;
 
-    fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError>
-    where
-        Self: Sized,
-    {
+    fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
         let slice: Signature = signature.into()[0..1].into();
 
         Self::ensure_correct_signature(slice)
@@ -59,10 +55,7 @@ pub trait Decode: Encode + std::fmt::Debug {
         data: &SharedData,
         signature: impl Into<Signature>,
         format: EncodingFormat,
-    ) -> Result<SharedData, VariantError>
-    where
-        Self: Sized,
-    {
+    ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
         let padding = Self::padding(data.position(), format);
         let len = Self::ALIGNMENT + padding;
@@ -90,9 +83,7 @@ pub trait Decode: Encode + std::fmt::Debug {
     /// assert!(u32::is(&v));
     /// assert!(!String::is(&v));
     /// ```
-    fn is(variant: &Variant) -> bool
-    where
-        Self: Sized;
+    fn is(variant: &Variant) -> bool;
 
     // `TryFrom<Variant>` trait bound would have been better but we can't use that unfortunately
     // since Variant implements Decode.
@@ -100,9 +91,7 @@ pub trait Decode: Encode + std::fmt::Debug {
     where
         Self: Sized;
 
-    fn from_variant(variant: &Variant) -> Result<&Self, VariantError>
-    where
-        Self: Sized;
+    fn from_variant(variant: &Variant) -> Result<&Self, VariantError>;
 }
 
 impl Decode for u8 {
