@@ -150,7 +150,7 @@ impl Decode for DictEntry {
         signature: impl Into<Signature>,
     ) -> Result<Signature, VariantError> {
         let signature = signature.into();
-        if !signature.starts_with("{") || !signature.ends_with("}") {
+        if !signature.starts_with('{') || !signature.ends_with('}') {
             return Err(VariantError::IncorrectType);
         }
         if signature.len() < 4 {
@@ -169,7 +169,7 @@ impl Decode for DictEntry {
     fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
         let signature = signature.into();
 
-        if !signature.starts_with("{") {
+        if !signature.starts_with('{') {
             return Err(VariantError::IncorrectType);
         }
         if signature.len() < 4 {

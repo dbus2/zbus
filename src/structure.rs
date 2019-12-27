@@ -122,7 +122,7 @@ impl Decode for Structure {
         if signature.len() < 3 {
             return Err(VariantError::InsufficientData);
         }
-        if !signature.starts_with("(") || !signature.ends_with(")") {
+        if !signature.starts_with('(') || !signature.ends_with(')') {
             return Err(VariantError::IncorrectType);
         }
 
@@ -138,7 +138,7 @@ impl Decode for Structure {
 
     fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
         let signature = signature.into();
-        if !signature.starts_with("(") {
+        if !signature.starts_with('(') {
             return Err(VariantError::IncorrectType);
         }
 

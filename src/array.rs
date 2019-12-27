@@ -240,7 +240,7 @@ impl Decode for Array {
         if signature.len() < 2 {
             return Err(VariantError::InsufficientData);
         }
-        if !signature.starts_with("a") {
+        if !signature.starts_with('a') {
             return Err(VariantError::IncorrectType);
         }
 
