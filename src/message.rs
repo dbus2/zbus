@@ -251,9 +251,9 @@ impl Message {
         let format = EncodingFormat::DBus;
         let slice = Array::slice_data(&encoding.tail(FIELDS_LEN_START_OFFSET), "a(yv)", format)?;
 
-        let array = Array::decode(&slice, "a(yv)", format).map_err(|e| MessageError::from(e))?;
+        let array = Array::decode(&slice, "a(yv)", format).map_err(MessageError::from)?;
 
-        array.try_into().map_err(|e| MessageError::from(e))
+        array.try_into().map_err(MessageError::from)
     }
 
     pub fn body(&self, body_signature: Option<Signature>) -> Result<Structure, MessageError> {

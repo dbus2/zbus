@@ -54,50 +54,30 @@ impl Variant {
             .ok_or(VariantError::InsufficientData)?
         {
             // FIXME: There has to be a shorter way to do this
-            u8::SIGNATURE_CHAR => u8::decode_simple(&slice, format).map(|value| Variant::U8(value)),
-            bool::SIGNATURE_CHAR => {
-                bool::decode_simple(&slice, format).map(|value| Variant::Bool(value))
-            }
-            i16::SIGNATURE_CHAR => {
-                i16::decode_simple(&slice, format).map(|value| Variant::I16(value))
-            }
-            u16::SIGNATURE_CHAR => {
-                u16::decode_simple(&slice, format).map(|value| Variant::U16(value))
-            }
-            i32::SIGNATURE_CHAR => {
-                i32::decode_simple(&slice, format).map(|value| Variant::I32(value))
-            }
-            u32::SIGNATURE_CHAR => {
-                u32::decode_simple(&slice, format).map(|value| Variant::U32(value))
-            }
-            i64::SIGNATURE_CHAR => {
-                i64::decode_simple(&slice, format).map(|value| Variant::I64(value))
-            }
-            u64::SIGNATURE_CHAR => {
-                u64::decode_simple(&slice, format).map(|value| Variant::U64(value))
-            }
-            f64::SIGNATURE_CHAR => {
-                f64::decode_simple(&slice, format).map(|value| Variant::F64(value))
-            }
-            String::SIGNATURE_CHAR => {
-                String::decode_simple(&slice, format).map(|value| Variant::Str(value))
-            }
-            Array::SIGNATURE_CHAR => {
-                Array::decode(&slice, signature, format).map(|value| Variant::Array(value))
-            }
+            u8::SIGNATURE_CHAR => u8::decode_simple(&slice, format).map(Variant::U8),
+            bool::SIGNATURE_CHAR => bool::decode_simple(&slice, format).map(Variant::Bool),
+            i16::SIGNATURE_CHAR => i16::decode_simple(&slice, format).map(Variant::I16),
+            u16::SIGNATURE_CHAR => u16::decode_simple(&slice, format).map(Variant::U16),
+            i32::SIGNATURE_CHAR => i32::decode_simple(&slice, format).map(Variant::I32),
+            u32::SIGNATURE_CHAR => u32::decode_simple(&slice, format).map(Variant::U32),
+            i64::SIGNATURE_CHAR => i64::decode_simple(&slice, format).map(Variant::I64),
+            u64::SIGNATURE_CHAR => u64::decode_simple(&slice, format).map(Variant::U64),
+            f64::SIGNATURE_CHAR => f64::decode_simple(&slice, format).map(Variant::F64),
+            String::SIGNATURE_CHAR => String::decode_simple(&slice, format).map(Variant::Str),
+            Array::SIGNATURE_CHAR => Array::decode(&slice, signature, format).map(Variant::Array),
             ObjectPath::SIGNATURE_CHAR => {
-                ObjectPath::decode_simple(&slice, format).map(|value| Variant::ObjectPath(value))
+                ObjectPath::decode_simple(&slice, format).map(Variant::ObjectPath)
             }
             Signature::SIGNATURE_CHAR => {
-                Signature::decode_simple(&slice, format).map(|value| Variant::Signature(value))
+                Signature::decode_simple(&slice, format).map(Variant::Signature)
             }
             Structure::SIGNATURE_CHAR => {
-                Structure::decode(&slice, signature, format).map(|value| Variant::Structure(value))
+                Structure::decode(&slice, signature, format).map(Variant::Structure)
             }
             Variant::SIGNATURE_CHAR => Variant::decode_simple(&slice, format)
                 .map(|value| Variant::Variant(Box::new(value))),
             DictEntry::SIGNATURE_CHAR => {
-                DictEntry::decode(&slice, signature, format).map(|value| Variant::DictEntry(value))
+                DictEntry::decode(&slice, signature, format).map(Variant::DictEntry)
             }
             _ => Err(VariantError::UnsupportedType(signature)),
         }

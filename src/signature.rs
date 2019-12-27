@@ -68,7 +68,7 @@ impl Decode for Signature {
         crate::ensure_sufficient_bytes(bytes, last_index)?;
 
         str::from_utf8(&bytes[1..last_index])
-            .map(|s| Self::new(s))
+            .map(Self::new)
             .map_err(|_| VariantError::InvalidUtf8)
     }
 

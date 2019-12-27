@@ -55,8 +55,7 @@ impl TryFrom<Array> for MessageFields {
         let mut fields = MessageFields::new();
 
         for value in array.take_inner() {
-            let structure =
-                Structure::take_from_variant(value).map_err(|e| MessageFieldError::from(e))?;
+            let structure = Structure::take_from_variant(value).map_err(MessageFieldError::from)?;
             let field = MessageField::try_from(structure)?;
 
             fields.add(field);

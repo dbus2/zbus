@@ -47,7 +47,7 @@ impl Decode for ObjectPath {
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
-        String::decode(data, String::SIGNATURE_STR, format).map(|s| Self(s))
+        String::decode(data, String::SIGNATURE_STR, format).map(Self)
     }
 
     fn is(variant: &Variant) -> bool {

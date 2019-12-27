@@ -73,7 +73,7 @@ impl TryFrom<Array> for Dict {
     type Error = VariantError;
 
     fn try_from(value: Array) -> Result<Self, VariantError> {
-        value.try_into().map(|vec| Dict::new_from_vec(vec))
+        value.try_into().map(Dict::new_from_vec)
     }
 }
 
