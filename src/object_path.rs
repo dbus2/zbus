@@ -17,7 +17,6 @@ impl ObjectPath {
     }
 }
 
-// FIXME: Find a way to share code with &str implementation above
 impl Encode for ObjectPath {
     const SIGNATURE_CHAR: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
