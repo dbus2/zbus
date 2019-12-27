@@ -38,6 +38,16 @@ impl Variant {
         // slice_data() ensures a valid signature
         let slice = crate::decode::slice_data(data, signature.clone(), format)?;
 
+        Variant::from_data_slice(&slice, signature, format)
+    }
+
+    pub fn from_data_slice(
+        slice: &SharedData,
+        signature: impl Into<Signature>,
+        format: EncodingFormat,
+    ) -> Result<Self, VariantError> {
+        let signature = signature.into();
+
         match signature
             .chars()
             .next()

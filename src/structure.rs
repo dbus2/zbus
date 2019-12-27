@@ -203,15 +203,13 @@ fn variants_from_struct_data(
     while i < last_index {
         let child_signature = crate::slice_signature(&signature[i..last_index])?;
 
-        // FIXME: Redundant slicing since Variant::from_data() does slicing too (maybe that function should return the
-        // len or slice as well?)
         let child_slice =
             crate::decode::slice_data(&data.tail(extracted), child_signature.as_str(), format)?;
         extracted += child_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
-        let variant = Variant::from_data(&child_slice, child_signature.as_str(), format)?;
+        let variant = Variant::from_data_slice(&child_slice, child_signature.as_str(), format)?;
         fields.push(variant);
 
         i += child_signature.len();
