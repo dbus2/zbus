@@ -28,6 +28,12 @@ pub use variant_error::*;
 mod str;
 pub use crate::str::*;
 
+mod signature;
+pub use crate::signature::*;
+
+mod object_path;
+pub use crate::object_path::*;
+
 mod simple_variant_type;
 pub use simple_variant_type::*;
 
