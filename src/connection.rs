@@ -247,20 +247,16 @@ impl Connection {
             {
                 let all_fields = incoming.fields()?;
 
-                if all_fields
-                    .iter()
-                    .find(|f| {
-                        f.code()
-                            .map(|c| c == message_field::MessageFieldCode::ReplySerial)
-                            .unwrap_or(false)
-                            && f.value()
-                                .map(|v| {
-                                    u32::from_variant(v).map(|u| *u == serial).unwrap_or(false)
-                                })
-                                .unwrap()
-                    })
-                    .is_some()
-                {
+                let find_serial_func = |f: &crate::MessageField| {
+                    f.code()
+                        .map(|c| c == message_field::MessageFieldCode::ReplySerial)
+                        .unwrap_or(false)
+                        && f.value()
+                            .map(|v| u32::from_variant(v).map(|u| *u == serial).unwrap_or(false))
+                            .unwrap()
+                };
+
+                if all_fields.iter().any(find_serial_func) {
                     match incoming.message_type() {
                         message::MessageType::Error => return Err(incoming.into()),
                         message::MessageType::MethodReturn => return Ok(incoming),
