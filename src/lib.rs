@@ -183,7 +183,7 @@ mod tests {
         for feature in features {
             print!(" {}", feature);
         }
-        println!("");
+        println!();
 
         // "Interfaces" property
         let interfaces: Vec<String> =
@@ -195,6 +195,6 @@ mod tests {
         for interface in interfaces {
             print!(" {}", interface);
         }
-        println!("");
+        println!();
     }
 }
