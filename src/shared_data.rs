@@ -34,7 +34,7 @@ impl SharedData {
         Self {
             data: Rc::new(data),
             position: 0,
-            end: end,
+            end,
         }
     }
 
