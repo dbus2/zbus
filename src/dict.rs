@@ -57,7 +57,7 @@ where
 // Conversion of Hashmap to Dict
 impl<K, V> From<HashMap<K, V>> for Dict
 where
-    K: SimpleDecode + Hash + Eq,
+    K: Encode + Hash + Eq,
     V: Encode,
 {
     fn from(value: HashMap<K, V>) -> Self {
@@ -87,10 +87,10 @@ mod tests {
 
     #[test]
     fn hashmap_to_vec() {
-        let mut hash: HashMap<i64, String> = HashMap::new();
-        hash.insert(1, String::from("123"));
-        hash.insert(2, String::from("456"));
-        hash.insert(3, String::from("789"));
+        let mut hash: HashMap<i64, &str> = HashMap::new();
+        hash.insert(1, "123");
+        hash.insert(2, "456");
+        hash.insert(3, "789");
 
         let dict: Dict = hash.into();
         for entry in dict.inner() {
@@ -106,9 +106,9 @@ mod tests {
     #[test]
     fn vec_to_hashmap() {
         let mut v = vec![];
-        v.push(DictEntry::new(1i64, String::from("123")));
-        v.push(DictEntry::new(2i64, String::from("456")));
-        v.push(DictEntry::new(3i64, String::from("789")));
+        v.push(DictEntry::new(1i64, "123"));
+        v.push(DictEntry::new(2i64, "456"));
+        v.push(DictEntry::new(3i64, "789"));
         let dict = Dict::new_from_vec(v);
 
         let hash: HashMap<i64, String> = dict.try_into().unwrap();

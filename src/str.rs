@@ -4,8 +4,9 @@ use crate::{Decode, Encode, EncodingFormat};
 use crate::{SharedData, Signature, SimpleDecode};
 use crate::{Variant, VariantError};
 
-// FIXME: Implement for owned string cause decode() needs that. Let's make it efficient later.
-impl Encode for String {
+// We can only implement Encode for unowned type as Decode::decode() implementation will need
+// require lifetimes and we really want to avoid that now.
+impl Encode for &str {
     const SIGNATURE_CHAR: char = 's';
     const SIGNATURE_STR: &'static str = "s";
     const ALIGNMENT: usize = 4;
@@ -17,6 +18,20 @@ impl Encode for String {
         bytes.extend(&crate::utils::usize_to_u32(len).to_ne_bytes());
         bytes.extend(self.as_bytes());
         bytes.push(b'\0');
+    }
+
+    fn to_variant(self) -> Variant {
+        String::from(self).to_variant()
+    }
+}
+
+impl Encode for String {
+    const SIGNATURE_CHAR: char = <&str>::SIGNATURE_CHAR;
+    const SIGNATURE_STR: &'static str = <&str>::SIGNATURE_STR;
+    const ALIGNMENT: usize = <&str>::ALIGNMENT;
+
+    fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
+        self.as_str().encode_into(bytes, format)
     }
 
     fn to_variant(self) -> Variant {

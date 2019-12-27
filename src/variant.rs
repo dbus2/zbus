@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn str_variant() {
-        let v = String::from("Hello world!").to_variant();
+        let v = "Hello world!".to_variant();
         assert!(*String::from_variant(&v).unwrap() == "Hello world!");
         assert!(String::is(&v));
 
@@ -444,9 +444,9 @@ mod tests {
 
     #[test]
     fn struct_variant() {
-        let mut map: HashMap<i64, String> = HashMap::new();
-        map.insert(1, String::from("123"));
-        map.insert(2, String::from("456"));
+        let mut map: HashMap<i64, &str> = HashMap::new();
+        map.insert(1, "123");
+        map.insert(2, "456");
         let dict: Dict = map.into();
         let array = Array::try_from(dict).unwrap();
 
@@ -463,7 +463,7 @@ mod tests {
                             .add_field(std::f64::MAX),
                     ),
             )
-            .add_field(String::from("hello"))
+            .add_field("hello")
             .add_field(array);
         let v = s.to_variant();
         assert!(Structure::is(&v));
@@ -541,12 +541,7 @@ mod tests {
 
         // Array of strings
         // Can't use 'as' as it's a keyword
-        let as_ = vec![
-            String::from("Hello"),
-            String::from("World"),
-            String::from("Now"),
-            String::from("Bye!"),
-        ];
+        let as_ = vec!["Hello", "World", "Now", "Bye!"];
         let array = Array::from(as_);
         assert!(array.signature() == "as");
         for element in array.inner() {
@@ -573,13 +568,10 @@ mod tests {
                     .add_field(true)
                     .add_field(i64::max_value())
                     // 2nd level array field
-                    .add_field(Array::from(vec![
-                        String::from("Hello"),
-                        String::from("World"),
-                    ])),
+                    .add_field(Array::from(vec!["Hello", "World"])),
             )
             // one more top-most simple field
-            .add_field(String::from("hello"))];
+            .add_field("hello")];
         let array = Array::from(ar);
         assert!(array.signature() == "a(yu(xbxas)s)");
         for element in array.inner() {
@@ -617,13 +609,13 @@ mod tests {
         // 2nd level array field
         let array = Array::take_from_variant(inner_fields.remove(3)).unwrap();
         let as_: Vec<String> = array.try_into().unwrap();
-        assert!(as_ == [String::from("Hello"), String::from("World")]);
+        assert!(as_ == ["Hello", "World"]);
     }
 
     #[test]
     fn dict_entry_variant() {
         // Simple type value
-        let entry = DictEntry::new(2u8, String::from("world"));
+        let entry = DictEntry::new(2u8, "world");
         assert!(entry.signature() == "{ys}");
         let v = entry.to_variant();
 
@@ -639,7 +631,7 @@ mod tests {
 
         // STRUCT value
         let entry = DictEntry::new(
-            String::from("hello"),
+            "hello",
             Structure::new()
                 .add_field(u8::max_value())
                 .add_field(u32::max_value()),

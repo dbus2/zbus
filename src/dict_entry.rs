@@ -11,7 +11,7 @@ pub struct DictEntry {
 impl DictEntry {
     pub fn new<K, V>(key: K, value: V) -> Self
     where
-        K: SimpleDecode + std::hash::Hash,
+        K: Encode + std::hash::Hash,
         V: Encode,
     {
         Self {
