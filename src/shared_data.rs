@@ -28,6 +28,7 @@ impl fmt::Display for SharedData {
     }
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl SharedData {
     pub fn new(data: Vec<u8>) -> Self {
         let end = data.len();
