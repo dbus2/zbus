@@ -1,10 +1,10 @@
 use std::str;
 
-use crate::{Decode, Encode, EncodingFormat};
+use crate::{Basic, Decode, Encode, EncodingFormat};
 use crate::{SharedData, Signature, SimpleDecode};
 use crate::{Variant, VariantError};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectPath(String);
 
 impl ObjectPath {
@@ -76,6 +76,7 @@ impl Decode for ObjectPath {
     }
 }
 impl SimpleDecode for ObjectPath {}
+impl Basic for ObjectPath {}
 
 impl From<&str> for ObjectPath {
     fn from(value: &str) -> Self {

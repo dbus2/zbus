@@ -1,10 +1,10 @@
 use std::str;
 
-use crate::{Decode, Encode, EncodingFormat};
+use crate::{Basic, Decode, Encode, EncodingFormat};
 use crate::{SharedData, SimpleDecode};
 use crate::{Variant, VariantError};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Signature(String);
 
 impl Signature {
@@ -97,6 +97,7 @@ impl Decode for Signature {
     }
 }
 impl SimpleDecode for Signature {}
+impl Basic for Signature {}
 
 impl From<&str> for Signature {
     fn from(value: &str) -> Self {

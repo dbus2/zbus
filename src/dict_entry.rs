@@ -1,5 +1,5 @@
-use crate::{Decode, Encode, EncodingFormat};
-use crate::{SharedData, Signature, SimpleDecode};
+use crate::{Basic, Decode, Encode, EncodingFormat};
+use crate::{SharedData, Signature};
 use crate::{Variant, VariantError};
 
 #[derive(Debug, Clone)]
@@ -11,7 +11,7 @@ pub struct DictEntry {
 impl DictEntry {
     pub fn new<K, V>(key: K, value: V) -> Self
     where
-        K: Encode + std::hash::Hash,
+        K: Encode + Basic,
         V: Encode,
     {
         Self {
@@ -23,7 +23,7 @@ impl DictEntry {
     // FIXME: Tryo to optimize (this should be returing a reference ideally
     pub fn key<K>(&self) -> Result<&K, VariantError>
     where
-        K: SimpleDecode + std::hash::Hash,
+        K: Decode + Basic,
     {
         K::from_variant(&self.key)
     }
@@ -37,7 +37,7 @@ impl DictEntry {
 
     pub fn take_inner<K, V>(self) -> Result<(K, V), VariantError>
     where
-        K: SimpleDecode + std::hash::Hash,
+        K: Decode + Basic,
         V: Decode,
     {
         Ok((

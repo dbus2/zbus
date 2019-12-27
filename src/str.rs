@@ -1,6 +1,6 @@
 use std::str;
 
-use crate::{Decode, Encode, EncodingFormat};
+use crate::{Basic, Decode, Encode, EncodingFormat};
 use crate::{SharedData, Signature, SimpleDecode};
 use crate::{Variant, VariantError};
 
@@ -24,6 +24,7 @@ impl Encode for &str {
         String::from(self).to_variant()
     }
 }
+impl Basic for &str {}
 
 impl Encode for String {
     const SIGNATURE_CHAR: char = <&str>::SIGNATURE_CHAR;
@@ -92,3 +93,4 @@ impl Decode for String {
     }
 }
 impl SimpleDecode for String {}
+impl Basic for String {}
