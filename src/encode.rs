@@ -252,6 +252,6 @@ pub(crate) fn alignment_for_signature(
         Structure::SIGNATURE_CHAR => Ok(Structure::ALIGNMENT),
         Variant::SIGNATURE_CHAR => Ok(Variant::ALIGNMENT),
         DictEntry::SIGNATURE_CHAR => Ok(DictEntry::ALIGNMENT),
-        _ => return Err(VariantError::UnsupportedType(signature)),
+        _ => Err(VariantError::UnsupportedType(signature)),
     }
 }

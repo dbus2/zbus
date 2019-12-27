@@ -459,7 +459,7 @@ pub(crate) fn slice_data(
         Structure::SIGNATURE_CHAR => Structure::slice_data(data, signature, format),
         Variant::SIGNATURE_CHAR => Variant::slice_data(data, signature, format),
         DictEntry::SIGNATURE_CHAR => DictEntry::slice_data(data, signature, format),
-        _ => return Err(VariantError::UnsupportedType(signature)),
+        _ => Err(VariantError::UnsupportedType(signature)),
     }
 }
 
@@ -488,6 +488,6 @@ pub(crate) fn slice_signature(signature: impl Into<Signature>) -> Result<Signatu
         Structure::SIGNATURE_CHAR => Structure::slice_signature(signature),
         Variant::SIGNATURE_CHAR => Variant::slice_signature(signature),
         DictEntry::SIGNATURE_CHAR => DictEntry::slice_signature(signature),
-        _ => return Err(VariantError::UnsupportedType(signature)),
+        _ => Err(VariantError::UnsupportedType(signature)),
     }
 }

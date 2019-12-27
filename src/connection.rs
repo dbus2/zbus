@@ -136,7 +136,7 @@ impl From<message::Message> for ConnectionError {
                         Err(e) => ConnectionError::Message(e),
                     }
                 } else {
-                    return ConnectionError::MethodError(name, None);
+                    ConnectionError::MethodError(name, None)
                 }
             }
             Err(e) => ConnectionError::Message(e),

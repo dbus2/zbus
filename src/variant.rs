@@ -99,7 +99,7 @@ impl Variant {
             DictEntry::SIGNATURE_CHAR => {
                 DictEntry::decode(&slice, signature, format).map(|value| Variant::DictEntry(value))
             }
-            _ => return Err(VariantError::UnsupportedType(signature)),
+            _ => Err(VariantError::UnsupportedType(signature)),
         }
     }
 
