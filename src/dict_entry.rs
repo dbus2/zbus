@@ -20,7 +20,6 @@ impl DictEntry {
         }
     }
 
-    // FIXME: Tryo to optimize (this should be returing a reference ideally
     pub fn key<K>(&self) -> Result<&K, VariantError>
     where
         K: Decode + Basic,
