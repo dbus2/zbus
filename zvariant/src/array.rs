@@ -59,11 +59,11 @@ impl Array {
     ///
     /// let mut array = Array::new();
     /// array.add_element(42u8).unwrap();
-    /// assert!(array.add_element(String::from("hi")).is_err());
+    /// assert!(array.add_element("hi").is_err());
     /// array.add_element(45u8).unwrap();
     /// assert!(array.add_element(42u32).is_err());
     /// ```
-    pub fn add_element<T: Decode>(&mut self, element: T) -> Result<(), VariantError> {
+    pub fn add_element<T: Encode>(&mut self, element: T) -> Result<(), VariantError> {
         // Ensure we only add elements of the same type
         if self.0.last().map(|v| !T::is(v)).unwrap_or(false) {
             return Err(VariantError::IncorrectType);
