@@ -36,6 +36,14 @@ impl Encode for Signature {
     fn to_variant(self) -> Variant {
         Variant::Signature(self)
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::Signature(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Decode for Signature {
@@ -70,14 +78,6 @@ impl Decode for Signature {
         str::from_utf8(&bytes[1..last_index])
             .map(Self::new)
             .map_err(|_| VariantError::InvalidUtf8)
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::Signature(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {

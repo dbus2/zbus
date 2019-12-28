@@ -29,6 +29,14 @@ impl Encode for ObjectPath {
     fn to_variant(self) -> Variant {
         Variant::ObjectPath(self)
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::ObjectPath(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Decode for ObjectPath {
@@ -48,14 +56,6 @@ impl Decode for ObjectPath {
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
         String::decode(data, String::SIGNATURE_STR, format).map(Self)
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::ObjectPath(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {

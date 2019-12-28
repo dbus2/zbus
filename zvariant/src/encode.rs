@@ -52,6 +52,27 @@ pub trait Encode: std::fmt::Debug {
     // thing: unflatten it.
     // `TryFrom<Variant>`.
     fn to_variant(self) -> Variant;
+
+    /// Checks if variant value is of the generic type `T`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zvariant::{Encode};
+    ///
+    /// let v = "hello".to_variant();
+    /// assert!(!u32::is(&v));
+    /// assert!(<&str>::is(&v));
+    /// ```
+    ///
+    /// ```
+    /// use zvariant::{Encode};
+    ///
+    /// let v = 147u32.to_variant();
+    /// assert!(u32::is(&v));
+    /// assert!(!String::is(&v));
+    /// ```
+    fn is(variant: &Variant) -> bool;
 }
 
 impl Encode for u8 {
@@ -66,6 +87,14 @@ impl Encode for u8 {
 
     fn to_variant(self) -> Variant {
         Variant::U8(self)
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::U8(_) = variant {
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -82,6 +111,14 @@ impl Encode for bool {
     fn to_variant(self) -> Variant {
         Variant::Bool(self)
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::Bool(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Encode for i16 {
@@ -96,6 +133,14 @@ impl Encode for i16 {
 
     fn to_variant(self) -> Variant {
         Variant::I16(self)
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::I16(_) = variant {
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -112,6 +157,14 @@ impl Encode for u16 {
     fn to_variant(self) -> Variant {
         Variant::U16(self)
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::U16(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Encode for i32 {
@@ -126,6 +179,14 @@ impl Encode for i32 {
 
     fn to_variant(self) -> Variant {
         Variant::I32(self)
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::I32(_) = variant {
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -142,6 +203,14 @@ impl Encode for u32 {
     fn to_variant(self) -> Variant {
         Variant::U32(self)
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::U32(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Encode for i64 {
@@ -157,6 +226,14 @@ impl Encode for i64 {
     fn to_variant(self) -> Variant {
         Variant::I64(self)
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::I64(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Encode for u64 {
@@ -171,6 +248,14 @@ impl Encode for u64 {
 
     fn to_variant(self) -> Variant {
         Variant::U64(self)
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::U64(_) = variant {
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -188,6 +273,14 @@ impl Encode for f64 {
 
     fn to_variant(self) -> Variant {
         Variant::F64(self)
+    }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::F64(_) = variant {
+            true
+        } else {
+            false
+        }
     }
 }
 

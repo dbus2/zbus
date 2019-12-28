@@ -178,6 +178,14 @@ impl Encode for Variant {
     fn to_variant(self) -> Variant {
         Variant::Variant(Box::new(self))
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::Variant(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Decode for Variant {
@@ -213,14 +221,6 @@ impl Decode for Variant {
         let sign = Signature::decode_simple(&sign_slice, format)?;
 
         Variant::from_data(&data.tail(sign_size), sign, format)
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::Variant(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     // In case of Variant, this gets the inner Variant (i-e flattens)

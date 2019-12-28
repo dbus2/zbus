@@ -72,6 +72,14 @@ impl Encode for DictEntry {
     fn to_variant(self) -> Variant {
         Variant::DictEntry(self)
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::DictEntry(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Decode for DictEntry {
@@ -182,14 +190,6 @@ impl Decode for DictEntry {
 
         // signature of value + `{` + 1 char of the key signature + `}`
         Ok((&signature[0..slice.len() + 3]).into())
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::DictEntry(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {

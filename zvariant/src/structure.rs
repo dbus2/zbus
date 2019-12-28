@@ -58,6 +58,14 @@ impl Encode for Structure {
     fn to_variant(self) -> Variant {
         Variant::Structure(self)
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::Structure(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Decode for Structure {
@@ -162,14 +170,6 @@ impl Decode for Structure {
         }
 
         Ok(Signature::from(&signature[0..=i]))
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::Structure(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {

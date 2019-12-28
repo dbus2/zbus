@@ -23,6 +23,14 @@ impl Encode for &str {
     fn to_variant(self) -> Variant {
         String::from(self).to_variant()
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::Str(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
 }
 impl Basic for &str {}
 
@@ -37,6 +45,10 @@ impl Encode for String {
 
     fn to_variant(self) -> Variant {
         Variant::Str(self)
+    }
+
+    fn is(variant: &Variant) -> bool {
+        <&str>::is(variant)
     }
 }
 
@@ -66,14 +78,6 @@ impl Decode for String {
         str::from_utf8(&bytes[4..last_index])
             .map(|s| s.to_owned())
             .map_err(|_| VariantError::InvalidUtf8)
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::Str(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {

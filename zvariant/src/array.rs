@@ -126,6 +126,14 @@ impl Encode for Array {
     fn to_variant(self) -> Variant {
         Variant::Array(self)
     }
+
+    fn is(variant: &Variant) -> bool {
+        if let Variant::Array(_) = variant {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Decode for Array {
@@ -248,14 +256,6 @@ impl Decode for Array {
         let slice = crate::decode::slice_signature(&signature[1..])?;
 
         Ok(Signature::from(&signature[0..=slice.len()]))
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::Array(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {

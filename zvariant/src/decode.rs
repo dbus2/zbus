@@ -64,27 +64,6 @@ pub trait Decode: Encode + std::fmt::Debug {
         Ok(data.tail(padding))
     }
 
-    /// Checks if variant value is of the generic type `T`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use zvariant::{Encode, Decode};
-    ///
-    /// let v = String::from("hello").to_variant();
-    /// assert!(!u32::is(&v));
-    /// assert!(String::is(&v));
-    /// ```
-    ///
-    /// ```
-    /// use zvariant::{Encode, Decode};
-    ///
-    /// let v = 147u32.to_variant();
-    /// assert!(u32::is(&v));
-    /// assert!(!String::is(&v));
-    /// ```
-    fn is(variant: &Variant) -> bool;
-
     // `TryFrom<Variant>` trait bound would have been better but we can't use that unfortunately
     // since Variant implements Decode.
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError>
@@ -103,14 +82,6 @@ impl Decode for u8 {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
         Ok(slice.bytes()[0])
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::U8(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
@@ -145,14 +116,6 @@ impl Decode for bool {
         }
     }
 
-    fn is(variant: &Variant) -> bool {
-        if let Variant::Bool(_) = variant {
-            true
-        } else {
-            false
-        }
-    }
-
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
         if let Variant::Bool(u) = variant {
             Ok(u)
@@ -179,14 +142,6 @@ impl Decode for i16 {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
         Ok(byteorder::NativeEndian::read_i16(slice.bytes()))
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::I16(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
@@ -217,14 +172,6 @@ impl Decode for u16 {
         Ok(byteorder::NativeEndian::read_u16(slice.bytes()))
     }
 
-    fn is(variant: &Variant) -> bool {
-        if let Variant::U16(_) = variant {
-            true
-        } else {
-            false
-        }
-    }
-
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
         if let Variant::U16(value) = variant {
             Ok(value)
@@ -251,14 +198,6 @@ impl Decode for i32 {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
         Ok(byteorder::NativeEndian::read_i32(slice.bytes()))
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::I32(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
@@ -289,14 +228,6 @@ impl Decode for u32 {
         Ok(byteorder::NativeEndian::read_u32(slice.bytes()))
     }
 
-    fn is(variant: &Variant) -> bool {
-        if let Variant::U32(_) = variant {
-            true
-        } else {
-            false
-        }
-    }
-
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
         if let Variant::U32(value) = variant {
             Ok(value)
@@ -323,14 +254,6 @@ impl Decode for i64 {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
         Ok(byteorder::NativeEndian::read_i64(slice.bytes()))
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::I64(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
@@ -361,14 +284,6 @@ impl Decode for u64 {
         Ok(byteorder::NativeEndian::read_u64(slice.bytes()))
     }
 
-    fn is(variant: &Variant) -> bool {
-        if let Variant::U64(_) = variant {
-            true
-        } else {
-            false
-        }
-    }
-
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
         if let Variant::U64(value) = variant {
             Ok(value)
@@ -395,14 +310,6 @@ impl Decode for f64 {
         let slice = Self::slice_for_decoding(data, signature, format)?;
 
         Ok(byteorder::NativeEndian::read_f64(slice.bytes()))
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::F64(_) = variant {
-            true
-        } else {
-            false
-        }
     }
 
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
