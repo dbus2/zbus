@@ -1,4 +1,5 @@
 stages:
+  - check
   - test
 
 variables:
@@ -8,6 +9,14 @@ variables:
 before_script:
   - apt-get update -yq
   - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y dbus
+
+check:
+  image: "registry.gitlab.com/alatiera/rustfmt-oci-image/rustfmt:stable"
+  stage: "check"
+  script:
+    - rustc --version
+    - cargo --version
+    - cargo fmt --all -- --check
 
 test:
   image: 'rust:latest'
