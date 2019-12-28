@@ -8,8 +8,8 @@ The project is divided into two crates:
 ## zvariant
 
 This crate provides API for encoding/decoding of data to/from D-Bus wire format. This crate is already in good shape
-and can and should be used by other projects. This wire format is simple and very efficient binary format and hence
-useful outside of D-Bus context as well.
+and can and should be used by other projects. This binary wire format is simple and very efficient and hence useful
+outside of D-Bus context as well.
 
 ## zbus
 
