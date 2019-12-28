@@ -4,11 +4,12 @@ use std::{env, error, fmt, io};
 
 use nix::unistd::Uid;
 
+use zvariant::VariantError;
+use zvariant::{Decode, Encode};
+
 use crate::address::{self, Address, AddressError};
 use crate::message;
 use crate::message_field;
-use crate::VariantError;
-use crate::{Decode, Encode};
 
 pub struct Connection {
     pub server_guid: String,
@@ -218,7 +219,7 @@ impl Connection {
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        body: Option<crate::Structure>,
+        body: Option<zvariant::Structure>,
     ) -> Result<message::Message, ConnectionError> {
         println!("Starting: {}", method_name);
         let serial = self.next_serial();

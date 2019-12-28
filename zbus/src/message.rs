@@ -3,12 +3,13 @@ use core::convert::TryInto;
 use std::error;
 use std::fmt;
 
+use zvariant::Signature;
+use zvariant::VariantError;
+use zvariant::{Array, Decode, Encode, EncodingFormat};
+use zvariant::{SharedData, Structure};
+
 use crate::utils::padding_for_8_bytes;
-use crate::Signature;
-use crate::VariantError;
-use crate::{Array, Decode, Encode, EncodingFormat};
 use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
-use crate::{SharedData, Structure};
 
 /// Size of primary message header
 pub const PRIMARY_HEADER_SIZE: usize = 16;

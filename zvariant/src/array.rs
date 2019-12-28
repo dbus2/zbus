@@ -22,7 +22,7 @@ impl Array {
     /// # Examples:
     ///
     /// ```
-    /// use zbus::{Array, Encode, Variant};
+    /// use zvariant::{Array, Encode, Variant};
     ///
     /// let variants = vec![42u8.to_variant(), 45u8.to_variant()];
     /// let array = Array::new_from_vec(variants).unwrap();
@@ -55,7 +55,7 @@ impl Array {
     /// # Examples:
     ///
     /// ```
-    /// use zbus::{Array, Decode, Variant};
+    /// use zvariant::{Array, Decode, Variant};
     ///
     /// let mut array = Array::new();
     /// array.add_element(42u8).unwrap();

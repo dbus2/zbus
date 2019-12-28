@@ -69,7 +69,7 @@ pub trait Decode: Encode + std::fmt::Debug {
     /// # Examples
     ///
     /// ```
-    /// use zbus::{Encode, Decode};
+    /// use zvariant::{Encode, Decode};
     ///
     /// let v = String::from("hello").to_variant();
     /// assert!(!u32::is(&v));
@@ -77,7 +77,7 @@ pub trait Decode: Encode + std::fmt::Debug {
     /// ```
     ///
     /// ```
-    /// use zbus::{Encode, Decode};
+    /// use zvariant::{Encode, Decode};
     ///
     /// let v = 147u32.to_variant();
     /// assert!(u32::is(&v));

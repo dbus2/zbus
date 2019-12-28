@@ -1,8 +1,9 @@
 use core::convert::TryFrom;
 
-use crate::{Array, Decode, Encode};
+use zvariant::{Array, Decode, Encode};
+use zvariant::{Structure, Variant};
+
 use crate::{MessageField, MessageFieldError};
-use crate::{Structure, Variant};
 
 // It's actually 10 (and even not that) but let's round it to next 8-byte alignment
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
