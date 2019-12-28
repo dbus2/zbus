@@ -17,6 +17,7 @@ check:
     - rustc --version
     - cargo --version
     - cargo fmt --all -- --check
+    - rustup component add clippy
     - cargo clippy -- -D warnings
 
 test:
