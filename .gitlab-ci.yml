@@ -17,6 +17,7 @@ check:
     - rustc --version
     - cargo --version
     - cargo fmt --all -- --check
+    - cargo clippy -- -D warnings
 
 test:
   image: 'rust:latest'
