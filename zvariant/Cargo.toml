@@ -3,6 +3,13 @@ name = "zvariant"
 version = "1.0.0"
 authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
 edition = "2018"
+
+description = "API for D-Bus wire format encoding & decoding"
+repository = "https://gitlab.freedesktop.org/zeenix/zbus/"
+documentation = "http://docs.rs/zvariant"
+keywords = ["D-Bus", "DBus", "IPC"]
+license = "MIT"
+categories = ["data-structures", "encoding", "parsing"]
 readme = "../README.md"
 
 [dependencies]
