@@ -15,4 +15,4 @@ readme = "../README.md"
 [dependencies]
 byteorder = "1.3.1"
 nix = "0.13.0"
-zvariant = { path = "../zvariant", version = "1.0.0" }
+zvariant = { path = "../zvariant", version = "^1" }
