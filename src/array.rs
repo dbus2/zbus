@@ -46,7 +46,7 @@ impl Array {
     }
 
     // Caller ensures all variants in the `vec` are of the same type
-    pub(crate) fn new_from_vec_unchecked(vec: Vec<Variant>) -> Self {
+    pub fn new_from_vec_unchecked(vec: Vec<Variant>) -> Self {
         Array(vec)
     }
 
