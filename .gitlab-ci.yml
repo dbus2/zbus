@@ -1,5 +1,3 @@
-image: 'rust:latest'
-
 stages:
   - test
 
@@ -12,6 +10,7 @@ before_script:
   - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y dbus
 
 test:
+  image: 'rust:latest'
   stage: test
   script:
     - rustc --version
