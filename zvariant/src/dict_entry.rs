@@ -147,7 +147,7 @@ impl Decode for DictEntry {
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
-        let value = Variant::from_data(value_slice, value_signature, format)?;
+        let value = Variant::from_data_slice(value_slice, value_signature, format)?;
 
         Ok(Self {
             key: Box::new(key),

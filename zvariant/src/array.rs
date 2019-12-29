@@ -220,7 +220,7 @@ impl Decode for Array {
                 return Err(VariantError::InsufficientData);
             }
 
-            let element = Variant::from_data(slice, child_signature.as_str(), format)?;
+            let element = Variant::from_data_slice(slice, child_signature.as_str(), format)?;
             elements.push(element);
         }
         if extracted == 0 {
