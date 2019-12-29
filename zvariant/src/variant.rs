@@ -632,7 +632,6 @@ mod tests {
         assert!(entry.signature() == "{s(yu)}");
         let v = entry.to_variant();
 
-        let format = EncodingFormat::default();
         let encoding = v.encode_value(format);
         assert!(encoding.len() == 24);
         assert!(DictEntry::is(&v));
