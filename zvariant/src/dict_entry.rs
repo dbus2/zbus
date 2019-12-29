@@ -2,6 +2,46 @@ use crate::{Basic, Decode, Encode, EncodingFormat};
 use crate::{SharedData, Signature};
 use crate::{Variant, VariantError};
 
+/// A dictionary entry as a key-value pair.
+///
+/// This is not very useful on its own but since D-Bus defines it as its own type, a hashmap in
+/// D-Bus is encoded as an array of dictionary entries and [GVariant] even allows this to be
+/// used outside of an array, we provide this data type.
+///
+/// The key must be a [basic data type].
+///
+/// [GVariant]: https://developer.gnome.org/glib/stable/glib-GVariant.html
+/// [basic data type]: trait.Basic.html
+///
+/// # Example:
+///
+/// ```
+/// use zvariant::{Decode, DictEntry};
+/// use zvariant::{Encode, EncodingFormat, Structure};
+///
+/// let entry = DictEntry::new(
+///     // String key
+///     "hello",
+///     // Structure value
+///     Structure::new()
+///         .add_field(u8::max_value())
+///         .add_field(u32::max_value()),
+/// );
+/// assert!(entry.signature() == "{s(yu)}");
+///
+/// let format = EncodingFormat::default();
+/// let encoding = entry.encode(format);
+/// assert!(encoding.len() == 24);
+///
+/// let entry = DictEntry::decode(encoding, entry.signature(), format).unwrap();
+/// assert!(entry.key::<String>().unwrap() == "hello");
+/// let structure = entry.value::<Structure>().unwrap();
+/// let fields = structure.fields();
+/// assert!(u8::is(&fields[0]));
+/// assert!(*u8::from_variant(&fields[0]).unwrap() == u8::max_value());
+/// assert!(u32::is(&fields[1]));
+/// assert!(*u32::from_variant(&fields[1]).unwrap() == u32::max_value());
+/// ```
 #[derive(Debug, Clone)]
 pub struct DictEntry {
     key: Box<Variant>,
@@ -9,6 +49,7 @@ pub struct DictEntry {
 }
 
 impl DictEntry {
+    /// Create a new `DictEntry`
     pub fn new<K, V>(key: K, value: V) -> Self
     where
         K: Encode + Basic,
@@ -20,6 +61,7 @@ impl DictEntry {
         }
     }
 
+    /// Get a reference to the key.
     pub fn key<K>(&self) -> Result<&K, VariantError>
     where
         K: Decode + Basic,
@@ -27,6 +69,7 @@ impl DictEntry {
         K::from_variant(&self.key)
     }
 
+    /// Get a reference to the value.
     pub fn value<V>(&self) -> Result<&V, VariantError>
     where
         V: Decode,
@@ -34,6 +77,7 @@ impl DictEntry {
         V::from_variant(&self.value)
     }
 
+    /// Take the key and value, consuming `self`.
     pub fn take<K, V>(self) -> Result<(K, V), VariantError>
     where
         K: Decode + Basic,
