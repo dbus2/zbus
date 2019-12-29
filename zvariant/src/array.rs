@@ -17,7 +17,7 @@ impl Array {
 
     /// Creates an `Array` from given variants.
     ///
-    /// All variants must all contain the same `VariantType`.
+    /// All variants must all contain the same type.
     ///
     /// # Examples:
     ///
