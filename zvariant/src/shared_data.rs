@@ -83,6 +83,12 @@ impl From<Vec<u8>> for SharedData {
     }
 }
 
+impl From<&SharedData> for SharedData {
+    fn from(value: &SharedData) -> Self {
+        value.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::SharedData;
