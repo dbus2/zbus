@@ -509,9 +509,7 @@ mod tests {
         let ay = vec![u8::max_value(), 0u8, 47u8];
         let array = Array::from(ay);
         assert!(array.signature() == "ay");
-        for element in array.inner() {
-            assert!(u8::is(&element));
-        }
+        let _: Vec<&u8> = (&array).try_into().unwrap();
 
         let format = EncodingFormat::default();
         let encoding = array.encode(format);
@@ -526,9 +524,7 @@ mod tests {
         let as_ = vec!["Hello", "World", "Now", "Bye!"];
         let array = Array::from(as_);
         assert!(array.signature() == "as");
-        for element in array.inner() {
-            assert!(String::is(&element));
-        }
+        let _: Vec<&String> = (&array).try_into().unwrap();
 
         let encoding = array.encode(format);
         assert!(encoding.len() == 45);
@@ -556,9 +552,7 @@ mod tests {
             .add_field("hello")];
         let array = Array::from(ar);
         assert!(array.signature() == "a(yu(xbxas)s)");
-        for element in array.inner() {
-            assert!(Structure::is(&element));
-        }
+        let _: Vec<&Structure> = (&array).try_into().unwrap();
 
         let encoding = array.encode(format);
         assert!(encoding.len() == 78);

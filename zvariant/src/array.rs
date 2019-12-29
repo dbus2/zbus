@@ -294,6 +294,23 @@ where
     }
 }
 
+impl<'a, T> TryInto<Vec<&'a T>> for &'a Array
+where
+    T: Decode,
+{
+    type Error = VariantError;
+
+    fn try_into(self) -> Result<Vec<&'a T>, VariantError> {
+        let mut v = vec![];
+
+        for value in self.inner() {
+            v.push(T::from_variant(value)?);
+        }
+
+        Ok(v)
+    }
+}
+
 impl<T> From<Vec<T>> for Array
 where
     T: Encode,
