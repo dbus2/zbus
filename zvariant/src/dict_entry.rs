@@ -34,7 +34,7 @@ impl DictEntry {
         V::from_variant(&self.value)
     }
 
-    pub fn take_inner<K, V>(self) -> Result<(K, V), VariantError>
+    pub fn take<K, V>(self) -> Result<(K, V), VariantError>
     where
         K: Decode + Basic,
         V: Decode,

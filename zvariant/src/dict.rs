@@ -43,7 +43,7 @@ where
         let mut map = HashMap::new();
 
         for entry in self.0 {
-            let (key, value) = entry.take_inner()?;
+            let (key, value) = entry.take()?;
 
             map.insert(key, value);
         }
