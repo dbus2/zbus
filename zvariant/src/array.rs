@@ -90,15 +90,11 @@ impl Array {
         T::from_variant(&self.0[index])
     }
 
-    pub fn inner(&self) -> &Vec<Variant> {
+    fn inner(&self) -> &Vec<Variant> {
         &self.0
     }
 
-    pub fn inner_mut(&mut self) -> &mut Vec<Variant> {
-        &mut self.0
-    }
-
-    pub fn take_inner(self) -> Vec<Variant> {
+    fn take_inner(self) -> Vec<Variant> {
         self.0
     }
 }

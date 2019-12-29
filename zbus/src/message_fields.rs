@@ -1,6 +1,6 @@
-use core::convert::TryFrom;
+use core::convert::{TryFrom, TryInto};
 
-use zvariant::{Array, Decode, Encode};
+use zvariant::{Array, Encode};
 use zvariant::{Structure, Variant};
 
 use crate::{MessageField, MessageFieldError};
@@ -61,9 +61,9 @@ impl TryFrom<Array> for MessageFields {
     fn try_from(array: Array) -> Result<Self, MessageFieldError> {
         let mut fields = MessageFields::new();
 
-        for value in array.take_inner() {
-            let structure = Structure::take_from_variant(value).map_err(MessageFieldError::from)?;
-            let field = MessageField::try_from(structure)?;
+        let vec: Vec<Structure> = array.try_into().map_err(MessageFieldError::from)?;
+        for structure in vec {
+            let field = structure.try_into()?;
 
             fields.add(field);
         }
