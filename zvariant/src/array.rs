@@ -74,6 +74,22 @@ impl Array {
         Ok(())
     }
 
+    /// Get the element at the given index.
+    ///
+    /// # Example:
+    ///
+    /// ```
+    /// use zvariant::{Array, Decode, Variant};
+    ///
+    /// let array = Array::from(vec![42u8, 43, 44]);
+    /// assert!(*array.get_element::<u8>(0).unwrap() == 42);
+    /// assert!(*array.get_element::<u8>(1).unwrap() == 43);
+    /// assert!(*array.get_element::<u8>(2).unwrap() == 44);
+    /// ```
+    pub fn get_element<T: Decode>(&self, index: usize) -> Result<&T, VariantError> {
+        T::from_variant(&self.0[index])
+    }
+
     pub fn inner(&self) -> &Vec<Variant> {
         &self.0
     }
