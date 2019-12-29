@@ -5,6 +5,11 @@ use crate::utils::padding_for_n_bytes;
 use crate::{Array, DictEntry, ObjectPath};
 use crate::{Signature, Structure, Variant, VariantError};
 
+/// The encoding format.
+///
+/// Currently only D-Bus format is supported but [`GVariant`] support is also planned.
+///
+/// [GVariant]: https://developer.gnome.org/glib/stable/glib-GVariant.html
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EncodingFormat {
     DBus,
@@ -17,12 +22,26 @@ impl Default for EncodingFormat {
     }
 }
 
+/// Trait for encoding of varius types.
+///
+/// All data types that implement `Encode` also implement [`Decode`]. As decoding require
+/// allocation, one exception here is `&str`. It only implements `Encode`, while its owned
+/// sibling, `String` implements both traits.
+///
+/// [`Decode`]: trait.Decode.html
 pub trait Encode: std::fmt::Debug {
+    /// The signature charachter of the implementing type.
     const SIGNATURE_CHAR: char;
+    /// The signature charachter of the implementing type, in string format.
     const SIGNATURE_STR: &'static str;
+    /// The alignment required for encoding of the implementing type, as number of bytes.
     const ALIGNMENT: usize;
 
-    // Only use for the first data in a message
+    /// Encode `self` into a new byte buffer and return it.
+    ///
+    /// Since encoding typically requires alignment based on the position of the encoded value in
+    /// the entire encoded message it is going to be part of, you can only use for the first value
+    /// in a message.
     fn encode(&self, format: EncodingFormat) -> Vec<u8> {
         let mut bytes = vec![];
         self.encode_into(&mut bytes, format);
@@ -30,12 +49,43 @@ pub trait Encode: std::fmt::Debug {
         bytes
     }
 
+    /// Encode `self` and append to the end of `bytes` buffer.
     fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat);
 
+    /// Get the signature.
+    ///
+    /// The default implementation works for simple types with single-character signatures.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use zvariant::{Encode, Structure};
+    ///
+    /// assert!("hello".signature() == "s");
+    /// assert!(7u32.signature() == "u");
+    /// let s = Structure::new()
+    ///             .add_field("hello")
+    ///             .add_field(7u32);
+    /// assert!(s.signature() == "(su)");
+    /// ```
     fn signature(&self) -> Signature {
         Signature::new(Self::SIGNATURE_STR)
     }
 
+    /// Append required padding to `bytes` buffer.
+    ///
+    /// Helper for implementations.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use zvariant::{Encode, EncodingFormat};
+    ///
+    /// let mut bytes = vec![0u8; 3];
+    /// u32::add_padding(&mut bytes, EncodingFormat::default());
+    /// // 1 byte padding needed for `u32` to be aligned to 4-bytes boundry
+    /// assert!(bytes.len() == 4);
+    /// ```
     fn add_padding(bytes: &mut Vec<u8>, format: EncodingFormat) {
         let padding = Self::padding(bytes.len(), format);
         if padding > 0 {
@@ -43,14 +93,21 @@ pub trait Encode: std::fmt::Debug {
         }
     }
 
+    /// The required padding for the implementing type.
+    ///
+    /// Helper for implementations.
     fn padding(n_bytes_before: usize, _format: EncodingFormat) -> usize {
         padding_for_n_bytes(n_bytes_before, Self::ALIGNMENT)
     }
 
-    // Into<Variant> trait bound would have been better and it's possible but since `Into<T> for T`
-    // is provided implicitly, the default no-op implementation for `Variant` won't do the right
-    // thing: unflatten it.
-    // `TryFrom<Variant>`.
+    /// Unflatten `self` into a [`Variant`].
+    ///
+    /// [`Into`]`<Variant>` trait bound would have been better and it's possible but since
+    /// `Into<T> for T` is provided implicitly, the default no-op implementation for [`Variant`]
+    /// won't do the right thing: unflatten it.
+    ///
+    /// [`Into`]: https://doc.rust-lang.org/std/convert/trait.Into.html
+    /// [`Variant`]: struct.Variant.html
     fn to_variant(self) -> Variant;
 
     /// Checks if variant value is of the generic type `T`.
