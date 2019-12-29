@@ -280,18 +280,7 @@ mod tests {
         assert!(bool::from_variant(&v).unwrap());
     }
 
-    #[test]
-    fn i16_variant() {
-        let v = i16::max_value().to_variant();
-        assert!(*i16::from_variant(&v).unwrap() == i16::max_value());
-        assert!(i16::is(&v));
-
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 2);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(*i16::from_variant(&v).unwrap() == i16::max_value());
-    }
+    /* i16 variant test in docs sample already, that's run as tests so no need to repeat here */
 
     #[test]
     fn u16_variant() {
