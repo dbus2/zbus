@@ -17,7 +17,7 @@
 //! * [`Array`]: An unordered collection of items of the same type. API is provided to transform this into, and from a
 //! [`Vec`].
 //! * [`Structure`]: An ordered collection of items of different types.
-//! * [`DictEntry`]: A key-value pair. The key must be a basic type.
+//! * [`DictEntry`]: A dictionary entry as a key-value pair. The key must be a basic type.
 //! * [`Dict`]: An Array of DictEntry. API is provided to transform this into, and from a [`HashMap`].
 //! * [`Variant`]: A generic container, in the form of an enum that holds exactly one value of any of the other types.
 //!
