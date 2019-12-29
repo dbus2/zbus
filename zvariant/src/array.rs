@@ -19,7 +19,7 @@ impl Array {
     ///
     /// All variants must all contain the same type.
     ///
-    /// # Examples:
+    /// # Example:
     ///
     /// ```
     /// use zvariant::{Array, Encode, Variant};
@@ -52,7 +52,7 @@ impl Array {
 
     /// Adds the given `element` to `self`.
     ///
-    /// # Examples:
+    /// # Example:
     ///
     /// ```
     /// use zvariant::{Array, Decode, Variant};
