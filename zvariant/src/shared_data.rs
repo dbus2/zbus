@@ -31,12 +31,7 @@ impl fmt::Display for SharedData {
 #[allow(clippy::len_without_is_empty)]
 impl SharedData {
     pub fn new(data: Vec<u8>) -> Self {
-        let end = data.len();
-        Self {
-            data: Rc::new(data),
-            position: 0,
-            end,
-        }
+        Self::from(data)
     }
 
     pub fn subset(&self, index: usize, end: usize) -> Self {
@@ -76,14 +71,25 @@ impl SharedData {
     }
 }
 
+impl From<Vec<u8>> for SharedData {
+    fn from(value: Vec<u8>) -> Self {
+        let end = value.len();
+
+        Self {
+            data: Rc::new(value),
+            position: 0,
+            end,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::SharedData;
 
     #[test]
     fn shared_data() {
-        let v: Vec<u8> = (0u8..10).collect();
-        let data = SharedData::new(v);
+        let data = SharedData::from((0u8..10).collect::<Vec<_>>());
         assert!(data.position() == 0);
         assert!(data.end() == 10);
         assert!(data.len() == 10);
