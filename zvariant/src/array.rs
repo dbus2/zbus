@@ -5,12 +5,16 @@ use crate::{Decode, Encode, EncodingFormat};
 use crate::{SharedData, Signature, SimpleDecode};
 use crate::{Variant, VariantError};
 
-// Since neither `From` trait nor `Vec` is from this crate, we need this intermediate type.
-//
+/// An unordered collection of items of the same type.
+///
+/// API is provided to transform this into, and from a [`Vec`].
+///
+/// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 #[derive(Debug, Clone, Default)]
 pub struct Array(Vec<Variant>);
 
 impl Array {
+    /// Creates a new empty `Array`.
     pub fn new() -> Self {
         Self::default()
     }
@@ -45,7 +49,12 @@ impl Array {
         Ok(Array(vec))
     }
 
-    // Caller ensures all variants in the `vec` are of the same type
+    /// Creates an `Array` from given variants.
+    ///
+    /// Same as [`new_from_vec`] but the caller guarantees all variants in the `vec` are of the same
+    /// type.
+    ///
+    /// [`new_from_vec`]: struct.Array.html#method.new_from_vec
     pub fn new_from_vec_unchecked(vec: Vec<Variant>) -> Self {
         Array(vec)
     }
