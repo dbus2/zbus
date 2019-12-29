@@ -41,7 +41,7 @@ impl Encode for ObjectPath {
 
 impl Decode for ObjectPath {
     fn slice_data<'b>(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
@@ -50,7 +50,7 @@ impl Decode for ObjectPath {
     }
 
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {

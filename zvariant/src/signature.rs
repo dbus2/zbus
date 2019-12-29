@@ -48,11 +48,12 @@ impl Encode for Signature {
 
 impl Decode for Signature {
     fn slice_data(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         _format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
+        let data = data.into();
         if data.len() < 1 {
             return Err(VariantError::InsufficientData);
         }
@@ -65,12 +66,13 @@ impl Decode for Signature {
     }
 
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         _format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
+        let data = data.into();
         let last_index = data.len() - 1;
         let bytes = data.bytes();
         crate::ensure_sufficient_bytes(bytes, last_index)?;

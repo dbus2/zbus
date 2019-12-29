@@ -2,7 +2,7 @@ use crate::{Decode, EncodingFormat, SharedData, VariantError};
 
 pub trait SimpleDecode: Decode {
     fn slice_data_simple(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError>
     where
@@ -11,11 +11,14 @@ pub trait SimpleDecode: Decode {
         Self::slice_data(data, Self::SIGNATURE_STR, format)
     }
 
-    fn decode_simple(bytes: &SharedData, format: EncodingFormat) -> Result<Self, VariantError>
+    fn decode_simple(
+        data: impl Into<SharedData>,
+        format: EncodingFormat,
+    ) -> Result<Self, VariantError>
     where
         Self: Sized,
     {
-        Self::decode(bytes, Self::SIGNATURE_STR, format)
+        Self::decode(data, Self::SIGNATURE_STR, format)
     }
 }
 

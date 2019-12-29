@@ -138,7 +138,7 @@ impl Encode for Array {
 
 impl Decode for Array {
     fn slice_data(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
@@ -147,6 +147,7 @@ impl Decode for Array {
         // Child signature
         let child_signature = crate::decode::slice_signature(&signature[1..])?;
 
+        let data = data.into();
         // Array size in bytes
         let len_slice = u32::slice_data_simple(&data, format)?;
         let mut extracted = len_slice.len();
@@ -165,7 +166,7 @@ impl Decode for Array {
                 first_element = false;
             }
 
-            let slice = crate::decode::slice_data(&element_data, child_signature.as_str(), format)?;
+            let slice = crate::decode::slice_data(element_data, child_signature.as_str(), format)?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
@@ -179,10 +180,11 @@ impl Decode for Array {
     }
 
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
+        let data = data.into();
         let padding = Self::padding(data.position(), format);
         if data.len() < padding + 4 {
             return Err(VariantError::InsufficientData);
@@ -212,13 +214,13 @@ impl Decode for Array {
                 first_element = false;
             }
 
-            let slice = crate::decode::slice_data(&element_data, child_signature.as_str(), format)?;
+            let slice = crate::decode::slice_data(element_data, child_signature.as_str(), format)?;
             extracted += slice.len();
             if extracted > len {
                 return Err(VariantError::InsufficientData);
             }
 
-            let element = Variant::from_data(&slice, child_signature.as_str(), format)?;
+            let element = Variant::from_data(slice, child_signature.as_str(), format)?;
             elements.push(element);
         }
         if extracted == 0 {

@@ -84,10 +84,11 @@ impl Encode for DictEntry {
 
 impl Decode for DictEntry {
     fn slice_data(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
+        let data = data.into();
         let padding = Self::padding(data.position(), format);
         if data.len() < padding {
             return Err(VariantError::InsufficientData);
@@ -98,12 +99,12 @@ impl Decode for DictEntry {
         // Key's signature will always be just 1 character so no need to slice for that.
         let key_signature = &signature[1..2];
         let key_slice =
-            crate::decode::slice_data(&data.tail(extracted as usize), key_signature, format)?;
+            crate::decode::slice_data(data.tail(extracted as usize), key_signature, format)?;
         extracted += key_slice.len();
 
         let value_signature = crate::decode::slice_signature(&signature[2..])?;
         let value_slice =
-            crate::decode::slice_data(&data.tail(extracted as usize), value_signature, format)?;
+            crate::decode::slice_data(data.tail(extracted as usize), value_signature, format)?;
         extracted += value_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
@@ -113,11 +114,12 @@ impl Decode for DictEntry {
     }
 
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         // Similar to slice_data, except we create variants.
+        let data = data.into();
         let padding = Self::padding(data.position(), format);
         if data.len() < padding {
             return Err(VariantError::InsufficientData);
@@ -128,24 +130,24 @@ impl Decode for DictEntry {
         // Key's signature will always be just 1 character so no need to slice for that.
         let key_signature = &signature[1..2];
         let key_slice =
-            crate::decode::slice_data(&data.tail(extracted as usize), key_signature, format)?;
-        let key = Variant::from_data(&key_slice, key_signature, format)?;
+            crate::decode::slice_data(data.tail(extracted as usize), key_signature, format)?;
         extracted += key_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
+        let key = Variant::from_data(key_slice, key_signature, format)?;
 
         let value_signature = crate::decode::slice_signature(&signature[2..])?;
         let value_slice = crate::decode::slice_data(
-            &data.tail(extracted as usize),
+            data.tail(extracted as usize),
             value_signature.as_str(),
             format,
         )?;
-        let value = Variant::from_data(&value_slice, value_signature, format)?;
         extracted += value_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
+        let value = Variant::from_data(value_slice, value_signature, format)?;
 
         Ok(Self {
             key: Box::new(key),

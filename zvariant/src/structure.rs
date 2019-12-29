@@ -70,10 +70,11 @@ impl Encode for Structure {
 
 impl Decode for Structure {
     fn slice_data(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
+        let data = data.into();
         let padding = Self::padding(data.position(), format);
         if data.len() < padding {
             return Err(VariantError::InsufficientData);
@@ -86,7 +87,7 @@ impl Decode for Structure {
         while i < last_index {
             let child_signature = crate::decode::slice_signature(&signature[i..last_index])?;
             let slice = crate::decode::slice_data(
-                &data.tail(extracted as usize),
+                data.tail(extracted as usize),
                 child_signature.as_str(),
                 format,
             )?;
@@ -105,11 +106,12 @@ impl Decode for Structure {
     }
 
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         // Similar to slice_data, except we create variants.
+        let data = data.into();
         let padding = Self::padding(data.position(), format);
         let signature = signature.into();
         if data.len() < padding || signature.len() < 3 {
@@ -204,12 +206,12 @@ fn variants_from_struct_data(
         let child_signature = crate::slice_signature(&signature[i..last_index])?;
 
         let child_slice =
-            crate::decode::slice_data(&data.tail(extracted), child_signature.as_str(), format)?;
+            crate::decode::slice_data(data.tail(extracted), child_signature.as_str(), format)?;
         extracted += child_slice.len();
         if extracted > data.len() {
             return Err(VariantError::InsufficientData);
         }
-        let variant = Variant::from_data_slice(&child_slice, child_signature.as_str(), format)?;
+        let variant = Variant::from_data_slice(child_slice, child_signature.as_str(), format)?;
         fields.push(variant);
 
         i += child_signature.len();

@@ -54,12 +54,13 @@ impl Encode for String {
 
 impl Decode for String {
     fn slice_data(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
 
+        let data = data.into();
         let len_slice = u32::slice_data_simple(&data, format)?;
         let last_index = u32::decode_simple(&len_slice, format)? as usize + len_slice.len() + 1;
 
@@ -67,7 +68,7 @@ impl Decode for String {
     }
 
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {

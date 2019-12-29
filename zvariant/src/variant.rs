@@ -30,7 +30,7 @@ pub enum Variant {
 
 impl Variant {
     pub fn from_data(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
@@ -38,15 +38,16 @@ impl Variant {
         // slice_data() ensures a valid signature
         let slice = crate::decode::slice_data(data, signature.clone(), format)?;
 
-        Variant::from_data_slice(&slice, signature, format)
+        Variant::from_data_slice(slice, signature, format)
     }
 
     pub fn from_data_slice(
-        slice: &SharedData,
+        slice: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         let signature = signature.into();
+        let slice = slice.into();
 
         match signature
             .chars()
@@ -190,35 +191,37 @@ impl Encode for Variant {
 
 impl Decode for Variant {
     fn slice_data(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
+        let data = data.into();
 
         // Variant is made of signature of the value followed by the actual value. So we gotta
         // extract the signature slice first and then the value slice. Once we know the sizes of
         // both, we can just slice the whole thing.
         let sign_slice = Signature::slice_data_simple(&data, format)?;
         let sign_size = sign_slice.len();
-        let sign = Signature::decode_simple(&sign_slice, format)?;
+        let sign = Signature::decode_simple(sign_slice, format)?;
 
-        let value_slice = crate::decode::slice_data(&data.tail(sign_size), sign, format)?;
+        let value_slice = crate::decode::slice_data(data.tail(sign_size), sign, format)?;
         let total_size = sign_size + value_slice.len();
 
         Ok(data.head(total_size))
     }
 
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
         Self::ensure_correct_signature(signature)?;
+        let data = data.into();
 
         let sign_slice = Signature::slice_data_simple(&data, format)?;
         let sign_size = sign_slice.len();
-        let sign = Signature::decode_simple(&sign_slice, format)?;
+        let sign = Signature::decode_simple(sign_slice, format)?;
 
         Variant::from_data(&data.tail(sign_size), sign, format)
     }
@@ -258,9 +261,9 @@ mod tests {
         assert!(*u8::from_variant(&v).unwrap() == u8::max_value());
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 1);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(*u8::from_variant(&v).unwrap() == u8::max_value());
     }
 
@@ -271,9 +274,9 @@ mod tests {
         assert!(bool::is(&v));
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 4);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(bool::from_variant(&v).unwrap());
     }
 
@@ -284,9 +287,9 @@ mod tests {
         assert!(i16::is(&v));
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 2);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(*i16::from_variant(&v).unwrap() == i16::max_value());
     }
 
@@ -297,9 +300,9 @@ mod tests {
         assert!(u16::is(&v));
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 2);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(*u16::from_variant(&v).unwrap() == u16::max_value());
     }
 
@@ -310,9 +313,9 @@ mod tests {
         assert!(i32::is(&v));
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 4);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(*i32::from_variant(&v).unwrap() == i32::max_value());
     }
 
@@ -323,9 +326,9 @@ mod tests {
         assert!(u32::is(&v));
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 4);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(*u32::from_variant(&v).unwrap() == u32::max_value());
     }
 
@@ -336,9 +339,9 @@ mod tests {
         assert!(i64::is(&v));
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 8);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(*i64::from_variant(&v).unwrap() == i64::max_value());
     }
 
@@ -349,9 +352,9 @@ mod tests {
         assert!(u64::is(&v));
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 8);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(*u64::from_variant(&v).unwrap() == u64::max_value());
     }
 
@@ -362,9 +365,9 @@ mod tests {
         assert!(f64::is(&v));
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 8);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(*f64::from_variant(&v).unwrap() == 117.112);
     }
 
@@ -375,9 +378,9 @@ mod tests {
         assert!(String::is(&v));
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 17);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(*String::from_variant(&v).unwrap() == "Hello world!");
     }
 
@@ -388,9 +391,9 @@ mod tests {
         assert!(crate::ObjectPath::is(&v));
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 17);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(crate::ObjectPath::from_variant(&v).unwrap().as_str() == "Hello world!");
     }
 
@@ -401,9 +404,9 @@ mod tests {
         assert!(crate::Signature::is(&v));
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 14);
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(crate::Signature::from_variant(&v).unwrap().as_str() == "Hello world!");
     }
 
@@ -423,7 +426,7 @@ mod tests {
         encoded.push(1);
         encoded.push(7);
 
-        let encoded = SharedData::new(encoded).tail(3);
+        let encoded = SharedData::from(encoded).tail(3);
         let slice = crate::Variant::slice_data_simple(&encoded, format).unwrap();
 
         let decoded = crate::Variant::decode_simple(&slice, format).unwrap();
@@ -483,12 +486,12 @@ mod tests {
         assert!(String::from_variant(&fields[3]).unwrap() == "hello");
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         // The HashMap is unordered so we can't rely on items to be in a specific order during the transformation to
         // Vec, and size depends on the order of items because of padding rules.
         assert!(encoding.len() == 88 || encoding.len() == 92);
 
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(Structure::is(&v));
         let s = Structure::from_variant(&v).unwrap();
         let fields = s.fields();
@@ -522,9 +525,9 @@ mod tests {
         }
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(array.encode(format));
+        let encoding = array.encode(format);
         assert!(encoding.len() == 7);
-        let v = crate::Variant::from_data(&encoding, array.signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, array.signature(), format).unwrap();
         let array = Array::take_from_variant(v).unwrap();
         let ay: Vec<u8> = array.try_into().unwrap();
         assert!(ay == [u8::max_value(), 0u8, 47u8]);
@@ -538,9 +541,9 @@ mod tests {
             assert!(String::is(&element));
         }
 
-        let encoding = SharedData::new(array.encode(format));
+        let encoding = array.encode(format);
         assert!(encoding.len() == 45);
-        let v = crate::Variant::from_data(&encoding, array.signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, array.signature(), format).unwrap();
         let array = Array::take_from_variant(v).unwrap();
         let as_: Vec<String> = array.try_into().unwrap();
         assert!(as_ == ["Hello", "World", "Now", "Bye!"]);
@@ -568,9 +571,9 @@ mod tests {
             assert!(Structure::is(&element));
         }
 
-        let encoding = SharedData::new(array.encode(format));
+        let encoding = array.encode(format);
         assert!(encoding.len() == 78);
-        let v = crate::Variant::from_data(&encoding, array.signature(), format).unwrap();
+        let v = crate::Variant::from_data(encoding, array.signature(), format).unwrap();
         let array = Array::take_from_variant(v).unwrap();
         let mut ar: Vec<Structure> = array.try_into().unwrap();
 
@@ -610,10 +613,10 @@ mod tests {
         let v = entry.to_variant();
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
-
-        let v = crate::Variant::from_data(&encoding, v.value_signature(), format).unwrap();
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 14);
+
+        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
         assert!(DictEntry::is(&v));
         let entry = DictEntry::from_variant(&v).unwrap();
         assert!(*entry.key::<u8>().unwrap() == 2u8);
@@ -630,7 +633,7 @@ mod tests {
         let v = entry.to_variant();
 
         let format = EncodingFormat::default();
-        let encoding = SharedData::new(v.encode_value(format));
+        let encoding = v.encode_value(format);
         assert!(encoding.len() == 24);
         assert!(DictEntry::is(&v));
         let entry = DictEntry::from_variant(&v).unwrap();

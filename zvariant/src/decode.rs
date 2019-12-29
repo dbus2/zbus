@@ -9,7 +9,7 @@ pub trait Decode: Encode + std::fmt::Debug {
     // Default implementation works for constant-sized types where size is the same as their
     // alignment
     fn slice_data(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError>
@@ -17,6 +17,7 @@ pub trait Decode: Encode + std::fmt::Debug {
         Self: Sized,
     {
         Self::ensure_correct_signature(signature)?;
+        let data = data.into();
         let padding = Self::padding(data.position(), format);
         let len = Self::ALIGNMENT + padding;
         ensure_sufficient_bytes(data.bytes(), len)?;
@@ -37,7 +38,7 @@ pub trait Decode: Encode + std::fmt::Debug {
     }
 
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError>
@@ -52,11 +53,12 @@ pub trait Decode: Encode + std::fmt::Debug {
 
     // Mostly a helper for decode() implementation. Removes any leading padding bytes.
     fn slice_for_decoding(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<SharedData, VariantError> {
         Self::ensure_correct_signature(signature)?;
+        let data = data.into();
         let padding = Self::padding(data.position(), format);
         let len = Self::ALIGNMENT + padding;
         ensure_sufficient_bytes(data.bytes(), len)?;
@@ -75,7 +77,7 @@ pub trait Decode: Encode + std::fmt::Debug {
 
 impl Decode for u8 {
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
@@ -103,7 +105,7 @@ impl Decode for u8 {
 
 impl Decode for bool {
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
@@ -135,7 +137,7 @@ impl Decode for bool {
 
 impl Decode for i16 {
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
@@ -163,7 +165,7 @@ impl Decode for i16 {
 
 impl Decode for u16 {
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
@@ -191,7 +193,7 @@ impl Decode for u16 {
 
 impl Decode for i32 {
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
@@ -219,7 +221,7 @@ impl Decode for i32 {
 
 impl Decode for u32 {
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
@@ -247,7 +249,7 @@ impl Decode for u32 {
 
 impl Decode for i64 {
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
@@ -275,7 +277,7 @@ impl Decode for i64 {
 
 impl Decode for u64 {
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
@@ -303,7 +305,7 @@ impl Decode for u64 {
 
 impl Decode for f64 {
     fn decode(
-        data: &SharedData,
+        data: impl Into<SharedData>,
         signature: impl Into<Signature>,
         format: EncodingFormat,
     ) -> Result<Self, VariantError> {
@@ -338,7 +340,7 @@ pub(crate) fn ensure_sufficient_bytes(bytes: &[u8], size: usize) -> Result<(), V
 }
 
 pub(crate) fn slice_data(
-    data: &SharedData,
+    data: impl Into<SharedData>,
     signature: impl Into<Signature>,
     format: EncodingFormat,
 ) -> Result<SharedData, VariantError> {
