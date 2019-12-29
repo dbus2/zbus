@@ -5,9 +5,25 @@ use crate::{Array, DictEntry, Encode, EncodingFormat};
 use crate::{ObjectPath, Signature, SimpleDecode, Structure};
 use crate::{Variant, VariantError};
 
+/// Trait for decoding of varius types from encoded form.
+///
+/// All data types that implement [`Encode`] also implement `Decode`. As decoding require
+/// allocation, one exception here is `&str`. It only implements [`Encode`], while its owned
+/// sibling, `String` implements both traits.
+///
+/// [`Encode`]: trait.Encode.html
 pub trait Decode: Encode + std::fmt::Debug {
-    // Default implementation works for constant-sized types where size is the same as their
-    // alignment
+    /// Get the slice of `data` that belongs to implementing type.
+    ///
+    /// Unless `data` only contains one item of implementing type, you need to call this function
+    /// to get the slice before you can call [`decode`]. For simple types, you might want to use
+    /// [`SimpleDecode::slice_data_simple`] instead.
+    ///
+    /// The default implementation works for constant-sized types whose size is the same as their
+    /// alignment
+    ///
+    /// [`decode`]: trait.Decode.html#tymethod.decode
+    /// [`SimpleDecode::slice_data_simple`]: trait.SimpleDecode.html#method.slice_data_simple
     fn slice_data(
         data: impl Into<SharedData>,
         signature: impl Into<Signature>,
@@ -25,6 +41,9 @@ pub trait Decode: Encode + std::fmt::Debug {
         Ok(data.subset(0, len))
     }
 
+    /// Ensure given `signature` is correct and of the implementing type.
+    ///
+    /// The default implementation works for simple types whose signature is constant.
     fn ensure_correct_signature(
         signature: impl Into<Signature>,
     ) -> Result<Signature, VariantError> {
@@ -37,6 +56,14 @@ pub trait Decode: Encode + std::fmt::Debug {
         Ok(signature)
     }
 
+    /// Decode instance of implementing type from the `data` slice.
+    ///
+    /// Unless `data` only contains one item of implementing type, you need to call [`slice_data`]
+    /// to get the slice before you can call this function. For simple types, you might want to use
+    /// [`SimpleDecode::decode_simple`] instead.
+    ///
+    /// [`slice_data`]: trait.Decode.html#method.slice_data
+    /// [`SimpleDecode::decode_simple`]: trait.SimpleDecode.html#method.decode_simple
     fn decode(
         data: impl Into<SharedData>,
         signature: impl Into<Signature>,
@@ -45,13 +72,37 @@ pub trait Decode: Encode + std::fmt::Debug {
     where
         Self: Sized;
 
+    /// Get the slice of `signature` that belongs to implementing type.
+    ///
+    /// This is used for getting individual signatures from container signatures. The default implementation works for
+    /// simple types with single-character signatures.
+    ///
+    /// # Example:
+    ///
+    /// ```
+    /// use zvariant::{Decode, Encode};
+    ///
+    /// let container_sig = "sux";
+    /// let str_sig = String::slice_signature(container_sig).unwrap();
+    /// assert!(str_sig == String::SIGNATURE_STR);
+    /// let mut parsed = str_sig.len();
+    ///
+    /// let u32_sig = u32::slice_signature(&container_sig[parsed..]).unwrap();
+    /// assert!(u32_sig == u32::SIGNATURE_STR);
+    /// parsed += u32_sig.len();
+    ///
+    /// let i64_sig = i64::slice_signature(&container_sig[parsed..]).unwrap();
+    /// assert!(i64_sig == i64::SIGNATURE_STR);
+    /// ```
     fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
         let slice: Signature = signature.into()[0..1].into();
 
         Self::ensure_correct_signature(slice)
     }
 
-    // Mostly a helper for decode() implementation. Removes any leading padding bytes.
+    /// A helper for [`decode`] implementation. Removes any leading padding bytes.
+    ///
+    /// [`decode`]: trait.Decode.html#tymethod.decode
     fn slice_for_decoding(
         data: impl Into<SharedData>,
         signature: impl Into<Signature>,
@@ -66,12 +117,18 @@ pub trait Decode: Encode + std::fmt::Debug {
         Ok(data.tail(padding))
     }
 
-    // `TryFrom<Variant>` trait bound would have been better but we can't use that unfortunately
-    // since Variant implements Decode.
+    /// Flatten the `variant` to enclosed value of the implementing type.
+    ///
+    /// `TryFrom<Variant>` bound on `Decode` trait would have been better but we can't do that
+    /// unfortunately since [`Variant`] implements `Decode`.
+    ///
+    /// [`Variant`]: enum.Variant.html
     fn take_from_variant(variant: Variant) -> Result<Self, VariantError>
     where
         Self: Sized;
 
+    /// Flatten the `variant` reference to a reference of the enclosed value of the implementing
+    /// type.
     fn from_variant(variant: &Variant) -> Result<&Self, VariantError>;
 }
 
