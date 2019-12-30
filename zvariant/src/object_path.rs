@@ -4,14 +4,19 @@ use crate::{Basic, Decode, Encode, EncodingFormat};
 use crate::{SharedData, Signature, SimpleDecode};
 use crate::{Variant, VariantError};
 
+/// String that identifies objects at a given destination on the D-Bus bus.
+///
+/// Mostly likely this is only useful in the D-Bus context.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectPath(String);
 
 impl ObjectPath {
+    /// Create a new `ObjectPath`.
     pub fn new(path: impl Into<ObjectPath>) -> Self {
         path.into()
     }
 
+    /// The object path as a string.
     pub fn as_str(&self) -> &str {
         &self.0
     }

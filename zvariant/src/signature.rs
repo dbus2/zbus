@@ -4,14 +4,18 @@ use crate::{Basic, Decode, Encode, EncodingFormat};
 use crate::{SharedData, SimpleDecode};
 use crate::{Variant, VariantError};
 
+/// String that identifies the type of an encoded value.
+///
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Signature(String);
 
 impl Signature {
+    /// Create a new `Signature`.
     pub fn new(signature: impl Into<Signature>) -> Self {
         signature.into()
     }
 
+    /// The signature as a string.
     pub fn as_str(&self) -> &str {
         &self.0
     }
