@@ -2,22 +2,95 @@ use crate::{Decode, Encode, EncodingFormat};
 use crate::{SharedData, Signature};
 use crate::{Variant, VariantError};
 
+/// An ordered collection of items of arbitrary types.
+///
+/// This is mostly just a way to support custom data structures. In the future, we'll hopefully
+/// provide a way to easily map a Rust struct into a `Structure` (probably through an [attribute
+/// macro]).
+///
+/// # Example
+///
+/// ```
+/// use core::convert::TryInto;
+///
+/// use zvariant::{Array, Decode, Encode, EncodingFormat};
+/// use zvariant::Structure;
+///
+/// // Create a complex structure
+/// let top_struct = Structure::new()
+///     // top-most simple fields
+///     .add_field(u8::max_value())
+///     .add_field(u32::max_value())
+///     // top-most inner structure
+///     .add_field(
+///         Structure::new()
+///             // 2nd level simple fields
+///             .add_field(i64::max_value())
+///             .add_field(true)
+///             .add_field(i64::max_value())
+///             // 2nd level array field
+///             .add_field(Array::from(vec!["Hello", "World"])),
+///     )
+///     // one more top-most simple field
+///     .add_field("hello");
+/// assert!(top_struct.signature() == "(yu(xbxas)s)");
+///
+/// // Encode it
+/// let format = EncodingFormat::default();
+/// let encoding = top_struct.encode(format);
+/// assert!(encoding.len() == 70);
+///
+/// // Then decode it
+/// let top_struct = Structure::decode(encoding, top_struct.signature(), format).unwrap();
+///
+/// // Now check if everything is as expected
+/// let fields = top_struct.fields();
+///
+/// // top-most simple fields
+/// assert!(*u8::from_variant(&fields[0]).unwrap() == u8::max_value());
+/// assert!(*u32::from_variant(&fields[1]).unwrap() == u32::max_value());
+/// assert!(String::from_variant(&fields[3]).unwrap() == "hello");
+///
+/// // top-most inner structure
+/// let inner = Structure::from_variant(&fields[2]).unwrap();
+/// let inner_fields = inner.fields();
+///
+/// // 2nd level simple fields
+/// assert!(*i64::from_variant(&inner_fields[0]).unwrap() == i64::max_value());
+/// assert!(*bool::from_variant(&inner_fields[1]).unwrap() == true);
+///
+/// // 2nd level array field
+/// let array = Array::from_variant(&inner_fields[3]).unwrap();
+/// let as_: Vec<&String> = array.try_into().unwrap();
+/// assert!(as_ == ["Hello", "World"]);
+/// ```
+///
+/// [attribute macro]: https://doc.rust-lang.org/reference/procedural-macros.html#attribute-macros
 #[derive(Debug, Clone, Default)]
 pub struct Structure(Vec<Variant>);
 
 impl Structure {
+    /// Get all the fields, consuming `self`.
     pub fn take_fields(self) -> Vec<Variant> {
         self.0
     }
 
+    /// Get a reference to all the fields of `self`.
     pub fn fields(&self) -> &[Variant] {
         &self.0
     }
 
+    /// Create a new `Structure`.
+    ///
+    /// Same as `Structure::default()`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Append `field` to `self`.
+    ///
+    /// This method returns `Self` so that you can use the builder pattern to create a complex
+    /// structure.
     pub fn add_field<T>(mut self, field: T) -> Self
     where
         T: Encode,
