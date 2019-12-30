@@ -4,28 +4,79 @@ use std::collections::HashMap;
 use crate::VariantError;
 use crate::{Array, Basic, Decode, DictEntry, Encode};
 
-// Since neither `From` trait nor `HashMap` is from this crate, we need this intermediate type.
-// We can't implement `Into` either as `Vec` isn't our type either.
+/// A dictionary as an [`Array`] of [`DictEntry`].
+///
+/// It would have been best to implement [`From`]`<`[`Vec`]`<`[`DictEntry`]`>>` for [`HashMap`]
+/// but since both [`From`] trait and [`HashMap`] are external to our crate, we need this
+/// intermediate type. We can't implement [`Into`] either as [`Vec`] isn't our type either.
+/// API is provided to transform this into, and from a [`HashMap`] though.
+///
+/// # Example:
+///
+/// ```
+/// use core::convert::{TryFrom, TryInto};
+/// use std::collections::HashMap;
+///
+/// use zvariant::{Array, Dict};
+/// use zvariant::{Decode, Encode, EncodingFormat};
+///
+/// // Create a Dict from a HashMap
+/// let mut map: HashMap<i64, &str> = HashMap::new();
+/// map.insert(1, "123");
+/// map.insert(2, "456");
+/// let dict: Dict = map.into();
+///
+/// // Then we turn it into an Array so we can encode it
+/// let array = Array::try_from(dict).unwrap();
+/// let format = EncodingFormat::default();
+/// let encoding = array.encode(format);
+/// assert!(encoding.len() == 40);
+///
+/// // Then we do the opposite
+/// let array = Array::decode(encoding, array.signature(), format).unwrap();
+/// let dict = Dict::try_from(array).unwrap();
+/// let map: HashMap<i64, String> = dict.try_into().unwrap();
+///
+/// // Check we got the right thing back
+/// assert!(map[&1] == "123");
+/// assert!(map[&2] == "456");
+/// ```
+///
+/// [`Array`]: struct.Array.html
+/// [`DictEntry`]: struct.DictEntry.html
+/// [`From`]: https://doc.rust-lang.org/std/convert/trait.From.html
+/// [`Into`]: https://doc.rust-lang.org/std/convert/trait.Into.html
+/// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
+/// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 #[derive(Default)]
 pub struct Dict(Vec<DictEntry>);
 
 impl Dict {
+    /// Create a new `Dict`.
+    ///
+    /// Same as calling `Dict::default()`.
     pub fn new() -> Self {
         Dict::default()
     }
 
+    /// Create a new `Dict` from `vec`.
+    ///
+    /// Same as calling `Dict::from(vec)`.
     pub fn new_from_vec(vec: Vec<DictEntry>) -> Self {
         Dict(vec)
     }
 
+    /// Get a reference to the underlying `Vec<DictEntry>`.
     pub fn inner(&self) -> &Vec<DictEntry> {
         &self.0
     }
 
+    /// Get a mutable reference to the underlying `Vec<DictEntry>`.
     pub fn inner_mut(&mut self) -> &mut Vec<DictEntry> {
         &mut self.0
     }
 
+    /// Unwraps the `Dict`, returning the underlying `Vec<DictEntry>`.
     pub fn take_inner(self) -> Vec<DictEntry> {
         self.0
     }
