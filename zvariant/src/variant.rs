@@ -5,6 +5,42 @@ use crate::{Array, DictEntry, Encode, EncodingFormat};
 use crate::{Decode, ObjectPath};
 use crate::{SharedData, Signature, SimpleDecode, Structure};
 
+/// A generic container, in the form of an enum that holds exactly one value of any of the other
+/// types.
+///
+/// Note that this type is defined by the [D-Bus specification] and as such, its encoding is not the
+/// same as that of the enclosed value. For encoding the enclosed value, use [`encode_value`]
+/// method instead of [`Encode`] API. Similarly, [`from_data`] and [`from_data_slice`] decode the
+/// encoded value and wraps it in a `Variant`.
+///
+/// # Example
+///
+/// ```
+/// use zvariant::{Decode, Encode, EncodingFormat, Variant};
+///
+/// // Create a Variant from an i16
+/// let v = i16::max_value().to_variant();
+/// assert!(*i16::from_variant(&v).unwrap() == i16::max_value());
+///
+/// // Encode it
+/// let format = EncodingFormat::default();
+/// let encoding = v.encode_value(format);
+/// assert!(encoding.len() == 2);
+///
+/// // Decode it back
+/// let v = Variant::from_data(encoding, v.value_signature(), format).unwrap();
+///
+/// // Check everything is as expected
+/// assert!(v.value_signature() == "n");
+/// assert!(v.signature() == "v");
+/// assert!(i16::take_from_variant(v).unwrap() == i16::max_value());
+/// ```
+///
+/// [D-Bus specification]: https://dbus.freedesktop.org/doc/dbus-specification.html
+/// [`encode_value`]: enum.Variant.html#method.encode_value
+/// [`Encode`]: trait.Encode.html
+/// [`from_data`]: enum.Variant.html#method.from_data
+/// [`from_data_slice`]: enum.Variant.html#method.from_data_slice
 #[derive(Debug, Clone)]
 pub enum Variant {
     // Simple types
@@ -29,6 +65,7 @@ pub enum Variant {
 }
 
 impl Variant {
+    /// Decode the first value in the encoded data and wrap it in a `Variant`.
     pub fn from_data(
         data: impl Into<SharedData>,
         signature: impl Into<Signature>,
@@ -41,6 +78,9 @@ impl Variant {
         Variant::from_data_slice(slice, signature, format)
     }
 
+    /// Decode the encoded value and wrap it in a `Variant`.
+    ///
+    /// `slice` must have exactly 1 encoded value in it.
     pub fn from_data_slice(
         slice: impl Into<SharedData>,
         signature: impl Into<Signature>,
@@ -84,6 +124,9 @@ impl Variant {
         }
     }
 
+    /// Same as [`Encode::encode`] but instead of encoding itself, encodes the enclosed value.
+    ///
+    ///[`Encode::encode`]: trait.Encode.html#method.encode
     // Only use for standalone or the first data in a message
     pub fn encode_value(&self, format: EncodingFormat) -> Vec<u8> {
         let mut bytes = vec![];
@@ -92,6 +135,9 @@ impl Variant {
         bytes
     }
 
+    /// Same as [`Encode::encode_into`] but instead of encoding itself, encodes the enclosed value.
+    ///
+    ///[`Encode::encode_into`]: trait.Encode.html#tymethod.encode_into
     pub fn encode_value_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
         match self {
             // Simple types
@@ -116,6 +162,7 @@ impl Variant {
         }
     }
 
+    /// The required padding for the enclosed value.
     pub(crate) fn value_padding(&self, n_bytes_before: usize, format: EncodingFormat) -> usize {
         match self {
             // Simple types
@@ -140,6 +187,7 @@ impl Variant {
         }
     }
 
+    /// Get the signature of the enclosed value.
     pub fn value_signature(&self) -> Signature {
         match self {
             Variant::U8(value) => value.signature(),
