@@ -32,7 +32,7 @@ impl MessageFields {
         &mut self.0
     }
 
-    pub fn take_inner(self) -> Vec<MessageField> {
+    pub fn into_inner(self) -> Vec<MessageField> {
         self.0
     }
 }
@@ -47,8 +47,8 @@ impl From<MessageFields> for Array {
     fn from(fields: MessageFields) -> Self {
         let mut v: Vec<Variant> = vec![];
 
-        for field in fields.take_inner() {
-            v.push(field.take_inner().to_variant());
+        for field in fields.into_inner() {
+            v.push(field.into_inner().to_variant());
         }
 
         Array::new_from_vec_unchecked(v)

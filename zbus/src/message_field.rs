@@ -100,7 +100,7 @@ impl MessageField {
         &mut self.0
     }
 
-    pub fn take_inner(self) -> Structure {
+    pub fn into_inner(self) -> Structure {
         self.0
     }
 

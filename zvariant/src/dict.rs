@@ -77,7 +77,7 @@ impl Dict {
     }
 
     /// Unwraps the `Dict`, returning the underlying `Vec<DictEntry>`.
-    pub fn take_inner(self) -> Vec<DictEntry> {
+    pub fn into_inner(self) -> Vec<DictEntry> {
         self.0
     }
 }

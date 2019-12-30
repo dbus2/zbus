@@ -103,7 +103,7 @@ impl Array {
         &self.0
     }
 
-    fn take_inner(self) -> Vec<Variant> {
+    fn into_inner(self) -> Vec<Variant> {
         self.0
     }
 }
@@ -307,7 +307,7 @@ where
     fn try_into(self) -> Result<Vec<T>, VariantError> {
         let mut v = vec![];
 
-        for value in self.take_inner() {
+        for value in self.into_inner() {
             v.push(T::take_from_variant(value)?);
         }
 
@@ -345,6 +345,6 @@ where
 
 impl From<crate::Dict> for Array {
     fn from(value: crate::Dict) -> Self {
-        Array::from(value.take_inner())
+        Array::from(value.into_inner())
     }
 }
