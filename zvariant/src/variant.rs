@@ -499,6 +499,12 @@ mod tests {
 
         assert!(String::from_variant(&fields[3]).unwrap() == "hello");
         assert!(String::is(&fields[3]));
+
+        let array = Array::from_variant(&fields[4]).unwrap();
+        let dict = Dict::try_from(array.clone()).unwrap();
+        let map: HashMap<&i64, &String> = (&dict).try_into().unwrap();
+        assert!(map[&1] == "123");
+        assert!(map[&2] == "456");
     }
 
     #[test]
