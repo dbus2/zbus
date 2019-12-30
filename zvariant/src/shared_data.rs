@@ -37,11 +37,11 @@ impl SharedData {
     pub fn subset(&self, index: usize, end: usize) -> Self {
         assert!(end > index);
         assert!(end != 0);
+        assert!(end <= self.end);
 
         let mut clone = self.clone();
         clone.position += index;
         clone.end = end + self.position;
-        assert!(self.end >= clone.end);
 
         clone
     }
