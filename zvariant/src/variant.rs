@@ -568,7 +568,7 @@ mod tests {
 
         // top-most structure
         let s = ar.remove(0);
-        let mut fields = s.take_fields();
+        let fields = s.fields();
 
         // top-most simple fields
         assert!(u8::is(&fields[0]));
@@ -579,8 +579,8 @@ mod tests {
         assert!(String::from_variant(&fields[3]).unwrap() == "hello");
 
         // top-most inner structure
-        let inner = Structure::take_from_variant(fields.remove(2)).unwrap();
-        let mut inner_fields = inner.take_fields();
+        let inner = Structure::from_variant(&fields[2]).unwrap();
+        let inner_fields = inner.fields();
 
         // 2nd level simple fields
         assert!(i64::is(&inner_fields[0]));
@@ -589,8 +589,8 @@ mod tests {
         assert!(*bool::from_variant(&inner_fields[1]).unwrap() == true);
 
         // 2nd level array field
-        let array = Array::take_from_variant(inner_fields.remove(3)).unwrap();
-        let as_: Vec<String> = array.try_into().unwrap();
+        let array = Array::from_variant(&inner_fields[3]).unwrap();
+        let as_: Vec<&String> = array.try_into().unwrap();
         assert!(as_ == ["Hello", "World"]);
     }
 
