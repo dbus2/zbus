@@ -16,7 +16,7 @@
 //!
 //! * [`Array`]: An unordered collection of items of the same type. API is provided to transform this into, and from a
 //! [`Vec`].
-//! * [`Structure`]: An ordered collection of items of different types.
+//! * [`Structure`]: An ordered collection of items of arbitrary types.
 //! * [`DictEntry`]: A dictionary entry as a key-value pair. The key must be a basic type.
 //! * [`Dict`]: A dictionary as an [`Array`] of [`DictEntry`]. API is provided to transform this into, and from a
 //! [`HashMap`].
