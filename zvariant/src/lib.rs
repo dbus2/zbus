@@ -114,8 +114,8 @@
 //! assert!(bool::is(&inner_fields[1]));
 //! assert!(*bool::from_variant(&inner_fields[1]).unwrap());
 //!
-//! assert!(String::from_variant(&fields[3]).unwrap() == "hello");
 //! assert!(String::is(&fields[3]));
+//! assert!(String::from_variant(&fields[3]).unwrap() == "hello");
 //! ```
 //! [D-Bus]: https://dbus.freedesktop.org/doc/dbus-specification.html
 //! [GVariant]: https://developer.gnome.org/glib/stable/glib-GVariant.html
