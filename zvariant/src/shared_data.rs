@@ -1,8 +1,35 @@
 use std::fmt;
 use std::rc::Rc;
 
-// More like shared slice since you can only increment position & decrement len.
-// This structure and its data is immutable.
+/// Immutable slice of an underlying byte buffer.
+///
+/// Cloning this is cheap as it does not clone the underlying buffer.
+///
+/// # Example
+///
+/// ```
+/// use zvariant::SharedData;
+///
+/// let data = SharedData::from((0u8..10).collect::<Vec<_>>());
+/// assert!(data.position() == 0);
+/// assert!(data.end() == 10);
+/// assert!(data.len() == 10);
+///
+/// let subset1 = data.subset(2, 8);
+/// assert!(subset1.position() == 2);
+/// assert!(subset1.end() == 8);
+/// assert!(subset1.len() == 6);
+///
+/// let subset3 = data.head(7);
+/// assert!(subset3.position() == 0);
+/// assert!(subset3.end() == 7);
+/// assert!(subset3.len() == 7);
+///
+/// let subset4 = subset3.tail(3);
+/// assert!(subset4.position() == 3);
+/// assert!(subset4.end() == 7);
+/// assert!(subset4.len() == 4);
+/// ```
 #[derive(Debug, Clone)]
 pub struct SharedData {
     data: Rc<Vec<u8>>,
@@ -30,10 +57,18 @@ impl fmt::Display for SharedData {
 
 #[allow(clippy::len_without_is_empty)]
 impl SharedData {
+    /// Create a new `SharedData`.
     pub fn new(data: Vec<u8>) -> Self {
         Self::from(data)
     }
 
+    /// Create a new slice of `self`, from `index` to (but excluding) `end`.
+    ///
+    /// # Panics
+    ///
+    /// * `index >= end`
+    /// * `end == 0`
+    /// * `end > self.end()`
     pub fn subset(&self, index: usize, end: usize) -> Self {
         assert!(end > index);
         assert!(end != 0);
@@ -46,26 +81,41 @@ impl SharedData {
         clone
     }
 
+    /// Create a new slice of `self`, containing the first `len` bytes.
+    ///
+    /// # Panics
+    ///
+    /// * `len == 0`
+    /// * `len > self.end()`
     pub fn head(&self, len: usize) -> Self {
         self.subset(0, len)
     }
 
+    /// Create a new slice of `self`, containing bytes after `index`.
+    ///
+    /// # Panics
+    ///
+    /// * `index >= self.end()`
     pub fn tail(&self, index: usize) -> Self {
         self.subset(index, self.len())
     }
 
+    /// Get the position of this slice in the whole underlying buffer.
     pub fn position(&self) -> usize {
         self.position
     }
 
+    /// Get the end of this slice in the whole underlying buffer.
     pub fn end(&self) -> usize {
         self.end
     }
 
+    /// Get the length of `self`.
     pub fn len(&self) -> usize {
         self.end - self.position
     }
 
+    /// Get the raw byte slice of `self`.
     pub fn bytes(&self) -> &[u8] {
         &self.data[self.position..self.end]
     }
@@ -83,6 +133,7 @@ impl From<Vec<u8>> for SharedData {
     }
 }
 
+/// Same as cloning
 impl From<&SharedData> for SharedData {
     fn from(value: &SharedData) -> Self {
         value.clone()
