@@ -132,7 +132,7 @@
 //! [`Dict`]: struct.Dict.html
 //! [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 //! [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
-//! [`Variant`]: struct.Variant.html
+//! [`Variant`]: enum.Variant.html
 
 mod basic;
 pub use basic::*;
