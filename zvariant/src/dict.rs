@@ -52,6 +52,24 @@ where
     }
 }
 
+impl<'a, K, V> TryInto<HashMap<&'a K, &'a V>> for &'a Dict
+where
+    K: Decode + Basic,
+    V: Decode,
+{
+    type Error = VariantError;
+
+    fn try_into(self) -> Result<HashMap<&'a K, &'a V>, VariantError> {
+        let mut map = HashMap::new();
+
+        for entry in &self.0 {
+            map.insert(entry.key()?, entry.value()?);
+        }
+
+        Ok(map)
+    }
+}
+
 // Conversion of Hashmap to Dict
 impl<K, V> From<HashMap<K, V>> for Dict
 where
