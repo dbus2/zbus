@@ -28,7 +28,7 @@ impl MessageFields {
         &self.0
     }
 
-    pub fn inner_mut(&mut self) -> &mut Vec<MessageField> {
+    pub fn get_mut(&mut self) -> &mut Vec<MessageField> {
         &mut self.0
     }
 
@@ -82,6 +82,6 @@ impl std::ops::Deref for MessageFields {
 
 impl std::ops::DerefMut for MessageFields {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner_mut()
+        self.get_mut()
     }
 }

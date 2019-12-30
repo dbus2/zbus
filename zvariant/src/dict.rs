@@ -72,7 +72,7 @@ impl Dict {
     }
 
     /// Get a mutable reference to the underlying `Vec<DictEntry>`.
-    pub fn inner_mut(&mut self) -> &mut Vec<DictEntry> {
+    pub fn get_mut(&mut self) -> &mut Vec<DictEntry> {
         &mut self.0
     }
 

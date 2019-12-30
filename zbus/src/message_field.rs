@@ -96,7 +96,7 @@ impl MessageField {
         &self.0
     }
 
-    pub fn inner_mut(&mut self) -> &mut Structure {
+    pub fn get_mut(&mut self) -> &mut Structure {
         &mut self.0
     }
 
@@ -187,7 +187,7 @@ impl std::ops::Deref for MessageField {
 
 impl std::ops::DerefMut for MessageField {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner_mut()
+        self.get_mut()
     }
 }
 
