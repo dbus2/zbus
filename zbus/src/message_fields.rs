@@ -24,7 +24,7 @@ impl MessageFields {
         self.0.push(field);
     }
 
-    pub fn inner(&self) -> &Vec<MessageField> {
+    pub fn get(&self) -> &Vec<MessageField> {
         &self.0
     }
 
@@ -76,7 +76,7 @@ impl std::ops::Deref for MessageFields {
     type Target = Vec<MessageField>;
 
     fn deref(&self) -> &Self::Target {
-        self.inner()
+        self.get()
     }
 }
 

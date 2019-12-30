@@ -92,7 +92,7 @@ impl MessageField {
         Ok(Variant::from_variant(&self.0.fields()[1])?)
     }
 
-    pub fn inner(&self) -> &Structure {
+    pub fn get(&self) -> &Structure {
         &self.0
     }
 
@@ -181,7 +181,7 @@ impl std::ops::Deref for MessageField {
     type Target = Structure;
 
     fn deref(&self) -> &Self::Target {
-        self.inner()
+        self.get()
     }
 }
 

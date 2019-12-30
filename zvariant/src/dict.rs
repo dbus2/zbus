@@ -67,7 +67,7 @@ impl Dict {
     }
 
     /// Get a reference to the underlying `Vec<DictEntry>`.
-    pub fn inner(&self) -> &Vec<DictEntry> {
+    pub fn get(&self) -> &Vec<DictEntry> {
         &self.0
     }
 
@@ -160,7 +160,7 @@ mod tests {
         hash.insert(3, "789");
 
         let dict: Dict = hash.into();
-        for entry in dict.inner() {
+        for entry in dict.get() {
             match entry.key::<i64>().unwrap() {
                 1 => assert!(entry.value::<String>().unwrap() == "123"),
                 2 => assert!(entry.value::<String>().unwrap() == "456"),

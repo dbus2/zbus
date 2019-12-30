@@ -99,7 +99,7 @@ impl Array {
         T::from_variant(&self.0[index])
     }
 
-    fn inner(&self) -> &Vec<Variant> {
+    fn get(&self) -> &Vec<Variant> {
         &self.0
     }
 
@@ -122,7 +122,7 @@ impl Encode for Array {
         let mut first_element = true;
         let mut first_padding = 0;
 
-        for element in self.inner() {
+        for element in self.get() {
             if first_element {
                 // Length we report doesn't include padding for the first element
                 first_padding = element.value_padding(bytes.len(), format);
@@ -139,7 +139,7 @@ impl Encode for Array {
     }
 
     fn signature(&self) -> Signature {
-        let signature = format!("a{}", self.inner()[0].value_signature().as_str());
+        let signature = format!("a{}", self.get()[0].value_signature().as_str());
 
         Signature::from(signature)
     }
@@ -324,7 +324,7 @@ where
     fn try_into(self) -> Result<Vec<&'a T>, VariantError> {
         let mut v = vec![];
 
-        for value in self.inner() {
+        for value in self.get() {
             v.push(T::from_variant(value)?);
         }
 

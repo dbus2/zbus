@@ -226,7 +226,7 @@ impl Message {
     }
 
     pub fn body_signature(&self) -> Result<Signature, MessageError> {
-        for field in self.fields()?.inner() {
+        for field in self.fields()?.get() {
             if field.code()? == MessageFieldCode::Signature {
                 let value = field.value()?;
                 let sig = Signature::from_variant(value)?;
