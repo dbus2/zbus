@@ -1,6 +1,15 @@
 use crate::{Decode, EncodingFormat, SharedData, VariantError};
 
+/// Simpler sibling of [`Decode`].
+///
+/// This trait is implemented by all the types (mostly basic) whose signature is always the same
+/// regardless of their actual value.
+///
+/// [`Decode`]: trait.Decode.html
 pub trait SimpleDecode: Decode {
+    /// Same as [`Decode::slice_data`], except you don't have to pass any signature to it.
+    ///
+    /// [`Decode::slice_data`]: trait.Decode.html#method.slice_data
     fn slice_data_simple(
         data: impl Into<SharedData>,
         format: EncodingFormat,
@@ -11,6 +20,9 @@ pub trait SimpleDecode: Decode {
         Self::slice_data(data, Self::SIGNATURE_STR, format)
     }
 
+    /// Same as [`Decode::decode`], except you don't have to pass any signature to it.
+    ///
+    /// [`Decode::decode`]: trait.Decode.html#method.decode
     fn decode_simple(
         data: impl Into<SharedData>,
         format: EncodingFormat,
