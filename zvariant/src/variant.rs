@@ -116,7 +116,7 @@ impl Variant {
         }
     }
 
-    pub fn value_padding(&self, n_bytes_before: usize, format: EncodingFormat) -> usize {
+    pub(crate) fn value_padding(&self, n_bytes_before: usize, format: EncodingFormat) -> usize {
         match self {
             // Simple types
             Variant::U8(_) => u8::padding(n_bytes_before, format),
