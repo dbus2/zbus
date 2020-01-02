@@ -61,18 +61,20 @@ impl Array {
 
     /// Adds the given `element` to `self`.
     ///
+    /// This method takes ownership of `self` and returns Self` so that you can use the builder pattern to easily
+    /// construct an array.
+    ///
     /// # Example:
     ///
     /// ```
     /// use zvariant::{Array, Decode, Variant};
     ///
-    /// let mut array = Array::new();
-    /// array.add_element(42u8).unwrap();
+    /// let array = Array::new()
+    ///     .add_element(42u8).unwrap()
+    ///     .add_element(45u8).unwrap();
     /// assert!(array.add_element("hi").is_err());
-    /// array.add_element(45u8).unwrap();
-    /// assert!(array.add_element(42u32).is_err());
     /// ```
-    pub fn add_element<T: Encode>(&mut self, element: T) -> Result<(), VariantError> {
+    pub fn add_element<T: Encode>(mut self, element: T) -> Result<Self, VariantError> {
         // Ensure we only add elements of the same type
         if self.0.last().map(|v| !T::is(v)).unwrap_or(false) {
             return Err(VariantError::IncorrectType);
@@ -80,7 +82,7 @@ impl Array {
 
         self.0.push(element.to_variant());
 
-        Ok(())
+        Ok(self)
     }
 
     /// Get the element at the given index.
