@@ -71,7 +71,7 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
     type SerializeStructVariant = StructSerializer<'a, 'b>;
 
     fn serialize_bool(self, v: bool) -> Result<()> {
-        self.prep_serialize_basic::<u8>()?;
+        self.prep_serialize_basic::<bool>()?;
         self.output.extend(&(v as u32).to_ne_bytes());
 
         Ok(())
