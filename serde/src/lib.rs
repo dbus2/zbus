@@ -97,22 +97,27 @@ mod tests {
 
     #[test]
     fn array_variant() {
-        let array = [77u8, 88];
+        // Let's use D-Bus/GVariant terms
+
+        //
+        // Array of u8
+        //
+        let ay = [77u8, 88];
         // Array itself is treated like a tuple by serde & that translates to a structure in our
         // case so gotta make it a slice for serde to treat it as seq type.
-        let (encoded, s) = to_bytes(&array[..], EncodingFormat::DBus).unwrap();
+        let (encoded, s) = to_bytes(&ay[..], EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 6);
         assert!(s.as_str() == "ay");
 
         // As Variant
         // FIXME: Provide a more direct translation
-        let v = Variant::from(Array::from(&array[..]));
+        let v = Variant::from(Array::from(&ay[..]));
         let (encoded, s) = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 10);
         assert!(s.as_str() == "v");
 
         // Now try as Vec
-        let vec = array.to_vec();
+        let vec = ay.to_vec();
         let (encoded, s) = to_bytes(&vec, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 6);
         assert!(s.as_str() == "ay");
@@ -122,5 +127,41 @@ mod tests {
         let (encoded, s) = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 10);
         assert!(s.as_str() == "v");
+
+        //
+        // Array of strings
+        //
+        // Can't use 'as' as it's a keyword
+        let as_ = ["Hello", "World", "Now", "Bye!"];
+        let (encoded, s) = to_bytes(&as_[..], EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 45);
+        assert!(s.as_str() == "as");
+
+        // As Variant
+        // FIXME: Provide a more direct translation
+        let v = Variant::from(Array::from(&as_[..]));
+        let (encoded, s) = to_bytes(&v, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 49);
+        assert!(s.as_str() == "v");
+
+        // Array of Struct, which in turn containin an Array (We gotta go deeper!)
+        let ar = [(
+            // top-most simple fields
+            u8::max_value(),
+            u32::max_value(),
+            (
+                // 2nd level simple fields
+                i64::max_value(),
+                true,
+                i64::max_value(),
+                // 2nd level array field
+                vec!["Hello", "World"],
+            ),
+            // one more top-most simple field
+            "hello",
+        )];
+        let (encoded, s) = to_bytes(&ar[..], EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 78);
+        assert!(dbg!(s.as_str()) == "a(yu(xbxas)s)");
     }
 }
