@@ -11,8 +11,7 @@ pub struct Serializer<'a> {
     // FIXME: Endianness needs to be configurable too
     pub(self) output: &'a mut Vec<u8>,
 
-    // FIXME: Use ArrayString
-    pub(self) signature: &'a mut String,
+    pub(self) last_padding: usize,
     // Used when serialising `Signature` and `ObjectPath`.
     custom_str_signature: Option<char>,
 }
@@ -23,6 +22,7 @@ impl<'a> Serializer<'a> {
         if padding > 0 {
             self.output.resize(self.output.len() + padding, 0);
         }
+        self.last_padding = padding;
 
         return padding;
     }
@@ -31,7 +31,6 @@ impl<'a> Serializer<'a> {
     where
         T: Basic,
     {
-        self.signature.push(T::SIGNATURE_CHAR);
         self.add_padding(T::ALIGNMENT);
 
         Ok(())
@@ -39,23 +38,19 @@ impl<'a> Serializer<'a> {
 }
 
 // FIXME: to_write() would be better, then to_bytes() can be a think wrapper over it
-pub fn to_bytes<T: ?Sized>(
-    value: &T,
-    format: EncodingFormat,
-) -> Result<(Vec<u8>, Signature<'static>)>
+pub fn to_bytes<T: ?Sized>(value: &T, format: EncodingFormat) -> Result<Vec<u8>>
 where
     T: Serialize,
 {
     let mut output = vec![];
-    let mut signature = String::with_capacity(512);
     let mut serializer = Serializer {
         format,
         output: &mut output,
-        signature: &mut signature,
+        last_padding: 0,
         custom_str_signature: None,
     };
     value.serialize(&mut serializer)?;
-    Ok((output, Signature::from(signature)))
+    Ok(output)
 }
 
 impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
@@ -153,16 +148,13 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
     fn serialize_str(self, v: &str) -> Result<()> {
         match self.custom_str_signature.take() {
             Some(Signature::SIGNATURE_CHAR) => {
-                self.signature.push(Signature::SIGNATURE_CHAR);
                 self.output.extend(&usize_to_u8(v.len()).to_ne_bytes());
             }
             Some(ObjectPath::SIGNATURE_CHAR) => {
-                self.signature.push(ObjectPath::SIGNATURE_CHAR);
                 self.add_padding(<&str>::ALIGNMENT);
                 self.output.extend(&usize_to_u32(v.len()).to_ne_bytes());
             }
             _ => {
-                self.signature.push(<&str>::SIGNATURE_CHAR);
                 self.add_padding(<&str>::ALIGNMENT);
                 self.output.extend(&usize_to_u32(v.len()).to_ne_bytes());
             }
@@ -223,8 +215,6 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
             self.custom_str_signature = Some(Signature::SIGNATURE_CHAR);
         } else if name == "zvariant::ObjectPath" {
             self.custom_str_signature = Some(ObjectPath::SIGNATURE_CHAR);
-        } else {
-            println!("serializing s");
         }
         value.serialize(self)?;
 
@@ -247,17 +237,17 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-        self.signature.push(ARRAY_SIGNATURE_CHAR);
         self.add_padding(ARRAY_ALIGNMENT);
         // Length in bytes (unfortunately not the same as len passed to us here) which we initially
         // set to 0.
         self.output.extend(&0u32.to_ne_bytes());
 
         let start = self.output.len();
+        let padding = self.last_padding;
         Ok(SeqSerializer {
             serializer: self,
             start,
-            element_signature_pos: 0,
+            padding,
             first_padding: 0,
         })
     }
@@ -289,20 +279,11 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
     }
 
     fn serialize_struct(self, name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-        let signature_pos = match name {
-            "zvariant::Variant" => Some(self.signature.len()),
-            _ => {
-                self.signature.push(STRUCT_SIG_START_CHAR);
-                self.add_padding(STRUCT_ALIGNMENT);
+        if name != "zvariant::Variant" {
+            self.add_padding(STRUCT_ALIGNMENT);
+        }
 
-                None
-            }
-        };
-
-        Ok(StructSerializer {
-            serializer: self,
-            signature_pos,
-        })
+        Ok(StructSerializer { serializer: self })
     }
 
     fn serialize_struct_variant(
@@ -320,7 +301,9 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
 pub struct SeqSerializer<'a, 'b> {
     serializer: &'b mut Serializer<'a>,
     start: usize,
-    element_signature_pos: usize,
+    // Own padding
+    padding: usize,
+    // First element's padding
     first_padding: usize,
 }
 
@@ -331,6 +314,8 @@ impl<'a, 'b> SeqSerializer<'a, 'b> {
         let len = usize_to_u32(output.len() - self.start - self.first_padding);
         let len_pos = self.start - 4;
         byteorder::NativeEndian::write_u32(&mut output[len_pos..self.start], len);
+
+        self.serializer.last_padding = self.padding;
 
         Ok(())
     }
@@ -349,26 +334,11 @@ impl<'a, 'b> ser::SerializeSeq for SeqSerializer<'a, 'b> {
     {
         if self.start == self.serializer.output.len() {
             // First element
-            self.element_signature_pos = self.serializer.signature.len();
             value.serialize(&mut *self.serializer)?;
-            let first_element_sig_char = self
-                .serializer
-                .signature
-                .chars()
-                .nth(self.element_signature_pos)
-                .ok_or(Error::InsufficientData)?;
-            self.first_padding = padding_for_signature_char(
-                self.start,
-                first_element_sig_char,
-                self.serializer.format,
-            );
+            self.first_padding = self.serializer.last_padding;
 
             Ok(())
         } else {
-            // The signature needs to be rewinded before encoding each element.
-            self.serializer
-                .signature
-                .drain(self.element_signature_pos..);
             value.serialize(&mut *self.serializer)
         }
     }
@@ -381,23 +351,6 @@ impl<'a, 'b> ser::SerializeSeq for SeqSerializer<'a, 'b> {
 // TODO: Put this in a separate file
 pub struct StructSerializer<'a, 'b> {
     serializer: &'b mut Serializer<'a>,
-    // Only used for `Variant` serialization.
-    signature_pos: Option<usize>,
-}
-
-impl<'a, 'b> StructSerializer<'a, 'b> {
-    pub(self) fn end_struct(self) -> Result<()> {
-        if let Some(signature_pos) = self.signature_pos {
-            // For `Variant` we only want 'v' as the signature
-            self.serializer
-                .signature
-                .replace_range(signature_pos.., VARIANT_SIGNATURE_STR);
-        } else {
-            self.serializer.signature.push(STRUCT_SIG_END_CHAR);
-        }
-
-        Ok(())
-    }
 }
 
 impl<'a, 'b> ser::SerializeTuple for StructSerializer<'a, 'b> {
@@ -412,7 +365,7 @@ impl<'a, 'b> ser::SerializeTuple for StructSerializer<'a, 'b> {
     }
 
     fn end(self) -> Result<()> {
-        self.end_struct()
+        Ok(())
     }
 }
 
@@ -428,7 +381,7 @@ impl<'a, 'b> ser::SerializeTupleStruct for StructSerializer<'a, 'b> {
     }
 
     fn end(self) -> Result<()> {
-        self.end_struct()
+        Ok(())
     }
 }
 
@@ -444,7 +397,7 @@ impl<'a, 'b> ser::SerializeTupleVariant for StructSerializer<'a, 'b> {
     }
 
     fn end(self) -> Result<()> {
-        self.end_struct()
+        Ok(())
     }
 }
 
@@ -465,26 +418,11 @@ impl<'a, 'b> ser::SerializeMap for SeqSerializer<'a, 'b> {
     {
         if self.start == self.serializer.output.len() {
             // First element
-            self.element_signature_pos = self.serializer.signature.len();
             key.serialize(&mut *self.serializer)?;
-            let first_element_sig_char = self
-                .serializer
-                .signature
-                .chars()
-                .nth(self.element_signature_pos)
-                .ok_or(Error::InsufficientData)?;
-            self.first_padding = padding_for_signature_char(
-                self.start,
-                first_element_sig_char,
-                self.serializer.format,
-            );
+            self.first_padding = self.serializer.last_padding;
 
             Ok(())
         } else {
-            // The signature needs to be rewinded before encoding each element.
-            self.serializer
-                .signature
-                .drain(self.element_signature_pos..);
             key.serialize(&mut *self.serializer)
         }
     }
@@ -497,7 +435,6 @@ impl<'a, 'b> ser::SerializeMap for SeqSerializer<'a, 'b> {
     }
 
     fn end(self) -> Result<()> {
-        self.serializer.signature.push(DICT_ENTRY_SIG_END_CHAR);
         self.end_seq()
     }
 }
@@ -514,7 +451,7 @@ impl<'a, 'b> ser::SerializeStruct for StructSerializer<'a, 'b> {
     }
 
     fn end(self) -> Result<()> {
-        self.end_struct()
+        Ok(())
     }
 }
 
@@ -530,6 +467,6 @@ impl<'a, 'b> ser::SerializeStructVariant for StructSerializer<'a, 'b> {
     }
 
     fn end(self) -> Result<()> {
-        self.end_struct()
+        Ok(())
     }
 }
