@@ -33,7 +33,7 @@ pub use variant_value::*;
 
 mod utils;
 
-// TODO: Tests for all *serde* types
+// TODO: Tests for all *serde* types and import all existing ones from zvariant
 
 #[cfg(test)]
 mod tests {
