@@ -48,54 +48,8 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////
 
-impl<V> VariantValue for [V; 0]
-where
-    V: VariantValue,
-{
-    #[inline]
-    fn signature() -> Signature<'static> {
-        let mut sig = String::with_capacity(255);
-        sig.push(STRUCT_SIG_START_CHAR);
-        sig.push_str(V::signature().as_str());
-        sig.push(STRUCT_SIG_END_CHAR);
-
-        Signature::from(sig)
-    }
-}
-
-// Arrays are serialized as tupples by Serde so we gotta do the same.
-macro_rules! array_impls {
-    ($($len:tt)+) => {
-        $(
-            impl<V> VariantValue for [V; $len]
-            where
-                V: VariantValue,
-            {
-                #[inline]
-                fn signature() -> Signature<'static> {
-                    let mut sig = String::with_capacity(255);
-                    sig.push(STRUCT_SIG_START_CHAR);
-                    let field_sig = V::signature();
-                    for _i in 0..$len {
-                        sig.push_str(field_sig.as_str());
-                    }
-                    sig.push(STRUCT_SIG_END_CHAR);
-
-                    Signature::from(sig)
-                }
-            }
-        )+
-    }
-}
-
-array_impls! {
-    01 02 03 04 05 06 07 08 09 10
-    11 12 13 14 15 16 17 18 19 20
-    21 22 23 24 25 26 27 28 29 30
-    31 32
-}
-
-////////////////////////////////////////////////////////////////////////////////
+// Arrays are serialized as tupples by Serde and that's strange. Let's just not support it at all.
+// TODO: Mention this fact in the module docs.
 
 macro_rules! tuple_impls {
     ($($len:expr => ($($n:tt $name:ident)+))+) => {
