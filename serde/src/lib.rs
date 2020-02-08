@@ -105,8 +105,7 @@ mod tests {
         assert!(encoded.len() == 6);
 
         // As Variant
-        // FIXME: Provide a more direct translation
-        let v = Variant::from(Array::from(&ay[..]));
+        let v = Variant::from(&ay[..]);
         assert!(v.value_signature().as_str() == "ay");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 10);
@@ -136,8 +135,7 @@ mod tests {
         assert!(encoded.len() == 45);
 
         // As Variant
-        // FIXME: Provide a more direct translation
-        let v = Variant::from(Array::from(&as_[..]));
+        let v = Variant::from(&as_[..]);
         assert!(v.value_signature().as_str() == "as");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 49);
