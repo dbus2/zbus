@@ -4,6 +4,9 @@ use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 use crate::{Basic, Signature, Variant};
 
+// TODO: This type can't be used indepentently now that Serializer requires VariantValue trait and
+// we can't implement VariantValue on this type since signature is dynamic.
+
 /// A dictionary entry as a key-value pair.
 ///
 /// This is not very useful on its own but since D-Bus defines it as its own type, a hashmap in
