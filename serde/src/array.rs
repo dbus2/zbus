@@ -52,7 +52,7 @@ where
 
 impl<'a, V> From<&[V]> for Array<'a>
 where
-    V: VariantValue + Into<Variant<'a>>,
+    V: VariantValue + Into<Variant<'a>> + Clone,
 {
     fn from(values: &[V]) -> Self {
         let element_signature = V::signature();
@@ -70,7 +70,7 @@ where
 
 impl<'a, V> From<&Vec<V>> for Array<'a>
 where
-    V: VariantValue + Into<Variant<'a>>,
+    V: VariantValue + Into<Variant<'a>> + Clone,
 {
     fn from(values: &Vec<V>) -> Self {
         Self::from(&values[..])

@@ -261,7 +261,7 @@ impl<'a> From<Structure<'a>> for Variant<'a> {
 
 impl<'a, V> From<&[V]> for Variant<'a>
 where
-    V: VariantValue + Into<Variant<'a>>,
+    V: VariantValue + Into<Variant<'a>> + Clone,
 {
     fn from(values: &[V]) -> Self {
         Variant::Array(Array::from(values))

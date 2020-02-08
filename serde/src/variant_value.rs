@@ -3,7 +3,7 @@ use crate::Signature;
 
 // TODO:
 // * proc derive macro to implement VariantValue for structures
-pub trait VariantValue: Clone {
+pub trait VariantValue {
     /// Get the signature for the implementing type.
     ///
     /// # Example
