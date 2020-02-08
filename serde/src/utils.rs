@@ -1,4 +1,4 @@
-use crate::{Basic, EncodingFormat, ObjectPath, Signature};
+use crate::{Basic, EncodingFormat, Error, ObjectPath, Signature};
 
 pub(crate) const ARRAY_SIGNATURE_CHAR: char = 'a';
 pub(crate) const ARRAY_ALIGNMENT: usize = 4;
@@ -36,33 +36,109 @@ pub(crate) fn usize_to_u8(value: usize) -> u8 {
     value as u8
 }
 
-pub(crate) fn padding_for_signature_char(
-    n_bytes_before: usize,
-    signature_char: char,
-    _format: EncodingFormat,
-) -> usize {
+pub(crate) fn alignment_for_signature_char(signature_char: char, _format: EncodingFormat) -> usize {
     match signature_char {
         // FIXME: There has to be a shorter way to do this
-        u8::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, u8::ALIGNMENT),
-        bool::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, bool::ALIGNMENT),
-        i16::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, i16::ALIGNMENT),
-        u16::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, u16::ALIGNMENT),
-        i32::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, i32::ALIGNMENT),
-        u32::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, u32::ALIGNMENT),
-        i64::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, i64::ALIGNMENT),
-        u64::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, u64::ALIGNMENT),
-        f64::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, f64::ALIGNMENT),
-        <&str>::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, <&str>::ALIGNMENT),
-        ObjectPath::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, ObjectPath::ALIGNMENT),
-        Signature::SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, Signature::ALIGNMENT),
-        VARIANT_SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, VARIANT_ALIGNMENT),
-        ARRAY_SIGNATURE_CHAR => padding_for_n_bytes(n_bytes_before, ARRAY_ALIGNMENT),
-        STRUCT_SIG_START_CHAR => padding_for_n_bytes(n_bytes_before, STRUCT_ALIGNMENT),
-        DICT_ENTRY_SIG_START_CHAR => padding_for_n_bytes(n_bytes_before, DICT_ENTRY_ALIGNMENT),
+        u8::SIGNATURE_CHAR => u8::ALIGNMENT,
+        bool::SIGNATURE_CHAR => bool::ALIGNMENT,
+        i16::SIGNATURE_CHAR => i16::ALIGNMENT,
+        u16::SIGNATURE_CHAR => u16::ALIGNMENT,
+        i32::SIGNATURE_CHAR => i32::ALIGNMENT,
+        u32::SIGNATURE_CHAR => u32::ALIGNMENT,
+        i64::SIGNATURE_CHAR => i64::ALIGNMENT,
+        u64::SIGNATURE_CHAR => u64::ALIGNMENT,
+        f64::SIGNATURE_CHAR => f64::ALIGNMENT,
+        <&str>::SIGNATURE_CHAR => <&str>::ALIGNMENT,
+        ObjectPath::SIGNATURE_CHAR => ObjectPath::ALIGNMENT,
+        Signature::SIGNATURE_CHAR => Signature::ALIGNMENT,
+        VARIANT_SIGNATURE_CHAR => VARIANT_ALIGNMENT,
+        ARRAY_SIGNATURE_CHAR => ARRAY_ALIGNMENT,
+        STRUCT_SIG_START_CHAR => STRUCT_ALIGNMENT,
+        DICT_ENTRY_SIG_START_CHAR => DICT_ENTRY_ALIGNMENT,
         _ => {
             println!("WARNING: Unsupported signature: {}", signature_char);
 
             0
         }
     }
+}
+
+pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
+    match signature.chars().next().ok_or(Error::InsufficientData)? {
+        // FIXME: There has to be a shorter way to do this
+        u8::SIGNATURE_CHAR
+        | bool::SIGNATURE_CHAR
+        | i16::SIGNATURE_CHAR
+        | u16::SIGNATURE_CHAR
+        | i32::SIGNATURE_CHAR
+        | u32::SIGNATURE_CHAR
+        | i64::SIGNATURE_CHAR
+        | u64::SIGNATURE_CHAR
+        | f64::SIGNATURE_CHAR
+        | <&str>::SIGNATURE_CHAR
+        | ObjectPath::SIGNATURE_CHAR
+        | Signature::SIGNATURE_CHAR
+        | VARIANT_SIGNATURE_CHAR => Ok(Signature::from(&signature[0..1])),
+        ARRAY_SIGNATURE_CHAR => slice_array_signature(signature),
+        STRUCT_SIG_START_CHAR => slice_structure_signature(signature),
+        DICT_ENTRY_SIG_START_CHAR => slice_dict_entry_signature(signature),
+        _ => Err(Error::UnsupportedType(String::from(signature.to_string()))),
+    }
+}
+
+fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
+    if signature.len() < 2 {
+        return Err(Error::InsufficientData);
+    }
+    if !signature.starts_with(ARRAY_SIGNATURE_CHAR) {
+        return Err(Error::IncorrectType);
+    }
+
+    // There should be a valid complete signature after 'a' but not more than 1
+    let slice_len = slice_signature(&Signature::from(&signature[1..]))?.len();
+
+    Ok(Signature::from(&signature[0..=slice_len]))
+}
+
+fn slice_structure_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
+    if !signature.starts_with(STRUCT_SIG_START_CHAR) {
+        return Err(Error::IncorrectType);
+    }
+
+    let mut open_braces = 1;
+    let mut i = 1;
+    while i < signature.len() {
+        if &signature[i..=i] == STRUCT_SIG_END_STR {
+            open_braces -= 1;
+
+            if open_braces == 0 {
+                break;
+            }
+        } else if &signature[i..=i] == STRUCT_SIG_START_STR {
+            open_braces += 1;
+        }
+
+        i += 1;
+    }
+    if &signature[i..=i] != STRUCT_SIG_END_STR {
+        return Err(Error::IncorrectType);
+    }
+
+    Ok(Signature::from(&signature[0..=i]))
+}
+
+fn slice_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
+    if !signature.starts_with(DICT_ENTRY_SIG_START_CHAR) {
+        return Err(Error::IncorrectType);
+    }
+    if signature.len() < 4 {
+        return Err(Error::InsufficientData);
+    }
+
+    // Key's signature will always be just 1 character so no need to slice for that.
+    // There should be one valid complete signature for value.
+    let slice_len = slice_signature(&Signature::from(&signature[2..]))?.len();
+
+    // signature of value + `{` + 1 char of the key signature + `}`
+    Ok((&signature[0..slice_len + 3]).into())
 }
