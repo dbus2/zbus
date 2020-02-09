@@ -271,6 +271,15 @@ where
     }
 }
 
+impl<'a, V> From<Vec<V>> for Variant<'a>
+where
+    V: VariantValue + Into<Variant<'a>> + Clone,
+{
+    fn from(values: Vec<V>) -> Self {
+        Variant::Array(Array::from(values))
+    }
+}
+
 //
 // Conversions from `Variant` to encodable types
 //
