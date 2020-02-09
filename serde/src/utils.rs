@@ -4,14 +4,14 @@ pub(crate) const ARRAY_SIGNATURE_CHAR: char = 'a';
 pub(crate) const ARRAY_ALIGNMENT: usize = 4;
 pub(crate) const STRUCT_SIG_START_CHAR: char = '(';
 pub(crate) const STRUCT_SIG_END_CHAR: char = ')';
-pub(crate) const STRUCT_SIG_START_STR: &'static str = "(";
-pub(crate) const STRUCT_SIG_END_STR: &'static str = ")";
+pub(crate) const STRUCT_SIG_START_STR: &str = "(";
+pub(crate) const STRUCT_SIG_END_STR: &str = ")";
 pub(crate) const STRUCT_ALIGNMENT: usize = 8;
 pub(crate) const DICT_ENTRY_SIG_START_CHAR: char = '{';
 pub(crate) const DICT_ENTRY_SIG_END_CHAR: char = '}';
 pub(crate) const DICT_ENTRY_ALIGNMENT: usize = 8;
 pub(crate) const VARIANT_SIGNATURE_CHAR: char = 'v';
-pub(crate) const VARIANT_SIGNATURE_STR: &'static str = "v";
+pub(crate) const VARIANT_SIGNATURE_STR: &str = "v";
 pub(crate) const VARIANT_ALIGNMENT: usize = 1;
 
 pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
@@ -82,7 +82,7 @@ pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
         ARRAY_SIGNATURE_CHAR => slice_array_signature(signature),
         STRUCT_SIG_START_CHAR => slice_structure_signature(signature),
         DICT_ENTRY_SIG_START_CHAR => slice_dict_entry_signature(signature),
-        _ => Err(Error::UnsupportedType(String::from(signature.to_string()))),
+        _ => Err(Error::UnsupportedType(signature.to_string())),
     }
 }
 

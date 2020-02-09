@@ -279,7 +279,7 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
 
         let next_signature_char = self
             .next_signature_char()
-            .ok_or(Error::InvalidSignature(self.signature.clone()))?;
+            .ok_or_else(|| Error::InvalidSignature(self.signature.clone()))?;
         let alignment = alignment_for_signature_char(next_signature_char, self.format);
         // D-Bus expects us to add padding for the first element even when there is no first
         // element (i-e empty array) so we add padding already.
@@ -380,7 +380,7 @@ impl<'a, 'b> SeqSerializer<'a, 'b> {
         }
 
         // Set size of array in bytes
-        let output = &mut (&mut *self.serializer).output;
+        let output = &mut self.serializer.output;
         let len = usize_to_u32(output.len() - self.start - self.first_padding);
         let len_pos = self.start - 4;
         byteorder::NativeEndian::write_u32(&mut output[len_pos..self.start], len);
