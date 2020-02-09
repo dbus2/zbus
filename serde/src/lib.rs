@@ -152,7 +152,7 @@ mod tests {
                 true,
                 i64::max_value(),
                 // 2nd level array field
-                vec!["Hello", "World"],
+                &["Hello", "World"][..],
             ),
             // one more top-most simple field
             "hello",

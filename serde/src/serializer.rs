@@ -183,7 +183,7 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
                 self.output.extend(&usize_to_u32(v.len()).to_ne_bytes());
             }
             Some(c) if c == Signature::SIGNATURE_CHAR || c == VARIANT_SIGNATURE_CHAR => {
-                self.output.extend(&usize_to_u8(v.len()).to_ne_bytes());
+                self.output.extend(&[usize_to_u8(v.len())]);
 
                 if c == VARIANT_SIGNATURE_CHAR {
                     // This is signature of a variant value that's next to be serialized so
