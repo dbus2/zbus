@@ -159,5 +159,11 @@ mod tests {
         )];
         let encoded = to_bytes(&ar[..], EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 78);
+
+        // As Variant
+        let v = Variant::from(&ar[..]);
+        assert!(v.value_signature().as_str() == "a(yu(xbxas)s)");
+        let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
+        assert!(dbg!(encoded.len()) == 94);
     }
 }
