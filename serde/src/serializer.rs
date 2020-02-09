@@ -41,7 +41,7 @@ impl<'a> Serializer<'a> {
             self.output.resize(self.output.len() + padding, 0);
         }
 
-        return padding;
+        padding
     }
 
     fn prep_serialize_basic<T>(&mut self) -> Result<()>
