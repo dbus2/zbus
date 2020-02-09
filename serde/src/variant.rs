@@ -253,9 +253,12 @@ impl<'a> From<DictEntry<'a, 'a>> for Variant<'a> {
     }
 }
 
-impl<'a> From<Structure<'a>> for Variant<'a> {
-    fn from(value: Structure<'a>) -> Self {
-        Variant::Structure(value)
+impl<'a, S> From<S> for Variant<'a>
+where
+    S: Into<Structure<'a>>,
+{
+    fn from(value: S) -> Self {
+        Variant::Structure(value.into())
     }
 }
 
