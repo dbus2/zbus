@@ -37,6 +37,8 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::to_bytes;
     use crate::{Array, EncodingFormat, ObjectPath, Signature, Variant};
 
@@ -165,5 +167,17 @@ mod tests {
         assert!(v.value_signature().as_str() == "a(yu(xbxas)s)");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(dbg!(encoded.len()) == 94);
+    }
+
+    #[test]
+    fn dict_variant() {
+        let mut map: HashMap<i64, &str> = HashMap::new();
+        map.insert(1, "123");
+        map.insert(2, "456");
+        let encoded = to_bytes(&map, EncodingFormat::DBus).unwrap();
+        assert!(dbg!(encoded.len()) == 40);
+
+        // As Variant
+        // TODO
     }
 }
