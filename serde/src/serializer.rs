@@ -491,10 +491,15 @@ impl<'a, 'b> ser::SerializeMap for SeqSerializer<'a, 'b> {
     where
         T: ?Sized + Serialize,
     {
-        if self.start != self.serializer.output.len() {
+        if self.start == self.serializer.output.len() {
+            // First key
+            self.serializer
+                .parse_signature_char(Some(DICT_ENTRY_SIG_START_CHAR))?;
+        } else {
             // The signature needs to be rewinded before encoding each element.
-            self.serializer.signature_pos = self.element_signature_pos;
+            self.serializer.signature_pos = self.element_signature_pos + 1;
         }
+        self.serializer.add_padding(DICT_ENTRY_ALIGNMENT);
 
         key.serialize(&mut *self.serializer)
     }
