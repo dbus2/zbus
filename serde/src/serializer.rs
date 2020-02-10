@@ -326,7 +326,7 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
             Some(VARIANT_SIGNATURE_CHAR) => None,
             Some(c) => {
                 self.parse_signature_char(Some(c))?;
-                self.add_padding(8);
+                self.add_padding(STRUCT_ALIGNMENT);
 
                 if c == STRUCT_SIG_START_CHAR {
                     Some(STRUCT_SIG_END_CHAR)
