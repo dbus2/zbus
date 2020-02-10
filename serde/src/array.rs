@@ -56,10 +56,7 @@ where
 {
     fn from(values: &[V]) -> Self {
         let element_signature = V::signature();
-        let elements = values
-            .into_iter()
-            .map(|value| value.clone().into())
-            .collect();
+        let elements = values.iter().map(|value| value.clone().into()).collect();
 
         Self {
             element_signature,
