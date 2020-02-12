@@ -4,8 +4,8 @@ pub use array::*;
 mod basic;
 pub use basic::*;
 
-mod dict_entry;
-pub use dict_entry::*;
+mod dict;
+pub use dict::*;
 
 mod encoding_format;
 pub use encoding_format::*;
@@ -38,9 +38,11 @@ mod utils;
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::convert::TryFrom;
 
     use crate::to_bytes;
-    use crate::{Array, EncodingFormat, ObjectPath, Signature, Variant};
+    use crate::{Array, Dict, EncodingFormat};
+    use crate::{ObjectPath, Signature, Variant, VariantValue};
 
     #[test]
     fn u8_variant() {
@@ -178,6 +180,23 @@ mod tests {
         assert!(dbg!(encoded.len()) == 40);
 
         // As Variant
-        // TODO
+        let v = Variant::from(Dict::from(map));
+        assert!(v.value_signature() == "a{xs}");
+        let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 48);
+        // Convert it back
+        let dict = Dict::try_from(v).unwrap();
+        let map: HashMap<i64, &str> = HashMap::try_from(dict).unwrap();
+        assert!(map[&1] == "123");
+        assert!(map[&2] == "456");
+
+        // Now a hand-crafted Dict Variant but with a Variant as value
+        let mut dict = Dict::new(&<&str>::signature(), &Variant::signature());
+        dict.add("hello", Variant::from("there")).unwrap();
+        dict.add("bye", Variant::from("now")).unwrap();
+        let v = Variant::from(dict);
+        assert!(v.value_signature() == "a{sv}");
+        let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
+        assert!(dbg!(encoded.len()) == 48);
     }
 }

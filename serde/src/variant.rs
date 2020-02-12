@@ -5,7 +5,7 @@ use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
 use crate::utils::VARIANT_SIGNATURE_STR;
 use crate::VariantValue;
-use crate::{Array, DictEntry, Error};
+use crate::{Array, Dict, Error};
 use crate::{ObjectPath, Signature, Structure};
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
@@ -38,9 +38,7 @@ pub enum Variant<'a> {
 
     // Container types
     Array(Array<'a>),
-    DictEntry(DictEntry<'a, 'a>),
-    // TODO
-    //Dict(Dict<'a>),
+    Dict(Dict<'a, 'a>),
     Structure(Structure<'a>),
 }
 
@@ -64,7 +62,7 @@ impl<'a> Variant<'a> {
 
             // Container types
             Variant::Array(value) => value.signature(),
-            Variant::DictEntry(value) => value.signature(),
+            Variant::Dict(value) => value.signature(),
             Variant::Structure(value) => value.signature(),
         }
     }
@@ -94,7 +92,7 @@ impl<'a> Variant<'a> {
 
             // Container types
             Variant::Array(value) => serializer.serialize_field(name, value),
-            Variant::DictEntry(value) => serializer.serialize_field(name, value),
+            Variant::Dict(value) => serializer.serialize_field(name, value),
             Variant::Structure(value) => serializer.serialize_field(name, value),
         }
     }
@@ -124,7 +122,7 @@ impl<'a> Variant<'a> {
 
             // Container types
             Variant::Array(value) => serializer.serialize_element(value),
-            Variant::DictEntry(value) => serializer.serialize_element(value),
+            Variant::Dict(value) => serializer.serialize_element(value),
             Variant::Structure(value) => serializer.serialize_element(value),
         }
     }
@@ -247,9 +245,9 @@ impl<'a> From<Array<'a>> for Variant<'a> {
     }
 }
 
-impl<'a> From<DictEntry<'a, 'a>> for Variant<'a> {
-    fn from(value: DictEntry<'a, 'a>) -> Self {
-        Variant::DictEntry(value)
+impl<'a> From<Dict<'a, 'a>> for Variant<'a> {
+    fn from(value: Dict<'a, 'a>) -> Self {
+        Variant::Dict(value)
     }
 }
 
@@ -624,11 +622,11 @@ impl<'a> TryFrom<&'a Variant<'a>> for &'a Array<'a> {
 
 // DictEntry
 
-impl<'a> TryFrom<Variant<'a>> for DictEntry<'a, 'a> {
+impl<'a> TryFrom<Variant<'a>> for Dict<'a, 'a> {
     type Error = Error;
 
     fn try_from(value: Variant<'a>) -> Result<Self, Error> {
-        if let Variant::DictEntry(value) = value {
+        if let Variant::Dict(value) = value {
             Ok(value)
         } else {
             Err(Error::IncorrectType)
@@ -636,11 +634,11 @@ impl<'a> TryFrom<Variant<'a>> for DictEntry<'a, 'a> {
     }
 }
 
-impl<'a> TryFrom<&'a Variant<'a>> for &'a DictEntry<'a, 'a> {
+impl<'a> TryFrom<&'a Variant<'a>> for &'a Dict<'a, 'a> {
     type Error = Error;
 
     fn try_from(value: &'a Variant<'a>) -> Result<Self, Error> {
-        if let Variant::DictEntry(value) = value {
+        if let Variant::Dict(value) = value {
             Ok(value)
         } else {
             Err(Error::IncorrectType)
