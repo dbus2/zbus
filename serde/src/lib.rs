@@ -49,7 +49,7 @@ mod tests {
 
         // As Variant
         let v = Variant::from(77u8);
-        assert!(v.value_signature().as_str() == "y");
+        assert!(v.value_signature() == "y");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 4);
     }
@@ -62,7 +62,7 @@ mod tests {
 
         // As Variant
         let v = Variant::from(string);
-        assert!(v.value_signature().as_str() == "s");
+        assert!(v.value_signature() == "s");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 20);
     }
@@ -75,7 +75,7 @@ mod tests {
 
         // As Variant
         let v = Variant::from(sig);
-        assert!(v.value_signature().as_str() == "g");
+        assert!(v.value_signature() == "g");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 8);
     }
@@ -88,7 +88,7 @@ mod tests {
 
         // As Variant
         let v = Variant::from(o);
-        assert!(v.value_signature().as_str() == "o");
+        assert!(v.value_signature() == "o");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 21);
     }
@@ -108,7 +108,7 @@ mod tests {
 
         // As Variant
         let v = Variant::from(&ay[..]);
-        assert!(v.value_signature().as_str() == "ay");
+        assert!(v.value_signature() == "ay");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 10);
 
@@ -119,7 +119,7 @@ mod tests {
 
         // Vec as Variant
         let v = Variant::from(Array::from(&vec));
-        assert!(v.value_signature().as_str() == "ay");
+        assert!(v.value_signature() == "ay");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 10);
 
@@ -138,7 +138,7 @@ mod tests {
 
         // As Variant
         let v = Variant::from(&as_[..]);
-        assert!(v.value_signature().as_str() == "as");
+        assert!(v.value_signature() == "as");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 49);
 
@@ -164,7 +164,7 @@ mod tests {
 
         // As Variant
         let v = Variant::from(&ar[..]);
-        assert!(v.value_signature().as_str() == "a(yu(xbxas)s)");
+        assert!(v.value_signature() == "a(yu(xbxas)s)");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(dbg!(encoded.len()) == 94);
     }
