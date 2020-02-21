@@ -192,8 +192,11 @@ mod tests {
 
         // Now a hand-crafted Dict Variant but with a Variant as value
         let mut dict = Dict::new(&<&str>::signature(), &Variant::signature());
-        dict.add("hello", Variant::from("there")).unwrap();
-        dict.add("bye", Variant::from("now")).unwrap();
+        // FIXME: We should be just able to do: Variant::from("there")
+        dict.add("hello", Variant::Variant(Box::new("there".into())))
+            .unwrap();
+        dict.add("bye", Variant::Variant(Box::new("now".into())))
+            .unwrap();
         let v = Variant::from(dict);
         assert!(v.value_signature() == "a{sv}");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
