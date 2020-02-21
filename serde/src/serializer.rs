@@ -1,5 +1,6 @@
 use byteorder::ByteOrder;
 use serde::{ser, ser::SerializeSeq, Serialize};
+use std::str;
 
 use crate::utils::*;
 use crate::VariantValue;
@@ -12,7 +13,7 @@ pub struct Serializer<'a> {
     // FIXME: Endianness needs to be configurable too
     pub(self) output: &'a mut Vec<u8>,
 
-    pub(self) signature: String,
+    pub(self) signature: &'a str,
     pub(self) signature_pos: usize,
 }
 
@@ -53,17 +54,6 @@ impl<'a> Serializer<'a> {
 
         Ok(())
     }
-
-    fn expand_variant_signature(&mut self, value_signature: &str) {
-        if self.next_signature_char().expect("expected more chars") != 'v' {
-            println!("Serializer::expand_variant_signature called for non-variant");
-
-            return;
-        }
-
-        self.signature
-            .replace_range(self.signature_pos..=self.signature_pos, value_signature);
-    }
 }
 
 // FIXME: to_write() would be better, then to_bytes() can be a think wrapper over it
@@ -71,11 +61,11 @@ pub fn to_bytes<T: ?Sized>(value: &T, format: EncodingFormat) -> Result<Vec<u8>>
 where
     T: Serialize + VariantValue,
 {
-    let signature = String::from(T::signature().as_str());
+    let signature = T::signature();
     let mut output = vec![];
     let mut serializer = Serializer {
         format,
-        signature,
+        signature: &signature,
         output: &mut output,
         signature_pos: 0,
     };
@@ -178,27 +168,18 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
     fn serialize_str(self, v: &str) -> Result<()> {
         match self.next_signature_char() {
             Some(ObjectPath::SIGNATURE_CHAR) | Some(<&str>::SIGNATURE_CHAR) => {
-                self.parse_signature_char(None)?;
                 self.add_padding(<&str>::ALIGNMENT);
                 self.output.extend(&usize_to_u32(v.len()).to_ne_bytes());
             }
             Some(c) if c == Signature::SIGNATURE_CHAR || c == VARIANT_SIGNATURE_CHAR => {
                 self.output.extend(&[usize_to_u8(v.len())]);
-
-                if c == VARIANT_SIGNATURE_CHAR {
-                    // This is signature of a variant value that's next to be serialized so
-                    // we replace the generic variant signature, `v` with the value's signature.
-                    // FIXME: Should be possible to replace this with a more efficient way.
-                    self.expand_variant_signature(v);
-                } else {
-                    self.parse_signature_char(None)?;
-                }
             }
             _ => {
                 // TODO: Better error here with more info
                 return Err(Error::IncorrectType);
             }
         }
+        self.parse_signature_char(None)?;
         self.output.extend(v.as_bytes());
         self.output.push(b'\0');
 
@@ -279,7 +260,7 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
 
         let next_signature_char = self
             .next_signature_char()
-            .ok_or_else(|| Error::InvalidSignature(self.signature.clone()))?;
+            .ok_or_else(|| Error::InvalidSignature(String::from(self.signature)))?;
         let alignment = alignment_for_signature_char(next_signature_char, self.format);
         // D-Bus expects us to add padding for the first element even when there is no first
         // element (i-e empty array) so we add padding already.
@@ -342,9 +323,11 @@ impl<'a, 'b> ser::Serializer for &'b mut Serializer<'a> {
             }
         };
 
+        let start = self.output.len();
         Ok(StructSerializer {
             serializer: self,
             end_parens,
+            start,
         })
     }
 
@@ -416,9 +399,37 @@ impl<'a, 'b> ser::SerializeSeq for SeqSerializer<'a, 'b> {
 pub struct StructSerializer<'a, 'b> {
     serializer: &'b mut Serializer<'a>,
     end_parens: Option<char>,
+    start: usize,
 }
 
 impl<'a, 'b> StructSerializer<'a, 'b> {
+    fn serialize_struct_element<T>(&mut self, name: Option<&'static str>, value: &T) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        match name {
+            Some("zvariant::Variant::Value") => {
+                // Serializing the value of a Variant, which means signature was serialized
+                // already, so let's get that signature back.
+                let start = self.start + 1;
+                let end = self.serializer.output.len() - 1;
+                let signature = str::from_utf8(&self.serializer.output[start..end])
+                    .map_err(|_| Error::InvalidUtf8)?;
+                // FIXME: Use ArrayString here?
+                let signature = String::from(signature);
+
+                let mut serializer = Serializer {
+                    format: self.serializer.format,
+                    signature: &signature,
+                    output: &mut self.serializer.output,
+                    signature_pos: 0,
+                };
+                value.serialize(&mut serializer)
+            }
+            _ => value.serialize(&mut *self.serializer),
+        }
+    }
+
     fn end_struct(self) -> Result<()> {
         if let Some(c) = self.end_parens {
             self.serializer.parse_signature_char(Some(c))?;
@@ -436,7 +447,7 @@ impl<'a, 'b> ser::SerializeTuple for StructSerializer<'a, 'b> {
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(&mut *self.serializer)
+        self.serialize_struct_element(None, value)
     }
 
     fn end(self) -> Result<()> {
@@ -452,7 +463,7 @@ impl<'a, 'b> ser::SerializeTupleStruct for StructSerializer<'a, 'b> {
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(&mut *self.serializer)
+        self.serialize_struct_element(None, value)
     }
 
     fn end(self) -> Result<()> {
@@ -468,7 +479,7 @@ impl<'a, 'b> ser::SerializeTupleVariant for StructSerializer<'a, 'b> {
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(&mut *self.serializer)
+        self.serialize_struct_element(None, value)
     }
 
     fn end(self) -> Result<()> {
@@ -520,11 +531,11 @@ impl<'a, 'b> ser::SerializeStruct for StructSerializer<'a, 'b> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<()>
+    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(&mut *self.serializer)
+        self.serialize_struct_element(Some(key), value)
     }
 
     fn end(self) -> Result<()> {
@@ -536,11 +547,11 @@ impl<'a, 'b> ser::SerializeStructVariant for StructSerializer<'a, 'b> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> Result<()>
+    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(&mut *self.serializer)
+        self.serialize_struct_element(Some(key), value)
     }
 
     fn end(self) -> Result<()> {
