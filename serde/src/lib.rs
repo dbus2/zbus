@@ -200,6 +200,6 @@ mod tests {
         let v = Variant::from(dict);
         assert!(v.value_signature() == "a{sv}");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
-        assert!(dbg!(encoded.len()) == 48);
+        assert!(dbg!(encoded.len()) == 68);
     }
 }
