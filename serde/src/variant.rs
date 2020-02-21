@@ -137,9 +137,9 @@ impl<'a> Serialize for Variant<'a> {
         let mut structure = serializer.serialize_struct("zvariant::Variant", 2)?;
 
         let signature = self.value_signature();
-        structure.serialize_field("zvariant::Signature", &signature)?;
+        structure.serialize_field("zvariant::Variant::Signature", &signature)?;
 
-        self.serialize_value_as_struct_field("zvariant::Value", &mut structure)?;
+        self.serialize_value_as_struct_field("zvariant::Variant::Value", &mut structure)?;
 
         structure.end()
     }
