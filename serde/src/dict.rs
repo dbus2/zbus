@@ -4,7 +4,8 @@ use std::hash::BuildHasher;
 
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
-use crate::{Basic, Error, Signature, Variant, VariantValue};
+use crate::{Basic, Error, Signature};
+use crate::{FromVariant, IntoVariant, Variant, VariantValue};
 
 /// A dictionary type to be used with [`Variant`].
 ///
@@ -30,16 +31,16 @@ impl<'k, 'v> Dict<'k, 'v> {
     /// Add a new entry.
     pub fn add<K, V>(&mut self, key: K, value: V) -> Result<(), Error>
     where
-        K: Basic + Into<Variant<'k>> + std::hash::Hash + std::cmp::Eq,
-        V: Into<Variant<'v>> + VariantValue,
+        K: Basic + IntoVariant<'k> + std::hash::Hash + std::cmp::Eq,
+        V: IntoVariant<'v> + VariantValue,
     {
         if K::signature() != self.key_signature || V::signature() != self.value_signature {
             return Err(Error::IncorrectType);
         }
 
         self.entries.push(DictEntry {
-            key: key.into(),
-            value: value.into(),
+            key: key.into_variant(),
+            value: value.into_variant(),
         });
 
         Ok(())
@@ -49,14 +50,13 @@ impl<'k, 'v> Dict<'k, 'v> {
     pub fn get<'d, K, V>(&'d self, key: &'k K) -> Result<Option<&'v V>, Error>
     where
         'd: 'k + 'v,
-        &'k K: TryFrom<&'k Variant<'k>, Error = Error>,
-        K: std::cmp::Eq,
-        &'v V: TryFrom<&'v Variant<'v>, Error = Error>,
+        K: FromVariant<'k> + std::cmp::Eq,
+        V: FromVariant<'v>,
     {
         for entry in &self.entries {
-            let k = <&K>::try_from(&entry.key)?;
+            let k = K::from_variant_ref(&entry.key)?;
             if *k == *key {
-                return <&V>::try_from(&entry.value).map(Some);
+                return V::from_variant_ref(&entry.value).map(Some);
             }
         }
 
@@ -91,8 +91,8 @@ impl<'k, 'v> Serialize for Dict<'k, 'v> {
 // Conversion of Dict to HashMap
 impl<'k, 'v, K, V, H> TryFrom<Dict<'k, 'v>> for HashMap<K, V, H>
 where
-    K: Basic + TryFrom<Variant<'k>, Error = Error> + std::hash::Hash + std::cmp::Eq,
-    V: TryFrom<Variant<'v>, Error = Error>,
+    K: Basic + FromVariant<'k> + std::hash::Hash + std::cmp::Eq,
+    V: FromVariant<'v>,
     H: BuildHasher + Default,
 {
     type Error = Error;
@@ -101,7 +101,7 @@ where
         let mut map = HashMap::default();
 
         for entry in value.entries {
-            let (key, value) = (K::try_from(entry.key)?, V::try_from(entry.value)?);
+            let (key, value) = (K::from_variant(entry.key)?, V::from_variant(entry.value)?);
 
             map.insert(key, value);
         }
@@ -113,9 +113,8 @@ where
 impl<'d, 'k, 'v, K, V, H> TryFrom<&'d Dict<'k, 'v>> for HashMap<&'k K, &'v V, H>
 where
     'd: 'k + 'v,
-    &'k K: TryFrom<&'k Variant<'k>, Error = Error>,
-    K: std::cmp::Eq + std::hash::Hash,
-    &'v V: TryFrom<&'v Variant<'v>, Error = Error>,
+    K: FromVariant<'k> + std::cmp::Eq + std::hash::Hash,
+    V: FromVariant<'v>,
     H: BuildHasher + Default,
 {
     type Error = Error;
@@ -124,7 +123,10 @@ where
         let mut map = HashMap::default();
 
         for entry in &value.entries {
-            let (key, value) = (<&K>::try_from(&entry.key)?, <&V>::try_from(&entry.value)?);
+            let (key, value) = (
+                K::from_variant_ref(&entry.key)?,
+                V::from_variant_ref(&entry.value)?,
+            );
 
             map.insert(key, value);
         }
@@ -136,15 +138,15 @@ where
 // Conversion of Hashmap to Dict
 impl<'k, 'v, K, V> From<HashMap<K, V>> for Dict<'k, 'v>
 where
-    K: VariantValue + Into<Variant<'k>> + std::hash::Hash + std::cmp::Eq,
-    V: VariantValue + Into<Variant<'v>>,
+    K: VariantValue + IntoVariant<'k> + std::hash::Hash + std::cmp::Eq,
+    V: VariantValue + IntoVariant<'v>,
 {
     fn from(value: HashMap<K, V>) -> Self {
         let entries = value
             .into_iter()
             .map(|(key, value)| DictEntry {
-                key: key.into(),
-                value: value.into(),
+                key: key.into_variant(),
+                value: value.into_variant(),
             })
             .collect();
 

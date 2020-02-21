@@ -1,6 +1,6 @@
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
-use crate::{Signature, Variant, VariantValue};
+use crate::{IntoVariant, Signature, Variant, VariantValue};
 
 /// An ordered collection of items of arbitrary types.
 ///
@@ -39,9 +39,9 @@ impl<'a> Structure<'a> {
     /// structure.
     pub fn add_field<V>(mut self, field: V) -> Self
     where
-        V: VariantValue + Into<Variant<'a>>,
+        V: VariantValue + IntoVariant<'a>,
     {
-        self.0.push(field.into());
+        self.0.push(field.into_variant());
 
         self
     }
@@ -79,7 +79,7 @@ macro_rules! tuple_impls {
         $(
             impl<'a, $($name),+> From<($($name),+,)> for Structure<'a>
             where
-                $($name: VariantValue + Into<Variant<'a>>,)+
+                $($name: VariantValue + IntoVariant<'a>,)+
             {
                 #[inline]
                 fn from(value: ($($name),+,)) -> Self {

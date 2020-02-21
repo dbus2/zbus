@@ -1,6 +1,6 @@
 use serde::ser::{Serialize, SerializeSeq, Serializer};
 
-use crate::{Signature, Variant, VariantValue};
+use crate::{IntoVariant, Signature, Variant, VariantValue};
 
 /// An unordered collection of items of the same type.
 ///
@@ -37,11 +37,14 @@ impl<'a> std::ops::Deref for Array<'a> {
 
 impl<'a, V> From<Vec<V>> for Array<'a>
 where
-    V: VariantValue + Into<Variant<'a>>,
+    V: VariantValue + IntoVariant<'a>,
 {
     fn from(values: Vec<V>) -> Self {
         let element_signature = V::signature();
-        let elements = values.into_iter().map(|value| value.into()).collect();
+        let elements = values
+            .into_iter()
+            .map(|value| value.into_variant())
+            .collect();
 
         Self {
             element_signature,
@@ -52,11 +55,14 @@ where
 
 impl<'a, V> From<&[V]> for Array<'a>
 where
-    V: VariantValue + Into<Variant<'a>> + Clone,
+    V: VariantValue + IntoVariant<'a> + Clone,
 {
     fn from(values: &[V]) -> Self {
         let element_signature = V::signature();
-        let elements = values.iter().map(|value| value.clone().into()).collect();
+        let elements = values
+            .iter()
+            .map(|value| value.clone().into_variant())
+            .collect();
 
         Self {
             element_signature,
@@ -67,7 +73,7 @@ where
 
 impl<'a, V> From<&Vec<V>> for Array<'a>
 where
-    V: VariantValue + Into<Variant<'a>> + Clone,
+    V: VariantValue + IntoVariant<'a> + Clone,
 {
     fn from(values: &Vec<V>) -> Self {
         Self::from(&values[..])

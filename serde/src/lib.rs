@@ -31,6 +31,12 @@ pub use error::*;
 mod variant_value;
 pub use variant_value::*;
 
+mod from_variant;
+pub use from_variant::*;
+
+mod into_variant;
+pub use into_variant::*;
+
 mod utils;
 
 // TODO: Tests for all *serde* types and import all existing ones from zvariant
@@ -42,7 +48,8 @@ mod tests {
 
     use crate::to_bytes;
     use crate::{Array, Dict, EncodingFormat};
-    use crate::{ObjectPath, Signature, Variant, VariantValue};
+    use crate::{FromVariant, IntoVariant, Variant, VariantValue};
+    use crate::{ObjectPath, Signature};
 
     #[test]
     fn u8_variant() {
@@ -50,7 +57,7 @@ mod tests {
         assert!(encoded.len() == 1);
 
         // As Variant
-        let v = Variant::from(77u8);
+        let v = 77u8.into_variant();
         assert!(v.value_signature() == "y");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 4);
@@ -63,7 +70,7 @@ mod tests {
         assert!(encoded.len() == 16);
 
         // As Variant
-        let v = Variant::from(string);
+        let v = string.into_variant();
         assert!(v.value_signature() == "s");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 20);
@@ -76,7 +83,7 @@ mod tests {
         assert!(encoded.len() == 5);
 
         // As Variant
-        let v = Variant::from(sig);
+        let v = sig.into_variant();
         assert!(v.value_signature() == "g");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 8);
@@ -89,7 +96,7 @@ mod tests {
         assert!(encoded.len() == 17);
 
         // As Variant
-        let v = Variant::from(o);
+        let v = o.into_variant();
         assert!(v.value_signature() == "o");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 21);
@@ -109,9 +116,9 @@ mod tests {
         assert!(encoded.len() == 6);
 
         // As Variant
-        let v = Variant::from(&ay[..]);
+        let v = &ay[..].into_variant();
         assert!(v.value_signature() == "ay");
-        let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
+        let encoded = to_bytes(v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 10);
 
         // Now try as Vec
@@ -120,7 +127,7 @@ mod tests {
         assert!(encoded.len() == 6);
 
         // Vec as Variant
-        let v = Variant::from(Array::from(&vec));
+        let v = Array::from(&vec).into_variant();
         assert!(v.value_signature() == "ay");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 10);
@@ -139,9 +146,9 @@ mod tests {
         assert!(encoded.len() == 45);
 
         // As Variant
-        let v = Variant::from(&as_[..]);
+        let v = &as_[..].into_variant();
         assert!(v.value_signature() == "as");
-        let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
+        let encoded = to_bytes(v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 49);
 
         // Array of Struct, which in turn containin an Array (We gotta go deeper!)
@@ -165,9 +172,9 @@ mod tests {
         assert!(encoded.len() == 78);
 
         // As Variant
-        let v = Variant::from(&ar[..]);
+        let v = &ar[..].into_variant();
         assert!(v.value_signature() == "a(yu(xbxas)s)");
-        let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
+        let encoded = to_bytes(v, EncodingFormat::DBus).unwrap();
         assert!(dbg!(encoded.len()) == 94);
     }
 
@@ -180,24 +187,21 @@ mod tests {
         assert!(dbg!(encoded.len()) == 40);
 
         // As Variant
-        let v = Variant::from(Dict::from(map));
+        let v = Dict::from(map).into_variant();
         assert!(v.value_signature() == "a{xs}");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 48);
         // Convert it back
-        let dict = Dict::try_from(v).unwrap();
+        let dict = Dict::from_variant(v).unwrap();
         let map: HashMap<i64, &str> = HashMap::try_from(dict).unwrap();
         assert!(map[&1] == "123");
         assert!(map[&2] == "456");
 
         // Now a hand-crafted Dict Variant but with a Variant as value
         let mut dict = Dict::new(&<&str>::signature(), &Variant::signature());
-        // FIXME: We should be just able to do: Variant::from("there")
-        dict.add("hello", Variant::Variant(Box::new("there".into())))
-            .unwrap();
-        dict.add("bye", Variant::Variant(Box::new("now".into())))
-            .unwrap();
-        let v = Variant::from(dict);
+        dict.add("hello", "there".into_variant()).unwrap();
+        dict.add("bye", "now".into_variant()).unwrap();
+        let v = dict.into_variant();
         assert!(v.value_signature() == "a{sv}");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(dbg!(encoded.len()) == 68);
