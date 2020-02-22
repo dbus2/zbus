@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::hash::BuildHasher;
 
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
@@ -88,15 +89,16 @@ impl<'k, 'v> Serialize for Dict<'k, 'v> {
 }
 
 // Conversion of Dict to HashMap
-impl<'k, 'v, K, V> TryFrom<Dict<'k, 'v>> for HashMap<K, V>
+impl<'k, 'v, K, V, H> TryFrom<Dict<'k, 'v>> for HashMap<K, V, H>
 where
     K: Basic + TryFrom<Variant<'k>, Error = Error> + std::hash::Hash + std::cmp::Eq,
     V: TryFrom<Variant<'v>, Error = Error>,
+    H: BuildHasher + Default,
 {
     type Error = Error;
 
-    fn try_from(value: Dict<'k, 'v>) -> Result<HashMap<K, V>, Error> {
-        let mut map = HashMap::new();
+    fn try_from(value: Dict<'k, 'v>) -> Result<HashMap<K, V, H>, Error> {
+        let mut map = HashMap::default();
 
         for entry in value.entries {
             let (key, value) = (K::try_from(entry.key)?, V::try_from(entry.value)?);
@@ -108,17 +110,18 @@ where
     }
 }
 
-impl<'d, 'k, 'v, K, V> TryFrom<&'d Dict<'k, 'v>> for HashMap<&'k K, &'v V>
+impl<'d, 'k, 'v, K, V, H> TryFrom<&'d Dict<'k, 'v>> for HashMap<&'k K, &'v V, H>
 where
     'd: 'k + 'v,
     &'k K: TryFrom<&'k Variant<'k>, Error = Error>,
     K: std::cmp::Eq + std::hash::Hash,
     &'v V: TryFrom<&'v Variant<'v>, Error = Error>,
+    H: BuildHasher + Default,
 {
     type Error = Error;
 
-    fn try_from(value: &'d Dict<'k, 'v>) -> Result<HashMap<&'k K, &'v V>, Error> {
-        let mut map = HashMap::new();
+    fn try_from(value: &'d Dict<'k, 'v>) -> Result<HashMap<&'k K, &'v V, H>, Error> {
+        let mut map = HashMap::default();
 
         for entry in &value.entries {
             let (key, value) = (<&K>::try_from(&entry.key)?, <&V>::try_from(&entry.value)?);
