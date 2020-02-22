@@ -46,7 +46,7 @@ mod tests {
     use std::collections::HashMap;
     use std::convert::TryFrom;
 
-    use byteorder::LittleEndian as LE;
+    use byteorder::{BigEndian as BE, ByteOrder, LittleEndian as LE};
 
     use crate::to_bytes;
     use crate::{Array, Dict, EncodingFormat};
@@ -63,6 +63,90 @@ mod tests {
         assert!(v.value_signature() == "y");
         let encoded = to_bytes::<_, LE>(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 4);
+    }
+
+    #[test]
+    fn u16_variant() {
+        let encoded = to_bytes::<_, BE>(&0xABBA_u16, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 2);
+        let decoded = LE::read_u16(&encoded);
+        assert!(decoded == 0xBAAB_u16);
+
+        // As Variant
+        let v = 0xFEFE_u16.into_variant();
+        assert!(v.value_signature() == "q");
+        let encoded = to_bytes::<_, LE>(&v, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 6);
+    }
+
+    #[test]
+    fn i16_variant() {
+        let encoded = to_bytes::<_, BE>(&-0xAB0_i16, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 2);
+        let decoded = LE::read_i16(&encoded);
+        assert!(decoded == 0x50F5_i16);
+
+        // As Variant
+        let v = 0xAB_i16.into_variant();
+        assert!(v.value_signature() == "n");
+        let encoded = to_bytes::<_, LE>(&v, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 6);
+    }
+
+    #[test]
+    fn u32_variant() {
+        let encoded = to_bytes::<_, BE>(&0xABBA_ABBA_u32, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 4);
+        let decoded = LE::read_u32(&encoded);
+        assert!(decoded == 0xBAAB_BAAB_u32);
+
+        // As Variant
+        let v = 0xABBA_ABBA_u32.into_variant();
+        assert!(v.value_signature() == "u");
+        let encoded = to_bytes::<_, LE>(&v, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 8);
+    }
+
+    #[test]
+    fn i32_variant() {
+        let encoded = to_bytes::<_, BE>(&-0xABBA_AB0_i32, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 4);
+        let decoded = LE::read_i32(&encoded);
+        assert!(decoded == 0x5055_44F5_i32);
+
+        // As Variant
+        let v = 0xABBA_AB0_i32.into_variant();
+        assert!(v.value_signature() == "i");
+        let encoded = to_bytes::<_, LE>(&v, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 8);
+    }
+
+    #[test]
+    fn u64_variant() {
+        let encoded = to_bytes::<_, BE>(&0xABBA_ABBA_ABBA_ABBA_u64, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 8);
+        let decoded = LE::read_u64(&encoded);
+        assert!(decoded == 0xBAAB_BAAB_BAAB_BAAB_u64);
+
+        // As Variant
+        let v = 0xFEFE_u64.into_variant();
+        assert!(v.value_signature() == "t");
+        let encoded = to_bytes::<_, LE>(&v, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 16);
+    }
+
+    #[test]
+    fn i64_variant() {
+        let encoded = to_bytes::<_, BE>(&-0xABBA_ABBA_ABBA_AB0_i64, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 8);
+        let decoded = LE::read_i64(&encoded);
+        assert!(decoded == 0x5055_4455_4455_44F5_i64);
+
+        // As Variant
+        let v = 0xABBA_AB0i64.into_variant();
+        assert!(v.value_signature() == "x");
+        let encoded = to_bytes::<_, LE>(&v, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 16);
     }
 
     #[test]
