@@ -53,11 +53,11 @@ mod tests {
 
     #[test]
     fn u8_variant() {
-        let encoded = to_bytes(&77u8, EncodingFormat::DBus).unwrap();
+        let encoded = to_bytes(&77_u8, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 1);
 
         // As Variant
-        let v = 77u8.into_variant();
+        let v = 77_u8.into_variant();
         assert!(v.value_signature() == "y");
         let encoded = to_bytes(&v, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 4);
