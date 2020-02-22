@@ -55,7 +55,7 @@ impl<'k, 'v> Dict<'k, 'v> {
         for entry in &self.entries {
             let k = <&K>::try_from(&entry.key)?;
             if *k == *key {
-                return <&V>::try_from(&entry.value).map(|v| Some(v));
+                return <&V>::try_from(&entry.value).map(Some);
             }
         }
 
