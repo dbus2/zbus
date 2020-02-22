@@ -39,7 +39,7 @@ pub use into_variant::*;
 
 mod utils;
 
-// TODO: Tests for all *serde* types and import all existing ones from zvariant
+// TODO: Tests for all *serde* types and import all existing ones from zvariant.
 
 #[cfg(test)]
 mod tests {
