@@ -69,8 +69,7 @@ mod tests {
     fn u16_variant() {
         let encoded = to_bytes::<_, BE>(&0xABBA_u16, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 2);
-        let decoded = LE::read_u16(&encoded);
-        assert!(decoded == 0xBAAB_u16);
+        assert!(LE::read_u16(&encoded) == 0xBAAB_u16);
 
         // As Variant
         let v = 0xFEFE_u16.into_variant();
@@ -83,8 +82,7 @@ mod tests {
     fn i16_variant() {
         let encoded = to_bytes::<_, BE>(&-0xAB0_i16, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 2);
-        let decoded = LE::read_i16(&encoded);
-        assert!(decoded == 0x50F5_i16);
+        assert!(LE::read_i16(&encoded) == 0x50F5_i16);
 
         // As Variant
         let v = 0xAB_i16.into_variant();
@@ -97,8 +95,7 @@ mod tests {
     fn u32_variant() {
         let encoded = to_bytes::<_, BE>(&0xABBA_ABBA_u32, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 4);
-        let decoded = LE::read_u32(&encoded);
-        assert!(decoded == 0xBAAB_BAAB_u32);
+        assert!(LE::read_u32(&encoded) == 0xBAAB_BAAB_u32);
 
         // As Variant
         let v = 0xABBA_ABBA_u32.into_variant();
@@ -111,8 +108,7 @@ mod tests {
     fn i32_variant() {
         let encoded = to_bytes::<_, BE>(&-0xABBA_AB0_i32, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 4);
-        let decoded = LE::read_i32(&encoded);
-        assert!(decoded == 0x5055_44F5_i32);
+        assert!(LE::read_i32(&encoded) == 0x5055_44F5_i32);
 
         // As Variant
         let v = 0xABBA_AB0_i32.into_variant();
@@ -125,8 +121,7 @@ mod tests {
     fn u64_variant() {
         let encoded = to_bytes::<_, BE>(&0xABBA_ABBA_ABBA_ABBA_u64, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 8);
-        let decoded = LE::read_u64(&encoded);
-        assert!(decoded == 0xBAAB_BAAB_BAAB_BAAB_u64);
+        assert!(LE::read_u64(&encoded) == 0xBAAB_BAAB_BAAB_BAAB_u64);
 
         // As Variant
         let v = 0xFEFE_u64.into_variant();
@@ -139,8 +134,7 @@ mod tests {
     fn i64_variant() {
         let encoded = to_bytes::<_, BE>(&-0xABBA_ABBA_ABBA_AB0_i64, EncodingFormat::DBus).unwrap();
         assert!(encoded.len() == 8);
-        let decoded = LE::read_i64(&encoded);
-        assert!(decoded == 0x5055_4455_4455_44F5_i64);
+        assert!(LE::read_i64(&encoded) == 0x5055_4455_4455_44F5_i64);
 
         // As Variant
         let v = 0xABBA_AB0i64.into_variant();
