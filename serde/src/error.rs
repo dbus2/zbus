@@ -6,6 +6,7 @@ pub enum Error {
     // Generic error needed by Serde
     Message(String),
 
+    Io(std::io::Error),
     ExcessData,
     IncorrectType,
     IncorrectValue,
@@ -25,6 +26,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Error::Message(s) => write!(f, "{}", s),
+            Error::Io(e) => e.fmt(f),
             Error::ExcessData => write!(f, "excess data"),
             Error::IncorrectType => write!(f, "incorrect type"),
             Error::IncorrectValue => write!(f, "incorrect value"),
