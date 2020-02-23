@@ -226,9 +226,9 @@ mod tests {
         assert!(encoded.len() == 10);
 
         // Emtpy array
-        let ay: [u8; 0] = [];
+        let ay: [u64; 0] = [];
         let encoded = to_bytes::<_, LE>(&ay[..], EncodingFormat::DBus).unwrap();
-        assert!(encoded.len() == 4);
+        assert!(encoded.len() == 8);
 
         //
         // Array of strings
