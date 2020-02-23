@@ -144,6 +144,19 @@ mod tests {
     }
 
     #[test]
+    fn f64_variant() {
+        let encoded = to_bytes::<_, BE>(&99999.99999_f64, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 8);
+        assert!(LE::read_f64(&encoded) == -5759340900185448e-143);
+
+        // As Variant
+        let v = 99999.99999_f64.into_variant();
+        assert!(v.value_signature() == "d");
+        let encoded = to_bytes::<_, LE>(&v, EncodingFormat::DBus).unwrap();
+        assert!(encoded.len() == 16);
+    }
+
+    #[test]
     fn str_variant() {
         let string = "hello world";
         let encoded = to_bytes::<_, LE>(&string, EncodingFormat::DBus).unwrap();
