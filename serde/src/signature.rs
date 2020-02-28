@@ -23,6 +23,7 @@ impl<'a> Basic for Signature<'a> {
     const ALIGNMENT: usize = 1;
 }
 
+// TODO: TryFrom instead and check signature validity.
 impl<'a> From<&'a str> for Signature<'a> {
     fn from(value: &'a str) -> Self
     where
