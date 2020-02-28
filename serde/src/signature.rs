@@ -39,6 +39,12 @@ impl<'a> From<String> for Signature<'a> {
     }
 }
 
+impl<'a> From<&Signature<'a>> for String {
+    fn from(value: &Signature<'a>) -> String {
+        String::from(value.as_str())
+    }
+}
+
 impl<'a> std::ops::Deref for Signature<'a> {
     type Target = str;
 
