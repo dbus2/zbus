@@ -3,6 +3,7 @@ use serde::{ser, ser::SerializeSeq, Serialize};
 use std::io::{Seek, Write};
 use std::{marker::PhantomData, str};
 
+use crate::signature_parser::SignatureParser;
 use crate::utils::*;
 use crate::VariantValue;
 use crate::{Basic, EncodingFormat};
@@ -14,8 +15,7 @@ pub struct Serializer<'a, B, W> {
     pub(self) write: &'a mut W,
     pub(self) bytes_written: usize,
 
-    pub(self) signature: &'a str,
-    pub(self) signature_pos: usize,
+    pub(self) sign_parser: SignatureParser<'a>,
 
     // FIXME: Use ArrayString here?
     pub(self) variant_sign: Option<String>,
@@ -28,24 +28,6 @@ where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
-    fn next_signature_char(&self) -> Option<char> {
-        self.signature.chars().nth(self.signature_pos)
-    }
-
-    fn parse_signature_char(&mut self, expected: Option<char>) -> Result<()> {
-        if self
-            .next_signature_char()
-            .map(|c| expected.map(|ec| c != ec).unwrap_or(false))
-            .unwrap_or(true)
-        {
-            // TODO: Better error here with more info
-            return Err(Error::IncorrectType);
-        }
-        self.signature_pos += 1;
-
-        Ok(())
-    }
-
     fn add_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.bytes_written, alignment);
         if padding > 0 {
@@ -62,7 +44,7 @@ where
     where
         T: Basic,
     {
-        self.parse_signature_char(Some(T::SIGNATURE_CHAR))?;
+        self.sign_parser.parse_char(Some(T::SIGNATURE_CHAR))?;
         self.add_padding(T::ALIGNMENT)?;
 
         Ok(())
@@ -76,10 +58,10 @@ where
     W: Write + Seek,
 {
     let signature = T::signature();
+    let sign_parser = SignatureParser::new(signature);
     let mut serializer = Serializer::<B, W> {
         format,
-        signature: &signature,
-        signature_pos: 0,
+        sign_parser,
         write,
         bytes_written: 0,
         variant_sign: None,
@@ -96,11 +78,11 @@ where
     B: byteorder::ByteOrder,
 {
     let signature = T::signature();
+    let sign_parser = SignatureParser::new(signature);
     let mut cursor = std::io::Cursor::new(vec![]);
     let mut serializer = Serializer::<B, _> {
         format,
-        signature: &signature,
-        signature_pos: 0,
+        sign_parser,
         write: &mut cursor,
         bytes_written: 0,
         variant_sign: None,
@@ -207,13 +189,15 @@ where
     }
 
     fn serialize_str(self, v: &str) -> Result<()> {
-        match self.next_signature_char() {
-            Some(ObjectPath::SIGNATURE_CHAR) | Some(<&str>::SIGNATURE_CHAR) => {
+        let c = self.sign_parser.next_char()?;
+
+        match c {
+            ObjectPath::SIGNATURE_CHAR | <&str>::SIGNATURE_CHAR => {
                 self.add_padding(<&str>::ALIGNMENT)?;
                 self.write_u32::<B>(usize_to_u32(v.len()))
                     .map_err(Error::Io)?;
             }
-            Some(c) if c == Signature::SIGNATURE_CHAR || c == VARIANT_SIGNATURE_CHAR => {
+            Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
                 self.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
 
                 if c == VARIANT_SIGNATURE_CHAR {
@@ -225,7 +209,7 @@ where
                 return Err(Error::IncorrectType);
             }
         }
-        self.parse_signature_char(None)?;
+        self.sign_parser.parse_char(None)?;
         self.write_all(&v.as_bytes()).map_err(Error::Io)?;
         self.write_all(&b"\0"[..]).map_err(Error::Io)?;
 
@@ -298,26 +282,28 @@ where
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-        self.parse_signature_char(Some(ARRAY_SIGNATURE_CHAR))?;
+        self.sign_parser.parse_char(Some(ARRAY_SIGNATURE_CHAR))?;
         self.add_padding(ARRAY_ALIGNMENT)?;
         // Length in bytes (unfortunately not the same as len passed to us here) which we initially
         // set to 0.
         self.write_u32::<B>(0_u32).map_err(Error::Io)?;
 
-        let next_signature_char = self
-            .next_signature_char()
-            .ok_or_else(|| Error::InvalidSignature(String::from(self.signature)))?;
+        let next_signature_char = self.sign_parser.next_char()?;
         let alignment = alignment_for_signature_char(next_signature_char, self.format);
         let start = self.bytes_written;
         // D-Bus expects us to add padding for the first element even when there is no first
         // element (i-e empty array) so we add padding already.
         let first_padding = self.add_padding(alignment)?;
-        let element_signature_pos = self.signature_pos;
+        let element_signature_pos = self.sign_parser.pos();
+        let rest_of_signature =
+            Signature::from(&self.sign_parser.signature()[element_signature_pos..]);
+        let element_signature = slice_signature(&rest_of_signature)?;
+        let element_signature_len = element_signature.len();
 
         Ok(SeqSerializer {
             serializer: self,
             start,
-            element_signature_pos,
+            element_signature_len,
             first_padding,
         })
     }
@@ -349,25 +335,22 @@ where
     }
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-        let end_parens = match self.next_signature_char() {
-            Some(VARIANT_SIGNATURE_CHAR) => None,
-            Some(c) => {
-                self.parse_signature_char(Some(c))?;
-                self.add_padding(STRUCT_ALIGNMENT)?;
+        let c = self.sign_parser.next_char()?;
+        let end_parens;
+        if c == VARIANT_SIGNATURE_CHAR {
+            end_parens = None;
+        } else {
+            self.sign_parser.parse_char(Some(c))?;
+            self.add_padding(STRUCT_ALIGNMENT)?;
 
-                if c == STRUCT_SIG_START_CHAR {
-                    Some(STRUCT_SIG_END_CHAR)
-                } else if c == DICT_ENTRY_SIG_START_CHAR {
-                    Some(DICT_ENTRY_SIG_END_CHAR)
-                } else {
-                    return Err(Error::IncorrectType);
-                }
-            }
-            _ => {
-                // TODO: Better error here with more info
+            if c == STRUCT_SIG_START_CHAR {
+                end_parens = Some(STRUCT_SIG_END_CHAR);
+            } else if c == DICT_ENTRY_SIG_START_CHAR {
+                end_parens = Some(DICT_ENTRY_SIG_END_CHAR);
+            } else {
                 return Err(Error::IncorrectType);
             }
-        };
+        }
 
         Ok(StructSerializer {
             serializer: self,
@@ -391,7 +374,7 @@ pub struct SeqSerializer<'a, 'b, B, W> {
     serializer: &'b mut Serializer<'a, B, W>,
     start: usize,
     // where value signature starts
-    element_signature_pos: usize,
+    element_signature_len: usize,
     // First element's padding
     first_padding: usize,
 }
@@ -404,10 +387,9 @@ where
     pub(self) fn end_seq(self) -> Result<()> {
         if self.start + self.first_padding == self.serializer.bytes_written {
             // Empty sequence so we need to parse the element signature.
-            let rest_of_signature =
-                Signature::from(&self.serializer.signature[self.element_signature_pos..]);
-            let element_signature = slice_signature(&rest_of_signature)?;
-            self.serializer.signature_pos += element_signature.len();
+            self.serializer
+                .sign_parser
+                .skip_chars(self.element_signature_len)?;
         }
 
         // Set size of array in bytes
@@ -444,7 +426,9 @@ where
     {
         if self.start + self.first_padding != self.serializer.bytes_written {
             // The signature needs to be rewinded before encoding each element.
-            self.serializer.signature_pos = self.element_signature_pos;
+            self.serializer
+                .sign_parser
+                .rewind_chars(self.element_signature_len);
         }
         value.serialize(&mut *self.serializer)
     }
@@ -478,15 +462,13 @@ where
                     .variant_sign
                     .take()
                     // FIXME: Better error?
-                    .ok_or_else(|| {
-                        Error::InvalidSignature(String::from(self.serializer.signature))
-                    })?;
+                    .ok_or_else(|| Error::IncorrectValue)?;
 
+                let sign_parser = SignatureParser::new(Signature::from(signature));
                 let mut serializer = Serializer::<B, W> {
                     format: self.serializer.format,
-                    signature: &signature,
+                    sign_parser,
                     write: &mut self.serializer.write,
-                    signature_pos: 0,
                     bytes_written: self.serializer.bytes_written,
                     variant_sign: None,
                     b: PhantomData,
@@ -502,7 +484,7 @@ where
 
     fn end_struct(self) -> Result<()> {
         if let Some(c) = self.end_parens {
-            self.serializer.parse_signature_char(Some(c))?;
+            self.serializer.sign_parser.parse_char(Some(c))?;
         }
 
         Ok(())
@@ -591,10 +573,13 @@ where
         if self.start + self.first_padding == self.serializer.bytes_written {
             // First key
             self.serializer
-                .parse_signature_char(Some(DICT_ENTRY_SIG_START_CHAR))?;
+                .sign_parser
+                .parse_char(Some(DICT_ENTRY_SIG_START_CHAR))?;
         } else {
             // The signature needs to be rewinded before encoding each element.
-            self.serializer.signature_pos = self.element_signature_pos + 1;
+            self.serializer
+                .sign_parser
+                .rewind_chars(self.element_signature_len - 2);
         }
         self.serializer.add_padding(DICT_ENTRY_ALIGNMENT)?;
 

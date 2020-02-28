@@ -37,6 +37,7 @@ pub use from_variant::*;
 mod into_variant;
 pub use into_variant::*;
 
+mod signature_parser;
 mod utils;
 
 // TODO: Tests for all *serde* types and import all existing ones from zvariant.
