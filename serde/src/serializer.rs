@@ -442,7 +442,7 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.start != self.serializer.bytes_written {
+        if self.start + self.first_padding != self.serializer.bytes_written {
             // The signature needs to be rewinded before encoding each element.
             self.serializer.signature_pos = self.element_signature_pos;
         }
@@ -588,7 +588,7 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.start == self.serializer.bytes_written {
+        if self.start + self.first_padding == self.serializer.bytes_written {
             // First key
             self.serializer
                 .parse_signature_char(Some(DICT_ENTRY_SIG_START_CHAR))?;
