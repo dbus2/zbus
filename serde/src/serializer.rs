@@ -17,15 +17,7 @@ where
     W: Write + Seek,
 {
     let signature = T::signature();
-    let sign_parser = SignatureParser::new(signature);
-    let mut serializer = Serializer::<B, W> {
-        format,
-        sign_parser,
-        write,
-        bytes_written: 0,
-        variant_sign: None,
-        b: PhantomData,
-    };
+    let mut serializer = Serializer::<B, W>::new(signature, write, format);
     value.serialize(&mut serializer)?;
     Ok(serializer.bytes_written)
 }
@@ -58,6 +50,23 @@ where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
+    pub fn new<'s: 'ser, 'w: 'ser>(
+        signature: Signature<'s>,
+        write: &'w mut W,
+        format: EncodingFormat,
+    ) -> Self {
+        let sign_parser = SignatureParser::new(signature);
+
+        Self {
+            format,
+            sign_parser,
+            write,
+            bytes_written: 0,
+            variant_sign: None,
+            b: PhantomData,
+        }
+    }
+
     fn add_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.bytes_written, alignment);
         if padding > 0 {
