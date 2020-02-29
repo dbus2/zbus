@@ -30,7 +30,6 @@ where
     Ok(serializer.bytes_written)
 }
 
-// FIXME: to_write() would be better, then to_bytes() can be a think wrapper over it
 pub fn to_bytes<T: ?Sized, B>(value: &T, format: EncodingFormat) -> Result<Vec<u8>>
 where
     T: Serialize + VariantValue,
