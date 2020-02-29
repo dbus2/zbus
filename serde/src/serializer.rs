@@ -35,18 +35,8 @@ where
     T: Serialize + VariantValue,
     B: byteorder::ByteOrder,
 {
-    let signature = T::signature();
-    let sign_parser = SignatureParser::new(signature);
     let mut cursor = std::io::Cursor::new(vec![]);
-    let mut serializer = Serializer::<B, _> {
-        format,
-        sign_parser,
-        write: &mut cursor,
-        bytes_written: 0,
-        variant_sign: None,
-        b: PhantomData,
-    };
-    value.serialize(&mut serializer)?;
+    let _ = to_write::<T, B, _>(value, &mut cursor, format);
     Ok(cursor.into_inner())
 }
 
