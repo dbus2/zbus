@@ -10,47 +10,6 @@ use crate::{Basic, EncodingFormat};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
-pub struct Serializer<'ser, B, W> {
-    pub(self) format: EncodingFormat,
-    pub(self) write: &'ser mut W,
-    pub(self) bytes_written: usize,
-
-    pub(self) sign_parser: SignatureParser<'ser>,
-
-    // FIXME: Use ArrayString here?
-    pub(self) variant_sign: Option<String>,
-
-    b: PhantomData<B>,
-}
-
-impl<'ser, B, W> Serializer<'ser, B, W>
-where
-    B: byteorder::ByteOrder,
-    W: Write + Seek,
-{
-    fn add_padding(&mut self, alignment: usize) -> Result<usize> {
-        let padding = padding_for_n_bytes(self.bytes_written, alignment);
-        if padding > 0 {
-            let byte = [0_u8; 1];
-            for _ in 0..padding {
-                self.write_all(&byte).map_err(Error::Io)?;
-            }
-        }
-
-        Ok(padding)
-    }
-
-    fn prep_serialize_basic<T>(&mut self) -> Result<()>
-    where
-        T: Basic,
-    {
-        self.sign_parser.parse_char(Some(T::SIGNATURE_CHAR))?;
-        self.add_padding(T::ALIGNMENT)?;
-
-        Ok(())
-    }
-}
-
 pub fn to_write<T: ?Sized, B, W>(value: &T, write: &mut W, format: EncodingFormat) -> Result<usize>
 where
     T: Serialize + VariantValue,
@@ -90,6 +49,47 @@ where
     };
     value.serialize(&mut serializer)?;
     Ok(cursor.into_inner())
+}
+
+pub struct Serializer<'ser, B, W> {
+    pub(self) format: EncodingFormat,
+    pub(self) write: &'ser mut W,
+    pub(self) bytes_written: usize,
+
+    pub(self) sign_parser: SignatureParser<'ser>,
+
+    // FIXME: Use ArrayString here?
+    pub(self) variant_sign: Option<String>,
+
+    b: PhantomData<B>,
+}
+
+impl<'ser, B, W> Serializer<'ser, B, W>
+where
+    B: byteorder::ByteOrder,
+    W: Write + Seek,
+{
+    fn add_padding(&mut self, alignment: usize) -> Result<usize> {
+        let padding = padding_for_n_bytes(self.bytes_written, alignment);
+        if padding > 0 {
+            let byte = [0_u8; 1];
+            for _ in 0..padding {
+                self.write_all(&byte).map_err(Error::Io)?;
+            }
+        }
+
+        Ok(padding)
+    }
+
+    fn prep_serialize_basic<T>(&mut self) -> Result<()>
+    where
+        T: Basic,
+    {
+        self.sign_parser.parse_char(Some(T::SIGNATURE_CHAR))?;
+        self.add_padding(T::ALIGNMENT)?;
+
+        Ok(())
+    }
 }
 
 impl<'ser, B, W> Write for Serializer<'ser, B, W>
