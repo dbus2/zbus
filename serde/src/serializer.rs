@@ -10,12 +10,12 @@ use crate::{Basic, EncodingFormat};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
-pub struct Serializer<'a, B, W> {
+pub struct Serializer<'ser, B, W> {
     pub(self) format: EncodingFormat,
-    pub(self) write: &'a mut W,
+    pub(self) write: &'ser mut W,
     pub(self) bytes_written: usize,
 
-    pub(self) sign_parser: SignatureParser<'a>,
+    pub(self) sign_parser: SignatureParser<'ser>,
 
     // FIXME: Use ArrayString here?
     pub(self) variant_sign: Option<String>,
@@ -23,7 +23,7 @@ pub struct Serializer<'a, B, W> {
     b: PhantomData<B>,
 }
 
-impl<'a, B, W> Serializer<'a, B, W>
+impl<'ser, B, W> Serializer<'ser, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -92,7 +92,7 @@ where
     Ok(cursor.into_inner())
 }
 
-impl<'a, B, W> Write for Serializer<'a, B, W>
+impl<'ser, B, W> Write for Serializer<'ser, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -111,7 +111,7 @@ where
     }
 }
 
-impl<'a, 'b, B, W> ser::Serializer for &'b mut Serializer<'a, B, W>
+impl<'ser, 'b, B, W> ser::Serializer for &'b mut Serializer<'ser, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -119,13 +119,13 @@ where
     type Ok = ();
     type Error = Error;
 
-    type SerializeSeq = SeqSerializer<'a, 'b, B, W>;
-    type SerializeTuple = StructSerializer<'a, 'b, B, W>;
-    type SerializeTupleStruct = StructSerializer<'a, 'b, B, W>;
-    type SerializeTupleVariant = StructSerializer<'a, 'b, B, W>;
-    type SerializeMap = SeqSerializer<'a, 'b, B, W>;
-    type SerializeStruct = StructSerializer<'a, 'b, B, W>;
-    type SerializeStructVariant = StructSerializer<'a, 'b, B, W>;
+    type SerializeSeq = SeqSerializer<'ser, 'b, B, W>;
+    type SerializeTuple = StructSerializer<'ser, 'b, B, W>;
+    type SerializeTupleStruct = StructSerializer<'ser, 'b, B, W>;
+    type SerializeTupleVariant = StructSerializer<'ser, 'b, B, W>;
+    type SerializeMap = SeqSerializer<'ser, 'b, B, W>;
+    type SerializeStruct = StructSerializer<'ser, 'b, B, W>;
+    type SerializeStructVariant = StructSerializer<'ser, 'b, B, W>;
 
     fn serialize_bool(self, v: bool) -> Result<()> {
         self.prep_serialize_basic::<bool>()?;
@@ -370,8 +370,8 @@ where
 }
 
 // TODO: Put this in a separate file
-pub struct SeqSerializer<'a, 'b, B, W> {
-    serializer: &'b mut Serializer<'a, B, W>,
+pub struct SeqSerializer<'ser, 'b, B, W> {
+    serializer: &'b mut Serializer<'ser, B, W>,
     start: usize,
     // where value signature starts
     element_signature_len: usize,
@@ -379,7 +379,7 @@ pub struct SeqSerializer<'a, 'b, B, W> {
     first_padding: usize,
 }
 
-impl<'a, 'b, B, W> SeqSerializer<'a, 'b, B, W>
+impl<'ser, 'b, B, W> SeqSerializer<'ser, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -412,7 +412,7 @@ where
     }
 }
 
-impl<'a, 'b, B, W> ser::SerializeSeq for SeqSerializer<'a, 'b, B, W>
+impl<'ser, 'b, B, W> ser::SerializeSeq for SeqSerializer<'ser, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -439,12 +439,12 @@ where
 }
 
 // TODO: Put this in a separate file
-pub struct StructSerializer<'a, 'b, B, W> {
-    serializer: &'b mut Serializer<'a, B, W>,
+pub struct StructSerializer<'ser, 'b, B, W> {
+    serializer: &'b mut Serializer<'ser, B, W>,
     end_parens: Option<char>,
 }
 
-impl<'a, 'b, B, W> StructSerializer<'a, 'b, B, W>
+impl<'ser, 'b, B, W> StructSerializer<'ser, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -491,7 +491,7 @@ where
     }
 }
 
-impl<'a, 'b, B, W> ser::SerializeTuple for StructSerializer<'a, 'b, B, W>
+impl<'ser, 'b, B, W> ser::SerializeTuple for StructSerializer<'ser, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -511,7 +511,7 @@ where
     }
 }
 
-impl<'a, 'b, B, W> ser::SerializeTupleStruct for StructSerializer<'a, 'b, B, W>
+impl<'ser, 'b, B, W> ser::SerializeTupleStruct for StructSerializer<'ser, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -531,7 +531,7 @@ where
     }
 }
 
-impl<'a, 'b, B, W> ser::SerializeTupleVariant for StructSerializer<'a, 'b, B, W>
+impl<'ser, 'b, B, W> ser::SerializeTupleVariant for StructSerializer<'ser, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -551,7 +551,7 @@ where
     }
 }
 
-impl<'a, 'b, B, W> ser::SerializeMap for SeqSerializer<'a, 'b, B, W>
+impl<'ser, 'b, B, W> ser::SerializeMap for SeqSerializer<'ser, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -598,7 +598,7 @@ where
     }
 }
 
-impl<'a, 'b, B, W> ser::SerializeStruct for StructSerializer<'a, 'b, B, W>
+impl<'ser, 'b, B, W> ser::SerializeStruct for StructSerializer<'ser, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -618,7 +618,7 @@ where
     }
 }
 
-impl<'a, 'b, B, W> ser::SerializeStructVariant for StructSerializer<'a, 'b, B, W>
+impl<'ser, 'b, B, W> ser::SerializeStructVariant for StructSerializer<'ser, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
