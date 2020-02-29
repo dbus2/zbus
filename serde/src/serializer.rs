@@ -10,7 +10,7 @@ use crate::{Basic, EncodingFormat};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
-pub fn to_write<T: ?Sized, B, W>(value: &T, write: &mut W, format: EncodingFormat) -> Result<usize>
+pub fn to_write<T: ?Sized, B, W>(write: &mut W, format: EncodingFormat, value: &T) -> Result<usize>
 where
     T: Serialize + VariantValue,
     B: byteorder::ByteOrder,
@@ -30,13 +30,13 @@ where
     Ok(serializer.bytes_written)
 }
 
-pub fn to_bytes<T: ?Sized, B>(value: &T, format: EncodingFormat) -> Result<Vec<u8>>
+pub fn to_bytes<T: ?Sized, B>(format: EncodingFormat, value: &T) -> Result<Vec<u8>>
 where
     T: Serialize + VariantValue,
     B: byteorder::ByteOrder,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let _ = to_write::<T, B, _>(value, &mut cursor, format);
+    let _ = to_write::<T, B, _>(&mut cursor, format, value);
     Ok(cursor.into_inner())
 }
 
