@@ -11,20 +11,14 @@ This crate provides API for encoding/decoding of data to/from D-Bus wire format.
 and can and should be used by other projects. This binary wire format is simple and very efficient and hence useful
 outside of D-Bus context as well.
 
+Status: Stable.
+
 ## zbus
 
 That's the main crate that you'll use to actually communicate with services and apps over D-Bus. At the moment you can
 only connect to the session bus and call methods synchronously.
 
-# Status
-
-## zvariant
-
-Stable.
-
-## zbus
-
-Early development. You've been warned!
+Status: Early development. You've been warned!
 
 # License
 
