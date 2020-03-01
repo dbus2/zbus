@@ -13,6 +13,8 @@ outside of D-Bus context as well.
 
 Status: Stable.
 
+Documentation can be found [here](https://docs.rs/zvariant/).
+
 ## zbus
 
 That's the main crate that you'll use to actually communicate with services and apps over D-Bus. At the moment you can
