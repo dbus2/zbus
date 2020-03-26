@@ -12,6 +12,7 @@ pub enum Error {
     IncorrectValue,
     InvalidUtf8,
     InsufficientData,
+    PaddingNot0,
     InvalidSignature(String),
     UnsupportedType(String),
 }
@@ -32,6 +33,7 @@ impl fmt::Display for Error {
             Error::IncorrectValue => write!(f, "incorrect value"),
             Error::InvalidUtf8 => write!(f, "invalid UTF-8"),
             Error::InsufficientData => write!(f, "insufficient data"),
+            Error::PaddingNot0 => write!(f, "non-0 padding byte(s)"),
             Error::InvalidSignature(s) => write!(f, "invalid signature: \"{}\"", s.as_str()),
             Error::UnsupportedType(s) => {
                 write!(f, "unsupported type (signature: \"{}\")", s.as_str())
