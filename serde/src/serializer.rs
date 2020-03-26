@@ -95,7 +95,7 @@ where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
-    /// Write `buf` and increment `bytes_written` field.
+    /// Write `buf` and increment internal bytes written counter.
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.write.write(buf).map(|n| {
             self.bytes_written += n;
