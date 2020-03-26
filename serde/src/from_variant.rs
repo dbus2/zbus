@@ -211,6 +211,26 @@ impl<'s, 'v: 's> FromVariant<'v> for &'s str {
     }
 }
 
+// String
+
+impl<'v> FromVariant<'v> for String {
+    fn from_variant(variant: Variant<'v>) -> Result<Self, Error> {
+        if let Variant::String(value) = variant {
+            Ok(value)
+        } else {
+            Err(Error::IncorrectType)
+        }
+    }
+
+    fn from_variant_ref(variant: &'v Variant<'v>) -> Result<&'v Self, Error> {
+        if let Variant::String(value) = variant {
+            Ok(value)
+        } else {
+            Err(Error::IncorrectType)
+        }
+    }
+}
+
 // Signature
 
 impl<'s, 'v: 's> FromVariant<'v> for Signature<'s> {

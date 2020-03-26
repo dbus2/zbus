@@ -80,6 +80,12 @@ impl<'v, 's: 'v> IntoVariant<'v> for &'s str {
     }
 }
 
+impl<'v> IntoVariant<'v> for String {
+    fn into_variant(self) -> Variant<'v> {
+        Variant::String(self)
+    }
+}
+
 impl<'v, 's: 'v> IntoVariant<'v> for Signature<'s> {
     fn into_variant(self) -> Variant<'v> {
         Variant::Signature(self)
