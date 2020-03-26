@@ -46,7 +46,6 @@ pub(crate) fn f64_to_f32(value: f64) -> f32 {
 
 pub(crate) fn alignment_for_signature_char(signature_char: char, _format: EncodingFormat) -> usize {
     match signature_char {
-        // FIXME: There has to be a shorter way to do this
         u8::SIGNATURE_CHAR => u8::ALIGNMENT,
         bool::SIGNATURE_CHAR => bool::ALIGNMENT,
         i16::SIGNATURE_CHAR => i16::ALIGNMENT,
@@ -73,7 +72,6 @@ pub(crate) fn alignment_for_signature_char(signature_char: char, _format: Encodi
 
 pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
     match signature.chars().next().ok_or(Error::InsufficientData)? {
-        // FIXME: There has to be a shorter way to do this
         u8::SIGNATURE_CHAR
         | bool::SIGNATURE_CHAR
         | i16::SIGNATURE_CHAR
