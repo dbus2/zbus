@@ -1,5 +1,6 @@
 use serde::ser::{Serialize, SerializeSeq, Serializer};
 
+use crate::{Error, Result};
 use crate::{IntoVariant, Signature, Variant, VariantValue};
 
 /// An unordered collection of items of the same type.
@@ -14,8 +15,33 @@ pub struct Array<'a> {
 }
 
 impl<'a> Array<'a> {
+    pub fn new<'s: 'a>(element_signature: Signature<'s>) -> Array<'a> {
+        Array {
+            element_signature,
+            elements: vec![],
+        }
+    }
+
+    pub fn append<'e: 'a>(&mut self, element: Variant<'e>) -> Result<()> {
+        if element.value_signature() != self.element_signature {
+            return Err(Error::IncorrectType);
+        }
+
+        self.elements.push(element);
+
+        Ok(())
+    }
+
     pub fn get(&self) -> &[Variant<'a>] {
         &self.elements
+    }
+
+    pub fn len(&self) -> usize {
+        self.elements.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.elements.len() == 0
     }
 
     pub fn signature(&self) -> Signature<'static> {
@@ -81,7 +107,7 @@ where
 }
 
 impl<'a> Serialize for Array<'a> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
