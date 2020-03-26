@@ -1,4 +1,4 @@
-use serde::ser;
+use serde::{de, ser};
 use std::{error, fmt, result};
 
 #[derive(Debug)]
@@ -40,6 +40,15 @@ impl fmt::Display for Error {
                 write!(f, "unsupported type (signature: \"{}\")", s.as_str())
             }
         }
+    }
+}
+
+impl de::Error for Error {
+    fn custom<T>(msg: T) -> Error
+    where
+        T: fmt::Display,
+    {
+        Error::Message(msg.to_string())
     }
 }
 
