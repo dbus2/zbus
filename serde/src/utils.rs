@@ -36,6 +36,14 @@ pub(crate) fn usize_to_u8(value: usize) -> u8 {
     value as u8
 }
 
+pub(crate) fn f64_to_f32(value: f64) -> f32 {
+    if value > (std::f32::MAX as f64) {
+        panic!("{} too large for `f32`", value);
+    }
+
+    value as f32
+}
+
 pub(crate) fn alignment_for_signature_char(signature_char: char, _format: EncodingFormat) -> usize {
     match signature_char {
         // FIXME: There has to be a shorter way to do this
