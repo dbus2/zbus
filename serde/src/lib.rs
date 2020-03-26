@@ -438,4 +438,39 @@ mod tests {
             panic!();
         }
     }
+
+    #[test]
+    fn variant_variant() {
+        let encoded = to_bytes::<BE, _>(Format::DBus, &0xABBA_ABBA_ABBA_ABBA_u64).unwrap();
+        assert!(encoded.len() == 8);
+        assert!(LE::read_u64(&encoded) == 0xBAAB_BAAB_BAAB_BAAB_u64);
+        let decoded = from_slice::<BE, u64>(&encoded, Format::DBus).unwrap();
+        assert!(decoded == 0xABBA_ABBA_ABBA_ABBA);
+
+        // As Variant
+        let v = 0xFEFE_u64.into_variant();
+        assert!(v.value_signature() == "t");
+        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
+        assert!(encoded.len() == 16);
+        let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
+        assert!(v == Variant::U64(0xFEFE));
+
+        // And now as Variant in a Variant
+        let v = Variant::Variant(Box::new(v));
+        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
+        assert!(encoded.len() == 16);
+        let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
+        if let Variant::Variant(v) = v {
+            assert!(v.value_signature() == "t");
+            assert!(*v == Variant::U64(0xFEFE));
+        } else {
+            panic!();
+        }
+
+        // Ensure Variant works with other Serializer & Deserializer
+        let v = 0xFEFE_u64.into_variant();
+        let encoded = serde_json::to_string(&v).unwrap();
+        let v = serde_json::from_str::<Variant>(&encoded).unwrap();
+        assert!(v == Variant::U64(0xFEFE));
+    }
 }
