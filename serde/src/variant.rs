@@ -1,10 +1,14 @@
+use std::marker::PhantomData;
 use std::str;
 
+use serde::de::{
+    Deserialize, DeserializeSeed, Deserializer, Error, MapAccess, SeqAccess, Unexpected, Visitor,
+};
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
-use crate::utils::VARIANT_SIGNATURE_STR;
-use crate::VariantValue;
+use crate::utils::*;
 use crate::{Array, Dict};
+use crate::{Basic, IntoVariant, VariantValue};
 use crate::{ObjectPath, Signature, Structure};
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
@@ -144,6 +148,262 @@ impl<'a> Serialize for Variant<'a> {
         self.serialize_value_as_struct_field("zvariant::Variant::Value", &mut structure)?;
 
         structure.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Variant<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let visitor = VariantVisitor;
+
+        deserializer.deserialize_any(visitor)
+    }
+}
+
+struct VariantVisitor;
+
+impl<'de> Visitor<'de> for VariantVisitor {
+    type Value = Variant<'de>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a Variant")
+    }
+
+    #[inline]
+    fn visit_seq<V>(self, mut visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        let signature = visitor.next_element::<Signature>()?.ok_or_else(|| {
+            Error::invalid_value(Unexpected::Other("nothing"), &"a Variant signature")
+        })?;
+        let seed = VariantSeed::<Variant> {
+            signature,
+            phantom: PhantomData,
+        };
+
+        visitor
+            .next_element_seed(seed)?
+            .ok_or_else(|| Error::invalid_value(Unexpected::Other("nothing"), &"a Variant value"))
+    }
+
+    fn visit_map<V>(self, mut visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: MapAccess<'de>,
+    {
+        let (_, signature) = visitor.next_entry::<&str, Signature>()?.ok_or_else(|| {
+            Error::invalid_value(Unexpected::Other("nothing"), &"a Variant signature")
+        })?;
+        let _ = visitor.next_key::<&str>()?;
+
+        let seed = VariantSeed::<Variant> {
+            signature,
+            phantom: PhantomData,
+        };
+        visitor.next_value_seed(seed)
+    }
+}
+
+struct VariantSeed<'de, T> {
+    signature: Signature<'de>,
+    phantom: PhantomData<T>,
+}
+
+impl<'de, T> VariantSeed<'de, T>
+where
+    T: Deserialize<'de>,
+{
+    #[inline]
+    fn visit_array<V>(self, mut visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        // TODO: Why do we need String here?
+        let signature = Signature::from(String::from(&self.signature[1..]));
+        let mut array = Array::new(signature.clone());
+
+        while let Some(elem) = visitor.next_element_seed(VariantSeed::<Variant> {
+            signature: signature.clone(),
+            phantom: PhantomData,
+        })? {
+            array.append(elem).map_err(Error::custom)?;
+        }
+
+        Ok(Variant::Array(array))
+    }
+
+    #[inline]
+    fn visit_struct<V>(self, mut visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        let mut i = 1;
+        let signature_end = self.signature.len() - 1;
+        let mut structure = Structure::new();
+        while i < signature_end {
+            let fields_signature = Signature::from(&self.signature[i..signature_end]);
+            let field_signature = slice_signature(&fields_signature).map_err(Error::custom)?;
+            i += field_signature.len();
+            // FIXME: Any way to avoid this allocation?
+            let field_signature = Signature::from(String::from(field_signature.as_str()));
+
+            if let Some(field) = visitor.next_element_seed(VariantSeed::<Variant> {
+                signature: field_signature,
+                phantom: PhantomData,
+            })? {
+                structure = structure.append_field(field);
+            }
+        }
+
+        Ok(Variant::Structure(structure))
+    }
+
+    #[inline]
+    fn visit_variant<V>(self, visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        VariantVisitor
+            .visit_seq(visitor)
+            .map(|v| Variant::Variant(Box::new(v)))
+    }
+}
+
+macro_rules! variant_seed_basic_method {
+    ($name:ident, $type:ty) => {
+        #[inline]
+        fn $name<E>(self, value: $type) -> Result<Variant<'de>, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(value.into_variant())
+        }
+    };
+}
+
+macro_rules! variant_seed_str_method {
+    ($name:ident, $type:ty, $variant:ident) => {
+        #[inline]
+        fn $name<E>(self, value: $type) -> Result<Variant<'de>, E>
+        where
+            E: serde::de::Error,
+        {
+            match self.signature.as_str() {
+                <&str>::SIGNATURE_STR => Ok(Variant::$variant(value)),
+                Signature::SIGNATURE_STR => Ok(Variant::Signature(Signature::from(value))),
+                ObjectPath::SIGNATURE_STR => Ok(Variant::ObjectPath(ObjectPath::from(value))),
+                _ => {
+                    let expected = format!(
+                        "`{}`, `{}` or `{}`",
+                        <&str>::SIGNATURE_STR,
+                        Signature::SIGNATURE_STR,
+                        ObjectPath::SIGNATURE_STR,
+                    );
+                    Err(Error::invalid_type(
+                        Unexpected::Str(self.signature.as_str()),
+                        &expected.as_str(),
+                    ))
+                }
+            }
+        }
+    };
+}
+
+impl<'de, T> Visitor<'de> for VariantSeed<'de, T>
+where
+    T: Deserialize<'de>,
+{
+    type Value = Variant<'de>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a Variant value")
+    }
+
+    variant_seed_basic_method!(visit_bool, bool);
+    variant_seed_basic_method!(visit_i16, i16);
+    variant_seed_basic_method!(visit_i32, i32);
+    variant_seed_basic_method!(visit_i64, i64);
+    variant_seed_basic_method!(visit_u8, u8);
+    variant_seed_basic_method!(visit_u16, u16);
+    variant_seed_basic_method!(visit_u32, u32);
+    variant_seed_basic_method!(visit_u64, u64);
+    variant_seed_basic_method!(visit_f64, f64);
+
+    #[inline]
+    fn visit_str<E>(self, value: &str) -> Result<Variant<'de>, E>
+    where
+        E: serde::de::Error,
+    {
+        self.visit_string(String::from(value))
+    }
+
+    variant_seed_str_method!(visit_borrowed_str, &'de str, Str);
+    variant_seed_str_method!(visit_string, String, String);
+
+    #[inline]
+    fn visit_seq<V>(self, visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        match self.signature.chars().next().ok_or_else(|| {
+            Error::invalid_value(
+                Unexpected::Other("nothing"),
+                &"Array or Struct signature character",
+            )
+        })? {
+            // For some reason rustc doesn't like us using ARRAY_SIGNATURE_CHAR const
+            'a' => self.visit_array(visitor),
+            '(' => self.visit_struct(visitor),
+            'v' => self.visit_variant(visitor),
+            c => Err(Error::invalid_value(
+                Unexpected::Char(c),
+                &"a Variant signature",
+            )),
+        }
+    }
+
+    #[inline]
+    fn visit_map<V>(self, mut visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: MapAccess<'de>,
+    {
+        // TODO: Why do we need String here?
+        println!("signature: {}", self.signature.as_str());
+        let key_signature = Signature::from(String::from(&self.signature[2..3]));
+        let signature_end = self.signature.len() - 1;
+        let value_signature = Signature::from(String::from(&self.signature[3..signature_end]));
+        let mut dict = Dict::new(key_signature.clone(), value_signature.clone());
+
+        while let Some((key, value)) = visitor.next_entry_seed(
+            VariantSeed::<Variant> {
+                signature: key_signature.clone(),
+                phantom: PhantomData,
+            },
+            VariantSeed::<Variant> {
+                signature: value_signature.clone(),
+                phantom: PhantomData,
+            },
+        )? {
+            dict.append(key, value).map_err(Error::custom)?;
+        }
+
+        Ok(Variant::Dict(dict))
+    }
+}
+
+impl<'de, T> DeserializeSeed<'de> for VariantSeed<'de, T>
+where
+    T: Deserialize<'de>,
+{
+    type Value = Variant<'de>;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(self)
     }
 }
 
