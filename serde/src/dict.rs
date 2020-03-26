@@ -20,11 +20,11 @@ pub struct Dict<'k, 'v> {
 }
 
 impl<'k, 'v> Dict<'k, 'v> {
-    pub fn new(key_signature: &Signature<'k>, value_signature: &Signature<'v>) -> Self {
+    pub fn new(key_signature: Signature<'k>, value_signature: Signature<'v>) -> Self {
         Self {
             entries: vec![],
-            key_signature: key_signature.clone(),
-            value_signature: value_signature.clone(),
+            key_signature,
+            value_signature,
         }
     }
 

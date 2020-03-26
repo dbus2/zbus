@@ -292,7 +292,7 @@ mod tests {
         assert!(map[&2] == "456");
 
         // Now a hand-crafted Dict Variant but with a Variant as value
-        let mut dict = Dict::new(&<&str>::signature(), &Variant::signature());
+        let mut dict = Dict::new(<&str>::signature(), Variant::signature());
         dict.add("hello", "there".into_variant()).unwrap();
         dict.add("bye", "now".into_variant()).unwrap();
         let v = dict.into_variant();
