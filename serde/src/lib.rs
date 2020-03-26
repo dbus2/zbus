@@ -16,6 +16,9 @@ pub use crate::object_path::*;
 mod serializer;
 pub use serializer::*;
 
+mod deserializer;
+pub use deserializer::*;
+
 mod signature;
 pub use crate::signature::*;
 
