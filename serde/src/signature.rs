@@ -1,4 +1,4 @@
-use serde_derive::Serialize;
+use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::str;
 
@@ -6,7 +6,7 @@ use crate::Basic;
 
 /// String that identifies the type of an encoded value.
 ///
-#[derive(Debug, PartialEq, Eq, Hash, Serialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
 #[serde(rename(serialize = "zvariant::Signature", deserialize = "zvariant::Signature"))]
 pub struct Signature<'a>(Cow<'a, str>);
 
