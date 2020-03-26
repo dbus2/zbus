@@ -1,4 +1,4 @@
-use serde_derive::Serialize;
+use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::str;
 
@@ -7,7 +7,7 @@ use crate::Basic;
 /// String that identifies objects at a given destination on the D-Bus bus.
 ///
 /// Mostly likely this is only useful in the D-Bus context.
-#[derive(Debug, PartialEq, Eq, Hash, Serialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
 #[serde(rename(
     serialize = "zvariant::ObjectPath",
     deserialize = "zvariant::ObjectPath"
