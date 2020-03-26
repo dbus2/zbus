@@ -269,7 +269,7 @@ mod tests {
         let v = &ar[..].into_variant();
         assert!(v.value_signature() == "a(yu(xbxas)s)");
         let encoded = to_bytes::<LE, _>(Format::DBus, v).unwrap();
-        assert!(dbg!(encoded.len()) == 94);
+        assert!(encoded.len() == 94);
     }
 
     #[test]
