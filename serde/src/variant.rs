@@ -18,7 +18,7 @@ use crate::{ObjectPath, Signature, Structure};
 /// TODO
 ///
 /// [D-Bus specification]: https://dbus.freedesktop.org/doc/dbus-specification.html
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Variant<'a> {
     // Simple types
     U8(u8),

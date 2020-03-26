@@ -12,7 +12,7 @@ use crate::{FromVariant, IntoVariant, Variant, VariantValue};
 /// TODO
 ///
 /// [`Variant`]: enum.Variant.html
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Dict<'k, 'v> {
     entries: Vec<DictEntry<'k, 'v>>,
     key_signature: Signature<'k>,
@@ -160,7 +160,7 @@ where
 
 // TODO: Conversion of Dict from/to BTreeMap
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct DictEntry<'k, 'v> {
     key: Variant<'k>,
     value: Variant<'v>,

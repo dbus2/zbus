@@ -7,7 +7,7 @@ use crate::{IntoVariant, Signature, Variant, VariantValue};
 /// API is provided to create this from a [`Vec`].
 ///
 /// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Array<'a> {
     element_signature: Signature<'a>,
     elements: Vec<Variant<'a>>,

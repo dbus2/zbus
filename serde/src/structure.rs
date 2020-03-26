@@ -12,7 +12,7 @@ use crate::{IntoVariant, Signature, Variant, VariantValue};
 /// TODO
 ///
 /// [`Variant`]: enum.Variant.html
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Structure<'a>(Vec<Variant<'a>>);
 
 impl<'a> Structure<'a> {
