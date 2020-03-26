@@ -19,6 +19,7 @@ pub enum Error {
 
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        // FIXME: is it true for Error::Io as well?
         None
     }
 }

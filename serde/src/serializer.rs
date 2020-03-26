@@ -135,6 +135,7 @@ where
         self.write_i16::<B>(v as i16).map_err(Error::Io)
     }
 
+    // TODO: Use macro to avoid code-duplication here
     fn serialize_i16(self, v: i16) -> Result<()> {
         self.prep_serialize_basic::<i16>()?;
         self.write_i16::<B>(v).map_err(Error::Io)
