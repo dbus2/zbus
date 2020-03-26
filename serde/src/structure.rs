@@ -46,6 +46,12 @@ impl<'a> Structure<'a> {
         self
     }
 
+    pub fn append_field<'e: 'a>(mut self, field: Variant<'e>) -> Self {
+        self.0.push(field);
+
+        self
+    }
+
     pub fn signature(&self) -> Signature<'static> {
         let mut signature = String::from("(");
         for field in &self.0 {
