@@ -28,6 +28,22 @@ impl<'k, 'v> Dict<'k, 'v> {
         }
     }
 
+    pub fn append<'kv: 'k, 'vv: 'v>(
+        &mut self,
+        key: Variant<'kv>,
+        value: Variant<'vv>,
+    ) -> Result<(), Error> {
+        if key.value_signature() != self.key_signature
+            || value.value_signature() != self.value_signature
+        {
+            return Err(Error::IncorrectType);
+        }
+
+        self.entries.push(DictEntry { key, value });
+
+        Ok(())
+    }
+
     /// Add a new entry.
     pub fn add<K, V>(&mut self, key: K, value: V) -> Result<(), Error>
     where
