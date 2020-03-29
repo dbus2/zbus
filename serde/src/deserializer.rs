@@ -453,7 +453,12 @@ where
     where
         V: Visitor<'de>,
     {
-        self.deserialize_str(visitor)
+        // Not using serialize_u32 cause identifier isn't part of the signature
+        self.parse_padding(u32::ALIGNMENT)?;
+        let variant_index = from_slice::<B, _>(&self.bytes[self.pos..], self.format)?;
+        self.pos += u32::ALIGNMENT;
+
+        visitor.visit_u32(variant_index)
     }
 
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>
