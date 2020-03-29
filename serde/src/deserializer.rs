@@ -16,6 +16,20 @@ where
     T: Deserialize<'d> + VariantValue,
 {
     let signature = T::signature();
+
+    from_slice_for_signature::<B, _, _>(bytes, format, signature)
+}
+
+pub fn from_slice_for_signature<'d, 'r: 'd, 's: 'd, B, S, T: ?Sized>(
+    bytes: &'r [u8],
+    format: EncodingFormat,
+    signature: S,
+) -> Result<T>
+where
+    B: byteorder::ByteOrder,
+    S: Into<Signature<'s>>,
+    T: Deserialize<'d>,
+{
     let mut de = Deserializer::<B>::new(bytes, signature, format);
 
     T::deserialize(&mut de)
