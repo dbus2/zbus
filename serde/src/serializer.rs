@@ -17,9 +17,8 @@ where
     T: Serialize + VariantValue,
 {
     let signature = T::signature();
-    let mut serializer = Serializer::<B, W>::new(signature, write, format);
-    value.serialize(&mut serializer)?;
-    Ok(serializer.bytes_written)
+
+    to_write_for_signature::<B, _, _, _>(write, format, signature, value)
 }
 
 pub fn to_bytes<B, T: ?Sized>(format: EncodingFormat, value: &T) -> Result<Vec<u8>>
@@ -29,6 +28,38 @@ where
 {
     let mut cursor = std::io::Cursor::new(vec![]);
     let _ = to_write::<B, _, T>(&mut cursor, format, value);
+    Ok(cursor.into_inner())
+}
+
+pub fn to_write_for_signature<'s, B, W, S, T: ?Sized>(
+    write: &mut W,
+    format: EncodingFormat,
+    signature: S,
+    value: &T,
+) -> Result<usize>
+where
+    B: byteorder::ByteOrder,
+    W: Write + Seek,
+    S: Into<Signature<'s>>,
+    T: Serialize,
+{
+    let mut serializer = Serializer::<B, W>::new(signature, write, format);
+    value.serialize(&mut serializer)?;
+    Ok(serializer.bytes_written)
+}
+
+pub fn to_bytes_for_signature<'s, B, S, T: ?Sized>(
+    format: EncodingFormat,
+    signature: S,
+    value: &T,
+) -> Result<Vec<u8>>
+where
+    B: byteorder::ByteOrder,
+    S: Into<Signature<'s>>,
+    T: Serialize,
+{
+    let mut cursor = std::io::Cursor::new(vec![]);
+    let _ = to_write_for_signature::<B, _, _, T>(&mut cursor, format, signature, value);
     Ok(cursor.into_inner())
 }
 
