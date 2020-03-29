@@ -52,7 +52,7 @@ mod tests {
 
     use byteorder::{BigEndian as BE, ByteOrder, LittleEndian as LE};
 
-    use crate::{from_slice, to_bytes};
+    use crate::{from_slice, from_slice_for_signature, to_bytes, to_bytes_for_signature};
     use crate::{Array, Dict, EncodingFormat as Format};
     use crate::{FromVariant, IntoVariant, Variant, VariantValue};
     use crate::{ObjectPath, Signature};
@@ -472,5 +472,49 @@ mod tests {
         let encoded = serde_json::to_string(&v).unwrap();
         let v = serde_json::from_str::<Variant>(&encoded).unwrap();
         assert!(v == Variant::U64(0xFEFE));
+    }
+
+    #[test]
+    fn enums() {
+        // TODO: Document enum handling.
+        //
+        // 1. `Variant`.
+        // 2. custom (de)serialize impl.
+        // 3. to/from_*_for_signature()
+        use serde_derive::{Deserialize, Serialize};
+
+        #[derive(PartialEq, Eq, Serialize, Deserialize)]
+        enum Test {
+            Unit,
+            NewType(u8),
+            Tuple(u8, u64),
+            Struct { y: u8, t: u64 },
+        }
+
+        let encoded = to_bytes_for_signature::<BE, _, _>(Format::DBus, "", &Test::Unit).unwrap();
+        assert!(encoded.len() == 4);
+        let decoded = from_slice_for_signature::<BE, _, Test>(&encoded, Format::DBus, "").unwrap();
+        assert!(decoded == Test::Unit);
+
+        let encoded =
+            to_bytes_for_signature::<BE, _, _>(Format::DBus, "y", &Test::NewType(42)).unwrap();
+        assert!(encoded.len() == 5);
+        let decoded = from_slice_for_signature::<BE, _, Test>(&encoded, Format::DBus, "y").unwrap();
+        assert!(decoded == Test::NewType(42));
+
+        // TODO: Provide convenience API to create complex signatures
+        let encoded =
+            to_bytes_for_signature::<BE, _, _>(Format::DBus, "(yt)", &Test::Tuple(42, 42)).unwrap();
+        assert!(encoded.len() == 24);
+        let decoded =
+            from_slice_for_signature::<BE, _, Test>(&encoded, Format::DBus, "(yt)").unwrap();
+        assert!(decoded == Test::Tuple(42, 42));
+
+        let s = Test::Struct { y: 42, t: 42 };
+        let encoded = to_bytes_for_signature::<BE, _, _>(Format::DBus, "(yt)", &s).unwrap();
+        assert!(encoded.len() == 24);
+        let decoded =
+            from_slice_for_signature::<BE, _, Test>(&encoded, Format::DBus, "(yt)").unwrap();
+        assert!(decoded == Test::Struct { y: 42, t: 42 });
     }
 }
