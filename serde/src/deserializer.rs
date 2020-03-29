@@ -37,10 +37,10 @@ where
 {
     pub fn new<'s: 'de, 'r: 'de>(
         bytes: &'r [u8],
-        signature: Signature<'s>,
+        signature: impl Into<Signature<'s>>,
         format: EncodingFormat,
     ) -> Self {
-        let sign_parser = SignatureParser::new(signature);
+        let sign_parser = SignatureParser::new(signature.into());
 
         Self {
             format,
