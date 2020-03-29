@@ -51,11 +51,11 @@ where
     W: Write + Seek,
 {
     pub fn new<'s: 'ser, 'w: 'ser>(
-        signature: Signature<'s>,
+        signature: impl Into<Signature<'s>>,
         write: &'w mut W,
         format: EncodingFormat,
     ) -> Self {
-        let sign_parser = SignatureParser::new(signature);
+        let sign_parser = SignatureParser::new(signature.into());
 
         Self {
             format,
