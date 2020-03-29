@@ -88,6 +88,14 @@ where
 
         Ok(())
     }
+
+    fn prep_serialize_enum_variant(&mut self, variant_index: u32) -> Result<()> {
+        // Encode enum variants as a struct with first field as variant index
+        self.add_padding(u32::ALIGNMENT)?;
+        self.write_u32::<B>(variant_index).map_err(Error::Io)?;
+
+        Ok(())
+    }
 }
 
 impl<'ser, B, W> Write for Serializer<'ser, B, W>
@@ -253,7 +261,7 @@ where
         variant_index: u32,
         _variant: &'static str,
     ) -> Result<()> {
-        self.serialize_u32(variant_index)
+        self.prep_serialize_enum_variant(variant_index)
     }
 
     fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<()>
@@ -268,16 +276,16 @@ where
     fn serialize_newtype_variant<T>(
         self,
         _name: &'static str,
-        _variant_index: u32,
+        variant_index: u32,
         _variant: &'static str,
         value: &T,
     ) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(self)?;
+        self.prep_serialize_enum_variant(variant_index)?;
 
-        Ok(())
+        value.serialize(self)
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
@@ -322,10 +330,12 @@ where
     fn serialize_tuple_variant(
         self,
         name: &'static str,
-        _variant_index: u32,
+        variant_index: u32,
         _variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
+        self.prep_serialize_enum_variant(variant_index)?;
+
         self.serialize_struct(name, len)
     }
 
@@ -360,10 +370,12 @@ where
     fn serialize_struct_variant(
         self,
         name: &'static str,
-        _variant_index: u32,
+        variant_index: u32,
         _variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStructVariant> {
+        self.prep_serialize_enum_variant(variant_index)?;
+
         self.serialize_struct(name, len)
     }
 }
