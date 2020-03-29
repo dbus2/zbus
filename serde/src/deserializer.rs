@@ -1,4 +1,4 @@
-use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
+use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor};
 use serde::Deserialize;
 
 use std::{marker::PhantomData, str};
@@ -439,14 +439,14 @@ where
 
     fn deserialize_enum<V>(
         self,
-        _name: &'static str,
+        name: &'static str,
         _variants: &'static [&'static str],
-        _visitor: V,
+        visitor: V,
     ) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        todo!();
+        visitor.visit_enum(Enum::<B> { de: self, name })
     }
 
     fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>
@@ -629,5 +629,57 @@ where
             }
             VariantParseStage::Done => Ok(None),
         }
+    }
+}
+
+struct Enum<'d, 'de: 'd, B> {
+    de: &'d mut Deserializer<'de, B>,
+    name: &'static str,
+}
+
+impl<'de, 'd, B> EnumAccess<'de> for Enum<'d, 'de, B>
+where
+    B: byteorder::ByteOrder,
+{
+    type Error = Error;
+    type Variant = Self;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant)>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        seed.deserialize(&mut *self.de).map(|v| (v, self))
+    }
+}
+
+impl<'de, 'd, B> VariantAccess<'de> for Enum<'d, 'de, B>
+where
+    B: byteorder::ByteOrder,
+{
+    type Error = Error;
+
+    fn unit_variant(self) -> Result<()> {
+        Ok(())
+    }
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        seed.deserialize(self.de)
+    }
+
+    fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        de::Deserializer::deserialize_struct(self.de, self.name, &[], visitor)
+    }
+
+    fn struct_variant<V>(self, fields: &'static [&'static str], visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        de::Deserializer::deserialize_struct(self.de, self.name, fields, visitor)
     }
 }
