@@ -50,7 +50,7 @@ mod tests {
     use std::collections::HashMap;
     use std::convert::TryFrom;
 
-    use byteorder::{BigEndian as BE, ByteOrder, LittleEndian as LE};
+    use byteorder::{self, ByteOrder, BE, LE};
 
     use crate::{
         from_slice, from_slice_be, from_slice_for_signature, from_slice_for_signature_be,
@@ -63,177 +63,148 @@ mod tests {
     use crate::{FromVariant, IntoVariant, Variant, VariantValue};
     use crate::{ObjectPath, Signature};
 
+    macro_rules! dual_test {
+        (be, $test_value:expr, $expected_len:expr, $expected_ty:ty) => {{
+            dual_test!(
+                BE,
+                to_bytes_be,
+                from_slice_be,
+                $test_value,
+                $expected_len,
+                $expected_ty
+            )
+        }};
+        (le, $test_value:expr, $expected_len:expr, $expected_ty:ty) => {{
+            dual_test!(
+                LE,
+                to_bytes_le,
+                from_slice_le,
+                $test_value,
+                $expected_len,
+                $expected_ty
+            )
+        }};
+        (ne, $test_value:expr, $expected_len:expr, $expected_ty:ty) => {{
+            dual_test!(
+                byteorder::NativeEndian,
+                to_bytes_ne,
+                from_slice_ne,
+                $test_value,
+                $expected_len,
+                $expected_ty
+            )
+        }};
+        ($trait:ty, $into_call:ident, $from_call:ident, $test_value:expr, $expected_len:expr, $expected_ty:ty) => {{
+            let encoded = to_bytes::<$trait, _>(Format::DBus, &$test_value).unwrap();
+            assert_eq!(encoded.len(), $expected_len, "invalid encoding 1");
+            let decoded = from_slice::<$trait, $expected_ty>(&encoded, Format::DBus).unwrap();
+            assert!(decoded == $test_value, "invalid decoding 1");
+
+            let x_encoded = $into_call(Format::DBus, &$test_value).unwrap();
+            assert_eq!(encoded, x_encoded, "invalid encoding 2");
+            let x_decoded: $expected_ty = $from_call(&x_encoded, Format::DBus).unwrap();
+            assert_eq!(decoded, x_decoded, "invalid decoding 2");
+
+            encoded
+        }};
+    }
+
     #[test]
     fn u8_variant() {
-        let encoded = to_bytes::<LE, _>(Format::DBus, &77_u8).unwrap();
-        assert!(encoded.len() == 1);
-        let decoded = from_slice::<LE, u8>(&encoded, Format::DBus).unwrap();
-        assert!(decoded == 77);
-
-        let le_encoded = to_bytes_le(Format::DBus, &77_u8).unwrap();
-        assert_eq!(encoded, le_encoded);
-        let le_decoded: u8 = from_slice_le(&le_encoded, Format::DBus).unwrap();
-        assert_eq!(decoded, le_decoded);
+        dual_test!(le, 77_u8, 1, u8);
 
         // As Variant
         let v = 77_u8.into_variant();
         assert!(v.value_signature() == "y");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
-        assert!(encoded.len() == 4);
-        let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::U8(77));
-
-        let le_encoded = to_bytes_le(Format::DBus, &v).unwrap();
-        assert_eq!(encoded, le_encoded);
-        let le_v: Variant = from_slice_le(&le_encoded, Format::DBus).unwrap();
-        assert_eq!(v, le_v);
+        dual_test!(le, v, 4, Variant);
     }
 
     #[test]
     fn u16_variant() {
-        let encoded = to_bytes::<BE, _>(Format::DBus, &0xABBA_u16).unwrap();
-        assert!(encoded.len() == 2);
-        assert!(LE::read_u16(&encoded) == 0xBAAB_u16);
-        let decoded = from_slice::<BE, u16>(&encoded, Format::DBus).unwrap();
-        assert!(decoded == 0xABBA);
-
-        let be_encoded = to_bytes_be(Format::DBus, &0xABBA_u16).unwrap();
-        assert_eq!(encoded, be_encoded);
-        let be_decoded: u16 = from_slice_be(&be_encoded, Format::DBus).unwrap();
-        assert_eq!(decoded, be_decoded);
+        dual_test!(be, 0xABBA_u16, 2, u16);
 
         // As Variant
         let v = 0xFEFE_u16.into_variant();
         assert!(v.value_signature() == "q");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
-        assert!(encoded.len() == 6);
-        let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::U16(0xFEFE));
-
-        let le_encoded = to_bytes_le(Format::DBus, &v).unwrap();
-        assert_eq!(encoded, le_encoded);
-        let le_v: Variant = from_slice_le(&le_encoded, Format::DBus).unwrap();
-        assert_eq!(v, le_v);
+        dual_test!(le, v, 6, Variant);
     }
 
     #[test]
     fn i16_variant() {
-        let encoded = to_bytes::<BE, _>(Format::DBus, &-0xAB0_i16).unwrap();
-        assert!(encoded.len() == 2);
+        let encoded = dual_test!(be, -0xAB0_i16, 2, i16);
         assert!(LE::read_i16(&encoded) == 0x50F5_i16);
-        let decoded = from_slice::<BE, i16>(&encoded, Format::DBus).unwrap();
-        assert!(decoded == -0xAB0);
-
-        let be_encoded = to_bytes_be(Format::DBus, &-0xAB0_i16).unwrap();
-        assert_eq!(encoded, be_encoded);
-        let be_decoded: i16 = from_slice_be(&be_encoded, Format::DBus).unwrap();
-        assert_eq!(decoded, be_decoded);
 
         // As Variant
         let v = 0xAB_i16.into_variant();
         assert!(v.value_signature() == "n");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
-        assert!(encoded.len() == 6);
-        let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::I16(0xAB));
-
-        let le_encoded = to_bytes_le(Format::DBus, &v).unwrap();
-        assert_eq!(encoded, le_encoded);
-        let le_v: Variant = from_slice_le(&le_encoded, Format::DBus).unwrap();
-        assert_eq!(v, le_v);
+        dual_test!(le, v, 6, Variant);
     }
 
     #[test]
     fn u32_variant() {
-        let encoded = to_bytes::<BE, _>(Format::DBus, &0xABBA_ABBA_u32).unwrap();
-        assert!(encoded.len() == 4);
-        assert!(LE::read_u32(&encoded) == 0xBAAB_BAAB_u32);
-        let decoded = from_slice::<BE, u32>(&encoded, Format::DBus).unwrap();
-        assert!(decoded == 0xABBA_ABBA);
+        dual_test!(be, 0xABBA_ABBA_u32, 4, u32);
 
         // As Variant
         let v = 0xABBA_ABBA_u32.into_variant();
         assert!(v.value_signature() == "u");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
-        assert!(encoded.len() == 8);
-        let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::U32(0xABBA_ABBA));
+        dual_test!(le, v, 8, Variant);
     }
 
     #[test]
     fn i32_variant() {
-        let encoded = to_bytes::<BE, _>(Format::DBus, &-0xABBA_AB0_i32).unwrap();
-        assert!(encoded.len() == 4);
+        let encoded = dual_test!(be, -0xABBA_AB0_i32, 4, i32);
         assert!(LE::read_i32(&encoded) == 0x5055_44F5_i32);
-        let decoded = from_slice::<BE, i32>(&encoded, Format::DBus).unwrap();
-        assert!(decoded == -0xABBA_AB0);
 
         // As Variant
         let v = 0xABBA_AB0_i32.into_variant();
         assert!(v.value_signature() == "i");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
-        assert!(encoded.len() == 8);
-        let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::I32(0xABBA_AB0));
+        dual_test!(le, v, 8, Variant);
     }
 
     // u64 is covered by `variant_variant` test below
 
     #[test]
     fn i64_variant() {
-        let encoded = to_bytes::<BE, _>(Format::DBus, &-0xABBA_ABBA_ABBA_AB0_i64).unwrap();
-        assert!(encoded.len() == 8);
+        let encoded = dual_test!(be, -0xABBA_ABBA_ABBA_AB0_i64, 8, i64);
         assert!(LE::read_i64(&encoded) == 0x5055_4455_4455_44F5_i64);
-        let decoded = from_slice::<BE, i64>(&encoded, Format::DBus).unwrap();
-        assert!(decoded == -0xABBA_ABBA_ABBA_AB0);
 
         // As Variant
         let v = 0xABBA_AB0i64.into_variant();
         assert!(v.value_signature() == "x");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
-        assert!(encoded.len() == 16);
-        let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::I64(0xABBA_AB0));
+        dual_test!(le, v, 16, Variant);
     }
 
     #[test]
     fn f64_variant() {
-        let encoded = to_bytes::<BE, _>(Format::DBus, &99999.99999_f64).unwrap();
-        assert!(encoded.len() == 8);
+        let encoded = dual_test!(be, 99999.99999_f64, 8, f64);
         assert!(LE::read_f64(&encoded) == -5759340900185448e-143);
-        let decoded = from_slice::<BE, f64>(&encoded, Format::DBus).unwrap();
-        assert!(decoded == 99999.99999);
 
         // As Variant
         let v = 99999.99999_f64.into_variant();
         assert!(v.value_signature() == "d");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
-        assert!(encoded.len() == 16);
-        let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::F64(99999.99999));
+        dual_test!(le, v, 16, Variant);
     }
 
     #[test]
     fn str_variant() {
         let string = "hello world";
-        let encoded = to_bytes::<LE, _>(Format::DBus, &string).unwrap();
-        assert!(encoded.len() == 16);
-        let decoded = from_slice::<LE, &str>(&encoded, Format::DBus).unwrap();
-        assert!(decoded == "hello world");
+        dual_test!(le, string, 16, &str);
 
         // As Variant
         let v = string.into_variant();
         assert!(v.value_signature() == "s");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
-        assert!(encoded.len() == 20);
-        let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::Str("hello world"));
+        dual_test!(le, v, 20, Variant);
 
         // Characters are treated as strings
-        let encoded = to_bytes::<LE, _>(Format::DBus, &'c').unwrap();
-        assert!(encoded.len() == 6);
-        let decoded = from_slice::<LE, char>(&encoded, Format::DBus).unwrap();
-        assert!(decoded == 'c');
+        dual_test!(le, 'c', 6, char);
 
         // As Variant
         let v = 'c'.into_variant();
@@ -247,16 +218,12 @@ mod tests {
     #[test]
     fn signature_variant() {
         let sig = Signature::from("yys");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &sig).unwrap();
-        assert!(encoded.len() == 5);
-        let decoded = from_slice::<LE, Signature>(&encoded, Format::DBus).unwrap();
-        assert!(decoded == Signature::from("yys"));
+        dual_test!(le, sig, 5, Signature);
 
         // As Variant
         let v = sig.into_variant();
         assert!(v.value_signature() == "g");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
-        assert!(encoded.len() == 8);
+        let encoded = dual_test!(le, v, 8, Variant);
         let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::Signature(Signature::from("yys")));
     }
@@ -264,16 +231,12 @@ mod tests {
     #[test]
     fn object_path_variant() {
         let o = ObjectPath::from("/hello/world");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &o).unwrap();
-        assert!(encoded.len() == 17);
-        let decoded = from_slice::<LE, ObjectPath>(&encoded, Format::DBus).unwrap();
-        assert!(decoded == ObjectPath::from("/hello/world"));
+        dual_test!(le, o, 17, ObjectPath);
 
         // As Variant
         let v = o.into_variant();
         assert!(v.value_signature() == "o");
-        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
-        assert!(encoded.len() == 21);
+        let encoded = dual_test!(le, v, 21, Variant);
         let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::ObjectPath(ObjectPath::from("/hello/world")));
     }
