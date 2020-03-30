@@ -96,14 +96,31 @@ mod tests {
         }};
         ($trait:ty, $into_call:ident, $from_call:ident, $test_value:expr, $expected_len:expr, $expected_ty:ty) => {{
             let encoded = to_bytes::<$trait, _>(Format::DBus, &$test_value).unwrap();
-            assert_eq!(encoded.len(), $expected_len, "invalid encoding 1");
+            assert_eq!(
+                encoded.len(),
+                $expected_len,
+                "invalid encoding using `to_bytes`"
+            );
             let decoded = from_slice::<$trait, $expected_ty>(&encoded, Format::DBus).unwrap();
-            assert!(decoded == $test_value, "invalid decoding 1");
+            assert!(
+                decoded == $test_value,
+                "invalid decoding using `from_slice`"
+            );
 
             let x_encoded = $into_call(Format::DBus, &$test_value).unwrap();
-            assert_eq!(encoded, x_encoded, "invalid encoding 2");
+            assert_eq!(
+                encoded,
+                x_encoded,
+                "invalid encoding using `{}`",
+                stringify!($into_call)
+            );
             let x_decoded: $expected_ty = $from_call(&x_encoded, Format::DBus).unwrap();
-            assert_eq!(decoded, x_decoded, "invalid decoding 2");
+            assert_eq!(
+                decoded,
+                x_decoded,
+                "invalid decoding using `{}`",
+                stringify!($from_call)
+            );
 
             encoded
         }};
