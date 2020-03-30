@@ -10,6 +10,28 @@ use crate::{Basic, EncodingFormat};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
+macro_rules! to_write_def {
+    ($func_name:ident, $call_name:ident) => {
+        pub fn $func_name<W, T: ?Sized>(
+            write: &mut W,
+            format: EncodingFormat,
+            value: &T,
+        ) -> Result<usize>
+        where
+            W: Write + Seek,
+            T: Serialize + VariantValue,
+        {
+            let signature = T::signature();
+
+            $call_name::<_, _, _>(write, format, signature, value)
+        }
+    };
+}
+
+to_write_def!(to_write_be, to_write_for_signature_be);
+to_write_def!(to_write_le, to_write_for_signature_le);
+to_write_def!(to_write_ne, to_write_for_signature_ne);
+
 pub fn to_write<B, W, T: ?Sized>(write: &mut W, format: EncodingFormat, value: &T) -> Result<usize>
 where
     B: byteorder::ByteOrder,
@@ -21,6 +43,23 @@ where
     to_write_for_signature::<B, _, _, _>(write, format, signature, value)
 }
 
+macro_rules! to_bytes_def {
+    ($func_name:ident, $call_name:ident) => {
+        pub fn $func_name<T: ?Sized>(format: EncodingFormat, value: &T) -> Result<Vec<u8>>
+        where
+            T: Serialize + VariantValue,
+        {
+            let mut cursor = std::io::Cursor::new(vec![]);
+            let _ = $call_name::<_, T>(&mut cursor, format, value);
+            Ok(cursor.into_inner())
+        }
+    };
+}
+
+to_bytes_def!(to_bytes_be, to_write_be);
+to_bytes_def!(to_bytes_le, to_write_le);
+to_bytes_def!(to_bytes_ne, to_write_ne);
+
 pub fn to_bytes<B, T: ?Sized>(format: EncodingFormat, value: &T) -> Result<Vec<u8>>
 where
     B: byteorder::ByteOrder,
@@ -30,6 +69,30 @@ where
     let _ = to_write::<B, _, T>(&mut cursor, format, value);
     Ok(cursor.into_inner())
 }
+
+macro_rules! to_write_for_signature_def {
+    ($func_name:ident, $trait:ty) => {
+        pub fn $func_name<'s, W, S, T: ?Sized>(
+            write: &mut W,
+            format: EncodingFormat,
+            signature: S,
+            value: &T,
+        ) -> Result<usize>
+        where
+            W: Write + Seek,
+            S: Into<Signature<'s>>,
+            T: Serialize,
+        {
+            let mut serializer = Serializer::<$trait, W>::new(signature, write, format);
+            value.serialize(&mut serializer)?;
+            Ok(serializer.bytes_written)
+        }
+    };
+}
+
+to_write_for_signature_def!(to_write_for_signature_be, byteorder::BE);
+to_write_for_signature_def!(to_write_for_signature_le, byteorder::LE);
+to_write_for_signature_def!(to_write_for_signature_ne, byteorder::NativeEndian);
 
 pub fn to_write_for_signature<'s, B, W, S, T: ?Sized>(
     write: &mut W,
@@ -47,6 +110,28 @@ where
     value.serialize(&mut serializer)?;
     Ok(serializer.bytes_written)
 }
+
+macro_rules! to_bytes_for_signature_def {
+    ($func_name:ident, $call:ident) => {
+        pub fn $func_name<'s, S, T: ?Sized>(
+            format: EncodingFormat,
+            signature: S,
+            value: &T,
+        ) -> Result<Vec<u8>>
+        where
+            S: Into<Signature<'s>>,
+            T: Serialize,
+        {
+            let mut cursor = std::io::Cursor::new(vec![]);
+            let _ = $call::<_, _, T>(&mut cursor, format, signature, value);
+            Ok(cursor.into_inner())
+        }
+    };
+}
+
+to_bytes_for_signature_def!(to_bytes_for_signature_be, to_write_for_signature_be);
+to_bytes_for_signature_def!(to_bytes_for_signature_le, to_write_for_signature_le);
+to_bytes_for_signature_def!(to_bytes_for_signature_ne, to_write_for_signature_ne);
 
 pub fn to_bytes_for_signature<'s, B, S, T: ?Sized>(
     format: EncodingFormat,

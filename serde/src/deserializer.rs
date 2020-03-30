@@ -10,6 +10,26 @@ use crate::{Basic, EncodingFormat};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
+macro_rules! from_slice_def {
+    ($func_name:ident, $call_name:ident) => {
+        pub fn $func_name<'d, 'r: 'd, T: ?Sized>(
+            bytes: &'r [u8],
+            format: EncodingFormat,
+        ) -> Result<T>
+        where
+            T: Deserialize<'d> + VariantValue,
+        {
+            let signature = T::signature();
+
+            $call_name::<_, _>(bytes, format, signature)
+        }
+    };
+}
+
+from_slice_def!(from_slice_be, from_slice_for_signature_be);
+from_slice_def!(from_slice_le, from_slice_for_signature_le);
+from_slice_def!(from_slice_ne, from_slice_for_signature_ne);
+
 pub fn from_slice<'d, 'r: 'd, B, T: ?Sized>(bytes: &'r [u8], format: EncodingFormat) -> Result<T>
 where
     B: byteorder::ByteOrder,
@@ -19,6 +39,28 @@ where
 
     from_slice_for_signature::<B, _, _>(bytes, format, signature)
 }
+
+macro_rules! from_slice_for_signature_def {
+    ($func_name:ident, $trait:ty) => {
+        pub fn $func_name<'d, 'r: 'd, 's: 'd, S, T: ?Sized>(
+            bytes: &'r [u8],
+            format: EncodingFormat,
+            signature: S,
+        ) -> Result<T>
+        where
+            S: Into<Signature<'s>>,
+            T: Deserialize<'d>,
+        {
+            let mut de = Deserializer::<$trait>::new(bytes, signature, format);
+
+            T::deserialize(&mut de)
+        }
+    };
+}
+
+from_slice_for_signature_def!(from_slice_for_signature_be, byteorder::BE);
+from_slice_for_signature_def!(from_slice_for_signature_le, byteorder::LE);
+from_slice_for_signature_def!(from_slice_for_signature_ne, byteorder::NativeEndian);
 
 pub fn from_slice_for_signature<'d, 'r: 'd, 's: 'd, B, S, T: ?Sized>(
     bytes: &'r [u8],

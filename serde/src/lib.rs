@@ -52,7 +52,13 @@ mod tests {
 
     use byteorder::{BigEndian as BE, ByteOrder, LittleEndian as LE};
 
-    use crate::{from_slice, from_slice_for_signature, to_bytes, to_bytes_for_signature};
+    use crate::{
+        from_slice, from_slice_be, from_slice_for_signature, from_slice_for_signature_be,
+        from_slice_le,
+    };
+    use crate::{
+        to_bytes, to_bytes_be, to_bytes_for_signature, to_bytes_for_signature_be, to_bytes_le,
+    };
     use crate::{Array, Dict, EncodingFormat as Format};
     use crate::{FromVariant, IntoVariant, Variant, VariantValue};
     use crate::{ObjectPath, Signature};
@@ -64,6 +70,11 @@ mod tests {
         let decoded = from_slice::<LE, u8>(&encoded, Format::DBus).unwrap();
         assert!(decoded == 77);
 
+        let le_encoded = to_bytes_le(Format::DBus, &77_u8).unwrap();
+        assert_eq!(encoded, le_encoded);
+        let le_decoded: u8 = from_slice_le(&le_encoded, Format::DBus).unwrap();
+        assert_eq!(decoded, le_decoded);
+
         // As Variant
         let v = 77_u8.into_variant();
         assert!(v.value_signature() == "y");
@@ -71,6 +82,11 @@ mod tests {
         assert!(encoded.len() == 4);
         let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::U8(77));
+
+        let le_encoded = to_bytes_le(Format::DBus, &v).unwrap();
+        assert_eq!(encoded, le_encoded);
+        let le_v: Variant = from_slice_le(&le_encoded, Format::DBus).unwrap();
+        assert_eq!(v, le_v);
     }
 
     #[test]
@@ -81,6 +97,11 @@ mod tests {
         let decoded = from_slice::<BE, u16>(&encoded, Format::DBus).unwrap();
         assert!(decoded == 0xABBA);
 
+        let be_encoded = to_bytes_be(Format::DBus, &0xABBA_u16).unwrap();
+        assert_eq!(encoded, be_encoded);
+        let be_decoded: u16 = from_slice_be(&be_encoded, Format::DBus).unwrap();
+        assert_eq!(decoded, be_decoded);
+
         // As Variant
         let v = 0xFEFE_u16.into_variant();
         assert!(v.value_signature() == "q");
@@ -88,6 +109,11 @@ mod tests {
         assert!(encoded.len() == 6);
         let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::U16(0xFEFE));
+
+        let le_encoded = to_bytes_le(Format::DBus, &v).unwrap();
+        assert_eq!(encoded, le_encoded);
+        let le_v: Variant = from_slice_le(&le_encoded, Format::DBus).unwrap();
+        assert_eq!(v, le_v);
     }
 
     #[test]
@@ -98,6 +124,11 @@ mod tests {
         let decoded = from_slice::<BE, i16>(&encoded, Format::DBus).unwrap();
         assert!(decoded == -0xAB0);
 
+        let be_encoded = to_bytes_be(Format::DBus, &-0xAB0_i16).unwrap();
+        assert_eq!(encoded, be_encoded);
+        let be_decoded: i16 = from_slice_be(&be_encoded, Format::DBus).unwrap();
+        assert_eq!(decoded, be_decoded);
+
         // As Variant
         let v = 0xAB_i16.into_variant();
         assert!(v.value_signature() == "n");
@@ -105,6 +136,11 @@ mod tests {
         assert!(encoded.len() == 6);
         let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::I16(0xAB));
+
+        let le_encoded = to_bytes_le(Format::DBus, &v).unwrap();
+        assert_eq!(encoded, le_encoded);
+        let le_v: Variant = from_slice_le(&le_encoded, Format::DBus).unwrap();
+        assert_eq!(v, le_v);
     }
 
     #[test]
@@ -497,7 +533,7 @@ mod tests {
         // 3. to/from_*_for_signature()
         use serde_derive::{Deserialize, Serialize};
 
-        #[derive(PartialEq, Eq, Serialize, Deserialize)]
+        #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
         enum Test {
             Unit,
             NewType(u8),
@@ -510,11 +546,21 @@ mod tests {
         let decoded = from_slice_for_signature::<BE, _, Test>(&encoded, Format::DBus, "").unwrap();
         assert!(decoded == Test::Unit);
 
+        let be_encoded = to_bytes_for_signature_be(Format::DBus, "", &Test::Unit).unwrap();
+        assert_eq!(encoded, be_encoded);
+        let be_decoded: Test = from_slice_for_signature_be(&be_encoded, Format::DBus, "").unwrap();
+        assert_eq!(decoded, be_decoded);
+
         let encoded =
             to_bytes_for_signature::<BE, _, _>(Format::DBus, "y", &Test::NewType(42)).unwrap();
         assert!(encoded.len() == 5);
         let decoded = from_slice_for_signature::<BE, _, Test>(&encoded, Format::DBus, "y").unwrap();
         assert!(decoded == Test::NewType(42));
+
+        let be_encoded = to_bytes_for_signature_be(Format::DBus, "y", &Test::NewType(42)).unwrap();
+        assert_eq!(encoded, be_encoded);
+        let be_decoded: Test = from_slice_for_signature_be(&be_encoded, Format::DBus, "y").unwrap();
+        assert_eq!(decoded, be_decoded);
 
         // TODO: Provide convenience API to create complex signatures
         let encoded =
@@ -524,11 +570,25 @@ mod tests {
             from_slice_for_signature::<BE, _, Test>(&encoded, Format::DBus, "(yt)").unwrap();
         assert!(decoded == Test::Tuple(42, 42));
 
+        let be_encoded =
+            to_bytes_for_signature_be(Format::DBus, "(yt)", &Test::Tuple(42, 42)).unwrap();
+        assert_eq!(encoded, be_encoded);
+        let be_decoded: Test =
+            from_slice_for_signature_be(&be_encoded, Format::DBus, "(yt)").unwrap();
+        assert_eq!(decoded, be_decoded);
+
         let s = Test::Struct { y: 42, t: 42 };
         let encoded = to_bytes_for_signature::<BE, _, _>(Format::DBus, "(yt)", &s).unwrap();
         assert!(encoded.len() == 24);
         let decoded =
             from_slice_for_signature::<BE, _, Test>(&encoded, Format::DBus, "(yt)").unwrap();
         assert!(decoded == Test::Struct { y: 42, t: 42 });
+
+        let s = Test::Struct { y: 42, t: 42 };
+        let be_encoded = to_bytes_for_signature_be(Format::DBus, "(yt)", &s).unwrap();
+        assert_eq!(encoded, be_encoded);
+        let be_decoded: Test =
+            from_slice_for_signature_be(&be_encoded, Format::DBus, "(yt)").unwrap();
+        assert_eq!(decoded, be_decoded);
     }
 }
