@@ -192,6 +192,20 @@ mod tests {
         assert!(encoded.len() == 20);
         let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
         assert!(v == Variant::Str("hello world"));
+
+        // Characters are treated as strings
+        let encoded = to_bytes::<LE, _>(Format::DBus, &'c').unwrap();
+        assert!(encoded.len() == 6);
+        let decoded = from_slice::<LE, char>(&encoded, Format::DBus).unwrap();
+        assert!(decoded == 'c');
+
+        // As Variant
+        let v = 'c'.into_variant();
+        assert!(v.value_signature() == "s");
+        let encoded = to_bytes::<LE, _>(Format::DBus, &v).unwrap();
+        assert!(encoded.len() == 10);
+        let v = from_slice::<LE, Variant>(&encoded, Format::DBus).unwrap();
+        assert!(v == Variant::Str("c"));
     }
 
     #[test]
