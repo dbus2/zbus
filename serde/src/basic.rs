@@ -88,3 +88,9 @@ impl Basic for &str {
     const SIGNATURE_STR: &'static str = "s";
     const ALIGNMENT: usize = 4;
 }
+
+impl Basic for char {
+    const SIGNATURE_CHAR: char = <&str>::SIGNATURE_CHAR;
+    const SIGNATURE_STR: &'static str = <&str>::SIGNATURE_STR;
+    const ALIGNMENT: usize = <&str>::ALIGNMENT;
+}
