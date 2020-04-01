@@ -63,6 +63,7 @@ mod tests {
     use crate::{FromVariant, IntoVariant, Variant, VariantValue};
     use crate::{ObjectPath, Signature};
 
+    // Test through both generic and specific API (wrt byte order)
     macro_rules! dual_test {
         (be, $test_value:expr, $expected_len:expr, $expected_ty:ty) => {{
             dual_test!(
