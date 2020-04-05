@@ -7,11 +7,3 @@ pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
 
     len_rounded_up.wrapping_sub(value)
 }
-
-pub(crate) fn usize_to_u32(value: usize) -> u32 {
-    if value > (std::u32::MAX as usize) {
-        panic!("{} too large for `u32`", value);
-    }
-
-    value as u32
-}
