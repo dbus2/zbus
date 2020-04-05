@@ -2,6 +2,7 @@ use byteorder::ByteOrder;
 use core::convert::TryInto;
 use std::error;
 use std::fmt;
+use std::io::Error as IOError;
 
 use zvariant::Signature;
 use zvariant::VariantError;
@@ -59,6 +60,7 @@ pub enum MessageError {
     InsufficientData,
     ExcessData,
     IncorrectEndian,
+    Io(IOError),
     NoBodySignature,
     MessageField(MessageFieldError),
     Variant(VariantError),
@@ -78,6 +80,7 @@ impl fmt::Display for MessageError {
         match self {
             MessageError::StrTooLarge => write!(f, "string too large"),
             MessageError::InsufficientData => write!(f, "insufficient data"),
+            MessageError::Io(e) => e.fmt(f),
             MessageError::ExcessData => write!(f, "excess data"),
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
             MessageError::NoBodySignature => write!(f, "missing body signature"),
@@ -96,6 +99,12 @@ impl From<MessageFieldError> for MessageError {
 impl From<VariantError> for MessageError {
     fn from(val: VariantError) -> MessageError {
         MessageError::Variant(val)
+    }
+}
+
+impl From<IOError> for MessageError {
+    fn from(val: IOError) -> MessageError {
+        MessageError::Io(val)
     }
 }
 
