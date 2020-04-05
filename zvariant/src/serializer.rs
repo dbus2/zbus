@@ -362,11 +362,6 @@ where
     }
 
     fn serialize_unit(self) -> Result<()> {
-        // Parse the expected signature but simply skip the value
-        for c in <()>::signature().chars() {
-            self.sign_parser.parse_char(Some(c))?;
-        }
-
         Ok(())
     }
 

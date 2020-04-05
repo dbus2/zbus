@@ -43,11 +43,11 @@ where
     }
 }
 
-// Let's pretend it's an empty structure
+// Empty type deserves empty signature
 impl VariantValue for () {
     #[inline]
     fn signature() -> Signature<'static> {
-        Signature::from("()")
+        Signature::from("")
     }
 }
 

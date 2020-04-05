@@ -360,10 +360,6 @@ where
     where
         V: Visitor<'de>,
     {
-        // Parse the expected signature
-        for c in <()>::signature().chars() {
-            self.sign_parser.parse_char(Some(c))?;
-        }
         visitor.visit_unit()
     }
 
