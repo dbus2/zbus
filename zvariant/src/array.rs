@@ -1,352 +1,121 @@
-use byteorder::ByteOrder;
-use core::convert::TryInto;
+use serde::ser::{Serialize, SerializeSeq, Serializer};
 
-use crate::{Decode, Encode, EncodingFormat};
-use crate::{SharedData, Signature, SimpleDecode};
-use crate::{Variant, VariantError};
+use crate::{Error, Result};
+use crate::{IntoVariant, Signature, Variant, VariantValue};
 
 /// An unordered collection of items of the same type.
 ///
-/// API is provided to transform this into, and from a [`Vec`].
+/// API is provided to create this from a [`Vec`].
 ///
 /// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-#[derive(Debug, Clone, Default)]
-pub struct Array(Vec<Variant>);
+#[derive(Debug, Clone, PartialEq)]
+pub struct Array<'a> {
+    element_signature: Signature<'a>,
+    elements: Vec<Variant<'a>>,
+}
 
-impl Array {
-    /// Creates a new empty `Array`.
-    pub fn new() -> Self {
-        Self::default()
+impl<'a> Array<'a> {
+    pub fn new<'s: 'a>(element_signature: Signature<'s>) -> Array<'a> {
+        Array {
+            element_signature,
+            elements: vec![],
+        }
     }
 
-    /// Creates an `Array` from given variants.
-    ///
-    /// All variants must all contain the same type.
-    ///
-    /// # Example:
-    ///
-    /// ```
-    /// use zvariant::{Array, Encode, Variant};
-    ///
-    /// let variants = vec![42u8.to_variant(), 45u8.to_variant()];
-    /// let array = Array::new_from_vec(variants).unwrap();
-    ///
-    /// let variants = vec![42u8.to_variant(), 45u32.to_variant()];
-    /// assert!(Array::new_from_vec(variants).is_err());
-    /// ```
-    pub fn new_from_vec(vec: Vec<Variant>) -> Result<Self, VariantError> {
-        // Ensure all elements are of the same type
-        if let Some(first) = vec.first() {
-            let first_sig = first.value_signature();
-
-            for element in &vec[1..] {
-                if element.value_signature() != first_sig {
-                    return Err(VariantError::IncorrectType);
-                }
-            }
+    pub fn append<'e: 'a>(&mut self, element: Variant<'e>) -> Result<()> {
+        if element.value_signature() != self.element_signature {
+            return Err(Error::IncorrectType);
         }
 
-        Ok(Array(vec))
+        self.elements.push(element);
+
+        Ok(())
     }
 
-    /// Creates an `Array` from given variants.
-    ///
-    /// Same as [`new_from_vec`] but the caller guarantees all variants in the `vec` are of the same
-    /// type.
-    ///
-    /// [`new_from_vec`]: struct.Array.html#method.new_from_vec
-    pub fn new_from_vec_unchecked(vec: Vec<Variant>) -> Self {
-        Array(vec)
+    pub fn get(&self) -> &[Variant<'a>] {
+        &self.elements
     }
 
-    /// Adds the given `element` to `self`.
-    ///
-    /// This method takes ownership of `self` and returns Self` so that you can use the builder pattern to easily
-    /// construct an array.
-    ///
-    /// # Example:
-    ///
-    /// ```
-    /// use zvariant::{Array, Decode, Variant};
-    ///
-    /// let array = Array::new()
-    ///     .add_element(42u8).unwrap()
-    ///     .add_element(45u8).unwrap();
-    /// assert!(array.add_element("hi").is_err());
-    /// ```
-    pub fn add_element<T: Encode>(mut self, element: T) -> Result<Self, VariantError> {
-        // Ensure we only add elements of the same type
-        if self.0.last().map(|v| !T::is(v)).unwrap_or(false) {
-            return Err(VariantError::IncorrectType);
-        }
-
-        self.0.push(element.to_variant());
-
-        Ok(self)
+    pub fn len(&self) -> usize {
+        self.elements.len()
     }
 
-    /// Get the element at the given index.
-    ///
-    /// # Example:
-    ///
-    /// ```
-    /// use zvariant::{Array, Decode, Variant};
-    ///
-    /// let array = Array::from(vec![42u8, 43, 44]);
-    /// assert!(*array.get_element::<u8>(0).unwrap() == 42);
-    /// assert!(*array.get_element::<u8>(1).unwrap() == 43);
-    /// assert!(*array.get_element::<u8>(2).unwrap() == 44);
-    /// ```
-    pub fn get_element<T: Decode>(&self, index: usize) -> Result<&T, VariantError> {
-        T::from_variant(&self.0[index])
+    pub fn is_empty(&self) -> bool {
+        self.elements.len() == 0
     }
 
-    fn get(&self) -> &Vec<Variant> {
-        &self.0
+    pub fn signature(&self) -> Signature<'static> {
+        Signature::from(format!("a{}", self.element_signature.as_str()))
     }
 
-    fn into_inner(self) -> Vec<Variant> {
-        self.0
+    pub fn element_signature(&self) -> &Signature {
+        &self.element_signature
     }
 }
 
-impl Encode for Array {
-    const SIGNATURE_CHAR: char = 'a';
-    const SIGNATURE_STR: &'static str = "a";
-    const ALIGNMENT: usize = 4;
+impl<'a> std::ops::Deref for Array<'a> {
+    type Target = [Variant<'a>];
 
-    fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
-        Self::add_padding(bytes, format);
-
-        let len_position = bytes.len();
-        bytes.extend(&0u32.to_ne_bytes());
-        let n_bytes_before = bytes.len();
-        let mut first_element = true;
-        let mut first_padding = 0;
-
-        for element in self.get() {
-            if first_element {
-                // Length we report doesn't include padding for the first element
-                first_padding = element.value_padding(bytes.len(), format);
-                first_element = false;
-            }
-
-            // Deep copying, nice!!! 🙈
-            element.encode_value_into(bytes, format);
-        }
-
-        // Set size of array in bytes
-        let len = crate::utils::usize_to_u32(bytes.len() - n_bytes_before - first_padding);
-        byteorder::NativeEndian::write_u32(&mut bytes[len_position..len_position + 4], len);
-    }
-
-    fn signature(&self) -> Signature {
-        let signature = format!("a{}", self.get()[0].value_signature().as_str());
-
-        Signature::from(signature)
-    }
-
-    fn to_variant(self) -> Variant {
-        Variant::Array(self)
-    }
-
-    fn is(variant: &Variant) -> bool {
-        if let Variant::Array(_) = variant {
-            true
-        } else {
-            false
-        }
+    fn deref(&self) -> &Self::Target {
+        self.get()
     }
 }
 
-impl Decode for Array {
-    fn slice_data(
-        data: impl Into<SharedData>,
-        signature: impl Into<Signature>,
-        format: EncodingFormat,
-    ) -> Result<SharedData, VariantError> {
-        let signature = Self::ensure_correct_signature(signature)?;
-
-        // Child signature
-        let child_signature = crate::decode::slice_signature(&signature[1..])?;
-
-        let data = data.into();
-        // Array size in bytes
-        let len_slice = u32::slice_data_simple(&data, format)?;
-        let mut extracted = len_slice.len();
-        let mut len = u32::decode_simple(&len_slice, format)? as usize + extracted;
-        let mut first_element = true;
-        while extracted < len {
-            let element_data = data.tail(extracted);
-
-            if first_element {
-                // Length we got from array doesn't include padding for the first element
-                len += crate::encode::padding_for_signature(
-                    element_data.position(),
-                    child_signature.as_str(),
-                    format,
-                );
-                first_element = false;
-            }
-
-            let slice = crate::decode::slice_data(element_data, child_signature.as_str(), format)?;
-            extracted += slice.len();
-            if extracted > len {
-                return Err(VariantError::InsufficientData);
-            }
-        }
-        if extracted == 0 {
-            return Err(VariantError::ExcessData);
-        }
-
-        Ok(data.head(extracted as usize))
-    }
-
-    fn decode(
-        data: impl Into<SharedData>,
-        signature: impl Into<Signature>,
-        format: EncodingFormat,
-    ) -> Result<Self, VariantError> {
-        let data = data.into();
-        let padding = Self::padding(data.position(), format);
-        if data.len() < padding + 4 {
-            return Err(VariantError::InsufficientData);
-        }
-        let signature = Self::ensure_correct_signature(signature)?;
-
-        // Child signature
-        let child_signature = crate::decode::slice_signature(&signature[1..])?;
-
-        // Array size in bytes
-        let mut extracted = padding + 4;
-        let mut len =
-            u32::decode_simple(&data.subset(padding, extracted), format)? as usize + extracted;
-        let mut elements = vec![];
-
-        let mut first_element = true;
-        while extracted < len {
-            let element_data = data.tail(extracted);
-
-            if first_element {
-                // Length we got from array doesn't include padding for the first element
-                len += crate::encode::padding_for_signature(
-                    element_data.position(),
-                    child_signature.as_str(),
-                    format,
-                );
-                first_element = false;
-            }
-
-            let slice = crate::decode::slice_data(element_data, child_signature.as_str(), format)?;
-            extracted += slice.len();
-            if extracted > len {
-                return Err(VariantError::InsufficientData);
-            }
-
-            let element = Variant::from_data_slice(slice, child_signature.as_str(), format)?;
-            elements.push(element);
-        }
-        if extracted == 0 {
-            return Err(VariantError::ExcessData);
-        }
-
-        // Not using Array::new_from_vec() as that will entail redundant (in this context) type
-        // checks
-        Ok(Array::new_from_vec_unchecked(elements))
-    }
-
-    fn ensure_correct_signature(
-        signature: impl Into<Signature>,
-    ) -> Result<Signature, VariantError> {
-        let signature = signature.into();
-        let len = signature.len();
-        let slice = Self::slice_signature(signature)?;
-        if slice.len() != len {
-            return Err(VariantError::IncorrectType);
-        }
-
-        Ok(slice)
-    }
-
-    fn slice_signature(signature: impl Into<Signature>) -> Result<Signature, VariantError> {
-        let signature = signature.into();
-        if signature.len() < 2 {
-            return Err(VariantError::InsufficientData);
-        }
-        if !signature.starts_with('a') {
-            return Err(VariantError::IncorrectType);
-        }
-
-        // There should be a valid complete signature after 'a' but not more than 1
-        let slice = crate::decode::slice_signature(&signature[1..])?;
-
-        Ok(Signature::from(&signature[0..=slice.len()]))
-    }
-
-    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
-        if let Variant::Array(value) = variant {
-            Ok(value)
-        } else {
-            Err(VariantError::IncorrectType)
-        }
-    }
-
-    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
-        if let Variant::Array(value) = variant {
-            Ok(value)
-        } else {
-            Err(VariantError::IncorrectType)
-        }
-    }
-}
-
-impl<T> TryInto<Vec<T>> for Array
+impl<'a, V> From<Vec<V>> for Array<'a>
 where
-    T: Decode,
+    V: VariantValue + IntoVariant<'a>,
 {
-    type Error = VariantError;
+    fn from(values: Vec<V>) -> Self {
+        let element_signature = V::signature();
+        let elements = values
+            .into_iter()
+            .map(|value| value.into_variant())
+            .collect();
 
-    fn try_into(self) -> Result<Vec<T>, VariantError> {
-        let mut v = vec![];
+        Self {
+            element_signature,
+            elements,
+        }
+    }
+}
 
-        for value in self.into_inner() {
-            v.push(T::take_from_variant(value)?);
+impl<'a, V> From<&[V]> for Array<'a>
+where
+    V: VariantValue + IntoVariant<'a> + Clone,
+{
+    fn from(values: &[V]) -> Self {
+        let element_signature = V::signature();
+        let elements = values
+            .iter()
+            .map(|value| value.clone().into_variant())
+            .collect();
+
+        Self {
+            element_signature,
+            elements,
+        }
+    }
+}
+
+impl<'a, V> From<&Vec<V>> for Array<'a>
+where
+    V: VariantValue + IntoVariant<'a> + Clone,
+{
+    fn from(values: &Vec<V>) -> Self {
+        Self::from(&values[..])
+    }
+}
+
+impl<'a> Serialize for Array<'a> {
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.elements.len()))?;
+        for element in &self.elements {
+            element.serialize_value_as_seq_element(&mut seq)?;
         }
 
-        Ok(v)
-    }
-}
-
-impl<'a, T> TryInto<Vec<&'a T>> for &'a Array
-where
-    T: Decode,
-{
-    type Error = VariantError;
-
-    fn try_into(self) -> Result<Vec<&'a T>, VariantError> {
-        let mut v = vec![];
-
-        for value in self.get() {
-            v.push(T::from_variant(value)?);
-        }
-
-        Ok(v)
-    }
-}
-
-impl<T> From<Vec<T>> for Array
-where
-    T: Encode,
-{
-    fn from(values: Vec<T>) -> Self {
-        let v = values.into_iter().map(|value| value.to_variant()).collect();
-
-        Array::new_from_vec_unchecked(v)
-    }
-}
-
-impl From<crate::Dict> for Array {
-    fn from(value: crate::Dict) -> Self {
-        Array::from(value.into_inner())
+        seq.end()
     }
 }

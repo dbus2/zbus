@@ -1,48 +1,29 @@
+use std::marker::PhantomData;
 use std::str;
 
-use crate::VariantError;
-use crate::{Array, DictEntry, Encode, EncodingFormat};
-use crate::{Decode, ObjectPath};
-use crate::{SharedData, Signature, SimpleDecode, Structure};
+use serde::de::{
+    Deserialize, DeserializeSeed, Deserializer, Error, MapAccess, SeqAccess, Unexpected, Visitor,
+};
+use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
+
+use crate::utils::*;
+use crate::{Array, Dict};
+use crate::{Basic, IntoVariant, VariantValue};
+use crate::{ObjectPath, Signature, Structure};
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
 ///
 /// Note that this type is defined by the [D-Bus specification] and as such, its encoding is not the
-/// same as that of the enclosed value. For encoding the enclosed value, use [`encode_value`]
-/// method instead of [`Encode`] API. Similarly, [`from_data`] and [`from_data_slice`] decode the
-/// encoded value and wraps it in a `Variant`.
+/// same as that of the enclosed value.
 ///
 /// # Example
 ///
-/// ```
-/// use zvariant::{Decode, Encode, EncodingFormat, Variant};
-///
-/// // Create a Variant from an i16
-/// let v = i16::max_value().to_variant();
-/// assert!(*i16::from_variant(&v).unwrap() == i16::max_value());
-///
-/// // Encode it
-/// let format = EncodingFormat::default();
-/// let encoding = v.encode_value(format);
-/// assert!(encoding.len() == 2);
-///
-/// // Decode it back
-/// let v = Variant::from_data(encoding, v.value_signature(), format).unwrap();
-///
-/// // Check everything is as expected
-/// assert!(v.value_signature() == "n");
-/// assert!(v.signature() == "v");
-/// assert!(i16::take_from_variant(v).unwrap() == i16::max_value());
-/// ```
+/// TODO
 ///
 /// [D-Bus specification]: https://dbus.freedesktop.org/doc/dbus-specification.html
-/// [`encode_value`]: enum.Variant.html#method.encode_value
-/// [`Encode`]: trait.Encode.html
-/// [`from_data`]: enum.Variant.html#method.from_data
-/// [`from_data_slice`]: enum.Variant.html#method.from_data_slice
-#[derive(Debug, Clone)]
-pub enum Variant {
+#[derive(Debug, Clone, PartialEq)]
+pub enum Variant<'a> {
     // Simple types
     U8(u8),
     Bool(bool),
@@ -53,632 +34,381 @@ pub enum Variant {
     I64(i64),
     U64(u64),
     F64(f64),
-    Str(String), // TODO: Optimize later!
-    Signature(Signature),
-    ObjectPath(ObjectPath),
-    Variant(Box<Variant>),
+    Str(&'a str),
+    String(String),
+    Signature(Signature<'a>),
+    ObjectPath(ObjectPath<'a>),
+    Variant(Box<Variant<'a>>),
 
     // Container types
-    Array(Array),
-    DictEntry(DictEntry),
-    Structure(Structure),
+    Array(Array<'a>),
+    Dict(Dict<'a, 'a>),
+    Structure(Structure<'a>),
 }
 
-impl Variant {
-    /// Decode the first value in the encoded data and wrap it in a `Variant`.
-    pub fn from_data(
-        data: impl Into<SharedData>,
-        signature: impl Into<Signature>,
-        format: EncodingFormat,
-    ) -> Result<Self, VariantError> {
-        let signature = signature.into();
-        // slice_data() ensures a valid signature
-        let slice = crate::decode::slice_data(data, signature.clone(), format)?;
-
-        Variant::from_data_slice(slice, signature, format)
-    }
-
-    /// Decode the encoded value and wrap it in a `Variant`.
-    ///
-    /// `slice` must have exactly 1 encoded value in it.
-    pub fn from_data_slice(
-        slice: impl Into<SharedData>,
-        signature: impl Into<Signature>,
-        format: EncodingFormat,
-    ) -> Result<Self, VariantError> {
-        let signature = signature.into();
-        let slice = slice.into();
-
-        match signature
-            .chars()
-            .next()
-            .ok_or(VariantError::InsufficientData)?
-        {
-            // FIXME: There has to be a shorter way to do this
-            u8::SIGNATURE_CHAR => u8::decode_simple(&slice, format).map(Variant::U8),
-            bool::SIGNATURE_CHAR => bool::decode_simple(&slice, format).map(Variant::Bool),
-            i16::SIGNATURE_CHAR => i16::decode_simple(&slice, format).map(Variant::I16),
-            u16::SIGNATURE_CHAR => u16::decode_simple(&slice, format).map(Variant::U16),
-            i32::SIGNATURE_CHAR => i32::decode_simple(&slice, format).map(Variant::I32),
-            u32::SIGNATURE_CHAR => u32::decode_simple(&slice, format).map(Variant::U32),
-            i64::SIGNATURE_CHAR => i64::decode_simple(&slice, format).map(Variant::I64),
-            u64::SIGNATURE_CHAR => u64::decode_simple(&slice, format).map(Variant::U64),
-            f64::SIGNATURE_CHAR => f64::decode_simple(&slice, format).map(Variant::F64),
-            String::SIGNATURE_CHAR => String::decode_simple(&slice, format).map(Variant::Str),
-            Array::SIGNATURE_CHAR => Array::decode(&slice, signature, format).map(Variant::Array),
-            ObjectPath::SIGNATURE_CHAR => {
-                ObjectPath::decode_simple(&slice, format).map(Variant::ObjectPath)
-            }
-            Signature::SIGNATURE_CHAR => {
-                Signature::decode_simple(&slice, format).map(Variant::Signature)
-            }
-            Structure::SIGNATURE_CHAR => {
-                Structure::decode(&slice, signature, format).map(Variant::Structure)
-            }
-            Variant::SIGNATURE_CHAR => Variant::decode_simple(&slice, format)
-                .map(|value| Variant::Variant(Box::new(value))),
-            DictEntry::SIGNATURE_CHAR => {
-                DictEntry::decode(&slice, signature, format).map(Variant::DictEntry)
-            }
-            _ => Err(VariantError::UnsupportedType(signature)),
-        }
-    }
-
-    /// Same as [`Encode::encode`] but instead of encoding itself, encodes the enclosed value.
-    ///
-    ///[`Encode::encode`]: trait.Encode.html#method.encode
-    // Only use for standalone or the first data in a message
-    pub fn encode_value(&self, format: EncodingFormat) -> Vec<u8> {
-        let mut bytes = vec![];
-        self.encode_value_into(&mut bytes, format);
-
-        bytes
-    }
-
-    /// Same as [`Encode::encode_into`] but instead of encoding itself, encodes the enclosed value.
-    ///
-    ///[`Encode::encode_into`]: trait.Encode.html#tymethod.encode_into
-    pub fn encode_value_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
-        match self {
-            // Simple types
-            Variant::U8(value) => value.encode_into(bytes, format),
-            Variant::Bool(value) => value.encode_into(bytes, format),
-            Variant::I16(value) => value.encode_into(bytes, format),
-            Variant::U16(value) => value.encode_into(bytes, format),
-            Variant::I32(value) => value.encode_into(bytes, format),
-            Variant::U32(value) => value.encode_into(bytes, format),
-            Variant::I64(value) => value.encode_into(bytes, format),
-            Variant::U64(value) => value.encode_into(bytes, format),
-            Variant::F64(value) => value.encode_into(bytes, format),
-            Variant::Str(value) => value.encode_into(bytes, format), // TODO: Optimize later!
-            Variant::Signature(value) => value.encode_into(bytes, format),
-            Variant::ObjectPath(value) => value.encode_into(bytes, format),
-            Variant::Variant(value) => value.encode_into(bytes, format),
-
-            // Container types
-            Variant::Array(value) => value.encode_into(bytes, format),
-            Variant::DictEntry(value) => value.encode_into(bytes, format),
-            Variant::Structure(value) => value.encode_into(bytes, format),
-        }
-    }
-
-    /// The required padding for the enclosed value.
-    pub(crate) fn value_padding(&self, n_bytes_before: usize, format: EncodingFormat) -> usize {
-        match self {
-            // Simple types
-            Variant::U8(_) => u8::padding(n_bytes_before, format),
-            Variant::Bool(_) => bool::padding(n_bytes_before, format),
-            Variant::I16(_) => i16::padding(n_bytes_before, format),
-            Variant::U16(_) => u16::padding(n_bytes_before, format),
-            Variant::I32(_) => i32::padding(n_bytes_before, format),
-            Variant::U32(_) => u32::padding(n_bytes_before, format),
-            Variant::I64(_) => i64::padding(n_bytes_before, format),
-            Variant::U64(_) => u64::padding(n_bytes_before, format),
-            Variant::F64(_) => f64::padding(n_bytes_before, format),
-            Variant::Str(_) => String::padding(n_bytes_before, format),
-            Variant::Signature(_) => Signature::padding(n_bytes_before, format),
-            Variant::ObjectPath(_) => ObjectPath::padding(n_bytes_before, format),
-            Variant::Variant(_) => Variant::padding(n_bytes_before, format),
-
-            // Container types
-            Variant::Array(_) => Array::padding(n_bytes_before, format),
-            Variant::DictEntry(_) => DictEntry::padding(n_bytes_before, format),
-            Variant::Structure(_) => Structure::padding(n_bytes_before, format),
-        }
-    }
-
+impl<'a> Variant<'a> {
     /// Get the signature of the enclosed value.
     pub fn value_signature(&self) -> Signature {
         match self {
-            Variant::U8(value) => value.signature(),
-            Variant::Bool(value) => value.signature(),
-            Variant::I16(value) => value.signature(),
-            Variant::U16(value) => value.signature(),
-            Variant::I32(value) => value.signature(),
-            Variant::U32(value) => value.signature(),
-            Variant::I64(value) => value.signature(),
-            Variant::U64(value) => value.signature(),
-            Variant::F64(value) => value.signature(),
-            Variant::Str(value) => value.signature(), // TODO: Optimize later!
-            Variant::Signature(value) => value.signature(),
-            Variant::ObjectPath(value) => value.signature(),
-            Variant::Variant(value) => value.signature(),
+            Variant::U8(_) => u8::signature(),
+            Variant::Bool(_) => bool::signature(),
+            Variant::I16(_) => i16::signature(),
+            Variant::U16(_) => u16::signature(),
+            Variant::I32(_) => i32::signature(),
+            Variant::U32(_) => u32::signature(),
+            Variant::I64(_) => i64::signature(),
+            Variant::U64(_) => u64::signature(),
+            Variant::F64(_) => f64::signature(),
+            Variant::String(_) | Variant::Str(_) => <&str>::signature(),
+            Variant::Signature(_) => Signature::signature(),
+            Variant::ObjectPath(_) => ObjectPath::signature(),
+            Variant::Variant(_) => Signature::from("v"),
 
             // Container types
             Variant::Array(value) => value.signature(),
-            Variant::DictEntry(value) => value.signature(),
+            Variant::Dict(value) => value.signature(),
             Variant::Structure(value) => value.signature(),
         }
     }
-}
 
-impl Encode for Variant {
-    const SIGNATURE_CHAR: char = 'v';
-    const SIGNATURE_STR: &'static str = "v";
-    const ALIGNMENT: usize = Signature::ALIGNMENT;
+    pub(crate) fn serialize_value_as_struct_field<S>(
+        &self,
+        name: &'static str,
+        serializer: &mut S,
+    ) -> Result<(), S::Error>
+    where
+        S: SerializeStruct,
+    {
+        match self {
+            Variant::U8(value) => serializer.serialize_field(name, value),
+            Variant::Bool(value) => serializer.serialize_field(name, value),
+            Variant::I16(value) => serializer.serialize_field(name, value),
+            Variant::U16(value) => serializer.serialize_field(name, value),
+            Variant::I32(value) => serializer.serialize_field(name, value),
+            Variant::U32(value) => serializer.serialize_field(name, value),
+            Variant::I64(value) => serializer.serialize_field(name, value),
+            Variant::U64(value) => serializer.serialize_field(name, value),
+            Variant::F64(value) => serializer.serialize_field(name, value),
+            Variant::Str(value) => serializer.serialize_field(name, value),
+            Variant::String(value) => serializer.serialize_field(name, value),
+            Variant::Signature(value) => serializer.serialize_field(name, value),
+            Variant::ObjectPath(value) => serializer.serialize_field(name, value),
+            Variant::Variant(value) => serializer.serialize_field(name, value),
 
-    fn encode_into(&self, bytes: &mut Vec<u8>, format: EncodingFormat) {
-        self.value_signature().encode_into(bytes, format);
-
-        self.encode_value_into(bytes, format)
+            // Container types
+            Variant::Array(value) => serializer.serialize_field(name, value),
+            Variant::Dict(value) => serializer.serialize_field(name, value),
+            Variant::Structure(value) => serializer.serialize_field(name, value),
+        }
     }
 
-    // In case of Variant, this create a Variant::Variant(self) (i-e deflattens)
-    fn to_variant(self) -> Variant {
-        Variant::Variant(Box::new(self))
-    }
+    // Really crappy that we need to do this separately for struct and seq cases. :(
+    pub(crate) fn serialize_value_as_seq_element<S>(
+        &self,
+        serializer: &mut S,
+    ) -> Result<(), S::Error>
+    where
+        S: SerializeSeq,
+    {
+        match self {
+            Variant::U8(value) => serializer.serialize_element(value),
+            Variant::Bool(value) => serializer.serialize_element(value),
+            Variant::I16(value) => serializer.serialize_element(value),
+            Variant::U16(value) => serializer.serialize_element(value),
+            Variant::I32(value) => serializer.serialize_element(value),
+            Variant::U32(value) => serializer.serialize_element(value),
+            Variant::I64(value) => serializer.serialize_element(value),
+            Variant::U64(value) => serializer.serialize_element(value),
+            Variant::F64(value) => serializer.serialize_element(value),
+            Variant::Str(value) => serializer.serialize_element(value),
+            Variant::String(value) => serializer.serialize_element(value),
+            Variant::Signature(value) => serializer.serialize_element(value),
+            Variant::ObjectPath(value) => serializer.serialize_element(value),
+            Variant::Variant(value) => serializer.serialize_element(value),
 
-    fn is(variant: &Variant) -> bool {
-        if let Variant::Variant(_) = variant {
-            true
-        } else {
-            false
+            // Container types
+            Variant::Array(value) => serializer.serialize_element(value),
+            Variant::Dict(value) => serializer.serialize_element(value),
+            Variant::Structure(value) => serializer.serialize_element(value),
         }
     }
 }
 
-impl Decode for Variant {
-    fn slice_data(
-        data: impl Into<SharedData>,
-        signature: impl Into<Signature>,
-        format: EncodingFormat,
-    ) -> Result<SharedData, VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        let data = data.into();
+impl<'a> Serialize for Variant<'a> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Serializer implementation needs to ensure padding isn't added for Variant.
+        let mut structure = serializer.serialize_struct("zvariant::Variant", 2)?;
 
-        // Variant is made of signature of the value followed by the actual value. So we gotta
-        // extract the signature slice first and then the value slice. Once we know the sizes of
-        // both, we can just slice the whole thing.
-        let sign_slice = Signature::slice_data_simple(&data, format)?;
-        let sign_size = sign_slice.len();
-        let sign = Signature::decode_simple(sign_slice, format)?;
+        let signature = self.value_signature();
+        structure.serialize_field("zvariant::Variant::Signature", &signature)?;
 
-        let value_slice = crate::decode::slice_data(data.tail(sign_size), sign, format)?;
-        let total_size = sign_size + value_slice.len();
+        self.serialize_value_as_struct_field("zvariant::Variant::Value", &mut structure)?;
 
-        Ok(data.head(total_size))
-    }
-
-    fn decode(
-        data: impl Into<SharedData>,
-        signature: impl Into<Signature>,
-        format: EncodingFormat,
-    ) -> Result<Self, VariantError> {
-        Self::ensure_correct_signature(signature)?;
-        let data = data.into();
-
-        let sign_slice = Signature::slice_data_simple(&data, format)?;
-        let sign_size = sign_slice.len();
-        let sign = Signature::decode_simple(sign_slice, format)?;
-
-        Variant::from_data(&data.tail(sign_size), sign, format)
-    }
-
-    // In case of Variant, this gets the inner Variant (i-e flattens)
-    fn take_from_variant(variant: Variant) -> Result<Self, VariantError> {
-        if let Variant::Variant(value) = variant {
-            Ok(*value)
-        } else {
-            Err(VariantError::IncorrectType)
-        }
-    }
-
-    fn from_variant(variant: &Variant) -> Result<&Self, VariantError> {
-        if let Variant::Variant(value) = variant {
-            Ok(value)
-        } else {
-            Err(VariantError::IncorrectType)
-        }
+        structure.end()
     }
 }
-impl SimpleDecode for Variant {}
 
-#[cfg(test)]
-mod tests {
-    use core::convert::{TryFrom, TryInto};
-    use std::collections::HashMap;
+impl<'de: 'a, 'a> Deserialize<'de> for Variant<'a> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let visitor = VariantVisitor;
 
-    use crate::{Array, Dict, DictEntry};
-    use crate::{Decode, Encode, EncodingFormat, SimpleDecode};
-    use crate::{SharedData, Structure};
+        deserializer.deserialize_any(visitor)
+    }
+}
 
-    #[test]
-    fn u8_variant() {
-        let v = u8::max_value().to_variant();
-        assert!(u8::is(&v));
-        assert!(*u8::from_variant(&v).unwrap() == u8::max_value());
+struct VariantVisitor;
 
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 1);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(*u8::from_variant(&v).unwrap() == u8::max_value());
+impl<'de> Visitor<'de> for VariantVisitor {
+    type Value = Variant<'de>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a Variant")
     }
 
-    #[test]
-    fn bool_variant() {
-        let v = true.to_variant();
-        assert!(bool::from_variant(&v).unwrap());
-        assert!(bool::is(&v));
+    #[inline]
+    fn visit_seq<V>(self, mut visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        let signature = visitor.next_element::<Signature>()?.ok_or_else(|| {
+            Error::invalid_value(Unexpected::Other("nothing"), &"a Variant signature")
+        })?;
+        let seed = VariantSeed::<Variant> {
+            signature,
+            phantom: PhantomData,
+        };
 
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 4);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(bool::from_variant(&v).unwrap());
+        visitor
+            .next_element_seed(seed)?
+            .ok_or_else(|| Error::invalid_value(Unexpected::Other("nothing"), &"a Variant value"))
     }
 
-    /* i16 variant test in docs sample already, that's run as tests so no need to repeat here */
+    fn visit_map<V>(self, mut visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: MapAccess<'de>,
+    {
+        let (_, signature) = visitor.next_entry::<&str, Signature>()?.ok_or_else(|| {
+            Error::invalid_value(Unexpected::Other("nothing"), &"a Variant signature")
+        })?;
+        let _ = visitor.next_key::<&str>()?;
 
-    #[test]
-    fn u16_variant() {
-        let v = u16::max_value().to_variant();
-        assert!(*u16::from_variant(&v).unwrap() == u16::max_value());
-        assert!(u16::is(&v));
+        let seed = VariantSeed::<Variant> {
+            signature,
+            phantom: PhantomData,
+        };
+        visitor.next_value_seed(seed)
+    }
+}
 
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 2);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(*u16::from_variant(&v).unwrap() == u16::max_value());
+struct VariantSeed<'de, T> {
+    signature: Signature<'de>,
+    phantom: PhantomData<T>,
+}
+
+impl<'de, T> VariantSeed<'de, T>
+where
+    T: Deserialize<'de>,
+{
+    #[inline]
+    fn visit_array<V>(self, mut visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        // TODO: Why do we need String here?
+        let signature = Signature::from(String::from(&self.signature[1..]));
+        let mut array = Array::new(signature.clone());
+
+        while let Some(elem) = visitor.next_element_seed(VariantSeed::<Variant> {
+            signature: signature.clone(),
+            phantom: PhantomData,
+        })? {
+            array.append(elem).map_err(Error::custom)?;
+        }
+
+        Ok(Variant::Array(array))
     }
 
-    #[test]
-    fn i32_variant() {
-        let v = i32::max_value().to_variant();
-        assert!(*i32::from_variant(&v).unwrap() == i32::max_value());
-        assert!(i32::is(&v));
+    #[inline]
+    fn visit_struct<V>(self, mut visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        let mut i = 1;
+        let signature_end = self.signature.len() - 1;
+        let mut structure = Structure::new();
+        while i < signature_end {
+            let fields_signature = Signature::from(&self.signature[i..signature_end]);
+            let field_signature = slice_signature(&fields_signature).map_err(Error::custom)?;
+            i += field_signature.len();
+            // FIXME: Any way to avoid this allocation?
+            let field_signature = Signature::from(String::from(field_signature.as_str()));
 
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 4);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(*i32::from_variant(&v).unwrap() == i32::max_value());
+            if let Some(field) = visitor.next_element_seed(VariantSeed::<Variant> {
+                signature: field_signature,
+                phantom: PhantomData,
+            })? {
+                structure = structure.append_field(field);
+            }
+        }
+
+        Ok(Variant::Structure(structure))
     }
 
-    #[test]
-    fn u32_variant() {
-        let v = u32::max_value().to_variant();
-        assert!(*u32::from_variant(&v).unwrap() == u32::max_value());
-        assert!(u32::is(&v));
+    #[inline]
+    fn visit_variant<V>(self, visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        VariantVisitor
+            .visit_seq(visitor)
+            .map(|v| Variant::Variant(Box::new(v)))
+    }
+}
 
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 4);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(*u32::from_variant(&v).unwrap() == u32::max_value());
+macro_rules! variant_seed_basic_method {
+    ($name:ident, $type:ty) => {
+        #[inline]
+        fn $name<E>(self, value: $type) -> Result<Variant<'de>, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(value.into_variant())
+        }
+    };
+}
+
+macro_rules! variant_seed_str_method {
+    ($name:ident, $type:ty, $variant:ident) => {
+        #[inline]
+        fn $name<E>(self, value: $type) -> Result<Variant<'de>, E>
+        where
+            E: serde::de::Error,
+        {
+            match self.signature.as_str() {
+                <&str>::SIGNATURE_STR => Ok(Variant::$variant(value)),
+                Signature::SIGNATURE_STR => Ok(Variant::Signature(Signature::from(value))),
+                ObjectPath::SIGNATURE_STR => Ok(Variant::ObjectPath(ObjectPath::from(value))),
+                _ => {
+                    let expected = format!(
+                        "`{}`, `{}` or `{}`",
+                        <&str>::SIGNATURE_STR,
+                        Signature::SIGNATURE_STR,
+                        ObjectPath::SIGNATURE_STR,
+                    );
+                    Err(Error::invalid_type(
+                        Unexpected::Str(self.signature.as_str()),
+                        &expected.as_str(),
+                    ))
+                }
+            }
+        }
+    };
+}
+
+impl<'de, T> Visitor<'de> for VariantSeed<'de, T>
+where
+    T: Deserialize<'de>,
+{
+    type Value = Variant<'de>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a Variant value")
     }
 
-    #[test]
-    fn i64_variant() {
-        let v = i64::max_value().to_variant();
-        assert!(*i64::from_variant(&v).unwrap() == i64::max_value());
-        assert!(i64::is(&v));
+    variant_seed_basic_method!(visit_bool, bool);
+    variant_seed_basic_method!(visit_i16, i16);
+    variant_seed_basic_method!(visit_i32, i32);
+    variant_seed_basic_method!(visit_i64, i64);
+    variant_seed_basic_method!(visit_u8, u8);
+    variant_seed_basic_method!(visit_u16, u16);
+    variant_seed_basic_method!(visit_u32, u32);
+    variant_seed_basic_method!(visit_u64, u64);
+    variant_seed_basic_method!(visit_f64, f64);
 
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 8);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(*i64::from_variant(&v).unwrap() == i64::max_value());
+    #[inline]
+    fn visit_str<E>(self, value: &str) -> Result<Variant<'de>, E>
+    where
+        E: serde::de::Error,
+    {
+        self.visit_string(String::from(value))
     }
 
-    #[test]
-    fn u64_variant() {
-        let v = u64::max_value().to_variant();
-        assert!(*u64::from_variant(&v).unwrap() == u64::max_value());
-        assert!(u64::is(&v));
+    variant_seed_str_method!(visit_borrowed_str, &'de str, Str);
+    variant_seed_str_method!(visit_string, String, String);
 
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 8);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(*u64::from_variant(&v).unwrap() == u64::max_value());
-    }
-
-    #[test]
-    fn f64_variant() {
-        let v = 117.112f64.to_variant();
-        assert!(*f64::from_variant(&v).unwrap() == 117.112);
-        assert!(f64::is(&v));
-
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 8);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(*f64::from_variant(&v).unwrap() == 117.112);
-    }
-
-    #[test]
-    fn str_variant() {
-        let v = "Hello world!".to_variant();
-        assert!(*String::from_variant(&v).unwrap() == "Hello world!");
-        assert!(String::is(&v));
-
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 17);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(*String::from_variant(&v).unwrap() == "Hello world!");
-    }
-
-    #[test]
-    fn object_path_variant() {
-        let v = crate::ObjectPath::new("Hello world!").to_variant();
-        assert!(crate::ObjectPath::from_variant(&v).unwrap().as_str() == "Hello world!");
-        assert!(crate::ObjectPath::is(&v));
-
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 17);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(crate::ObjectPath::from_variant(&v).unwrap().as_str() == "Hello world!");
-    }
-
-    #[test]
-    fn signature_variant() {
-        let v = crate::Signature::new("Hello world!").to_variant();
-        assert!(crate::Signature::from_variant(&v).unwrap().as_str() == "Hello world!");
-        assert!(crate::Signature::is(&v));
-
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 14);
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(crate::Signature::from_variant(&v).unwrap().as_str() == "Hello world!");
-    }
-
-    #[test]
-    fn variant_variant() {
-        let v = 7u8.to_variant();
-        // The argument to encode here shouln't matter cause variants are 1-byte aligned so just
-        // keep an arbitrary odd number of bytes before the variant and encoding shouldn't add
-        // any padding (i-e we should end up with 7 bytes only).
-        let mut encoded = vec![0u8; 3];
-        let format = EncodingFormat::default();
-        v.encode_into(&mut encoded, format);
-        assert!(encoded.len() == 7);
-
-        // Add some extra bytes to the encoded data to test the slicing
-        encoded.push(0);
-        encoded.push(1);
-        encoded.push(7);
-
-        let encoded = SharedData::from(encoded).tail(3);
-        let slice = crate::Variant::slice_data_simple(&encoded, format).unwrap();
-
-        let decoded = crate::Variant::decode_simple(&slice, format).unwrap();
-        assert!(decoded.signature() == crate::Variant::SIGNATURE_STR);
-        assert!(decoded.value_signature() == u8::SIGNATURE_STR);
-        assert!(*u8::from_variant(&decoded).unwrap() == 7u8);
-    }
-
-    #[test]
-    fn struct_variant() {
-        let mut map: HashMap<i64, &str> = HashMap::new();
-        map.insert(1, "123");
-        map.insert(2, "456");
-        let dict: Dict = map.into();
-        let array = Array::try_from(dict).unwrap();
-
-        let s = Structure::new()
-            .add_field(u8::max_value())
-            .add_field(u32::max_value())
-            .add_field(
-                Structure::new()
-                    .add_field(i64::max_value())
-                    .add_field(true)
-                    .add_field(
-                        Structure::new()
-                            .add_field(i64::max_value())
-                            .add_field(std::f64::MAX),
-                    ),
+    #[inline]
+    fn visit_seq<V>(self, visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        match self.signature.chars().next().ok_or_else(|| {
+            Error::invalid_value(
+                Unexpected::Other("nothing"),
+                &"Array or Struct signature character",
             )
-            .add_field("hello")
-            .add_field(array);
-        let v = s.to_variant();
-        assert!(Structure::is(&v));
-        let s = Structure::from_variant(&v).unwrap();
-        let fields = s.fields();
-        assert!(u8::is(&fields[0]));
-        assert!(*u8::from_variant(&fields[0]).unwrap() == u8::max_value());
-        assert!(u32::is(&fields[1]));
-        assert!(*u32::from_variant(&fields[1]).unwrap() == u32::max_value());
-
-        assert!(Structure::is(&fields[2]));
-        let inner = Structure::from_variant(&fields[2]).unwrap();
-        let inner_fields = inner.fields();
-        assert!(i64::is(&inner_fields[0]));
-        assert!(*i64::from_variant(&inner_fields[0]).unwrap() == i64::max_value());
-        assert!(bool::is(&inner_fields[1]));
-        assert!(bool::from_variant(&inner_fields[1]).unwrap());
-        assert!(Structure::is(&inner_fields[2]));
-        let inner = Structure::from_variant(&inner_fields[2]).unwrap();
-        let inner_fields = inner.fields();
-        assert!(i64::is(&inner_fields[0]));
-        assert!(*i64::from_variant(&inner_fields[0]).unwrap() == i64::max_value());
-        assert!(f64::is(&inner_fields[1]));
-        assert!(*f64::from_variant(&inner_fields[1]).unwrap() == std::f64::MAX);
-
-        assert!(String::is(&fields[3]));
-        assert!(String::from_variant(&fields[3]).unwrap() == "hello");
-
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        // The HashMap is unordered so we can't rely on items to be in a specific order during the transformation to
-        // Vec, and size depends on the order of items because of padding rules.
-        assert!(encoding.len() == 88 || encoding.len() == 92);
-
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(Structure::is(&v));
-        let s = Structure::from_variant(&v).unwrap();
-        let fields = s.fields();
-        assert!(*u8::from_variant(&fields[0]).unwrap() == u8::max_value());
-        assert!(u8::is(&fields[0]));
-        assert!(*u32::from_variant(&fields[1]).unwrap() == u32::max_value());
-        assert!(u32::is(&fields[1]));
-
-        assert!(Structure::is(&fields[2]));
-        let inner = Structure::from_variant(&fields[2]).unwrap();
-        let inner_fields = inner.fields();
-        assert!(i64::is(&inner_fields[0]));
-        assert!(*i64::from_variant(&inner_fields[0]).unwrap() == i64::max_value());
-        assert!(bool::is(&inner_fields[1]));
-        assert!(*bool::from_variant(&inner_fields[1]).unwrap());
-
-        assert!(String::from_variant(&fields[3]).unwrap() == "hello");
-        assert!(String::is(&fields[3]));
-
-        let array = Array::from_variant(&fields[4]).unwrap();
-        let dict = Dict::try_from(array.clone()).unwrap();
-        let map: HashMap<&i64, &String> = (&dict).try_into().unwrap();
-        assert!(map[&1] == "123");
-        assert!(map[&2] == "456");
+        })? {
+            // For some reason rustc doesn't like us using ARRAY_SIGNATURE_CHAR const
+            'a' => self.visit_array(visitor),
+            '(' => self.visit_struct(visitor),
+            'v' => self.visit_variant(visitor),
+            c => Err(Error::invalid_value(
+                Unexpected::Char(c),
+                &"a Variant signature",
+            )),
+        }
     }
 
-    #[test]
-    fn array_variant() {
-        // Let's use D-Bus/GVariant terms
+    #[inline]
+    fn visit_map<V>(self, mut visitor: V) -> Result<Variant<'de>, V::Error>
+    where
+        V: MapAccess<'de>,
+    {
+        // TODO: Why do we need String here?
+        println!("signature: {}", self.signature.as_str());
+        let key_signature = Signature::from(String::from(&self.signature[2..3]));
+        let signature_end = self.signature.len() - 1;
+        let value_signature = Signature::from(String::from(&self.signature[3..signature_end]));
+        let mut dict = Dict::new(key_signature.clone(), value_signature.clone());
 
-        // Array of u8
-        let ay = vec![u8::max_value(), 0u8, 47u8];
-        let array = Array::from(ay);
-        assert!(array.signature() == "ay");
-        let _: Vec<&u8> = (&array).try_into().unwrap();
+        while let Some((key, value)) = visitor.next_entry_seed(
+            VariantSeed::<Variant> {
+                signature: key_signature.clone(),
+                phantom: PhantomData,
+            },
+            VariantSeed::<Variant> {
+                signature: value_signature.clone(),
+                phantom: PhantomData,
+            },
+        )? {
+            dict.append(key, value).map_err(Error::custom)?;
+        }
 
-        let format = EncodingFormat::default();
-        let encoding = array.encode(format);
-        assert!(encoding.len() == 7);
-        let v = crate::Variant::from_data(encoding, array.signature(), format).unwrap();
-        let array = Array::take_from_variant(v).unwrap();
-        let ay: Vec<u8> = array.try_into().unwrap();
-        assert!(ay == [u8::max_value(), 0u8, 47u8]);
-
-        // Array of strings
-        // Can't use 'as' as it's a keyword
-        let as_ = vec!["Hello", "World", "Now", "Bye!"];
-        let array = Array::from(as_);
-        assert!(array.signature() == "as");
-        let _: Vec<&String> = (&array).try_into().unwrap();
-
-        let encoding = array.encode(format);
-        assert!(encoding.len() == 45);
-        let v = crate::Variant::from_data(encoding, array.signature(), format).unwrap();
-        let array = Array::take_from_variant(v).unwrap();
-        let as_: Vec<String> = array.try_into().unwrap();
-        assert!(as_ == ["Hello", "World", "Now", "Bye!"]);
-
-        // Array of Struct, which in turn containin an Array (We gotta go deeper!)
-        let ar = vec![Structure::new()
-            // top-most simple fields
-            .add_field(u8::max_value())
-            .add_field(u32::max_value())
-            // top-most inner structure
-            .add_field(
-                Structure::new()
-                    // 2nd level simple fields
-                    .add_field(i64::max_value())
-                    .add_field(true)
-                    .add_field(i64::max_value())
-                    // 2nd level array field
-                    .add_field(Array::from(vec!["Hello", "World"])),
-            )
-            // one more top-most simple field
-            .add_field("hello")];
-        let array = Array::from(ar);
-        assert!(array.signature() == "a(yu(xbxas)s)");
-        let _: Vec<&Structure> = (&array).try_into().unwrap();
-
-        let encoding = array.encode(format);
-        assert!(encoding.len() == 78);
-        let v = crate::Variant::from_data(encoding, array.signature(), format).unwrap();
-        let array = Array::take_from_variant(v).unwrap();
-        let mut ar: Vec<Structure> = array.try_into().unwrap();
-
-        // top-most structure
-        let s = ar.remove(0);
-        let fields = s.fields();
-
-        // top-most simple fields
-        assert!(u8::is(&fields[0]));
-        assert!(*u8::from_variant(&fields[0]).unwrap() == u8::max_value());
-        assert!(u32::is(&fields[1]));
-        assert!(*u32::from_variant(&fields[1]).unwrap() == u32::max_value());
-        assert!(String::is(&fields[3]));
-        assert!(String::from_variant(&fields[3]).unwrap() == "hello");
-
-        // top-most inner structure
-        let inner = Structure::from_variant(&fields[2]).unwrap();
-        let inner_fields = inner.fields();
-
-        // 2nd level simple fields
-        assert!(i64::is(&inner_fields[0]));
-        assert!(*i64::from_variant(&inner_fields[0]).unwrap() == i64::max_value());
-        assert!(bool::is(&inner_fields[1]));
-        assert!(*bool::from_variant(&inner_fields[1]).unwrap() == true);
-
-        // 2nd level array field
-        let array = Array::from_variant(&inner_fields[3]).unwrap();
-        let as_: Vec<&String> = array.try_into().unwrap();
-        assert!(as_ == ["Hello", "World"]);
+        Ok(Variant::Dict(dict))
     }
+}
 
-    #[test]
-    fn dict_entry_variant() {
-        // Simple type value
-        let entry = DictEntry::new(2u8, "world");
-        assert!(entry.signature() == "{ys}");
-        let v = entry.to_variant();
+impl<'de, T> DeserializeSeed<'de> for VariantSeed<'de, T>
+where
+    T: Deserialize<'de>,
+{
+    type Value = Variant<'de>;
 
-        let format = EncodingFormat::default();
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 14);
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(self)
+    }
+}
 
-        let v = crate::Variant::from_data(encoding, v.value_signature(), format).unwrap();
-        assert!(DictEntry::is(&v));
-        let entry = DictEntry::from_variant(&v).unwrap();
-        assert!(*entry.key::<u8>().unwrap() == 2u8);
-        assert!(entry.value::<String>().unwrap() == "world");
-
-        // STRUCT value
-        let entry = DictEntry::new(
-            "hello",
-            Structure::new()
-                .add_field(u8::max_value())
-                .add_field(u32::max_value()),
-        );
-        assert!(entry.signature() == "{s(yu)}");
-        let v = entry.to_variant();
-
-        let encoding = v.encode_value(format);
-        assert!(encoding.len() == 24);
-        assert!(DictEntry::is(&v));
-        let entry = DictEntry::from_variant(&v).unwrap();
-        assert!(entry.key::<String>().unwrap() == "hello");
-        let s = entry.value::<Structure>().unwrap();
-        let fields = s.fields();
-        assert!(u8::is(&fields[0]));
-        assert!(*u8::from_variant(&fields[0]).unwrap() == u8::max_value());
-        assert!(u32::is(&fields[1]));
-        assert!(*u32::from_variant(&fields[1]).unwrap() == u32::max_value());
+impl<'a> VariantValue for Variant<'a> {
+    fn signature() -> Signature<'static> {
+        Signature::from(VARIANT_SIGNATURE_STR)
     }
 }

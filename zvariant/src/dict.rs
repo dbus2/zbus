@@ -1,100 +1,123 @@
-use core::convert::{TryFrom, TryInto};
 use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::hash::BuildHasher;
 
-use crate::VariantError;
-use crate::{Array, Basic, Decode, DictEntry, Encode};
+use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
-/// A dictionary as an [`Array`] of [`DictEntry`].
-///
-/// It would have been best to implement [`From`]`<`[`Vec`]`<`[`DictEntry`]`>>` for [`HashMap`]
-/// but since both [`From`] trait and [`HashMap`] are external to our crate, we need this
-/// intermediate type. We can't implement [`Into`] either as [`Vec`] isn't our type either.
-/// API is provided to transform this into, and from a [`HashMap`] though.
-///
-/// # Example:
-///
-/// ```
-/// use core::convert::{TryFrom, TryInto};
-/// use std::collections::HashMap;
-///
-/// use zvariant::{Array, Dict};
-/// use zvariant::{Decode, Encode, EncodingFormat};
-///
-/// // Create a Dict from a HashMap
-/// let mut map: HashMap<i64, &str> = HashMap::new();
-/// map.insert(1, "123");
-/// map.insert(2, "456");
-/// let dict: Dict = map.into();
-///
-/// // Then we turn it into an Array so we can encode it
-/// let array = Array::try_from(dict).unwrap();
-/// let format = EncodingFormat::default();
-/// let encoding = array.encode(format);
-/// assert!(encoding.len() == 40);
-///
-/// // Then we do the opposite
-/// let array = Array::decode(encoding, array.signature(), format).unwrap();
-/// let dict = Dict::try_from(array).unwrap();
-/// let map: HashMap<i64, String> = dict.try_into().unwrap();
-///
-/// // Check we got the right thing back
-/// assert!(map[&1] == "123");
-/// assert!(map[&2] == "456");
-/// ```
-///
-/// [`Array`]: struct.Array.html
-/// [`DictEntry`]: struct.DictEntry.html
-/// [`From`]: https://doc.rust-lang.org/std/convert/trait.From.html
-/// [`Into`]: https://doc.rust-lang.org/std/convert/trait.Into.html
-/// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
-/// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-#[derive(Default)]
-pub struct Dict(Vec<DictEntry>);
+use crate::{Basic, Error, Signature};
+use crate::{FromVariant, IntoVariant, Variant, VariantValue};
 
-impl Dict {
-    /// Create a new `Dict`.
-    ///
-    /// Same as calling `Dict::default()`.
-    pub fn new() -> Self {
-        Dict::default()
+/// A dictionary type to be used with [`Variant`].
+///
+/// TODO
+///
+/// [`Variant`]: enum.Variant.html
+#[derive(Debug, Clone, PartialEq)]
+pub struct Dict<'k, 'v> {
+    entries: Vec<DictEntry<'k, 'v>>,
+    key_signature: Signature<'k>,
+    value_signature: Signature<'v>,
+}
+
+impl<'k, 'v> Dict<'k, 'v> {
+    pub fn new(key_signature: Signature<'k>, value_signature: Signature<'v>) -> Self {
+        Self {
+            entries: vec![],
+            key_signature,
+            value_signature,
+        }
     }
 
-    /// Create a new `Dict` from `vec`.
-    ///
-    /// Same as calling `Dict::from(vec)`.
-    pub fn new_from_vec(vec: Vec<DictEntry>) -> Self {
-        Dict(vec)
+    pub fn append<'kv: 'k, 'vv: 'v>(
+        &mut self,
+        key: Variant<'kv>,
+        value: Variant<'vv>,
+    ) -> Result<(), Error> {
+        if key.value_signature() != self.key_signature
+            || value.value_signature() != self.value_signature
+        {
+            return Err(Error::IncorrectType);
+        }
+
+        self.entries.push(DictEntry { key, value });
+
+        Ok(())
     }
 
-    /// Get a reference to the underlying `Vec<DictEntry>`.
-    pub fn get(&self) -> &Vec<DictEntry> {
-        &self.0
+    /// Add a new entry.
+    pub fn add<K, V>(&mut self, key: K, value: V) -> Result<(), Error>
+    where
+        K: Basic + IntoVariant<'k> + std::hash::Hash + std::cmp::Eq,
+        V: IntoVariant<'v> + VariantValue,
+    {
+        if K::signature() != self.key_signature || V::signature() != self.value_signature {
+            return Err(Error::IncorrectType);
+        }
+
+        self.entries.push(DictEntry {
+            key: key.into_variant(),
+            value: value.into_variant(),
+        });
+
+        Ok(())
     }
 
-    /// Get a mutable reference to the underlying `Vec<DictEntry>`.
-    pub fn get_mut(&mut self) -> &mut Vec<DictEntry> {
-        &mut self.0
+    /// Get the value for the given key.
+    pub fn get<'d, K, V>(&'d self, key: &'k K) -> Result<Option<&'v V>, Error>
+    where
+        'd: 'k + 'v,
+        K: FromVariant<'k> + std::cmp::Eq,
+        V: FromVariant<'v>,
+    {
+        for entry in &self.entries {
+            let k = K::from_variant_ref(&entry.key)?;
+            if *k == *key {
+                return V::from_variant_ref(&entry.value).map(Some);
+            }
+        }
+
+        Ok(None)
     }
 
-    /// Unwraps the `Dict`, returning the underlying `Vec<DictEntry>`.
-    pub fn into_inner(self) -> Vec<DictEntry> {
-        self.0
+    pub fn signature(&self) -> Signature<'static> {
+        Signature::from(format!(
+            "a{{{}{}}}",
+            self.key_signature.as_str(),
+            self.value_signature.as_str(),
+        ))
+    }
+
+    // TODO: Provide more API like https://docs.rs/toml/0.5.5/toml/map/struct.Map.html
+}
+
+impl<'k, 'v> Serialize for Dict<'k, 'v> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.entries.len()))?;
+        for entry in &self.entries {
+            seq.serialize_element(entry)?;
+        }
+
+        seq.end()
     }
 }
 
 // Conversion of Dict to HashMap
-impl<K, V> TryInto<HashMap<K, V>> for Dict
+impl<'k, 'v, K, V, H> TryFrom<Dict<'k, 'v>> for HashMap<K, V, H>
 where
-    K: Decode + Basic,
-    V: Decode,
+    K: Basic + FromVariant<'k> + std::hash::Hash + std::cmp::Eq,
+    V: FromVariant<'v>,
+    H: BuildHasher + Default,
 {
-    type Error = VariantError;
+    type Error = Error;
 
-    fn try_into(self) -> Result<HashMap<K, V>, VariantError> {
-        let mut map = HashMap::new();
+    fn try_from(value: Dict<'k, 'v>) -> Result<HashMap<K, V, H>, Error> {
+        let mut map = HashMap::default();
 
-        for entry in self.0 {
-            let (key, value) = entry.take()?;
+        for entry in value.entries {
+            let (key, value) = (K::from_variant(entry.key)?, V::from_variant(entry.value)?);
 
             map.insert(key, value);
         }
@@ -103,18 +126,25 @@ where
     }
 }
 
-impl<'a, K, V> TryInto<HashMap<&'a K, &'a V>> for &'a Dict
+impl<'d, 'k, 'v, K, V, H> TryFrom<&'d Dict<'k, 'v>> for HashMap<&'k K, &'v V, H>
 where
-    K: Decode + Basic,
-    V: Decode,
+    'd: 'k + 'v,
+    K: FromVariant<'k> + std::cmp::Eq + std::hash::Hash,
+    V: FromVariant<'v>,
+    H: BuildHasher + Default,
 {
-    type Error = VariantError;
+    type Error = Error;
 
-    fn try_into(self) -> Result<HashMap<&'a K, &'a V>, VariantError> {
-        let mut map = HashMap::new();
+    fn try_from(value: &'d Dict<'k, 'v>) -> Result<HashMap<&'k K, &'v V, H>, Error> {
+        let mut map = HashMap::default();
 
-        for entry in &self.0 {
-            map.insert(entry.key()?, entry.value()?);
+        for entry in &value.entries {
+            let (key, value) = (
+                K::from_variant_ref(&entry.key)?,
+                V::from_variant_ref(&entry.value)?,
+            );
+
+            map.insert(key, value);
         }
 
         Ok(map)
@@ -122,70 +152,47 @@ where
 }
 
 // Conversion of Hashmap to Dict
-impl<K, V> From<HashMap<K, V>> for Dict
+impl<'k, 'v, K, V> From<HashMap<K, V>> for Dict<'k, 'v>
 where
-    K: Encode + Basic,
-    V: Encode,
+    K: VariantValue + IntoVariant<'k> + std::hash::Hash + std::cmp::Eq,
+    V: VariantValue + IntoVariant<'v>,
 {
     fn from(value: HashMap<K, V>) -> Self {
-        let vec = value
+        let entries = value
             .into_iter()
-            .map(|(key, value)| DictEntry::new(key, value))
+            .map(|(key, value)| DictEntry {
+                key: key.into_variant(),
+                value: value.into_variant(),
+            })
             .collect();
 
-        Dict(vec)
+        Self {
+            entries,
+            key_signature: K::signature(),
+            value_signature: V::signature(),
+        }
     }
 }
 
-// Conversion of ARRAY of DICT_ENTRY to Dict
-impl TryFrom<Array> for Dict {
-    type Error = VariantError;
+// TODO: Conversion of Dict from/to BTreeMap
 
-    fn try_from(value: Array) -> Result<Self, VariantError> {
-        value.try_into().map(Dict::new_from_vec)
-    }
+#[derive(Debug, Clone, PartialEq)]
+struct DictEntry<'k, 'v> {
+    key: Variant<'k>,
+    value: Variant<'v>,
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{Dict, DictEntry};
-    use core::convert::TryInto;
-    use std::collections::HashMap;
+impl<'k, 'v> Serialize for DictEntry<'k, 'v> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut entry = serializer.serialize_struct("zvariant::DictEntry", 2)?;
+        self.key
+            .serialize_value_as_struct_field("zvariant::DictEntry::Key", &mut entry)?;
+        self.value
+            .serialize_value_as_struct_field("zvariant::DictEntry::Value", &mut entry)?;
 
-    #[test]
-    fn hashmap_to_vec() {
-        let mut hash: HashMap<i64, &str> = HashMap::new();
-        hash.insert(1, "123");
-        hash.insert(2, "456");
-        hash.insert(3, "789");
-
-        let dict: Dict = hash.into();
-        for entry in dict.get() {
-            match entry.key::<i64>().unwrap() {
-                1 => assert!(entry.value::<String>().unwrap() == "123"),
-                2 => assert!(entry.value::<String>().unwrap() == "456"),
-                3 => assert!(entry.value::<String>().unwrap() == "789"),
-                _ => panic!("Encountered a key that wasn't supposed to be in the hashmap"),
-            }
-        }
-    }
-
-    #[test]
-    fn vec_to_hashmap() {
-        let mut v = vec![];
-        v.push(DictEntry::new(1i64, "123"));
-        v.push(DictEntry::new(2i64, "456"));
-        v.push(DictEntry::new(3i64, "789"));
-        let dict = Dict::new_from_vec(v);
-
-        let hash: HashMap<i64, String> = dict.try_into().unwrap();
-        for (key, value) in hash.iter() {
-            match key {
-                1 => assert!(*value == "123"),
-                2 => assert!(*value == "456"),
-                3 => assert!(*value == "789"),
-                _ => panic!("Encountered a key that wasn't supposed to be in the hashmap"),
-            }
-        }
+        entry.end()
     }
 }
