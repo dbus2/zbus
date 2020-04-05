@@ -43,6 +43,15 @@ where
     }
 }
 
+// Let's pretend it's an empty structure
+// TODO: test for unit type
+impl VariantValue for () {
+    #[inline]
+    fn signature() -> Signature<'static> {
+        Signature::from("()")
+    }
+}
+
 // TODO: implement when we support GVariant support
 // impl<V> VariantValue for Option<V>
 

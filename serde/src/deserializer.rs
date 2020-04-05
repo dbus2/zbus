@@ -356,12 +356,15 @@ where
         todo!();
     }
 
-    // FIXME: What am i supposed to do with this strange type?
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        self.deserialize_option(visitor)
+        // Parse the expected signature
+        for c in <()>::signature().chars() {
+            self.sign_parser.parse_char(Some(c))?;
+        }
+        visitor.visit_unit()
     }
 
     fn deserialize_unit_struct<V>(self, name: &'static str, visitor: V) -> Result<V::Value>

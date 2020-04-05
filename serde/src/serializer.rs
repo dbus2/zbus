@@ -361,9 +361,13 @@ where
         todo!();
     }
 
-    // FIXME: What am i supposed to do with this strange type?
     fn serialize_unit(self) -> Result<()> {
-        self.serialize_none()
+        // Parse the expected signature but simply skip the value
+        for c in <()>::signature().chars() {
+            self.sign_parser.parse_char(Some(c))?;
+        }
+
+        Ok(())
     }
 
     fn serialize_unit_struct(self, name: &'static str) -> Result<()> {
