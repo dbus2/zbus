@@ -1,13 +1,10 @@
 use byteorder::ByteOrder;
-use core::convert::TryInto;
 use std::error;
 use std::fmt;
-use std::io::Error as IOError;
+use std::io::{Error as IOError, Write};
 
-use zvariant::Signature;
-use zvariant::VariantError;
-use zvariant::{Array, Decode, Encode, EncodingFormat};
-use zvariant::{SharedData, Structure};
+use zvariant::{EncodingFormat, Error as VariantError, FromVariant};
+use zvariant::{Signature, VariantValue};
 
 use crate::utils::padding_for_8_bytes;
 use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
@@ -111,15 +108,22 @@ impl From<IOError> for MessageError {
 #[derive(Debug)]
 pub struct Message(Vec<u8>);
 
+// TODO: Make generic over byteorder
+// TODO: Document multiple args needing to be a tuple
 impl Message {
-    pub fn method(
+    pub fn method<B>(
         destination: Option<&str>,
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        body: Option<Structure>,
-    ) -> Result<Self, MessageError> {
-        let mut m = Message::new(MessageType::MethodCall);
+        // TODO: callback for caller to serialize directly into the message?
+        body: Option<&B>,
+    ) -> Result<Self, MessageError>
+    where
+        B: serde::ser::Serialize + VariantValue,
+    {
+        let mut bytes: Vec<u8> = Vec::with_capacity(PRIMARY_HEADER_SIZE);
+        let mut cursor = std::io::Cursor::new(&mut bytes);
 
         let dest_length = destination.map_or(0, |s| s.len());
         let iface_length = iface.map_or(0, |s| s.len());
@@ -133,14 +137,7 @@ impl Message {
             return Err(MessageError::StrTooLarge);
         }
 
-        // Message body encoding set to 0 at first
-        let body_len_position = m.0.len();
-        m.0.extend(&0u32.to_ne_bytes());
-
-        // Serial number. FIXME: managed by connection
-        m.0.extend(&1u32.to_ne_bytes());
-
-        // Now array of fields
+        // Construct the array of fields
         let mut fields = MessageFields::new();
 
         if let Some(destination) = destination {
@@ -149,42 +146,54 @@ impl Message {
         if let Some(iface) = iface {
             fields.add(MessageField::interface(iface));
         }
-        let body_signature = body.as_ref().map(|structure| {
-            let signature = structure.signature();
-            // Remove the leading and trailing STRUCT delimiter
-            let signature = &signature[1..signature.len() - 1];
-
-            String::from(signature)
-        });
-        if let Some(body_signature) = body_signature {
-            fields.add(MessageField::signature(body_signature));
+        if body.is_some() {
+            let mut signature = B::signature();
+            // Remove any leading and trailing STRUCT delimiters
+            if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
+                signature = Signature::from(String::from(&signature[1..signature.len() - 1]));
+            }
+            fields.add(MessageField::signature(signature));
         }
 
         fields.add(MessageField::path(path));
         fields.add(MessageField::member(method_name));
 
         let format = EncodingFormat::DBus;
-        let array = Array::from(fields);
-        array.encode_into(&mut m.0, format);
+        zvariant::to_write_ne(
+            &mut cursor,
+            format,
+            &(
+                ENDIAN_SIG,                    // Endianness
+                MessageType::MethodCall as u8, // Message type
+                0u8,                           // Flags
+                1u8,                           // Major version of D-Bus protocol
+                0u32,                          // Message body encoding set to 0 at first
+                1u32,                          // Serial number. FIXME: managed by connection
+                fields,
+            ),
+        )?; // Array of fields
 
         // Do we need to do this if body is None?
-        let padding = padding_for_8_bytes(m.0.len());
+        let padding = padding_for_8_bytes(cursor.position() as usize);
         if padding > 0 {
-            m.push_padding(padding);
+            for _ in 0..padding {
+                cursor.write_all(&[0u8; 1])?;
+            }
         }
 
         if let Some(body) = body {
-            let n_bytes_before = m.0.len();
-            body.encode_into(&mut m.0, format);
+            let pos = cursor.position();
+            zvariant::to_write_ne(&mut cursor, format, body)?;
 
-            let len = crate::utils::usize_to_u32(m.0.len() - n_bytes_before);
-            byteorder::NativeEndian::write_u32(
-                &mut m.0[body_len_position..body_len_position + 4],
-                len,
-            );
+            let body_len = cursor.position() - pos;
+            if body_len > (u32::max_value() as u64) {
+                return Err(MessageError::ExcessData);
+            }
+            cursor.set_position(BODY_LEN_START_OFFSET as u64);
+            zvariant::to_write_ne(&mut cursor, format, &(body_len as u32))?;
         }
 
-        Ok(m)
+        Ok(Message(bytes))
     }
 
     pub fn set_serial(mut self, serial: u32) -> Self {
@@ -236,11 +245,11 @@ impl Message {
 
     pub fn body_signature(&self) -> Result<Signature, MessageError> {
         for field in self.fields()?.get() {
-            if field.code()? == MessageFieldCode::Signature {
-                let value = field.value()?;
-                let sig = Signature::from_variant(value)?;
+            if field.code() == MessageFieldCode::Signature {
+                let sig = Signature::from_variant_ref(field.value())?;
 
-                return Ok(Signature::from(sig.as_str()));
+                // FIXME: Can we avoid the copy?
+                return Ok(Signature::from(String::from(sig)));
             }
         }
 
@@ -256,17 +265,18 @@ impl Message {
             return Err(MessageError::InsufficientData);
         }
 
-        // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
-        let encoding = SharedData::new(self.0.clone());
-        let format = EncodingFormat::DBus;
-        let slice = Array::slice_data(&encoding.tail(FIELDS_LEN_START_OFFSET), "a(yv)", format)?;
-
-        let array = Array::decode(&slice, "a(yv)", format).map_err(MessageError::from)?;
-
-        array.try_into().map_err(MessageError::from)
+        zvariant::from_slice_ne::<(u8, u8, u8, u8, u32, u32, MessageFields)>(
+            &self.0,
+            EncodingFormat::DBus,
+        )
+        .map(|(_, _, _, _, _, _, fields)| fields)
+        .map_err(MessageError::from)
     }
 
-    pub fn body(&self, body_signature: Option<Signature>) -> Result<Structure, MessageError> {
+    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<Option<B>, MessageError>
+    where
+        B: serde::de::Deserialize<'d> + VariantValue,
+    {
         if self.bytes_to_completion() != 0 {
             return Err(MessageError::InsufficientData);
         }
@@ -274,19 +284,12 @@ impl Message {
         let mut header_len = PRIMARY_HEADER_SIZE + self.fields_len();
         header_len = header_len + padding_for_8_bytes(header_len);
         if self.body_len() == 0 {
-            return Ok(Structure::new());
+            return Ok(None);
         }
 
-        let signature = body_signature.unwrap_or(self.body_signature()?);
-        // Add () for Structure
-        let signature = format!("({})", signature.as_str());
-
-        // FIXME: We can avoid this deep copy (perhaps if we have builder pattern for Message?)
-        let encoding = SharedData::new(self.0.clone());
-        let structure =
-            Structure::decode(&encoding.tail(header_len), signature, EncodingFormat::DBus)?;
-
-        Ok(structure)
+        zvariant::from_slice_ne(&self.0[header_len..], EncodingFormat::DBus)
+            .map(Some)
+            .map_err(MessageError::from)
     }
 
     pub fn no_reply_expected(mut self) -> Self {
@@ -309,18 +312,5 @@ impl Message {
 
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
-    }
-
-    fn new(mtype: MessageType) -> Self {
-        Message(vec![
-            ENDIAN_SIG,  // Endianness
-            mtype as u8, // Message type
-            0,           // Flags
-            1,           // Major version of D-Bus protocol
-        ])
-    }
-
-    fn push_padding(&mut self, len: usize) {
-        self.0.extend(std::iter::repeat(0).take(len));
     }
 }

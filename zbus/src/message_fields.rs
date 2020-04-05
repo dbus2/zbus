@@ -1,87 +1,64 @@
-use core::convert::{TryFrom, TryInto};
+use serde_derive::{Deserialize, Serialize};
+use zvariant::{Signature, VariantValue};
 
-use zvariant::{Array, Encode};
-use zvariant::{Structure, Variant};
-
-use crate::{MessageField, MessageFieldError};
+use crate::MessageField;
 
 // It's actually 10 (and even not that) but let's round it to next 8-byte alignment
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
 
-#[derive(Debug)]
-pub struct MessageFields(Vec<MessageField>);
+// FIXME: Use ArrayVec
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MessageFields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
 
-impl MessageFields {
+impl<'m> MessageFields<'m> {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn new_from_vec(fields: Vec<MessageField>) -> Self {
+    pub fn new_from_vec<'f: 'm>(fields: Vec<MessageField<'f>>) -> Self {
         Self(fields)
     }
 
-    pub fn add(&mut self, field: MessageField) {
+    pub fn add<'f: 'm>(&mut self, field: MessageField<'f>) {
         self.0.push(field);
     }
 
-    pub fn get(&self) -> &Vec<MessageField> {
+    pub fn get(&self) -> &Vec<MessageField<'m>> {
         &self.0
     }
 
-    pub fn get_mut(&mut self) -> &mut Vec<MessageField> {
+    pub fn get_mut(&mut self) -> &mut Vec<MessageField<'m>> {
         &mut self.0
     }
 
-    pub fn into_inner(self) -> Vec<MessageField> {
+    pub fn into_inner(self) -> Vec<MessageField<'m>> {
         self.0
     }
 }
 
-impl Default for MessageFields {
+impl<'m> Default for MessageFields<'m> {
     fn default() -> Self {
         Self(Vec::with_capacity(MAX_FIELDS_IN_MESSAGE))
     }
 }
 
-impl From<MessageFields> for Array {
-    fn from(fields: MessageFields) -> Self {
-        let mut v: Vec<Variant> = vec![];
-
-        for field in fields.into_inner() {
-            v.push(field.into_inner().to_variant());
-        }
-
-        Array::new_from_vec_unchecked(v)
-    }
-}
-
-impl TryFrom<Array> for MessageFields {
-    type Error = MessageFieldError;
-
-    fn try_from(array: Array) -> Result<Self, MessageFieldError> {
-        let mut fields = MessageFields::new();
-
-        let vec: Vec<Structure> = array.try_into().map_err(MessageFieldError::from)?;
-        for structure in vec {
-            let field = structure.try_into()?;
-
-            fields.add(field);
-        }
-
-        Ok(fields)
-    }
-}
-
-impl std::ops::Deref for MessageFields {
-    type Target = Vec<MessageField>;
+impl<'m> std::ops::Deref for MessageFields<'m> {
+    type Target = Vec<MessageField<'m>>;
 
     fn deref(&self) -> &Self::Target {
         self.get()
     }
 }
 
-impl std::ops::DerefMut for MessageFields {
+impl<'m> std::ops::DerefMut for MessageFields<'m> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.get_mut()
+    }
+}
+
+// FIXME: Use derive macro when it's available
+impl<'a> VariantValue for MessageFields<'a> {
+    fn signature() -> Signature<'static> {
+        <Vec<MessageField>>::signature()
     }
 }

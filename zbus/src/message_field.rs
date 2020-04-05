@@ -1,13 +1,14 @@
-use core::convert::TryFrom;
-
 use std::error;
 use std::fmt;
 
-use zvariant::{Decode, Encode};
-use zvariant::{ObjectPath, Signature, Structure};
-use zvariant::{Variant, VariantError};
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, Serializer};
+
+use serde_derive::{Deserialize, Serialize};
+
+use zvariant::IntoVariant;
+use zvariant::{Error as VariantError, Variant, VariantValue};
+use zvariant::{ObjectPath, Signature};
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -93,134 +94,97 @@ impl From<VariantError> for MessageFieldError {
     }
 }
 
-#[derive(Debug)]
-pub struct MessageField(Structure);
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MessageField<'v> {
+    code: MessageFieldCode,
+    #[serde(borrow)]
+    value: Variant<'v>,
+}
 
-impl MessageField {
-    pub fn code(&self) -> Result<MessageFieldCode, MessageFieldError> {
-        let fields = self.0.fields();
-        if fields.len() < 2 {
-            return Err(MessageFieldError::InsufficientData);
+impl<'v> MessageField<'v> {
+    pub fn code(&self) -> MessageFieldCode {
+        self.code
+    }
+
+    //pub fn value<'d, 'f: 'd, V>(&'f self) -> Result<V, MessageFieldError>
+    //where
+    //    B: serde::de::Deserialize<'d> + VariantValue,
+    //{
+    pub fn value(&self) -> &Variant {
+        &self.value
+    }
+
+    pub fn path<'o: 'v>(path: impl Into<ObjectPath<'o>>) -> Self {
+        Self {
+            code: MessageFieldCode::Path,
+            value: path.into().into_variant(),
         }
-
-        Ok(u8::from_variant(&self.0.fields()[0])
-            .map(|c| MessageFieldCode::from(*c))
-            .unwrap_or(MessageFieldCode::Invalid))
     }
 
-    pub fn value(&self) -> Result<&Variant, MessageFieldError> {
-        Ok(Variant::from_variant(&self.0.fields()[1])?)
+    pub fn interface<'i: 'v>(interface: &'i str) -> Self {
+        Self {
+            code: MessageFieldCode::Interface,
+            value: interface.into_variant(),
+        }
     }
 
-    pub fn get(&self) -> &Structure {
-        &self.0
+    pub fn member<'m: 'v>(member: &'m str) -> Self {
+        Self {
+            code: MessageFieldCode::Member,
+            value: member.into_variant(),
+        }
     }
 
-    pub fn get_mut(&mut self) -> &mut Structure {
-        &mut self.0
-    }
-
-    pub fn into_inner(self) -> Structure {
-        self.0
-    }
-
-    pub fn path(path: impl Into<ObjectPath>) -> Self {
-        Self(
-            Structure::new()
-                .add_field(MessageFieldCode::Path as u8)
-                .add_field(path.into().to_variant()),
-        )
-    }
-
-    pub fn interface(interface: &str) -> Self {
-        Self(
-            Structure::new()
-                .add_field(MessageFieldCode::Interface as u8)
-                .add_field(String::from(interface).to_variant()),
-        )
-    }
-
-    pub fn member(member: &str) -> Self {
-        Self(
-            Structure::new()
-                .add_field(MessageFieldCode::Member as u8)
-                .add_field(String::from(member).to_variant()),
-        )
-    }
-
-    pub fn error_name(error_name: &str) -> Self {
-        Self(
-            Structure::new()
-                .add_field(MessageFieldCode::ErrorName as u8)
-                .add_field(String::from(error_name).to_variant()),
-        )
+    pub fn error_name<'e: 'v>(error_name: &'e str) -> Self {
+        Self {
+            code: MessageFieldCode::ErrorName,
+            value: error_name.into_variant(),
+        }
     }
 
     pub fn reply_serial(serial: u32) -> Self {
-        Self(
-            Structure::new()
-                .add_field(MessageFieldCode::ReplySerial as u8)
-                .add_field(serial.to_variant()),
-        )
+        Self {
+            code: MessageFieldCode::ReplySerial,
+            value: serial.into_variant(),
+        }
     }
 
-    pub fn destination(destination: &str) -> Self {
-        Self(
-            Structure::new()
-                .add_field(MessageFieldCode::Destination as u8)
-                .add_field(String::from(destination).to_variant()),
-        )
+    pub fn destination<'d: 'v>(destination: &'d str) -> Self {
+        Self {
+            code: MessageFieldCode::Destination,
+            value: destination.into_variant(),
+        }
     }
 
-    pub fn sender(sender: &str) -> Self {
-        Self(
-            Structure::new()
-                .add_field(MessageFieldCode::Sender as u8)
-                .add_field(String::from(sender).to_variant()),
-        )
+    pub fn sender<'s: 'v>(sender: &'s str) -> Self {
+        Self {
+            code: MessageFieldCode::Sender,
+            value: sender.into_variant(),
+        }
     }
 
-    pub fn signature(signature: impl Into<Signature>) -> Self {
-        Self(
-            Structure::new()
-                .add_field(MessageFieldCode::Signature as u8)
-                .add_field(signature.into().to_variant()),
-        )
+    pub fn signature<'s: 'v>(signature: impl Into<Signature<'s>>) -> Self {
+        Self {
+            code: MessageFieldCode::Signature,
+            value: signature.into().into_variant(),
+        }
     }
 
     pub fn unix_fds(fd: u32) -> Self {
-        Self(
-            Structure::new()
-                .add_field(MessageFieldCode::UnixFDs as u8)
-                .add_field(fd.to_variant()),
-        )
+        Self {
+            code: MessageFieldCode::UnixFDs,
+            value: fd.into_variant(),
+        }
     }
 }
 
-impl std::ops::Deref for MessageField {
-    type Target = Structure;
-
-    fn deref(&self) -> &Self::Target {
-        self.get()
-    }
-}
-
-impl std::ops::DerefMut for MessageField {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.get_mut()
-    }
-}
-
-impl TryFrom<Structure> for MessageField {
-    type Error = MessageFieldError;
-
-    fn try_from(structure: Structure) -> Result<Self, MessageFieldError> {
-        let field = MessageField(structure);
-
-        // Ensure there is a valid code & variant payload
-        let _ = field.code()?;
-        let _ = field.value()?;
-
-        Ok(field)
+// FIXME: Use derive macro when it's available
+impl<'a> VariantValue for MessageField<'a> {
+    fn signature() -> Signature<'static> {
+        Signature::from(format!(
+            "({}{})",
+            u8::signature().as_str(),
+            Variant::signature().as_str(),
+        ))
     }
 }

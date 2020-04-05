@@ -4,12 +4,11 @@ use std::{env, error, fmt, io};
 
 use nix::unistd::Uid;
 
-use zvariant::VariantError;
-use zvariant::{Decode, Encode};
+use zvariant::{Error as VariantError, FromVariant};
 
 use crate::address::{self, Address, AddressError};
 use crate::message;
-use crate::message_field;
+use crate::message_field::{self, MessageFieldCode};
 
 pub struct Connection {
     pub server_guid: String,
@@ -110,34 +109,26 @@ impl From<message::Message> for ConnectionError {
         match message.fields() {
             Ok(all_fields) => {
                 // First, get the error name
-                let name = match all_fields.iter().find(|f| {
-                    f.code()
-                        .map(|c| c == message_field::MessageFieldCode::ErrorName)
-                        .unwrap_or(false)
-                }) {
-                    Some(f) => match f.value() {
-                        Ok(v) => match String::from_variant(v) {
-                            Ok(s) => String::from(s),
-                            Err(e) => return ConnectionError::Variant(e),
-                        },
-                        Err(e) => return ConnectionError::MessageField(e),
+                let name = match all_fields
+                    .iter()
+                    .find(|f| f.code() == MessageFieldCode::ErrorName)
+                {
+                    Some(f) => match String::from_variant_ref(f.value()) {
+                        Ok(s) => String::from(s),
+                        Err(e) => return ConnectionError::Variant(e),
                     },
                     None => return ConnectionError::InvalidReply,
                 };
 
                 // Then, try to get the optional description string
-                if message.body_len() > 0 {
-                    match message.body(Some(<String>::SIGNATURE_STR.into())) {
-                        Ok(body) => match String::from_variant(&body.fields()[0]) {
-                            Ok(detail) => {
-                                ConnectionError::MethodError(name, Some(String::from(detail)))
-                            }
-                            Err(e) => ConnectionError::Variant(e),
-                        },
-                        Err(e) => ConnectionError::Message(e),
-                    }
-                } else {
-                    ConnectionError::MethodError(name, None)
+                match message.body::<&str>() {
+                    Ok(body) => match body {
+                        Some(detail) => {
+                            ConnectionError::MethodError(name, Some(String::from(detail)))
+                        }
+                        None => ConnectionError::MethodError(name, None),
+                    },
+                    Err(e) => ConnectionError::Message(e),
                 }
             }
             Err(e) => ConnectionError::Message(e),
@@ -197,7 +188,7 @@ impl Connection {
         };
 
         // Now that daemon has approved us, we must send a hello as per specs
-        let reply = connection.call_method(
+        let reply = connection.call_method::<()>(
             Some("org.freedesktop.DBus"),
             "/org/freedesktop/DBus",
             Some("org.freedesktop.DBus"),
@@ -205,22 +196,25 @@ impl Connection {
             None,
         )?;
 
-        let body = reply.body(Some(<String>::SIGNATURE_STR.into()))?;
-        let bus_name = String::from_variant(&body.fields()[0])?;
-
+        let bus_name = reply
+            .body::<&str>()?
+            .ok_or_else(|| ConnectionError::InvalidReply)?;
         println!("bus name: {}", bus_name);
 
         Ok(connection)
     }
 
-    pub fn call_method(
+    pub fn call_method<B>(
         &mut self,
         destination: Option<&str>,
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        body: Option<zvariant::Structure>,
-    ) -> Result<message::Message, ConnectionError> {
+        body: Option<&B>,
+    ) -> Result<message::Message, ConnectionError>
+    where
+        B: serde::ser::Serialize + zvariant::VariantValue,
+    {
         println!("Starting: {}", method_name);
         let serial = self.next_serial();
         let m = message::Message::method(destination, path, iface, method_name, body)?
@@ -249,12 +243,8 @@ impl Connection {
                 let all_fields = incoming.fields()?;
 
                 let find_serial_func = |f: &crate::MessageField| {
-                    f.code()
-                        .map(|c| c == message_field::MessageFieldCode::ReplySerial)
-                        .unwrap_or(false)
-                        && f.value()
-                            .map(|v| u32::from_variant(v).map(|u| *u == serial).unwrap_or(false))
-                            .unwrap()
+                    f.code() == MessageFieldCode::ReplySerial
+                        && *f.value() == zvariant::Variant::U32(serial)
                 };
 
                 if all_fields.iter().any(find_serial_func) {
