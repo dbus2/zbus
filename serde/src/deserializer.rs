@@ -667,8 +667,6 @@ where
                 let signature = str::from_utf8(slice)
                     .map(Signature::from)
                     .map_err(|_| Error::InvalidUtf8)?;
-                // FIXME: Remove this
-                println!("decoding variant value: {}", signature.as_str());
                 let sign_parser = SignatureParser::new(signature);
 
                 let mut de = Deserializer::<B> {
