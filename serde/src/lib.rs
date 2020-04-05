@@ -262,6 +262,11 @@ mod tests {
     }
 
     #[test]
+    fn unit() {
+        dual_test!(be, (), 0, ());
+    }
+
+    #[test]
     fn array_variant() {
         // Let's use D-Bus/GVariant terms
 
