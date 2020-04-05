@@ -62,6 +62,7 @@ from_slice_for_signature_def!(from_slice_for_signature_be, byteorder::BE);
 from_slice_for_signature_def!(from_slice_for_signature_le, byteorder::LE);
 from_slice_for_signature_def!(from_slice_for_signature_ne, byteorder::NativeEndian);
 
+// TODO: Return number of bytes parsed?
 pub fn from_slice_for_signature<'d, 'r: 'd, 's: 'd, B, S, T: ?Sized>(
     bytes: &'r [u8],
     format: EncodingFormat,
