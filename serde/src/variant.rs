@@ -151,7 +151,7 @@ impl<'a> Serialize for Variant<'a> {
     }
 }
 
-impl<'de> Deserialize<'de> for Variant<'de> {
+impl<'de: 'a, 'a> Deserialize<'de> for Variant<'a> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
