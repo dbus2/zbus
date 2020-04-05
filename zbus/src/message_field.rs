@@ -8,7 +8,7 @@ use zvariant::{ObjectPath, Signature, Structure};
 use zvariant::{Variant, VariantError};
 
 #[repr(u8)]
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum MessageFieldCode {
     Invalid = 0,     // Not a valid field name.
     Path = 1,        // The object to send a call to, or the object a signal is emitted from.
