@@ -6,6 +6,8 @@ use std::fmt;
 use zvariant::{Decode, Encode};
 use zvariant::{ObjectPath, Signature, Structure};
 use zvariant::{Variant, VariantError};
+use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, Serializer};
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -36,6 +38,24 @@ impl From<u8> for MessageFieldCode {
             9 => MessageFieldCode::UnixFDs,
             _ => MessageFieldCode::Invalid,
         }
+    }
+}
+
+impl Serialize for MessageFieldCode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        (*self as u8).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for MessageFieldCode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        u8::deserialize(deserializer).map(MessageFieldCode::from)
     }
 }
 
