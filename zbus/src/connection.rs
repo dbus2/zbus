@@ -188,12 +188,12 @@ impl Connection {
         };
 
         // Now that daemon has approved us, we must send a hello as per specs
-        let reply = connection.call_method::<()>(
+        let reply = connection.call_method(
             Some("org.freedesktop.DBus"),
             "/org/freedesktop/DBus",
             Some("org.freedesktop.DBus"),
             "Hello",
-            None,
+            &(),
         )?;
 
         let bus_name = reply
@@ -210,7 +210,7 @@ impl Connection {
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        body: Option<&B>,
+        body: &B,
     ) -> Result<message::Message, ConnectionError>
     where
         B: serde::ser::Serialize + zvariant::VariantValue,

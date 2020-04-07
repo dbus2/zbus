@@ -109,15 +109,17 @@ impl From<IOError> for MessageError {
 pub struct Message(Vec<u8>);
 
 // TODO: Make generic over byteorder
-// TODO: Document multiple args needing to be a tuple
+// TODO: Document
+//
+// * multiple args needing to be a tuple or struct
+// * pass unit ref for empty body
 impl Message {
     pub fn method<B>(
         destination: Option<&str>,
         path: &str,
         iface: Option<&str>,
         method_name: &str,
-        // TODO: callback for caller to serialize directly into the message?
-        body: Option<&B>,
+        body: &B,
     ) -> Result<Self, MessageError>
     where
         B: serde::ser::Serialize + VariantValue,
@@ -146,10 +148,10 @@ impl Message {
         if let Some(iface) = iface {
             fields.add(MessageField::interface(iface));
         }
-        if body.is_some() {
-            let mut signature = B::signature();
-            // Remove any leading and trailing STRUCT delimiters
+        let mut signature = B::signature();
+        if signature != "" {
             if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
+                // Remove leading and trailing STRUCT delimiters
                 signature = Signature::from(String::from(&signature[1..signature.len() - 1]));
             }
             fields.add(MessageField::signature(signature));
@@ -181,17 +183,15 @@ impl Message {
             }
         }
 
-        if let Some(body) = body {
-            let pos = cursor.position();
-            zvariant::to_write_ne(&mut cursor, format, body)?;
+        let pos = cursor.position();
+        zvariant::to_write_ne(&mut cursor, format, body)?;
 
-            let body_len = cursor.position() - pos;
-            if body_len > (u32::max_value() as u64) {
-                return Err(MessageError::ExcessData);
-            }
-            cursor.set_position(BODY_LEN_START_OFFSET as u64);
-            zvariant::to_write_ne(&mut cursor, format, &(body_len as u32))?;
+        let body_len = cursor.position() - pos;
+        if body_len > (u32::max_value() as u64) {
+            return Err(MessageError::ExcessData);
         }
+        cursor.set_position(BODY_LEN_START_OFFSET as u64);
+        zvariant::to_write_ne(&mut cursor, format, &(body_len as u32))?;
 
         Ok(Message(bytes))
     }

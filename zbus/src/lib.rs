@@ -45,12 +45,12 @@ mod tests {
 
         if std::env::var("GET_MACHINE_ID").unwrap_or(String::from("1")) == "1" {
             let reply = connection
-                .call_method::<()>(
+                .call_method(
                     Some("org.freedesktop.DBus"),
                     "/org/freedesktop/DBus",
                     Some("org.freedesktop.DBus.Peer"),
                     "GetMachineId",
-                    None,
+                    &(),
                 )
                 .unwrap();
 
@@ -68,7 +68,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "NameHasOwner",
-                Some(&"org.freedesktop.DBus"),
+                &"org.freedesktop.DBus",
             )
             .unwrap();
 
@@ -84,7 +84,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "GetNameOwner",
-                Some(&"org.freedesktop.DBus"),
+                &"org.freedesktop.DBus",
             )
             .unwrap();
 
@@ -101,7 +101,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus.Properties"),
                 "GetAll",
-                Some(&"org.freedesktop.DBus"),
+                &"org.freedesktop.DBus",
             )
             .unwrap();
 
