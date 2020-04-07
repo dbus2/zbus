@@ -52,3 +52,9 @@ impl<'a> PartialEq<&str> for ObjectPath<'a> {
         self.as_str() == *other
     }
 }
+
+impl<'a> std::fmt::Display for ObjectPath<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
