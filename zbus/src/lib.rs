@@ -58,7 +58,7 @@ mod tests {
                 .body_signature()
                 .map(|s| s == <&str>::signature())
                 .unwrap());
-            let id: &str = reply.body().unwrap().unwrap();
+            let id: &str = reply.body().unwrap();
             println!("Machine ID: {}", id);
         }
 
@@ -76,7 +76,7 @@ mod tests {
             .body_signature()
             .map(|s| s == bool::signature())
             .unwrap());
-        assert!(reply.body::<bool>().unwrap().unwrap());
+        assert!(reply.body::<bool>().unwrap());
 
         let reply = connection
             .call_method(
@@ -92,7 +92,7 @@ mod tests {
             .body_signature()
             .map(|s| s == <&str>::signature())
             .unwrap());
-        let owner: &str = reply.body().unwrap().unwrap();
+        let owner: &str = reply.body().unwrap();
         println!("Owner of 'org.freedesktop.DBus' is: {}", owner);
 
         let reply = connection
@@ -109,7 +109,7 @@ mod tests {
             .body_signature()
             .map(|s| s.as_str() == "a{sv}")
             .unwrap());
-        let hashmap: HashMap<&str, Variant> = reply.body().unwrap().unwrap();
+        let hashmap: HashMap<&str, Variant> = reply.body().unwrap();
 
         // "Features" property
         let features = Array::from_variant_ref(&hashmap["Features"]).unwrap();

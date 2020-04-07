@@ -273,7 +273,7 @@ impl Message {
         .map_err(MessageError::from)
     }
 
-    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<Option<B>, MessageError>
+    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
     where
         B: serde::de::Deserialize<'d> + VariantValue,
     {
@@ -283,12 +283,8 @@ impl Message {
 
         let mut header_len = PRIMARY_HEADER_SIZE + self.fields_len();
         header_len = header_len + padding_for_8_bytes(header_len);
-        if self.body_len() == 0 {
-            return Ok(None);
-        }
 
         zvariant::from_slice_ne(&self.0[header_len..], EncodingFormat::DBus)
-            .map(Some)
             .map_err(MessageError::from)
     }
 

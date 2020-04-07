@@ -122,12 +122,7 @@ impl From<message::Message> for ConnectionError {
 
                 // Then, try to get the optional description string
                 match message.body::<&str>() {
-                    Ok(body) => match body {
-                        Some(detail) => {
-                            ConnectionError::MethodError(name, Some(String::from(detail)))
-                        }
-                        None => ConnectionError::MethodError(name, None),
-                    },
+                    Ok(detail) => ConnectionError::MethodError(name, Some(String::from(detail))),
                     Err(e) => ConnectionError::Message(e),
                 }
             }
@@ -196,9 +191,7 @@ impl Connection {
             &(),
         )?;
 
-        let bus_name = reply
-            .body::<&str>()?
-            .ok_or_else(|| ConnectionError::InvalidReply)?;
+        let bus_name: &str = reply.body()?;
         println!("bus name: {}", bus_name);
 
         Ok(connection)
