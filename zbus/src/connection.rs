@@ -102,30 +102,32 @@ impl From<message::Message> for ConnectionError {
     fn from(message: message::Message) -> ConnectionError {
         // FIXME: Instead of checking this, we should have Method as trait and specific types for
         // each message type.
-        if message.message_type() != message::MessageType::Error {
+        let header = match message.header() {
+            Ok(header) => header,
+            Err(e) => {
+                return ConnectionError::Message(e);
+            }
+        };
+        if header.primary().msg_type() != message::MessageType::Error {
             return ConnectionError::InvalidReply;
         }
 
-        match message.fields() {
-            Ok(all_fields) => {
-                // First, get the error name
-                let name = match all_fields
-                    .iter()
-                    .find(|f| f.code() == MessageFieldCode::ErrorName)
-                {
-                    Some(f) => match String::from_variant_ref(f.value()) {
-                        Ok(s) => String::from(s),
-                        Err(e) => return ConnectionError::Variant(e),
-                    },
-                    None => return ConnectionError::InvalidReply,
-                };
+        // First, get the error name
+        let name = match header
+            .fields()
+            .iter()
+            .find(|f| f.code() == MessageFieldCode::ErrorName)
+        {
+            Some(f) => match String::from_variant_ref(f.value()) {
+                Ok(s) => String::from(s),
+                Err(e) => return ConnectionError::Variant(e),
+            },
+            None => return ConnectionError::InvalidReply,
+        };
 
-                // Then, try to get the optional description string
-                match message.body::<&str>() {
-                    Ok(detail) => ConnectionError::MethodError(name, Some(String::from(detail))),
-                    Err(e) => ConnectionError::Message(e),
-                }
-            }
+        // Then, try to get the optional description string
+        match message.body::<&str>() {
+            Ok(detail) => ConnectionError::MethodError(name, Some(String::from(detail))),
             Err(e) => ConnectionError::Message(e),
         }
     }
@@ -218,11 +220,11 @@ impl Connection {
         loop {
             // FIXME: We need to read incoming messages in a separate thread and maintain a queue
 
-            let mut buf = [0; message::PRIMARY_HEADER_SIZE];
+            let mut buf = [0; message::MIN_MESSAGE_SIZE];
             self.socket.read_exact(&mut buf[..])?;
 
             let mut incoming = message::Message::from_bytes(&buf)?;
-            let bytes_left = incoming.bytes_to_completion();
+            let bytes_left = incoming.bytes_to_completion()?;
             if bytes_left == 0 {
                 return Err(ConnectionError::Handshake);
             }
@@ -230,10 +232,12 @@ impl Connection {
             self.socket.read_exact(&mut buf[..])?;
             incoming.add_bytes(&buf[..])?;
 
-            if incoming.message_type() == message::MessageType::MethodReturn
-                || incoming.message_type() == message::MessageType::Error
+            let header = incoming.header()?;
+            let msg_type = header.primary().msg_type();
+            if msg_type == message::MessageType::MethodReturn
+                || msg_type == message::MessageType::Error
             {
-                let all_fields = incoming.fields()?;
+                let all_fields = header.fields();
 
                 let find_serial_func = |f: &crate::MessageField| {
                     f.code() == MessageFieldCode::ReplySerial
@@ -241,7 +245,7 @@ impl Connection {
                 };
 
                 if all_fields.iter().any(find_serial_func) {
-                    match incoming.message_type() {
+                    match msg_type {
                         message::MessageType::Error => return Err(incoming.into()),
                         message::MessageType::MethodReturn => return Ok(incoming),
                         _ => (),

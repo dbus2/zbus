@@ -1,7 +1,11 @@
 use byteorder::ByteOrder;
 use std::error;
 use std::fmt;
-use std::io::{Error as IOError, Write};
+use std::io::Error as IOError;
+
+use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, Serializer};
+use serde_derive::{Deserialize, Serialize};
 
 use zvariant::{EncodingFormat, Error as VariantError, FromVariant};
 use zvariant::{Signature, VariantValue};
@@ -9,13 +13,10 @@ use zvariant::{Signature, VariantValue};
 use crate::utils::padding_for_8_bytes;
 use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
 
-/// Size of primary message header
-pub const PRIMARY_HEADER_SIZE: usize = 16;
-
-const MESSAGE_TYPE_OFFSET: usize = 1;
+const PRIMARY_HEADER_SIZE: usize = 12;
+pub const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
 
 const BODY_LEN_START_OFFSET: usize = 4;
-const BODY_LEN_END_OFFSET: usize = 8;
 
 const SERIAL_START_OFFSET: usize = 8;
 const SERIAL_END_OFFSET: usize = 12;
@@ -48,6 +49,31 @@ impl From<u8> for MessageType {
             4 => MessageType::Signal,
             _ => MessageType::Invalid,
         }
+    }
+}
+
+impl Serialize for MessageType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        (*self as u8).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for MessageType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        u8::deserialize(deserializer).map(MessageType::from)
+    }
+}
+
+// FIXME: Use derive macro when it's available
+impl VariantValue for MessageType {
+    fn signature() -> Signature<'static> {
+        u8::signature()
     }
 }
 
@@ -105,6 +131,86 @@ impl From<IOError> for MessageError {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MessagePrimaryHeader {
+    endian_sig: u8,
+    msg_type: MessageType,
+    flags: u8,
+    protocol_version: u8,
+    body_len: u32,
+    serial_num: u32,
+}
+
+// FIXME: Use derive macro when it's available
+impl<'m> VariantValue for MessagePrimaryHeader {
+    fn signature() -> Signature<'static> {
+        Signature::from(format!(
+            "({}{}{}{}{}{})",
+            u8::signature(),
+            MessageType::signature(),
+            u8::signature(),
+            u8::signature(),
+            u32::signature(),
+            u32::signature(),
+        ))
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MessageHeader<'m> {
+    primary: MessagePrimaryHeader,
+    #[serde(borrow)]
+    fields: MessageFields<'m>,
+    end: ((),), // To ensure header end on 8-byte boundry
+}
+
+impl MessagePrimaryHeader {
+    pub fn endian_sig(&self) -> u8 {
+        self.endian_sig
+    }
+
+    pub fn msg_type(&self) -> MessageType {
+        self.msg_type
+    }
+
+    pub fn flags(&self) -> u8 {
+        self.flags
+    }
+
+    pub fn protocol_version(&self) -> u8 {
+        self.protocol_version
+    }
+
+    pub fn body_len(&self) -> u32 {
+        self.body_len
+    }
+
+    pub fn serial_num(&self) -> u32 {
+        self.serial_num
+    }
+}
+
+impl<'m> MessageHeader<'m> {
+    pub fn primary(&self) -> &MessagePrimaryHeader {
+        &self.primary
+    }
+
+    pub fn fields(&self) -> &MessageFields {
+        &self.fields
+    }
+}
+
+// FIXME: Use derive macro when it's available
+impl<'m> VariantValue for MessageHeader<'m> {
+    fn signature() -> Signature<'static> {
+        Signature::from(format!(
+            "({}{}())",
+            MessagePrimaryHeader::signature(),
+            MessageFields::signature(),
+        ))
+    }
+}
+
 #[derive(Debug)]
 pub struct Message(Vec<u8>);
 
@@ -124,7 +230,7 @@ impl Message {
     where
         B: serde::ser::Serialize + VariantValue,
     {
-        let mut bytes: Vec<u8> = Vec::with_capacity(PRIMARY_HEADER_SIZE);
+        let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
         let mut cursor = std::io::Cursor::new(&mut bytes);
 
         let dest_length = destination.map_or(0, |s| s.len());
@@ -156,32 +262,23 @@ impl Message {
             }
             fields.add(MessageField::signature(signature));
         }
-
         fields.add(MessageField::path(path));
         fields.add(MessageField::member(method_name));
 
         let format = EncodingFormat::DBus;
-        zvariant::to_write_ne(
-            &mut cursor,
-            format,
-            &(
-                ENDIAN_SIG,                    // Endianness
-                MessageType::MethodCall as u8, // Message type
-                0u8,                           // Flags
-                1u8,                           // Major version of D-Bus protocol
-                0u32,                          // Message body encoding set to 0 at first
-                1u32,                          // Serial number. FIXME: managed by connection
-                fields,
-            ),
-        )?; // Array of fields
-
-        // Do we need to do this if body is None?
-        let padding = padding_for_8_bytes(cursor.position() as usize);
-        if padding > 0 {
-            for _ in 0..padding {
-                cursor.write_all(&[0u8; 1])?;
-            }
-        }
+        let header = MessageHeader {
+            primary: MessagePrimaryHeader {
+                endian_sig: ENDIAN_SIG,
+                msg_type: MessageType::MethodCall,
+                flags: 0,
+                protocol_version: 1,
+                body_len: 0,   // set to 0 at first
+                serial_num: 1, // FIXME: managed by connection
+            },
+            fields,
+            end: ((),),
+        };
+        zvariant::to_write_ne(&mut cursor, format, &header)?;
 
         let pos = cursor.position();
         zvariant::to_write_ne(&mut cursor, format, body)?;
@@ -206,7 +303,7 @@ impl Message {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
-        if bytes.len() < PRIMARY_HEADER_SIZE {
+        if bytes.len() < MIN_MESSAGE_SIZE {
             return Err(MessageError::InsufficientData);
         }
 
@@ -218,7 +315,7 @@ impl Message {
     }
 
     pub fn add_bytes(&mut self, bytes: &[u8]) -> Result<(), MessageError> {
-        if bytes.len() > self.bytes_to_completion() as usize {
+        if bytes.len() > self.bytes_to_completion()? {
             return Err(MessageError::ExcessData);
         }
 
@@ -227,10 +324,13 @@ impl Message {
         Ok(())
     }
 
-    pub fn bytes_to_completion(&self) -> usize {
-        let header_len = PRIMARY_HEADER_SIZE + self.fields_len();
+    pub fn bytes_to_completion(&self) -> Result<usize, MessageError> {
+        let header_len = MIN_MESSAGE_SIZE + self.fields_len();
+        let body_padding = padding_for_8_bytes(header_len);
+        let body_len = self.primary_header()?.body_len();
+        let required = header_len + body_padding + body_len as usize;
 
-        (header_len + padding_for_8_bytes(header_len) + self.body_len()) - self.0.len()
+        Ok(required - self.0.len())
     }
 
     pub fn fields_len(&self) -> usize {
@@ -238,13 +338,9 @@ impl Message {
             as usize
     }
 
-    pub fn body_len(&self) -> usize {
-        byteorder::NativeEndian::read_u32(&self.0[BODY_LEN_START_OFFSET..BODY_LEN_END_OFFSET])
-            as usize
-    }
-
     pub fn body_signature(&self) -> Result<Signature, MessageError> {
-        for field in self.fields()?.get() {
+        let fields = self.header().map(|header| header.fields)?;
+        for field in fields.get() {
             if field.code() == MessageFieldCode::Signature {
                 let sig = Signature::from_variant_ref(field.value())?;
 
@@ -256,28 +352,27 @@ impl Message {
         Err(MessageError::NoBodySignature)
     }
 
-    pub fn message_type(&self) -> MessageType {
-        MessageType::from(self.0[MESSAGE_TYPE_OFFSET])
+    pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {
+        zvariant::from_slice_ne(&self.0, EncodingFormat::DBus).map_err(MessageError::from)
+    }
+
+    pub fn header(&self) -> Result<MessageHeader, MessageError> {
+        zvariant::from_slice_ne(&self.0, EncodingFormat::DBus).map_err(MessageError::from)
     }
 
     pub fn fields(&self) -> Result<MessageFields, MessageError> {
-        zvariant::from_slice_ne::<(u8, u8, u8, u8, u32, u32, MessageFields)>(
-            &self.0,
-            EncodingFormat::DBus,
-        )
-        .map(|(_, _, _, _, _, _, fields)| fields)
-        .map_err(MessageError::from)
+        self.header().map(|header| header.fields)
     }
 
     pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
     where
         B: serde::de::Deserialize<'d> + VariantValue,
     {
-        if self.bytes_to_completion() != 0 {
+        if self.bytes_to_completion()? != 0 {
             return Err(MessageError::InsufficientData);
         }
 
-        let mut header_len = PRIMARY_HEADER_SIZE + self.fields_len();
+        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len();
         header_len = header_len + padding_for_8_bytes(header_len);
 
         zvariant::from_slice_ne(&self.0[header_len..], EncodingFormat::DBus)
