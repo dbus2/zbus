@@ -1,4 +1,3 @@
-use byteorder::ByteOrder;
 use std::error;
 use std::fmt;
 use std::io::{Cursor, Error as IOError};
@@ -17,9 +16,6 @@ const PRIMARY_HEADER_SIZE: usize = 12;
 pub const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
 
 const BODY_LEN_START_OFFSET: usize = 4;
-
-const SERIAL_START_OFFSET: usize = 8;
-const SERIAL_END_OFFSET: usize = 12;
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
 
@@ -311,15 +307,6 @@ impl Message {
         zvariant::to_write_ne(&mut cursor, format, &(body_len as u32))?;
 
         Ok(Message(bytes))
-    }
-
-    pub fn set_serial(mut self, serial: u32) -> Self {
-        byteorder::NativeEndian::write_u32(
-            &mut self.0[SERIAL_START_OFFSET..SERIAL_END_OFFSET],
-            serial,
-        );
-
-        self
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
