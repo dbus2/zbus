@@ -261,10 +261,6 @@ impl Message {
     }
 
     pub fn fields(&self) -> Result<MessageFields, MessageError> {
-        if self.bytes_to_completion() != 0 {
-            return Err(MessageError::InsufficientData);
-        }
-
         zvariant::from_slice_ne::<(u8, u8, u8, u8, u32, u32, MessageFields)>(
             &self.0,
             EncodingFormat::DBus,
