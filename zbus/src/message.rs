@@ -299,8 +299,8 @@ impl Message {
                 msg_type: MessageType::MethodCall,
                 flags: 0,
                 protocol_version: 1,
-                body_len: 0,   // set to 0 at first
-                serial_num: 1, // FIXME: managed by connection
+                body_len: 0, // set to 0 at first
+                serial_num: 1,
             },
             fields,
             end: ((),),
