@@ -279,11 +279,8 @@ impl Message {
         };
         zvariant::to_write_ne(&mut cursor, format, &header)?;
 
-        let pos = cursor.position();
-        zvariant::to_write_ne(&mut cursor, format, body)?;
-
-        let body_len = cursor.position() - pos;
-        if body_len > (u32::max_value() as u64) {
+        let body_len = zvariant::to_write_ne(&mut cursor, format, body)?;
+        if body_len > u32::max_value() as usize {
             return Err(MessageError::ExcessData);
         }
         cursor.set_position(BODY_LEN_START_OFFSET as u64);
