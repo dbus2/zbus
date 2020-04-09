@@ -15,8 +15,6 @@ use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
 const PRIMARY_HEADER_SIZE: usize = 12;
 pub const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
 
-const BODY_LEN_START_OFFSET: usize = 4;
-
 const FIELDS_LEN_START_OFFSET: usize = 12;
 
 #[cfg(target_endian = "big")]
@@ -293,7 +291,7 @@ impl Message {
         fields.add(MessageField::member(method_name));
 
         let format = EncodingFormat::DBus;
-        let header = MessageHeader {
+        let mut header = MessageHeader {
             primary: MessagePrimaryHeader {
                 endian_sig: ENDIAN_SIG,
                 msg_type: MessageType::MethodCall,
@@ -311,8 +309,10 @@ impl Message {
         if body_len > u32::max_value() as usize {
             return Err(MessageError::ExcessData);
         }
-        cursor.set_position(BODY_LEN_START_OFFSET as u64);
-        zvariant::to_write_ne(&mut cursor, format, &(body_len as u32))?;
+        let primary = header.primary_mut();
+        primary.set_body_len(body_len as u32);
+        cursor.set_position(0);
+        zvariant::to_write_ne(&mut cursor, format, primary)?;
 
         Ok(Message(bytes))
     }
