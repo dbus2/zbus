@@ -214,8 +214,16 @@ impl<'m> MessageHeader<'m> {
         &self.primary
     }
 
+    pub fn primary_mut(&mut self) -> &mut MessagePrimaryHeader {
+        &mut self.primary
+    }
+
     pub fn fields(&self) -> &MessageFields {
         &self.fields
+    }
+
+    pub fn fields_mut<'s: 'm>(&'s mut self) -> &'s mut MessageFields {
+        &mut self.fields
     }
 }
 
