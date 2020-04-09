@@ -300,7 +300,7 @@ impl Message {
                 flags: 0,
                 protocol_version: 1,
                 body_len: 0, // set to 0 at first
-                serial_num: 1,
+                serial_num: u32::max_value(),
             },
             fields,
             end: ((),),
