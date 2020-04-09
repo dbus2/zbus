@@ -1,7 +1,7 @@
 use byteorder::ByteOrder;
 use std::error;
 use std::fmt;
-use std::io::Error as IOError;
+use std::io::{Cursor, Error as IOError};
 
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, Serializer};
@@ -254,7 +254,7 @@ impl Message {
         B: serde::ser::Serialize + VariantValue,
     {
         let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
-        let mut cursor = std::io::Cursor::new(&mut bytes);
+        let mut cursor = Cursor::new(&mut bytes);
 
         let dest_length = destination.map_or(0, |s| s.len());
         let iface_length = iface.map_or(0, |s| s.len());
@@ -371,8 +371,25 @@ impl Message {
         zvariant::from_slice_ne(&self.0, EncodingFormat::DBus).map_err(MessageError::from)
     }
 
+    pub fn set_primary_header(
+        &mut self,
+        header: &MessagePrimaryHeader,
+    ) -> Result<(), MessageError> {
+        let mut cursor = Cursor::new(&mut self.0);
+        zvariant::to_write_ne(&mut cursor, EncodingFormat::DBus, header)
+            .map(|_| ())
+            .map_err(MessageError::from)
+    }
+
     pub fn header(&self) -> Result<MessageHeader, MessageError> {
         zvariant::from_slice_ne(&self.0, EncodingFormat::DBus).map_err(MessageError::from)
+    }
+
+    pub fn set_header(&mut self, header: &MessageHeader) -> Result<(), MessageError> {
+        let mut cursor = Cursor::new(&mut self.0);
+        zvariant::to_write_ne(&mut cursor, EncodingFormat::DBus, header)
+            .map(|_| ())
+            .map_err(MessageError::from)
     }
 
     pub fn fields(&self) -> Result<MessageFields, MessageError> {

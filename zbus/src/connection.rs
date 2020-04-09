@@ -212,8 +212,10 @@ impl Connection {
     {
         println!("Starting: {}", method_name);
         let serial = self.next_serial();
-        let m = message::Message::method(destination, path, iface, method_name, body)?
-            .set_serial(serial);
+        let mut m = message::Message::method(destination, path, iface, method_name, body)?;
+        let mut header = m.primary_header()?;
+        header.set_serial_num(serial);
+        m.set_primary_header(&header)?;
 
         self.socket.write_all(m.as_bytes())?;
 
