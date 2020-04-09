@@ -168,24 +168,48 @@ impl MessagePrimaryHeader {
         self.endian_sig
     }
 
+    pub fn set_endian_sig(&mut self, sig: u8) {
+        self.endian_sig = sig;
+    }
+
     pub fn msg_type(&self) -> MessageType {
         self.msg_type
+    }
+
+    pub fn set_msg_type(&mut self, msg_type: MessageType) {
+        self.msg_type = msg_type;
     }
 
     pub fn flags(&self) -> u8 {
         self.flags
     }
 
+    pub fn set_flags(&mut self, flags: u8) {
+        self.flags = flags;
+    }
+
     pub fn protocol_version(&self) -> u8 {
         self.protocol_version
+    }
+
+    pub fn set_protocol_version(&mut self, version: u8) {
+        self.protocol_version = version;
     }
 
     pub fn body_len(&self) -> u32 {
         self.body_len
     }
 
+    pub fn set_body_len(&mut self, len: u32) {
+        self.body_len = len;
+    }
+
     pub fn serial_num(&self) -> u32 {
         self.serial_num
+    }
+
+    pub fn set_serial_num(&mut self, serial: u32) {
+        self.serial_num = serial;
     }
 }
 
