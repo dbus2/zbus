@@ -22,7 +22,6 @@ const SERIAL_START_OFFSET: usize = 8;
 const SERIAL_END_OFFSET: usize = 12;
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
-const FIELDS_LEN_END_OFFSET: usize = 16;
 
 #[cfg(target_endian = "big")]
 const ENDIAN_SIG: u8 = b'B';
@@ -325,7 +324,7 @@ impl Message {
     }
 
     pub fn bytes_to_completion(&self) -> Result<usize, MessageError> {
-        let header_len = MIN_MESSAGE_SIZE + self.fields_len();
+        let header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         let body_padding = padding_for_8_bytes(header_len);
         let body_len = self.primary_header()?.body_len();
         let required = header_len + body_padding + body_len as usize;
@@ -367,7 +366,7 @@ impl Message {
             return Err(MessageError::InsufficientData);
         }
 
-        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len();
+        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         header_len = header_len + padding_for_8_bytes(header_len);
 
         zvariant::from_slice_ne(&self.0[header_len..], EncodingFormat::DBus)
@@ -396,8 +395,9 @@ impl Message {
         &self.0
     }
 
-    fn fields_len(&self) -> usize {
-        byteorder::NativeEndian::read_u32(&self.0[FIELDS_LEN_START_OFFSET..FIELDS_LEN_END_OFFSET])
-            as usize
+    fn fields_len(&self) -> Result<usize, MessageError> {
+        zvariant::from_slice_ne::<u32>(&self.0[FIELDS_LEN_START_OFFSET..], EncodingFormat::DBus)
+            .map(|v| v as usize)
+            .map_err(MessageError::from)
     }
 }
