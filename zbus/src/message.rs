@@ -333,11 +333,6 @@ impl Message {
         Ok(required - self.0.len())
     }
 
-    pub fn fields_len(&self) -> usize {
-        byteorder::NativeEndian::read_u32(&self.0[FIELDS_LEN_START_OFFSET..FIELDS_LEN_END_OFFSET])
-            as usize
-    }
-
     pub fn body_signature(&self) -> Result<Signature, MessageError> {
         let fields = self.header().map(|header| header.fields)?;
         for field in fields.get() {
@@ -399,5 +394,10 @@ impl Message {
 
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
+    }
+
+    fn fields_len(&self) -> usize {
+        byteorder::NativeEndian::read_u32(&self.0[FIELDS_LEN_START_OFFSET..FIELDS_LEN_END_OFFSET])
+            as usize
     }
 }
