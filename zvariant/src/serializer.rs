@@ -523,7 +523,7 @@ where
         let len = usize_to_u32(array_len - self.first_padding);
         self.serializer
             .write
-            .seek(std::io::SeekFrom::End(-(array_len as i64) - 4))
+            .seek(std::io::SeekFrom::Current(-(array_len as i64) - 4))
             .map_err(Error::Io)?;
         self.serializer
             .write
