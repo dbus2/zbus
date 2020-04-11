@@ -2,9 +2,8 @@ use std::error;
 use std::fmt;
 use std::io::{Cursor, Error as IOError};
 
-use serde::de::{Deserialize, Deserializer};
-use serde::ser::{Serialize, Serializer};
 use serde_derive::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use zvariant::{EncodingFormat, Error as VariantError, FromVariant};
 use zvariant::{Signature, VariantValue};
@@ -23,7 +22,7 @@ const ENDIAN_SIG: u8 = b'B';
 const ENDIAN_SIG: u8 = b'l';
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr)]
 pub enum MessageType {
     Invalid = 0,
     MethodCall = 1,
@@ -42,24 +41,6 @@ impl From<u8> for MessageType {
             4 => MessageType::Signal,
             _ => MessageType::Invalid,
         }
-    }
-}
-
-impl Serialize for MessageType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        (*self as u8).serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for MessageType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        u8::deserialize(deserializer).map(MessageType::from)
     }
 }
 

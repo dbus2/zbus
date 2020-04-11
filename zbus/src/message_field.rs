@@ -1,17 +1,15 @@
 use std::error;
 use std::fmt;
 
-use serde::de::{Deserialize, Deserializer};
-use serde::ser::{Serialize, Serializer};
-
 use serde_derive::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use zvariant::IntoVariant;
 use zvariant::{Error as VariantError, Variant, VariantValue};
 use zvariant::{ObjectPath, Signature};
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Serialize_repr)]
 pub enum MessageFieldCode {
     Invalid = 0,     // Not a valid field name.
     Path = 1,        // The object to send a call to, or the object a signal is emitted from.
@@ -39,24 +37,6 @@ impl From<u8> for MessageFieldCode {
             9 => MessageFieldCode::UnixFDs,
             _ => MessageFieldCode::Invalid,
         }
-    }
-}
-
-impl Serialize for MessageFieldCode {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        (*self as u8).serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for MessageFieldCode {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        u8::deserialize(deserializer).map(MessageFieldCode::from)
     }
 }
 

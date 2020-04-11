@@ -17,5 +17,6 @@ byteorder = "1.3.1"
 nix = "0.13.0"
 serde = "1.0"
 serde_derive = "1.0"
+serde_repr = "0.1"
 #arrayvec = { version = "0.5.1", features = [ "serde" ] }
 zvariant = { path = "../zvariant", version = "^2" }
