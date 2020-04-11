@@ -4,6 +4,9 @@ pub use address::*;
 mod message;
 pub use message::*;
 
+mod message_header;
+pub use message_header::*;
+
 mod message_field;
 pub use message_field::*;
 

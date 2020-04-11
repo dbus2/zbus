@@ -7,8 +7,8 @@ use nix::unistd::Uid;
 use zvariant::{Error as VariantError, FromVariant};
 
 use crate::address::{self, Address, AddressError};
-use crate::message;
 use crate::message_field::{self, MessageFieldCode};
+use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
 pub struct Connection {
     pub server_guid: String,
@@ -22,7 +22,7 @@ pub struct Connection {
 pub enum ConnectionError {
     Address(AddressError),
     IO(io::Error),
-    Message(message::MessageError),
+    Message(MessageError),
     MessageField(message_field::MessageFieldError),
     Variant(VariantError),
     Handshake,
@@ -79,8 +79,8 @@ impl From<io::Error> for ConnectionError {
     }
 }
 
-impl From<message::MessageError> for ConnectionError {
-    fn from(val: message::MessageError) -> Self {
+impl From<MessageError> for ConnectionError {
+    fn from(val: MessageError) -> Self {
         ConnectionError::Message(val)
     }
 }
@@ -98,8 +98,8 @@ impl From<VariantError> for ConnectionError {
 }
 
 // For messages that are D-Bus error returns
-impl From<message::Message> for ConnectionError {
-    fn from(message: message::Message) -> ConnectionError {
+impl From<Message> for ConnectionError {
+    fn from(message: Message) -> ConnectionError {
         // FIXME: Instead of checking this, we should have Method as trait and specific types for
         // each message type.
         let header = match message.header() {
@@ -108,7 +108,7 @@ impl From<message::Message> for ConnectionError {
                 return ConnectionError::Message(e);
             }
         };
-        if header.primary().msg_type() != message::MessageType::Error {
+        if header.primary().msg_type() != MessageType::Error {
             return ConnectionError::InvalidReply;
         }
 
@@ -206,13 +206,13 @@ impl Connection {
         iface: Option<&str>,
         method_name: &str,
         body: &B,
-    ) -> Result<message::Message, ConnectionError>
+    ) -> Result<Message, ConnectionError>
     where
         B: serde::ser::Serialize + zvariant::VariantValue,
     {
         println!("Starting: {}", method_name);
         let serial = self.next_serial();
-        let mut m = message::Message::method(destination, path, iface, method_name, body)?;
+        let mut m = Message::method(destination, path, iface, method_name, body)?;
         m.modify_primary_header(|primary| {
             primary.set_serial_num(serial);
 
@@ -224,10 +224,10 @@ impl Connection {
         loop {
             // FIXME: We need to read incoming messages in a separate thread and maintain a queue
 
-            let mut buf = [0; message::MIN_MESSAGE_SIZE];
+            let mut buf = [0; MIN_MESSAGE_SIZE];
             self.socket.read_exact(&mut buf[..])?;
 
-            let mut incoming = message::Message::from_bytes(&buf)?;
+            let mut incoming = Message::from_bytes(&buf)?;
             let bytes_left = incoming.bytes_to_completion()?;
             if bytes_left == 0 {
                 return Err(ConnectionError::Handshake);
@@ -238,9 +238,7 @@ impl Connection {
 
             let header = incoming.header()?;
             let msg_type = header.primary().msg_type();
-            if msg_type == message::MessageType::MethodReturn
-                || msg_type == message::MessageType::Error
-            {
+            if msg_type == MessageType::MethodReturn || msg_type == MessageType::Error {
                 let all_fields = header.fields();
 
                 let find_serial_func = |f: &crate::MessageField| {
@@ -250,8 +248,8 @@ impl Connection {
 
                 if all_fields.iter().any(find_serial_func) {
                     match msg_type {
-                        message::MessageType::Error => return Err(incoming.into()),
-                        message::MessageType::MethodReturn => return Ok(incoming),
+                        MessageType::Error => return Err(incoming.into()),
+                        MessageType::MethodReturn => return Ok(incoming),
                         _ => (),
                     }
                 }
