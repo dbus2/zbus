@@ -214,7 +214,10 @@ impl Message {
     }
 
     pub fn fields(&self) -> Result<MessageFields, MessageError> {
-        self.header().map(|header| header.take_fields())
+        let ctxt =
+            EncodingContext::new_n_bytes_before(EncodingFormat::DBus, crate::PRIMARY_HEADER_SIZE);
+        zvariant::from_slice_ne(&self.0[crate::PRIMARY_HEADER_SIZE..], ctxt)
+            .map_err(MessageError::from)
     }
 
     pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
