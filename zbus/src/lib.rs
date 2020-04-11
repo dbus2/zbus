@@ -23,6 +23,25 @@ mod tests {
     use zvariant::{Variant, VariantValue};
 
     #[test]
+    fn msg() {
+        let mut m = crate::Message::method(
+            Some("org.freedesktop.DBus"),
+            "/org/freedesktop/DBus",
+            Some("org.freedesktop.DBus.Peer"),
+            "GetMachineId",
+            &(),
+        )
+        .unwrap();
+        m.modify_primary_header(|primary| {
+            primary.set_serial_num(11);
+
+            Ok(())
+        })
+        .unwrap();
+        assert!(m.primary_header().unwrap().serial_num() == 11);
+    }
+
+    #[test]
     fn basic_connection() {
         crate::Connection::new_session()
             .map_err(|e| {
