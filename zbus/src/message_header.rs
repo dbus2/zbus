@@ -7,7 +7,7 @@ use zvariant::{Signature, VariantValue};
 
 use crate::{MessageError, MessageFields};
 
-const PRIMARY_HEADER_SIZE: usize = 12;
+pub const PRIMARY_HEADER_SIZE: usize = 12;
 pub const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
 
 #[repr(u8)]
