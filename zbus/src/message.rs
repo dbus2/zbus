@@ -366,12 +366,15 @@ impl Message {
         zvariant::from_slice_ne(&self.0, EncodingFormat::DBus).map_err(MessageError::from)
     }
 
-    pub fn set_primary_header(
-        &mut self,
-        header: &MessagePrimaryHeader,
-    ) -> Result<(), MessageError> {
+    pub fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
+    where
+        F: FnMut(&mut MessagePrimaryHeader) -> Result<(), MessageError>,
+    {
+        let mut primary = self.primary_header()?;
+        modifier(&mut primary)?;
+
         let mut cursor = Cursor::new(&mut self.0);
-        zvariant::to_write_ne(&mut cursor, EncodingFormat::DBus, header)
+        zvariant::to_write_ne(&mut cursor, EncodingFormat::DBus, &primary)
             .map(|_| ())
             .map_err(MessageError::from)
     }
