@@ -456,24 +456,6 @@ impl Message {
             .map_err(MessageError::from)
     }
 
-    pub fn no_reply_expected(mut self) -> Self {
-        self.0[3] |= 0x01;
-
-        self
-    }
-
-    pub fn no_auto_start(mut self) -> Self {
-        self.0[3] |= 0x02;
-
-        self
-    }
-
-    pub fn allow_interactive_auth(mut self) -> Self {
-        self.0[3] |= 0x03;
-
-        self
-    }
-
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
