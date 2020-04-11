@@ -14,3 +14,18 @@ impl Default for EncodingFormat {
         EncodingFormat::DBus
     }
 }
+
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub struct EncodingContext {
+    format: EncodingFormat,
+}
+
+impl EncodingContext {
+    pub fn new(format: EncodingFormat) -> Self {
+        Self { format }
+    }
+
+    pub fn format(self) -> EncodingFormat {
+        self.format
+    }
+}

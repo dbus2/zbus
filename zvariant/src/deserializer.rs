@@ -6,7 +6,7 @@ use std::{marker::PhantomData, str};
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
 use crate::VariantValue;
-use crate::{Basic, EncodingFormat};
+use crate::{Basic, EncodingContext};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
@@ -14,14 +14,14 @@ macro_rules! from_slice_def {
     ($func_name:ident, $call_name:ident) => {
         pub fn $func_name<'d, 'r: 'd, T: ?Sized>(
             bytes: &'r [u8],
-            format: EncodingFormat,
+            ctxt: EncodingContext,
         ) -> Result<T>
         where
             T: Deserialize<'d> + VariantValue,
         {
             let signature = T::signature();
 
-            $call_name::<_, _>(bytes, format, signature)
+            $call_name::<_, _>(bytes, ctxt, signature)
         }
     };
 }
@@ -30,28 +30,28 @@ from_slice_def!(from_slice_be, from_slice_for_signature_be);
 from_slice_def!(from_slice_le, from_slice_for_signature_le);
 from_slice_def!(from_slice_ne, from_slice_for_signature_ne);
 
-pub fn from_slice<'d, 'r: 'd, B, T: ?Sized>(bytes: &'r [u8], format: EncodingFormat) -> Result<T>
+pub fn from_slice<'d, 'r: 'd, B, T: ?Sized>(bytes: &'r [u8], ctxt: EncodingContext) -> Result<T>
 where
     B: byteorder::ByteOrder,
     T: Deserialize<'d> + VariantValue,
 {
     let signature = T::signature();
 
-    from_slice_for_signature::<B, _, _>(bytes, format, signature)
+    from_slice_for_signature::<B, _, _>(bytes, ctxt, signature)
 }
 
 macro_rules! from_slice_for_signature_def {
     ($func_name:ident, $trait:ty) => {
         pub fn $func_name<'d, 'r: 'd, 's: 'd, S, T: ?Sized>(
             bytes: &'r [u8],
-            format: EncodingFormat,
+            ctxt: EncodingContext,
             signature: S,
         ) -> Result<T>
         where
             S: Into<Signature<'s>>,
             T: Deserialize<'d>,
         {
-            let mut de = Deserializer::<$trait>::new(bytes, signature, format);
+            let mut de = Deserializer::<$trait>::new(bytes, signature, ctxt);
 
             T::deserialize(&mut de)
         }
@@ -65,7 +65,7 @@ from_slice_for_signature_def!(from_slice_for_signature_ne, byteorder::NativeEndi
 // TODO: Return number of bytes parsed?
 pub fn from_slice_for_signature<'d, 'r: 'd, 's: 'd, B, S, T: ?Sized>(
     bytes: &'r [u8],
-    format: EncodingFormat,
+    ctxt: EncodingContext,
     signature: S,
 ) -> Result<T>
 where
@@ -73,13 +73,13 @@ where
     S: Into<Signature<'s>>,
     T: Deserialize<'d>,
 {
-    let mut de = Deserializer::<B>::new(bytes, signature, format);
+    let mut de = Deserializer::<B>::new(bytes, signature, ctxt);
 
     T::deserialize(&mut de)
 }
 
 pub struct Deserializer<'de, B> {
-    pub(self) format: EncodingFormat,
+    pub(self) ctxt: EncodingContext,
     pub(self) bytes: &'de [u8],
     pub(self) pos: usize,
 
@@ -95,12 +95,12 @@ where
     pub fn new<'s: 'de, 'r: 'de>(
         bytes: &'r [u8],
         signature: impl Into<Signature<'s>>,
-        format: EncodingFormat,
+        ctxt: EncodingContext,
     ) -> Self {
         let sign_parser = SignatureParser::new(signature.into());
 
         Self {
-            format,
+            ctxt,
             sign_parser,
             bytes,
             pos: 0,
@@ -399,7 +399,8 @@ where
                 let len = B::read_u32(self.next_slice(4)?) as usize;
 
                 let next_signature_char = self.sign_parser.next_char()?;
-                let alignment = alignment_for_signature_char(next_signature_char, self.format);
+                let alignment =
+                    alignment_for_signature_char(next_signature_char, self.ctxt.format());
                 // D-Bus requires padding for the first element even when there is no first element
                 // (i-e empty array) so we parse padding already.
                 self.parse_padding(alignment)?;
@@ -511,7 +512,7 @@ where
     {
         // Not using serialize_u32 cause identifier isn't part of the signature
         self.parse_padding(u32::ALIGNMENT)?;
-        let variant_index = from_slice::<B, _>(&self.bytes[self.pos..], self.format)?;
+        let variant_index = from_slice::<B, _>(&self.bytes[self.pos..], self.ctxt)?;
         self.pos += u32::ALIGNMENT;
 
         visitor.visit_u32(variant_index)
@@ -669,7 +670,7 @@ where
                 let sign_parser = SignatureParser::new(signature);
 
                 let mut de = Deserializer::<B> {
-                    format: self.de.format,
+                    ctxt: self.de.ctxt,
                     sign_parser,
                     bytes: self.de.bytes,
                     pos: self.de.pos,

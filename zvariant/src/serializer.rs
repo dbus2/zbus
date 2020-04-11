@@ -6,7 +6,7 @@ use std::{marker::PhantomData, str};
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
 use crate::VariantValue;
-use crate::{Basic, EncodingFormat};
+use crate::{Basic, EncodingContext};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
@@ -14,7 +14,7 @@ macro_rules! to_write_def {
     ($func_name:ident, $call_name:ident) => {
         pub fn $func_name<W, T: ?Sized>(
             write: &mut W,
-            format: EncodingFormat,
+            ctxt: EncodingContext,
             value: &T,
         ) -> Result<usize>
         where
@@ -23,7 +23,7 @@ macro_rules! to_write_def {
         {
             let signature = T::signature();
 
-            $call_name::<_, _, _>(write, format, signature, value)
+            $call_name::<_, _, _>(write, ctxt, signature, value)
         }
     };
 }
@@ -32,7 +32,7 @@ to_write_def!(to_write_be, to_write_for_signature_be);
 to_write_def!(to_write_le, to_write_for_signature_le);
 to_write_def!(to_write_ne, to_write_for_signature_ne);
 
-pub fn to_write<B, W, T: ?Sized>(write: &mut W, format: EncodingFormat, value: &T) -> Result<usize>
+pub fn to_write<B, W, T: ?Sized>(write: &mut W, ctxt: EncodingContext, value: &T) -> Result<usize>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -40,17 +40,17 @@ where
 {
     let signature = T::signature();
 
-    to_write_for_signature::<B, _, _, _>(write, format, signature, value)
+    to_write_for_signature::<B, _, _, _>(write, ctxt, signature, value)
 }
 
 macro_rules! to_bytes_def {
     ($func_name:ident, $call_name:ident) => {
-        pub fn $func_name<T: ?Sized>(format: EncodingFormat, value: &T) -> Result<Vec<u8>>
+        pub fn $func_name<T: ?Sized>(ctxt: EncodingContext, value: &T) -> Result<Vec<u8>>
         where
             T: Serialize + VariantValue,
         {
             let mut cursor = std::io::Cursor::new(vec![]);
-            let _ = $call_name::<_, T>(&mut cursor, format, value);
+            let _ = $call_name::<_, T>(&mut cursor, ctxt, value);
             Ok(cursor.into_inner())
         }
     };
@@ -60,13 +60,13 @@ to_bytes_def!(to_bytes_be, to_write_be);
 to_bytes_def!(to_bytes_le, to_write_le);
 to_bytes_def!(to_bytes_ne, to_write_ne);
 
-pub fn to_bytes<B, T: ?Sized>(format: EncodingFormat, value: &T) -> Result<Vec<u8>>
+pub fn to_bytes<B, T: ?Sized>(ctxt: EncodingContext, value: &T) -> Result<Vec<u8>>
 where
     B: byteorder::ByteOrder,
     T: Serialize + VariantValue,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let _ = to_write::<B, _, T>(&mut cursor, format, value);
+    let _ = to_write::<B, _, T>(&mut cursor, ctxt, value);
     Ok(cursor.into_inner())
 }
 
@@ -74,7 +74,7 @@ macro_rules! to_write_for_signature_def {
     ($func_name:ident, $trait:ty) => {
         pub fn $func_name<'s, W, S, T: ?Sized>(
             write: &mut W,
-            format: EncodingFormat,
+            ctxt: EncodingContext,
             signature: S,
             value: &T,
         ) -> Result<usize>
@@ -83,7 +83,7 @@ macro_rules! to_write_for_signature_def {
             S: Into<Signature<'s>>,
             T: Serialize,
         {
-            let mut serializer = Serializer::<$trait, W>::new(signature, write, format);
+            let mut serializer = Serializer::<$trait, W>::new(signature, write, ctxt);
             value.serialize(&mut serializer)?;
             Ok(serializer.bytes_written)
         }
@@ -96,7 +96,7 @@ to_write_for_signature_def!(to_write_for_signature_ne, byteorder::NativeEndian);
 
 pub fn to_write_for_signature<'s, B, W, S, T: ?Sized>(
     write: &mut W,
-    format: EncodingFormat,
+    ctxt: EncodingContext,
     signature: S,
     value: &T,
 ) -> Result<usize>
@@ -106,7 +106,7 @@ where
     S: Into<Signature<'s>>,
     T: Serialize,
 {
-    let mut serializer = Serializer::<B, W>::new(signature, write, format);
+    let mut serializer = Serializer::<B, W>::new(signature, write, ctxt);
     value.serialize(&mut serializer)?;
     Ok(serializer.bytes_written)
 }
@@ -114,7 +114,7 @@ where
 macro_rules! to_bytes_for_signature_def {
     ($func_name:ident, $call:ident) => {
         pub fn $func_name<'s, S, T: ?Sized>(
-            format: EncodingFormat,
+            ctxt: EncodingContext,
             signature: S,
             value: &T,
         ) -> Result<Vec<u8>>
@@ -123,7 +123,7 @@ macro_rules! to_bytes_for_signature_def {
             T: Serialize,
         {
             let mut cursor = std::io::Cursor::new(vec![]);
-            let _ = $call::<_, _, T>(&mut cursor, format, signature, value);
+            let _ = $call::<_, _, T>(&mut cursor, ctxt, signature, value);
             Ok(cursor.into_inner())
         }
     };
@@ -134,7 +134,7 @@ to_bytes_for_signature_def!(to_bytes_for_signature_le, to_write_for_signature_le
 to_bytes_for_signature_def!(to_bytes_for_signature_ne, to_write_for_signature_ne);
 
 pub fn to_bytes_for_signature<'s, B, S, T: ?Sized>(
-    format: EncodingFormat,
+    ctxt: EncodingContext,
     signature: S,
     value: &T,
 ) -> Result<Vec<u8>>
@@ -144,12 +144,12 @@ where
     T: Serialize,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let _ = to_write_for_signature::<B, _, _, T>(&mut cursor, format, signature, value);
+    let _ = to_write_for_signature::<B, _, _, T>(&mut cursor, ctxt, signature, value);
     Ok(cursor.into_inner())
 }
 
 pub struct Serializer<'ser, B, W> {
-    pub(self) format: EncodingFormat,
+    pub(self) ctxt: EncodingContext,
     pub(self) write: &'ser mut W,
     pub(self) bytes_written: usize,
 
@@ -169,12 +169,12 @@ where
     pub fn new<'s: 'ser, 'w: 'ser>(
         signature: impl Into<Signature<'s>>,
         write: &'w mut W,
-        format: EncodingFormat,
+        ctxt: EncodingContext,
     ) -> Self {
         let sign_parser = SignatureParser::new(signature.into());
 
         Self {
-            format,
+            ctxt,
             sign_parser,
             write,
             bytes_written: 0,
@@ -411,7 +411,7 @@ where
         self.write_u32::<B>(0_u32).map_err(Error::Io)?;
 
         let next_signature_char = self.sign_parser.next_char()?;
-        let alignment = alignment_for_signature_char(next_signature_char, self.format);
+        let alignment = alignment_for_signature_char(next_signature_char, self.ctxt.format());
         let start = self.bytes_written;
         // D-Bus expects us to add padding for the first element even when there is no first
         // element (i-e empty array) so we add padding already.
@@ -592,7 +592,7 @@ where
 
                 let sign_parser = SignatureParser::new(Signature::from(signature));
                 let mut serializer = Serializer::<B, W> {
-                    format: self.serializer.format,
+                    ctxt: self.serializer.ctxt,
                     sign_parser,
                     write: &mut self.serializer.write,
                     bytes_written: self.serializer.bytes_written,

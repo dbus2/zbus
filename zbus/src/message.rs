@@ -3,7 +3,7 @@ use std::error;
 use std::fmt;
 use std::io::{Cursor, Error as IOError};
 
-use zvariant::{EncodingFormat, Error as VariantError, FromVariant};
+use zvariant::{EncodingContext, EncodingFormat, Error as VariantError, FromVariant};
 use zvariant::{Signature, VariantValue};
 
 use crate::utils::padding_for_8_bytes;
@@ -12,6 +12,11 @@ use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
 use crate::{MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG};
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
+macro_rules! dbus_context {
+    () => {
+        EncodingContext::new(EncodingFormat::DBus)
+    };
+}
 
 #[derive(Debug)]
 pub enum MessageError {
@@ -124,19 +129,19 @@ impl Message {
         fields.add(MessageField::path(path));
         fields.add(MessageField::member(method_name));
 
-        let format = EncodingFormat::DBus;
+        let ctxt = dbus_context!();
         let mut header =
             MessageHeader::new(MessagePrimaryHeader::new(MessageType::MethodCall), fields);
-        zvariant::to_write_ne(&mut cursor, format, &header)?;
+        zvariant::to_write_ne(&mut cursor, ctxt, &header)?;
 
-        let body_len = zvariant::to_write_ne(&mut cursor, format, body)?;
+        let body_len = zvariant::to_write_ne(&mut cursor, ctxt, body)?;
         if body_len > u32::max_value() as usize {
             return Err(MessageError::ExcessData);
         }
         let primary = header.primary_mut();
         primary.set_body_len(body_len as u32);
         cursor.set_position(0);
-        zvariant::to_write_ne(&mut cursor, format, primary)?;
+        zvariant::to_write_ne(&mut cursor, ctxt, primary)?;
 
         Ok(Message(bytes))
     }
@@ -188,7 +193,7 @@ impl Message {
     }
 
     pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {
-        zvariant::from_slice_ne(&self.0, EncodingFormat::DBus).map_err(MessageError::from)
+        zvariant::from_slice_ne(&self.0, dbus_context!()).map_err(MessageError::from)
     }
 
     pub fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
@@ -199,13 +204,13 @@ impl Message {
         modifier(&mut primary)?;
 
         let mut cursor = Cursor::new(&mut self.0);
-        zvariant::to_write_ne(&mut cursor, EncodingFormat::DBus, &primary)
+        zvariant::to_write_ne(&mut cursor, dbus_context!(), &primary)
             .map(|_| ())
             .map_err(MessageError::from)
     }
 
     pub fn header(&self) -> Result<MessageHeader, MessageError> {
-        zvariant::from_slice_ne(&self.0, EncodingFormat::DBus).map_err(MessageError::from)
+        zvariant::from_slice_ne(&self.0, dbus_context!()).map_err(MessageError::from)
     }
 
     pub fn fields(&self) -> Result<MessageFields, MessageError> {
@@ -223,8 +228,7 @@ impl Message {
         let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         header_len = header_len + padding_for_8_bytes(header_len);
 
-        zvariant::from_slice_ne(&self.0[header_len..], EncodingFormat::DBus)
-            .map_err(MessageError::from)
+        zvariant::from_slice_ne(&self.0[header_len..], dbus_context!()).map_err(MessageError::from)
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -232,7 +236,7 @@ impl Message {
     }
 
     fn fields_len(&self) -> Result<usize, MessageError> {
-        zvariant::from_slice_ne::<u32>(&self.0[FIELDS_LEN_START_OFFSET..], EncodingFormat::DBus)
+        zvariant::from_slice_ne::<u32>(&self.0[FIELDS_LEN_START_OFFSET..], dbus_context!())
             .map(|v| v as usize)
             .map_err(MessageError::from)
     }
