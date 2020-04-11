@@ -22,9 +22,11 @@ mod tests {
     use zvariant::{Array, FromVariant};
     use zvariant::{Variant, VariantValue};
 
+    use crate::{Message, MessageFlags};
+
     #[test]
     fn msg() {
-        let mut m = crate::Message::method(
+        let mut m = Message::method(
             Some("org.freedesktop.DBus"),
             "/org/freedesktop/DBus",
             Some("org.freedesktop.DBus.Peer"),
@@ -33,12 +35,15 @@ mod tests {
         )
         .unwrap();
         m.modify_primary_header(|primary| {
+            primary.set_flags(MessageFlags::NoAutoStart);
             primary.set_serial_num(11);
 
             Ok(())
         })
         .unwrap();
-        assert!(m.primary_header().unwrap().serial_num() == 11);
+        let primary = m.primary_header().unwrap();
+        assert!(primary.serial_num() == 11);
+        assert!(primary.flags() == MessageFlags::NoAutoStart);
     }
 
     #[test]
