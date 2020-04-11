@@ -244,6 +244,7 @@ pub struct Message(Vec<u8>);
 //
 // * multiple args needing to be a tuple or struct
 // * pass unit ref for empty body
+// * Only primary header can be modified after creation.
 impl Message {
     pub fn method<B>(
         destination: Option<&str>,
@@ -381,13 +382,6 @@ impl Message {
 
     pub fn header(&self) -> Result<MessageHeader, MessageError> {
         zvariant::from_slice_ne(&self.0, EncodingFormat::DBus).map_err(MessageError::from)
-    }
-
-    pub fn set_header(&mut self, header: &MessageHeader) -> Result<(), MessageError> {
-        let mut cursor = Cursor::new(&mut self.0);
-        zvariant::to_write_ne(&mut cursor, EncodingFormat::DBus, header)
-            .map(|_| ())
-            .map_err(MessageError::from)
     }
 
     pub fn fields(&self) -> Result<MessageFields, MessageError> {
