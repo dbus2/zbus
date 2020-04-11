@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::error;
 use std::fmt;
 use std::io::{Cursor, Error as IOError};
@@ -16,10 +17,37 @@ pub const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
 
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr)]
+pub enum EndianSig {
+    Big = b'B',
+    Little = b'l',
+}
+
+// Such a shame I've to do this manually
+impl TryFrom<u8> for EndianSig {
+    type Error = MessageError;
+
+    fn try_from(val: u8) -> Result<EndianSig, MessageError> {
+        match val {
+            b'B' => Ok(EndianSig::Big),
+            b'l' => Ok(EndianSig::Little),
+            _ => Err(MessageError::IncorrectEndian),
+        }
+    }
+}
+
+// FIXME: Use derive macro when it's available
+impl VariantValue for EndianSig {
+    fn signature() -> Signature<'static> {
+        u8::signature()
+    }
+}
+
 #[cfg(target_endian = "big")]
-const ENDIAN_SIG: u8 = b'B';
+const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Big;
 #[cfg(target_endian = "little")]
-const ENDIAN_SIG: u8 = b'l';
+const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Little;
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr)]
@@ -107,7 +135,7 @@ impl From<IOError> for MessageError {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MessagePrimaryHeader {
-    endian_sig: u8,
+    endian_sig: EndianSig,
     msg_type: MessageType,
     flags: u8,
     protocol_version: u8,
@@ -139,11 +167,11 @@ pub struct MessageHeader<'m> {
 }
 
 impl MessagePrimaryHeader {
-    pub fn endian_sig(&self) -> u8 {
+    pub fn endian_sig(&self) -> EndianSig {
         self.endian_sig
     }
 
-    pub fn set_endian_sig(&mut self, sig: u8) {
+    pub fn set_endian_sig(&mut self, sig: EndianSig) {
         self.endian_sig = sig;
     }
 
@@ -275,7 +303,7 @@ impl Message {
         let format = EncodingFormat::DBus;
         let mut header = MessageHeader {
             primary: MessagePrimaryHeader {
-                endian_sig: ENDIAN_SIG,
+                endian_sig: NATIVE_ENDIAN_SIG,
                 msg_type: MessageType::MethodCall,
                 flags: 0,
                 protocol_version: 1,
@@ -304,7 +332,7 @@ impl Message {
             return Err(MessageError::InsufficientData);
         }
 
-        if bytes[0] != ENDIAN_SIG {
+        if EndianSig::try_from(bytes[0])? != NATIVE_ENDIAN_SIG {
             return Err(MessageError::IncorrectEndian);
         }
 
