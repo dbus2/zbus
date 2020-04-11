@@ -184,7 +184,7 @@ where
     }
 
     fn add_padding(&mut self, alignment: usize) -> Result<usize> {
-        let padding = padding_for_n_bytes(self.bytes_written, alignment);
+        let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
             let byte = [0_u8; 1];
             for _ in 0..padding {
@@ -211,6 +211,10 @@ where
         self.write_u32::<B>(variant_index).map_err(Error::Io)?;
 
         Ok(())
+    }
+
+    fn abs_pos(&self) -> usize {
+        self.ctxt.n_bytes_before() + self.bytes_written
     }
 }
 

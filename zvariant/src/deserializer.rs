@@ -109,7 +109,7 @@ where
     }
 
     fn parse_padding(&mut self, alignment: usize) -> Result<usize> {
-        let padding = padding_for_n_bytes(self.pos, alignment);
+        let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
             for i in 0..padding {
                 if self.bytes[self.pos + i] != 0 {
@@ -150,6 +150,10 @@ where
         self.prep_deserialize_basic::<T>()?;
 
         self.next_slice(T::ALIGNMENT)
+    }
+
+    fn abs_pos(&self) -> usize {
+        self.ctxt.n_bytes_before() + self.pos
     }
 }
 
