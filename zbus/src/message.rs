@@ -94,6 +94,8 @@ pub enum MessageError {
 impl error::Error for MessageError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
+            MessageError::Io(e) => Some(e),
+            MessageError::MessageField(e) => Some(e),
             MessageError::Variant(e) => Some(e),
             _ => None,
         }
