@@ -344,6 +344,12 @@ mod tests {
         assert!(decoded[0] == "Hello");
         assert!(decoded[1] == "World");
 
+        // Decode just the second string
+        let ctxt = Context::new_n_bytes_before(Format::DBus, 14);
+        let decoded = from_slice::<LE, &str>(&encoded[14..], ctxt).unwrap();
+        assert!(decoded == "World");
+        let ctxt = Context::new(Format::DBus);
+
         // As Variant
         let v = &as_[..].into_variant();
         assert!(v.value_signature() == "as");
@@ -489,6 +495,14 @@ mod tests {
         assert!(LE::read_u64(&encoded) == 0xBAAB_BAAB_BAAB_BAAB_u64);
         let decoded = from_slice::<BE, u64>(&encoded, ctxt).unwrap();
         assert!(decoded == 0xABBA_ABBA_ABBA_ABBA);
+
+        // Lie about there being bytes before
+        let ctxt = Context::new_n_bytes_before(Format::DBus, 2);
+        let encoded = to_bytes::<LE, _>(ctxt, &0xABBA_ABBA_ABBA_ABBA_u64).unwrap();
+        assert!(encoded.len() == 14);
+        let decoded = from_slice::<LE, u64>(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, 0xABBA_ABBA_ABBA_ABBA_u64);
+        let ctxt = Context::new(Format::DBus);
 
         // As Variant
         let v = 0xFEFE_u64.into_variant();
