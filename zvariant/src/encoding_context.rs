@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 /// The encoding format.
 ///
 /// Currently only D-Bus format is supported but [`GVariant`] support is also planned.
@@ -16,12 +18,17 @@ impl Default for EncodingFormat {
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
-pub struct EncodingContext {
+pub struct EncodingContext<B> {
     format: EncodingFormat,
     n_bytes_before: usize,
+
+    b: PhantomData<B>,
 }
 
-impl EncodingContext {
+impl<B> EncodingContext<B>
+where
+    B: byteorder::ByteOrder,
+{
     pub fn new(format: EncodingFormat) -> Self {
         Self::new_n_bytes_before(format, 0)
     }
@@ -30,6 +37,7 @@ impl EncodingContext {
         Self {
             format,
             n_bytes_before,
+            b: PhantomData,
         }
     }
 

@@ -10,62 +10,20 @@ use crate::{Basic, EncodingContext};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
-macro_rules! from_slice_def {
-    ($func_name:ident, $call_name:ident) => {
-        pub fn $func_name<'d, 'r: 'd, T: ?Sized>(
-            bytes: &'r [u8],
-            ctxt: EncodingContext,
-        ) -> Result<T>
-        where
-            T: Deserialize<'d> + VariantValue,
-        {
-            let signature = T::signature();
-
-            $call_name::<_, _>(bytes, ctxt, signature)
-        }
-    };
-}
-
-from_slice_def!(from_slice_be, from_slice_for_signature_be);
-from_slice_def!(from_slice_le, from_slice_for_signature_le);
-from_slice_def!(from_slice_ne, from_slice_for_signature_ne);
-
-pub fn from_slice<'d, 'r: 'd, B, T: ?Sized>(bytes: &'r [u8], ctxt: EncodingContext) -> Result<T>
+pub fn from_slice<'d, 'r: 'd, B, T: ?Sized>(bytes: &'r [u8], ctxt: EncodingContext<B>) -> Result<T>
 where
     B: byteorder::ByteOrder,
     T: Deserialize<'d> + VariantValue,
 {
     let signature = T::signature();
 
-    from_slice_for_signature::<B, _, _>(bytes, ctxt, signature)
+    from_slice_for_signature(bytes, ctxt, signature)
 }
-
-macro_rules! from_slice_for_signature_def {
-    ($func_name:ident, $trait:ty) => {
-        pub fn $func_name<'d, 'r: 'd, 's: 'd, S, T: ?Sized>(
-            bytes: &'r [u8],
-            ctxt: EncodingContext,
-            signature: S,
-        ) -> Result<T>
-        where
-            S: Into<Signature<'s>>,
-            T: Deserialize<'d>,
-        {
-            let mut de = Deserializer::<$trait>::new(bytes, signature, ctxt);
-
-            T::deserialize(&mut de)
-        }
-    };
-}
-
-from_slice_for_signature_def!(from_slice_for_signature_be, byteorder::BE);
-from_slice_for_signature_def!(from_slice_for_signature_le, byteorder::LE);
-from_slice_for_signature_def!(from_slice_for_signature_ne, byteorder::NativeEndian);
 
 // TODO: Return number of bytes parsed?
 pub fn from_slice_for_signature<'d, 'r: 'd, 's: 'd, B, S, T: ?Sized>(
     bytes: &'r [u8],
-    ctxt: EncodingContext,
+    ctxt: EncodingContext<B>,
     signature: S,
 ) -> Result<T>
 where
@@ -73,13 +31,13 @@ where
     S: Into<Signature<'s>>,
     T: Deserialize<'d>,
 {
-    let mut de = Deserializer::<B>::new(bytes, signature, ctxt);
+    let mut de = Deserializer::new(bytes, signature, ctxt);
 
     T::deserialize(&mut de)
 }
 
 pub struct Deserializer<'de, B> {
-    pub(self) ctxt: EncodingContext,
+    pub(self) ctxt: EncodingContext<B>,
     pub(self) bytes: &'de [u8],
     pub(self) pos: usize,
 
@@ -95,7 +53,7 @@ where
     pub fn new<'s: 'de, 'r: 'de>(
         bytes: &'r [u8],
         signature: impl Into<Signature<'s>>,
-        ctxt: EncodingContext,
+        ctxt: EncodingContext<B>,
     ) -> Self {
         let sign_parser = SignatureParser::new(signature.into());
 
