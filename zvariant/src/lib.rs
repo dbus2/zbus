@@ -57,14 +57,14 @@ mod tests {
     use crate::{from_slice, from_slice_for_signature};
     use crate::{to_bytes, to_bytes_for_signature};
 
-    use crate::{Array, Dict, EncodingContext as Context, EncodingFormat as Format};
+    use crate::{Array, Dict, EncodingContext as Context};
     use crate::{FromVariant, IntoVariant, Variant, VariantValue};
     use crate::{ObjectPath, Signature};
 
     // Test through both generic and specific API (wrt byte order)
     macro_rules! basic_type_test {
         ($trait:ty, $test_value:expr, $expected_len:expr, $expected_ty:ty) => {{
-            let ctxt = Context::<$trait>::new(Format::DBus, 0);
+            let ctxt = Context::<$trait>::new_dbus(0);
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
@@ -181,7 +181,7 @@ mod tests {
         // As Variant
         let v = 'c'.into_variant();
         assert!(v.value_signature() == "s");
-        let ctxt = Context::new(Format::DBus, 0);
+        let ctxt = Context::new_dbus(0);
         let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert!(encoded.len() == 10);
         let v = from_slice::<LE, Variant>(&encoded, ctxt).unwrap();
@@ -197,7 +197,7 @@ mod tests {
         let v = sig.into_variant();
         assert!(v.value_signature() == "g");
         let encoded = basic_type_test!(LE, v, 8, Variant);
-        let ctxt = Context::new(Format::DBus, 0);
+        let ctxt = Context::new_dbus(0);
         let v = from_slice::<LE, Variant>(&encoded, ctxt).unwrap();
         assert!(v == Variant::Signature(Signature::from("yys")));
     }
@@ -211,7 +211,7 @@ mod tests {
         let v = o.into_variant();
         assert!(v.value_signature() == "o");
         let encoded = basic_type_test!(LE, v, 21, Variant);
-        let ctxt = Context::new(Format::DBus, 0);
+        let ctxt = Context::new_dbus(0);
         let v = from_slice::<LE, Variant>(&encoded, ctxt).unwrap();
         assert!(v == Variant::ObjectPath(ObjectPath::from("/hello/world")));
     }
@@ -231,7 +231,7 @@ mod tests {
         let ay = [77u8, 88];
         // Array itself is treated like a tuple by serde & that translates to a structure in our
         // case so gotta make it a slice for serde to treat it as seq type.
-        let ctxt = Context::<LE>::new(Format::DBus, 0);
+        let ctxt = Context::<LE>::new_dbus(0);
         let encoded = to_bytes(ctxt, &ay[..]).unwrap();
         assert!(encoded.len() == 6);
         // FIXME: We shouldn't need to use a Vec here but we have to. Maybe array can still be
@@ -296,10 +296,10 @@ mod tests {
         assert!(decoded[1] == "World");
 
         // Decode just the second string
-        let ctxt = Context::<LE>::new(Format::DBus, 14);
+        let ctxt = Context::<LE>::new_dbus(14);
         let decoded: &str = from_slice(&encoded[14..], ctxt).unwrap();
         assert!(decoded == "World");
-        let ctxt = Context::<LE>::new(Format::DBus, 0);
+        let ctxt = Context::<LE>::new_dbus(0);
 
         // As Variant
         let v = &as_[..].into_variant();
@@ -395,7 +395,7 @@ mod tests {
         let mut map: HashMap<i64, &str> = HashMap::new();
         map.insert(1, "123");
         map.insert(2, "456");
-        let ctxt = Context::<LE>::new(Format::DBus, 0);
+        let ctxt = Context::<LE>::new_dbus(0);
         let encoded = to_bytes(ctxt, &map).unwrap();
         assert!(dbg!(encoded.len()) == 40);
         let decoded: HashMap<i64, &str> = from_slice(&encoded, ctxt).unwrap();
@@ -440,7 +440,7 @@ mod tests {
 
     #[test]
     fn variant_variant() {
-        let ctxt = Context::<BE>::new(Format::DBus, 0);
+        let ctxt = Context::<BE>::new_dbus(0);
         let encoded = to_bytes(ctxt, &0xABBA_ABBA_ABBA_ABBA_u64).unwrap();
         assert!(encoded.len() == 8);
         assert!(LE::read_u64(&encoded) == 0xBAAB_BAAB_BAAB_BAAB_u64);
@@ -448,12 +448,12 @@ mod tests {
         assert!(decoded == 0xABBA_ABBA_ABBA_ABBA);
 
         // Lie about there being bytes before
-        let ctxt = Context::<LE>::new(Format::DBus, 2);
+        let ctxt = Context::<LE>::new_dbus(2);
         let encoded = to_bytes(ctxt, &0xABBA_ABBA_ABBA_ABBA_u64).unwrap();
         assert!(encoded.len() == 14);
         let decoded: u64 = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(decoded, 0xABBA_ABBA_ABBA_ABBA_u64);
-        let ctxt = Context::<LE>::new(Format::DBus, 0);
+        let ctxt = Context::<LE>::new_dbus(0);
 
         // As Variant
         let v = 0xFEFE_u64.into_variant();
@@ -499,7 +499,7 @@ mod tests {
             Struct { y: u8, t: u64 },
         }
 
-        let ctxt = Context::<BE>::new(Format::DBus, 0);
+        let ctxt = Context::<BE>::new_dbus(0);
         let encoded = to_bytes_for_signature(ctxt, "", &Test::Unit).unwrap();
         assert!(encoded.len() == 4);
         let decoded: Test = from_slice_for_signature(&encoded, ctxt, "").unwrap();

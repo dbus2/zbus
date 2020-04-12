@@ -3,7 +3,7 @@ use std::error;
 use std::fmt;
 use std::io::{Cursor, Error as IOError};
 
-use zvariant::{EncodingContext, EncodingFormat, Error as VariantError, FromVariant};
+use zvariant::{EncodingContext, Error as VariantError, FromVariant};
 use zvariant::{Signature, VariantValue};
 
 use crate::utils::padding_for_8_bytes;
@@ -14,7 +14,7 @@ use crate::{MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG};
 const FIELDS_LEN_START_OFFSET: usize = 12;
 macro_rules! dbus_context {
     ($n_bytes_before: expr) => {
-        EncodingContext::<byteorder::NativeEndian>::new(EncodingFormat::DBus, $n_bytes_before)
+        EncodingContext::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
     };
 }
 

@@ -37,6 +37,10 @@ where
         }
     }
 
+    pub fn new_dbus(n_bytes_before: usize) -> Self {
+        Self::new(EncodingFormat::DBus, n_bytes_before)
+    }
+
     pub fn format(self) -> EncodingFormat {
         self.format
     }
