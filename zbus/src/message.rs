@@ -13,8 +13,8 @@ use crate::{MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG};
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
 macro_rules! dbus_context {
-    () => {
-        EncodingContext::<byteorder::NativeEndian>::new(EncodingFormat::DBus)
+    ($n_bytes_before: expr) => {
+        EncodingContext::<byteorder::NativeEndian>::new(EncodingFormat::DBus, $n_bytes_before)
     };
 }
 
@@ -129,7 +129,7 @@ impl Message {
         fields.add(MessageField::path(path));
         fields.add(MessageField::member(method_name));
 
-        let ctxt = dbus_context!();
+        let ctxt = dbus_context!(0);
         let mut header =
             MessageHeader::new(MessagePrimaryHeader::new(MessageType::MethodCall), fields);
         zvariant::to_write(&mut cursor, ctxt, &header)?;
@@ -193,7 +193,7 @@ impl Message {
     }
 
     pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {
-        zvariant::from_slice(&self.0, dbus_context!()).map_err(MessageError::from)
+        zvariant::from_slice(&self.0, dbus_context!(0)).map_err(MessageError::from)
     }
 
     pub fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
@@ -204,20 +204,17 @@ impl Message {
         modifier(&mut primary)?;
 
         let mut cursor = Cursor::new(&mut self.0);
-        zvariant::to_write(&mut cursor, dbus_context!(), &primary)
+        zvariant::to_write(&mut cursor, dbus_context!(0), &primary)
             .map(|_| ())
             .map_err(MessageError::from)
     }
 
     pub fn header(&self) -> Result<MessageHeader, MessageError> {
-        zvariant::from_slice(&self.0, dbus_context!()).map_err(MessageError::from)
+        zvariant::from_slice(&self.0, dbus_context!(0)).map_err(MessageError::from)
     }
 
     pub fn fields(&self) -> Result<MessageFields, MessageError> {
-        let ctxt = EncodingContext::<byteorder::NativeEndian>::new_n_bytes_before(
-            EncodingFormat::DBus,
-            crate::PRIMARY_HEADER_SIZE,
-        );
+        let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
         zvariant::from_slice(&self.0[crate::PRIMARY_HEADER_SIZE..], ctxt)
             .map_err(MessageError::from)
     }
@@ -233,7 +230,7 @@ impl Message {
         let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         header_len = header_len + padding_for_8_bytes(header_len);
 
-        zvariant::from_slice(&self.0[header_len..], dbus_context!()).map_err(MessageError::from)
+        zvariant::from_slice(&self.0[header_len..], dbus_context!(0)).map_err(MessageError::from)
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -241,7 +238,7 @@ impl Message {
     }
 
     fn fields_len(&self) -> Result<usize, MessageError> {
-        zvariant::from_slice(&self.0[FIELDS_LEN_START_OFFSET..], dbus_context!())
+        zvariant::from_slice(&self.0[FIELDS_LEN_START_OFFSET..], dbus_context!(0))
             .map(|v: u32| v as usize)
             .map_err(MessageError::from)
     }

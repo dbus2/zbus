@@ -29,11 +29,7 @@ impl<B> EncodingContext<B>
 where
     B: byteorder::ByteOrder,
 {
-    pub fn new(format: EncodingFormat) -> Self {
-        Self::new_n_bytes_before(format, 0)
-    }
-
-    pub fn new_n_bytes_before(format: EncodingFormat, n_bytes_before: usize) -> Self {
+    pub fn new(format: EncodingFormat, n_bytes_before: usize) -> Self {
         Self {
             format,
             n_bytes_before,
