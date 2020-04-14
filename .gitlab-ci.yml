@@ -11,11 +11,12 @@ before_script:
   - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y dbus
 
 check:
-  image: "registry.gitlab.com/alatiera/rustfmt-oci-image/rustfmt:stable"
+  image: "rust:latest"
   stage: "lint"
   script:
     - rustc --version
     - cargo --version
+    - rustup component add rustfmt
     - cargo fmt --all -- --check
     - rustup component add clippy
     - cargo clippy -- -D warnings
