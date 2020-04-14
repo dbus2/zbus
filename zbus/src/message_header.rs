@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use serde_derive::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use zvariant::{Signature, VariantValue};
+use zvariant_derive::VariantValue;
 
 use crate::{MessageError, MessageFields};
 
@@ -11,7 +11,7 @@ pub const PRIMARY_HEADER_SIZE: usize = 12;
 pub const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, VariantValue)]
 pub enum EndianSig {
     Big = b'B',
     Little = b'l',
@@ -30,20 +30,13 @@ impl TryFrom<u8> for EndianSig {
     }
 }
 
-// FIXME: Use derive macro when it's available
-impl VariantValue for EndianSig {
-    fn signature() -> Signature<'static> {
-        u8::signature()
-    }
-}
-
 #[cfg(target_endian = "big")]
 pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Big;
 #[cfg(target_endian = "little")]
 pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Little;
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, VariantValue)]
 pub enum MessageType {
     Invalid = 0,
     MethodCall = 1,
@@ -65,15 +58,8 @@ impl From<u8> for MessageType {
     }
 }
 
-// FIXME: Use derive macro when it's available
-impl VariantValue for MessageType {
-    fn signature() -> Signature<'static> {
-        u8::signature()
-    }
-}
-
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, VariantValue)]
 pub enum MessageFlags {
     /// No flags.
     None = 0x0,
@@ -107,14 +93,7 @@ impl From<u8> for MessageFlags {
     }
 }
 
-// FIXME: Use derive macro when it's available
-impl VariantValue for MessageFlags {
-    fn signature() -> Signature<'static> {
-        u8::signature()
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, VariantValue)]
 pub struct MessagePrimaryHeader {
     endian_sig: EndianSig,
     msg_type: MessageType,
@@ -124,22 +103,7 @@ pub struct MessagePrimaryHeader {
     serial_num: u32,
 }
 
-// FIXME: Use derive macro when it's available
-impl<'m> VariantValue for MessagePrimaryHeader {
-    fn signature() -> Signature<'static> {
-        Signature::from(format!(
-            "({}{}{}{}{}{})",
-            u8::signature(),
-            MessageType::signature(),
-            u8::signature(),
-            u8::signature(),
-            u32::signature(),
-            u32::signature(),
-        ))
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, VariantValue)]
 pub struct MessageHeader<'m> {
     primary: MessagePrimaryHeader,
     #[serde(borrow)]
@@ -238,16 +202,5 @@ impl<'m> MessageHeader<'m> {
 
     pub fn take_fields(self) -> MessageFields<'m> {
         self.fields
-    }
-}
-
-// FIXME: Use derive macro when it's available
-impl<'m> VariantValue for MessageHeader<'m> {
-    fn signature() -> Signature<'static> {
-        Signature::from(format!(
-            "({}{}())",
-            MessagePrimaryHeader::signature(),
-            MessageFields::signature(),
-        ))
     }
 }

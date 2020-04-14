@@ -1,5 +1,5 @@
 use serde_derive::{Deserialize, Serialize};
-use zvariant::{Signature, VariantValue};
+use zvariant_derive::VariantValue;
 
 use crate::MessageField;
 
@@ -7,7 +7,7 @@ use crate::MessageField;
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
 
 // FIXME: Use ArrayVec
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, VariantValue)]
 pub struct MessageFields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
 
 impl<'m> MessageFields<'m> {
@@ -53,12 +53,5 @@ impl<'m> std::ops::Deref for MessageFields<'m> {
 impl<'m> std::ops::DerefMut for MessageFields<'m> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.get_mut()
-    }
-}
-
-// FIXME: Use derive macro when it's available
-impl<'a> VariantValue for MessageFields<'a> {
-    fn signature() -> Signature<'static> {
-        <Vec<MessageField>>::signature()
     }
 }

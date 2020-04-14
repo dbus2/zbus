@@ -5,11 +5,12 @@ use serde_derive::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use zvariant::IntoVariant;
-use zvariant::{Error as VariantError, Variant, VariantValue};
+use zvariant::{Error as VariantError, Variant};
 use zvariant::{ObjectPath, Signature};
+use zvariant_derive::VariantValue;
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Serialize_repr)]
+#[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Serialize_repr, VariantValue)]
 pub enum MessageFieldCode {
     Invalid = 0,     // Not a valid field name.
     Path = 1,        // The object to send a call to, or the object a signal is emitted from.
@@ -74,7 +75,7 @@ impl From<VariantError> for MessageFieldError {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, VariantValue)]
 pub struct MessageField<'v> {
     code: MessageFieldCode,
     #[serde(borrow)]
@@ -155,16 +156,5 @@ impl<'v> MessageField<'v> {
             code: MessageFieldCode::UnixFDs,
             value: fd.into_variant(),
         }
-    }
-}
-
-// FIXME: Use derive macro when it's available
-impl<'a> VariantValue for MessageField<'a> {
-    fn signature() -> Signature<'static> {
-        Signature::from(format!(
-            "({}{})",
-            u8::signature().as_str(),
-            Variant::signature().as_str(),
-        ))
     }
 }
