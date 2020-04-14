@@ -1,0 +1,23 @@
+[package]
+name = "zvariant_derive"
+# Keep version in sync with zvariant crate
+version = "2.0.0"
+authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
+edition = "2018"
+
+description = "API for D-Bus wire format encoding & decoding"
+repository = "https://gitlab.freedesktop.org/zeenix/zbus/"
+documentation = "http://docs.rs/zvariant/"
+keywords = ["D-Bus", "DBus", "IPC"]
+license = "MIT"
+categories = ["data-structures", "encoding", "parsing"]
+readme = "../README.md"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+zvariant = { path = "../zvariant", version = "^2" }
+proc-macro2 = "1.0"
+syn = "1.0.17"
+quote = "1.0.3"
