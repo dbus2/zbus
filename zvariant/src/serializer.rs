@@ -298,7 +298,7 @@ where
         variant_index: u32,
         _variant: &'static str,
     ) -> Result<()> {
-        self.prep_serialize_enum_variant(variant_index)
+        variant_index.serialize(self)
     }
 
     fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<()>

@@ -675,6 +675,8 @@ where
     type Error = Error;
 
     fn unit_variant(self) -> Result<()> {
+        self.de.sign_parser.parse_char(Some(u32::SIGNATURE_CHAR))?;
+
         Ok(())
     }
 

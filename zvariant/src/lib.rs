@@ -500,9 +500,9 @@ mod tests {
         }
 
         let ctxt = Context::<BE>::new_dbus(0);
-        let encoded = to_bytes_for_signature(ctxt, "", &Test::Unit).unwrap();
+        let encoded = to_bytes_for_signature(ctxt, "u", &Test::Unit).unwrap();
         assert!(encoded.len() == 4);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, "").unwrap();
+        let decoded: Test = from_slice_for_signature(&encoded, ctxt, "u").unwrap();
         assert!(decoded == Test::Unit);
 
         let encoded = to_bytes_for_signature(ctxt, "y", &Test::NewType(42)).unwrap();
