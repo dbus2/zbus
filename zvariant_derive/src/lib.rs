@@ -24,10 +24,14 @@ pub fn variant_value_macro_derive(input: TokenStream) -> TokenStream {
 fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let field_types = fields.iter().map(|field| field.ty.to_token_stream());
-    let expended = quote! {
-        impl #impl_generics zvariant::VariantValue for #name #ty_generics #where_clause {
-            #[inline]
-            fn signature() -> zvariant::Signature<'static> {
+    let signature = if field_types.len() == 1 {
+        quote! {
+            #(
+                <#field_types as zvariant::VariantValue>::signature()
+             )*
+        }
+    } else {
+        quote! {
                 let mut s = String::from("(");
                 #(
                     s.push_str(<#field_types as zvariant::VariantValue>::signature().as_str());
@@ -35,6 +39,13 @@ fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
                 s.push_str(")");
 
                 zvariant::Signature::from(s)
+        }
+    };
+    let expended = quote! {
+        impl #impl_generics zvariant::VariantValue for #name #ty_generics #where_clause {
+            #[inline]
+            fn signature() -> zvariant::Signature<'static> {
+                #signature
             }
         }
     };
