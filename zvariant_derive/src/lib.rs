@@ -56,19 +56,19 @@ fn impl_unit_struct(name: Ident, generics: Generics) -> TokenStream {
     TokenStream::from(expended)
 }
 
-const REPR_MESSAGE: &str = "missing `#[repr(...)]` attribute";
-
 fn impl_enum(
     name: Ident,
     generics: Generics,
     attrs: Vec<Attribute>,
     data: DataEnum,
 ) -> TokenStream {
-    let repr_attr = attrs
-        .iter()
-        .find(|attr| attr.path.is_ident("repr"))
-        .expect(REPR_MESSAGE);
-    let repr: proc_macro2::TokenStream = repr_attr.parse_args().expect(REPR_MESSAGE);
+    let repr: proc_macro2::TokenStream = match attrs.iter().find(|attr| attr.path.is_ident("repr"))
+    {
+        Some(repr_attr) => repr_attr
+            .parse_args()
+            .expect("Failed to parse `#[repr(...)]` attribute"),
+        None => quote! { u32 },
+    };
 
     for variant in data.variants {
         // Ensure all variants of the enum are unit type
