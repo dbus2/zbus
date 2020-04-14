@@ -325,12 +325,11 @@ where
         visitor.visit_unit()
     }
 
-    fn deserialize_unit_struct<V>(self, name: &'static str, visitor: V) -> Result<V::Value>
+    fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        // Not sure what else can we do with this?
-        visitor.visit_borrowed_str(name)
+        visitor.visit_unit()
     }
 
     fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>

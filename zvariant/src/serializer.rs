@@ -288,9 +288,8 @@ where
         Ok(())
     }
 
-    fn serialize_unit_struct(self, name: &'static str) -> Result<()> {
-        // Not sure what else can we do with this?
-        self.serialize_str(name)
+    fn serialize_unit_struct(self, _name: &'static str) -> Result<()> {
+        self.serialize_unit()
     }
 
     fn serialize_unit_variant(
