@@ -54,6 +54,8 @@ mod tests {
 
     use byteorder::{self, ByteOrder, BE, LE};
 
+    use zvariant_derive::VariantValue;
+
     use crate::{from_slice, from_slice_for_signature};
     use crate::{to_bytes, to_bytes_for_signature};
 
@@ -521,5 +523,70 @@ mod tests {
         assert!(encoded.len() == 24);
         let decoded: Test = from_slice_for_signature(&encoded, ctxt, "(yt)").unwrap();
         assert!(decoded == Test::Struct { y: 42, t: 42 });
+    }
+
+    #[test]
+    fn derive() {
+        use crate as zvariant;
+
+        use serde_derive::{Deserialize, Serialize};
+        use serde_repr::{Deserialize_repr, Serialize_repr};
+
+        #[derive(Deserialize, Serialize, VariantValue)]
+        struct Struct<'s> {
+            field1: u16,
+            field2: i64,
+            field3: &'s str,
+        }
+
+        assert_eq!(Struct::signature(), "(qxs)");
+        let s = Struct {
+            field1: 0xFF_FF,
+            field2: 0xFF_FF_FF_FF_FF_FF,
+            field3: "hello",
+        };
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &s).unwrap();
+        assert!(encoded.len() == 26);
+        let decoded: Struct = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded.field1, 0xFF_FF);
+        assert_eq!(decoded.field2, 0xFF_FF_FF_FF_FF_FF);
+        assert_eq!(decoded.field3, "hello");
+
+        #[derive(Deserialize, Serialize, VariantValue)]
+        struct UnitStruct;
+
+        assert_eq!(UnitStruct::signature(), <()>::signature());
+        let encoded = to_bytes(ctxt, &UnitStruct).unwrap();
+        assert!(encoded.len() == 0);
+        let _: UnitStruct = from_slice(&encoded, ctxt).unwrap();
+
+        #[repr(u8)]
+        #[derive(Deserialize_repr, Serialize_repr, VariantValue, Debug, PartialEq)]
+        enum Enum {
+            Variant1,
+            Variant2,
+            Variant3,
+        }
+
+        assert_eq!(Enum::signature(), u8::signature());
+        let encoded = to_bytes(ctxt, &Enum::Variant3).unwrap();
+        assert_eq!(encoded.len(), 1);
+        let decoded: Enum = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, Enum::Variant3);
+
+        #[repr(i64)]
+        #[derive(Deserialize_repr, Serialize_repr, VariantValue, Debug, PartialEq)]
+        enum Enum2 {
+            Variant1,
+            Variant2,
+            Variant3,
+        }
+
+        assert_eq!(Enum2::signature(), i64::signature());
+        let encoded = to_bytes(ctxt, &Enum2::Variant2).unwrap();
+        assert_eq!(encoded.len(), 8);
+        let decoded: Enum2 = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, Enum2::Variant2);
     }
 }
