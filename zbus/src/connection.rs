@@ -118,8 +118,8 @@ impl From<Message> for ConnectionError {
             .iter()
             .find(|f| f.code() == MessageFieldCode::ErrorName)
         {
-            Some(f) => match String::from_variant_ref(f.value()) {
-                Ok(s) => String::from(s),
+            Some(f) => match <&str>::from_variant_ref(f.value()) {
+                Ok(s) => String::from(*s),
                 Err(e) => return ConnectionError::Variant(e),
             },
             None => return ConnectionError::InvalidReply,

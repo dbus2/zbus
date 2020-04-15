@@ -211,25 +211,9 @@ impl<'s, 'v: 's> FromVariant<'v> for &'s str {
     }
 }
 
-// String
-
-impl<'v> FromVariant<'v> for String {
-    fn from_variant(variant: Variant<'v>) -> Result<Self, Error> {
-        if let Variant::String(value) = variant {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_variant_ref(variant: &'v Variant<'v>) -> Result<&'v Self, Error> {
-        if let Variant::String(value) = variant {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
+// Not providing FromVariant for String implementtion cause if we have Variant::Str,
+// it'll be valid to call String::from_variant_ref() on it and we can't return reference
+// to a value owned by the function itself.
 
 // Signature
 
