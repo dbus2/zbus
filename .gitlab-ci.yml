@@ -11,18 +11,16 @@ before_script:
   - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y dbus
 
 check:
-  image: "rust:latest"
+  image: "rustdocker/rustfmt_clippy:stable"
   stage: "lint"
   script:
     - rustc --version
     - cargo --version
-    - rustup component add rustfmt
     - cargo fmt --all -- --check
-    - rustup component add clippy
     - cargo clippy -- -D warnings
 
 test:
-  image: 'rust:latest'
+  image: "rustdocker/rustfmt_clippy:stable"
   stage: test
   script:
     - rustc --version
