@@ -51,13 +51,26 @@ mod tests {
 
     #[test]
     fn basic_connection() {
-        crate::Connection::new_session()
+        let mut connection = crate::Connection::new_session()
             .map_err(|e| {
                 println!("error: {}", e);
 
                 e
             })
             .unwrap();
+        // Hello method is already called during connection creation so subsequent calls are expected to fail but only
+        // with a D-Bus error.
+        match connection.call_method(
+            Some("org.freedesktop.DBus"),
+            "/org/freedesktop/DBus",
+            Some("org.freedesktop.DBus"),
+            "Hello",
+            &(),
+        ) {
+            Err(crate::ConnectionError::MethodError(_, _)) => (),
+            Err(e) => panic!("{}", e),
+            _ => panic!(),
+        };
     }
 
     #[test]
