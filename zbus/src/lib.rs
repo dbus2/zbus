@@ -22,8 +22,7 @@ mod utils;
 mod tests {
     use std::collections::HashMap;
 
-    use zvariant::{Array, FromVariant};
-    use zvariant::{Variant, VariantValue};
+    use zvariant::{FromVariant, Variant, VariantValue};
 
     use crate::{Message, MessageFlags};
 
@@ -137,8 +136,8 @@ mod tests {
             .call_method(
                 Some("org.freedesktop.DBus"),
                 "/org/freedesktop/DBus",
-                Some("org.freedesktop.DBus.Properties"),
-                "GetAll",
+                Some("org.freedesktop.DBus"),
+                "GetConnectionCredentials",
                 &"org.freedesktop.DBus",
             )
             .unwrap();
@@ -149,20 +148,10 @@ mod tests {
             .unwrap());
         let hashmap: HashMap<&str, Variant> = reply.body().unwrap();
 
-        // "Features" property
-        let features = Array::from_variant_ref(&hashmap["Features"]).unwrap();
-        println!("org.freedesktop.DBus.Features on /org/freedesktop/DBus:");
-        for feature in features.get() {
-            print!(" {}", <&str>::from_variant_ref(feature).unwrap());
-        }
-        println!();
+        let pid = u32::from_variant_ref(&hashmap["ProcessID"]).unwrap();
+        println!("DBus bus PID: {}", pid);
 
-        // "Interfaces" property
-        let interfaces = Array::from_variant_ref(&hashmap["Interfaces"]).unwrap();
-        println!("org.freedesktop.DBus.Interfaces on /org/freedesktop/DBus:");
-        for interface in interfaces.get() {
-            print!(" {}", <&str>::from_variant_ref(interface).unwrap());
-        }
-        println!();
+        let uid = u32::from_variant_ref(&hashmap["UnixUserID"]).unwrap();
+        println!("DBus bus UID: {}", uid);
     }
 }
