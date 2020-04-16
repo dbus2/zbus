@@ -83,24 +83,22 @@ mod tests {
             })
             .unwrap();
 
-        if std::env::var("GET_MACHINE_ID").unwrap_or(String::from("1")) == "1" {
-            let reply = connection
-                .call_method(
-                    Some("org.freedesktop.DBus"),
-                    "/org/freedesktop/DBus",
-                    Some("org.freedesktop.DBus.Peer"),
-                    "GetMachineId",
-                    &(),
-                )
-                .unwrap();
+        let reply = connection
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "GetId",
+                &(),
+            )
+            .unwrap();
 
-            assert!(reply
-                .body_signature()
-                .map(|s| s == <&str>::signature())
-                .unwrap());
-            let id: &str = reply.body().unwrap();
-            println!("Machine ID: {}", id);
-        }
+        assert!(reply
+            .body_signature()
+            .map(|s| s == <&str>::signature())
+            .unwrap());
+        let id: &str = reply.body().unwrap();
+        println!("Unique ID of the bus: {}", id);
 
         let reply = connection
             .call_method(
