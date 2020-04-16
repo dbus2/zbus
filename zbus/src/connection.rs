@@ -12,6 +12,7 @@ use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
 pub struct Connection {
     pub server_guid: String,
+    pub unique_name: String,
 
     socket: UnixStream,
     // Serial number for next outgoing message
@@ -182,6 +183,7 @@ impl Connection {
             socket,
             server_guid,
             serial: 0,
+            unique_name: String::from(""),
         };
 
         // Now that daemon has approved us, we must send a hello as per specs
@@ -193,8 +195,8 @@ impl Connection {
             &(),
         )?;
 
-        let bus_name: &str = reply.body()?;
-        println!("bus name: {}", bus_name);
+        connection.unique_name = reply.body::<&str>().map(String::from)?;
+        println!("bus name: {}", connection.unique_name);
 
         Ok(connection)
     }
