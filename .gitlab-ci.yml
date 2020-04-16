@@ -3,7 +3,6 @@ stages:
   - test
 
 variables:
-  CARGO_HOME: $CI_PROJECT_DIR/cargo
   APT_CACHE_DIR: $CI_PROJECT_DIR/apt
 
 before_script:
