@@ -21,3 +21,6 @@ serde_repr = "0.1"
 #arrayvec = { version = "0.5.1", features = [ "serde" ] }
 zvariant = { path = "../zvariant", version = "^2" }
 zvariant_derive = { path = "../zvariant_derive", version = "^2" }
+
+[dev-dependencies]
+enumflags2 = { version= " ^0.6", features = [ "serde" ] }

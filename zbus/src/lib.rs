@@ -22,7 +22,11 @@ mod utils;
 mod tests {
     use std::collections::HashMap;
 
+    use enumflags2::BitFlags;
+    use serde_repr::{Deserialize_repr, Serialize_repr};
+
     use zvariant::{FromVariant, Variant, VariantValue};
+    use zvariant_derive::VariantValue;
 
     use crate::{Message, MessageFlags};
 
@@ -82,6 +86,40 @@ mod tests {
             })
             .unwrap();
 
+        // Let's try getting us a fancy name on the bus
+        #[repr(u32)]
+        #[derive(
+            Deserialize_repr, Serialize_repr, VariantValue, BitFlags, Debug, PartialEq, Copy, Clone,
+        )]
+        enum RequestNameFlags {
+            AllowReplacement = 0x01,
+            ReplaceExisting = 0x02,
+            DoNotQueue = 0x04,
+        }
+
+        #[repr(u32)]
+        #[derive(Deserialize_repr, Serialize_repr, VariantValue, Debug, PartialEq)]
+        enum RequestNameReply {
+            PrimaryOwner = 0x01,
+            InQueue = 0x02,
+            Exists = 0x03,
+            AlreadyOwner = 0x04,
+        }
+
+        let reply = connection
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "RequestName",
+                &("org.freedesktop.zbus", RequestNameFlags::ReplaceExisting),
+            )
+            .unwrap();
+
+        assert!(reply.body_signature().map(|s| s.as_str() == "u").unwrap());
+        let reply: RequestNameReply = reply.body().unwrap();
+        assert_eq!(reply, RequestNameReply::PrimaryOwner);
+
         let reply = connection
             .call_method(
                 Some("org.freedesktop.DBus"),
@@ -105,7 +143,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "NameHasOwner",
-                &"org.freedesktop.DBus",
+                &"org.freedesktop.zbus",
             )
             .unwrap();
 
@@ -121,7 +159,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "GetNameOwner",
-                &"org.freedesktop.DBus",
+                &"org.freedesktop.zbus",
             )
             .unwrap();
 
@@ -129,8 +167,7 @@ mod tests {
             .body_signature()
             .map(|s| s == <&str>::signature())
             .unwrap());
-        let owner: &str = reply.body().unwrap();
-        println!("Owner of 'org.freedesktop.DBus' is: {}", owner);
+        assert_eq!(reply.body::<&str>().unwrap(), connection.unique_name);
 
         let reply = connection
             .call_method(
