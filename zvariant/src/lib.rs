@@ -168,8 +168,13 @@ mod tests {
 
     #[test]
     fn str_value() {
+        let string = String::from("hello world");
+        basic_type_test!(LE, string, 16, String);
+        basic_type_test!(LE, string, 16, &str);
+
         let string = "hello world";
         basic_type_test!(LE, string, 16, &str);
+        basic_type_test!(LE, string, 16, String);
 
         // As Value
         let v = string.into_value();
@@ -296,6 +301,9 @@ mod tests {
         assert_eq!(decoded.len(), 4);
         assert_eq!(decoded[0], "Hello");
         assert_eq!(decoded[1], "World");
+
+        let decoded = from_slice::<LE, Vec<String>>(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, as_);
 
         // Decode just the second string
         let ctxt = Context::<LE>::new_dbus(14);
