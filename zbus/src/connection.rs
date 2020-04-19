@@ -130,19 +130,23 @@ impl From<Message> for ConnectionError {
     }
 }
 
+fn connect(addr: &Address) -> Result<UnixStream, ConnectionError> {
+    match addr {
+        Address::Path(p) => Ok(UnixStream::connect(p)?),
+        Address::Abstract(_) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "abstract sockets are not currently supported",
+        )
+        .into()),
+    }
+}
+
 /// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
 /// variable. If we don't recognize the value (or it's not set) we fall back to
 /// /run/user/UID/bus
 fn session_socket() -> Result<UnixStream, ConnectionError> {
     match env::var("DBUS_SESSION_BUS_ADDRESS") {
-        Ok(val) => match address::parse_dbus_address(&val)? {
-            Address::Path(p) => Ok(UnixStream::connect(p)?),
-            Address::Abstract(_) => Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "abstract sockets are not currently supported",
-            )
-            .into()),
-        },
+        Ok(val) => connect(&address::parse_dbus_address(&val)?),
         _ => {
             let uid = Uid::current();
             let path = format!("/run/user/{}/bus", uid);
@@ -151,9 +155,18 @@ fn session_socket() -> Result<UnixStream, ConnectionError> {
     }
 }
 
+/// Get a system socket respecting the DBUS_SYSTEM_BUS_ADDRESS environment
+/// variable. If we don't recognize the value (or it's not set) we fall back to
+/// /var/run/dbus/system_bus_socket
+fn system_socket() -> Result<UnixStream, ConnectionError> {
+    match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
+        Ok(val) => connect(&address::parse_dbus_address(&val)?),
+        _ => Ok(UnixStream::connect("/var/run/dbus/system_bus_socket")?),
+    }
+}
+
 impl Connection {
-    pub fn new_session() -> Result<Self, ConnectionError> {
-        let mut socket = session_socket()?;
+    fn new(mut socket: UnixStream) -> Result<Self, ConnectionError> {
         let uid = Uid::current();
 
         // SASL Handshake
@@ -195,6 +208,14 @@ impl Connection {
         println!("bus name: {}", connection.unique_name);
 
         Ok(connection)
+    }
+
+    pub fn new_session() -> Result<Self, ConnectionError> {
+        Self::new(session_socket()?)
+    }
+
+    pub fn new_system() -> Result<Self, ConnectionError> {
+        Self::new(system_socket()?)
     }
 
     pub fn call_method<B>(
