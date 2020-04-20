@@ -1,6 +1,6 @@
 use crate::{Signature, Type};
 
-pub trait Basic: Clone {
+pub trait Basic {
     const SIGNATURE_CHAR: char;
     const SIGNATURE_STR: &'static str;
     const ALIGNMENT: usize;
