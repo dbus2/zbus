@@ -1,28 +1,28 @@
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
-use crate::{IntoVariant, Signature, Type, Variant};
+use crate::{IntoValue, Signature, Type, Value};
 
 /// An ordered collection of items of arbitrary types.
 ///
 /// This is mostly just a way to support custom data structures. You only use this for structures
-/// inside [`Variant`].
+/// inside [`Value`].
 ///
 /// # Example
 ///
 /// TODO
 ///
-/// [`Variant`]: enum.Variant.html
+/// [`Value`]: enum.Value.html
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct Structure<'a>(Vec<Variant<'a>>);
+pub struct Structure<'a>(Vec<Value<'a>>);
 
 impl<'a> Structure<'a> {
     /// Get all the fields, consuming `self`.
-    pub fn take_fields(self) -> Vec<Variant<'a>> {
+    pub fn take_fields(self) -> Vec<Value<'a>> {
         self.0
     }
 
     /// Get a reference to all the fields of `self`.
-    pub fn fields(&self) -> &[Variant<'a>] {
+    pub fn fields(&self) -> &[Value<'a>] {
         &self.0
     }
 
@@ -39,14 +39,14 @@ impl<'a> Structure<'a> {
     /// structure.
     pub fn add_field<T>(mut self, field: T) -> Self
     where
-        T: Type + IntoVariant<'a>,
+        T: Type + IntoValue<'a>,
     {
-        self.0.push(field.into_variant());
+        self.0.push(field.into_value());
 
         self
     }
 
-    pub fn append_field<'e: 'a>(mut self, field: Variant<'e>) -> Self {
+    pub fn append_field<'e: 'a>(mut self, field: Value<'e>) -> Self {
         self.0.push(field);
 
         self
@@ -85,7 +85,7 @@ macro_rules! tuple_impls {
         $(
             impl<'a, $($name),+> From<($($name),+,)> for Structure<'a>
             where
-                $($name: Type + IntoVariant<'a>,)+
+                $($name: Type + IntoValue<'a>,)+
             {
                 #[inline]
                 fn from(value: ($($name),+,)) -> Self {

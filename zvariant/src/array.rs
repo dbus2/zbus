@@ -1,7 +1,7 @@
 use serde::ser::{Serialize, SerializeSeq, Serializer};
 
 use crate::{Error, Result};
-use crate::{IntoVariant, Signature, Type, Variant};
+use crate::{IntoValue, Signature, Type, Value};
 
 /// An unordered collection of items of the same type.
 ///
@@ -11,7 +11,7 @@ use crate::{IntoVariant, Signature, Type, Variant};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Array<'a> {
     element_signature: Signature<'a>,
-    elements: Vec<Variant<'a>>,
+    elements: Vec<Value<'a>>,
 }
 
 impl<'a> Array<'a> {
@@ -22,7 +22,7 @@ impl<'a> Array<'a> {
         }
     }
 
-    pub fn append<'e: 'a>(&mut self, element: Variant<'e>) -> Result<()> {
+    pub fn append<'e: 'a>(&mut self, element: Value<'e>) -> Result<()> {
         if element.value_signature() != self.element_signature {
             return Err(Error::IncorrectType);
         }
@@ -32,7 +32,7 @@ impl<'a> Array<'a> {
         Ok(())
     }
 
-    pub fn get(&self) -> &[Variant<'a>] {
+    pub fn get(&self) -> &[Value<'a>] {
         &self.elements
     }
 
@@ -54,7 +54,7 @@ impl<'a> Array<'a> {
 }
 
 impl<'a> std::ops::Deref for Array<'a> {
-    type Target = [Variant<'a>];
+    type Target = [Value<'a>];
 
     fn deref(&self) -> &Self::Target {
         self.get()
@@ -63,14 +63,11 @@ impl<'a> std::ops::Deref for Array<'a> {
 
 impl<'a, T> From<Vec<T>> for Array<'a>
 where
-    T: Type + IntoVariant<'a>,
+    T: Type + IntoValue<'a>,
 {
     fn from(values: Vec<T>) -> Self {
         let element_signature = T::signature();
-        let elements = values
-            .into_iter()
-            .map(|value| value.into_variant())
-            .collect();
+        let elements = values.into_iter().map(|value| value.into_value()).collect();
 
         Self {
             element_signature,
@@ -81,13 +78,13 @@ where
 
 impl<'a, T> From<&[T]> for Array<'a>
 where
-    T: Type + IntoVariant<'a> + Clone,
+    T: Type + IntoValue<'a> + Clone,
 {
     fn from(values: &[T]) -> Self {
         let element_signature = T::signature();
         let elements = values
             .iter()
-            .map(|value| value.clone().into_variant())
+            .map(|value| value.clone().into_value())
             .collect();
 
         Self {
@@ -99,7 +96,7 @@ where
 
 impl<'a, T> From<&Vec<T>> for Array<'a>
 where
-    T: Type + IntoVariant<'a> + Clone,
+    T: Type + IntoValue<'a> + Clone,
 {
     fn from(values: &Vec<T>) -> Self {
         Self::from(&values[..])

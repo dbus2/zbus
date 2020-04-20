@@ -4,8 +4,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use zvariant::IntoVariant;
-use zvariant::{Error as VariantError, Variant};
+use zvariant::IntoValue;
+use zvariant::{Error as VariantError, Value};
 use zvariant::{ObjectPath, Signature};
 use zvariant_derive::Type;
 
@@ -79,7 +79,7 @@ impl From<VariantError> for MessageFieldError {
 pub struct MessageField<'v> {
     code: MessageFieldCode,
     #[serde(borrow)]
-    value: Variant<'v>,
+    value: Value<'v>,
 }
 
 impl<'v> MessageField<'v> {
@@ -91,70 +91,70 @@ impl<'v> MessageField<'v> {
     //where
     //    B: serde::de::Deserialize<'d> + Type,
     //{
-    pub fn value(&self) -> &Variant {
+    pub fn value(&self) -> &Value {
         &self.value
     }
 
     pub fn path<'o: 'v>(path: impl Into<ObjectPath<'o>>) -> Self {
         Self {
             code: MessageFieldCode::Path,
-            value: path.into().into_variant(),
+            value: path.into().into_value(),
         }
     }
 
     pub fn interface<'i: 'v>(interface: &'i str) -> Self {
         Self {
             code: MessageFieldCode::Interface,
-            value: interface.into_variant(),
+            value: interface.into_value(),
         }
     }
 
     pub fn member<'m: 'v>(member: &'m str) -> Self {
         Self {
             code: MessageFieldCode::Member,
-            value: member.into_variant(),
+            value: member.into_value(),
         }
     }
 
     pub fn error_name<'e: 'v>(error_name: &'e str) -> Self {
         Self {
             code: MessageFieldCode::ErrorName,
-            value: error_name.into_variant(),
+            value: error_name.into_value(),
         }
     }
 
     pub fn reply_serial(serial: u32) -> Self {
         Self {
             code: MessageFieldCode::ReplySerial,
-            value: serial.into_variant(),
+            value: serial.into_value(),
         }
     }
 
     pub fn destination<'d: 'v>(destination: &'d str) -> Self {
         Self {
             code: MessageFieldCode::Destination,
-            value: destination.into_variant(),
+            value: destination.into_value(),
         }
     }
 
     pub fn sender<'s: 'v>(sender: &'s str) -> Self {
         Self {
             code: MessageFieldCode::Sender,
-            value: sender.into_variant(),
+            value: sender.into_value(),
         }
     }
 
     pub fn signature<'s: 'v>(signature: impl Into<Signature<'s>>) -> Self {
         Self {
             code: MessageFieldCode::Signature,
-            value: signature.into().into_variant(),
+            value: signature.into().into_value(),
         }
     }
 
     pub fn unix_fds(fd: u32) -> Self {
         Self {
             code: MessageFieldCode::UnixFDs,
-            value: fd.into_variant(),
+            value: fd.into_value(),
         }
     }
 }

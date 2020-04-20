@@ -3,7 +3,7 @@ use std::error;
 use std::fmt;
 use std::io::{Cursor, Error as IOError};
 
-use zvariant::{EncodingContext, Error as VariantError, FromVariant};
+use zvariant::{EncodingContext, Error as VariantError, FromValue};
 use zvariant::{Signature, Type};
 
 use crate::utils::padding_for_8_bytes;
@@ -182,7 +182,7 @@ impl Message {
         let fields = header.fields();
         for field in fields.get() {
             if field.code() == MessageFieldCode::Signature {
-                let sig = Signature::from_variant_ref(field.value())?;
+                let sig = Signature::from_value_ref(field.value())?;
 
                 // FIXME: Can we avoid the copy?
                 return Ok(Signature::from(String::from(sig)));

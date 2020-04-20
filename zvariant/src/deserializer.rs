@@ -346,13 +346,13 @@ where
         match self.sign_parser.next_char()? {
             VARIANT_SIGNATURE_CHAR => {
                 let start = self.pos + 1; // skip length byte
-                let variant_de = VariantDeserializer::<B> {
+                let value_de = ValueDeserializer::<B> {
                     de: self,
-                    stage: VariantParseStage::Signature,
+                    stage: ValueParseStage::Signature,
                     start,
                 };
 
-                visitor.visit_seq(variant_de)
+                visitor.visit_seq(value_de)
             }
             ARRAY_SIGNATURE_CHAR => {
                 self.sign_parser.parse_char(Some(ARRAY_SIGNATURE_CHAR))?;
@@ -593,19 +593,19 @@ where
     }
 }
 
-enum VariantParseStage {
+enum ValueParseStage {
     Signature,
     Value,
     Done,
 }
 
-pub struct VariantDeserializer<'d, 'de, B> {
+pub struct ValueDeserializer<'d, 'de, B> {
     de: &'d mut Deserializer<'de, B>,
-    stage: VariantParseStage,
+    stage: ValueParseStage,
     start: usize,
 }
 
-impl<'d, 'de, B> SeqAccess<'de> for VariantDeserializer<'d, 'de, B>
+impl<'d, 'de, B> SeqAccess<'de> for ValueDeserializer<'d, 'de, B>
 where
     B: byteorder::ByteOrder,
 {
@@ -616,13 +616,13 @@ where
         T: DeserializeSeed<'de>,
     {
         match self.stage {
-            VariantParseStage::Signature => {
-                self.stage = VariantParseStage::Value;
+            ValueParseStage::Signature => {
+                self.stage = ValueParseStage::Value;
 
                 seed.deserialize(&mut *self.de).map(Some)
             }
-            VariantParseStage::Value => {
-                self.stage = VariantParseStage::Done;
+            ValueParseStage::Value => {
+                self.stage = ValueParseStage::Done;
 
                 let slice = &self.de.bytes[self.start..=self.de.pos];
                 let signature = str::from_utf8(slice)
@@ -643,7 +643,7 @@ where
 
                 v
             }
-            VariantParseStage::Done => Ok(None),
+            ValueParseStage::Done => Ok(None),
         }
     }
 }

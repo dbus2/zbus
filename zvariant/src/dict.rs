@@ -5,13 +5,13 @@ use std::hash::BuildHasher;
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
 use crate::{Basic, Error, Signature};
-use crate::{FromVariant, IntoVariant, Type, Variant};
+use crate::{FromValue, IntoValue, Type, Value};
 
-/// A dictionary type to be used with [`Variant`].
+/// A dictionary type to be used with [`Value`].
 ///
 /// TODO
 ///
-/// [`Variant`]: enum.Variant.html
+/// [`Value`]: enum.Value.html
 #[derive(Debug, Clone, PartialEq)]
 pub struct Dict<'k, 'v> {
     entries: Vec<DictEntry<'k, 'v>>,
@@ -30,8 +30,8 @@ impl<'k, 'v> Dict<'k, 'v> {
 
     pub fn append<'kv: 'k, 'vv: 'v>(
         &mut self,
-        key: Variant<'kv>,
-        value: Variant<'vv>,
+        key: Value<'kv>,
+        value: Value<'vv>,
     ) -> Result<(), Error> {
         if key.value_signature() != self.key_signature
             || value.value_signature() != self.value_signature
@@ -47,16 +47,16 @@ impl<'k, 'v> Dict<'k, 'v> {
     /// Add a new entry.
     pub fn add<K, V>(&mut self, key: K, value: V) -> Result<(), Error>
     where
-        K: Basic + IntoVariant<'k> + std::hash::Hash + std::cmp::Eq,
-        V: IntoVariant<'v> + Type,
+        K: Basic + IntoValue<'k> + std::hash::Hash + std::cmp::Eq,
+        V: IntoValue<'v> + Type,
     {
         if K::signature() != self.key_signature || V::signature() != self.value_signature {
             return Err(Error::IncorrectType);
         }
 
         self.entries.push(DictEntry {
-            key: key.into_variant(),
-            value: value.into_variant(),
+            key: key.into_value(),
+            value: value.into_value(),
         });
 
         Ok(())
@@ -66,13 +66,13 @@ impl<'k, 'v> Dict<'k, 'v> {
     pub fn get<'d, K, V>(&'d self, key: &'k K) -> Result<Option<&'v V>, Error>
     where
         'd: 'k + 'v,
-        K: FromVariant<'k> + std::cmp::Eq,
-        V: FromVariant<'v>,
+        K: FromValue<'k> + std::cmp::Eq,
+        V: FromValue<'v>,
     {
         for entry in &self.entries {
-            let k = K::from_variant_ref(&entry.key)?;
+            let k = K::from_value_ref(&entry.key)?;
             if *k == *key {
-                return V::from_variant_ref(&entry.value).map(Some);
+                return V::from_value_ref(&entry.value).map(Some);
             }
         }
 
@@ -107,8 +107,8 @@ impl<'k, 'v> Serialize for Dict<'k, 'v> {
 // Conversion of Dict to HashMap
 impl<'k, 'v, K, V, H> TryFrom<Dict<'k, 'v>> for HashMap<K, V, H>
 where
-    K: Basic + FromVariant<'k> + std::hash::Hash + std::cmp::Eq,
-    V: FromVariant<'v>,
+    K: Basic + FromValue<'k> + std::hash::Hash + std::cmp::Eq,
+    V: FromValue<'v>,
     H: BuildHasher + Default,
 {
     type Error = Error;
@@ -117,7 +117,7 @@ where
         let mut map = HashMap::default();
 
         for entry in value.entries {
-            let (key, value) = (K::from_variant(entry.key)?, V::from_variant(entry.value)?);
+            let (key, value) = (K::from_value(entry.key)?, V::from_value(entry.value)?);
 
             map.insert(key, value);
         }
@@ -129,8 +129,8 @@ where
 impl<'d, 'k, 'v, K, V, H> TryFrom<&'d Dict<'k, 'v>> for HashMap<&'k K, &'v V, H>
 where
     'd: 'k + 'v,
-    K: FromVariant<'k> + std::cmp::Eq + std::hash::Hash,
-    V: FromVariant<'v>,
+    K: FromValue<'k> + std::cmp::Eq + std::hash::Hash,
+    V: FromValue<'v>,
     H: BuildHasher + Default,
 {
     type Error = Error;
@@ -140,8 +140,8 @@ where
 
         for entry in &value.entries {
             let (key, value) = (
-                K::from_variant_ref(&entry.key)?,
-                V::from_variant_ref(&entry.value)?,
+                K::from_value_ref(&entry.key)?,
+                V::from_value_ref(&entry.value)?,
             );
 
             map.insert(key, value);
@@ -154,15 +154,15 @@ where
 // Conversion of Hashmap to Dict
 impl<'k, 'v, K, V> From<HashMap<K, V>> for Dict<'k, 'v>
 where
-    K: Type + IntoVariant<'k> + std::hash::Hash + std::cmp::Eq,
-    V: Type + IntoVariant<'v>,
+    K: Type + IntoValue<'k> + std::hash::Hash + std::cmp::Eq,
+    V: Type + IntoValue<'v>,
 {
     fn from(value: HashMap<K, V>) -> Self {
         let entries = value
             .into_iter()
             .map(|(key, value)| DictEntry {
-                key: key.into_variant(),
-                value: value.into_variant(),
+                key: key.into_value(),
+                value: value.into_value(),
             })
             .collect();
 
@@ -178,8 +178,8 @@ where
 
 #[derive(Debug, Clone, PartialEq)]
 struct DictEntry<'k, 'v> {
-    key: Variant<'k>,
-    value: Variant<'v>,
+    key: Value<'k>,
+    value: Value<'v>,
 }
 
 impl<'k, 'v> Serialize for DictEntry<'k, 'v> {

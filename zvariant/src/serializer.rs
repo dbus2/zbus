@@ -75,7 +75,7 @@ pub struct Serializer<'ser, B, W> {
     pub(self) sign_parser: SignatureParser<'ser>,
 
     // FIXME: Use ArrayString here?
-    pub(self) variant_sign: Option<String>,
+    pub(self) value_sign: Option<String>,
 
     b: PhantomData<B>,
 }
@@ -97,7 +97,7 @@ where
             sign_parser,
             write,
             bytes_written: 0,
-            variant_sign: None,
+            value_sign: None,
             b: PhantomData,
         }
     }
@@ -247,7 +247,7 @@ where
                 self.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
 
                 if c == VARIANT_SIGNATURE_CHAR {
-                    self.variant_sign = Some(String::from(v));
+                    self.value_sign = Some(String::from(v));
                 }
             }
             _ => {
@@ -502,12 +502,12 @@ where
         T: ?Sized + Serialize,
     {
         match name {
-            Some("zvariant::Variant::Value") => {
-                // Serializing the value of a Variant, which means signature was serialized
+            Some("zvariant::Value::Value") => {
+                // Serializing the value of a Value, which means signature was serialized
                 // already, and also put aside for us to be picked here.
                 let signature = self
                     .serializer
-                    .variant_sign
+                    .value_sign
                     .take()
                     // FIXME: Better error?
                     .ok_or_else(|| Error::IncorrectValue)?;
@@ -518,7 +518,7 @@ where
                     sign_parser,
                     write: &mut self.serializer.write,
                     bytes_written: self.serializer.bytes_written,
-                    variant_sign: None,
+                    value_sign: None,
                     b: PhantomData,
                 };
                 value.serialize(&mut serializer)?;

@@ -25,8 +25,8 @@ pub use crate::signature::*;
 mod structure;
 pub use crate::structure::*;
 
-mod variant;
-pub use variant::*;
+mod value;
+pub use value::*;
 
 mod error;
 pub use error::*;
@@ -34,11 +34,11 @@ pub use error::*;
 mod r#type;
 pub use r#type::*;
 
-mod from_variant;
-pub use from_variant::*;
+mod from_value;
+pub use from_value::*;
 
-mod into_variant;
-pub use into_variant::*;
+mod into_value;
+pub use into_value::*;
 
 mod utils;
 pub use utils::*;
@@ -60,7 +60,7 @@ mod tests {
     use crate::{to_bytes, to_bytes_for_signature};
 
     use crate::{Array, Dict, EncodingContext as Context};
-    use crate::{FromVariant, IntoVariant, Type, Variant};
+    use crate::{FromValue, IntoValue, Type, Value};
     use crate::{ObjectPath, Signature};
 
     // Test through both generic and specific API (wrt byte order)
@@ -84,138 +84,138 @@ mod tests {
     }
 
     #[test]
-    fn u8_variant() {
+    fn u8_value() {
         basic_type_test!(LE, 77_u8, 1, u8);
 
-        // As Variant
-        let v = 77_u8.into_variant();
+        // As Value
+        let v = 77_u8.into_value();
         assert_eq!(v.value_signature(), "y");
-        assert_eq!(v, Variant::U8(77));
-        basic_type_test!(LE, v, 4, Variant);
+        assert_eq!(v, Value::U8(77));
+        basic_type_test!(LE, v, 4, Value);
     }
 
     #[test]
-    fn u16_variant() {
+    fn u16_value() {
         basic_type_test!(BE, 0xABBA_u16, 2, u16);
 
-        // As Variant
-        let v = 0xFEFE_u16.into_variant();
+        // As Value
+        let v = 0xFEFE_u16.into_value();
         assert_eq!(v.value_signature(), "q");
-        assert_eq!(v, Variant::U16(0xFEFE));
-        basic_type_test!(LE, v, 6, Variant);
+        assert_eq!(v, Value::U16(0xFEFE));
+        basic_type_test!(LE, v, 6, Value);
     }
 
     #[test]
-    fn i16_variant() {
+    fn i16_value() {
         let encoded = basic_type_test!(BE, -0xAB0_i16, 2, i16);
         assert_eq!(LE::read_i16(&encoded), 0x50F5_i16);
 
-        // As Variant
-        let v = 0xAB_i16.into_variant();
+        // As Value
+        let v = 0xAB_i16.into_value();
         assert_eq!(v.value_signature(), "n");
-        assert_eq!(v, Variant::I16(0xAB));
-        basic_type_test!(LE, v, 6, Variant);
+        assert_eq!(v, Value::I16(0xAB));
+        basic_type_test!(LE, v, 6, Value);
     }
 
     #[test]
-    fn u32_variant() {
+    fn u32_value() {
         basic_type_test!(BE, 0xABBA_ABBA_u32, 4, u32);
 
-        // As Variant
-        let v = 0xABBA_ABBA_u32.into_variant();
+        // As Value
+        let v = 0xABBA_ABBA_u32.into_value();
         assert_eq!(v.value_signature(), "u");
-        assert_eq!(v, Variant::U32(0xABBA_ABBA));
-        basic_type_test!(LE, v, 8, Variant);
+        assert_eq!(v, Value::U32(0xABBA_ABBA));
+        basic_type_test!(LE, v, 8, Value);
     }
 
     #[test]
-    fn i32_variant() {
+    fn i32_value() {
         let encoded = basic_type_test!(BE, -0xABBA_AB0_i32, 4, i32);
         assert_eq!(LE::read_i32(&encoded), 0x5055_44F5_i32);
 
-        // As Variant
-        let v = 0xABBA_AB0_i32.into_variant();
+        // As Value
+        let v = 0xABBA_AB0_i32.into_value();
         assert_eq!(v.value_signature(), "i");
-        assert_eq!(v, Variant::I32(0xABBA_AB0));
-        basic_type_test!(LE, v, 8, Variant);
+        assert_eq!(v, Value::I32(0xABBA_AB0));
+        basic_type_test!(LE, v, 8, Value);
     }
 
-    // u64 is covered by `variant_variant` test below
+    // u64 is covered by `value_value` test below
 
     #[test]
-    fn i64_variant() {
+    fn i64_value() {
         let encoded = basic_type_test!(BE, -0xABBA_ABBA_ABBA_AB0_i64, 8, i64);
         assert_eq!(LE::read_i64(&encoded), 0x5055_4455_4455_44F5_i64);
 
-        // As Variant
-        let v = 0xABBA_AB0i64.into_variant();
+        // As Value
+        let v = 0xABBA_AB0i64.into_value();
         assert_eq!(v.value_signature(), "x");
-        assert_eq!(v, Variant::I64(0xABBA_AB0));
-        basic_type_test!(LE, v, 16, Variant);
+        assert_eq!(v, Value::I64(0xABBA_AB0));
+        basic_type_test!(LE, v, 16, Value);
     }
 
     #[test]
-    fn f64_variant() {
+    fn f64_value() {
         let encoded = basic_type_test!(BE, 99999.99999_f64, 8, f64);
         assert_eq!(LE::read_f64(&encoded), -5759340900185448e-143);
 
-        // As Variant
-        let v = 99999.99999_f64.into_variant();
+        // As Value
+        let v = 99999.99999_f64.into_value();
         assert_eq!(v.value_signature(), "d");
-        assert_eq!(v, Variant::F64(99999.99999));
-        basic_type_test!(LE, v, 16, Variant);
+        assert_eq!(v, Value::F64(99999.99999));
+        basic_type_test!(LE, v, 16, Value);
     }
 
     #[test]
-    fn str_variant() {
+    fn str_value() {
         let string = "hello world";
         basic_type_test!(LE, string, 16, &str);
 
-        // As Variant
-        let v = string.into_variant();
+        // As Value
+        let v = string.into_value();
         assert_eq!(v.value_signature(), "s");
-        assert_eq!(v, Variant::Str("hello world"));
-        basic_type_test!(LE, v, 20, Variant);
+        assert_eq!(v, Value::Str("hello world"));
+        basic_type_test!(LE, v, 20, Value);
 
         // Characters are treated as strings
         basic_type_test!(LE, 'c', 6, char);
 
-        // As Variant
-        let v = 'c'.into_variant();
+        // As Value
+        let v = 'c'.into_value();
         assert_eq!(v.value_signature(), "s");
         let ctxt = Context::new_dbus(0);
         let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 10);
-        let v = from_slice::<LE, Variant>(&encoded, ctxt).unwrap();
-        assert_eq!(v, Variant::Str("c"));
+        let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
+        assert_eq!(v, Value::Str("c"));
     }
 
     #[test]
-    fn signature_variant() {
+    fn signature_value() {
         let sig = Signature::from("yys");
         basic_type_test!(LE, sig, 5, Signature);
 
-        // As Variant
-        let v = sig.into_variant();
+        // As Value
+        let v = sig.into_value();
         assert_eq!(v.value_signature(), "g");
-        let encoded = basic_type_test!(LE, v, 8, Variant);
+        let encoded = basic_type_test!(LE, v, 8, Value);
         let ctxt = Context::new_dbus(0);
-        let v = from_slice::<LE, Variant>(&encoded, ctxt).unwrap();
-        assert_eq!(v, Variant::Signature(Signature::from("yys")));
+        let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
+        assert_eq!(v, Value::Signature(Signature::from("yys")));
     }
 
     #[test]
-    fn object_path_variant() {
+    fn object_path_value() {
         let o = ObjectPath::from("/hello/world");
         basic_type_test!(LE, o, 17, ObjectPath);
 
-        // As Variant
-        let v = o.into_variant();
+        // As Value
+        let v = o.into_value();
         assert_eq!(v.value_signature(), "o");
-        let encoded = basic_type_test!(LE, v, 21, Variant);
+        let encoded = basic_type_test!(LE, v, 21, Value);
         let ctxt = Context::new_dbus(0);
-        let v = from_slice::<LE, Variant>(&encoded, ctxt).unwrap();
-        assert_eq!(v, Variant::ObjectPath(ObjectPath::from("/hello/world")));
+        let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
+        assert_eq!(v, Value::ObjectPath(ObjectPath::from("/hello/world")));
     }
 
     #[test]
@@ -224,7 +224,7 @@ mod tests {
     }
 
     #[test]
-    fn array_variant() {
+    fn array_value() {
         // Let's use D-Bus/GVariant terms
 
         //
@@ -241,17 +241,17 @@ mod tests {
         let decoded: Vec<u8> = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(decoded, &[77u8, 88]);
 
-        // As Variant
-        let v = &ay[..].into_variant();
+        // As Value
+        let v = &ay[..].into_value();
         assert_eq!(v.value_signature(), "ay");
         let encoded = to_bytes::<LE, _>(ctxt, v).unwrap();
         assert_eq!(encoded.len(), 10);
-        let v = from_slice::<LE, Variant>(&encoded, ctxt).unwrap();
-        if let Variant::Array(array) = v {
+        let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
+        if let Value::Array(array) = v {
             assert_eq!(*array.element_signature(), "y");
             assert_eq!(array.len(), 2);
-            assert_eq!(array.get()[0], Variant::U8(77));
-            assert_eq!(array.get()[1], Variant::U8(88));
+            assert_eq!(array.get()[0], Value::U8(77));
+            assert_eq!(array.get()[1], Value::U8(88));
         } else {
             panic!();
         }
@@ -261,8 +261,8 @@ mod tests {
         let encoded = to_bytes::<LE, _>(ctxt, &vec).unwrap();
         assert_eq!(encoded.len(), 6);
 
-        // Vec as Variant
-        let v = Array::from(&vec).into_variant();
+        // Vec as Value
+        let v = Array::from(&vec).into_value();
         assert_eq!(v.value_signature(), "ay");
         let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 10);
@@ -272,13 +272,13 @@ mod tests {
         let encoded = to_bytes::<LE, _>(ctxt, &at[..]).unwrap();
         assert_eq!(encoded.len(), 8);
 
-        // As Variant
-        let v = &at[..].into_variant();
+        // As Value
+        let v = &at[..].into_value();
         assert_eq!(v.value_signature(), "at");
         let encoded = to_bytes::<LE, _>(ctxt, v).unwrap();
         assert_eq!(encoded.len(), 8);
-        let v = from_slice::<LE, Variant>(&encoded, ctxt).unwrap();
-        if let Variant::Array(array) = v {
+        let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
+        if let Value::Array(array) = v {
             assert_eq!(*array.element_signature(), "t");
             assert_eq!(array.len(), 0);
         } else {
@@ -303,17 +303,17 @@ mod tests {
         assert_eq!(decoded, "World");
         let ctxt = Context::<LE>::new_dbus(0);
 
-        // As Variant
-        let v = &as_[..].into_variant();
+        // As Value
+        let v = &as_[..].into_value();
         assert_eq!(v.value_signature(), "as");
         let encoded = to_bytes(ctxt, v).unwrap();
         assert_eq!(encoded.len(), 49);
         let v = from_slice(&encoded, ctxt).unwrap();
-        if let Variant::Array(array) = v {
+        if let Value::Array(array) = v {
             assert_eq!(*array.element_signature(), "s");
             assert_eq!(array.len(), 4);
-            assert_eq!(array.get()[0], Variant::Str("Hello"));
-            assert_eq!(array.get()[1], Variant::Str("World"));
+            assert_eq!(array.get()[0], Value::Str("Hello"));
+            assert_eq!(array.get()[1], Value::Str("World"));
         } else {
             panic!();
         }
@@ -354,36 +354,36 @@ mod tests {
         assert_eq!(as_[1], "World");
         assert_eq!(r.3, "hello");
 
-        // As Variant
-        let v = &ar[..].into_variant();
+        // As Value
+        let v = &ar[..].into_value();
         assert_eq!(v.value_signature(), "a(yu(xbxas)s)");
         let encoded = to_bytes::<LE, _>(ctxt, v).unwrap();
         assert_eq!(encoded.len(), 94);
-        let v = from_slice::<LE, Variant>(&encoded, ctxt).unwrap();
-        if let Variant::Array(array) = v {
+        let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
+        if let Value::Array(array) = v {
             assert_eq!(*array.element_signature(), "(yu(xbxas)s)");
             assert_eq!(array.len(), 1);
             let r = &array.get()[0];
-            if let Variant::Structure(r) = r {
+            if let Value::Structure(r) = r {
                 let fields = r.fields();
-                assert_eq!(fields[0], Variant::U8(u8::max_value()));
-                assert_eq!(fields[1], Variant::U32(u32::max_value()));
-                if let Variant::Structure(r) = &fields[2] {
+                assert_eq!(fields[0], Value::U8(u8::max_value()));
+                assert_eq!(fields[1], Value::U32(u32::max_value()));
+                if let Value::Structure(r) = &fields[2] {
                     let fields = r.fields();
-                    assert_eq!(fields[0], Variant::I64(i64::max_value()));
-                    assert_eq!(fields[1], Variant::Bool(true));
-                    assert_eq!(fields[2], Variant::I64(i64::max_value()));
-                    if let Variant::Array(as_) = &fields[3] {
+                    assert_eq!(fields[0], Value::I64(i64::max_value()));
+                    assert_eq!(fields[1], Value::Bool(true));
+                    assert_eq!(fields[2], Value::I64(i64::max_value()));
+                    if let Value::Array(as_) = &fields[3] {
                         assert_eq!(as_.len(), 2);
-                        assert_eq!(as_.get()[0], Variant::Str("Hello"));
-                        assert_eq!(as_.get()[1], Variant::Str("World"));
+                        assert_eq!(as_.get()[0], Value::Str("Hello"));
+                        assert_eq!(as_.get()[1], Value::Str("World"));
                     } else {
                         panic!();
                     }
                 } else {
                     panic!();
                 }
-                assert_eq!(fields[3], Variant::Str("hello"));
+                assert_eq!(fields[3], Value::Str("hello"));
             } else {
                 panic!();
             }
@@ -393,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn dict_variant() {
+    fn dict_value() {
         let mut map: HashMap<i64, &str> = HashMap::new();
         map.insert(1, "123");
         map.insert(2, "456");
@@ -404,42 +404,42 @@ mod tests {
         assert_eq!(decoded[&1], "123");
         assert_eq!(decoded[&2], "456");
 
-        // As Variant
-        let v = Dict::from(map).into_variant();
+        // As Value
+        let v = Dict::from(map).into_value();
         assert_eq!(v.value_signature(), "a{xs}");
         let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 48);
         // Convert it back
-        let dict = Dict::from_variant(v).unwrap();
+        let dict = Dict::from_value(v).unwrap();
         let map: HashMap<i64, &str> = HashMap::try_from(dict).unwrap();
         assert_eq!(map[&1], "123");
         assert_eq!(map[&2], "456");
         // Also decode it back
         let v = from_slice(&encoded, ctxt).unwrap();
-        if let Variant::Dict(dict) = v {
+        if let Value::Dict(dict) = v {
             assert_eq!(dict.get::<i64, &str>(&1).unwrap().unwrap(), &"123");
             assert_eq!(dict.get::<i64, &str>(&2).unwrap().unwrap(), &"456");
         } else {
             panic!();
         }
 
-        // Now a hand-crafted Dict Variant but with a Variant as value
-        let mut dict = Dict::new(<&str>::signature(), Variant::signature());
-        dict.add("hello", "there".into_variant()).unwrap();
-        dict.add("bye", "now".into_variant()).unwrap();
-        let v = dict.into_variant();
+        // Now a hand-crafted Dict Value but with a Value as value
+        let mut dict = Dict::new(<&str>::signature(), Value::signature());
+        dict.add("hello", "there".into_value()).unwrap();
+        dict.add("bye", "now".into_value()).unwrap();
+        let v = dict.into_value();
         assert_eq!(v.value_signature(), "a{sv}");
         let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(dbg!(encoded.len()), 68);
         let v = from_slice(&encoded, ctxt).unwrap();
-        if let Variant::Dict(dict) = v {
+        if let Value::Dict(dict) = v {
             assert_eq!(
-                *dict.get::<_, Variant>(&"hello").unwrap().unwrap(),
-                Variant::Str("there")
+                *dict.get::<_, Value>(&"hello").unwrap().unwrap(),
+                Value::Str("there")
             );
             assert_eq!(
-                *dict.get::<_, Variant>(&"bye").unwrap().unwrap(),
-                Variant::Str("now")
+                *dict.get::<_, Value>(&"bye").unwrap().unwrap(),
+                Value::Str("now")
             );
         } else {
             panic!();
@@ -447,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn variant_variant() {
+    fn value_value() {
         let ctxt = Context::<BE>::new_dbus(0);
         let encoded = to_bytes(ctxt, &0xABBA_ABBA_ABBA_ABBA_u64).unwrap();
         assert_eq!(encoded.len(), 8);
@@ -463,38 +463,38 @@ mod tests {
         assert_eq!(decoded, 0xABBA_ABBA_ABBA_ABBA_u64);
         let ctxt = Context::<LE>::new_dbus(0);
 
-        // As Variant
-        let v = 0xFEFE_u64.into_variant();
+        // As Value
+        let v = 0xFEFE_u64.into_value();
         assert_eq!(v.value_signature(), "t");
         let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 16);
         let v = from_slice(&encoded, ctxt).unwrap();
-        assert_eq!(v, Variant::U64(0xFEFE));
+        assert_eq!(v, Value::U64(0xFEFE));
 
-        // And now as Variant in a Variant
-        let v = Variant::Variant(Box::new(v));
+        // And now as Value in a Value
+        let v = Value::Value(Box::new(v));
         let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 16);
         let v = from_slice(&encoded, ctxt).unwrap();
-        if let Variant::Variant(v) = v {
+        if let Value::Value(v) = v {
             assert_eq!(v.value_signature(), "t");
-            assert_eq!(*v, Variant::U64(0xFEFE));
+            assert_eq!(*v, Value::U64(0xFEFE));
         } else {
             panic!();
         }
 
-        // Ensure Variant works with other Serializer & Deserializer
-        let v = 0xFEFE_u64.into_variant();
+        // Ensure Value works with other Serializer & Deserializer
+        let v = 0xFEFE_u64.into_value();
         let encoded = serde_json::to_string(&v).unwrap();
-        let v = serde_json::from_str::<Variant>(&encoded).unwrap();
-        assert_eq!(v, Variant::U64(0xFEFE));
+        let v = serde_json::from_str::<Value>(&encoded).unwrap();
+        assert_eq!(v, Value::U64(0xFEFE));
     }
 
     #[test]
     fn enums() {
         // TODO: Document enum handling.
         //
-        // 1. `Variant`.
+        // 1. `Value`.
         // 2. custom (de)serialize impl.
         // 3. to/from_*_for_signature()
         use serde::{Deserialize, Serialize};

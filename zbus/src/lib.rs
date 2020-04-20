@@ -25,7 +25,7 @@ mod tests {
     use enumflags2::BitFlags;
     use serde_repr::{Deserialize_repr, Serialize_repr};
 
-    use zvariant::{FromVariant, Type, Variant};
+    use zvariant::{FromValue, Type, Value};
     use zvariant_derive::Type;
 
     use crate::{Message, MessageFlags};
@@ -183,12 +183,12 @@ mod tests {
             .body_signature()
             .map(|s| s.as_str() == "a{sv}")
             .unwrap());
-        let hashmap: HashMap<&str, Variant> = reply.body().unwrap();
+        let hashmap: HashMap<&str, Value> = reply.body().unwrap();
 
-        let pid = u32::from_variant_ref(&hashmap["ProcessID"]).unwrap();
+        let pid = u32::from_value_ref(&hashmap["ProcessID"]).unwrap();
         println!("DBus bus PID: {}", pid);
 
-        let uid = u32::from_variant_ref(&hashmap["UnixUserID"]).unwrap();
+        let uid = u32::from_value_ref(&hashmap["UnixUserID"]).unwrap();
         println!("DBus bus UID: {}", uid);
     }
 }

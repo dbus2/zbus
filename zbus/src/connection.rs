@@ -4,7 +4,7 @@ use std::{env, error, fmt, io};
 
 use nix::unistd::Uid;
 
-use zvariant::{Error as VariantError, FromVariant};
+use zvariant::{Error as VariantError, FromValue};
 
 use crate::address::{self, Address, AddressError};
 use crate::message_field::{self, MessageFieldCode};
@@ -115,7 +115,7 @@ impl From<Message> for ConnectionError {
 
         // First, get the error name
         let name = match header.fields().get_field(MessageFieldCode::ErrorName) {
-            Some(f) => match <&str>::from_variant_ref(f.value()) {
+            Some(f) => match <&str>::from_value_ref(f.value()) {
                 Ok(s) => String::from(*s),
                 Err(e) => return ConnectionError::Variant(e),
             },
@@ -240,7 +240,7 @@ impl Connection {
                 let serial_field = header.fields().get_field(MessageFieldCode::ReplySerial);
 
                 if let Some(serial_field) = serial_field {
-                    if *serial_field.value() != zvariant::Variant::U32(serial) {
+                    if *serial_field.value() != zvariant::Value::U32(serial) {
                         continue;
                     }
                 } else {
