@@ -114,11 +114,7 @@ impl From<Message> for ConnectionError {
         }
 
         // First, get the error name
-        let name = match header
-            .fields()
-            .iter()
-            .find(|f| f.code() == MessageFieldCode::ErrorName)
-        {
+        let name = match header.fields().get_field(MessageFieldCode::ErrorName) {
             Some(f) => match <&str>::from_variant_ref(f.value()) {
                 Ok(s) => String::from(*s),
                 Err(e) => return ConnectionError::Variant(e),
@@ -241,19 +237,21 @@ impl Connection {
             let header = incoming.header()?;
             let msg_type = header.primary().msg_type();
             if msg_type == MessageType::MethodReturn || msg_type == MessageType::Error {
-                let all_fields = header.fields();
+                let serial_field = header.fields().get_field(MessageFieldCode::ReplySerial);
 
-                let find_serial_func = |f: &crate::MessageField| {
-                    f.code() == MessageFieldCode::ReplySerial
-                        && *f.value() == zvariant::Variant::U32(serial)
-                };
-
-                if all_fields.iter().any(find_serial_func) {
-                    match msg_type {
-                        MessageType::Error => return Err(incoming.into()),
-                        MessageType::MethodReturn => return Ok(incoming),
-                        _ => (),
+                if let Some(serial_field) = serial_field {
+                    if *serial_field.value() != zvariant::Variant::U32(serial) {
+                        continue;
                     }
+                } else {
+                    // FIXME: Debug log about ignoring the message
+                    continue;
+                }
+
+                match msg_type {
+                    MessageType::Error => return Err(incoming.into()),
+                    MessageType::MethodReturn => return Ok(incoming),
+                    _ => (),
                 }
             }
         }

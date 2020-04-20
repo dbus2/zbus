@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use zvariant_derive::VariantValue;
 
-use crate::MessageField;
+use crate::{MessageField, MessageFieldCode};
 
 // It's actually 10 (and even not that) but let's round it to next 8-byte alignment
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
@@ -33,6 +33,10 @@ impl<'m> MessageFields<'m> {
 
     pub fn into_inner(self) -> Vec<MessageField<'m>> {
         self.0
+    }
+
+    pub fn get_field(&self, code: MessageFieldCode) -> Option<&MessageField<'m>> {
+        self.0.iter().find(|f| f.code() == code)
     }
 }
 
