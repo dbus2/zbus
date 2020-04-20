@@ -497,7 +497,7 @@ mod tests {
         // 1. `Variant`.
         // 2. custom (de)serialize impl.
         // 3. to/from_*_for_signature()
-        use serde_derive::{Deserialize, Serialize};
+        use serde::{Deserialize, Serialize};
 
         #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
         enum Test {
@@ -535,7 +535,7 @@ mod tests {
     fn derive() {
         use crate as zvariant;
 
-        use serde_derive::{Deserialize, Serialize};
+        use serde::{Deserialize, Serialize};
         use serde_repr::{Deserialize_repr, Serialize_repr};
 
         #[derive(Deserialize, Serialize, VariantValue)]

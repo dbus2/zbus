@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use zvariant_derive::VariantValue;
