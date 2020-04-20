@@ -1,8 +1,6 @@
 use crate::utils::*;
 use crate::Signature;
 
-// TODO:
-// * proc derive macro to implement VariantValue for structures
 pub trait VariantValue {
     /// Get the signature for the implementing type.
     ///
