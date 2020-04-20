@@ -13,11 +13,11 @@ pub use encoding_context::*;
 mod object_path;
 pub use crate::object_path::*;
 
-mod serializer;
-pub use serializer::*;
+mod ser;
+pub use ser::*;
 
-mod deserializer;
-pub use deserializer::*;
+mod de;
+pub use de::*;
 
 mod signature;
 pub use crate::signature::*;
