@@ -6,8 +6,8 @@ use syn::{self, Attribute, Data, DataEnum, DeriveInput, Fields, Generics, Ident}
 
 // TODO: Note about enums requiring repr attr. and serde-repr crate in the docs.
 
-#[proc_macro_derive(VariantValue)]
-pub fn variant_value_macro_derive(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(Type)]
+pub fn type_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
 
     match ast.data {
@@ -27,14 +27,14 @@ fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
     let signature = if field_types.len() == 1 {
         quote! {
             #(
-                <#field_types as zvariant::VariantValue>::signature()
+                <#field_types as zvariant::Type>::signature()
              )*
         }
     } else {
         quote! {
                 let mut s = String::from("(");
                 #(
-                    s.push_str(<#field_types as zvariant::VariantValue>::signature().as_str());
+                    s.push_str(<#field_types as zvariant::Type>::signature().as_str());
                 )*
                 s.push_str(")");
 
@@ -42,7 +42,7 @@ fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
         }
     };
     let expended = quote! {
-        impl #impl_generics zvariant::VariantValue for #name #ty_generics #where_clause {
+        impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
             #[inline]
             fn signature() -> zvariant::Signature<'static> {
                 #signature
@@ -56,7 +56,7 @@ fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
 fn impl_unit_struct(name: Ident, generics: Generics) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let expended = quote! {
-        impl #impl_generics zvariant::VariantValue for #name #ty_generics #where_clause {
+        impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
             #[inline]
             fn signature() -> zvariant::Signature<'static> {
                 zvariant::Signature::from("")
@@ -91,10 +91,10 @@ fn impl_enum(
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let expended = quote! {
-        impl #impl_generics zvariant::VariantValue for #name #ty_generics #where_clause {
+        impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
             #[inline]
             fn signature() -> zvariant::Signature<'static> {
-                <#repr as zvariant::VariantValue>::signature()
+                <#repr as zvariant::Type>::signature()
             }
         }
     };

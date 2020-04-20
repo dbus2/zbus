@@ -4,7 +4,7 @@ use std::fmt;
 use std::io::{Cursor, Error as IOError};
 
 use zvariant::{EncodingContext, Error as VariantError, FromVariant};
-use zvariant::{Signature, VariantValue};
+use zvariant::{Signature, Type};
 
 use crate::utils::padding_for_8_bytes;
 use crate::{EndianSig, MessageHeader, MessagePrimaryHeader, MessageType};
@@ -92,7 +92,7 @@ impl Message {
         body: &B,
     ) -> Result<Self, MessageError>
     where
-        B: serde::ser::Serialize + VariantValue,
+        B: serde::ser::Serialize + Type,
     {
         let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
         let mut cursor = Cursor::new(&mut bytes);
@@ -221,7 +221,7 @@ impl Message {
 
     pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
     where
-        B: serde::de::Deserialize<'d> + VariantValue,
+        B: serde::de::Deserialize<'d> + Type,
     {
         if self.bytes_to_completion()? != 0 {
             return Err(MessageError::InsufficientData);

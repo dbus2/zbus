@@ -1,4 +1,4 @@
-use crate::{Signature, VariantValue};
+use crate::{Signature, Type};
 
 pub trait Basic: Clone {
     const SIGNATURE_CHAR: char;
@@ -6,7 +6,7 @@ pub trait Basic: Clone {
     const ALIGNMENT: usize;
 }
 
-impl<B: ?Sized> VariantValue for B
+impl<B: ?Sized> Type for B
 where
     B: Basic,
 {

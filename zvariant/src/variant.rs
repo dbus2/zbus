@@ -8,7 +8,7 @@ use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
 use crate::utils::*;
 use crate::{Array, Dict};
-use crate::{Basic, IntoVariant, VariantValue};
+use crate::{Basic, IntoVariant, Type};
 use crate::{ObjectPath, Signature, Structure};
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
@@ -407,7 +407,7 @@ where
     }
 }
 
-impl<'a> VariantValue for Variant<'a> {
+impl<'a> Type for Variant<'a> {
     fn signature() -> Signature<'static> {
         Signature::from(VARIANT_SIGNATURE_STR)
     }

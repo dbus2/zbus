@@ -5,7 +5,7 @@ use std::hash::BuildHasher;
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
 use crate::{Basic, Error, Signature};
-use crate::{FromVariant, IntoVariant, Variant, VariantValue};
+use crate::{FromVariant, IntoVariant, Type, Variant};
 
 /// A dictionary type to be used with [`Variant`].
 ///
@@ -48,7 +48,7 @@ impl<'k, 'v> Dict<'k, 'v> {
     pub fn add<K, V>(&mut self, key: K, value: V) -> Result<(), Error>
     where
         K: Basic + IntoVariant<'k> + std::hash::Hash + std::cmp::Eq,
-        V: IntoVariant<'v> + VariantValue,
+        V: IntoVariant<'v> + Type,
     {
         if K::signature() != self.key_signature || V::signature() != self.value_signature {
             return Err(Error::IncorrectType);
@@ -154,8 +154,8 @@ where
 // Conversion of Hashmap to Dict
 impl<'k, 'v, K, V> From<HashMap<K, V>> for Dict<'k, 'v>
 where
-    K: VariantValue + IntoVariant<'k> + std::hash::Hash + std::cmp::Eq,
-    V: VariantValue + IntoVariant<'v>,
+    K: Type + IntoVariant<'k> + std::hash::Hash + std::cmp::Eq,
+    V: Type + IntoVariant<'v>,
 {
     fn from(value: HashMap<K, V>) -> Self {
         let entries = value

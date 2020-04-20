@@ -206,7 +206,7 @@ impl Connection {
         body: &B,
     ) -> Result<Message, ConnectionError>
     where
-        B: serde::ser::Serialize + zvariant::VariantValue,
+        B: serde::ser::Serialize + zvariant::Type,
     {
         println!("Starting: {}", method_name);
         let serial = self.next_serial();

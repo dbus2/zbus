@@ -25,8 +25,8 @@ mod tests {
     use enumflags2::BitFlags;
     use serde_repr::{Deserialize_repr, Serialize_repr};
 
-    use zvariant::{FromVariant, Variant, VariantValue};
-    use zvariant_derive::VariantValue;
+    use zvariant::{FromVariant, Type, Variant};
+    use zvariant_derive::Type;
 
     use crate::{Message, MessageFlags};
 
@@ -89,7 +89,7 @@ mod tests {
         // Let's try getting us a fancy name on the bus
         #[repr(u32)]
         #[derive(
-            Deserialize_repr, Serialize_repr, VariantValue, BitFlags, Debug, PartialEq, Copy, Clone,
+            Deserialize_repr, Serialize_repr, Type, BitFlags, Debug, PartialEq, Copy, Clone,
         )]
         enum RequestNameFlags {
             AllowReplacement = 0x01,
@@ -98,7 +98,7 @@ mod tests {
         }
 
         #[repr(u32)]
-        #[derive(Deserialize_repr, Serialize_repr, VariantValue, Debug, PartialEq)]
+        #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
         enum RequestNameReply {
             PrimaryOwner = 0x01,
             InQueue = 0x02,

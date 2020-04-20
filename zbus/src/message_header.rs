@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use zvariant_derive::VariantValue;
+use zvariant_derive::Type;
 
 use crate::{MessageError, MessageFields};
 
@@ -11,7 +11,7 @@ pub const PRIMARY_HEADER_SIZE: usize = 12;
 pub const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, VariantValue)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, Type)]
 pub enum EndianSig {
     Big = b'B',
     Little = b'l',
@@ -36,7 +36,7 @@ pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Big;
 pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Little;
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, VariantValue)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, Type)]
 pub enum MessageType {
     Invalid = 0,
     MethodCall = 1,
@@ -59,7 +59,7 @@ impl From<u8> for MessageType {
 }
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, VariantValue)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, Type)]
 pub enum MessageFlags {
     /// No flags.
     None = 0x0,
@@ -93,7 +93,7 @@ impl From<u8> for MessageFlags {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, VariantValue)]
+#[derive(Debug, Serialize, Deserialize, Type)]
 pub struct MessagePrimaryHeader {
     endian_sig: EndianSig,
     msg_type: MessageType,
@@ -103,7 +103,7 @@ pub struct MessagePrimaryHeader {
     serial_num: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize, VariantValue)]
+#[derive(Debug, Serialize, Deserialize, Type)]
 pub struct MessageHeader<'m> {
     primary: MessagePrimaryHeader,
     #[serde(borrow)]

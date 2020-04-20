@@ -31,8 +31,8 @@ pub use variant::*;
 mod error;
 pub use error::*;
 
-mod variant_value;
-pub use variant_value::*;
+mod r#type;
+pub use r#type::*;
 
 mod from_variant;
 pub use from_variant::*;
@@ -54,13 +54,13 @@ mod tests {
 
     use byteorder::{self, ByteOrder, BE, LE};
 
-    use zvariant_derive::VariantValue;
+    use zvariant_derive::Type;
 
     use crate::{from_slice, from_slice_for_signature};
     use crate::{to_bytes, to_bytes_for_signature};
 
     use crate::{Array, Dict, EncodingContext as Context};
-    use crate::{FromVariant, IntoVariant, Variant, VariantValue};
+    use crate::{FromVariant, IntoVariant, Type, Variant};
     use crate::{ObjectPath, Signature};
 
     // Test through both generic and specific API (wrt byte order)
@@ -538,7 +538,7 @@ mod tests {
         use serde::{Deserialize, Serialize};
         use serde_repr::{Deserialize_repr, Serialize_repr};
 
-        #[derive(Deserialize, Serialize, VariantValue)]
+        #[derive(Deserialize, Serialize, Type)]
         struct Struct<'s> {
             field1: u16,
             field2: i64,
@@ -559,7 +559,7 @@ mod tests {
         assert_eq!(decoded.field2, 0xFF_FF_FF_FF_FF_FF);
         assert_eq!(decoded.field3, "hello");
 
-        #[derive(Deserialize, Serialize, VariantValue)]
+        #[derive(Deserialize, Serialize, Type)]
         struct UnitStruct;
 
         assert_eq!(UnitStruct::signature(), <()>::signature());
@@ -568,7 +568,7 @@ mod tests {
         let _: UnitStruct = from_slice(&encoded, ctxt).unwrap();
 
         #[repr(u8)]
-        #[derive(Deserialize_repr, Serialize_repr, VariantValue, Debug, PartialEq)]
+        #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
         enum Enum {
             Variant1,
             Variant2,
@@ -582,7 +582,7 @@ mod tests {
         assert_eq!(decoded, Enum::Variant3);
 
         #[repr(i64)]
-        #[derive(Deserialize_repr, Serialize_repr, VariantValue, Debug, PartialEq)]
+        #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
         enum Enum2 {
             Variant1,
             Variant2,
@@ -595,7 +595,7 @@ mod tests {
         let decoded: Enum2 = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(decoded, Enum2::Variant2);
 
-        #[derive(Deserialize, Serialize, VariantValue, Debug, PartialEq)]
+        #[derive(Deserialize, Serialize, Type, Debug, PartialEq)]
         enum NoReprEnum {
             Variant1,
             Variant2,

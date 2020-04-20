@@ -7,10 +7,10 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use zvariant::IntoVariant;
 use zvariant::{Error as VariantError, Variant};
 use zvariant::{ObjectPath, Signature};
-use zvariant_derive::VariantValue;
+use zvariant_derive::Type;
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Serialize_repr, VariantValue)]
+#[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Serialize_repr, Type)]
 pub enum MessageFieldCode {
     Invalid = 0,     // Not a valid field name.
     Path = 1,        // The object to send a call to, or the object a signal is emitted from.
@@ -75,7 +75,7 @@ impl From<VariantError> for MessageFieldError {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, VariantValue)]
+#[derive(Debug, Serialize, Deserialize, Type)]
 pub struct MessageField<'v> {
     code: MessageFieldCode,
     #[serde(borrow)]
@@ -89,7 +89,7 @@ impl<'v> MessageField<'v> {
 
     //pub fn value<'d, 'f: 'd, V>(&'f self) -> Result<V, MessageFieldError>
     //where
-    //    B: serde::de::Deserialize<'d> + VariantValue,
+    //    B: serde::de::Deserialize<'d> + Type,
     //{
     pub fn value(&self) -> &Variant {
         &self.value

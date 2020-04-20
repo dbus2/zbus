@@ -1,7 +1,7 @@
 use crate::utils::*;
 use crate::Signature;
 
-pub trait VariantValue {
+pub trait Type {
     /// Get the signature for the implementing type.
     ///
     /// # Example
@@ -11,38 +11,38 @@ pub trait VariantValue {
     fn signature() -> Signature<'static>;
 }
 
-impl<V> VariantValue for [V]
+impl<T> Type for [T]
 where
-    V: VariantValue,
+    T: Type,
 {
     #[inline]
     fn signature() -> Signature<'static> {
-        Signature::from(format!("a{}", V::signature().as_str()))
+        Signature::from(format!("a{}", T::signature().as_str()))
     }
 }
 
-impl<V> VariantValue for &[V]
+impl<T> Type for &[T]
 where
-    V: VariantValue,
+    T: Type,
 {
     #[inline]
     fn signature() -> Signature<'static> {
-        <[V]>::signature()
+        <[T]>::signature()
     }
 }
 
-impl<V> VariantValue for Vec<V>
+impl<T> Type for Vec<T>
 where
-    V: VariantValue,
+    T: Type,
 {
     #[inline]
     fn signature() -> Signature<'static> {
-        <[V]>::signature()
+        <[T]>::signature()
     }
 }
 
 // Empty type deserves empty signature
-impl VariantValue for () {
+impl Type for () {
     #[inline]
     fn signature() -> Signature<'static> {
         Signature::from("")
@@ -50,7 +50,7 @@ impl VariantValue for () {
 }
 
 // TODO: implement when we support GVariant support
-// impl<V> VariantValue for Option<V>
+// impl<T> Type for Option<T>
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -60,9 +60,9 @@ impl VariantValue for () {
 macro_rules! tuple_impls {
     ($($len:expr => ($($n:tt $name:ident)+))+) => {
         $(
-            impl<$($name),+> VariantValue for ($($name,)+)
+            impl<$($name),+> Type for ($($name,)+)
             where
-                $($name: VariantValue,)+
+                $($name: Type,)+
             {
                 #[inline]
                 fn signature() -> Signature<'static> {
@@ -106,10 +106,10 @@ use std::hash::{BuildHasher, Hash};
 
 macro_rules! map_impl {
     ($ty:ident < K $(: $kbound1:ident $(+ $kbound2:ident)*)*, V $(, $typaram:ident : $bound:ident)* >) => {
-        impl<K, V $(, $typaram)*> VariantValue for $ty<K, V $(, $typaram)*>
+        impl<K, V $(, $typaram)*> Type for $ty<K, V $(, $typaram)*>
         where
-            K: VariantValue $(+ $kbound1 $(+ $kbound2)*)*,
-            V: VariantValue,
+            K: Type $(+ $kbound1 $(+ $kbound2)*)*,
+            V: Type,
             $($typaram: $bound,)*
         {
             #[inline]

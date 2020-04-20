@@ -5,7 +5,7 @@ use std::{marker::PhantomData, str};
 
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
-use crate::VariantValue;
+use crate::Type;
 use crate::{Basic, EncodingContext};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
@@ -13,7 +13,7 @@ use crate::{ObjectPath, Signature};
 pub fn from_slice<'d, 'r: 'd, B, T: ?Sized>(bytes: &'r [u8], ctxt: EncodingContext<B>) -> Result<T>
 where
     B: byteorder::ByteOrder,
-    T: Deserialize<'d> + VariantValue,
+    T: Deserialize<'d> + Type,
 {
     let signature = T::signature();
 

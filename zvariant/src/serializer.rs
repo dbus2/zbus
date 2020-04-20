@@ -5,7 +5,7 @@ use std::{marker::PhantomData, str};
 
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
-use crate::VariantValue;
+use crate::Type;
 use crate::{Basic, EncodingContext};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
@@ -18,7 +18,7 @@ pub fn to_write<B, W, T: ?Sized>(
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
-    T: Serialize + VariantValue,
+    T: Serialize + Type,
 {
     let signature = T::signature();
 
@@ -28,7 +28,7 @@ where
 pub fn to_bytes<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Vec<u8>>
 where
     B: byteorder::ByteOrder,
-    T: Serialize + VariantValue,
+    T: Serialize + Type,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
     let _ = to_write(&mut cursor, ctxt, value);

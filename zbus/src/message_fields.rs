@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use zvariant_derive::VariantValue;
+use zvariant_derive::Type;
 
 use crate::{MessageField, MessageFieldCode};
 
@@ -7,7 +7,7 @@ use crate::{MessageField, MessageFieldCode};
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
 
 // FIXME: Use ArrayVec
-#[derive(Debug, Serialize, Deserialize, VariantValue)]
+#[derive(Debug, Serialize, Deserialize, Type)]
 pub struct MessageFields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
 
 impl<'m> MessageFields<'m> {

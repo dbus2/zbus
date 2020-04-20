@@ -1,6 +1,6 @@
 use crate::{Array, Dict};
 use crate::{ObjectPath, Signature, Structure};
-use crate::{Variant, VariantValue};
+use crate::{Type, Variant};
 
 //
 // Conversions from encodable types to `Variant`
@@ -135,7 +135,7 @@ where
 
 impl<'v, V> IntoVariant<'v> for &[V]
 where
-    V: VariantValue + IntoVariant<'v> + Clone,
+    V: Type + IntoVariant<'v> + Clone,
 {
     fn into_variant(self) -> Variant<'v> {
         Variant::Array(Array::from(self))
@@ -144,7 +144,7 @@ where
 
 impl<'v, V> IntoVariant<'v> for Vec<V>
 where
-    V: VariantValue + IntoVariant<'v> + Clone,
+    V: Type + IntoVariant<'v> + Clone,
 {
     fn into_variant(self) -> Variant<'v> {
         Variant::Array(Array::from(self))
