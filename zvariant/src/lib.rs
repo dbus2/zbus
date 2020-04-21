@@ -10,6 +10,9 @@ pub use dict::*;
 mod encoding_context;
 pub use encoding_context::*;
 
+mod fd;
+pub use fd::*;
+
 mod object_path;
 pub use crate::object_path::*;
 
