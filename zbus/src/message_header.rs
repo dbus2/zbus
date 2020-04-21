@@ -80,19 +80,6 @@ pub enum MessageFlags {
     AllowInteractiveAuth = 0x4,
 }
 
-// Such a shame I've to do this manually
-impl From<u8> for MessageFlags {
-    fn from(val: u8) -> MessageFlags {
-        match val {
-            0x1 => MessageFlags::NoReplyExpected,
-            0x2 => MessageFlags::NoAutoStart,
-            0x4 => MessageFlags::AllowInteractiveAuth,
-            // According to the spec, unknown flags must be ignored
-            _ => MessageFlags::None,
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct MessagePrimaryHeader {
     endian_sig: EndianSig,
