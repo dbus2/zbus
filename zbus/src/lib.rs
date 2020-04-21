@@ -16,6 +16,7 @@ pub use message_fields::*;
 mod connection;
 pub use connection::*;
 
+mod owned_fd;
 mod utils;
 
 #[cfg(test)]
