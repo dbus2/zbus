@@ -123,4 +123,16 @@ macro_rules! map_impl {
 map_impl!(BTreeMap<K: Ord, V>);
 map_impl!(HashMap<K: Eq + Hash, V, H: BuildHasher>);
 
+// BitFlags
+#[cfg(feature = "enumflags2")]
+impl<F> Type for enumflags2::BitFlags<F>
+where
+    F: Type + enumflags2::RawBitFlags,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        F::signature()
+    }
+}
+
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
