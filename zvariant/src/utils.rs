@@ -1,4 +1,4 @@
-use crate::{Basic, EncodingFormat, Error, ObjectPath, Signature};
+use crate::{Basic, EncodingFormat, Error, Fd, ObjectPath, Signature};
 
 pub const ARRAY_SIGNATURE_CHAR: char = 'a';
 pub const ARRAY_ALIGNMENT: usize = 4;
@@ -51,7 +51,7 @@ pub(crate) fn alignment_for_signature_char(signature_char: char, _format: Encodi
         i16::SIGNATURE_CHAR => i16::ALIGNMENT,
         u16::SIGNATURE_CHAR => u16::ALIGNMENT,
         i32::SIGNATURE_CHAR => i32::ALIGNMENT,
-        u32::SIGNATURE_CHAR => u32::ALIGNMENT,
+        u32::SIGNATURE_CHAR | Fd::SIGNATURE_CHAR => u32::ALIGNMENT,
         i64::SIGNATURE_CHAR => i64::ALIGNMENT,
         u64::SIGNATURE_CHAR => u64::ALIGNMENT,
         f64::SIGNATURE_CHAR => f64::ALIGNMENT,
@@ -84,6 +84,7 @@ pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
         | <&str>::SIGNATURE_CHAR
         | ObjectPath::SIGNATURE_CHAR
         | Signature::SIGNATURE_CHAR
+        | Fd::SIGNATURE_CHAR
         | VARIANT_SIGNATURE_CHAR => Ok(Signature::from_str_unchecked(&signature[0..1])),
         ARRAY_SIGNATURE_CHAR => slice_array_signature(signature),
         STRUCT_SIG_START_CHAR => slice_structure_signature(signature),
