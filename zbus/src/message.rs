@@ -2,6 +2,7 @@ use std::convert::{TryFrom, TryInto};
 use std::error;
 use std::fmt;
 use std::io::{Cursor, Error as IOError};
+use std::os::unix::io::RawFd;
 
 use zvariant::{EncodingContext, Error as VariantError};
 use zvariant::{Signature, Type};
@@ -75,7 +76,10 @@ impl From<IOError> for MessageError {
 }
 
 #[derive(Debug)]
-pub struct Message(Vec<u8>);
+pub struct Message {
+    bytes: Vec<u8>,
+    fds: Vec<RawFd>,
+}
 
 // TODO: Make generic over byteorder
 // TODO: Document
@@ -137,7 +141,8 @@ impl Message {
             MessageHeader::new(MessagePrimaryHeader::new(MessageType::MethodCall), fields);
         zvariant::to_write(&mut cursor, ctxt, &header)?;
 
-        let body_len = zvariant::to_write(&mut cursor, ctxt, body)?;
+        let mut fds = vec![];
+        let body_len = zvariant::to_write_fds(&mut cursor, &mut fds, ctxt, body)?;
         if body_len > u32::max_value() as usize {
             return Err(MessageError::ExcessData);
         }
@@ -146,7 +151,7 @@ impl Message {
         cursor.set_position(0);
         zvariant::to_write(&mut cursor, ctxt, primary)?;
 
-        Ok(Message(bytes))
+        Ok(Self { bytes, fds })
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
@@ -158,7 +163,9 @@ impl Message {
             return Err(MessageError::IncorrectEndian);
         }
 
-        Ok(Message(bytes.to_vec()))
+        let bytes = bytes.to_vec();
+        let fds = vec![];
+        Ok(Self { bytes, fds })
     }
 
     pub fn add_bytes(&mut self, bytes: &[u8]) -> Result<(), MessageError> {
@@ -166,7 +173,7 @@ impl Message {
             return Err(MessageError::ExcessData);
         }
 
-        self.0.extend(bytes);
+        self.bytes.extend(bytes);
 
         Ok(())
     }
@@ -177,7 +184,7 @@ impl Message {
         let body_len = self.primary_header()?.body_len();
         let required = header_len + body_padding + body_len as usize;
 
-        Ok(required - self.0.len())
+        Ok(required - self.bytes.len())
     }
 
     pub fn body_signature(&self) -> Result<Signature, MessageError> {
@@ -191,7 +198,7 @@ impl Message {
     }
 
     pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {
-        zvariant::from_slice(&self.0, dbus_context!(0)).map_err(MessageError::from)
+        zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
     }
 
     pub fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
@@ -201,19 +208,19 @@ impl Message {
         let mut primary = self.primary_header()?;
         modifier(&mut primary)?;
 
-        let mut cursor = Cursor::new(&mut self.0);
+        let mut cursor = Cursor::new(&mut self.bytes);
         zvariant::to_write(&mut cursor, dbus_context!(0), &primary)
             .map(|_| ())
             .map_err(MessageError::from)
     }
 
     pub fn header(&self) -> Result<MessageHeader, MessageError> {
-        zvariant::from_slice(&self.0, dbus_context!(0)).map_err(MessageError::from)
+        zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
     }
 
     pub fn fields(&self) -> Result<MessageFields, MessageError> {
         let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
-        zvariant::from_slice(&self.0[crate::PRIMARY_HEADER_SIZE..], ctxt)
+        zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt)
             .map_err(MessageError::from)
     }
 
@@ -228,16 +235,32 @@ impl Message {
         let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         header_len = header_len + padding_for_8_bytes(header_len);
 
-        zvariant::from_slice(&self.0[header_len..], dbus_context!(0)).map_err(MessageError::from)
+        zvariant::from_slice(&self.bytes[header_len..], dbus_context!(0))
+            .map_err(MessageError::from)
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0
+        &self.bytes
     }
 
     fn fields_len(&self) -> Result<usize, MessageError> {
-        zvariant::from_slice(&self.0[FIELDS_LEN_START_OFFSET..], dbus_context!(0))
+        zvariant::from_slice(&self.bytes[FIELDS_LEN_START_OFFSET..], dbus_context!(0))
             .map(|v: u32| v as usize)
             .map_err(MessageError::from)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Message;
+    use std::os::unix::io::AsRawFd;
+    use zvariant::Fd;
+
+    #[test]
+    fn test() {
+        let stdout = std::io::stdout();
+        let m = Message::method(None, "/", None, "do", &(Fd::from(&stdout), "foo")).unwrap();
+        assert_eq!(m.body_signature().unwrap().to_string(), "hs");
+        assert_eq!(m.fds, vec![stdout.as_raw_fd()]);
     }
 }
