@@ -1,5 +1,5 @@
 use std::convert::TryInto;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::{env, error, fmt, io};
 
@@ -9,7 +9,7 @@ use zvariant::Error as VariantError;
 
 use crate::address::{self, Address, AddressError};
 use crate::message_field::{self, MessageFieldCode};
-use crate::utils::write_all;
+use crate::utils::{read_exact, write_all};
 use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
 pub struct Connection {
@@ -265,7 +265,7 @@ impl Connection {
             // FIXME: We need to read incoming messages in a separate thread and maintain a queue
 
             let mut buf = [0; MIN_MESSAGE_SIZE];
-            self.socket.read_exact(&mut buf[..])?;
+            let mut fds = read_exact(&self.socket, &mut buf[..])?;
 
             let mut incoming = Message::from_bytes(&buf)?;
             let bytes_left = incoming.bytes_to_completion()?;
@@ -273,12 +273,15 @@ impl Connection {
                 return Err(ConnectionError::Handshake);
             }
             let mut buf = vec![0; bytes_left as usize];
-            self.socket.read_exact(&mut buf[..])?;
+            fds.append(&mut read_exact(&self.socket, &mut buf[..])?);
             incoming.add_bytes(&buf[..])?;
 
             match process_response(&incoming, serial) {
                 Some(MessageType::Error) => return Err((incoming).into()),
-                Some(MessageType::MethodReturn) => return Ok(incoming),
+                Some(MessageType::MethodReturn) => {
+                    incoming.set_fds(fds);
+                    return Ok(incoming);
+                }
                 _ => (),
             }
         }
