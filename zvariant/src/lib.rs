@@ -62,24 +62,24 @@ mod tests {
 
     use zvariant_derive::Type;
 
-    use crate::{from_slice, from_slice_for_signature};
-    use crate::{to_bytes, to_bytes_for_signature};
+    use crate::{from_slice, from_slice_fds, from_slice_for_signature};
+    use crate::{to_bytes, to_bytes_fds, to_bytes_for_signature};
 
     use crate::{Array, Dict, EncodingContext as Context};
-    use crate::{ObjectPath, Signature, Structure};
+    use crate::{Fd, ObjectPath, Signature, Structure};
     use crate::{Type, Value};
 
     // Test through both generic and specific API (wrt byte order)
     macro_rules! basic_type_test {
         ($trait:ty, $test_value:expr, $expected_len:expr, $expected_ty:ty) => {{
             let ctxt = Context::<$trait>::new_dbus(0);
-            let encoded = to_bytes(ctxt, &$test_value).unwrap();
+            let (encoded, fds) = to_bytes_fds(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
                 $expected_len,
                 "invalid encoding using `to_bytes`"
             );
-            let decoded: $expected_ty = from_slice(&encoded, ctxt).unwrap();
+            let decoded: $expected_ty = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
             assert!(
                 decoded == $test_value,
                 "invalid decoding using `from_slice`"
@@ -101,6 +101,17 @@ mod tests {
 
         let v: u8 = v.try_into().unwrap();
         assert_eq!(v, 77_u8);
+    }
+
+    #[test]
+    fn fd_value() {
+        basic_type_test!(LE, Fd::from(42), 4, Fd);
+
+        // As Valure
+        let v: Value = Fd::from(42).into();
+        assert_eq!(v.value_signature(), "h");
+        assert_eq!(v, Value::Fd(Fd::from(42)));
+        basic_type_test!(LE, v, 8, Value);
     }
 
     #[test]
