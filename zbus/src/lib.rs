@@ -41,7 +41,7 @@ mod tests {
         )
         .unwrap();
         m.modify_primary_header(|primary| {
-            primary.set_flags(MessageFlags::NoAutoStart);
+            primary.set_flags(BitFlags::from(MessageFlags::NoAutoStart));
             primary.set_serial_num(11);
 
             Ok(())
@@ -88,9 +88,7 @@ mod tests {
 
         // Let's try getting us a fancy name on the bus
         #[repr(u32)]
-        #[derive(
-            Deserialize_repr, Serialize_repr, Type, BitFlags, Debug, PartialEq, Copy, Clone,
-        )]
+        #[derive(Type, BitFlags, Debug, PartialEq, Copy, Clone)]
         enum RequestNameFlags {
             AllowReplacement = 0x01,
             ReplaceExisting = 0x02,
@@ -112,7 +110,10 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "RequestName",
-                &("org.freedesktop.zbus", RequestNameFlags::ReplaceExisting),
+                &(
+                    "org.freedesktop.zbus",
+                    BitFlags::from(RequestNameFlags::ReplaceExisting),
+                ),
             )
             .unwrap();
 

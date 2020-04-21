@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 
+use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -59,10 +60,8 @@ impl From<u8> for MessageType {
 }
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, Type)]
+#[derive(Debug, Copy, Clone, PartialEq, BitFlags, Type)]
 pub enum MessageFlags {
-    /// No flags.
-    None = 0x0,
     /// This message does not expect method return replies or error replies, even if it is of a type
     /// that can have a reply; the reply should be omitted.
     ///
@@ -84,7 +83,7 @@ pub enum MessageFlags {
 pub struct MessagePrimaryHeader {
     endian_sig: EndianSig,
     msg_type: MessageType,
-    flags: MessageFlags,
+    flags: BitFlags<MessageFlags>,
     protocol_version: u8,
     body_len: u32,
     serial_num: u32,
@@ -103,7 +102,7 @@ impl MessagePrimaryHeader {
         Self {
             endian_sig: NATIVE_ENDIAN_SIG,
             msg_type,
-            flags: MessageFlags::None,
+            flags: BitFlags::empty(),
             protocol_version: 1,
             body_len: 0, // set to 0 at first
             serial_num: u32::max_value(),
@@ -125,11 +124,11 @@ impl MessagePrimaryHeader {
         self.msg_type = msg_type;
     }
 
-    pub fn flags(&self) -> MessageFlags {
+    pub fn flags(&self) -> BitFlags<MessageFlags> {
         self.flags
     }
 
-    pub fn set_flags(&mut self, flags: MessageFlags) {
+    pub fn set_flags(&mut self, flags: BitFlags<MessageFlags>) {
         self.flags = flags;
     }
 
