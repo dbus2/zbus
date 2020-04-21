@@ -1,6 +1,7 @@
 use serde::{de, ser};
 use std::{error, fmt, result};
 
+// TODO: See if we can avoid allocated String
 #[derive(Debug)]
 pub enum Error {
     // Generic error needed by Serde
