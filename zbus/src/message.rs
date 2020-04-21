@@ -2,11 +2,12 @@ use std::convert::{TryFrom, TryInto};
 use std::error;
 use std::fmt;
 use std::io::{Cursor, Error as IOError};
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{IntoRawFd, RawFd};
 
 use zvariant::{EncodingContext, Error as VariantError};
 use zvariant::{Signature, Type};
 
+use crate::owned_fd::OwnedFd;
 use crate::utils::padding_for_8_bytes;
 use crate::{EndianSig, MessageHeader, MessagePrimaryHeader, MessageType};
 use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
@@ -75,6 +76,12 @@ impl From<IOError> for MessageError {
     }
 }
 
+/// A DBus Message
+///
+/// The content of the serialized Message is in `bytes`.
+///
+/// *Note*: The owner of the message is responsible for closing the
+/// `fds`.
 #[derive(Debug)]
 pub struct Message {
     bytes: Vec<u8>,
@@ -179,6 +186,12 @@ impl Message {
         Ok(())
     }
 
+    pub(crate) fn set_fds(&mut self, fds: Vec<OwnedFd>) {
+        assert_eq!(self.fds.len(), 0);
+        // From now on, it's the caller responsability to close the fds
+        self.fds = fds.into_iter().map(|fd| fd.into_raw_fd()).collect();
+    }
+
     pub fn bytes_to_completion(&self) -> Result<usize, MessageError> {
         let header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         let body_padding = padding_for_8_bytes(header_len);
@@ -236,7 +249,7 @@ impl Message {
         let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         header_len = header_len + padding_for_8_bytes(header_len);
 
-        zvariant::from_slice(&self.bytes[header_len..], dbus_context!(0))
+        zvariant::from_slice_fds(&self.bytes[header_len..], Some(&self.fds), dbus_context!(0))
             .map_err(MessageError::from)
     }
 
