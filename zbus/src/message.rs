@@ -103,7 +103,7 @@ impl Message {
 
         let dest_length = destination.map_or(0, |s| s.len());
         let iface_length = iface.map_or(0, |s| s.len());
-        let (body_len, _fds_len) = zvariant::len(body)?;
+        let (body_len, fds_len) = zvariant::serialized_size(body)?;
 
         // Checks args
         if dest_length > (u32::max_value() as usize)
@@ -139,6 +139,9 @@ impl Message {
         let path = zvariant::ObjectPath::try_from(path)?;
         fields.add(MessageField::path(path));
         fields.add(MessageField::member(method_name));
+        if fds_len > 0 {
+            fields.add(MessageField::unix_fds(fds_len as u32));
+        }
 
         let ctxt = dbus_context!(0);
 
