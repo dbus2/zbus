@@ -9,6 +9,7 @@ use zvariant::Error as VariantError;
 
 use crate::address::{self, Address, AddressError};
 use crate::message_field::{self, MessageFieldCode};
+use crate::utils::write_all;
 use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
 pub struct Connection {
@@ -258,7 +259,7 @@ impl Connection {
             Ok(())
         })?;
 
-        self.socket.write_all(m.as_bytes())?;
+        write_all(&self.socket, m.as_bytes(), m.fds())?;
 
         loop {
             // FIXME: We need to read incoming messages in a separate thread and maintain a queue
