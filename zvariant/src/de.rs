@@ -3,6 +3,7 @@ use core::convert::TryFrom;
 use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor};
 use serde::Deserialize;
 
+use std::os::unix::io::RawFd;
 use std::{marker::PhantomData, str};
 
 use crate::signature_parser::SignatureParser;
@@ -12,13 +13,25 @@ use crate::{Basic, EncodingContext};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
+pub fn from_slice_fds<'d, 'r: 'd, B, T: ?Sized>(
+    bytes: &'r [u8],
+    fds: Option<&'r Vec<RawFd>>,
+    ctxt: EncodingContext<B>,
+) -> Result<T>
+where
+    B: byteorder::ByteOrder,
+    T: Deserialize<'d> + Type,
+{
+    let signature = T::signature();
+    from_slice_fds_for_signature(bytes, fds, ctxt, &signature)
+}
+
 pub fn from_slice<'d, 'r: 'd, B, T: ?Sized>(bytes: &'r [u8], ctxt: EncodingContext<B>) -> Result<T>
 where
     B: byteorder::ByteOrder,
     T: Deserialize<'d> + Type,
 {
     let signature = T::signature();
-
     from_slice_for_signature(bytes, ctxt, &signature)
 }
 
@@ -32,7 +45,21 @@ where
     B: byteorder::ByteOrder,
     T: Deserialize<'d>,
 {
-    let mut de = Deserializer::new(bytes, signature, ctxt);
+    from_slice_fds_for_signature(bytes, None, ctxt, signature)
+}
+
+// TODO: Return number of bytes parsed?
+pub fn from_slice_fds_for_signature<'d, 's, 'sig, 'r: 'd, B, T: ?Sized>(
+    bytes: &'r [u8],
+    fds: Option<&'r Vec<RawFd>>,
+    ctxt: EncodingContext<B>,
+    signature: &'s Signature<'sig>,
+) -> Result<T>
+where
+    B: byteorder::ByteOrder,
+    T: Deserialize<'d>,
+{
+    let mut de = Deserializer::new(bytes, fds, signature, ctxt);
 
     T::deserialize(&mut de)
 }
@@ -40,6 +67,7 @@ where
 pub struct Deserializer<'de, 'sig, B> {
     pub(self) ctxt: EncodingContext<B>,
     pub(self) bytes: &'de [u8],
+    pub(self) fds: Option<&'de Vec<RawFd>>,
     pub(self) pos: usize,
 
     pub(self) sign_parser: SignatureParser<'sig>,
@@ -53,6 +81,7 @@ where
 {
     pub fn new<'r: 'de, 's>(
         bytes: &'r [u8],
+        fds: Option<&'r Vec<RawFd>>,
         signature: &'s Signature<'sig>,
         ctxt: EncodingContext<B>,
     ) -> Self {
@@ -62,6 +91,7 @@ where
             ctxt,
             sign_parser,
             bytes,
+            fds,
             pos: 0,
             b: PhantomData,
         }
@@ -493,7 +523,7 @@ where
     {
         // Not using serialize_u32 cause identifier isn't part of the signature
         self.parse_padding(u32::ALIGNMENT)?;
-        let variant_index = from_slice::<B, _>(&self.bytes[self.pos..], self.ctxt)?;
+        let variant_index = from_slice_fds::<B, _>(&self.bytes[self.pos..], self.fds, self.ctxt)?;
         self.pos += u32::ALIGNMENT;
 
         visitor.visit_u32(variant_index)
@@ -654,6 +684,7 @@ where
                     ctxt: self.de.ctxt,
                     sign_parser,
                     bytes: self.de.bytes,
+                    fds: self.de.fds,
                     pos: self.de.pos,
                     b: PhantomData,
                 };
