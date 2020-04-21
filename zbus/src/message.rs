@@ -103,6 +103,7 @@ impl Message {
 
         let dest_length = destination.map_or(0, |s| s.len());
         let iface_length = iface.map_or(0, |s| s.len());
+        let (body_len, _fds_len) = zvariant::len(body)?;
 
         // Checks args
         if dest_length > (u32::max_value() as usize)
@@ -111,6 +112,9 @@ impl Message {
             || method_name.len() > (u32::max_value() as usize)
         {
             return Err(MessageError::StrTooLarge);
+        }
+        if body_len > u32::max_value() as usize {
+            return Err(MessageError::ExcessData);
         }
 
         // Construct the array of fields
@@ -137,19 +141,13 @@ impl Message {
         fields.add(MessageField::member(method_name));
 
         let ctxt = dbus_context!(0);
-        let mut header =
-            MessageHeader::new(MessagePrimaryHeader::new(MessageType::MethodCall), fields);
+
+        let primary = MessagePrimaryHeader::new(MessageType::MethodCall, body_len as u32);
+        let header = MessageHeader::new(primary, fields);
         zvariant::to_write(&mut cursor, ctxt, &header)?;
 
         let mut fds = vec![];
-        let body_len = zvariant::to_write_fds(&mut cursor, &mut fds, ctxt, body)?;
-        if body_len > u32::max_value() as usize {
-            return Err(MessageError::ExcessData);
-        }
-        let primary = header.primary_mut();
-        primary.set_body_len(body_len as u32);
-        cursor.set_position(0);
-        zvariant::to_write(&mut cursor, ctxt, primary)?;
+        zvariant::to_write_fds(&mut cursor, &mut fds, ctxt, body)?;
 
         Ok(Self { bytes, fds })
     }

@@ -98,13 +98,13 @@ pub struct MessageHeader<'m> {
 }
 
 impl MessagePrimaryHeader {
-    pub fn new(msg_type: MessageType) -> Self {
+    pub fn new(msg_type: MessageType, body_len: u32) -> Self {
         Self {
             endian_sig: NATIVE_ENDIAN_SIG,
             msg_type,
             flags: BitFlags::empty(),
             protocol_version: 1,
-            body_len: 0, // set to 0 at first
+            body_len,
             serial_num: u32::max_value(),
         }
     }
