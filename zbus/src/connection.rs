@@ -13,6 +13,7 @@ use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
 pub struct Connection {
     pub server_guid: String,
+    pub cap_unix_fd: bool,
     pub unique_name: String,
 
     socket: UnixStream,
@@ -166,6 +167,16 @@ fn system_socket() -> Result<UnixStream, ConnectionError> {
     }
 }
 
+fn read_reply(socket: &UnixStream) -> Result<Vec<String>, ConnectionError> {
+    let mut buf_reader = BufReader::new(socket);
+    let mut buf = String::new();
+
+    buf_reader.read_line(&mut buf)?;
+    let components = buf.split_whitespace();
+
+    Ok(components.map(String::from).collect())
+}
+
 impl Connection {
     fn new(mut socket: UnixStream) -> Result<Self, ConnectionError> {
         let uid = Uid::current();
@@ -177,21 +188,24 @@ impl Connection {
             .map(|c| format!("{:x}", c as u32))
             .collect::<String>();
         socket.write_all(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
-        let mut buf_reader = BufReader::new(&socket);
-        let mut buf = String::new();
-        let bytes_read = buf_reader.read_line(&mut buf)?;
-        let mut components = buf.split_whitespace();
-        if bytes_read < 3 || components.next() != Some("OK") {
-            return Err(ConnectionError::Handshake);
-        }
+        let server_guid = match read_reply(&socket)?.as_slice() {
+            [ok, guid] if ok == "OK" => guid.clone(),
+            _ => return Err(ConnectionError::Handshake),
+        };
 
-        let server_guid = String::from(components.next().ok_or(ConnectionError::Handshake)?);
+        socket.write_all(b"NEGOTIATE_UNIX_FD\r\n")?;
+        let cap_unix_fd = match read_reply(&socket)?.as_slice() {
+            [agree] if agree == "AGREE_UNIX_FD" => true,
+            [error] if error == "ERROR" => false,
+            _ => return Err(ConnectionError::Handshake),
+        };
 
         socket.write_all(b"BEGIN\r\n")?;
 
         let mut connection = Self {
             socket,
             server_guid,
+            cap_unix_fd,
             serial: 0,
             unique_name: String::from(""),
         };
