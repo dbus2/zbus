@@ -9,7 +9,7 @@ use serde::ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct,
 
 use crate::utils::*;
 use crate::{Array, Dict};
-use crate::{Basic, Type};
+use crate::{Basic, Fd, Type};
 use crate::{ObjectPath, Signature, Structure};
 
 macro_rules! serialize_value {
@@ -33,6 +33,8 @@ macro_rules! serialize_value {
             Value::Array(value) => $serializer.$method($($first_arg,)* value),
             Value::Dict(value) => $serializer.$method($($first_arg,)* value),
             Value::Structure(value) => $serializer.$method($($first_arg,)* value),
+
+            Value::Fd(value) => $serializer.$method($($first_arg,)* value),
         }
     }
 }
@@ -69,6 +71,8 @@ pub enum Value<'a> {
     Array(Array<'a>),
     Dict(Dict<'a, 'a>),
     Structure(Structure<'a>),
+
+    Fd(Fd),
 }
 
 impl<'a> Value<'a> {
@@ -123,6 +127,8 @@ impl<'a> Value<'a> {
             Value::Array(value) => value.signature(),
             Value::Dict(value) => value.signature(),
             Value::Structure(value) => value.signature(),
+
+            Value::Fd(_) => Fd::signature(),
         }
     }
 
@@ -393,13 +399,30 @@ where
 
     value_seed_basic_method!(visit_bool, bool);
     value_seed_basic_method!(visit_i16, i16);
-    value_seed_basic_method!(visit_i32, i32);
     value_seed_basic_method!(visit_i64, i64);
     value_seed_basic_method!(visit_u8, u8);
     value_seed_basic_method!(visit_u16, u16);
     value_seed_basic_method!(visit_u32, u32);
     value_seed_basic_method!(visit_u64, u64);
     value_seed_basic_method!(visit_f64, f64);
+
+    #[inline]
+    fn visit_i32<E>(self, value: i32) -> Result<Value<'de>, E>
+    where
+        E: serde::de::Error,
+    {
+        let v = match self.signature.chars().next().ok_or_else(|| {
+            Error::invalid_value(
+                Unexpected::Other("nothing"),
+                &"i32 or fd signature character",
+            )
+        })? {
+            'h' => Fd::from(value).into(),
+            _ => value.into(),
+        };
+
+        Ok(v)
+    }
 
     #[inline]
     fn visit_str<E>(self, value: &str) -> Result<Value<'de>, E>

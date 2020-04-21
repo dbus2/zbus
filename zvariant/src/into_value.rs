@@ -1,6 +1,6 @@
 use crate::Value;
 use crate::{Array, Dict};
-use crate::{ObjectPath, Signature, Structure};
+use crate::{Fd, ObjectPath, Signature, Structure};
 
 //
 // Conversions from encodable types to `Value`
@@ -26,6 +26,7 @@ into_value!(u64, U64);
 into_value!(i64, I64);
 into_value!(f32, F64);
 into_value!(f64, F64);
+into_value!(Fd, Fd);
 
 into_value!(&'a str, Str);
 into_value!(Signature<'a>, Signature);
