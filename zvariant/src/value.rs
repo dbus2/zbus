@@ -1,5 +1,5 @@
+use core::str;
 use std::marker::PhantomData;
-use std::str;
 
 use serde::de::{
     Deserialize, DeserializeSeed, Deserializer, Error, MapAccess, SeqAccess, Unexpected, Visitor,
