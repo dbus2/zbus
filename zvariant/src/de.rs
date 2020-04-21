@@ -11,7 +11,7 @@ use crate::utils::*;
 use crate::Type;
 use crate::{Basic, EncodingContext};
 use crate::{Error, Result};
-use crate::{ObjectPath, Signature};
+use crate::{Fd, ObjectPath, Signature};
 
 pub fn from_slice_fds<'d, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
@@ -97,6 +97,14 @@ where
         }
     }
 
+    fn get_fd(&self, idx: u32) -> Result<i32> {
+        self.fds
+            .map(|fds| fds.get(idx as usize))
+            .flatten()
+            .copied()
+            .ok_or(Error::InsufficientData)
+    }
+
     fn parse_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
@@ -161,7 +169,7 @@ where
             bool::SIGNATURE_CHAR => self.deserialize_bool(visitor),
             i16::SIGNATURE_CHAR => self.deserialize_i16(visitor),
             u16::SIGNATURE_CHAR => self.deserialize_u16(visitor),
-            i32::SIGNATURE_CHAR => self.deserialize_i32(visitor),
+            i32::SIGNATURE_CHAR | Fd::SIGNATURE_CHAR => self.deserialize_i32(visitor),
             u32::SIGNATURE_CHAR => self.deserialize_u32(visitor),
             i64::SIGNATURE_CHAR => self.deserialize_i64(visitor),
             u64::SIGNATURE_CHAR => self.deserialize_u64(visitor),
@@ -219,7 +227,15 @@ where
     where
         V: Visitor<'de>,
     {
-        let v = B::read_i32(self.next_const_size_slice::<i32>()?);
+        let v = match self.sign_parser.next_char()? {
+            Fd::SIGNATURE_CHAR => {
+                self.sign_parser.parse_char(None)?;
+                self.parse_padding(u32::ALIGNMENT)?;
+                let idx = B::read_u32(self.next_slice(u32::ALIGNMENT)?);
+                self.get_fd(idx)?
+            }
+            _ => B::read_i32(self.next_const_size_slice::<i32>()?),
+        };
 
         visitor.visit_i32(v)
     }
