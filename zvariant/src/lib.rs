@@ -712,4 +712,18 @@ mod tests {
         let decoded: NoReprEnum = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(decoded, NoReprEnum::Variant2);
     }
+
+    #[test]
+    fn serialized_size() {
+        let l = crate::serialized_size(&()).unwrap();
+        assert_eq!(l, (0, 0));
+        let stdout = std::io::stdout();
+        let l = crate::serialized_size(&Fd::from(&stdout)).unwrap();
+        assert_eq!(l, (4, 1));
+        //FIXME: add more tests, can't get them to work :(
+        //let l = len(&('a', "abc", [1, 2])).unwrap();
+        //let v = vec![1, 2];
+        //let l = len(&('a', "bc", &v)).unwrap();
+        //assert_eq!(l, (4, 0));
+    }
 }

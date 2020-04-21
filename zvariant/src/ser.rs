@@ -11,6 +11,37 @@ use crate::{Basic, EncodingContext};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
+struct NullWriteSeek;
+
+impl Write for NullWriteSeek {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Seek for NullWriteSeek {
+    fn seek(&mut self, _pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        Ok(std::u64::MAX) // should never read the return value!
+    }
+}
+
+pub fn serialized_size<T: ?Sized>(value: &T) -> Result<(usize, usize)>
+where
+    T: Serialize + Type,
+{
+    let signature = T::signature();
+    let mut fds = vec![];
+    let mut null = NullWriteSeek;
+
+    let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+    let len = to_write_for_signature(&mut null, &mut fds, ctxt, &signature, value)?;
+    Ok((len, fds.len()))
+}
+
 /// Serialize the given data structure as DBus marshalling format into
 /// the IO stream.
 ///
