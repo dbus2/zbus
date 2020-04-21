@@ -154,6 +154,15 @@ where
         }
     }
 
+    fn add_fd(&mut self, fd: RawFd) -> Result<u32> {
+        if let Some(idx) = self.fds.iter().position(|&x| x == fd) {
+            return Ok(idx as u32);
+        }
+        let idx = self.fds.len();
+        self.fds.push(fd);
+        Ok(idx as u32)
+    }
+
     fn add_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
@@ -241,8 +250,18 @@ where
     }
 
     fn serialize_i32(self, v: i32) -> Result<()> {
-        self.prep_serialize_basic::<i32>()?;
-        self.write_i32::<B>(v).map_err(Error::Io)
+        match self.sign_parser.next_char()? {
+            'h' => {
+                self.sign_parser.parse_char(None)?;
+                self.add_padding(u32::ALIGNMENT)?;
+                let v = self.add_fd(v)?;
+                self.write_u32::<B>(v).map_err(Error::Io)
+            }
+            _ => {
+                self.prep_serialize_basic::<i32>()?;
+                self.write_i32::<B>(v).map_err(Error::Io)
+            }
+        }
     }
 
     fn serialize_i64(self, v: i64) -> Result<()> {
