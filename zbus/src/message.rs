@@ -240,6 +240,10 @@ impl Message {
             .map_err(MessageError::from)
     }
 
+    pub fn fds(&self) -> &[RawFd] {
+        &self.fds
+    }
+
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
     }

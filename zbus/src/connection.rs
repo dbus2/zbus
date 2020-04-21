@@ -33,6 +33,7 @@ pub enum ConnectionError {
     // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds anything more than a
     // string description.
     MethodError(String, Option<String>),
+    Unsupported,
 }
 
 impl error::Error for ConnectionError {
@@ -46,6 +47,7 @@ impl error::Error for ConnectionError {
             ConnectionError::Variant(e) => Some(e),
             ConnectionError::InvalidReply => None,
             ConnectionError::MethodError(_, _) => None,
+            ConnectionError::Unsupported => None,
         }
     }
 }
@@ -66,6 +68,7 @@ impl fmt::Display for ConnectionError {
                 name,
                 detail.as_ref().map(|s| s.as_str()).unwrap_or("no details")
             ),
+            ConnectionError::Unsupported => write!(f, "Connection support is lacking"),
         }
     }
 }
@@ -245,6 +248,10 @@ impl Connection {
     {
         let serial = self.next_serial();
         let mut m = Message::method(destination, path, iface, method_name, body)?;
+        if !m.fds().is_empty() && !self.cap_unix_fd {
+            return Err(ConnectionError::Unsupported);
+        }
+
         m.modify_primary_header(|primary| {
             primary.set_serial_num(serial);
 
