@@ -1,6 +1,7 @@
 use byteorder::WriteBytesExt;
 use serde::{ser, ser::SerializeSeq, Serialize};
 use std::io::{Seek, Write};
+use std::os::unix::io::RawFd;
 use std::{marker::PhantomData, str};
 
 use crate::signature_parser::SignatureParser;
@@ -21,8 +22,29 @@ where
     T: Serialize + Type,
 {
     let signature = T::signature();
+    let mut fds = vec![];
 
-    to_write_for_signature(write, ctxt, &signature, value)
+    let r = to_write_for_signature(write, &mut fds, ctxt, &signature, value);
+    if !fds.is_empty() {
+        panic!("can't serialize with FDs")
+    }
+    r
+}
+
+pub fn to_write_fds<B, W, T: ?Sized>(
+    write: &mut W,
+    fds: &mut Vec<RawFd>,
+    ctxt: EncodingContext<B>,
+    value: &T,
+) -> Result<usize>
+where
+    B: byteorder::ByteOrder,
+    W: Write + Seek,
+    T: Serialize + Type,
+{
+    let signature = T::signature();
+
+    to_write_for_signature(write, fds, ctxt, &signature, value)
 }
 
 pub fn to_bytes<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Vec<u8>>
@@ -30,13 +52,26 @@ where
     B: byteorder::ByteOrder,
     T: Serialize + Type,
 {
+    Ok(to_bytes_fds(ctxt, value)?.0)
+}
+
+pub fn to_bytes_fds<B, T: ?Sized>(
+    ctxt: EncodingContext<B>,
+    value: &T,
+) -> Result<(Vec<u8>, Vec<RawFd>)>
+where
+    B: byteorder::ByteOrder,
+    T: Serialize + Type,
+{
     let mut cursor = std::io::Cursor::new(vec![]);
-    to_write(&mut cursor, ctxt, value)?;
-    Ok(cursor.into_inner())
+    let mut fds = vec![];
+    to_write_fds(&mut cursor, &mut fds, ctxt, value)?;
+    Ok((cursor.into_inner(), fds))
 }
 
 pub fn to_write_for_signature<'s, 'sig, B, W, T: ?Sized>(
     write: &mut W,
+    fds: &mut Vec<RawFd>,
     ctxt: EncodingContext<B>,
     signature: &'s Signature<'sig>,
     value: &T,
@@ -46,7 +81,7 @@ where
     W: Write + Seek,
     T: Serialize,
 {
-    let mut serializer = Serializer::<B, W>::new(signature, write, ctxt);
+    let mut serializer = Serializer::<B, W>::new(signature, write, fds, ctxt);
     value.serialize(&mut serializer)?;
     Ok(serializer.bytes_written)
 }
@@ -61,7 +96,8 @@ where
     T: Serialize,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let _ = to_write_for_signature(&mut cursor, ctxt, signature, value);
+    let mut fds = vec![];
+    let _ = to_write_for_signature(&mut cursor, &mut fds, ctxt, signature, value);
     Ok(cursor.into_inner())
 }
 
@@ -69,6 +105,7 @@ pub struct Serializer<'ser, 'sig, B, W> {
     pub(self) ctxt: EncodingContext<B>,
     pub(self) write: &'ser mut W,
     pub(self) bytes_written: usize,
+    pub(self) fds: &'ser mut Vec<RawFd>,
 
     pub(self) sign_parser: SignatureParser<'sig>,
 
@@ -85,6 +122,7 @@ where
     pub fn new<'w: 'ser, 's>(
         signature: &'s Signature<'sig>,
         write: &'w mut W,
+        fds: &'w mut Vec<RawFd>,
         ctxt: EncodingContext<B>,
     ) -> Self {
         let sign_parser = SignatureParser::new(signature.clone());
@@ -93,6 +131,7 @@ where
             ctxt,
             sign_parser,
             write,
+            fds,
             bytes_written: 0,
             value_sign: None,
             b: PhantomData,
@@ -533,6 +572,7 @@ where
                     ctxt: self.serializer.ctxt,
                     sign_parser,
                     write: &mut self.serializer.write,
+                    fds: self.serializer.fds,
                     bytes_written: self.serializer.bytes_written,
                     value_sign: None,
                     b: PhantomData,
