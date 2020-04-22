@@ -16,7 +16,7 @@ pub struct Array<'a> {
 }
 
 impl<'a> Array<'a> {
-    pub fn new<'s: 'a>(element_signature: Signature<'s>) -> Array<'a> {
+    pub fn new(element_signature: Signature) -> Array {
         Array {
             element_signature,
             elements: vec![],
@@ -45,7 +45,7 @@ impl<'a> Array<'a> {
         self.elements.len() == 0
     }
 
-    pub fn signature(&self) -> Signature<'static> {
+    pub fn signature(&self) -> Signature {
         Signature::from_string_unchecked(format!("a{}", self.element_signature))
     }
 
