@@ -35,7 +35,6 @@ pub enum Value<'a> {
     U64(u64),
     F64(f64),
     Str(&'a str),
-    String(String),
     Signature(Signature<'a>),
     ObjectPath(ObjectPath<'a>),
     Value(Box<Value<'a>>),
@@ -59,7 +58,7 @@ impl<'a> Value<'a> {
             Value::I64(_) => i64::signature(),
             Value::U64(_) => u64::signature(),
             Value::F64(_) => f64::signature(),
-            Value::String(_) | Value::Str(_) => <&str>::signature(),
+            Value::Str(_) => <&str>::signature(),
             Value::Signature(_) => Signature::signature(),
             Value::ObjectPath(_) => ObjectPath::signature(),
             Value::Value(_) => Signature::from("v"),
@@ -90,7 +89,6 @@ impl<'a> Value<'a> {
             Value::U64(value) => serializer.serialize_field(name, value),
             Value::F64(value) => serializer.serialize_field(name, value),
             Value::Str(value) => serializer.serialize_field(name, value),
-            Value::String(value) => serializer.serialize_field(name, value),
             Value::Signature(value) => serializer.serialize_field(name, value),
             Value::ObjectPath(value) => serializer.serialize_field(name, value),
             Value::Value(value) => serializer.serialize_field(name, value),
@@ -121,7 +119,6 @@ impl<'a> Value<'a> {
             Value::U64(value) => serializer.serialize_element(value),
             Value::F64(value) => serializer.serialize_element(value),
             Value::Str(value) => serializer.serialize_element(value),
-            Value::String(value) => serializer.serialize_element(value),
             Value::Signature(value) => serializer.serialize_element(value),
             Value::ObjectPath(value) => serializer.serialize_element(value),
             Value::Value(value) => serializer.serialize_element(value),
@@ -340,7 +337,6 @@ where
     }
 
     value_seed_str_method!(visit_borrowed_str, &'de str, Str);
-    value_seed_str_method!(visit_string, String, String);
 
     #[inline]
     fn visit_seq<V>(self, visitor: V) -> Result<Value<'de>, V::Error>

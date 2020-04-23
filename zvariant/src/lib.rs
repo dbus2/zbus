@@ -186,7 +186,7 @@ mod tests {
         basic_type_test!(LE, 'c', 6, char);
 
         // As Value
-        let v = 'c'.into_value();
+        let v = "c".into_value();
         assert_eq!(v.value_signature(), "s");
         let ctxt = Context::new_dbus(0);
         let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();

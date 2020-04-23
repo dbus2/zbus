@@ -80,18 +80,6 @@ impl<'v, 's: 'v> IntoValue<'v> for &'s str {
     }
 }
 
-impl<'v> IntoValue<'v> for String {
-    fn into_value(self) -> Value<'v> {
-        Value::String(self)
-    }
-}
-
-impl<'v> IntoValue<'v> for char {
-    fn into_value(self) -> Value<'v> {
-        Value::String(self.to_string())
-    }
-}
-
 impl<'v, 's: 'v> IntoValue<'v> for Signature<'s> {
     fn into_value(self) -> Value<'v> {
         Value::Signature(self)
