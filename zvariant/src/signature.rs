@@ -8,7 +8,7 @@ use crate::Basic;
 ///
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
 #[serde(rename(serialize = "zvariant::Signature", deserialize = "zvariant::Signature"))]
-pub struct Signature<'a>(Cow<'a, str>);
+pub struct Signature<'a>(#[serde(borrow)] Cow<'a, str>);
 
 impl<'a> Signature<'a> {
     /// The signature as a string.

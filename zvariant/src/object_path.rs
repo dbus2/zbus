@@ -12,7 +12,7 @@ use crate::Basic;
     serialize = "zvariant::ObjectPath",
     deserialize = "zvariant::ObjectPath"
 ))]
-pub struct ObjectPath<'a>(Cow<'a, str>);
+pub struct ObjectPath<'a>(#[serde(borrow)] Cow<'a, str>);
 
 impl<'a> ObjectPath<'a> {
     /// The object path as a string.
