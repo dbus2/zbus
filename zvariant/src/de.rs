@@ -23,10 +23,10 @@ where
 }
 
 // TODO: Return number of bytes parsed?
-pub fn from_slice_for_signature<'d, 'r: 'd, 's: 'd, B, T: ?Sized>(
+pub fn from_slice_for_signature<'d, 's, 'sig, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
     ctxt: EncodingContext<B>,
-    signature: &Signature<'s>,
+    signature: &'s Signature<'sig>,
 ) -> Result<T>
 where
     B: byteorder::ByteOrder,
@@ -37,23 +37,23 @@ where
     T::deserialize(&mut de)
 }
 
-pub struct Deserializer<'de, B> {
+pub struct Deserializer<'de, 'sig, B> {
     pub(self) ctxt: EncodingContext<B>,
     pub(self) bytes: &'de [u8],
     pub(self) pos: usize,
 
-    pub(self) sign_parser: SignatureParser<'de>,
+    pub(self) sign_parser: SignatureParser<'sig>,
 
     b: PhantomData<B>,
 }
 
-impl<'de, B> Deserializer<'de, B>
+impl<'de, 'sig, B> Deserializer<'de, 'sig, B>
 where
     B: byteorder::ByteOrder,
 {
-    pub fn new<'s: 'de, 'r: 'de>(
+    pub fn new<'r: 'de, 's>(
         bytes: &'r [u8],
-        signature: &Signature<'s>,
+        signature: &'s Signature<'sig>,
         ctxt: EncodingContext<B>,
     ) -> Self {
         let sign_parser = SignatureParser::new(signature.clone());
@@ -116,7 +116,7 @@ where
     }
 }
 
-impl<'de, 'd, B> de::Deserializer<'de> for &'d mut Deserializer<'de, B>
+impl<'de, 'd, 'sig, B> de::Deserializer<'de> for &'d mut Deserializer<'de, 'sig, B>
 where
     B: byteorder::ByteOrder,
 {
@@ -489,15 +489,15 @@ where
     }
 }
 
-pub struct ArrayDeserializer<'d, 'de, B> {
-    de: &'d mut Deserializer<'de, B>,
+pub struct ArrayDeserializer<'d, 'de, 'sig, B> {
+    de: &'d mut Deserializer<'de, 'sig, B>,
     len: usize,
     start: usize,
     // where value signature starts
     element_signature_len: usize,
 }
 
-impl<'d, 'de, B> SeqAccess<'de> for ArrayDeserializer<'d, 'de, B>
+impl<'d, 'de, 'sig, B> SeqAccess<'de> for ArrayDeserializer<'d, 'de, 'sig, B>
 where
     B: byteorder::ByteOrder,
 {
@@ -530,7 +530,7 @@ where
     }
 }
 
-impl<'d, 'de, B> MapAccess<'de> for ArrayDeserializer<'d, 'de, B>
+impl<'d, 'de, 'sig, B> MapAccess<'de> for ArrayDeserializer<'d, 'de, 'sig, B>
 where
     B: byteorder::ByteOrder,
 {
@@ -577,11 +577,11 @@ where
     }
 }
 
-pub struct StructureDeserializer<'d, 'de, B> {
-    de: &'d mut Deserializer<'de, B>,
+pub struct StructureDeserializer<'d, 'de, 'sig, B> {
+    de: &'d mut Deserializer<'de, 'sig, B>,
 }
 
-impl<'d, 'de, B> SeqAccess<'de> for StructureDeserializer<'d, 'de, B>
+impl<'d, 'de, 'sig, B> SeqAccess<'de> for StructureDeserializer<'d, 'de, 'sig, B>
 where
     B: byteorder::ByteOrder,
 {
@@ -601,13 +601,13 @@ enum ValueParseStage {
     Done,
 }
 
-pub struct ValueDeserializer<'d, 'de, B> {
-    de: &'d mut Deserializer<'de, B>,
+pub struct ValueDeserializer<'d, 'de, 'sig, B> {
+    de: &'d mut Deserializer<'de, 'sig, B>,
     stage: ValueParseStage,
     start: usize,
 }
 
-impl<'d, 'de, B> SeqAccess<'de> for ValueDeserializer<'d, 'de, B>
+impl<'d, 'de, 'sig, B> SeqAccess<'de> for ValueDeserializer<'d, 'de, 'sig, B>
 where
     B: byteorder::ByteOrder,
 {
@@ -650,12 +650,12 @@ where
     }
 }
 
-struct Enum<'d, 'de: 'd, B> {
-    de: &'d mut Deserializer<'de, B>,
+struct Enum<'d, 'de: 'd, 'sig, B> {
+    de: &'d mut Deserializer<'de, 'sig, B>,
     name: &'static str,
 }
 
-impl<'de, 'd, B> EnumAccess<'de> for Enum<'d, 'de, B>
+impl<'de, 'd, 'sig, B> EnumAccess<'de> for Enum<'d, 'de, 'sig, B>
 where
     B: byteorder::ByteOrder,
 {
@@ -670,7 +670,7 @@ where
     }
 }
 
-impl<'de, 'd, B> VariantAccess<'de> for Enum<'d, 'de, B>
+impl<'de, 'd, 'sig, B> VariantAccess<'de> for Enum<'d, 'de, 'sig, B>
 where
     B: byteorder::ByteOrder,
 {
