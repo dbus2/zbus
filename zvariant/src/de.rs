@@ -624,7 +624,7 @@ where
             ValueParseStage::Value => {
                 self.stage = ValueParseStage::Done;
 
-                let slice = &self.de.bytes[self.start..=self.de.pos];
+                let slice = &self.de.bytes[self.start..(self.de.pos - 1)];
                 let signature = str::from_utf8(slice)
                     .map(Signature::from)
                     .map_err(|_| Error::InvalidUtf8)?;
