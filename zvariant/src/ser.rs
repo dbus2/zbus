@@ -35,10 +35,10 @@ where
     Ok(cursor.into_inner())
 }
 
-pub fn to_write_for_signature<'s, B, W, T: ?Sized>(
+pub fn to_write_for_signature<'s, 'sig, B, W, T: ?Sized>(
     write: &mut W,
     ctxt: EncodingContext<B>,
-    signature: &'s Signature<'s>,
+    signature: &'s Signature<'sig>,
     value: &T,
 ) -> Result<usize>
 where
@@ -51,9 +51,9 @@ where
     Ok(serializer.bytes_written)
 }
 
-pub fn to_bytes_for_signature<'s, B, T: ?Sized>(
+pub fn to_bytes_for_signature<'s, 'sig, B, T: ?Sized>(
     ctxt: EncodingContext<B>,
-    signature: &'s Signature<'s>,
+    signature: &'s Signature<'sig>,
     value: &T,
 ) -> Result<Vec<u8>>
 where
@@ -65,12 +65,12 @@ where
     Ok(cursor.into_inner())
 }
 
-pub struct Serializer<'ser, B, W> {
+pub struct Serializer<'ser, 'sig, B, W> {
     pub(self) ctxt: EncodingContext<B>,
     pub(self) write: &'ser mut W,
     pub(self) bytes_written: usize,
 
-    pub(self) sign_parser: SignatureParser<'ser>,
+    pub(self) sign_parser: SignatureParser<'sig>,
 
     // FIXME: Use ArrayString here?
     pub(self) value_sign: Option<String>,
@@ -78,13 +78,13 @@ pub struct Serializer<'ser, B, W> {
     b: PhantomData<B>,
 }
 
-impl<'ser, B, W> Serializer<'ser, B, W>
+impl<'ser, 'sig, B, W> Serializer<'ser, 'sig, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
-    pub fn new<'s: 'ser, 'w: 'ser>(
-        signature: &'s Signature<'s>,
+    pub fn new<'w: 'ser, 's>(
+        signature: &'s Signature<'sig>,
         write: &'w mut W,
         ctxt: EncodingContext<B>,
     ) -> Self {
@@ -135,7 +135,7 @@ where
     }
 }
 
-impl<'ser, B, W> Write for Serializer<'ser, B, W>
+impl<'ser, 'sig, B, W> Write for Serializer<'ser, 'sig, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -154,7 +154,7 @@ where
     }
 }
 
-impl<'ser, 'b, B, W> ser::Serializer for &'b mut Serializer<'ser, B, W>
+impl<'ser, 'sig, 'b, B, W> ser::Serializer for &'b mut Serializer<'ser, 'sig, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -162,13 +162,13 @@ where
     type Ok = ();
     type Error = Error;
 
-    type SerializeSeq = SeqSerializer<'ser, 'b, B, W>;
-    type SerializeTuple = StructSerializer<'ser, 'b, B, W>;
-    type SerializeTupleStruct = StructSerializer<'ser, 'b, B, W>;
-    type SerializeTupleVariant = StructSerializer<'ser, 'b, B, W>;
-    type SerializeMap = SeqSerializer<'ser, 'b, B, W>;
-    type SerializeStruct = StructSerializer<'ser, 'b, B, W>;
-    type SerializeStructVariant = StructSerializer<'ser, 'b, B, W>;
+    type SerializeSeq = SeqSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeTuple = StructSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeTupleStruct = StructSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeTupleVariant = StructSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeMap = SeqSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeStruct = StructSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeStructVariant = StructSerializer<'ser, 'sig, 'b, B, W>;
 
     fn serialize_bool(self, v: bool) -> Result<()> {
         self.prep_serialize_basic::<bool>()?;
@@ -416,8 +416,8 @@ where
 }
 
 // TODO: Put this in a separate file
-pub struct SeqSerializer<'ser, 'b, B, W> {
-    serializer: &'b mut Serializer<'ser, B, W>,
+pub struct SeqSerializer<'ser, 'sig, 'b, B, W> {
+    serializer: &'b mut Serializer<'ser, 'sig, B, W>,
     start: usize,
     // where value signature starts
     element_signature_len: usize,
@@ -425,7 +425,7 @@ pub struct SeqSerializer<'ser, 'b, B, W> {
     first_padding: usize,
 }
 
-impl<'ser, 'b, B, W> SeqSerializer<'ser, 'b, B, W>
+impl<'ser, 'sig, 'b, B, W> SeqSerializer<'ser, 'sig, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -458,7 +458,7 @@ where
     }
 }
 
-impl<'ser, 'b, B, W> ser::SerializeSeq for SeqSerializer<'ser, 'b, B, W>
+impl<'ser, 'sig, 'b, B, W> ser::SerializeSeq for SeqSerializer<'ser, 'sig, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -485,12 +485,12 @@ where
 }
 
 // TODO: Put this in a separate file
-pub struct StructSerializer<'ser, 'b, B, W> {
-    serializer: &'b mut Serializer<'ser, B, W>,
+pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
+    serializer: &'b mut Serializer<'ser, 'sig, B, W>,
     end_parens: Option<char>,
 }
 
-impl<'ser, 'b, B, W> StructSerializer<'ser, 'b, B, W>
+impl<'ser, 'sig, 'b, B, W> StructSerializer<'ser, 'sig, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -537,7 +537,7 @@ where
     }
 }
 
-impl<'ser, 'b, B, W> ser::SerializeTuple for StructSerializer<'ser, 'b, B, W>
+impl<'ser, 'sig, 'b, B, W> ser::SerializeTuple for StructSerializer<'ser, 'sig, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -557,7 +557,7 @@ where
     }
 }
 
-impl<'ser, 'b, B, W> ser::SerializeTupleStruct for StructSerializer<'ser, 'b, B, W>
+impl<'ser, 'sig, 'b, B, W> ser::SerializeTupleStruct for StructSerializer<'ser, 'sig, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -577,7 +577,7 @@ where
     }
 }
 
-impl<'ser, 'b, B, W> ser::SerializeTupleVariant for StructSerializer<'ser, 'b, B, W>
+impl<'ser, 'sig, 'b, B, W> ser::SerializeTupleVariant for StructSerializer<'ser, 'sig, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -597,7 +597,7 @@ where
     }
 }
 
-impl<'ser, 'b, B, W> ser::SerializeMap for SeqSerializer<'ser, 'b, B, W>
+impl<'ser, 'sig, 'b, B, W> ser::SerializeMap for SeqSerializer<'ser, 'sig, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -644,7 +644,7 @@ where
     }
 }
 
-impl<'ser, 'b, B, W> ser::SerializeStruct for StructSerializer<'ser, 'b, B, W>
+impl<'ser, 'sig, 'b, B, W> ser::SerializeStruct for StructSerializer<'ser, 'sig, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -664,7 +664,7 @@ where
     }
 }
 
-impl<'ser, 'b, B, W> ser::SerializeStructVariant for StructSerializer<'ser, 'b, B, W>
+impl<'ser, 'sig, 'b, B, W> ser::SerializeStructVariant for StructSerializer<'ser, 'sig, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
