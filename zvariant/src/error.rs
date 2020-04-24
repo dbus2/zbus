@@ -37,11 +37,9 @@ impl fmt::Display for Error {
             Error::InvalidUtf8 => write!(f, "invalid UTF-8"),
             Error::InsufficientData => write!(f, "insufficient data"),
             Error::PaddingNot0 => write!(f, "non-0 padding byte(s)"),
-            Error::InvalidSignature(s) => write!(f, "invalid signature: \"{}\"", s.as_str()),
-            Error::InvalidObjectPath(s) => write!(f, "invalid object path: \"{}\"", s.as_str()),
-            Error::UnsupportedType(s) => {
-                write!(f, "unsupported type (signature: \"{}\")", s.as_str())
-            }
+            Error::InvalidSignature(s) => write!(f, "invalid signature: \"{}\"", s),
+            Error::InvalidObjectPath(s) => write!(f, "invalid object path: \"{}\"", s),
+            Error::UnsupportedType(s) => write!(f, "unsupported type (signature: \"{}\")", s),
         }
     }
 }

@@ -17,7 +17,7 @@ where
 {
     #[inline]
     fn signature() -> Signature<'static> {
-        Signature::from_string_unchecked(format!("a{}", T::signature().as_str()))
+        Signature::from_string_unchecked(format!("a{}", T::signature()))
     }
 }
 
@@ -114,7 +114,7 @@ macro_rules! map_impl {
         {
             #[inline]
             fn signature() -> Signature<'static> {
-                Signature::from_string_unchecked(format!("a{{{}{}}}", K::signature().as_str(), V::signature().as_str()))
+                Signature::from_string_unchecked(format!("a{{{}{}}}", K::signature(), V::signature()))
             }
         }
     }

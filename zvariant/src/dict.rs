@@ -82,8 +82,7 @@ impl<'k, 'v> Dict<'k, 'v> {
     pub fn signature(&self) -> Signature<'static> {
         Signature::from_string_unchecked(format!(
             "a{{{}{}}}",
-            self.key_signature.as_str(),
-            self.value_signature.as_str(),
+            self.key_signature, self.value_signature,
         ))
     }
 

@@ -117,7 +117,7 @@ mod tests {
             )
             .unwrap();
 
-        assert!(reply.body_signature().map(|s| s.as_str() == "u").unwrap());
+        assert!(reply.body_signature().map(|s| s == "u").unwrap());
         let reply: RequestNameReply = reply.body().unwrap();
         assert_eq!(reply, RequestNameReply::PrimaryOwner);
 
@@ -180,10 +180,7 @@ mod tests {
             )
             .unwrap();
 
-        assert!(reply
-            .body_signature()
-            .map(|s| s.as_str() == "a{sv}")
-            .unwrap());
+        assert!(reply.body_signature().map(|s| s == "a{sv}").unwrap());
         let hashmap: HashMap<&str, Value> = reply.body().unwrap();
 
         let pid = u32::from_value_ref(&hashmap["ProcessID"]).unwrap();
