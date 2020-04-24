@@ -15,6 +15,7 @@ pub enum Error {
     InsufficientData,
     PaddingNot0,
     InvalidSignature(String),
+    InvalidObjectPath(String),
     UnsupportedType(String),
 }
 
@@ -37,6 +38,7 @@ impl fmt::Display for Error {
             Error::InsufficientData => write!(f, "insufficient data"),
             Error::PaddingNot0 => write!(f, "non-0 padding byte(s)"),
             Error::InvalidSignature(s) => write!(f, "invalid signature: \"{}\"", s.as_str()),
+            Error::InvalidObjectPath(s) => write!(f, "invalid object path: \"{}\"", s.as_str()),
             Error::UnsupportedType(s) => {
                 write!(f, "unsupported type (signature: \"{}\")", s.as_str())
             }
