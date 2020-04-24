@@ -11,7 +11,7 @@ where
     B: Basic,
 {
     fn signature() -> Signature<'static> {
-        B::SIGNATURE_STR.into()
+        Signature::from_str_unchecked(B::SIGNATURE_STR)
     }
 }
 

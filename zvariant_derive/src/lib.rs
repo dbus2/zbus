@@ -38,7 +38,7 @@ fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
                 )*
                 s.push_str(")");
 
-                zvariant::Signature::from(s)
+                zvariant::Signature::from_string_unchecked(s)
         }
     };
     let expended = quote! {
@@ -59,7 +59,7 @@ fn impl_unit_struct(name: Ident, generics: Generics) -> TokenStream {
         impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
             #[inline]
             fn signature() -> zvariant::Signature<'static> {
-                zvariant::Signature::from("")
+                zvariant::Signature::from_str_unchecked("")
             }
         }
     };

@@ -59,7 +59,7 @@ impl<'a> Structure<'a> {
         }
         signature.push_str(")");
 
-        Signature::from(signature)
+        Signature::from_string_unchecked(signature)
     }
 }
 

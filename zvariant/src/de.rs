@@ -1,3 +1,5 @@
+use core::convert::TryFrom;
+
 use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor};
 use serde::Deserialize;
 
@@ -17,18 +19,17 @@ where
 {
     let signature = T::signature();
 
-    from_slice_for_signature(bytes, ctxt, signature)
+    from_slice_for_signature(bytes, ctxt, &signature)
 }
 
 // TODO: Return number of bytes parsed?
-pub fn from_slice_for_signature<'d, 'r: 'd, 's: 'd, B, S, T: ?Sized>(
+pub fn from_slice_for_signature<'d, 'r: 'd, 's: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
     ctxt: EncodingContext<B>,
-    signature: S,
+    signature: &Signature<'s>,
 ) -> Result<T>
 where
     B: byteorder::ByteOrder,
-    S: Into<Signature<'s>>,
     T: Deserialize<'d>,
 {
     let mut de = Deserializer::new(bytes, signature, ctxt);
@@ -52,10 +53,10 @@ where
 {
     pub fn new<'s: 'de, 'r: 'de>(
         bytes: &'r [u8],
-        signature: impl Into<Signature<'s>>,
+        signature: &Signature<'s>,
         ctxt: EncodingContext<B>,
     ) -> Self {
-        let sign_parser = SignatureParser::new(signature.into());
+        let sign_parser = SignatureParser::new(signature.clone());
 
         Self {
             ctxt,
@@ -372,8 +373,9 @@ where
                     self.sign_parser
                         .parse_char(Some(DICT_ENTRY_SIG_START_CHAR))?;
                 }
-                let rest_of_signature =
-                    Signature::from(&self.sign_parser.signature()[element_signature_pos..]);
+                let rest_of_signature = Signature::from_str_unchecked(
+                    &self.sign_parser.signature()[element_signature_pos..],
+                );
                 let element_signature = slice_signature(&rest_of_signature)?;
 
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
@@ -626,8 +628,8 @@ where
 
                 let slice = &self.de.bytes[self.start..(self.de.pos - 1)];
                 let signature = str::from_utf8(slice)
-                    .map(Signature::from)
-                    .map_err(|_| Error::InvalidUtf8)?;
+                    .map_err(|_| Error::InvalidUtf8)
+                    .and_then(Signature::try_from)?;
                 let sign_parser = SignatureParser::new(signature);
 
                 let mut de = Deserializer::<B> {

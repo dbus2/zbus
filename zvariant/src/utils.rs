@@ -84,7 +84,7 @@ pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
         | <&str>::SIGNATURE_CHAR
         | ObjectPath::SIGNATURE_CHAR
         | Signature::SIGNATURE_CHAR
-        | VARIANT_SIGNATURE_CHAR => Ok(Signature::from(&signature[0..1])),
+        | VARIANT_SIGNATURE_CHAR => Ok(Signature::from_str_unchecked(&signature[0..1])),
         ARRAY_SIGNATURE_CHAR => slice_array_signature(signature),
         STRUCT_SIG_START_CHAR => slice_structure_signature(signature),
         DICT_ENTRY_SIG_START_CHAR => slice_dict_entry_signature(signature),
@@ -101,9 +101,9 @@ fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'
     }
 
     // There should be a valid complete signature after 'a' but not more than 1
-    let slice_len = slice_signature(&Signature::from(&signature[1..]))?.len();
+    let slice_len = slice_signature(&Signature::from_str_unchecked(&signature[1..]))?.len();
 
-    Ok(Signature::from(&signature[0..=slice_len]))
+    Ok(Signature::from_str_unchecked(&signature[0..=slice_len]))
 }
 
 fn slice_structure_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
@@ -130,7 +130,7 @@ fn slice_structure_signature<'a>(signature: &'a Signature<'a>) -> Result<Signatu
         return Err(Error::IncorrectType);
     }
 
-    Ok(Signature::from(&signature[0..=i]))
+    Ok(Signature::from_str_unchecked(&signature[0..=i]))
 }
 
 fn slice_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
@@ -143,8 +143,8 @@ fn slice_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
 
     // Key's signature will always be just 1 character so no need to slice for that.
     // There should be one valid complete signature for value.
-    let slice_len = slice_signature(&Signature::from(&signature[2..]))?.len();
+    let slice_len = slice_signature(&Signature::from_str_unchecked(&signature[2..]))?.len();
 
     // signature of value + `{` + 1 char of the key signature + `}`
-    Ok((&signature[0..slice_len + 3]).into())
+    Ok(Signature::from_str_unchecked(&signature[0..slice_len + 3]))
 }

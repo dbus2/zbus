@@ -22,7 +22,7 @@ where
 {
     let signature = T::signature();
 
-    to_write_for_signature(write, ctxt, signature, value)
+    to_write_for_signature(write, ctxt, &signature, value)
 }
 
 pub fn to_bytes<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Vec<u8>>
@@ -35,16 +35,15 @@ where
     Ok(cursor.into_inner())
 }
 
-pub fn to_write_for_signature<'s, B, W, S, T: ?Sized>(
+pub fn to_write_for_signature<'s, B, W, T: ?Sized>(
     write: &mut W,
     ctxt: EncodingContext<B>,
-    signature: S,
+    signature: &'s Signature<'s>,
     value: &T,
 ) -> Result<usize>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
-    S: Into<Signature<'s>>,
     T: Serialize,
 {
     let mut serializer = Serializer::<B, W>::new(signature, write, ctxt);
@@ -52,14 +51,13 @@ where
     Ok(serializer.bytes_written)
 }
 
-pub fn to_bytes_for_signature<'s, B, S, T: ?Sized>(
+pub fn to_bytes_for_signature<'s, B, T: ?Sized>(
     ctxt: EncodingContext<B>,
-    signature: S,
+    signature: &'s Signature<'s>,
     value: &T,
 ) -> Result<Vec<u8>>
 where
     B: byteorder::ByteOrder,
-    S: Into<Signature<'s>>,
     T: Serialize,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
@@ -86,11 +84,11 @@ where
     W: Write + Seek,
 {
     pub fn new<'s: 'ser, 'w: 'ser>(
-        signature: impl Into<Signature<'s>>,
+        signature: &'s Signature<'s>,
         write: &'w mut W,
         ctxt: EncodingContext<B>,
     ) -> Self {
-        let sign_parser = SignatureParser::new(signature.into());
+        let sign_parser = SignatureParser::new(signature.clone());
 
         Self {
             ctxt,
@@ -340,7 +338,7 @@ where
         let first_padding = self.add_padding(alignment)?;
         let element_signature_pos = self.sign_parser.pos();
         let rest_of_signature =
-            Signature::from(&self.sign_parser.signature()[element_signature_pos..]);
+            Signature::from_str_unchecked(&self.sign_parser.signature()[element_signature_pos..]);
         let element_signature = slice_signature(&rest_of_signature)?;
         let element_signature_len = element_signature.len();
 
@@ -512,7 +510,7 @@ where
                     // FIXME: Better error?
                     .ok_or_else(|| Error::IncorrectValue)?;
 
-                let sign_parser = SignatureParser::new(Signature::from(signature));
+                let sign_parser = SignatureParser::new(Signature::from_string_unchecked(signature));
                 let mut serializer = Serializer::<B, W> {
                     ctxt: self.serializer.ctxt,
                     sign_parser,

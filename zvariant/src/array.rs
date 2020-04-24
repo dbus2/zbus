@@ -45,7 +45,7 @@ impl<'a> Array<'a> {
     }
 
     pub fn signature(&self) -> Signature<'static> {
-        Signature::from(format!("a{}", self.element_signature.as_str()))
+        Signature::from_string_unchecked(format!("a{}", self.element_signature.as_str()))
     }
 
     pub fn element_signature(&self) -> &Signature {

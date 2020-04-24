@@ -17,7 +17,7 @@ where
 {
     #[inline]
     fn signature() -> Signature<'static> {
-        Signature::from(format!("a{}", T::signature().as_str()))
+        Signature::from_string_unchecked(format!("a{}", T::signature().as_str()))
     }
 }
 
@@ -45,7 +45,7 @@ where
 impl Type for () {
     #[inline]
     fn signature() -> Signature<'static> {
-        Signature::from("")
+        Signature::from_str_unchecked("")
     }
 }
 
@@ -73,7 +73,7 @@ macro_rules! tuple_impls {
                     )+
                     sig.push(STRUCT_SIG_END_CHAR);
 
-                    Signature::from(sig)
+                    Signature::from_string_unchecked(sig)
                 }
             }
         )+
@@ -114,7 +114,7 @@ macro_rules! map_impl {
         {
             #[inline]
             fn signature() -> Signature<'static> {
-                Signature::from(format!("a{{{}{}}}", K::signature().as_str(), V::signature().as_str()))
+                Signature::from_string_unchecked(format!("a{{{}{}}}", K::signature().as_str(), V::signature().as_str()))
             }
         }
     }

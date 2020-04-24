@@ -95,10 +95,10 @@ impl<'v> MessageField<'v> {
         &self.value
     }
 
-    pub fn path<'o: 'v>(path: impl Into<ObjectPath<'o>>) -> Self {
+    pub fn path<'o: 'v>(path: ObjectPath<'o>) -> Self {
         Self {
             code: MessageFieldCode::Path,
-            value: path.into().into_value(),
+            value: path.into_value(),
         }
     }
 
@@ -144,10 +144,10 @@ impl<'v> MessageField<'v> {
         }
     }
 
-    pub fn signature<'s: 'v>(signature: impl Into<Signature<'s>>) -> Self {
+    pub fn signature<'s: 'v>(signature: Signature<'s>) -> Self {
         Self {
             code: MessageFieldCode::Signature,
-            value: signature.into().into_value(),
+            value: signature.into_value(),
         }
     }
 

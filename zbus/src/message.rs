@@ -122,10 +122,13 @@ impl Message {
         if signature != "" {
             if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
                 // Remove leading and trailing STRUCT delimiters
-                signature = Signature::from(String::from(&signature[1..signature.len() - 1]));
+                signature = Signature::from_string_unchecked(String::from(
+                    &signature[1..signature.len() - 1],
+                ));
             }
             fields.add(MessageField::signature(signature));
         }
+        let path = zvariant::ObjectPath::try_from(path)?;
         fields.add(MessageField::path(path));
         fields.add(MessageField::member(method_name));
 
@@ -185,7 +188,7 @@ impl Message {
                 let sig = Signature::from_value_ref(field.value())?;
 
                 // FIXME: Can we avoid the copy?
-                return Ok(Signature::from(String::from(sig)));
+                return Ok(Signature::from_string_unchecked(String::from(sig)));
             }
         }
 

@@ -61,7 +61,7 @@ impl<'a> Value<'a> {
             Value::Str(_) => <&str>::signature(),
             Value::Signature(_) => Signature::signature(),
             Value::ObjectPath(_) => ObjectPath::signature(),
-            Value::Value(_) => Signature::from("v"),
+            Value::Value(_) => Signature::from_str_unchecked("v"),
 
             // Container types
             Value::Array(value) => value.signature(),
@@ -159,6 +159,10 @@ impl<'de: 'a, 'a> Deserialize<'de> for Value<'a> {
     }
 }
 
+// Note that the Visitor implementations don't check for validity of the
+// signature. That's left to the Deserialize implementation of Signature
+// itself.
+
 struct ValueVisitor;
 
 impl<'de> Visitor<'de> for ValueVisitor {
@@ -218,7 +222,7 @@ where
         V: SeqAccess<'de>,
     {
         // TODO: Why do we need String here?
-        let signature = Signature::from(String::from(&self.signature[1..]));
+        let signature = Signature::from_string_unchecked(String::from(&self.signature[1..]));
         let mut array = Array::new(signature.clone());
 
         while let Some(elem) = visitor.next_element_seed(ValueSeed::<Value> {
@@ -240,11 +244,11 @@ where
         let signature_end = self.signature.len() - 1;
         let mut structure = Structure::new();
         while i < signature_end {
-            let fields_signature = Signature::from(&self.signature[i..signature_end]);
+            let fields_signature = Signature::from_str_unchecked(&self.signature[i..signature_end]);
             let field_signature = slice_signature(&fields_signature).map_err(Error::custom)?;
             i += field_signature.len();
             // FIXME: Any way to avoid this allocation?
-            let field_signature = Signature::from(String::from(field_signature.as_str()));
+            let field_signature = Signature::from_string_unchecked(String::from(&field_signature));
 
             if let Some(field) = visitor.next_element_seed(ValueSeed::<Value> {
                 signature: field_signature,
@@ -281,7 +285,7 @@ macro_rules! value_seed_basic_method {
 }
 
 macro_rules! value_seed_str_method {
-    ($name:ident, $type:ty, $variant:ident) => {
+    ($name:ident, $type:ty, $variant:ident, $constructor:ident) => {
         #[inline]
         fn $name<E>(self, value: $type) -> Result<Value<'de>, E>
         where
@@ -289,8 +293,8 @@ macro_rules! value_seed_str_method {
         {
             match self.signature.as_str() {
                 <&str>::SIGNATURE_STR => Ok(Value::$variant(value)),
-                Signature::SIGNATURE_STR => Ok(Value::Signature(Signature::from(value))),
-                ObjectPath::SIGNATURE_STR => Ok(Value::ObjectPath(ObjectPath::from(value))),
+                Signature::SIGNATURE_STR => Ok(Value::Signature(Signature::$constructor(value))),
+                ObjectPath::SIGNATURE_STR => Ok(Value::ObjectPath(ObjectPath::$constructor(value))),
                 _ => {
                     let expected = format!(
                         "`{}`, `{}` or `{}`",
@@ -336,7 +340,7 @@ where
         self.visit_string(String::from(value))
     }
 
-    value_seed_str_method!(visit_borrowed_str, &'de str, Str);
+    value_seed_str_method!(visit_borrowed_str, &'de str, Str, from_str_unchecked);
 
     #[inline]
     fn visit_seq<V>(self, visitor: V) -> Result<Value<'de>, V::Error>
@@ -367,9 +371,10 @@ where
     {
         // TODO: Why do we need String here?
         println!("signature: {}", self.signature.as_str());
-        let key_signature = Signature::from(String::from(&self.signature[2..3]));
+        let key_signature = Signature::from_string_unchecked(String::from(&self.signature[2..3]));
         let signature_end = self.signature.len() - 1;
-        let value_signature = Signature::from(String::from(&self.signature[3..signature_end]));
+        let value_signature =
+            Signature::from_string_unchecked(String::from(&self.signature[3..signature_end]));
         let mut dict = Dict::new(key_signature.clone(), value_signature.clone());
 
         while let Some((key, value)) = visitor.next_entry_seed(
@@ -405,6 +410,6 @@ where
 
 impl<'a> Type for Value<'a> {
     fn signature() -> Signature<'static> {
-        Signature::from(VARIANT_SIGNATURE_STR)
+        Signature::from_str_unchecked(VARIANT_SIGNATURE_STR)
     }
 }

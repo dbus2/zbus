@@ -50,7 +50,7 @@ mod signature_parser;
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::convert::TryFrom;
+    use std::convert::{TryFrom, TryInto};
 
     use byteorder::{self, ByteOrder, BE, LE};
 
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn signature_value() {
-        let sig = Signature::from("yys");
+        let sig = Signature::try_from("yys").unwrap();
         basic_type_test!(LE, sig, 5, Signature);
 
         // As Value
@@ -206,12 +206,12 @@ mod tests {
         let encoded = basic_type_test!(LE, v, 8, Value);
         let ctxt = Context::new_dbus(0);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
-        assert_eq!(v, Value::Signature(Signature::from("yys")));
+        assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
     }
 
     #[test]
     fn object_path_value() {
-        let o = ObjectPath::from("/hello/world");
+        let o = ObjectPath::try_from("/hello/world").unwrap();
         basic_type_test!(LE, o, 17, ObjectPath);
 
         // As Value
@@ -220,7 +220,10 @@ mod tests {
         let encoded = basic_type_test!(LE, v, 21, Value);
         let ctxt = Context::new_dbus(0);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
-        assert_eq!(v, Value::ObjectPath(ObjectPath::from("/hello/world")));
+        assert_eq!(
+            v,
+            Value::ObjectPath(ObjectPath::try_from("/hello/world").unwrap())
+        );
     }
 
     #[test]
@@ -516,26 +519,29 @@ mod tests {
         }
 
         let ctxt = Context::<BE>::new_dbus(0);
-        let encoded = to_bytes_for_signature(ctxt, "u", &Test::Unit).unwrap();
+        let signature = "u".try_into().unwrap();
+        let encoded = to_bytes_for_signature(ctxt, &signature, &Test::Unit).unwrap();
         assert_eq!(encoded.len(), 4);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, "u").unwrap();
+        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
         assert_eq!(decoded, Test::Unit);
 
-        let encoded = to_bytes_for_signature(ctxt, "y", &Test::NewType(42)).unwrap();
+        let signature = "y".try_into().unwrap();
+        let encoded = to_bytes_for_signature(ctxt, &signature, &Test::NewType(42)).unwrap();
         assert_eq!(encoded.len(), 5);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, "y").unwrap();
+        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
         assert_eq!(decoded, Test::NewType(42));
 
         // TODO: Provide convenience API to create complex signatures
-        let encoded = to_bytes_for_signature(ctxt, "(yt)", &Test::Tuple(42, 42)).unwrap();
+        let signature = "(yt)".try_into().unwrap();
+        let encoded = to_bytes_for_signature(ctxt, &signature, &Test::Tuple(42, 42)).unwrap();
         assert_eq!(encoded.len(), 24);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, "(yt)").unwrap();
+        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
         assert_eq!(decoded, Test::Tuple(42, 42));
 
         let s = Test::Struct { y: 42, t: 42 };
-        let encoded = to_bytes_for_signature(ctxt, "(yt)", &s).unwrap();
+        let encoded = to_bytes_for_signature(ctxt, &signature, &s).unwrap();
         assert_eq!(encoded.len(), 24);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, "(yt)").unwrap();
+        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
         assert_eq!(decoded, Test::Struct { y: 42, t: 42 });
     }
 
