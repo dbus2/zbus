@@ -31,7 +31,7 @@ where
     T: Serialize + Type,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let _ = to_write(&mut cursor, ctxt, value);
+    to_write(&mut cursor, ctxt, value)?;
     Ok(cursor.into_inner())
 }
 
