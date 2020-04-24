@@ -205,7 +205,6 @@ impl Connection {
         )?;
 
         connection.unique_name = reply.body::<&str>().map(String::from)?;
-        println!("bus name: {}", connection.unique_name);
 
         Ok(connection)
     }
@@ -229,7 +228,6 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        println!("Starting: {}", method_name);
         let serial = self.next_serial();
         let mut m = Message::method(destination, path, iface, method_name, body)?;
         m.modify_primary_header(|primary| {

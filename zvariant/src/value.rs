@@ -370,7 +370,6 @@ where
         V: MapAccess<'de>,
     {
         // TODO: Why do we need String here?
-        println!("signature: {}", self.signature.as_str());
         let key_signature = Signature::from_string_unchecked(String::from(&self.signature[2..3]));
         let signature_end = self.signature.len() - 1;
         let value_signature =
