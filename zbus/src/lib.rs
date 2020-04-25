@@ -21,11 +21,12 @@ mod utils;
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::convert::TryInto;
 
     use enumflags2::BitFlags;
     use serde_repr::{Deserialize_repr, Serialize_repr};
 
-    use zvariant::{FromValue, Type, Value};
+    use zvariant::{Type, Value};
     use zvariant_derive::Type;
 
     use crate::{Message, MessageFlags};
@@ -183,10 +184,10 @@ mod tests {
         assert!(reply.body_signature().map(|s| s == "a{sv}").unwrap());
         let hashmap: HashMap<&str, Value> = reply.body().unwrap();
 
-        let pid = u32::from_value_ref(&hashmap["ProcessID"]).unwrap();
+        let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
         println!("DBus bus PID: {}", pid);
 
-        let uid = u32::from_value_ref(&hashmap["UnixUserID"]).unwrap();
+        let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
         println!("DBus bus UID: {}", uid);
     }
 }

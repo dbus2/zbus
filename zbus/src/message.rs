@@ -1,9 +1,9 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::error;
 use std::fmt;
 use std::io::{Cursor, Error as IOError};
 
-use zvariant::{EncodingContext, Error as VariantError, FromValue};
+use zvariant::{EncodingContext, Error as VariantError};
 use zvariant::{Signature, Type};
 
 use crate::utils::padding_for_8_bytes;
@@ -181,14 +181,13 @@ impl Message {
     }
 
     pub fn body_signature(&self) -> Result<Signature, MessageError> {
-        let header = self.header()?;
-        let fields = header.take_fields();
-        let field = fields
+        let field = self
+            .header()?
+            .take_fields()
             .take_field(MessageFieldCode::Signature)
             .ok_or(MessageError::NoBodySignature)?;
-        let sig = Signature::from_value(field.take_value())?;
 
-        Ok(sig)
+        Ok(field.take_value().try_into()?)
     }
 
     pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {

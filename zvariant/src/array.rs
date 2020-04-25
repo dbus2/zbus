@@ -120,7 +120,7 @@ where
     }
 }
 
-// TODO: that could be useful
+// TODO: this could be useful
 // impl<'a, 'b, T> TryFrom<&'a Array<'b>> for Vec<T>
 
 impl<'a> Serialize for Array<'a> {

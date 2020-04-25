@@ -61,7 +61,7 @@ mod tests {
     use crate::{to_bytes, to_bytes_for_signature};
 
     use crate::{Array, Dict, EncodingContext as Context};
-    use crate::{FromValue, IntoValue, Type, Value};
+    use crate::{IntoValue, Type, Value};
     use crate::{ObjectPath, Signature};
 
     // Test through both generic and specific API (wrt byte order)
@@ -93,6 +93,9 @@ mod tests {
         assert_eq!(v.value_signature(), "y");
         assert_eq!(v, Value::U8(77));
         basic_type_test!(LE, v, 4, Value);
+
+        let v: u8 = v.try_into().unwrap();
+        assert_eq!(v, 77_u8);
     }
 
     #[test]
@@ -104,6 +107,9 @@ mod tests {
         assert_eq!(v.value_signature(), "q");
         assert_eq!(v, Value::U16(0xFEFE));
         basic_type_test!(LE, v, 6, Value);
+
+        let v: u16 = v.try_into().unwrap();
+        assert_eq!(v, 0xFEFE_u16);
     }
 
     #[test]
@@ -116,6 +122,9 @@ mod tests {
         assert_eq!(v.value_signature(), "n");
         assert_eq!(v, Value::I16(0xAB));
         basic_type_test!(LE, v, 6, Value);
+
+        let v: i16 = v.try_into().unwrap();
+        assert_eq!(v, 0xAB_i16);
     }
 
     #[test]
@@ -127,6 +136,9 @@ mod tests {
         assert_eq!(v.value_signature(), "u");
         assert_eq!(v, Value::U32(0xABBA_ABBA));
         basic_type_test!(LE, v, 8, Value);
+
+        let v: u32 = v.try_into().unwrap();
+        assert_eq!(v, 0xABBA_ABBA_u32);
     }
 
     #[test]
@@ -139,6 +151,9 @@ mod tests {
         assert_eq!(v.value_signature(), "i");
         assert_eq!(v, Value::I32(0xABBA_AB0));
         basic_type_test!(LE, v, 8, Value);
+
+        let v: i32 = v.try_into().unwrap();
+        assert_eq!(v, 0xABBA_AB0_i32);
     }
 
     // u64 is covered by `value_value` test below
@@ -153,6 +168,9 @@ mod tests {
         assert_eq!(v.value_signature(), "x");
         assert_eq!(v, Value::I64(0xABBA_AB0));
         basic_type_test!(LE, v, 16, Value);
+
+        let v: i64 = v.try_into().unwrap();
+        assert_eq!(v, 0xABBA_AB0_i64);
     }
 
     #[test]
@@ -165,6 +183,9 @@ mod tests {
         assert_eq!(v.value_signature(), "d");
         assert_eq!(v, Value::F64(99999.99999));
         basic_type_test!(LE, v, 16, Value);
+
+        let v: f64 = v.try_into().unwrap();
+        assert_eq!(v, 99999.99999_f64);
     }
 
     #[test]
@@ -182,6 +203,11 @@ mod tests {
         assert_eq!(v.value_signature(), "s");
         assert_eq!(v, Value::Str("hello world"));
         basic_type_test!(LE, v, 20, Value);
+
+        let v: &str = v.try_into().unwrap();
+        assert_eq!(v, "hello world");
+        let v: String = v.try_into().unwrap();
+        assert_eq!(v, "hello world");
 
         // Characters are treated as strings
         basic_type_test!(LE, 'c', 6, char);
@@ -335,6 +361,10 @@ mod tests {
             panic!();
         }
 
+        let v = &as_[..].into_value();
+        let a: Array = v.try_into().unwrap();
+        let _ve: Vec<&str> = a.try_into().unwrap();
+
         // Array of Struct, which in turn containin an Array (We gotta go deeper!)
         // Signature: "a(yu(xbxas)s)");
         let ar = ArrayVec::from([(
@@ -429,8 +459,8 @@ mod tests {
         let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 48);
         // Convert it back
-        let dict = Dict::from_value(v).unwrap();
-        let map: HashMap<i64, &str> = HashMap::try_from(dict).unwrap();
+        let dict: Dict = v.try_into().unwrap();
+        let map: HashMap<i64, &str> = dict.try_into().unwrap();
         assert_eq!(map[&1], "123");
         assert_eq!(map[&2], "456");
         // Also decode it back
@@ -450,7 +480,7 @@ mod tests {
         assert_eq!(v.value_signature(), "a{sv}");
         let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(dbg!(encoded.len()), 68);
-        let v = from_slice(&encoded, ctxt).unwrap();
+        let v: Value = from_slice(&encoded, ctxt).unwrap();
         if let Value::Dict(dict) = v {
             assert_eq!(
                 *dict.get::<_, Value>(&"hello").unwrap().unwrap(),

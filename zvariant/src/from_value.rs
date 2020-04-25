@@ -1,336 +1,102 @@
 use crate::Value;
-use crate::{Array, Dict, Error};
-use crate::{ObjectPath, Signature, Structure};
+use crate::{Array, Dict, Error, ObjectPath, Signature, Structure};
+use std::convert::TryFrom;
 
-//
-// Conversions from `Value` to encodable types
-pub trait FromValue<'v> {
-    fn from_value(value: Value<'v>) -> Result<Self, Error>
-    where
-        Self: Sized;
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error>;
+macro_rules! value_try_from {
+    ($kind:ident, $to:ty) => {
+        impl<'a> TryFrom<Value<'a>> for $to {
+            type Error = Error;
+
+            fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+                if let Value::$kind(value) = value {
+                    Ok(value.into())
+                } else {
+                    Err(Error::IncorrectType)
+                }
+            }
+        }
+    };
 }
 
-// u8
+macro_rules! value_try_from_ref {
+    ($kind:ident, $to:ty) => {
+        impl<'a> TryFrom<&'a Value<'a>> for &'a $to {
+            type Error = Error;
 
-impl<'v> FromValue<'v> for u8 {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::U8(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
+            fn try_from(value: &'a Value<'a>) -> Result<Self, Self::Error> {
+                if let Value::$kind(value) = value {
+                    Ok(value)
+                } else {
+                    Err(Error::IncorrectType)
+                }
+            }
         }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::U8(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
+    };
 }
 
-// bool
+macro_rules! value_try_from_ref_clone {
+    ($kind:ident, $to:ty) => {
+        impl<'a> TryFrom<&'a Value<'a>> for $to {
+            type Error = Error;
 
-impl<'v> FromValue<'v> for bool {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::Bool(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
+            fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
+                if let Value::$kind(value) = value {
+                    Ok(value.clone().into())
+                } else {
+                    Err(Error::IncorrectType)
+                }
+            }
         }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::Bool(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
+    };
 }
 
-// i16
-
-impl<'v> FromValue<'v> for i16 {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::I16(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::I16(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
+macro_rules! value_try_from_all {
+    ($from:ident, $to:ty) => {
+        value_try_from!($from, $to);
+        value_try_from_ref!($from, $to);
+        value_try_from_ref_clone!($from, $to);
+    };
 }
 
-// u16
+value_try_from_all!(U8, u8);
+value_try_from_all!(Bool, bool);
+value_try_from_all!(I16, i16);
+value_try_from_all!(U16, u16);
+value_try_from_all!(I32, i32);
+value_try_from_all!(U32, u32);
+value_try_from_all!(I64, i64);
+value_try_from_all!(U64, u64);
+value_try_from_all!(F64, f64);
+//value_try_from_all!(Fd, Fd);
 
-impl<'v> FromValue<'v> for u16 {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::U16(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
+value_try_from_all!(Signature, Signature<'a>);
+value_try_from_all!(ObjectPath, ObjectPath<'a>);
+value_try_from_all!(Structure, Structure<'a>);
+value_try_from_all!(Dict, Dict<'a, 'a>);
+value_try_from_all!(Array, Array<'a>);
 
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::U16(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
+value_try_from!(Str, &'a str);
+value_try_from!(Str, String);
+value_try_from_ref!(Str, &'a str);
+value_try_from_ref_clone!(Str, String);
 
-// i32
+impl<'a, T> TryFrom<Value<'a>> for Vec<T>
+where
+    T: TryFrom<Value<'a>, Error = Error> + 'a,
+{
+    type Error = Error;
 
-impl<'v> FromValue<'v> for i32 {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::I32(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::I32(value) = value {
-            Ok(value)
+    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+        if let Value::Array(v) = value {
+            Self::try_from(v)
         } else {
             Err(Error::IncorrectType)
         }
     }
 }
 
-// u32
-
-impl<'v> FromValue<'v> for u32 {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::U32(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::U32(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
-
-// i64
-
-impl<'v> FromValue<'v> for i64 {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::I64(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::I64(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
-
-// u64
-
-impl<'v> FromValue<'v> for u64 {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::U64(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::U64(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
-
-// f64
-
-impl<'v> FromValue<'v> for f64 {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::F64(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::F64(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
-
-// &str
-
-impl<'s, 'v: 's> FromValue<'v> for &'s str {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::Str(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::Str(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
-
-// Not providing FromValue for String implementtion cause if we have Value::Str,
-// it'll be valid to call String::from_value_ref() on it and we can't return reference
-// to a value owned by the function itself.
-
-// Signature
-
-impl<'s, 'v: 's> FromValue<'v> for Signature<'s> {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::Signature(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::Signature(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
-
-// ObjectPath
-
-impl<'o, 'v: 'o> FromValue<'v> for ObjectPath<'o> {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::ObjectPath(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::ObjectPath(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
-
-// Value itself (flatten)
-
-impl<'a, 'v: 'a> FromValue<'v> for Value<'a> {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::Value(value) = value {
-            Ok(*value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::Value(value) = value {
-            Ok(&*value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
-
-// Array
-
-impl<'r, 'v: 'r> FromValue<'v> for Array<'r> {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::Array(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::Array(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
-
-// DictEntry
-
-impl<'d, 'v: 'd> FromValue<'v> for Dict<'d, 'd> {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::Dict(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::Dict(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
-
-// Structure
-
-impl<'s, 'v: 's> FromValue<'v> for Structure<'s> {
-    fn from_value(value: Value<'v>) -> Result<Self, Error> {
-        if let Value::Structure(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-
-    fn from_value_ref(value: &'v Value<'v>) -> Result<&'v Self, Error> {
-        if let Value::Structure(value) = value {
-            Ok(value)
-        } else {
-            Err(Error::IncorrectType)
-        }
-    }
-}
+// TODO: this could be useful
+// impl<'a, 'b, T> TryFrom<&'a Value<'b>> for Vec<T>
+// impl<'a, K, V, H> TryFrom<Value<'a> for HashMap<K, V, H>
+// impl<'a, 'b, K, V, H> TryFrom<&'a Value<'v>> for HashMap<K, V, H>
+// and more..

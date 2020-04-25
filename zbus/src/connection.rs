@@ -1,10 +1,11 @@
+use std::convert::TryInto;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::{env, error, fmt, io};
 
 use nix::unistd::Uid;
 
-use zvariant::{Error as VariantError, FromValue};
+use zvariant::Error as VariantError;
 
 use crate::address::{self, Address, AddressError};
 use crate::message_field::{self, MessageFieldCode};
@@ -115,8 +116,8 @@ impl From<Message> for ConnectionError {
 
         // First, get the error name
         let name = match header.fields().get_field(MessageFieldCode::ErrorName) {
-            Some(f) => match <&str>::from_value_ref(f.value()) {
-                Ok(s) => String::from(*s),
+            Some(f) => match f.value().try_into() {
+                Ok(s) => s,
                 Err(e) => return ConnectionError::Variant(e),
             },
             None => return ConnectionError::InvalidReply,

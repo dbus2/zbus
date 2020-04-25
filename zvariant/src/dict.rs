@@ -5,7 +5,7 @@ use std::hash::BuildHasher;
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
 use crate::{Basic, Error, Signature};
-use crate::{FromValue, IntoValue, Type, Value};
+use crate::{IntoValue, Type, Value};
 
 /// A dictionary type to be used with [`Value`].
 ///
@@ -63,16 +63,19 @@ impl<'k, 'v> Dict<'k, 'v> {
     }
 
     /// Get the value for the given key.
-    pub fn get<'d, K, V>(&'d self, key: &'k K) -> Result<Option<&'v V>, Error>
+    pub fn get<'d, K, V>(&'d self, key: &K) -> Result<Option<&'v V>, Error>
     where
         'd: 'k + 'v,
-        K: FromValue<'k> + std::cmp::Eq,
-        V: FromValue<'v>,
+        K: std::cmp::Eq + 'k,
+        &'k K: TryFrom<&'k Value<'k>>,
+        &'v V: TryFrom<&'v Value<'v>>,
     {
         for entry in &self.entries {
-            let k = K::from_value_ref(&entry.key)?;
-            if *k == *key {
-                return V::from_value_ref(&entry.value).map(Some);
+            let entry_key = entry.key.downcast_ref::<K>().ok_or(Error::IncorrectType)?;
+            if *entry_key == *key {
+                return Ok(Some(
+                    entry.value.downcast_ref().ok_or(Error::IncorrectType)?,
+                ));
             }
         }
 
@@ -106,49 +109,23 @@ impl<'k, 'v> Serialize for Dict<'k, 'v> {
 // Conversion of Dict to HashMap
 impl<'k, 'v, K, V, H> TryFrom<Dict<'k, 'v>> for HashMap<K, V, H>
 where
-    K: Basic + FromValue<'k> + std::hash::Hash + std::cmp::Eq,
-    V: FromValue<'v>,
+    K: Basic + TryFrom<Value<'k>, Error = Error> + std::hash::Hash + std::cmp::Eq,
+    V: TryFrom<Value<'v>, Error = Error>,
     H: BuildHasher + Default,
 {
     type Error = Error;
 
-    fn try_from(value: Dict<'k, 'v>) -> Result<HashMap<K, V, H>, Error> {
+    fn try_from(v: Dict<'k, 'v>) -> Result<Self, Self::Error> {
         let mut map = HashMap::default();
-
-        for entry in value.entries {
-            let (key, value) = (K::from_value(entry.key)?, V::from_value(entry.value)?);
-
-            map.insert(key, value);
+        for e in v.entries.into_iter() {
+            map.insert(K::try_from(e.key)?, V::try_from(e.value)?);
         }
-
         Ok(map)
     }
 }
 
-impl<'d, 'k, 'v, K, V, H> TryFrom<&'d Dict<'k, 'v>> for HashMap<&'k K, &'v V, H>
-where
-    'd: 'k + 'v,
-    K: FromValue<'k> + std::cmp::Eq + std::hash::Hash,
-    V: FromValue<'v>,
-    H: BuildHasher + Default,
-{
-    type Error = Error;
-
-    fn try_from(value: &'d Dict<'k, 'v>) -> Result<HashMap<&'k K, &'v V, H>, Error> {
-        let mut map = HashMap::default();
-
-        for entry in &value.entries {
-            let (key, value) = (
-                K::from_value_ref(&entry.key)?,
-                V::from_value_ref(&entry.value)?,
-            );
-
-            map.insert(key, value);
-        }
-
-        Ok(map)
-    }
-}
+// TODO: this could be useful
+// impl<'d, 'k, 'v, K, V, H> TryFrom<&'d Dict<'k, 'v>> for HashMap<&'k K, &'v V, H>
 
 // Conversion of Hashmap to Dict
 impl<'k, 'v, K, V> From<HashMap<K, V>> for Dict<'k, 'v>
