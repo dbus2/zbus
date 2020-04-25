@@ -81,6 +81,12 @@ impl<'a> TryFrom<String> for Signature<'a> {
     }
 }
 
+impl<'a> From<Signature<'a>> for String {
+    fn from(value: Signature<'a>) -> String {
+        String::from(value.as_str())
+    }
+}
+
 impl<'a> From<&Signature<'a>> for String {
     fn from(value: &Signature<'a>) -> String {
         String::from(value.as_str())
