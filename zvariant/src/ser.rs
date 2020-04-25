@@ -1,3 +1,4 @@
+use arrayvec::ArrayString;
 use byteorder::WriteBytesExt;
 use serde::{ser, ser::SerializeSeq, Serialize};
 use std::io::{Seek, Write};
@@ -72,8 +73,7 @@ pub struct Serializer<'ser, 'sig, B, W> {
 
     pub(self) sign_parser: SignatureParser<'sig>,
 
-    // FIXME: Use ArrayString here?
-    pub(self) value_sign: Option<String>,
+    pub(self) value_sign: ArrayString<[u8; 255]>,
 
     b: PhantomData<B>,
 }
@@ -95,7 +95,7 @@ where
             sign_parser,
             write,
             bytes_written: 0,
-            value_sign: None,
+            value_sign: ArrayString::new(),
             b: PhantomData,
         }
     }
@@ -245,7 +245,9 @@ where
                 self.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
 
                 if c == VARIANT_SIGNATURE_CHAR {
-                    self.value_sign = Some(String::from(v));
+                    self.value_sign
+                        .try_push_str(v)
+                        .map_err(|_| Error::InvalidSignature(String::from(v)))?;
                 }
             }
             _ => {
@@ -503,24 +505,23 @@ where
             Some("zvariant::Value::Value") => {
                 // Serializing the value of a Value, which means signature was serialized
                 // already, and also put aside for us to be picked here.
-                let signature = self
-                    .serializer
-                    .value_sign
-                    .take()
-                    // FIXME: Better error?
-                    .ok_or_else(|| Error::IncorrectValue)?;
+                if self.serializer.value_sign.is_empty() {
+                    return Err(Error::IncorrectValue);
+                }
+                let signature = self.serializer.value_sign.as_str();
 
-                let sign_parser = SignatureParser::new(Signature::from_string_unchecked(signature));
+                let sign_parser = SignatureParser::new(Signature::from_str_unchecked(signature));
                 let mut serializer = Serializer::<B, W> {
                     ctxt: self.serializer.ctxt,
                     sign_parser,
                     write: &mut self.serializer.write,
                     bytes_written: self.serializer.bytes_written,
-                    value_sign: None,
+                    value_sign: ArrayString::default(),
                     b: PhantomData,
                 };
                 value.serialize(&mut serializer)?;
                 self.serializer.bytes_written = serializer.bytes_written;
+                self.serializer.value_sign.clear();
 
                 Ok(())
             }
