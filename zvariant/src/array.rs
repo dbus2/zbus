@@ -1,4 +1,5 @@
 use serde::ser::{Serialize, SerializeSeq, Serializer};
+use std::convert::TryFrom;
 
 use crate::{Error, Result};
 use crate::{IntoValue, Signature, Type, Value};
@@ -102,6 +103,25 @@ where
         Self::from(&values[..])
     }
 }
+
+impl<'a, T> TryFrom<Array<'a>> for Vec<T>
+where
+    T: TryFrom<Value<'a>, Error = Error>,
+{
+    type Error = Error;
+
+    fn try_from(v: Array<'a>) -> core::result::Result<Self, Self::Error> {
+        // there is no try_map yet..
+        let mut res = vec![];
+        for e in v.elements.into_iter() {
+            res.push(T::try_from(e)?);
+        }
+        Ok(res)
+    }
+}
+
+// TODO: that could be useful
+// impl<'a, 'b, T> TryFrom<&'a Array<'b>> for Vec<T>
 
 impl<'a> Serialize for Array<'a> {
     fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
