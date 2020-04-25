@@ -1,4 +1,5 @@
 use core::str;
+use std::convert::TryFrom;
 use std::marker::PhantomData;
 
 use serde::de::{
@@ -127,6 +128,29 @@ impl<'a> Value<'a> {
             Value::Array(value) => serializer.serialize_element(value),
             Value::Dict(value) => serializer.serialize_element(value),
             Value::Structure(value) => serializer.serialize_element(value),
+        }
+    }
+
+    /// Try to get `&x` from `&Value(x)` for type `T`.
+    ///
+    /// [`TryFrom`] is implemented for various `Value->T` conversions,
+    /// and you can use that, as it is usually the most convenient.
+    ///
+    /// However, if you need to unwrap [`Value`] explicitely, and
+    /// handle the `Value(Value) -> Value` case, then you should use
+    /// this function (because [`TryFrom`] is idempotent on [`Value`]
+    /// itself).
+    ///
+    /// [`Value`]: enum.Value.html
+    /// [`TryFrom`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
+    pub fn downcast_ref<T>(&'a self) -> Option<&'a T>
+    where
+        &'a T: TryFrom<&'a Value<'a>>,
+    {
+        if let Value::Value(v) = self {
+            <&T>::try_from(v).ok()
+        } else {
+            <&T>::try_from(&self).ok()
         }
     }
 }
