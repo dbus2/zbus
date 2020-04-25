@@ -47,6 +47,26 @@ pub enum Value<'a> {
 }
 
 impl<'a> Value<'a> {
+    /// Make a [`Value`] for a given value.
+    ///
+    /// In general, you can use [`Into`] trait on basic types, except
+    /// when you explicitely need to wrap [`Value`] itself, in which
+    /// case this constructor comes handy.
+    ///
+    /// [`Value`]: enum.Value.html
+    /// [`Into`]: https://doc.rust-lang.org/std/convert/trait.Into.html
+    pub fn new<T>(value: T) -> Self
+    where
+        T: Into<Self> + Type,
+    {
+        // With specialization, we wouldn't have this
+        if T::signature() == VARIANT_SIGNATURE_STR {
+            Self::Value(Box::new(value.into()))
+        } else {
+            value.into()
+        }
+    }
+
     /// Get the signature of the enclosed value.
     pub fn value_signature(&self) -> Signature {
         match self {
