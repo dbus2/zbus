@@ -2,7 +2,7 @@ use serde::ser::{Serialize, SerializeSeq, Serializer};
 use std::convert::TryFrom;
 
 use crate::{Error, Result};
-use crate::{IntoValue, Signature, Type, Value};
+use crate::{Signature, Type, Value};
 
 /// An unordered collection of items of the same type.
 ///
@@ -64,11 +64,11 @@ impl<'a> std::ops::Deref for Array<'a> {
 
 impl<'a, T> From<Vec<T>> for Array<'a>
 where
-    T: Type + IntoValue<'a>,
+    T: Type + Into<Value<'a>>,
 {
     fn from(values: Vec<T>) -> Self {
         let element_signature = T::signature();
-        let elements = values.into_iter().map(|value| value.into_value()).collect();
+        let elements = values.into_iter().map(Value::new).collect();
 
         Self {
             element_signature,
@@ -79,13 +79,13 @@ where
 
 impl<'a, T> From<&[T]> for Array<'a>
 where
-    T: Type + IntoValue<'a> + Clone,
+    T: Type + Into<Value<'a>> + Clone,
 {
     fn from(values: &[T]) -> Self {
         let element_signature = T::signature();
         let elements = values
             .iter()
-            .map(|value| value.clone().into_value())
+            .map(|value| Value::new(value.clone()))
             .collect();
 
         Self {
@@ -97,7 +97,7 @@ where
 
 impl<'a, T> From<&Vec<T>> for Array<'a>
 where
-    T: Type + IntoValue<'a> + Clone,
+    T: Type + Into<Value<'a>> + Clone,
 {
     fn from(values: &Vec<T>) -> Self {
         Self::from(&values[..])

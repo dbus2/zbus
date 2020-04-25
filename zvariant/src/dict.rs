@@ -5,7 +5,7 @@ use std::hash::BuildHasher;
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
 use crate::{Basic, Error, Signature};
-use crate::{IntoValue, Type, Value};
+use crate::{Type, Value};
 
 /// A dictionary type to be used with [`Value`].
 ///
@@ -47,16 +47,16 @@ impl<'k, 'v> Dict<'k, 'v> {
     /// Add a new entry.
     pub fn add<K, V>(&mut self, key: K, value: V) -> Result<(), Error>
     where
-        K: Basic + IntoValue<'k> + std::hash::Hash + std::cmp::Eq,
-        V: IntoValue<'v> + Type,
+        K: Basic + Into<Value<'k>> + std::hash::Hash + std::cmp::Eq,
+        V: Into<Value<'v>> + Type,
     {
         if K::signature() != self.key_signature || V::signature() != self.value_signature {
             return Err(Error::IncorrectType);
         }
 
         self.entries.push(DictEntry {
-            key: key.into_value(),
-            value: value.into_value(),
+            key: Value::new(key),
+            value: Value::new(value),
         });
 
         Ok(())
@@ -130,15 +130,15 @@ where
 // Conversion of Hashmap to Dict
 impl<'k, 'v, K, V> From<HashMap<K, V>> for Dict<'k, 'v>
 where
-    K: Type + IntoValue<'k> + std::hash::Hash + std::cmp::Eq,
-    V: Type + IntoValue<'v>,
+    K: Type + Into<Value<'k>> + std::hash::Hash + std::cmp::Eq,
+    V: Type + Into<Value<'v>>,
 {
     fn from(value: HashMap<K, V>) -> Self {
         let entries = value
             .into_iter()
             .map(|(key, value)| DictEntry {
-                key: key.into_value(),
-                value: value.into_value(),
+                key: Value::new(key),
+                value: Value::new(value),
             })
             .collect();
 

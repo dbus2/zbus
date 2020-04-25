@@ -4,7 +4,6 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use zvariant::IntoValue;
 use zvariant::{Error as VariantError, Value};
 use zvariant::{ObjectPath, Signature};
 use zvariant_derive::Type;
@@ -98,63 +97,63 @@ impl<'v> MessageField<'v> {
     pub fn path<'o: 'v>(path: ObjectPath<'o>) -> Self {
         Self {
             code: MessageFieldCode::Path,
-            value: path.into_value(),
+            value: path.into(),
         }
     }
 
     pub fn interface<'i: 'v>(interface: &'i str) -> Self {
         Self {
             code: MessageFieldCode::Interface,
-            value: interface.into_value(),
+            value: interface.into(),
         }
     }
 
     pub fn member<'m: 'v>(member: &'m str) -> Self {
         Self {
             code: MessageFieldCode::Member,
-            value: member.into_value(),
+            value: member.into(),
         }
     }
 
     pub fn error_name<'e: 'v>(error_name: &'e str) -> Self {
         Self {
             code: MessageFieldCode::ErrorName,
-            value: error_name.into_value(),
+            value: error_name.into(),
         }
     }
 
     pub fn reply_serial(serial: u32) -> Self {
         Self {
             code: MessageFieldCode::ReplySerial,
-            value: serial.into_value(),
+            value: serial.into(),
         }
     }
 
     pub fn destination<'d: 'v>(destination: &'d str) -> Self {
         Self {
             code: MessageFieldCode::Destination,
-            value: destination.into_value(),
+            value: destination.into(),
         }
     }
 
     pub fn sender<'s: 'v>(sender: &'s str) -> Self {
         Self {
             code: MessageFieldCode::Sender,
-            value: sender.into_value(),
+            value: sender.into(),
         }
     }
 
     pub fn signature<'s: 'v>(signature: Signature<'s>) -> Self {
         Self {
             code: MessageFieldCode::Signature,
-            value: signature.into_value(),
+            value: signature.into(),
         }
     }
 
     pub fn unix_fds(fd: u32) -> Self {
         Self {
             code: MessageFieldCode::UnixFDs,
-            value: fd.into_value(),
+            value: fd.into(),
         }
     }
 }

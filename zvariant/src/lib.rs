@@ -61,8 +61,8 @@ mod tests {
     use crate::{to_bytes, to_bytes_for_signature};
 
     use crate::{Array, Dict, EncodingContext as Context};
-    use crate::{IntoValue, Type, Value};
     use crate::{ObjectPath, Signature, Structure};
+    use crate::{Type, Value};
 
     // Test through both generic and specific API (wrt byte order)
     macro_rules! basic_type_test {
@@ -89,7 +89,7 @@ mod tests {
         basic_type_test!(LE, 77_u8, 1, u8);
 
         // As Value
-        let v = 77_u8.into_value();
+        let v: Value = 77_u8.into();
         assert_eq!(v.value_signature(), "y");
         assert_eq!(v, Value::U8(77));
         basic_type_test!(LE, v, 4, Value);
@@ -103,7 +103,7 @@ mod tests {
         basic_type_test!(BE, 0xABBA_u16, 2, u16);
 
         // As Value
-        let v = 0xFEFE_u16.into_value();
+        let v: Value = 0xFEFE_u16.into();
         assert_eq!(v.value_signature(), "q");
         assert_eq!(v, Value::U16(0xFEFE));
         basic_type_test!(LE, v, 6, Value);
@@ -118,7 +118,7 @@ mod tests {
         assert_eq!(LE::read_i16(&encoded), 0x50F5_i16);
 
         // As Value
-        let v = 0xAB_i16.into_value();
+        let v: Value = 0xAB_i16.into();
         assert_eq!(v.value_signature(), "n");
         assert_eq!(v, Value::I16(0xAB));
         basic_type_test!(LE, v, 6, Value);
@@ -132,7 +132,7 @@ mod tests {
         basic_type_test!(BE, 0xABBA_ABBA_u32, 4, u32);
 
         // As Value
-        let v = 0xABBA_ABBA_u32.into_value();
+        let v: Value = 0xABBA_ABBA_u32.into();
         assert_eq!(v.value_signature(), "u");
         assert_eq!(v, Value::U32(0xABBA_ABBA));
         basic_type_test!(LE, v, 8, Value);
@@ -147,7 +147,7 @@ mod tests {
         assert_eq!(LE::read_i32(&encoded), 0x5055_44F5_i32);
 
         // As Value
-        let v = 0xABBA_AB0_i32.into_value();
+        let v: Value = 0xABBA_AB0_i32.into();
         assert_eq!(v.value_signature(), "i");
         assert_eq!(v, Value::I32(0xABBA_AB0));
         basic_type_test!(LE, v, 8, Value);
@@ -164,7 +164,7 @@ mod tests {
         assert_eq!(LE::read_i64(&encoded), 0x5055_4455_4455_44F5_i64);
 
         // As Value
-        let v = 0xABBA_AB0i64.into_value();
+        let v: Value = 0xABBA_AB0i64.into();
         assert_eq!(v.value_signature(), "x");
         assert_eq!(v, Value::I64(0xABBA_AB0));
         basic_type_test!(LE, v, 16, Value);
@@ -179,7 +179,7 @@ mod tests {
         assert_eq!(LE::read_f64(&encoded), -5759340900185448e-143);
 
         // As Value
-        let v = 99999.99999_f64.into_value();
+        let v: Value = 99999.99999_f64.into();
         assert_eq!(v.value_signature(), "d");
         assert_eq!(v, Value::F64(99999.99999));
         basic_type_test!(LE, v, 16, Value);
@@ -199,7 +199,7 @@ mod tests {
         basic_type_test!(LE, string, 16, String);
 
         // As Value
-        let v = string.into_value();
+        let v: Value = string.into();
         assert_eq!(v.value_signature(), "s");
         assert_eq!(v, Value::Str("hello world"));
         basic_type_test!(LE, v, 20, Value);
@@ -213,7 +213,7 @@ mod tests {
         basic_type_test!(LE, 'c', 6, char);
 
         // As Value
-        let v = "c".into_value();
+        let v: Value = "c".into();
         assert_eq!(v.value_signature(), "s");
         let ctxt = Context::new_dbus(0);
         let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
@@ -228,7 +228,7 @@ mod tests {
         basic_type_test!(LE, sig, 5, Signature);
 
         // As Value
-        let v = sig.into_value();
+        let v: Value = sig.into();
         assert_eq!(v.value_signature(), "g");
         let encoded = basic_type_test!(LE, v, 8, Value);
         let ctxt = Context::new_dbus(0);
@@ -242,7 +242,7 @@ mod tests {
         basic_type_test!(LE, o, 17, ObjectPath);
 
         // As Value
-        let v = o.into_value();
+        let v: Value = o.into();
         assert_eq!(v.value_signature(), "o");
         let encoded = basic_type_test!(LE, v, 21, Value);
         let ctxt = Context::new_dbus(0);
@@ -282,9 +282,9 @@ mod tests {
         assert_eq!(&decoded.as_slice(), &[77u8, 88]);
 
         // As Value
-        let v = &ay.into_value();
+        let v: Value = ay[..].into();
         assert_eq!(v.value_signature(), "ay");
-        let encoded = to_bytes::<LE, _>(ctxt, v).unwrap();
+        let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 10);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
         if let Value::Array(array) = v {
@@ -302,7 +302,7 @@ mod tests {
         assert_eq!(encoded.len(), 6);
 
         // Vec as Value
-        let v = Array::from(&vec).into_value();
+        let v: Value = Array::from(&vec).into();
         assert_eq!(v.value_signature(), "ay");
         let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 10);
@@ -313,9 +313,9 @@ mod tests {
         assert_eq!(encoded.len(), 8);
 
         // As Value
-        let v = &at.into_value();
+        let v: Value = at[..].into();
         assert_eq!(v.value_signature(), "at");
-        let encoded = to_bytes::<LE, _>(ctxt, v).unwrap();
+        let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 8);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
         if let Value::Array(array) = v {
@@ -347,9 +347,9 @@ mod tests {
         let ctxt = Context::<LE>::new_dbus(0);
 
         // As Value
-        let v = &as_.into_value();
+        let v: Value = as_[..].into();
         assert_eq!(v.value_signature(), "as");
-        let encoded = to_bytes(ctxt, v).unwrap();
+        let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 49);
         let v = from_slice(&encoded, ctxt).unwrap();
         if let Value::Array(array) = v {
@@ -361,7 +361,7 @@ mod tests {
             panic!();
         }
 
-        let v = &as_[..].into_value();
+        let v: Value = as_[..].into();
         let a: Array = v.try_into().unwrap();
         let _ve: Vec<&str> = a.try_into().unwrap();
 
@@ -404,9 +404,9 @@ mod tests {
         assert_eq!(r.3, "hello");
 
         // As Value
-        let v = &ar[..].into_value();
+        let v: Value = ar[..].into();
         assert_eq!(v.value_signature(), "a(yu(xbxas)s)");
-        let encoded = to_bytes::<LE, _>(ctxt, v).unwrap();
+        let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 94);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
         if let Value::Array(array) = v {
@@ -439,12 +439,16 @@ mod tests {
         } else {
             panic!();
         }
+
+        let av = Value::new([Value::new(43), Value::new("bonjour")].to_vec());
+        let ar = TryInto::<&Array>::try_into(&av).unwrap();
+        assert_eq!(ar[1], Value::new(Value::new("bonjour")));
     }
 
     #[test]
     fn struct_value() {
         // Struct->Value
-        let s: Value = ("a", "b", (1, 2)).into_value();
+        let s: Value = ("a", "b", (1, 2)).into();
 
         let ctxt = Context::<LE>::new_dbus(0);
         let encoded = to_bytes(ctxt, &s).unwrap();
@@ -474,7 +478,7 @@ mod tests {
         assert_eq!(decoded[&2], "456");
 
         // As Value
-        let v = Dict::from(map).into_value();
+        let v: Value = Dict::from(map).into();
         assert_eq!(v.value_signature(), "a{xs}");
         let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 48);
@@ -494,9 +498,9 @@ mod tests {
 
         // Now a hand-crafted Dict Value but with a Value as value
         let mut dict = Dict::new(<&str>::signature(), Value::signature());
-        dict.add("hello", "there".into_value()).unwrap();
-        dict.add("bye", "now".into_value()).unwrap();
-        let v = dict.into_value();
+        dict.add("hello", Value::new("there")).unwrap();
+        dict.add("bye", Value::new("now")).unwrap();
+        let v: Value = dict.into();
         assert_eq!(v.value_signature(), "a{sv}");
         let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(dbg!(encoded.len()), 68);
@@ -533,7 +537,7 @@ mod tests {
         let ctxt = Context::<LE>::new_dbus(0);
 
         // As Value
-        let v = 0xFEFE_u64.into_value();
+        let v: Value = 0xFEFE_u64.into();
         assert_eq!(v.value_signature(), "t");
         let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 16);
@@ -553,7 +557,7 @@ mod tests {
         }
 
         // Ensure Value works with other Serializer & Deserializer
-        let v = 0xFEFE_u64.into_value();
+        let v: Value = 0xFEFE_u64.into();
         let encoded = serde_json::to_string(&v).unwrap();
         let v = serde_json::from_str::<Value>(&encoded).unwrap();
         assert_eq!(v, Value::U64(0xFEFE));

@@ -9,7 +9,7 @@ use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
 use crate::utils::*;
 use crate::{Array, Dict};
-use crate::{Basic, IntoValue, Type};
+use crate::{Basic, Type};
 use crate::{ObjectPath, Signature, Structure};
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
@@ -323,7 +323,7 @@ macro_rules! value_seed_basic_method {
         where
             E: serde::de::Error,
         {
-            Ok(value.into_value())
+            Ok(value.into())
         }
     };
 }
