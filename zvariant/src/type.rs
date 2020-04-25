@@ -41,6 +41,17 @@ where
     }
 }
 
+impl<A, T> Type for arrayvec::ArrayVec<A>
+where
+    A: arrayvec::Array<Item = T>,
+    T: Type,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <[T]>::signature()
+    }
+}
+
 // Empty type deserves empty signature
 impl Type for () {
     #[inline]
@@ -55,6 +66,7 @@ impl Type for () {
 ////////////////////////////////////////////////////////////////////////////////
 
 // Arrays are serialized as tupples by Serde and that's strange. Let's just not support it at all.
+// Type is implemented for arrayvec::ArrayVec OTOH (above).
 // TODO: Mention this fact in the module docs.
 
 macro_rules! tuple_impls {
