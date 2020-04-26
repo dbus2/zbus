@@ -4,8 +4,10 @@ use zvariant_derive::Type;
 
 use crate::{MessageField, MessageFieldCode};
 
-// It's actually 10 (and even not that) but let's round it to next 8-byte alignment
-const MAX_FIELDS_IN_MESSAGE: usize = 16;
+// Currently the maximum fields in a message can really be 7 (in method calls and signals) but
+// let's keep it large enough in case we're wrong, as long as the size of MessageFields structure
+// is below 1k.
+const MAX_FIELDS_IN_MESSAGE: usize = 9;
 
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct MessageFields<'m>(#[serde(borrow)] ArrayVec<[MessageField<'m>; MAX_FIELDS_IN_MESSAGE]>);
