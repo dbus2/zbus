@@ -91,6 +91,10 @@ impl<'v> MessageField<'v> {
         &self.value
     }
 
+    pub fn take_value(self) -> Value<'v> {
+        self.value
+    }
+
     pub fn path<'o: 'v>(path: ObjectPath<'o>) -> Self {
         Self {
             code: MessageFieldCode::Path,
