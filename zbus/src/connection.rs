@@ -253,25 +253,10 @@ impl Connection {
             self.socket.read_exact(&mut buf[..])?;
             incoming.add_bytes(&buf[..])?;
 
-            let header = incoming.header()?;
-            let msg_type = header.primary().msg_type();
-            if msg_type == MessageType::MethodReturn || msg_type == MessageType::Error {
-                let serial_field = header.fields().get_field(MessageFieldCode::ReplySerial);
-
-                if let Some(serial_field) = serial_field {
-                    if *serial_field.value() != zvariant::Value::U32(serial) {
-                        continue;
-                    }
-                } else {
-                    // FIXME: Debug log about ignoring the message
-                    continue;
-                }
-
-                match msg_type {
-                    MessageType::Error => return Err(incoming.into()),
-                    MessageType::MethodReturn => return Ok(incoming),
-                    _ => (),
-                }
+            match process_response(&incoming, serial) {
+                Some(MessageType::Error) => return Err((incoming).into()),
+                Some(MessageType::MethodReturn) => return Ok(incoming),
+                _ => (),
             }
         }
     }
@@ -281,4 +266,28 @@ impl Connection {
 
         self.serial
     }
+}
+
+fn process_response(msg: &Message, serial: u32) -> Option<MessageType> {
+    let header = match msg.header() {
+        Ok(header) => header,
+        Err(e) => {
+            println!("Error parsing a message header: {}", e);
+
+            return None;
+        }
+    };
+    let msg_type = header.primary().msg_type();
+    if msg_type != MessageType::MethodReturn && msg_type != MessageType::Error {
+        return None;
+    }
+
+    let fields = header.fields();
+    if let Some(serial_field) = fields.get_field(MessageFieldCode::ReplySerial) {
+        if *serial_field.value() == zvariant::Value::U32(serial) {
+            return Some(msg_type);
+        }
+    }
+
+    None
 }
