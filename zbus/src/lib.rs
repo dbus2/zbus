@@ -23,11 +23,13 @@ mod utils;
 mod tests {
     use std::collections::HashMap;
     use std::convert::TryInto;
+    use std::fs::File;
+    use std::os::unix::io::{FromRawFd, RawFd};
 
     use enumflags2::BitFlags;
     use serde_repr::{Deserialize_repr, Serialize_repr};
 
-    use zvariant::{Type, Value};
+    use zvariant::{Fd, Type, Value};
     use zvariant_derive::Type;
 
     use crate::{Message, MessageFlags};
@@ -76,6 +78,31 @@ mod tests {
             Err(e) => panic!("{}", e),
             _ => panic!(),
         };
+    }
+
+    #[test]
+    fn fdpass_systemd() {
+        let mut connection = crate::Connection::new_system().unwrap();
+
+        let reply = connection
+            .call_method(
+                Some("org.freedesktop.systemd1"),
+                "/org/freedesktop/systemd1",
+                Some("org.freedesktop.systemd1.Manager"),
+                "DumpByFileDescriptor",
+                &(),
+            )
+            .unwrap();
+
+        assert!(reply
+            .body_signature()
+            .map(|s| s == <Fd>::signature())
+            .unwrap());
+
+        let fd: RawFd = reply.body().unwrap();
+        assert!(fd >= 0);
+        let f = unsafe { File::from_raw_fd(fd) };
+        f.metadata().unwrap();
     }
 
     #[test]
