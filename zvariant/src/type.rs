@@ -65,10 +65,6 @@ impl Type for () {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// Arrays are serialized as tupples by Serde and that's strange. Let's just not support it at all.
-// Type is implemented for arrayvec::ArrayVec OTOH (above).
-// TODO: Mention this fact in the module docs.
-
 macro_rules! tuple_impls {
     ($($len:expr => ($($n:tt $name:ident)+))+) => {
         $(
@@ -109,6 +105,40 @@ tuple_impls! {
     14 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13)
     15 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14)
     16 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14 15 T15)
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Arrays are serialized as tupples/structs by Serde so we treat them as such too even though
+// it's very strange. Slices and arrayvec::ArrayVec can be used anyway so I guess it's no big
+// deal.
+// TODO: Mention this fact in the module docs.
+
+macro_rules! array_impls {
+    ($($len:tt)+) => {
+        $(
+            impl<T> Type for [T; $len]
+            where
+                T: Type,
+            {
+                #[inline]
+                fn signature() -> Signature<'static> {
+                    let mut sig = String::with_capacity(255);
+                    sig.push(STRUCT_SIG_START_CHAR);
+                    for _ in 0..$len {
+                        sig.push_str(T::signature().as_str());
+                    }
+                    sig.push(STRUCT_SIG_END_CHAR);
+
+                    Signature::from_string_unchecked(sig)
+                }
+            }
+        )+
+    }
+}
+
+array_impls! {
+    0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
 }
 
 ////////////////////////////////////////////////////////////////////////////////

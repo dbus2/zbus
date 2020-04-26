@@ -239,9 +239,18 @@ mod tests {
         //
         // Array of u8
         //
+        // First a normal Rust array that is actually serialized as a struct (thank you Serde!)
+        let ay = [77u8, 88];
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &ay).unwrap();
+        assert_eq!(encoded.len(), 2);
+        let decoded: [u8; 2] = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(&decoded, &[77u8, 88]);
+
+        // Then rest of the tests just use ArrayVec
         let ay = ArrayVec::from([77u8, 88]);
         let ctxt = Context::<LE>::new_dbus(0);
-        let encoded = to_bytes(ctxt, &ay[..]).unwrap();
+        let encoded = to_bytes(ctxt, &ay).unwrap();
         assert_eq!(encoded.len(), 6);
         let decoded: ArrayVec<[u8; 2]> = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(&decoded.as_slice(), &[77u8, 88]);
