@@ -486,7 +486,7 @@ where
     }
 }
 
-pub struct ArrayDeserializer<'d, 'de, 'sig, B> {
+struct ArrayDeserializer<'d, 'de, 'sig, B> {
     de: &'d mut Deserializer<'de, 'sig, B>,
     len: usize,
     start: usize,
@@ -574,7 +574,7 @@ where
     }
 }
 
-pub struct StructureDeserializer<'d, 'de, 'sig, B> {
+struct StructureDeserializer<'d, 'de, 'sig, B> {
     de: &'d mut Deserializer<'de, 'sig, B>,
 }
 
@@ -598,7 +598,7 @@ enum ValueParseStage {
     Done,
 }
 
-pub struct ValueDeserializer<'d, 'de, 'sig, B> {
+struct ValueDeserializer<'d, 'de, 'sig, B> {
     de: &'d mut Deserializer<'de, 'sig, B>,
     stage: ValueParseStage,
     start: usize,
