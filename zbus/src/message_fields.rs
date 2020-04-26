@@ -38,6 +38,16 @@ impl<'m> MessageFields<'m> {
     pub fn get_field(&self, code: MessageFieldCode) -> Option<&MessageField<'m>> {
         self.0.iter().find(|f| f.code() == code)
     }
+
+    pub fn take_field(self, code: MessageFieldCode) -> Option<MessageField<'m>> {
+        for field in self.0 {
+            if field.code() == code {
+                return Some(field);
+            }
+        }
+
+        None
+    }
 }
 
 impl<'m> Default for MessageFields<'m> {
