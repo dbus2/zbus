@@ -53,6 +53,16 @@ impl<'a> Value<'a> {
     /// when you explicitely need to wrap [`Value`] itself, in which
     /// case this constructor comes handy.
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zvariant::Value;
+    ///
+    /// let s = Value::new("hello");
+    /// let u: Value = 51.into();
+    /// assert_ne!(s, u);
+    /// ```
+    ///
     /// [`Value`]: enum.Value.html
     /// [`Into`]: https://doc.rust-lang.org/std/convert/trait.Into.html
     pub fn new<T>(value: T) -> Self
@@ -160,6 +170,24 @@ impl<'a> Value<'a> {
     /// handle the `Value(Value) -> Value` case, then you should use
     /// this function (because [`TryFrom`] is idempotent on [`Value`]
     /// itself).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zvariant::Value;
+    /// use std::convert::TryInto;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let s = Value::from("hello");
+    /// let val: &str = s.try_into()?;
+    /// assert_eq!(val, "hello");
+    ///
+    /// let s = Value::from(42u32);
+    /// let val: &u32 = s.downcast_ref().unwrap();
+    /// assert_eq!(val, &42);
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// [`Value`]: enum.Value.html
     /// [`TryFrom`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
