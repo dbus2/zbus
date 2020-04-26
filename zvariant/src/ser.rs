@@ -417,7 +417,6 @@ where
     }
 }
 
-// TODO: Put this in a separate file
 #[doc(hidden)]
 pub struct SeqSerializer<'ser, 'sig, 'b, B, W> {
     serializer: &'b mut Serializer<'ser, 'sig, B, W>,
@@ -487,7 +486,6 @@ where
     }
 }
 
-// TODO: Put this in a separate file
 #[doc(hidden)]
 pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
     serializer: &'b mut Serializer<'ser, 'sig, B, W>,
