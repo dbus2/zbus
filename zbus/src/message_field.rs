@@ -87,10 +87,6 @@ impl<'v> MessageField<'v> {
         self.code
     }
 
-    //pub fn value<'d, 'f: 'd, V>(&'f self) -> Result<V, MessageFieldError>
-    //where
-    //    B: serde::de::Deserialize<'d> + Type,
-    //{
     pub fn value(&self) -> &Value {
         &self.value
     }
