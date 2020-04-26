@@ -178,11 +178,11 @@ impl<'m> MessageHeader<'m> {
         self.primary
     }
 
-    pub fn fields(&self) -> &MessageFields {
+    pub fn fields<'s>(&'s self) -> &'s MessageFields<'m> {
         &self.fields
     }
 
-    pub fn fields_mut<'s: 'm>(&'s mut self) -> &'s mut MessageFields {
+    pub fn fields_mut<'s>(&'s mut self) -> &'s mut MessageFields<'m> {
         &mut self.fields
     }
 
