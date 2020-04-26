@@ -15,24 +15,12 @@ impl<'m> MessageFields<'m> {
         Self::default()
     }
 
-    pub fn new_from_vec<'f: 'm>(fields: Vec<MessageField<'f>>) -> Self {
-        Self(fields)
-    }
-
     pub fn add<'f: 'm>(&mut self, field: MessageField<'f>) {
         self.0.push(field);
     }
 
-    pub fn get(&self) -> &Vec<MessageField<'m>> {
+    pub fn get(&self) -> &[MessageField<'m>] {
         &self.0
-    }
-
-    pub fn get_mut(&mut self) -> &mut Vec<MessageField<'m>> {
-        &mut self.0
-    }
-
-    pub fn into_inner(self) -> Vec<MessageField<'m>> {
-        self.0
     }
 
     pub fn get_field(&self, code: MessageFieldCode) -> Option<&MessageField<'m>> {
@@ -57,15 +45,9 @@ impl<'m> Default for MessageFields<'m> {
 }
 
 impl<'m> std::ops::Deref for MessageFields<'m> {
-    type Target = Vec<MessageField<'m>>;
+    type Target = [MessageField<'m>];
 
     fn deref(&self) -> &Self::Target {
         self.get()
-    }
-}
-
-impl<'m> std::ops::DerefMut for MessageFields<'m> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.get_mut()
     }
 }
