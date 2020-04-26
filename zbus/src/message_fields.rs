@@ -1,3 +1,4 @@
+use arrayvec::ArrayVec;
 use serde::{Deserialize, Serialize};
 use zvariant_derive::Type;
 
@@ -8,7 +9,7 @@ const MAX_FIELDS_IN_MESSAGE: usize = 16;
 
 // FIXME: Use ArrayVec
 #[derive(Debug, Serialize, Deserialize, Type)]
-pub struct MessageFields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
+pub struct MessageFields<'m>(#[serde(borrow)] ArrayVec<[MessageField<'m>; MAX_FIELDS_IN_MESSAGE]>);
 
 impl<'m> MessageFields<'m> {
     pub fn new() -> Self {
@@ -40,7 +41,7 @@ impl<'m> MessageFields<'m> {
 
 impl<'m> Default for MessageFields<'m> {
     fn default() -> Self {
-        Self(Vec::with_capacity(MAX_FIELDS_IN_MESSAGE))
+        Self(ArrayVec::new())
     }
 }
 
