@@ -182,17 +182,14 @@ impl Message {
 
     pub fn body_signature(&self) -> Result<Signature, MessageError> {
         let header = self.header()?;
-        let fields = header.fields();
-        for field in fields.get() {
-            if field.code() == MessageFieldCode::Signature {
-                let sig = Signature::from_value_ref(field.value())?;
+        let field = header
+            .fields()
+            .get_field(MessageFieldCode::Signature)
+            .ok_or(MessageError::NoBodySignature)?;
+        let sig = Signature::from_value_ref(field.value())?;
 
-                // FIXME: Can we avoid the copy?
-                return Ok(Signature::from_string_unchecked(String::from(sig)));
-            }
-        }
-
-        Err(MessageError::NoBodySignature)
+        // FIXME: Can we avoid the copy?
+        return Ok(Signature::from_string_unchecked(String::from(sig)));
     }
 
     pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {
