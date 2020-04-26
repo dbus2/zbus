@@ -16,11 +16,6 @@ use crate::{IntoValue, Signature, Type, Value};
 pub struct Structure<'a>(Vec<Value<'a>>);
 
 impl<'a> Structure<'a> {
-    /// Get all the fields, consuming `self`.
-    pub fn take_fields(self) -> Vec<Value<'a>> {
-        self.0
-    }
-
     /// Get a reference to all the fields of `self`.
     pub fn fields(&self) -> &[Value<'a>] {
         &self.0
