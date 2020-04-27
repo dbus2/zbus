@@ -1,16 +1,13 @@
-use arrayvec::ArrayVec;
 use serde::{Deserialize, Serialize};
 use zvariant_derive::Type;
 
 use crate::{MessageField, MessageFieldCode};
 
-// Currently the maximum fields in a message can really be 7 (in method calls and signals) but
-// let's keep it large enough in case we're wrong, as long as the size of MessageFields structure
-// is below 1k.
-const MAX_FIELDS_IN_MESSAGE: usize = 9;
+// It's actually 10 (and even not that) but let's round it to next 8-byte alignment
+const MAX_FIELDS_IN_MESSAGE: usize = 16;
 
 #[derive(Debug, Serialize, Deserialize, Type)]
-pub struct MessageFields<'m>(#[serde(borrow)] ArrayVec<[MessageField<'m>; MAX_FIELDS_IN_MESSAGE]>);
+pub struct MessageFields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
 
 impl<'m> MessageFields<'m> {
     pub fn new() -> Self {
@@ -42,7 +39,7 @@ impl<'m> MessageFields<'m> {
 
 impl<'m> Default for MessageFields<'m> {
     fn default() -> Self {
-        Self(ArrayVec::new())
+        Self(Vec::with_capacity(MAX_FIELDS_IN_MESSAGE))
     }
 }
 
