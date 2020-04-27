@@ -28,6 +28,11 @@ impl<'a> Structure<'a> {
         Self::default()
     }
 
+    #[cfg(test)]
+    pub(crate) fn from_vec(vec: Vec<Value<'a>>) -> Self {
+        Self(vec)
+    }
+
     /// Append `field` to `self`.
     ///
     /// This method returns `Self` so that you can use the builder pattern to create a complex

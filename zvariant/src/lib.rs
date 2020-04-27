@@ -62,7 +62,7 @@ mod tests {
 
     use crate::{Array, Dict, EncodingContext as Context};
     use crate::{IntoValue, Type, Value};
-    use crate::{ObjectPath, Signature};
+    use crate::{ObjectPath, Signature, Structure};
 
     // Test through both generic and specific API (wrt byte order)
     macro_rules! basic_type_test {
@@ -439,6 +439,26 @@ mod tests {
         } else {
             panic!();
         }
+    }
+
+    #[test]
+    fn struct_value() {
+        // Struct->Value
+        let s: Value = ("a", "b", (1, 2)).into_value();
+
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &s).unwrap();
+        assert_eq!(dbg!(encoded.len()), 40);
+        let decoded: Value = from_slice(&encoded, ctxt).unwrap();
+
+        assert_eq!(
+            decoded,
+            Value::Structure(Structure::from_vec(vec![
+                Value::Str("a"),
+                Value::Str("b"),
+                Value::Structure(Structure::from_vec(vec![Value::I32(1), Value::I32(2)]))
+            ],))
+        );
     }
 
     #[test]
