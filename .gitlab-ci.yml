@@ -28,6 +28,7 @@ test:
     - mkdir -p /run/user/$UID
     - sed s/UID/$UID/ gitlab/dbus-session.conf > /tmp/dbus-session.conf
     - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose
+    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features
 
 cache:
   paths:
