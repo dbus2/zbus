@@ -52,6 +52,7 @@ mod tests {
     use std::collections::HashMap;
     use std::convert::{TryFrom, TryInto};
 
+    #[cfg(feature = "arrayvec")]
     use arrayvec::ArrayVec;
     use byteorder::{self, ByteOrder, BE, LE};
 
@@ -273,12 +274,18 @@ mod tests {
         let decoded: [u8; 2] = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(&decoded, &[77u8, 88]);
 
-        // Then rest of the tests just use ArrayVec
+        // Then rest of the tests just use ArrayVec or Vec
+        #[cfg(feature = "arrayvec")]
         let ay = ArrayVec::from([77u8, 88]);
+        #[cfg(not(feature = "arrayvec"))]
+        let ay = vec![77u8, 88];
         let ctxt = Context::<LE>::new_dbus(0);
         let encoded = to_bytes(ctxt, &ay).unwrap();
         assert_eq!(encoded.len(), 6);
+        #[cfg(feature = "arrayvec")]
         let decoded: ArrayVec<[u8; 2]> = from_slice(&encoded, ctxt).unwrap();
+        #[cfg(not(feature = "arrayvec"))]
+        let decoded: Vec<u8> = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(&decoded.as_slice(), &[77u8, 88]);
 
         // As Value
@@ -308,7 +315,7 @@ mod tests {
         assert_eq!(encoded.len(), 10);
 
         // Emtpy array
-        let at = ArrayVec::<[u64; 0]>::new();
+        let at: Vec<u64> = vec![];
         let encoded = to_bytes::<LE, _>(ctxt, &at).unwrap();
         assert_eq!(encoded.len(), 8);
 
@@ -329,15 +336,15 @@ mod tests {
         // Array of strings
         //
         // Can't use 'as' as it's a keyword
-        let as_ = ArrayVec::from(["Hello", "World", "Now", "Bye!"]);
+        let as_ = vec!["Hello", "World", "Now", "Bye!"];
         let encoded = to_bytes::<LE, _>(ctxt, &as_).unwrap();
         assert_eq!(encoded.len(), 45);
-        let decoded = from_slice::<LE, ArrayVec<[&str; 4]>>(&encoded, ctxt).unwrap();
+        let decoded = from_slice::<LE, Vec<&str>>(&encoded, ctxt).unwrap();
         assert_eq!(decoded.len(), 4);
         assert_eq!(decoded[0], "Hello");
         assert_eq!(decoded[1], "World");
 
-        let decoded = from_slice::<LE, ArrayVec<[String; 4]>>(&encoded, ctxt).unwrap();
+        let decoded = from_slice::<LE, Vec<String>>(&encoded, ctxt).unwrap();
         assert_eq!(decoded.as_slice(), as_.as_slice());
 
         // Decode just the second string
@@ -367,7 +374,7 @@ mod tests {
 
         // Array of Struct, which in turn containin an Array (We gotta go deeper!)
         // Signature: "a(yu(xbxas)s)");
-        let ar = ArrayVec::from([(
+        let ar = vec![(
             // top-most simple fields
             u8::max_value(),
             u32::max_value(),
@@ -381,14 +388,12 @@ mod tests {
             ),
             // one more top-most simple field
             "hello",
-        )]);
+        )];
         let encoded = to_bytes(ctxt, &ar).unwrap();
         assert_eq!(encoded.len(), 78);
-        let decoded = from_slice::<
-            LE,
-            ArrayVec<[(u8, u32, (i64, bool, i64, ArrayVec<[&str; 2]>), &str); 1]>,
-        >(&encoded, ctxt)
-        .unwrap();
+        let decoded =
+            from_slice::<LE, Vec<(u8, u32, (i64, bool, i64, Vec<&str>), &str)>>(&encoded, ctxt)
+                .unwrap();
         assert_eq!(decoded.len(), 1);
         let r = &decoded[0];
         assert_eq!(r.0, u8::max_value());

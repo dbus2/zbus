@@ -41,6 +41,7 @@ where
     }
 }
 
+#[cfg(feature = "arrayvec")]
 impl<A, T> Type for arrayvec::ArrayVec<A>
 where
     A: arrayvec::Array<Item = T>,
