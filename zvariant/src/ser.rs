@@ -244,7 +244,10 @@ where
                 self.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
 
                 if c == VARIANT_SIGNATURE_CHAR {
-                    self.value_sign = Some(String::from(v));
+                    // TODO: internal macro for creating String from &str w/ capacity
+                    let mut s = String::with_capacity(255);
+                    s.push_str(v);
+                    self.value_sign = Some(s);
                 }
             }
             _ => {
