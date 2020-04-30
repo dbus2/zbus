@@ -92,6 +92,17 @@ pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
     }
 }
 
+// Given an &str, create an owned (String-based) Signature w/ appropriate capacity
+#[macro_export]
+macro_rules! signature_string {
+    ($signature:expr) => {{
+        let mut s = String::with_capacity(255);
+        s.push_str($signature);
+
+        Signature::from_string_unchecked(s)
+    }};
+}
+
 fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
     if signature.len() < 2 {
         return Err(Error::InsufficientData);
