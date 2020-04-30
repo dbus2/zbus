@@ -77,9 +77,6 @@ impl<'a> Serialize for Structure<'a> {
     }
 }
 
-// Arrays are serialized as tupples by Serde and that's strange. Let's just not support it at all.
-// TODO: Mention this fact in the module docs.
-
 macro_rules! tuple_impls {
     ($($len:expr => ($($n:tt $name:ident)+))+) => {
         $(
