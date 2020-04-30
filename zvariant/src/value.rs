@@ -294,7 +294,7 @@ where
         V: SeqAccess<'de>,
     {
         // TODO: Why do we need String here?
-        let signature = Signature::from_string_unchecked(String::from(&self.signature[1..]));
+        let signature = crate::signature_string!(&self.signature[1..]);
         let mut array = Array::new(signature.clone());
 
         while let Some(elem) = visitor.next_element_seed(ValueSeed::<Value> {
@@ -320,7 +320,7 @@ where
             let field_signature = slice_signature(&fields_signature).map_err(Error::custom)?;
             i += field_signature.len();
             // FIXME: Any way to avoid this allocation?
-            let field_signature = Signature::from_string_unchecked(String::from(&field_signature));
+            let field_signature = crate::signature_string!(&field_signature);
 
             if let Some(field) = visitor.next_element_seed(ValueSeed::<Value> {
                 signature: field_signature,
@@ -442,10 +442,9 @@ where
         V: MapAccess<'de>,
     {
         // TODO: Why do we need String here?
-        let key_signature = Signature::from_string_unchecked(String::from(&self.signature[2..3]));
+        let key_signature = crate::signature_string!(&self.signature[2..3]);
         let signature_end = self.signature.len() - 1;
-        let value_signature =
-            Signature::from_string_unchecked(String::from(&self.signature[3..signature_end]));
+        let value_signature = crate::signature_string!(&self.signature[3..signature_end]);
         let mut dict = Dict::new(key_signature.clone(), value_signature.clone());
 
         while let Some((key, value)) = visitor.next_entry_seed(

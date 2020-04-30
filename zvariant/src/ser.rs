@@ -72,7 +72,7 @@ pub struct Serializer<'ser, 'sig, B, W> {
 
     pub(self) sign_parser: SignatureParser<'sig>,
 
-    pub(self) value_sign: Option<String>,
+    pub(self) value_sign: Option<Signature<'static>>,
 
     b: PhantomData<B>,
 }
@@ -244,10 +244,7 @@ where
                 self.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
 
                 if c == VARIANT_SIGNATURE_CHAR {
-                    // TODO: internal macro for creating String from &str w/ capacity
-                    let mut s = String::with_capacity(255);
-                    s.push_str(v);
-                    self.value_sign = Some(s);
+                    self.value_sign = Some(crate::signature_string!(v));
                 }
             }
             _ => {
@@ -512,7 +509,7 @@ where
                     // FIXME: Better error?
                     .ok_or_else(|| Error::IncorrectValue)?;
 
-                let sign_parser = SignatureParser::new(Signature::from_string_unchecked(signature));
+                let sign_parser = SignatureParser::new(signature);
                 let mut serializer = Serializer::<B, W> {
                     ctxt: self.serializer.ctxt,
                     sign_parser,
