@@ -142,7 +142,7 @@ where
             VARIANT_SIGNATURE_CHAR => self.deserialize_seq(visitor),
             ARRAY_SIGNATURE_CHAR => self.deserialize_seq(visitor),
             STRUCT_SIG_START_CHAR => self.deserialize_seq(visitor),
-            _ => Err(Error::UnsupportedType(String::from(
+            _ => Err(Error::InvalidSignature(String::from(
                 self.sign_parser.signature(),
             ))),
         }

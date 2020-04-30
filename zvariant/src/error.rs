@@ -16,7 +16,6 @@ pub enum Error {
     PaddingNot0,
     InvalidSignature(String),
     InvalidObjectPath(String),
-    UnsupportedType(String),
 }
 
 impl error::Error for Error {
@@ -39,7 +38,6 @@ impl fmt::Display for Error {
             Error::PaddingNot0 => write!(f, "non-0 padding byte(s)"),
             Error::InvalidSignature(s) => write!(f, "invalid signature: \"{}\"", s),
             Error::InvalidObjectPath(s) => write!(f, "invalid object path: \"{}\"", s),
-            Error::UnsupportedType(s) => write!(f, "unsupported type (signature: \"{}\")", s),
         }
     }
 }

@@ -88,7 +88,7 @@ pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
         ARRAY_SIGNATURE_CHAR => slice_array_signature(signature),
         STRUCT_SIG_START_CHAR => slice_structure_signature(signature),
         DICT_ENTRY_SIG_START_CHAR => slice_dict_entry_signature(signature),
-        _ => Err(Error::UnsupportedType(signature.to_string())),
+        _ => Err(Error::InvalidSignature(signature.to_string())),
     }
 }
 
