@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use serde::de::{
     Deserialize, DeserializeSeed, Deserializer, Error, MapAccess, SeqAccess, Unexpected, Visitor,
 };
-use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
+use serde::ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer};
 
 use crate::utils::*;
 use crate::{Array, Dict};
@@ -135,6 +135,16 @@ impl<'a> Value<'a> {
         S: SerializeStruct,
     {
         serialize_value!(self serializer.serialize_field name)
+    }
+
+    pub(crate) fn serialize_value_as_tuple_struct_field<S>(
+        &self,
+        serializer: &mut S,
+    ) -> Result<(), S::Error>
+    where
+        S: SerializeTupleStruct,
+    {
+        serialize_value!(self serializer.serialize_field)
     }
 
     // Really crappy that we need to do this separately for struct and seq cases. :(
