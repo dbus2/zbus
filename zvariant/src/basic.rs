@@ -100,3 +100,12 @@ impl Basic for char {
     const SIGNATURE_STR: &'static str = <&str>::SIGNATURE_STR;
     const ALIGNMENT: usize = <&str>::ALIGNMENT;
 }
+
+impl<B: ?Sized> Basic for &B
+where
+    B: Basic,
+{
+    const SIGNATURE_CHAR: char = B::SIGNATURE_CHAR;
+    const SIGNATURE_STR: &'static str = B::SIGNATURE_STR;
+    const ALIGNMENT: usize = B::ALIGNMENT;
+}

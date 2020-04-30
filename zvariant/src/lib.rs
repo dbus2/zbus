@@ -472,6 +472,14 @@ mod tests {
     }
 
     #[test]
+    fn struct_ref() {
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &(&1u32, &2u32)).unwrap();
+        let decoded: [u32; 2] = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, [1u32, 2u32]);
+    }
+
+    #[test]
     fn dict_value() {
         let mut map: HashMap<i64, &str> = HashMap::new();
         map.insert(1, "123");
