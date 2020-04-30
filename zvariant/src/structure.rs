@@ -1,4 +1,4 @@
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde::ser::{Serialize, SerializeTupleStruct, Serializer};
 
 use crate::{Signature, Type, Value};
 
@@ -68,10 +68,10 @@ impl<'a> Serialize for Structure<'a> {
     where
         S: Serializer,
     {
-        let mut structure = serializer.serialize_struct("zvariant::Structure", self.0.len())?;
+        let mut structure =
+            serializer.serialize_tuple_struct("zvariant::Structure", self.0.len())?;
         for field in &self.0 {
-            // FIXME: field names should be unique within the structure.
-            field.serialize_value_as_struct_field("zvariant::Structure::field", &mut structure)?;
+            field.serialize_value_as_tuple_struct_field(&mut structure)?;
         }
         structure.end()
     }
