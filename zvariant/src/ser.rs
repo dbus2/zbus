@@ -248,8 +248,17 @@ where
                 }
             }
             _ => {
-                // TODO: Better error here with more info
-                return Err(Error::IncorrectType);
+                let expected = format!(
+                    "`{}`, `{}`, `{}` or `{}`",
+                    <&str>::SIGNATURE_STR,
+                    Signature::SIGNATURE_STR,
+                    ObjectPath::SIGNATURE_STR,
+                    VARIANT_SIGNATURE_CHAR,
+                );
+                return Err(serde::de::Error::invalid_type(
+                    serde::de::Unexpected::Char(c),
+                    &expected.as_str(),
+                ));
             }
         }
         self.sign_parser.parse_char(None)?;
@@ -391,7 +400,17 @@ where
             } else if c == DICT_ENTRY_SIG_START_CHAR {
                 end_parens = Some(DICT_ENTRY_SIG_END_CHAR);
             } else {
-                return Err(Error::IncorrectType);
+                let expected = format!(
+                    "`{}`, `{}`, `{}` or `{}`",
+                    <&str>::SIGNATURE_STR,
+                    Signature::SIGNATURE_STR,
+                    ObjectPath::SIGNATURE_STR,
+                    VARIANT_SIGNATURE_CHAR,
+                );
+                return Err(serde::de::Error::invalid_type(
+                    serde::de::Unexpected::Char(c),
+                    &expected.as_str(),
+                ));
             }
         }
 

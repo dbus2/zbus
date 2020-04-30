@@ -274,9 +274,18 @@ where
 
                 B::read_u32(len_slice) as usize
             }
-            _ => {
-                // TODO: Better error here with more info
-                return Err(Error::IncorrectType);
+            c => {
+                let expected = format!(
+                    "`{}`, `{}`, `{}` or `{}`",
+                    <&str>::SIGNATURE_STR,
+                    Signature::SIGNATURE_STR,
+                    ObjectPath::SIGNATURE_STR,
+                    VARIANT_SIGNATURE_CHAR,
+                );
+                return Err(de::Error::invalid_type(
+                    de::Unexpected::Char(c),
+                    &expected.as_str(),
+                ));
             }
         };
         self.sign_parser.parse_char(None)?;
@@ -412,7 +421,14 @@ where
                         Ok(v)
                     })
             }
-            _ => Err(Error::IncorrectType),
+            c => Err(de::Error::invalid_type(
+                de::Unexpected::Char(c),
+                &format!(
+                    "`{}`, `{}` or `{}`",
+                    VARIANT_SIGNATURE_CHAR, ARRAY_SIGNATURE_CHAR, STRUCT_SIG_START_CHAR,
+                )
+                .as_str(),
+            )),
         }
     }
 

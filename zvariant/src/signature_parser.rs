@@ -20,19 +20,22 @@ impl<'s> SignatureParser<'s> {
     }
 
     pub fn next_char(&self) -> Result<char> {
-        // TODO: Better error here with more info
-        self.signature
-            .chars()
-            .nth(self.pos)
-            .ok_or(Error::InsufficientData)
+        self.signature.chars().nth(self.pos).ok_or_else(|| {
+            serde::de::Error::invalid_value(
+                serde::de::Unexpected::Other("end of signature"),
+                &"a signature character",
+            )
+        })
     }
 
     pub fn parse_char(&mut self, expected: Option<char>) -> Result<()> {
         let c = self.next_char()?;
         if let Some(expected) = expected {
             if c != expected {
-                // TODO: Better error here with more info
-                return Err(Error::IncorrectType);
+                return Err(serde::de::Error::invalid_value(
+                    serde::de::Unexpected::Char(c),
+                    &expected.to_string().as_str(),
+                ));
             }
         }
         self.skip_chars(1)?;
