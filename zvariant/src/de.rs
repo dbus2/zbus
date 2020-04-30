@@ -157,7 +157,12 @@ where
             1 => true,
             0 => false,
             // As per D-Bus spec, only 0 and 1 values are allowed
-            _ => return Err(Error::IncorrectValue),
+            _ => {
+                return Err(de::Error::invalid_value(
+                    de::Unexpected::Unsigned(v as u64),
+                    &"0 or 1",
+                ))
+            }
         };
 
         visitor.visit_bool(b)
