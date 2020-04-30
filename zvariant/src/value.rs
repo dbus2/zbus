@@ -12,6 +12,31 @@ use crate::{Array, Dict};
 use crate::{Basic, Type};
 use crate::{ObjectPath, Signature, Structure};
 
+macro_rules! serialize_value {
+    ($self:ident $serializer:ident.$method:ident $($first_arg:expr)*) => {
+        match $self {
+            Value::U8(value) => $serializer.$method($($first_arg,)* value),
+            Value::Bool(value) => $serializer.$method($($first_arg,)* value),
+            Value::I16(value) => $serializer.$method($($first_arg,)* value),
+            Value::U16(value) => $serializer.$method($($first_arg,)* value),
+            Value::I32(value) => $serializer.$method($($first_arg,)* value),
+            Value::U32(value) => $serializer.$method($($first_arg,)* value),
+            Value::I64(value) => $serializer.$method($($first_arg,)* value),
+            Value::U64(value) => $serializer.$method($($first_arg,)* value),
+            Value::F64(value) => $serializer.$method($($first_arg,)* value),
+            Value::Str(value) => $serializer.$method($($first_arg,)* value),
+            Value::Signature(value) => $serializer.$method($($first_arg,)* value),
+            Value::ObjectPath(value) => $serializer.$method($($first_arg,)* value),
+            Value::Value(value) => $serializer.$method($($first_arg,)* value),
+
+            // Container types
+            Value::Array(value) => $serializer.$method($($first_arg,)* value),
+            Value::Dict(value) => $serializer.$method($($first_arg,)* value),
+            Value::Structure(value) => $serializer.$method($($first_arg,)* value),
+        }
+    }
+}
+
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
 ///
@@ -109,26 +134,7 @@ impl<'a> Value<'a> {
     where
         S: SerializeStruct,
     {
-        match self {
-            Value::U8(value) => serializer.serialize_field(name, value),
-            Value::Bool(value) => serializer.serialize_field(name, value),
-            Value::I16(value) => serializer.serialize_field(name, value),
-            Value::U16(value) => serializer.serialize_field(name, value),
-            Value::I32(value) => serializer.serialize_field(name, value),
-            Value::U32(value) => serializer.serialize_field(name, value),
-            Value::I64(value) => serializer.serialize_field(name, value),
-            Value::U64(value) => serializer.serialize_field(name, value),
-            Value::F64(value) => serializer.serialize_field(name, value),
-            Value::Str(value) => serializer.serialize_field(name, value),
-            Value::Signature(value) => serializer.serialize_field(name, value),
-            Value::ObjectPath(value) => serializer.serialize_field(name, value),
-            Value::Value(value) => serializer.serialize_field(name, value),
-
-            // Container types
-            Value::Array(value) => serializer.serialize_field(name, value),
-            Value::Dict(value) => serializer.serialize_field(name, value),
-            Value::Structure(value) => serializer.serialize_field(name, value),
-        }
+        serialize_value!(self serializer.serialize_field name)
     }
 
     // Really crappy that we need to do this separately for struct and seq cases. :(
@@ -139,26 +145,7 @@ impl<'a> Value<'a> {
     where
         S: SerializeSeq,
     {
-        match self {
-            Value::U8(value) => serializer.serialize_element(value),
-            Value::Bool(value) => serializer.serialize_element(value),
-            Value::I16(value) => serializer.serialize_element(value),
-            Value::U16(value) => serializer.serialize_element(value),
-            Value::I32(value) => serializer.serialize_element(value),
-            Value::U32(value) => serializer.serialize_element(value),
-            Value::I64(value) => serializer.serialize_element(value),
-            Value::U64(value) => serializer.serialize_element(value),
-            Value::F64(value) => serializer.serialize_element(value),
-            Value::Str(value) => serializer.serialize_element(value),
-            Value::Signature(value) => serializer.serialize_element(value),
-            Value::ObjectPath(value) => serializer.serialize_element(value),
-            Value::Value(value) => serializer.serialize_element(value),
-
-            // Container types
-            Value::Array(value) => serializer.serialize_element(value),
-            Value::Dict(value) => serializer.serialize_element(value),
-            Value::Structure(value) => serializer.serialize_element(value),
-        }
+        serialize_value!(self serializer.serialize_element)
     }
 
     /// Try to get `&x` from `&Value(x)` for type `T`.
