@@ -4,4 +4,4 @@ zvariant/target
 **/*.rs.bk
 Cargo.lock
 *.rs.swp
-*.rs.orig
+*.orig
