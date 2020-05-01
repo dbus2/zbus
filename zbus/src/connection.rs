@@ -131,7 +131,7 @@ impl From<Message> for ConnectionError {
         // Then, try to get the optional description string
         match message.body::<&str>() {
             Ok(detail) => ConnectionError::MethodError(name, Some(String::from(detail)), message),
-            Err(e) => ConnectionError::Message(e),
+            Err(_) => ConnectionError::MethodError(name, None, message),
         }
     }
 }
