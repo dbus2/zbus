@@ -204,11 +204,11 @@ impl Message {
     pub fn body_signature(&self) -> Result<Signature, MessageError> {
         let field = self
             .header()?
-            .take_fields()
-            .take_field(MessageFieldCode::Signature)
+            .into_fields()
+            .into_field(MessageFieldCode::Signature)
             .ok_or(MessageError::NoBodySignature)?;
 
-        Ok(field.take_value().try_into()?)
+        Ok(field.into_value().try_into()?)
     }
 
     pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {

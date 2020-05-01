@@ -90,7 +90,7 @@ impl<'v> MessageField<'v> {
         &self.value
     }
 
-    pub fn take_value(self) -> Value<'v> {
+    pub fn into_value(self) -> Value<'v> {
         self.value
     }
 
