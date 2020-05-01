@@ -248,7 +248,7 @@ impl Connection {
         B: serde::ser::Serialize + zvariant::Type,
     {
         let serial = self.next_serial();
-        let mut m = Message::method(destination, path, iface, method_name, body)?;
+        let mut m = Message::method(None, destination, path, iface, method_name, body)?;
         if !m.fds().is_empty() && !self.cap_unix_fd {
             return Err(ConnectionError::Unsupported);
         }

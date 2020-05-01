@@ -37,6 +37,7 @@ mod tests {
     #[test]
     fn msg() {
         let mut m = Message::method(
+            None,
             Some("org.freedesktop.DBus"),
             "/org/freedesktop/DBus",
             Some("org.freedesktop.DBus.Peer"),
