@@ -4,9 +4,10 @@ use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+use zvariant::{ObjectPath, Signature, Value};
 use zvariant_derive::Type;
 
-use crate::{MessageError, MessageFields};
+use crate::{MessageError, MessageFieldCode, MessageFields};
 
 pub const PRIMARY_HEADER_SIZE: usize = 12;
 pub const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
@@ -188,5 +189,121 @@ impl<'m> MessageHeader<'m> {
 
     pub fn into_fields(self) -> MessageFields<'m> {
         self.fields
+    }
+
+    /// The message type
+    pub fn message_type(&self) -> Result<MessageType, MessageError> {
+        Ok(self.primary().msg_type())
+    }
+
+    fn field<'s, T>(&'s self, code: MessageFieldCode) -> Result<Option<T>, MessageError>
+    where
+        T: TryFrom<&'s Value<'s>, Error = zvariant::Error>,
+    {
+        if let Some(f) = self.fields().get_field(code) {
+            Ok(Some(<T>::try_from(f.value())?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// The object to send a call to, or the object a signal is emitted from.
+    pub fn path(&self) -> Result<Option<ObjectPath>, MessageError> {
+        self.field(MessageFieldCode::Path)
+    }
+
+    /// The interface to invoke a method call on, or that a signal is emitted from.
+    pub fn interface(&self) -> Result<Option<String>, MessageError> {
+        self.field(MessageFieldCode::Interface)
+    }
+
+    /// The member, either the method name or signal name.
+    pub fn member(&self) -> Result<Option<String>, MessageError> {
+        self.field(MessageFieldCode::Member)
+    }
+
+    /// The name of the error that occurred, for errors.
+    pub fn error_name(&self) -> Result<Option<String>, MessageError> {
+        self.field(MessageFieldCode::ErrorName)
+    }
+
+    /// The serial number of the message this message is a reply to.
+    pub fn reply_serial(&self) -> Result<Option<u32>, MessageError> {
+        self.field(MessageFieldCode::ReplySerial)
+    }
+
+    /// The name of the connection this message is intended for.
+    pub fn destination(&self) -> Result<Option<String>, MessageError> {
+        self.field(MessageFieldCode::Destination)
+    }
+
+    /// Unique name of the sending connection.
+    pub fn sender(&self) -> Result<Option<String>, MessageError> {
+        self.field(MessageFieldCode::Sender)
+    }
+
+    /// The signature of the message body.
+    pub fn signature(&self) -> Result<Option<Signature>, MessageError> {
+        self.field(MessageFieldCode::Signature)
+    }
+
+    /// The number of Unix file descriptors that accompany the message.
+    pub fn unix_fds(&self) -> Result<Option<u32>, MessageError> {
+        self.field(MessageFieldCode::UnixFDs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{MessageField, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType};
+
+    use std::convert::TryFrom;
+    use std::error::Error;
+    use std::result::Result;
+    use zvariant::{ObjectPath, Signature};
+
+    #[test]
+    fn header() -> Result<(), Box<dyn Error>> {
+        let path = ObjectPath::try_from("/some/path")?;
+        let mut f = MessageFields::new();
+        f.add(MessageField::path(path.clone()));
+        f.add(MessageField::interface("some.interface"));
+        f.add(MessageField::member("Member"));
+        f.add(MessageField::sender(":1.84"));
+        let h = MessageHeader::new(MessagePrimaryHeader::new(MessageType::Signal, 77), f);
+
+        assert_eq!(h.message_type()?, MessageType::Signal);
+        assert_eq!(h.path()?, Some(path));
+        assert_eq!(h.interface()?, Some("some.interface".into()));
+        assert_eq!(h.member()?, Some("Member".into()));
+        assert_eq!(h.error_name()?, None);
+        assert_eq!(h.destination()?, None);
+        assert_eq!(h.reply_serial()?, None);
+        assert_eq!(h.sender()?, Some(":1.84".into()));
+        assert_eq!(h.signature()?, None);
+        assert_eq!(h.unix_fds()?, None);
+
+        let mut f = MessageFields::new();
+        f.add(MessageField::error_name("org.zbus.Error"));
+        f.add(MessageField::destination(":1.11"));
+        f.add(MessageField::reply_serial(88));
+        f.add(MessageField::signature(Signature::from_str_unchecked(
+            "say",
+        )));
+        f.add(MessageField::unix_fds(12));
+        let h = MessageHeader::new(MessagePrimaryHeader::new(MessageType::MethodReturn, 77), f);
+
+        assert_eq!(h.message_type()?, MessageType::MethodReturn);
+        assert_eq!(h.path()?, None);
+        assert_eq!(h.interface()?, None);
+        assert_eq!(h.member()?, None);
+        assert_eq!(h.error_name()?, Some("org.zbus.Error".into()));
+        assert_eq!(h.destination()?, Some(":1.11".into()));
+        assert_eq!(h.reply_serial()?, Some(88));
+        assert_eq!(h.sender()?, None);
+        assert_eq!(h.signature()?, Some(Signature::from_str_unchecked("say")));
+        assert_eq!(h.unix_fds()?, Some(12));
+
+        Ok(())
     }
 }
