@@ -7,7 +7,7 @@ use nix::unistd::Uid;
 use zvariant::Error as VariantError;
 
 use crate::address::{self, Address, AddressError};
-use crate::message_field::{self, MessageFieldCode};
+use crate::message_field;
 use crate::utils::{read_exact, write_all};
 use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
@@ -298,17 +298,13 @@ fn process_response(msg: &Message, serial: u32) -> Option<MessageType> {
             return None;
         }
     };
-    let msg_type = header.primary().msg_type();
-    if msg_type != MessageType::MethodReturn && msg_type != MessageType::Error {
+
+    if header.reply_serial().ok().flatten() != Some(serial) {
         return None;
     }
 
-    let fields = header.fields();
-    if let Some(serial_field) = fields.get_field(MessageFieldCode::ReplySerial) {
-        if *serial_field.value() == zvariant::Value::U32(serial) {
-            return Some(msg_type);
-        }
+    match header.message_type().ok() {
+        Some(t @ MessageType::MethodReturn) | Some(t @ MessageType::Error) => Some(t),
+        _ => None,
     }
-
-    None
 }
