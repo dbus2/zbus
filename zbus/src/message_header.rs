@@ -174,7 +174,7 @@ impl<'m> MessageHeader<'m> {
         &mut self.primary
     }
 
-    pub fn take_primary(self) -> MessagePrimaryHeader {
+    pub fn into_primary(self) -> MessagePrimaryHeader {
         self.primary
     }
 
@@ -186,7 +186,7 @@ impl<'m> MessageHeader<'m> {
         &mut self.fields
     }
 
-    pub fn take_fields(self) -> MessageFields<'m> {
+    pub fn into_fields(self) -> MessageFields<'m> {
         self.fields
     }
 }

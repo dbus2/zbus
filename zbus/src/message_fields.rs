@@ -26,7 +26,7 @@ impl<'m> MessageFields<'m> {
         self.0.iter().find(|f| f.code() == code)
     }
 
-    pub fn take_field(self, code: MessageFieldCode) -> Option<MessageField<'m>> {
+    pub fn into_field(self, code: MessageFieldCode) -> Option<MessageField<'m>> {
         for field in self.0 {
             if field.code() == code {
                 return Some(field);
