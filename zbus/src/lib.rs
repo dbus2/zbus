@@ -74,7 +74,7 @@ mod tests {
             "Hello",
             &(),
         ) {
-            Err(crate::ConnectionError::MethodError(_, _)) => (),
+            Err(crate::ConnectionError::MethodError(_, _, _)) => (),
             Err(e) => panic!("{}", e),
             _ => panic!(),
         };
