@@ -11,6 +11,22 @@ use crate::{Basic, EncodingContext};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
+/// Serialize the given data structure as DBus marshalling format into
+/// the IO stream.
+///
+/// # Panics
+///
+/// This function will `panic!()` if the value to serialize contains FDs.
+///
+/// # Examples
+///
+/// ```
+/// use zvariant::{EncodingContext, to_write};
+/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let mut cursor = std::io::Cursor::new(vec![]);
+/// let len = to_write(&mut cursor, ctxt, &42u32).unwrap();
+/// assert_eq!(len, 4);
+/// ```
 pub fn to_write<B, W, T: ?Sized>(
     write: &mut W,
     ctxt: EncodingContext<B>,
