@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::{env, error, fmt, io};
@@ -119,19 +118,15 @@ impl From<Message> for ConnectionError {
             return ConnectionError::InvalidReply;
         }
 
-        // First, get the error name
-        let name = match header.fields().get_field(MessageFieldCode::ErrorName) {
-            Some(f) => match f.value().try_into() {
-                Ok(s) => s,
-                Err(e) => return ConnectionError::Variant(e),
-            },
-            None => return ConnectionError::InvalidReply,
-        };
-
-        // Then, try to get the optional description string
-        match message.body::<&str>() {
-            Ok(detail) => ConnectionError::MethodError(name, Some(String::from(detail)), message),
-            Err(_) => ConnectionError::MethodError(name, None, message),
+        if let Ok(Some(name)) = header.error_name() {
+            match message.body::<&str>() {
+                Ok(detail) => {
+                    ConnectionError::MethodError(name, Some(String::from(detail)), message)
+                }
+                Err(_) => ConnectionError::MethodError(name, None, message),
+            }
+        } else {
+            ConnectionError::InvalidReply
         }
     }
 }
