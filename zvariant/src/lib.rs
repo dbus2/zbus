@@ -113,7 +113,7 @@ mod tests {
     fn fd_value() {
         basic_type_test!(LE, Fd::from(42), 4, Fd);
 
-        // As Valure
+        // As Value
         let v: Value = Fd::from(42).into();
         assert_eq!(v.value_signature(), "h");
         assert_eq!(v, Value::Fd(Fd::from(42)));
