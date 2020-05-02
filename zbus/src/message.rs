@@ -82,7 +82,6 @@ impl From<IOError> for MessageError {
 ///
 /// *Note*: The owner of the message is responsible for closing the
 /// `fds`.
-#[derive(Debug)]
 pub struct Message {
     bytes: Vec<u8>,
     fds: Vec<RawFd>,
@@ -269,6 +268,40 @@ impl Message {
         zvariant::from_slice(&self.bytes[FIELDS_LEN_START_OFFSET..], dbus_context!(0))
             .map(|v: u32| v as usize)
             .map_err(MessageError::from)
+    }
+}
+
+impl fmt::Debug for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut msg = f.debug_struct("Msg");
+        let _ = self.header().and_then(|h| {
+            if let Ok(t) = h.message_type() {
+                msg.field("type", &t);
+            }
+            if let Ok(Some(sender)) = h.sender() {
+                msg.field("sender", &sender);
+            }
+            if let Ok(Some(serial)) = h.reply_serial() {
+                msg.field("reply-serial", &serial);
+            }
+            if let Ok(Some(path)) = h.path() {
+                msg.field("path", &path);
+            }
+            if let Ok(Some(iface)) = h.interface() {
+                msg.field("iface", &iface);
+            }
+            if let Ok(Some(member)) = h.member() {
+                msg.field("member", &member);
+            }
+            Ok(())
+        });
+        if let Ok(s) = self.body_signature() {
+            msg.field("body", &s);
+        }
+        if !self.fds.is_empty() {
+            msg.field("fds", &self.fds);
+        }
+        msg.finish()
     }
 }
 
