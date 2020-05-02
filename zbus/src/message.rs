@@ -76,6 +76,83 @@ impl From<IOError> for MessageError {
     }
 }
 
+#[derive(Debug)]
+struct MessageBuilder<'a, B> {
+    ty: MessageType,
+    body: &'a B,
+    body_len: u32,
+    fields: MessageFields<'a>,
+}
+
+impl<'a, B> MessageBuilder<'a, B>
+where
+    B: serde::ser::Serialize + Type,
+{
+    fn new(ty: MessageType, body: &'a B) -> Result<Self, MessageError> {
+        let (body_len, fds_len) = zvariant::serialized_size(body)?;
+        let body_len = u32::try_from(body_len).map_err(|_| MessageError::ExcessData)?;
+
+        let mut fields = MessageFields::new();
+
+        let mut signature = B::signature();
+        if signature != "" {
+            if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
+                // Remove leading and trailing STRUCT delimiters
+                signature = Signature::from_string_unchecked(String::from(
+                    &signature[1..signature.len() - 1],
+                ));
+            }
+            fields.add(MessageField::signature(signature));
+        }
+
+        if fds_len > 0 {
+            fields.add(MessageField::unix_fds(fds_len as u32));
+        }
+
+        Ok(Self {
+            ty,
+            body,
+            body_len,
+            fields,
+        })
+    }
+
+    fn build(self) -> Result<Message, MessageError> {
+        let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
+        let mut fds = vec![];
+
+        let MessageBuilder {
+            ty,
+            body,
+            body_len,
+            fields,
+        } = self;
+        let mut cursor = Cursor::new(&mut bytes);
+        let ctxt = dbus_context!(0);
+
+        let primary = MessagePrimaryHeader::new(ty, body_len);
+        let header = MessageHeader::new(primary, fields);
+
+        zvariant::to_write(&mut cursor, ctxt, &header)?;
+        zvariant::to_write_fds(&mut cursor, &mut fds, ctxt, body)?;
+
+        Ok(Message { bytes, fds })
+    }
+
+    fn set_field(mut self, field: MessageField<'a>) -> Result<Self, MessageError> {
+        self.fields.add(field);
+        Ok(self)
+    }
+
+    fn method(path: &'a str, method_name: &'a str, body: &'a B) -> Result<Self, MessageError> {
+        let path = path.try_into()?;
+
+        Self::new(MessageType::MethodCall, body)?
+            .set_field(MessageField::path(path))?
+            .set_field(MessageField::member(method_name))
+    }
+}
+
 /// A DBus Message
 ///
 /// The content of the serialized Message is in `bytes`.
@@ -105,64 +182,17 @@ impl Message {
     where
         B: serde::ser::Serialize + Type,
     {
-        let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
-        let mut cursor = Cursor::new(&mut bytes);
-
-        let dest_length = destination.map_or(0, |s| s.len());
-        let iface_length = iface.map_or(0, |s| s.len());
-        let (body_len, fds_len) = zvariant::serialized_size(body)?;
-
-        // Checks args
-        if dest_length > (u32::max_value() as usize)
-            || path.len() > (u32::max_value() as usize)
-            || iface_length > (u32::max_value() as usize)
-            || method_name.len() > (u32::max_value() as usize)
-        {
-            return Err(MessageError::StrTooLarge);
-        }
-        if body_len > u32::max_value() as usize {
-            return Err(MessageError::ExcessData);
-        }
-
-        // Construct the array of fields
-        let mut fields = MessageFields::new();
-
+        let mut b = MessageBuilder::method(path, method_name, body)?;
         if let Some(sender) = sender {
-            fields.add(MessageField::sender(sender));
+            b = b.set_field(MessageField::sender(sender))?;
         }
         if let Some(destination) = destination {
-            fields.add(MessageField::destination(destination));
+            b = b.set_field(MessageField::destination(destination))?;
         }
         if let Some(iface) = iface {
-            fields.add(MessageField::interface(iface));
+            b = b.set_field(MessageField::interface(iface))?;
         }
-        let mut signature = B::signature();
-        if signature != "" {
-            if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
-                // Remove leading and trailing STRUCT delimiters
-                signature = Signature::from_string_unchecked(String::from(
-                    &signature[1..signature.len() - 1],
-                ));
-            }
-            fields.add(MessageField::signature(signature));
-        }
-        let path = zvariant::ObjectPath::try_from(path)?;
-        fields.add(MessageField::path(path));
-        fields.add(MessageField::member(method_name));
-        if fds_len > 0 {
-            fields.add(MessageField::unix_fds(fds_len as u32));
-        }
-
-        let ctxt = dbus_context!(0);
-
-        let primary = MessagePrimaryHeader::new(MessageType::MethodCall, body_len as u32);
-        let header = MessageHeader::new(primary, fields);
-        zvariant::to_write(&mut cursor, ctxt, &header)?;
-
-        let mut fds = vec![];
-        zvariant::to_write_fds(&mut cursor, &mut fds, ctxt, body)?;
-
-        Ok(Self { bytes, fds })
+        b.build()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
