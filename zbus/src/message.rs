@@ -96,6 +96,7 @@ pub struct Message {
 // * Only primary header can be modified after creation.
 impl Message {
     pub fn method<B>(
+        sender: Option<&str>,
         destination: Option<&str>,
         path: &str,
         iface: Option<&str>,
@@ -127,6 +128,9 @@ impl Message {
         // Construct the array of fields
         let mut fields = MessageFields::new();
 
+        if let Some(sender) = sender {
+            fields.add(MessageField::sender(sender));
+        }
         if let Some(destination) = destination {
             fields.add(MessageField::destination(destination));
         }
@@ -277,7 +281,15 @@ mod tests {
     #[test]
     fn test() {
         let stdout = std::io::stdout();
-        let m = Message::method(None, "/", None, "do", &(Fd::from(&stdout), "foo")).unwrap();
+        let m = Message::method(
+            Some(":1.72"),
+            None,
+            "/",
+            None,
+            "do",
+            &(Fd::from(&stdout), "foo"),
+        )
+        .unwrap();
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
         assert_eq!(m.fds, vec![stdout.as_raw_fd()]);
     }
