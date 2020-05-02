@@ -15,7 +15,7 @@ use crate::{Fd, ObjectPath, Signature};
 
 pub fn from_slice_fds<'d, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
-    fds: Option<&'r Vec<RawFd>>,
+    fds: Option<&'r [RawFd]>,
     ctxt: EncodingContext<B>,
 ) -> Result<T>
 where
@@ -51,7 +51,7 @@ where
 // TODO: Return number of bytes parsed?
 pub fn from_slice_fds_for_signature<'d, 's, 'sig, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
-    fds: Option<&'r Vec<RawFd>>,
+    fds: Option<&'r [RawFd]>,
     ctxt: EncodingContext<B>,
     signature: &'s Signature<'sig>,
 ) -> Result<T>
@@ -67,7 +67,7 @@ where
 pub struct Deserializer<'de, 'sig, B> {
     pub(self) ctxt: EncodingContext<B>,
     pub(self) bytes: &'de [u8],
-    pub(self) fds: Option<&'de Vec<RawFd>>,
+    pub(self) fds: Option<&'de [RawFd]>,
     pub(self) pos: usize,
 
     pub(self) sign_parser: SignatureParser<'sig>,
@@ -81,7 +81,7 @@ where
 {
     pub fn new<'r: 'de, 's>(
         bytes: &'r [u8],
-        fds: Option<&'r Vec<RawFd>>,
+        fds: Option<&'r [RawFd]>,
         signature: &'s Signature<'sig>,
         ctxt: EncodingContext<B>,
     ) -> Self {
