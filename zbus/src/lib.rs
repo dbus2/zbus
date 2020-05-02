@@ -198,7 +198,10 @@ mod tests {
             .body_signature()
             .map(|s| s == <&str>::signature())
             .unwrap());
-        assert_eq!(reply.body::<&str>().unwrap(), connection.unique_name);
+        assert_eq!(
+            Some(reply.body::<&str>().unwrap()),
+            connection.unique_name.as_deref()
+        );
 
         let reply = connection
             .call_method(

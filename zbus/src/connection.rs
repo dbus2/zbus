@@ -15,7 +15,7 @@ use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 pub struct Connection {
     pub server_guid: String,
     pub cap_unix_fd: bool,
-    pub unique_name: String,
+    pub unique_name: Option<String>,
 
     socket: UnixStream,
     // Serial number for next outgoing message
@@ -211,7 +211,7 @@ impl Connection {
             server_guid,
             cap_unix_fd,
             serial: 0,
-            unique_name: String::from(""),
+            unique_name: None,
         };
 
         // Now that daemon has approved us, we must send a hello as per specs
@@ -223,7 +223,7 @@ impl Connection {
             &(),
         )?;
 
-        connection.unique_name = reply.body::<&str>().map(String::from)?;
+        connection.unique_name = Some(reply.body::<&str>().map(String::from)?);
 
         Ok(connection)
     }
@@ -248,7 +248,14 @@ impl Connection {
         B: serde::ser::Serialize + zvariant::Type,
     {
         let serial = self.next_serial();
-        let mut m = Message::method(None, destination, path, iface, method_name, body)?;
+        let mut m = Message::method(
+            self.unique_name.as_deref(),
+            destination,
+            path,
+            iface,
+            method_name,
+            body,
+        )?;
         if !m.fds().is_empty() && !self.cap_unix_fd {
             return Err(ConnectionError::Unsupported);
         }
