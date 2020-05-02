@@ -119,6 +119,7 @@ impl From<Message> for ConnectionError {
         }
 
         if let Ok(Some(name)) = header.error_name() {
+            let name = String::from(name);
             match message.body::<&str>() {
                 Ok(detail) => {
                     ConnectionError::MethodError(name, Some(String::from(detail)), message)
