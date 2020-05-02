@@ -253,6 +253,22 @@ impl Connection {
         Ok(incoming)
     }
 
+    fn send_message(&mut self, mut msg: Message) -> Result<u32, ConnectionError> {
+        if !msg.fds().is_empty() && !self.cap_unix_fd {
+            return Err(ConnectionError::Unsupported);
+        }
+
+        let serial = self.next_serial();
+        msg.modify_primary_header(|primary| {
+            primary.set_serial_num(serial);
+
+            Ok(())
+        })?;
+
+        write_all(&self.socket, msg.as_bytes(), &msg.fds())?;
+        Ok(serial)
+    }
+
     pub fn call_method<B>(
         &mut self,
         destination: Option<&str>,
@@ -264,8 +280,7 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        let serial = self.next_serial();
-        let mut m = Message::method(
+        let m = Message::method(
             self.unique_name.as_deref(),
             destination,
             path,
@@ -273,17 +288,8 @@ impl Connection {
             method_name,
             body,
         )?;
-        if !m.fds().is_empty() && !self.cap_unix_fd {
-            return Err(ConnectionError::Unsupported);
-        }
 
-        m.modify_primary_header(|primary| {
-            primary.set_serial_num(serial);
-
-            Ok(())
-        })?;
-
-        write_all(&self.socket, m.as_bytes(), &m.fds())?;
+        let serial = self.send_message(m)?;
 
         // FIXME: We need to read incoming messages in a separate thread and maintain a queue
         loop {
