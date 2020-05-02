@@ -466,9 +466,9 @@ mod tests {
             panic!();
         }
 
-        let av = Value::new([Value::new(43), Value::new("bonjour")].to_vec());
-        let ar = TryInto::<&Array>::try_into(&av).unwrap();
-        assert_eq!(ar[1], Value::new(Value::new("bonjour")));
+        let v = Value::new(vec![Value::new(43), Value::new("bonjour")]);
+        let av = <&Array>::try_from(&v).unwrap();
+        assert_eq!(av[1], Value::new(Value::new("bonjour")));
     }
 
     #[test]
