@@ -262,7 +262,7 @@ impl Connection {
             Ok(())
         })?;
 
-        write_all(&self.socket, m.as_bytes(), m.fds())?;
+        write_all(&self.socket, m.as_bytes(), &m.fds())?;
 
         loop {
             // FIXME: We need to read incoming messages in a separate thread and maintain a queue
@@ -282,7 +282,7 @@ impl Connection {
             match process_response(&incoming, serial) {
                 Some(MessageType::Error) => return Err((incoming).into()),
                 Some(MessageType::MethodReturn) => {
-                    incoming.set_fds(fds);
+                    incoming.set_owned_fds(fds);
                     return Ok(incoming);
                 }
                 _ => (),
