@@ -77,6 +77,7 @@ value_try_from_all!(Array, Array<'a>);
 
 value_try_from!(Str, &'a str);
 value_try_from!(Str, String);
+value_try_from_ref!(Str, str);
 value_try_from_ref!(Str, &'a str);
 value_try_from_ref_clone!(Str, String);
 
