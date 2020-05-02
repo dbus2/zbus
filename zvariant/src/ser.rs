@@ -47,7 +47,8 @@ where
 ///
 /// # Panics
 ///
-/// This function will `panic!()` if the value to serialize contains FDs.
+/// This function will `panic!()` if the value to serialize contains FDs. Use [`to_write_fds`] if
+/// you'd want to potentially pass FDs.
 ///
 /// # Examples
 ///
@@ -58,6 +59,8 @@ where
 /// let len = to_write(&mut cursor, ctxt, &42u32).unwrap();
 /// assert_eq!(len, 4);
 /// ```
+///
+/// [`to_write_fds`]: fn.to_write_fds.html
 pub fn to_write<B, W, T: ?Sized>(
     write: &mut W,
     ctxt: EncodingContext<B>,
