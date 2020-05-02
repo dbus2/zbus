@@ -213,17 +213,17 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
-    pub fn interface(&self) -> Result<Option<String>, MessageError> {
+    pub fn interface(&self) -> Result<Option<&str>, MessageError> {
         self.field(MessageFieldCode::Interface)
     }
 
     /// The member, either the method name or signal name.
-    pub fn member(&self) -> Result<Option<String>, MessageError> {
+    pub fn member(&self) -> Result<Option<&str>, MessageError> {
         self.field(MessageFieldCode::Member)
     }
 
     /// The name of the error that occurred, for errors.
-    pub fn error_name(&self) -> Result<Option<String>, MessageError> {
+    pub fn error_name(&self) -> Result<Option<&str>, MessageError> {
         self.field(MessageFieldCode::ErrorName)
     }
 
@@ -233,12 +233,12 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// The name of the connection this message is intended for.
-    pub fn destination(&self) -> Result<Option<String>, MessageError> {
+    pub fn destination(&self) -> Result<Option<&str>, MessageError> {
         self.field(MessageFieldCode::Destination)
     }
 
     /// Unique name of the sending connection.
-    pub fn sender(&self) -> Result<Option<String>, MessageError> {
+    pub fn sender(&self) -> Result<Option<&str>, MessageError> {
         self.field(MessageFieldCode::Sender)
     }
 
