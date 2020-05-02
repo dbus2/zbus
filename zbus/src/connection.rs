@@ -232,6 +232,27 @@ impl Connection {
         Self::new(system_socket()?)
     }
 
+    /// Return the next message from the connection.
+    ///
+    /// Read from the connection until a message is received or an error is reached. Return the
+    /// message on success.
+    pub fn next_message(&self) -> Result<Message, ConnectionError> {
+        let mut buf = [0; MIN_MESSAGE_SIZE];
+        let mut fds = read_exact(&self.socket, &mut buf[..])?;
+
+        let mut incoming = Message::from_bytes(&buf)?;
+        let bytes_left = incoming.bytes_to_completion()?;
+        if bytes_left == 0 {
+            return Err(ConnectionError::Handshake);
+        }
+        let mut buf = vec![0; bytes_left as usize];
+        fds.append(&mut read_exact(&self.socket, &mut buf[..])?);
+        incoming.add_bytes(&buf[..])?;
+        incoming.set_owned_fds(fds);
+
+        Ok(incoming)
+    }
+
     pub fn call_method<B>(
         &mut self,
         destination: Option<&str>,
@@ -264,27 +285,18 @@ impl Connection {
 
         write_all(&self.socket, m.as_bytes(), &m.fds())?;
 
+        // FIXME: We need to read incoming messages in a separate thread and maintain a queue
         loop {
-            // FIXME: We need to read incoming messages in a separate thread and maintain a queue
+            let m = self.next_message()?;
+            let h = m.header()?;
 
-            let mut buf = [0; MIN_MESSAGE_SIZE];
-            let mut fds = read_exact(&self.socket, &mut buf[..])?;
-
-            let mut incoming = Message::from_bytes(&buf)?;
-            let bytes_left = incoming.bytes_to_completion()?;
-            if bytes_left == 0 {
-                return Err(ConnectionError::Handshake);
+            if h.reply_serial()? != Some(serial) {
+                continue;
             }
-            let mut buf = vec![0; bytes_left as usize];
-            fds.append(&mut read_exact(&self.socket, &mut buf[..])?);
-            incoming.add_bytes(&buf[..])?;
 
-            match process_response(&incoming, serial) {
-                Some(MessageType::Error) => return Err((incoming).into()),
-                Some(MessageType::MethodReturn) => {
-                    incoming.set_owned_fds(fds);
-                    return Ok(incoming);
-                }
+            match h.message_type()? {
+                MessageType::Error => return Err(m.into()),
+                MessageType::MethodReturn => return Ok(m),
                 _ => (),
             }
         }
@@ -294,25 +306,5 @@ impl Connection {
         self.serial += 1;
 
         self.serial
-    }
-}
-
-fn process_response(msg: &Message, serial: u32) -> Option<MessageType> {
-    let header = match msg.header() {
-        Ok(header) => header,
-        Err(e) => {
-            println!("Error parsing a message header: {}", e);
-
-            return None;
-        }
-    };
-
-    if header.reply_serial().ok().flatten() != Some(serial) {
-        return None;
-    }
-
-    match header.message_type().ok() {
-        Some(t @ MessageType::MethodReturn) | Some(t @ MessageType::Error) => Some(t),
-        _ => None,
     }
 }
