@@ -13,6 +13,26 @@ use crate::{Basic, EncodingContext};
 use crate::{Error, Result};
 use crate::{Fd, ObjectPath, Signature};
 
+/// Deserialize `T` from a given slice of bytes, containing file descriptor indices.
+///
+/// Please note that actual file descriptors are not part of the encoding and need to be transferred
+/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
+/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
+///
+/// # Examples
+///
+/// ```
+/// use zvariant::{to_bytes_fds, from_slice_fds};
+/// use zvariant::{EncodingContext, Fd};
+///
+/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let (encoded, fds) = to_bytes_fds(ctxt, &Fd::from(42)).unwrap();
+/// let decoded: Fd = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
+/// assert_eq!(decoded, Fd::from(42));
+/// ```
+///
+/// [`Fd`]: struct.Fd.html
+/// [`from_slice`]: fn.from_slice.html
 pub fn from_slice_fds<'d, 'r: 'd, 'f, B, T: ?Sized>(
     bytes: &'r [u8],
     fds: Option<&'f [RawFd]>,
@@ -26,6 +46,24 @@ where
     from_slice_fds_for_signature(bytes, fds, ctxt, &signature)
 }
 
+/// Deserialize `T` from a given slice of bytes.
+///
+/// If `T` is an, or (potentially) contains an [`Fd`], use [`from_slice_fds`] instead.
+///
+/// # Examples
+///
+/// ```
+/// use zvariant::{to_bytes, from_slice};
+/// use zvariant::EncodingContext;
+///
+/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let encoded = to_bytes(ctxt, &"hello world").unwrap();
+/// let decoded: &str = from_slice(&encoded, ctxt).unwrap();
+/// assert_eq!(decoded, "hello world");
+/// ```
+///
+/// [`Fd`]: struct.Fd.html
+/// [`from_slice_fds`]: fn.from_slice_fds.html
 pub fn from_slice<'d, 'r: 'd, B, T: ?Sized>(bytes: &'r [u8], ctxt: EncodingContext<B>) -> Result<T>
 where
     B: byteorder::ByteOrder,
@@ -35,6 +73,56 @@ where
     from_slice_for_signature(bytes, ctxt, &signature)
 }
 
+/// Deserialize `T` from a given slice of bytes with the given signature.
+///
+/// Use this function instead of [`from_slice`] if the value being deserialized does not implement
+/// `Type`. Also, if `T` is an, or (potentially) contains an [`Fd`], use
+/// [`from_slice_fds_for_signature`] instead.
+///
+/// # Examples
+///
+/// One known case where `Type` implementation isn't possible, is enum types (except simple ones
+/// with unit variants only).
+///
+/// ```
+/// use std::convert::TryInto;
+/// use serde::{Deserialize, Serialize};
+///
+/// use zvariant::{to_bytes_for_signature, from_slice_for_signature};
+/// use zvariant::EncodingContext;
+///
+/// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// enum Test {
+///     Unit,
+///     NewType(u8),
+///     Tuple(u8, u64),
+///     Struct { y: u8, t: u64 },
+/// }
+///
+/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let signature = "u".try_into().unwrap();
+/// let encoded = to_bytes_for_signature(ctxt, &signature, &Test::Unit).unwrap();
+/// let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// assert_eq!(decoded, Test::Unit);
+///
+/// let signature = "y".try_into().unwrap();
+/// let encoded = to_bytes_for_signature(ctxt, &signature, &Test::NewType(42)).unwrap();
+/// let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// assert_eq!(decoded, Test::NewType(42));
+///
+/// let signature = "(yt)".try_into().unwrap();
+/// let encoded = to_bytes_for_signature(ctxt, &signature, &Test::Tuple(42, 42)).unwrap();
+/// let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// assert_eq!(decoded, Test::Tuple(42, 42));
+///
+/// let s = Test::Struct { y: 42, t: 42 };
+/// let encoded = to_bytes_for_signature(ctxt, &signature, &s).unwrap();
+/// let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// assert_eq!(decoded, Test::Struct { y: 42, t: 42 });
+/// ```
+///
+/// [`Fd`]: struct.Fd.html
+/// [`from_slice_fds_for_signature`]: fn.from_slice_fds_for_signature.html
 // TODO: Return number of bytes parsed?
 pub fn from_slice_for_signature<'d, 's, 'sig, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
@@ -48,6 +136,15 @@ where
     from_slice_fds_for_signature(bytes, None, ctxt, signature)
 }
 
+/// Deserialize `T` from a given slice of bytes containing file descriptor indices, with the given signature.
+///
+/// Please note that actual file descriptors are not part of the encoding and need to be transferred
+/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
+/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
+///
+/// [`Fd`]: struct.Fd.html
+/// [`from_slice`]: fn.from_slice.html
+/// [`from_slice_for_signature`]: fn.from_slice_for_signature.html
 // TODO: Return number of bytes parsed?
 pub fn from_slice_fds_for_signature<'d, 's, 'sig, 'r: 'd, 'f, B, T: ?Sized>(
     bytes: &'r [u8],
@@ -75,10 +172,12 @@ pub struct Deserializer<'de, 'sig, 'f, B> {
     b: PhantomData<B>,
 }
 
+/// Our Deserialization implementation.
 impl<'de, 'sig, 'f, B> Deserializer<'de, 'sig, 'f, B>
 where
     B: byteorder::ByteOrder,
 {
+    /// Create a Deserializer struct instance.
     pub fn new<'r: 'de, 's>(
         bytes: &'r [u8],
         fds: Option<&'f [RawFd]>,
