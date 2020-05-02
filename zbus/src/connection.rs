@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::{env, error, fmt, io};
@@ -8,7 +7,7 @@ use nix::unistd::Uid;
 use zvariant::Error as VariantError;
 
 use crate::address::{self, Address, AddressError};
-use crate::message_field::{self, MessageFieldCode};
+use crate::message_field;
 use crate::utils::{read_exact, write_all};
 use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
@@ -119,19 +118,15 @@ impl From<Message> for ConnectionError {
             return ConnectionError::InvalidReply;
         }
 
-        // First, get the error name
-        let name = match header.fields().get_field(MessageFieldCode::ErrorName) {
-            Some(f) => match f.value().try_into() {
-                Ok(s) => s,
-                Err(e) => return ConnectionError::Variant(e),
-            },
-            None => return ConnectionError::InvalidReply,
-        };
-
-        // Then, try to get the optional description string
-        match message.body::<&str>() {
-            Ok(detail) => ConnectionError::MethodError(name, Some(String::from(detail)), message),
-            Err(_) => ConnectionError::MethodError(name, None, message),
+        if let Ok(Some(name)) = header.error_name() {
+            match message.body::<&str>() {
+                Ok(detail) => {
+                    ConnectionError::MethodError(name, Some(String::from(detail)), message)
+                }
+                Err(_) => ConnectionError::MethodError(name, None, message),
+            }
+        } else {
+            ConnectionError::InvalidReply
         }
     }
 }
@@ -303,17 +298,13 @@ fn process_response(msg: &Message, serial: u32) -> Option<MessageType> {
             return None;
         }
     };
-    let msg_type = header.primary().msg_type();
-    if msg_type != MessageType::MethodReturn && msg_type != MessageType::Error {
+
+    if header.reply_serial().ok().flatten() != Some(serial) {
         return None;
     }
 
-    let fields = header.fields();
-    if let Some(serial_field) = fields.get_field(MessageFieldCode::ReplySerial) {
-        if *serial_field.value() == zvariant::Value::U32(serial) {
-            return Some(msg_type);
-        }
+    match header.message_type().ok() {
+        Some(t @ MessageType::MethodReturn) | Some(t @ MessageType::Error) => Some(t),
+        _ => None,
     }
-
-    None
 }
