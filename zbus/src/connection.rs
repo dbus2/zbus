@@ -308,6 +308,35 @@ impl Connection {
         }
     }
 
+    /// Reply to a message.
+    ///
+    /// Given an existing message (likely a method call), send a reply back to the caller with the
+    /// given `body`.
+    pub fn reply<B>(&mut self, call: &Message, body: &B) -> Result<u32, ConnectionError>
+    where
+        B: serde::ser::Serialize + zvariant::Type,
+    {
+        let m = Message::method_reply(call, body)?;
+        self.send_message(m)
+    }
+
+    /// Reply an error to a message.
+    ///
+    /// Given an existing message (likely a method call), send an error reply back to the caller
+    /// with the given `error_name` and `body`.
+    pub fn reply_error<B>(
+        &mut self,
+        call: &Message,
+        error_name: &str,
+        body: &B,
+    ) -> Result<u32, ConnectionError>
+    where
+        B: serde::ser::Serialize + zvariant::Type,
+    {
+        let m = Message::method_error(call, error_name, body)?;
+        self.send_message(m)
+    }
+
     fn next_serial(&mut self) -> u32 {
         self.serial += 1;
 
