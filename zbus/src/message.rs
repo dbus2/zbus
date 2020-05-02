@@ -28,6 +28,7 @@ pub enum MessageError {
     IncorrectEndian,
     Io(IOError),
     NoBodySignature,
+    MissingSender,
     MessageField(MessageFieldError),
     Variant(VariantError),
 }
@@ -52,6 +53,7 @@ impl fmt::Display for MessageError {
             MessageError::ExcessData => write!(f, "excess data"),
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
             MessageError::NoBodySignature => write!(f, "missing body signature"),
+            MessageError::MissingSender => write!(f, "missing sender"),
             MessageError::MessageField(e) => write!(f, "{}", e),
             MessageError::Variant(e) => write!(f, "{}", e),
         }
@@ -81,6 +83,7 @@ struct MessageBuilder<'a, B> {
     ty: MessageType,
     body: &'a B,
     body_len: u32,
+    reply_to: Option<MessageHeader<'a>>,
     fields: MessageFields<'a>,
 }
 
@@ -114,6 +117,7 @@ where
             body,
             body_len,
             fields,
+            reply_to: None,
         })
     }
 
@@ -125,10 +129,19 @@ where
             ty,
             body,
             body_len,
-            fields,
+            mut fields,
+            reply_to,
         } = self;
         let mut cursor = Cursor::new(&mut bytes);
         let ctxt = dbus_context!(0);
+
+        if let Some(reply_to) = reply_to.as_ref() {
+            let destination = reply_to.sender()?.ok_or(MessageError::MissingSender)?;
+            let serial = reply_to.primary().serial_num();
+
+            fields.add(MessageField::destination(destination));
+            fields.add(MessageField::reply_serial(serial));
+        }
 
         let primary = MessagePrimaryHeader::new(ty, body_len);
         let header = MessageHeader::new(primary, fields);
@@ -139,9 +152,28 @@ where
         Ok(Message { bytes, fds })
     }
 
+    fn set_reply_to(mut self, reply_to: &'a Message) -> Result<Self, MessageError> {
+        self.reply_to = Some(reply_to.header()?);
+        Ok(self)
+    }
+
     fn set_field(mut self, field: MessageField<'a>) -> Result<Self, MessageError> {
         self.fields.add(field);
         Ok(self)
+    }
+
+    fn reply(reply_to: &'a Message, body: &'a B) -> Result<Self, MessageError> {
+        Self::new(MessageType::MethodReturn, body)?.set_reply_to(reply_to)
+    }
+
+    fn error(
+        reply_to: &'a Message,
+        error_name: &'a str,
+        body: &'a B,
+    ) -> Result<Self, MessageError> {
+        Self::new(MessageType::Error, body)?
+            .set_reply_to(reply_to)?
+            .set_field(MessageField::error_name(error_name))
     }
 
     fn method(path: &'a str, method_name: &'a str, body: &'a B) -> Result<Self, MessageError> {
@@ -193,6 +225,20 @@ impl Message {
             b = b.set_field(MessageField::interface(iface))?;
         }
         b.build()
+    }
+
+    pub fn method_reply<B>(call: &Self, body: &B) -> Result<Self, MessageError>
+    where
+        B: serde::ser::Serialize + Type,
+    {
+        MessageBuilder::reply(call, body)?.build()
+    }
+
+    pub fn method_error<B>(call: &Self, name: &str, body: &B) -> Result<Self, MessageError>
+    where
+        B: serde::ser::Serialize + Type,
+    {
+        MessageBuilder::error(call, name, body)?.build()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
@@ -355,5 +401,8 @@ mod tests {
         .unwrap();
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
         assert_eq!(m.fds, vec![stdout.as_raw_fd()]);
+
+        Message::method_reply(&m, &("all fine!")).unwrap();
+        Message::method_error(&m, "org.freedesktop.zbus.Error", &("kaboom!", 32)).unwrap();
     }
 }
