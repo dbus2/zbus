@@ -381,6 +381,53 @@ impl fmt::Debug for Message {
     }
 }
 
+impl fmt::Display for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let header = self.header();
+        let (ty, error_name, sender) = if let Ok(h) = header.as_ref() {
+            (
+                h.message_type().ok(),
+                h.error_name().ok().flatten(),
+                h.sender().ok().flatten(),
+            )
+        } else {
+            (None, None, None)
+        };
+
+        match ty {
+            Some(MessageType::MethodCall) => {
+                write!(f, "Method call")?;
+            }
+            Some(MessageType::MethodReturn) => {
+                write!(f, "Method return")?;
+            }
+            Some(MessageType::Error) => {
+                write!(f, "Error")?;
+                if let Some(e) = error_name {
+                    write!(f, " {}", e)?;
+                }
+
+                let msg = self.body::<&str>();
+                if let Ok(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+            }
+            Some(MessageType::Signal) => {
+                write!(f, "Signal")?;
+            }
+            _ => {
+                write!(f, "Unknown message")?;
+            }
+        }
+
+        if let Some(s) = sender {
+            write!(f, " from {}", s)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Message;
@@ -402,7 +449,10 @@ mod tests {
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
         assert_eq!(m.fds, vec![stdout.as_raw_fd()]);
 
-        Message::method_reply(&m, &("all fine!")).unwrap();
-        Message::method_error(&m, "org.freedesktop.zbus.Error", &("kaboom!", 32)).unwrap();
+        assert_eq!(m.to_string(), "Method call from :1.72");
+        let r = Message::method_reply(&m, &("all fine!")).unwrap();
+        assert_eq!(r.to_string(), "Method return");
+        let e = Message::method_error(&m, "org.freedesktop.zbus.Error", &("kaboom!", 32)).unwrap();
+        assert_eq!(e.to_string(), "Error org.freedesktop.zbus.Error: kaboom!");
     }
 }
