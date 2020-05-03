@@ -52,6 +52,13 @@ impl<'a> Array<'a> {
     pub fn element_signature(&self) -> &Signature {
         &self.element_signature
     }
+
+    pub(crate) fn to_owned(&self) -> Array<'static> {
+        Array {
+            element_signature: self.element_signature.to_owned(),
+            elements: self.elements.iter().map(|v| v.to_owned()).collect(),
+        }
+    }
 }
 
 impl<'a> std::ops::Deref for Array<'a> {

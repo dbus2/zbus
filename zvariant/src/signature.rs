@@ -30,6 +30,11 @@ impl<'a> Signature<'a> {
     pub fn from_string_unchecked(signature: String) -> Self {
         Self(Cow::from(signature))
     }
+
+    pub(crate) fn to_owned(&self) -> Signature<'static> {
+        let s = self.0.clone().into_owned();
+        Signature(Cow::Owned(s))
+    }
 }
 
 impl<'a> Basic for Signature<'a> {

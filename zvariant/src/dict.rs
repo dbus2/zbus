@@ -90,6 +90,13 @@ impl<'k, 'v> Dict<'k, 'v> {
         ))
     }
 
+    pub(crate) fn to_owned(&self) -> Dict<'static, 'static> {
+        Dict {
+            key_signature: self.key_signature.to_owned(),
+            value_signature: self.value_signature.to_owned(),
+            entries: self.entries.iter().map(|v| v.to_owned()).collect(),
+        }
+    }
     // TODO: Provide more API like https://docs.rs/toml/0.5.5/toml/map/struct.Map.html
 }
 
@@ -157,6 +164,15 @@ where
 struct DictEntry<'k, 'v> {
     key: Value<'k>,
     value: Value<'v>,
+}
+
+impl<'k, 'v> DictEntry<'k, 'v> {
+    fn to_owned(&self) -> DictEntry<'static, 'static> {
+        DictEntry {
+            key: self.key.to_owned(),
+            value: self.value.to_owned(),
+        }
+    }
 }
 
 impl<'k, 'v> Serialize for DictEntry<'k, 'v> {

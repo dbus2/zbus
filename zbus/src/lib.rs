@@ -29,7 +29,7 @@ mod tests {
     use enumflags2::BitFlags;
     use serde_repr::{Deserialize_repr, Serialize_repr};
 
-    use zvariant::{Fd, Type, Value};
+    use zvariant::{Fd, OwnedValue, Type};
     use zvariant_derive::Type;
 
     use crate::{Message, MessageFlags};
@@ -215,7 +215,7 @@ mod tests {
             .unwrap();
 
         assert!(reply.body_signature().map(|s| s == "a{sv}").unwrap());
-        let hashmap: HashMap<&str, Value> = reply.body().unwrap();
+        let hashmap: HashMap<&str, OwnedValue> = reply.body().unwrap();
 
         let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
         println!("DBus bus PID: {}", pid);

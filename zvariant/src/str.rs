@@ -12,6 +12,11 @@ impl<'a> Str<'a> {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub(crate) fn to_owned(&self) -> Str<'static> {
+        let s = self.0.clone().into_owned();
+        Str(Cow::Owned(s))
+    }
 }
 
 impl<'a> Basic for Str<'a> {

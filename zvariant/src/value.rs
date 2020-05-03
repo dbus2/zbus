@@ -8,9 +8,7 @@ use serde::de::{
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer};
 
 use crate::utils::*;
-use crate::{Array, Dict};
-use crate::{Basic, Fd, Type};
-use crate::{ObjectPath, Signature, Str, Structure};
+use crate::{Array, Basic, Dict, Fd, ObjectPath, OwnedValue, Signature, Str, Structure, Type};
 
 macro_rules! serialize_value {
     ($self:ident $serializer:ident.$method:ident $($first_arg:expr)*) => {
@@ -103,6 +101,32 @@ impl<'a> Value<'a> {
             Self::Value(Box::new(value.into()))
         } else {
             value.into()
+        }
+    }
+
+    pub(crate) fn to_owned(&self) -> Value<'static> {
+        match self {
+            Value::U8(v) => Value::U8(*v),
+            Value::Bool(v) => Value::Bool(*v),
+            Value::I16(v) => Value::I16(*v),
+            Value::U16(v) => Value::U16(*v),
+            Value::I32(v) => Value::I32(*v),
+            Value::U32(v) => Value::U32(*v),
+            Value::I64(v) => Value::I64(*v),
+            Value::U64(v) => Value::U64(*v),
+            Value::F64(v) => Value::F64(*v),
+            Value::Str(v) => Value::Str(v.to_owned()),
+            Value::Signature(v) => Value::Signature(v.to_owned()),
+            Value::ObjectPath(v) => Value::ObjectPath(v.to_owned()),
+            Value::Value(v) => {
+                let o = OwnedValue::from(&**v);
+                Value::Value(Box::new(o.into_inner()))
+            }
+
+            Value::Array(v) => Value::Array(v.to_owned()),
+            Value::Dict(v) => Value::Dict(v.to_owned()),
+            Value::Structure(v) => Value::Structure(v.to_owned()),
+            Value::Fd(v) => Value::Fd(*v),
         }
     }
 

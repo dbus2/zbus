@@ -46,6 +46,9 @@ pub use from_value::*;
 mod into_value;
 pub use into_value::*;
 
+mod owned_value;
+pub use owned_value::*;
+
 #[macro_use]
 mod utils;
 pub use utils::*;
