@@ -1,5 +1,5 @@
 use std::mem::forget;
-use std::os::unix::io::{FromRawFd, IntoRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct OwnedFd {
@@ -9,6 +9,12 @@ pub(crate) struct OwnedFd {
 impl FromRawFd for OwnedFd {
     unsafe fn from_raw_fd(fd: RawFd) -> OwnedFd {
         OwnedFd { inner: fd }
+    }
+}
+
+impl AsRawFd for OwnedFd {
+    fn as_raw_fd(&self) -> RawFd {
+        self.inner
     }
 }
 
