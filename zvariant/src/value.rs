@@ -10,7 +10,7 @@ use serde::ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct,
 use crate::utils::*;
 use crate::{Array, Dict};
 use crate::{Basic, Fd, Type};
-use crate::{ObjectPath, Signature, Structure};
+use crate::{ObjectPath, Signature, Str, Structure};
 
 macro_rules! serialize_value {
     ($self:ident $serializer:ident.$method:ident $($first_arg:expr)*) => {
@@ -62,7 +62,7 @@ pub enum Value<'a> {
     I64(i64),
     U64(u64),
     F64(f64),
-    Str(&'a str),
+    Str(Str<'a>),
     Signature(Signature<'a>),
     ObjectPath(ObjectPath<'a>),
     Value(Box<Value<'a>>),
@@ -182,7 +182,7 @@ impl<'a> Value<'a> {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let s = Value::from("hello");
-    /// let val: &str = s.try_into()?;
+    /// let val: String = s.try_into()?;
     /// assert_eq!(val, "hello");
     ///
     /// let s = Value::from(42u32);
@@ -196,6 +196,7 @@ impl<'a> Value<'a> {
     /// [`TryFrom`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
     pub fn downcast_ref<T>(&'a self) -> Option<&'a T>
     where
+        T: ?Sized,
         &'a T: TryFrom<&'a Value<'a>>,
     {
         if let Value::Value(v) = self {
@@ -360,14 +361,14 @@ macro_rules! value_seed_basic_method {
 }
 
 macro_rules! value_seed_str_method {
-    ($name:ident, $type:ty, $variant:ident, $constructor:ident) => {
+    ($name:ident, $type:ty, $constructor:ident) => {
         #[inline]
         fn $name<E>(self, value: $type) -> Result<Value<'de>, E>
         where
             E: serde::de::Error,
         {
             match self.signature.as_str() {
-                <&str>::SIGNATURE_STR => Ok(Value::$variant(value)),
+                <&str>::SIGNATURE_STR => Ok(Value::Str(Str::from(value))),
                 Signature::SIGNATURE_STR => Ok(Value::Signature(Signature::$constructor(value))),
                 ObjectPath::SIGNATURE_STR => Ok(Value::ObjectPath(ObjectPath::$constructor(value))),
                 _ => {
@@ -432,7 +433,7 @@ where
         self.visit_string(String::from(value))
     }
 
-    value_seed_str_method!(visit_borrowed_str, &'de str, Str, from_str_unchecked);
+    value_seed_str_method!(visit_borrowed_str, &'de str, from_str_unchecked);
 
     #[inline]
     fn visit_seq<V>(self, visitor: V) -> Result<Value<'de>, V::Error>

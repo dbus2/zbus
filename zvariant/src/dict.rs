@@ -66,7 +66,8 @@ impl<'k, 'v> Dict<'k, 'v> {
     pub fn get<'d, K, V>(&'d self, key: &K) -> Result<Option<&'v V>, Error>
     where
         'd: 'k + 'v,
-        K: std::cmp::Eq + 'k,
+        K: ?Sized + std::cmp::Eq + 'k,
+        V: ?Sized,
         &'k K: TryFrom<&'k Value<'k>>,
         &'v V: TryFrom<&'v Value<'v>>,
     {
