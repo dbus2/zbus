@@ -28,6 +28,7 @@ pub enum MessageError {
     IncorrectEndian,
     Io(IOError),
     NoBodySignature,
+    MissingSender,
     MessageField(MessageFieldError),
     Variant(VariantError),
 }
@@ -52,6 +53,7 @@ impl fmt::Display for MessageError {
             MessageError::ExcessData => write!(f, "excess data"),
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
             MessageError::NoBodySignature => write!(f, "missing body signature"),
+            MessageError::MissingSender => write!(f, "missing sender"),
             MessageError::MessageField(e) => write!(f, "{}", e),
             MessageError::Variant(e) => write!(f, "{}", e),
         }
@@ -76,13 +78,119 @@ impl From<IOError> for MessageError {
     }
 }
 
+#[derive(Debug)]
+struct MessageBuilder<'a, B> {
+    ty: MessageType,
+    body: &'a B,
+    body_len: u32,
+    reply_to: Option<MessageHeader<'a>>,
+    fields: MessageFields<'a>,
+}
+
+impl<'a, B> MessageBuilder<'a, B>
+where
+    B: serde::ser::Serialize + Type,
+{
+    fn new(ty: MessageType, body: &'a B) -> Result<Self, MessageError> {
+        let (body_len, fds_len) = zvariant::serialized_size(body)?;
+        let body_len = u32::try_from(body_len).map_err(|_| MessageError::ExcessData)?;
+
+        let mut fields = MessageFields::new();
+
+        let mut signature = B::signature();
+        if signature != "" {
+            if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
+                // Remove leading and trailing STRUCT delimiters
+                signature = Signature::from_string_unchecked(String::from(
+                    &signature[1..signature.len() - 1],
+                ));
+            }
+            fields.add(MessageField::signature(signature));
+        }
+
+        if fds_len > 0 {
+            fields.add(MessageField::unix_fds(fds_len as u32));
+        }
+
+        Ok(Self {
+            ty,
+            body,
+            body_len,
+            fields,
+            reply_to: None,
+        })
+    }
+
+    fn build(self) -> Result<Message, MessageError> {
+        let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
+        let mut fds = vec![];
+
+        let MessageBuilder {
+            ty,
+            body,
+            body_len,
+            mut fields,
+            reply_to,
+        } = self;
+        let mut cursor = Cursor::new(&mut bytes);
+        let ctxt = dbus_context!(0);
+
+        if let Some(reply_to) = reply_to.as_ref() {
+            let destination = reply_to.sender()?.ok_or(MessageError::MissingSender)?;
+            let serial = reply_to.primary().serial_num();
+
+            fields.add(MessageField::destination(destination));
+            fields.add(MessageField::reply_serial(serial));
+        }
+
+        let primary = MessagePrimaryHeader::new(ty, body_len);
+        let header = MessageHeader::new(primary, fields);
+
+        zvariant::to_write(&mut cursor, ctxt, &header)?;
+        zvariant::to_write_fds(&mut cursor, &mut fds, ctxt, body)?;
+
+        Ok(Message { bytes, fds })
+    }
+
+    fn set_reply_to(mut self, reply_to: &'a Message) -> Result<Self, MessageError> {
+        self.reply_to = Some(reply_to.header()?);
+        Ok(self)
+    }
+
+    fn set_field(mut self, field: MessageField<'a>) -> Result<Self, MessageError> {
+        self.fields.add(field);
+        Ok(self)
+    }
+
+    fn reply(reply_to: &'a Message, body: &'a B) -> Result<Self, MessageError> {
+        Self::new(MessageType::MethodReturn, body)?.set_reply_to(reply_to)
+    }
+
+    fn error(
+        reply_to: &'a Message,
+        error_name: &'a str,
+        body: &'a B,
+    ) -> Result<Self, MessageError> {
+        Self::new(MessageType::Error, body)?
+            .set_reply_to(reply_to)?
+            .set_field(MessageField::error_name(error_name))
+    }
+
+    fn method(path: &'a str, method_name: &'a str, body: &'a B) -> Result<Self, MessageError> {
+        let path = path.try_into()?;
+
+        Self::new(MessageType::MethodCall, body)?
+            .set_field(MessageField::path(path))?
+            .set_field(MessageField::member(method_name))
+    }
+}
+
 /// A DBus Message
 ///
 /// The content of the serialized Message is in `bytes`.
 ///
 /// *Note*: The owner of the message is responsible for closing the
 /// `fds`.
-#[derive(Debug)]
 pub struct Message {
     bytes: Vec<u8>,
     fds: Vec<RawFd>,
@@ -106,64 +214,31 @@ impl Message {
     where
         B: serde::ser::Serialize + Type,
     {
-        let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
-        let mut cursor = Cursor::new(&mut bytes);
-
-        let dest_length = destination.map_or(0, |s| s.len());
-        let iface_length = iface.map_or(0, |s| s.len());
-        let (body_len, fds_len) = zvariant::serialized_size(body)?;
-
-        // Checks args
-        if dest_length > (u32::max_value() as usize)
-            || path.len() > (u32::max_value() as usize)
-            || iface_length > (u32::max_value() as usize)
-            || method_name.len() > (u32::max_value() as usize)
-        {
-            return Err(MessageError::StrTooLarge);
-        }
-        if body_len > u32::max_value() as usize {
-            return Err(MessageError::ExcessData);
-        }
-
-        // Construct the array of fields
-        let mut fields = MessageFields::new();
-
+        let mut b = MessageBuilder::method(path, method_name, body)?;
         if let Some(sender) = sender {
-            fields.add(MessageField::sender(sender));
+            b = b.set_field(MessageField::sender(sender))?;
         }
         if let Some(destination) = destination {
-            fields.add(MessageField::destination(destination));
+            b = b.set_field(MessageField::destination(destination))?;
         }
         if let Some(iface) = iface {
-            fields.add(MessageField::interface(iface));
+            b = b.set_field(MessageField::interface(iface))?;
         }
-        let mut signature = B::signature();
-        if signature != "" {
-            if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
-                // Remove leading and trailing STRUCT delimiters
-                signature = Signature::from_string_unchecked(String::from(
-                    &signature[1..signature.len() - 1],
-                ));
-            }
-            fields.add(MessageField::signature(signature));
-        }
-        let path = zvariant::ObjectPath::try_from(path)?;
-        fields.add(MessageField::path(path));
-        fields.add(MessageField::member(method_name));
-        if fds_len > 0 {
-            fields.add(MessageField::unix_fds(fds_len as u32));
-        }
+        b.build()
+    }
 
-        let ctxt = dbus_context!(0);
+    pub fn method_reply<B>(call: &Self, body: &B) -> Result<Self, MessageError>
+    where
+        B: serde::ser::Serialize + Type,
+    {
+        MessageBuilder::reply(call, body)?.build()
+    }
 
-        let primary = MessagePrimaryHeader::new(MessageType::MethodCall, body_len as u32);
-        let header = MessageHeader::new(primary, fields);
-        zvariant::to_write(&mut cursor, ctxt, &header)?;
-
-        let mut fds = vec![];
-        zvariant::to_write_fds(&mut cursor, &mut fds, ctxt, body)?;
-
-        Ok(Self { bytes, fds })
+    pub fn method_error<B>(call: &Self, name: &str, body: &B) -> Result<Self, MessageError>
+    where
+        B: serde::ser::Serialize + Type,
+    {
+        MessageBuilder::error(call, name, body)?.build()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
@@ -272,6 +347,87 @@ impl Message {
     }
 }
 
+impl fmt::Debug for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut msg = f.debug_struct("Msg");
+        let _ = self.header().and_then(|h| {
+            if let Ok(t) = h.message_type() {
+                msg.field("type", &t);
+            }
+            if let Ok(Some(sender)) = h.sender() {
+                msg.field("sender", &sender);
+            }
+            if let Ok(Some(serial)) = h.reply_serial() {
+                msg.field("reply-serial", &serial);
+            }
+            if let Ok(Some(path)) = h.path() {
+                msg.field("path", &path);
+            }
+            if let Ok(Some(iface)) = h.interface() {
+                msg.field("iface", &iface);
+            }
+            if let Ok(Some(member)) = h.member() {
+                msg.field("member", &member);
+            }
+            Ok(())
+        });
+        if let Ok(s) = self.body_signature() {
+            msg.field("body", &s);
+        }
+        if !self.fds.is_empty() {
+            msg.field("fds", &self.fds);
+        }
+        msg.finish()
+    }
+}
+
+impl fmt::Display for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let header = self.header();
+        let (ty, error_name, sender) = if let Ok(h) = header.as_ref() {
+            (
+                h.message_type().ok(),
+                h.error_name().ok().flatten(),
+                h.sender().ok().flatten(),
+            )
+        } else {
+            (None, None, None)
+        };
+
+        match ty {
+            Some(MessageType::MethodCall) => {
+                write!(f, "Method call")?;
+            }
+            Some(MessageType::MethodReturn) => {
+                write!(f, "Method return")?;
+            }
+            Some(MessageType::Error) => {
+                write!(f, "Error")?;
+                if let Some(e) = error_name {
+                    write!(f, " {}", e)?;
+                }
+
+                let msg = self.body::<&str>();
+                if let Ok(msg) = msg {
+                    write!(f, ": {}", msg)?;
+                }
+            }
+            Some(MessageType::Signal) => {
+                write!(f, "Signal")?;
+            }
+            _ => {
+                write!(f, "Unknown message")?;
+            }
+        }
+
+        if let Some(s) = sender {
+            write!(f, " from {}", s)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Message;
@@ -292,5 +448,11 @@ mod tests {
         .unwrap();
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
         assert_eq!(m.fds, vec![stdout.as_raw_fd()]);
+
+        assert_eq!(m.to_string(), "Method call from :1.72");
+        let r = Message::method_reply(&m, &("all fine!")).unwrap();
+        assert_eq!(r.to_string(), "Method return");
+        let e = Message::method_error(&m, "org.freedesktop.zbus.Error", &("kaboom!", 32)).unwrap();
+        assert_eq!(e.to_string(), "Error org.freedesktop.zbus.Error: kaboom!");
     }
 }
