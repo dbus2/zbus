@@ -2,7 +2,7 @@ use std::convert::{TryFrom, TryInto};
 use std::error;
 use std::fmt;
 use std::io::{Cursor, Error as IOError};
-use std::os::unix::io::{IntoRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 
 use zvariant::{EncodingContext, Error as VariantError};
 use zvariant::{Signature, Type};
@@ -149,7 +149,10 @@ where
         zvariant::to_write(&mut cursor, ctxt, &header)?;
         zvariant::to_write_fds(&mut cursor, &mut fds, ctxt, body)?;
 
-        Ok(Message { bytes, fds })
+        Ok(Message {
+            bytes,
+            fds: Fds::Raw(fds),
+        })
     }
 
     fn set_reply_to(mut self, reply_to: &'a Message) -> Result<Self, MessageError> {
@@ -185,15 +188,28 @@ where
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+enum Fds {
+    Owned(Vec<OwnedFd>),
+    Raw(Vec<RawFd>),
+}
+
 /// A DBus Message
 ///
-/// The content of the serialized Message is in `bytes`.
+/// The content of the serialized Message is in `bytes`. To
+/// deserialize the body of the message, use the [`body`] method. You
+/// may also access the header and other details with the various
+/// other getters.
 ///
-/// *Note*: The owner of the message is responsible for closing the
-/// `fds`.
+/// *Note*: The message owns the received FDs and will close them when
+/// dropped. You may call [`disown_fds`] after deserializing to
+/// `RawFD` with [`body`] if you want to.
+///
+/// [`body`]: #method.body
+/// [`disown_fds`]: #method.disown_fds
 pub struct Message {
     bytes: Vec<u8>,
-    fds: Vec<RawFd>,
+    fds: Fds,
 }
 
 // TODO: Make generic over byteorder
@@ -251,7 +267,7 @@ impl Message {
         }
 
         let bytes = bytes.to_vec();
-        let fds = vec![];
+        let fds = Fds::Raw(vec![]);
         Ok(Self { bytes, fds })
     }
 
@@ -265,10 +281,21 @@ impl Message {
         Ok(())
     }
 
-    pub(crate) fn set_fds(&mut self, fds: Vec<OwnedFd>) {
-        assert_eq!(self.fds.len(), 0);
-        // From now on, it's the caller responsability to close the fds
-        self.fds = fds.into_iter().map(|fd| fd.into_raw_fd()).collect();
+    pub(crate) fn set_owned_fds(&mut self, fds: Vec<OwnedFd>) {
+        self.fds = Fds::Owned(fds);
+    }
+
+    /// Disown the associated file descriptors.
+    ///
+    /// When a message is received over a AF_UNIX socket, it may
+    /// contain associated FDs. To prevent the message from closing
+    /// those FDs on drop, you may remove the ownership thanks to this
+    /// method, after that you are responsible for closing them.
+    pub fn disown_fds(&mut self) {
+        if let Fds::Owned(ref mut fds) = &mut self.fds {
+            // From now on, it's the caller responsability to close the fds
+            self.fds = Fds::Raw(fds.drain(..).map(|fd| fd.into_raw_fd()).collect());
+        }
     }
 
     pub fn bytes_to_completion(&self) -> Result<usize, MessageError> {
@@ -328,12 +355,19 @@ impl Message {
         let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         header_len = header_len + padding_for_8_bytes(header_len);
 
-        zvariant::from_slice_fds(&self.bytes[header_len..], Some(&self.fds), dbus_context!(0))
-            .map_err(MessageError::from)
+        zvariant::from_slice_fds(
+            &self.bytes[header_len..],
+            Some(&self.fds()),
+            dbus_context!(0),
+        )
+        .map_err(MessageError::from)
     }
 
-    pub fn fds(&self) -> &[RawFd] {
-        &self.fds
+    pub(crate) fn fds(&self) -> Vec<RawFd> {
+        match &self.fds {
+            Fds::Raw(fds) => fds.clone(),
+            Fds::Owned(fds) => fds.iter().map(|f| f.as_raw_fd()).collect(),
+        }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -374,7 +408,7 @@ impl fmt::Debug for Message {
         if let Ok(s) = self.body_signature() {
             msg.field("body", &s);
         }
-        if !self.fds.is_empty() {
+        if !self.fds().is_empty() {
             msg.field("fds", &self.fds);
         }
         msg.finish()
@@ -430,7 +464,7 @@ impl fmt::Display for Message {
 
 #[cfg(test)]
 mod tests {
-    use super::Message;
+    use super::{Fds, Message};
     use std::os::unix::io::AsRawFd;
     use zvariant::Fd;
 
@@ -447,7 +481,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
-        assert_eq!(m.fds, vec![stdout.as_raw_fd()]);
+        assert_eq!(m.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
 
         assert_eq!(m.to_string(), "Method call from :1.72");
         let r = Message::method_reply(&m, &("all fine!")).unwrap();

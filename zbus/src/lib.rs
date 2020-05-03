@@ -85,7 +85,7 @@ mod tests {
     fn fdpass_systemd() {
         let mut connection = crate::Connection::new_system().unwrap();
 
-        let reply = connection
+        let mut reply = connection
             .call_method(
                 Some("org.freedesktop.systemd1"),
                 "/org/freedesktop/systemd1",
@@ -101,6 +101,7 @@ mod tests {
             .unwrap());
 
         let fd: RawFd = reply.body().unwrap();
+        reply.disown_fds();
         assert!(fd >= 0);
         let f = unsafe { File::from_raw_fd(fd) };
         f.metadata().unwrap();
