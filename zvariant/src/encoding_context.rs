@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 /// The encoding format.
 ///
-/// Currently only D-Bus format is supported but [`GVariant`] support is also planned.
+/// Currently only D-Bus format is supported but [GVariant] support is also planned.
 ///
 /// [GVariant]: https://developer.gnome.org/glib/stable/glib-GVariant.html
 #[derive(Debug, PartialEq, Copy, Clone)]
