@@ -1,6 +1,7 @@
 use std::mem::forget;
 use std::os::unix::io::{FromRawFd, IntoRawFd, RawFd};
 
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct OwnedFd {
     inner: RawFd,
 }
