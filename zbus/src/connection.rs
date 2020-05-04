@@ -254,7 +254,7 @@ impl Connection {
         Ok(incoming)
     }
 
-    fn send_message(&mut self, mut msg: Message) -> Result<u32, ConnectionError> {
+    fn send_message(&self, mut msg: Message) -> Result<u32, ConnectionError> {
         if !msg.fds().is_empty() && !self.cap_unix_fd {
             return Err(ConnectionError::Unsupported);
         }
@@ -271,7 +271,7 @@ impl Connection {
     }
 
     pub fn call_method<B>(
-        &mut self,
+        &self,
         destination: Option<&str>,
         path: &str,
         iface: Option<&str>,
@@ -313,7 +313,7 @@ impl Connection {
     ///
     /// Given an existing message (likely a method call), send a reply back to the caller with the
     /// given `body`.
-    pub fn reply<B>(&mut self, call: &Message, body: &B) -> Result<u32, ConnectionError>
+    pub fn reply<B>(&self, call: &Message, body: &B) -> Result<u32, ConnectionError>
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
@@ -326,7 +326,7 @@ impl Connection {
     /// Given an existing message (likely a method call), send an error reply back to the caller
     /// with the given `error_name` and `body`.
     pub fn reply_error<B>(
-        &mut self,
+        &self,
         call: &Message,
         error_name: &str,
         body: &B,
