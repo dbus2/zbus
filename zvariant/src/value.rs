@@ -503,3 +503,9 @@ impl<'a> Type for Value<'a> {
         Signature::from_str_unchecked(VARIANT_SIGNATURE_STR)
     }
 }
+
+impl<'a> Type for &Value<'a> {
+    fn signature() -> Signature<'static> {
+        Value::signature()
+    }
+}
