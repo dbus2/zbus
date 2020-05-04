@@ -1,5 +1,5 @@
 use crate::Value;
-use crate::{Array, Dict, Error, ObjectPath, Signature, Structure};
+use crate::{Array, Dict, Error, Fd, ObjectPath, Signature, Structure};
 use std::convert::TryFrom;
 
 macro_rules! value_try_from {
@@ -67,7 +67,7 @@ value_try_from_all!(U32, u32);
 value_try_from_all!(I64, i64);
 value_try_from_all!(U64, u64);
 value_try_from_all!(F64, f64);
-//value_try_from_all!(Fd, Fd);
+value_try_from_all!(Fd, Fd);
 
 value_try_from_all!(Signature, Signature<'a>);
 value_try_from_all!(ObjectPath, ObjectPath<'a>);
