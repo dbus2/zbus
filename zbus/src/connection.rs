@@ -1,5 +1,6 @@
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::{env, error, fmt, io};
 
 use nix::unistd::Uid;
@@ -18,7 +19,7 @@ pub struct Connection {
 
     socket: UnixStream,
     // Serial number for next outgoing message
-    serial: u32,
+    serial: AtomicU32,
 }
 
 #[derive(Debug)]
@@ -206,7 +207,7 @@ impl Connection {
             socket,
             server_guid,
             cap_unix_fd,
-            serial: 0,
+            serial: AtomicU32::new(1),
             unique_name: None,
         };
 
@@ -337,9 +338,7 @@ impl Connection {
         self.send_message(m)
     }
 
-    fn next_serial(&mut self) -> u32 {
-        self.serial += 1;
-
-        self.serial
+    fn next_serial(&self) -> u32 {
+        self.serial.fetch_add(1, Ordering::SeqCst)
     }
 }
