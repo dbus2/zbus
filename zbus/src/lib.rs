@@ -19,6 +19,8 @@ pub use connection::*;
 mod owned_fd;
 mod utils;
 
+pub mod xml;
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
