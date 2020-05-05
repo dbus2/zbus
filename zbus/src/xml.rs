@@ -22,7 +22,7 @@ use std::io::{Read, Write};
 use std::result::Result;
 
 /// Annotations are generic key/value pairs of metadata.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Annotation {
     name: String,
     value: String,
@@ -41,7 +41,7 @@ impl Annotation {
 }
 
 /// An argument
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Arg {
     name: Option<String>,
     r#type: String,
@@ -73,7 +73,7 @@ impl Arg {
 }
 
 /// A method
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Method {
     name: String,
 
@@ -101,7 +101,7 @@ impl Method {
 }
 
 /// A signal
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Signal {
     name: String,
 
@@ -129,7 +129,7 @@ impl Signal {
 }
 
 /// A property
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Property {
     name: String,
     r#type: String,
@@ -162,7 +162,7 @@ impl Property {
 }
 
 /// An interface
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Interface {
     name: String,
 
@@ -204,7 +204,7 @@ impl Interface {
 }
 
 /// An introspection tree node (typically the root of the XML document).
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Node {
     name: Option<String>,
 
