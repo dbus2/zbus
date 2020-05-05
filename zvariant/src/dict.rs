@@ -7,11 +7,13 @@ use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 use crate::{Basic, Error, Signature};
 use crate::{Type, Value};
 
-/// A dictionary type to be used with [`Value`].
+/// A dictionary.
 ///
-/// TODO
+/// This is used for keeping dictionaries in a [`Value`]. API is provided to convert from, and to a
+/// [`HashMap`].
 ///
-/// [`Value`]: enum.Value.html
+/// [`Value`]: enum.Value.html#variant.Dict
+/// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
 #[derive(Debug, Clone, PartialEq)]
 pub struct Dict<'k, 'v> {
     entries: Vec<DictEntry<'k, 'v>>,
@@ -20,6 +22,7 @@ pub struct Dict<'k, 'v> {
 }
 
 impl<'k, 'v> Dict<'k, 'v> {
+    /// Create a new empty `Dict`, given the signature of the keys and values.
     pub fn new(key_signature: Signature<'k>, value_signature: Signature<'v>) -> Self {
         Self {
             entries: vec![],
@@ -28,6 +31,15 @@ impl<'k, 'v> Dict<'k, 'v> {
         }
     }
 
+    /// Append `key` and `value` as a new entry.
+    ///
+    /// # Errors
+    ///
+    /// * if [`key.value_signature()`] doesn't match the key signature `self` was created for.
+    /// * if [`value.value_signature()`] doesn't match the value signature `self` was created for.
+    ///
+    /// [`key.value_signature()`]: enum.Value.html#method.value_signature
+    /// [`value.value_signature()`]: enum.Value.html#method.value_signature
     pub fn append<'kv: 'k, 'vv: 'v>(
         &mut self,
         key: Value<'kv>,
@@ -83,6 +95,7 @@ impl<'k, 'v> Dict<'k, 'v> {
         Ok(None)
     }
 
+    /// Get the signature of this `Dict`.
     pub fn signature(&self) -> Signature<'static> {
         Signature::from_string_unchecked(format!(
             "a{{{}{}}}",
