@@ -309,6 +309,31 @@ impl Connection {
         }
     }
 
+    pub fn emit_signal<B>(
+        &self,
+        destination: Option<&str>,
+        path: &str,
+        iface: &str,
+        signal_name: &str,
+        body: &B,
+    ) -> Result<(), ConnectionError>
+    where
+        B: serde::ser::Serialize + zvariant::Type,
+    {
+        let m = Message::signal(
+            self.unique_name.as_deref(),
+            destination,
+            path,
+            iface,
+            signal_name,
+            body,
+        )?;
+
+        self.send_message(m)?;
+
+        Ok(())
+    }
+
     /// Reply to a message.
     ///
     /// Given an existing message (likely a method call), send a reply back to the caller with the

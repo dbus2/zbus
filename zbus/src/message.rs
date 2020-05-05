@@ -199,6 +199,21 @@ where
             .set_field(MessageField::path(path))?
             .set_field(MessageField::member(method_name))
     }
+
+    fn signal(
+        sender: Option<&'a str>,
+        path: &'a str,
+        iface: &'a str,
+        signal_name: &'a str,
+        body: &'a B,
+    ) -> Result<Self, MessageError> {
+        let path = path.try_into()?;
+
+        Self::new(MessageType::Signal, sender, body)?
+            .set_field(MessageField::path(path))?
+            .set_field(MessageField::interface(iface))?
+            .set_field(MessageField::member(signal_name))
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -249,6 +264,24 @@ impl Message {
         }
         if let Some(iface) = iface {
             b = b.set_field(MessageField::interface(iface))?;
+        }
+        b.build()
+    }
+
+    pub fn signal<B>(
+        sender: Option<&str>,
+        destination: Option<&str>,
+        path: &str,
+        iface: &str,
+        signal_name: &str,
+        body: &B,
+    ) -> Result<Self, MessageError>
+    where
+        B: serde::ser::Serialize + Type,
+    {
+        let mut b = MessageBuilder::signal(sender, path, iface, signal_name, body)?;
+        if let Some(destination) = destination {
+            b = b.set_field(MessageField::destination(destination))?;
         }
         b.build()
     }
