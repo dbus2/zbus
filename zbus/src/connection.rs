@@ -13,9 +13,9 @@ use crate::utils::{read_exact, write_all};
 use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
 pub struct Connection {
-    pub server_guid: String,
-    pub cap_unix_fd: bool,
-    pub unique_name: Option<String>,
+    server_guid: String,
+    cap_unix_fd: bool,
+    unique_name: Option<String>,
 
     socket: UnixStream,
     // Serial number for next outgoing message
@@ -231,6 +231,16 @@ impl Connection {
 
     pub fn new_system() -> Result<Self, ConnectionError> {
         Self::new(system_socket()?)
+    }
+
+    /// The server's GUID.
+    pub fn server_guid(&self) -> &str {
+        &self.server_guid
+    }
+
+    /// The unique name as assigned by the message bus or `None` if not a message bus connection.
+    pub fn unique_name(&self) -> Option<&str> {
+        self.unique_name.as_deref()
     }
 
     /// Return the next message from the connection.

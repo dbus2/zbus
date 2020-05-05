@@ -201,7 +201,7 @@ mod tests {
             .unwrap());
         assert_eq!(
             Some(reply.body::<&str>().unwrap()),
-            connection.unique_name.as_deref()
+            connection.unique_name()
         );
 
         let reply = connection
