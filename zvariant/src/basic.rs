@@ -1,5 +1,11 @@
 use crate::{Signature, Type};
 
+/// Trait for basic types.
+///
+/// All basic types are also [`Type`] implementers.
+///
+/// [`Type`]: trait.Type.html
+/// [`Value`]: enum.Value.html
 pub trait Basic {
     const SIGNATURE_CHAR: char;
     const SIGNATURE_STR: &'static str;

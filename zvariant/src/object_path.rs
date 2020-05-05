@@ -9,6 +9,28 @@ use crate::{Basic, Error, Result};
 /// String that identifies objects at a given destination on the D-Bus bus.
 ///
 /// Mostly likely this is only useful in the D-Bus context.
+///
+/// # Examples
+///
+/// ```
+/// use core::convert::TryFrom;
+/// use zvariant::ObjectPath;
+///
+/// // Valid object paths
+/// let o = ObjectPath::try_from("/").unwrap();
+/// assert_eq!(o, "/");
+/// let o = ObjectPath::try_from("/Path/t0/0bject").unwrap();
+/// assert_eq!(o, "/Path/t0/0bject");
+/// let o = ObjectPath::try_from("/a/very/looooooooooooooooooooooooo0000o0ng/path").unwrap();
+/// assert_eq!(o, "/a/very/looooooooooooooooooooooooo0000o0ng/path");
+///
+/// // Invalid object paths
+/// ObjectPath::try_from("").unwrap_err();
+/// ObjectPath::try_from("/double//slashes/").unwrap_err();
+/// ObjectPath::try_from(".").unwrap_err();
+/// ObjectPath::try_from("/end/with/slash/").unwrap_err();
+/// ObjectPath::try_from("/ha.d").unwrap_err();
+/// ```
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Clone)]
 #[serde(rename(
     serialize = "zvariant::ObjectPath",
@@ -51,25 +73,6 @@ impl<'a> Basic for ObjectPath<'a> {
 }
 
 /// Try to create an ObjectPath from a string.
-///
-/// # Examples
-///
-/// ```
-/// use core::convert::TryFrom;
-/// use zvariant::ObjectPath;
-///
-/// // Valid object paths
-/// ObjectPath::try_from("/").unwrap();
-/// ObjectPath::try_from("/Path/t0/0bject").unwrap();
-/// ObjectPath::try_from("/a/very/looooooooooooooooooooooooo0000o0ng/path").unwrap();
-///
-/// // Invalid object paths
-/// ObjectPath::try_from("").unwrap_err();
-/// ObjectPath::try_from("/double//slashes/").unwrap_err();
-/// ObjectPath::try_from(".").unwrap_err();
-/// ObjectPath::try_from("/end/with/slash/").unwrap_err();
-/// ObjectPath::try_from("/ha.d").unwrap_err();
-/// ```
 impl<'a> TryFrom<&'a str> for ObjectPath<'a> {
     type Error = Error;
 

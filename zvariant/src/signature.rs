@@ -8,6 +8,32 @@ use crate::{Basic, Error, Result};
 
 /// String that identifies the type of an encoded value.
 ///
+/// # Examples
+///
+/// ```
+/// use core::convert::TryFrom;
+/// use zvariant::Signature;
+///
+/// // Valid signatures
+/// let s = Signature::try_from("").unwrap();
+/// assert_eq!(s, "");
+/// let s = Signature::try_from("y").unwrap();
+/// assert_eq!(s, "y");
+/// let s = Signature::try_from("xs").unwrap();
+/// assert_eq!(s, "xs");
+/// let s = Signature::try_from("(ysa{sd})").unwrap();
+/// assert_eq!(s, "(ysa{sd})");
+/// let s = Signature::try_from("a{sd}").unwrap();
+/// assert_eq!(s, "a{sd}");
+///
+/// // Invalid signatures
+/// Signature::try_from("z").unwrap_err();
+/// Signature::try_from("(xs").unwrap_err();
+/// Signature::try_from("xs)").unwrap_err();
+/// Signature::try_from("s/").unwrap_err();
+/// Signature::try_from("a").unwrap_err();
+/// Signature::try_from("a{yz}").unwrap_err();
+/// ```
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Clone)]
 #[serde(rename(serialize = "zvariant::Signature", deserialize = "zvariant::Signature"))]
 pub struct Signature<'a>(#[serde(borrow)] Cow<'a, str>);
@@ -44,28 +70,6 @@ impl<'a> Basic for Signature<'a> {
 }
 
 /// Try to create a Signature from a string.
-///
-/// # Examples
-///
-/// ```
-/// use core::convert::TryFrom;
-/// use zvariant::Signature;
-///
-/// // Valid signatures
-/// Signature::try_from("").unwrap();
-/// Signature::try_from("y").unwrap();
-/// Signature::try_from("xs").unwrap();
-/// Signature::try_from("(ysa{sd})").unwrap();
-/// Signature::try_from("a{sd}").unwrap();
-///
-/// // Invalid signatures
-/// Signature::try_from("z").unwrap_err();
-/// Signature::try_from("(xs").unwrap_err();
-/// Signature::try_from("xs)").unwrap_err();
-/// Signature::try_from("s/").unwrap_err();
-/// Signature::try_from("a").unwrap_err();
-/// Signature::try_from("a{yz}").unwrap_err();
-/// ```
 impl<'a> TryFrom<&'a str> for Signature<'a> {
     type Error = Error;
 
