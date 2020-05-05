@@ -1,2 +1,2 @@
 [workspace]
-members = ["zbus", "zvariant", "zvariant_derive", "zbus_derive"]
+members = ["zbus", "zvariant", "zvariant_derive", "zbus_derive", "zbus_xmlgen"]
