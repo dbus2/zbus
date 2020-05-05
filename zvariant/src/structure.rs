@@ -61,6 +61,10 @@ impl<'a> Structure<'a> {
 
         Signature::from_string_unchecked(signature)
     }
+
+    pub(crate) fn to_owned(&self) -> Structure<'static> {
+        Structure(self.0.iter().map(|v| v.to_owned()).collect())
+    }
 }
 
 impl<'a> Serialize for Structure<'a> {

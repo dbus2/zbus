@@ -25,6 +25,9 @@ pub use de::*;
 mod signature;
 pub use crate::signature::*;
 
+mod str;
+pub use crate::str::*;
+
 mod structure;
 pub use crate::structure::*;
 
@@ -42,6 +45,9 @@ pub use from_value::*;
 
 mod into_value;
 pub use into_value::*;
+
+mod owned_value;
+pub use owned_value::*;
 
 #[macro_use]
 mod utils;
@@ -217,10 +223,10 @@ mod tests {
         // As Value
         let v: Value = string.into();
         assert_eq!(v.value_signature(), "s");
-        assert_eq!(v, Value::Str("hello world"));
+        assert_eq!(v, Value::Str("hello world".into()));
         basic_type_test!(LE, v, 20, Value);
 
-        let v: &str = v.try_into().unwrap();
+        let v: String = v.try_into().unwrap();
         assert_eq!(v, "hello world");
         let v: String = v.try_into().unwrap();
         assert_eq!(v, "hello world");
@@ -235,7 +241,7 @@ mod tests {
         let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 10);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
-        assert_eq!(v, Value::Str("c"));
+        assert_eq!(v, Value::Str("c".into()));
     }
 
     #[test]
@@ -377,15 +383,15 @@ mod tests {
         if let Value::Array(array) = v {
             assert_eq!(*array.element_signature(), "s");
             assert_eq!(array.len(), 4);
-            assert_eq!(array.get()[0], Value::Str("Hello"));
-            assert_eq!(array.get()[1], Value::Str("World"));
+            assert_eq!(array.get()[0], Value::Str("Hello".into()));
+            assert_eq!(array.get()[1], Value::Str("World".into()));
         } else {
             panic!();
         }
 
         let v: Value = as_[..].into();
         let a: Array = v.try_into().unwrap();
-        let _ve: Vec<&str> = a.try_into().unwrap();
+        let _ve: Vec<String> = a.try_into().unwrap();
 
         // Array of Struct, which in turn containin an Array (We gotta go deeper!)
         // Signature: "a(yu(xbxas)s)");
@@ -444,15 +450,15 @@ mod tests {
                     assert_eq!(fields[2], Value::I64(i64::max_value()));
                     if let Value::Array(as_) = &fields[3] {
                         assert_eq!(as_.len(), 2);
-                        assert_eq!(as_.get()[0], Value::Str("Hello"));
-                        assert_eq!(as_.get()[1], Value::Str("World"));
+                        assert_eq!(as_.get()[0], Value::Str("Hello".into()));
+                        assert_eq!(as_.get()[1], Value::Str("World".into()));
                     } else {
                         panic!();
                     }
                 } else {
                     panic!();
                 }
-                assert_eq!(fields[3], Value::Str("hello"));
+                assert_eq!(fields[3], Value::Str("hello".into()));
             } else {
                 panic!();
             }
@@ -478,8 +484,8 @@ mod tests {
         assert_eq!(
             decoded,
             Value::Structure(Structure::from_vec(vec![
-                Value::Str("a"),
-                Value::Str("b"),
+                Value::Str("a".into()),
+                Value::Str("b".into()),
                 Value::Structure(Structure::from_vec(vec![Value::I32(1), Value::I32(2)]))
             ],))
         );
@@ -512,14 +518,14 @@ mod tests {
         assert_eq!(encoded.len(), 48);
         // Convert it back
         let dict: Dict = v.try_into().unwrap();
-        let map: HashMap<i64, &str> = dict.try_into().unwrap();
+        let map: HashMap<i64, String> = dict.try_into().unwrap();
         assert_eq!(map[&1], "123");
         assert_eq!(map[&2], "456");
         // Also decode it back
         let v = from_slice(&encoded, ctxt).unwrap();
         if let Value::Dict(dict) = v {
-            assert_eq!(dict.get::<i64, &str>(&1).unwrap().unwrap(), &"123");
-            assert_eq!(dict.get::<i64, &str>(&2).unwrap().unwrap(), &"456");
+            assert_eq!(dict.get::<i64, str>(&1).unwrap().unwrap(), "123");
+            assert_eq!(dict.get::<i64, str>(&2).unwrap().unwrap(), "456");
         } else {
             panic!();
         }
@@ -535,12 +541,12 @@ mod tests {
         let v: Value = from_slice(&encoded, ctxt).unwrap();
         if let Value::Dict(dict) = v {
             assert_eq!(
-                *dict.get::<_, Value>(&"hello").unwrap().unwrap(),
-                Value::Str("there")
+                *dict.get::<_, Value>("hello").unwrap().unwrap(),
+                Value::Str("there".into())
             );
             assert_eq!(
-                *dict.get::<_, Value>(&"bye").unwrap().unwrap(),
-                Value::Str("now")
+                *dict.get::<_, Value>("bye").unwrap().unwrap(),
+                Value::Str("now".into())
             );
         } else {
             panic!();

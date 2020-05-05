@@ -8,9 +8,7 @@ use serde::de::{
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer};
 
 use crate::utils::*;
-use crate::{Array, Dict};
-use crate::{Basic, Fd, Type};
-use crate::{ObjectPath, Signature, Structure};
+use crate::{Array, Basic, Dict, Fd, ObjectPath, OwnedValue, Signature, Str, Structure, Type};
 
 macro_rules! serialize_value {
     ($self:ident $serializer:ident.$method:ident $($first_arg:expr)*) => {
@@ -62,7 +60,7 @@ pub enum Value<'a> {
     I64(i64),
     U64(u64),
     F64(f64),
-    Str(&'a str),
+    Str(Str<'a>),
     Signature(Signature<'a>),
     ObjectPath(ObjectPath<'a>),
     Value(Box<Value<'a>>),
@@ -103,6 +101,32 @@ impl<'a> Value<'a> {
             Self::Value(Box::new(value.into()))
         } else {
             value.into()
+        }
+    }
+
+    pub(crate) fn to_owned(&self) -> Value<'static> {
+        match self {
+            Value::U8(v) => Value::U8(*v),
+            Value::Bool(v) => Value::Bool(*v),
+            Value::I16(v) => Value::I16(*v),
+            Value::U16(v) => Value::U16(*v),
+            Value::I32(v) => Value::I32(*v),
+            Value::U32(v) => Value::U32(*v),
+            Value::I64(v) => Value::I64(*v),
+            Value::U64(v) => Value::U64(*v),
+            Value::F64(v) => Value::F64(*v),
+            Value::Str(v) => Value::Str(v.to_owned()),
+            Value::Signature(v) => Value::Signature(v.to_owned()),
+            Value::ObjectPath(v) => Value::ObjectPath(v.to_owned()),
+            Value::Value(v) => {
+                let o = OwnedValue::from(&**v);
+                Value::Value(Box::new(o.into_inner()))
+            }
+
+            Value::Array(v) => Value::Array(v.to_owned()),
+            Value::Dict(v) => Value::Dict(v.to_owned()),
+            Value::Structure(v) => Value::Structure(v.to_owned()),
+            Value::Fd(v) => Value::Fd(*v),
         }
     }
 
@@ -182,7 +206,7 @@ impl<'a> Value<'a> {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let s = Value::from("hello");
-    /// let val: &str = s.try_into()?;
+    /// let val: String = s.try_into()?;
     /// assert_eq!(val, "hello");
     ///
     /// let s = Value::from(42u32);
@@ -196,6 +220,7 @@ impl<'a> Value<'a> {
     /// [`TryFrom`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
     pub fn downcast_ref<T>(&'a self) -> Option<&'a T>
     where
+        T: ?Sized,
         &'a T: TryFrom<&'a Value<'a>>,
     {
         if let Value::Value(v) = self {
@@ -360,14 +385,14 @@ macro_rules! value_seed_basic_method {
 }
 
 macro_rules! value_seed_str_method {
-    ($name:ident, $type:ty, $variant:ident, $constructor:ident) => {
+    ($name:ident, $type:ty, $constructor:ident) => {
         #[inline]
         fn $name<E>(self, value: $type) -> Result<Value<'de>, E>
         where
             E: serde::de::Error,
         {
             match self.signature.as_str() {
-                <&str>::SIGNATURE_STR => Ok(Value::$variant(value)),
+                <&str>::SIGNATURE_STR => Ok(Value::Str(Str::from(value))),
                 Signature::SIGNATURE_STR => Ok(Value::Signature(Signature::$constructor(value))),
                 ObjectPath::SIGNATURE_STR => Ok(Value::ObjectPath(ObjectPath::$constructor(value))),
                 _ => {
@@ -432,7 +457,7 @@ where
         self.visit_string(String::from(value))
     }
 
-    value_seed_str_method!(visit_borrowed_str, &'de str, Str, from_str_unchecked);
+    value_seed_str_method!(visit_borrowed_str, &'de str, from_str_unchecked);
 
     #[inline]
     fn visit_seq<V>(self, visitor: V) -> Result<Value<'de>, V::Error>

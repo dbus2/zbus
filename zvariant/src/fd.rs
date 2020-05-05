@@ -3,7 +3,7 @@ use std::os::unix::io;
 
 use crate::Basic;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct Fd(io::RawFd);
 
 impl Basic for Fd {

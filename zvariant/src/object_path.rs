@@ -37,6 +37,11 @@ impl<'a> ObjectPath<'a> {
     pub fn from_string_unchecked(signature: String) -> Self {
         Self(Cow::from(signature))
     }
+
+    pub(crate) fn to_owned(&self) -> ObjectPath<'static> {
+        let s = self.0.clone().into_owned();
+        ObjectPath(Cow::Owned(s))
+    }
 }
 
 impl<'a> Basic for ObjectPath<'a> {

@@ -1,5 +1,5 @@
 use crate::Value;
-use crate::{Array, Dict, Error, Fd, ObjectPath, Signature, Structure};
+use crate::{Array, Dict, Error, Fd, ObjectPath, Signature, Str, Structure};
 use std::convert::TryFrom;
 
 macro_rules! value_try_from {
@@ -69,16 +69,15 @@ value_try_from_all!(U64, u64);
 value_try_from_all!(F64, f64);
 value_try_from_all!(Fd, Fd);
 
+value_try_from_all!(Str, Str<'a>);
 value_try_from_all!(Signature, Signature<'a>);
 value_try_from_all!(ObjectPath, ObjectPath<'a>);
 value_try_from_all!(Structure, Structure<'a>);
 value_try_from_all!(Dict, Dict<'a, 'a>);
 value_try_from_all!(Array, Array<'a>);
 
-value_try_from!(Str, &'a str);
 value_try_from!(Str, String);
 value_try_from_ref!(Str, str);
-value_try_from_ref!(Str, &'a str);
 value_try_from_ref_clone!(Str, String);
 
 impl<'a, T> TryFrom<Value<'a>> for Vec<T>
