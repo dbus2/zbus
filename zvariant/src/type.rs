@@ -11,35 +11,24 @@ pub trait Type {
     fn signature() -> Signature<'static>;
 }
 
-impl<T> Type for [T]
-where
-    T: Type,
-{
-    #[inline]
-    fn signature() -> Signature<'static> {
-        Signature::from_string_unchecked(format!("a{}", T::signature()))
-    }
+macro_rules! array_type {
+    ($arr:ty) => {
+        impl<T> Type for $arr
+        where
+            T: Type,
+        {
+            #[inline]
+            fn signature() -> Signature<'static> {
+                Signature::from_string_unchecked(format!("a{}", T::signature()))
+            }
+        }
+    };
 }
 
-impl<T> Type for &[T]
-where
-    T: Type,
-{
-    #[inline]
-    fn signature() -> Signature<'static> {
-        <[T]>::signature()
-    }
-}
-
-impl<T> Type for Vec<T>
-where
-    T: Type,
-{
-    #[inline]
-    fn signature() -> Signature<'static> {
-        <[T]>::signature()
-    }
-}
+array_type!([T]);
+array_type!(&[T]);
+array_type!(Vec<T>);
+array_type!(&Vec<T>);
 
 #[cfg(feature = "arrayvec")]
 impl<A, T> Type for arrayvec::ArrayVec<A>
