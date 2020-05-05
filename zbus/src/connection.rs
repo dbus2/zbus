@@ -317,7 +317,7 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        let m = Message::method_reply(call, body)?;
+        let m = Message::method_reply(self.unique_name.as_deref(), call, body)?;
         self.send_message(m)
     }
 
@@ -334,7 +334,7 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        let m = Message::method_error(call, error_name, body)?;
+        let m = Message::method_error(self.unique_name.as_deref(), call, error_name, body)?;
         self.send_message(m)
     }
 
