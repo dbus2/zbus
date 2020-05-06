@@ -91,7 +91,7 @@ impl<'a, B> MessageBuilder<'a, B>
 where
     B: serde::ser::Serialize + Type,
 {
-    fn new(ty: MessageType, body: &'a B) -> Result<Self, MessageError> {
+    fn new(ty: MessageType, sender: Option<&'a str>, body: &'a B) -> Result<Self, MessageError> {
         let (body_len, fds_len) = zvariant::serialized_size(body)?;
         let body_len = u32::try_from(body_len).map_err(|_| MessageError::ExcessData)?;
 
@@ -106,6 +106,9 @@ where
                 ));
             }
             fields.add(MessageField::signature(signature));
+        }
+        if let Some(sender) = sender {
+            fields.add(MessageField::sender(sender));
         }
 
         if fds_len > 0 {
@@ -165,26 +168,51 @@ where
         Ok(self)
     }
 
-    fn reply(reply_to: &'a Message, body: &'a B) -> Result<Self, MessageError> {
-        Self::new(MessageType::MethodReturn, body)?.set_reply_to(reply_to)
+    fn reply(
+        sender: Option<&'a str>,
+        reply_to: &'a Message,
+        body: &'a B,
+    ) -> Result<Self, MessageError> {
+        Self::new(MessageType::MethodReturn, sender, body)?.set_reply_to(reply_to)
     }
 
     fn error(
+        sender: Option<&'a str>,
         reply_to: &'a Message,
         error_name: &'a str,
         body: &'a B,
     ) -> Result<Self, MessageError> {
-        Self::new(MessageType::Error, body)?
+        Self::new(MessageType::Error, sender, body)?
             .set_reply_to(reply_to)?
             .set_field(MessageField::error_name(error_name))
     }
 
-    fn method(path: &'a str, method_name: &'a str, body: &'a B) -> Result<Self, MessageError> {
+    fn method(
+        sender: Option<&'a str>,
+        path: &'a str,
+        method_name: &'a str,
+        body: &'a B,
+    ) -> Result<Self, MessageError> {
         let path = path.try_into()?;
 
-        Self::new(MessageType::MethodCall, body)?
+        Self::new(MessageType::MethodCall, sender, body)?
             .set_field(MessageField::path(path))?
             .set_field(MessageField::member(method_name))
+    }
+
+    fn signal(
+        sender: Option<&'a str>,
+        path: &'a str,
+        iface: &'a str,
+        signal_name: &'a str,
+        body: &'a B,
+    ) -> Result<Self, MessageError> {
+        let path = path.try_into()?;
+
+        Self::new(MessageType::Signal, sender, body)?
+            .set_field(MessageField::path(path))?
+            .set_field(MessageField::interface(iface))?
+            .set_field(MessageField::member(signal_name))
     }
 }
 
@@ -230,10 +258,7 @@ impl Message {
     where
         B: serde::ser::Serialize + Type,
     {
-        let mut b = MessageBuilder::method(path, method_name, body)?;
-        if let Some(sender) = sender {
-            b = b.set_field(MessageField::sender(sender))?;
-        }
+        let mut b = MessageBuilder::method(sender, path, method_name, body)?;
         if let Some(destination) = destination {
             b = b.set_field(MessageField::destination(destination))?;
         }
@@ -243,18 +268,45 @@ impl Message {
         b.build()
     }
 
-    pub fn method_reply<B>(call: &Self, body: &B) -> Result<Self, MessageError>
+    pub fn signal<B>(
+        sender: Option<&str>,
+        destination: Option<&str>,
+        path: &str,
+        iface: &str,
+        signal_name: &str,
+        body: &B,
+    ) -> Result<Self, MessageError>
     where
         B: serde::ser::Serialize + Type,
     {
-        MessageBuilder::reply(call, body)?.build()
+        let mut b = MessageBuilder::signal(sender, path, iface, signal_name, body)?;
+        if let Some(destination) = destination {
+            b = b.set_field(MessageField::destination(destination))?;
+        }
+        b.build()
     }
 
-    pub fn method_error<B>(call: &Self, name: &str, body: &B) -> Result<Self, MessageError>
+    pub fn method_reply<B>(
+        sender: Option<&str>,
+        call: &Self,
+        body: &B,
+    ) -> Result<Self, MessageError>
     where
         B: serde::ser::Serialize + Type,
     {
-        MessageBuilder::error(call, name, body)?.build()
+        MessageBuilder::reply(sender, call, body)?.build()
+    }
+
+    pub fn method_error<B>(
+        sender: Option<&str>,
+        call: &Self,
+        name: &str,
+        body: &B,
+    ) -> Result<Self, MessageError>
+    where
+        B: serde::ser::Serialize + Type,
+    {
+        MessageBuilder::error(sender, call, name, body)?.build()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
@@ -484,9 +536,10 @@ mod tests {
         assert_eq!(m.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
 
         assert_eq!(m.to_string(), "Method call from :1.72");
-        let r = Message::method_reply(&m, &("all fine!")).unwrap();
+        let r = Message::method_reply(None, &m, &("all fine!")).unwrap();
         assert_eq!(r.to_string(), "Method return");
-        let e = Message::method_error(&m, "org.freedesktop.zbus.Error", &("kaboom!", 32)).unwrap();
+        let e = Message::method_error(None, &m, "org.freedesktop.zbus.Error", &("kaboom!", 32))
+            .unwrap();
         assert_eq!(e.to_string(), "Error org.freedesktop.zbus.Error: kaboom!");
     }
 }
