@@ -26,9 +26,7 @@ macro_rules! array_type {
 }
 
 array_type!([T]);
-array_type!(&[T]);
 array_type!(Vec<T>);
-array_type!(&Vec<T>);
 
 #[cfg(feature = "arrayvec")]
 impl<A, T> Type for arrayvec::ArrayVec<A>
@@ -47,6 +45,16 @@ impl Type for () {
     #[inline]
     fn signature() -> Signature<'static> {
         Signature::from_str_unchecked("")
+    }
+}
+
+impl<T> Type for &T
+where
+    T: ?Sized + Type,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        T::signature()
     }
 }
 

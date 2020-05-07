@@ -4,7 +4,7 @@ use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::Serialize;
 use std::borrow::Cow;
 
-use crate::{Basic, Error, Result};
+use crate::{Basic, Error, Result, Type};
 
 /// String that identifies the type of an encoded value.
 ///
@@ -67,6 +67,12 @@ impl<'a> Basic for Signature<'a> {
     const SIGNATURE_CHAR: char = 'g';
     const SIGNATURE_STR: &'static str = "g";
     const ALIGNMENT: usize = 1;
+}
+
+impl<'a> Type for Signature<'a> {
+    fn signature() -> Signature<'static> {
+        Signature::from_str_unchecked(Self::SIGNATURE_STR)
+    }
 }
 
 /// Try to create a Signature from a string.

@@ -4,7 +4,7 @@ use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::Serialize;
 use std::borrow::Cow;
 
-use crate::{Basic, Error, Result};
+use crate::{Basic, Error, Result, Signature, Type};
 
 /// String that identifies objects at a given destination on the D-Bus bus.
 ///
@@ -70,6 +70,12 @@ impl<'a> Basic for ObjectPath<'a> {
     const SIGNATURE_CHAR: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
     const ALIGNMENT: usize = <&str>::ALIGNMENT;
+}
+
+impl<'a> Type for ObjectPath<'a> {
+    fn signature() -> Signature<'static> {
+        Signature::from_str_unchecked(Self::SIGNATURE_STR)
+    }
 }
 
 /// Try to create an ObjectPath from a string.
