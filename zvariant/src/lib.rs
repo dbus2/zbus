@@ -732,4 +732,31 @@ mod tests {
         //let l = len(&('a', "bc", &v)).unwrap();
         //assert_eq!(l, (4, 0));
     }
+
+    #[test]
+    fn struct_with_hashmap() {
+        use crate as zvariant;
+        use serde::{Deserialize, Serialize};
+
+        let mut hm = HashMap::new();
+        hm.insert("key".into(), "value".into());
+
+        #[derive(Type, Deserialize, Serialize, PartialEq, Debug)]
+        struct Foo {
+            some: String,
+            hmap: HashMap<String, String>,
+            other: String,
+        }
+
+        let foo = Foo {
+            some: "some".into(),
+            hmap: hm,
+            other: "other".into(),
+        };
+
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &(&foo, 1)).unwrap();
+        let f: Foo = from_slice_fds(&encoded, None, ctxt).unwrap();
+        assert_eq!(f, foo);
+    }
 }

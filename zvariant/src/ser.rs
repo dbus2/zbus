@@ -767,6 +767,12 @@ where
     }
 
     fn end(self) -> Result<()> {
+        if self.start + self.first_padding != self.serializer.bytes_written {
+            // Non-empty map, take }
+            self.serializer
+                .sign_parser
+                .parse_char(Some(DICT_ENTRY_SIG_END_CHAR))?;
+        }
         self.end_seq()
     }
 }
