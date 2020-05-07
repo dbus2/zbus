@@ -1,7 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::os::unix::io;
 
-use crate::Basic;
+use crate::{Basic, Signature, Type};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct Fd(io::RawFd);
@@ -10,6 +10,12 @@ impl Basic for Fd {
     const SIGNATURE_CHAR: char = 'h';
     const SIGNATURE_STR: &'static str = "h";
     const ALIGNMENT: usize = <u32>::ALIGNMENT;
+}
+
+impl Type for Fd {
+    fn signature() -> Signature<'static> {
+        Signature::from_str_unchecked(Self::SIGNATURE_STR)
+    }
 }
 
 impl Serialize for Fd {
