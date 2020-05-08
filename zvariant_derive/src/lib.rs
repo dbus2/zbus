@@ -24,8 +24,22 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 
 fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    let signature = signature_for_struct(fields);
+    let expended = quote! {
+        impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
+            #[inline]
+            fn signature() -> zvariant::Signature<'static> {
+                #signature
+            }
+        }
+    };
+
+    TokenStream::from(expended)
+}
+
+fn signature_for_struct(fields: Fields) -> proc_macro2::TokenStream {
     let field_types = fields.iter().map(|field| field.ty.to_token_stream());
-    let signature = if field_types.len() == 1 {
+    if field_types.len() == 1 {
         quote! {
             #(
                 <#field_types as zvariant::Type>::signature()
@@ -41,17 +55,7 @@ fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
 
                 zvariant::Signature::from_string_unchecked(s)
         }
-    };
-    let expended = quote! {
-        impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
-            #[inline]
-            fn signature() -> zvariant::Signature<'static> {
-                #signature
-            }
-        }
-    };
-
-    TokenStream::from(expended)
+    }
 }
 
 fn impl_unit_struct(name: Ident, generics: Generics) -> TokenStream {
