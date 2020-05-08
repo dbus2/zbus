@@ -12,6 +12,7 @@ use crate::message_field;
 use crate::utils::{read_exact, write_all};
 use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
+#[derive(Debug)]
 pub struct Connection {
     server_guid: String,
     cap_unix_fd: bool,
