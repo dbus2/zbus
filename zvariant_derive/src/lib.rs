@@ -12,8 +12,9 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 
     match ast.data {
         Data::Struct(ds) => match ds.fields {
-            Fields::Named(_) => impl_struct(ast.ident, ast.generics, ds.fields),
-            Fields::Unnamed(_) => impl_struct(ast.ident, ast.generics, ds.fields),
+            Fields::Named(_) | Fields::Unnamed(_) => {
+                impl_struct(ast.ident, ast.generics, ds.fields)
+            }
             Fields::Unit => impl_unit_struct(ast.ident, ast.generics),
         },
         Data::Enum(data) => impl_enum(ast.ident, ast.generics, ast.attrs, data),
@@ -23,8 +24,27 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 
 fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    let signature = signature_for_struct(fields);
+    let expended = quote! {
+        impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
+            #[inline]
+            fn signature() -> zvariant::Signature<'static> {
+                #signature
+            }
+        }
+    };
+
+    TokenStream::from(expended)
+}
+
+fn signature_for_struct(fields: Fields) -> proc_macro2::TokenStream {
     let field_types = fields.iter().map(|field| field.ty.to_token_stream());
-    let signature = if field_types.len() == 1 {
+    let named = match fields {
+        Fields::Named(_) => true,
+        Fields::Unnamed(_) => false,
+        Fields::Unit => panic!("signature_for_struct must not be called for unit fields"),
+    };
+    if !named && field_types.len() == 1 {
         quote! {
             #(
                 <#field_types as zvariant::Type>::signature()
@@ -40,17 +60,7 @@ fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
 
                 zvariant::Signature::from_string_unchecked(s)
         }
-    };
-    let expended = quote! {
-        impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
-            #[inline]
-            fn signature() -> zvariant::Signature<'static> {
-                #signature
-            }
-        }
-    };
-
-    TokenStream::from(expended)
+    }
 }
 
 fn impl_unit_struct(name: Ident, generics: Generics) -> TokenStream {
