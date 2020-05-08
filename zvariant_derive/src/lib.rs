@@ -12,8 +12,9 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 
     match ast.data {
         Data::Struct(ds) => match ds.fields {
-            Fields::Named(_) => impl_struct(ast.ident, ast.generics, ds.fields),
-            Fields::Unnamed(_) => impl_struct(ast.ident, ast.generics, ds.fields),
+            Fields::Named(_) | Fields::Unnamed(_) => {
+                impl_struct(ast.ident, ast.generics, ds.fields)
+            }
             Fields::Unit => impl_unit_struct(ast.ident, ast.generics),
         },
         Data::Enum(data) => impl_enum(ast.ident, ast.generics, ast.attrs, data),
