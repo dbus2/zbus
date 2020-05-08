@@ -39,7 +39,12 @@ fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
 
 fn signature_for_struct(fields: Fields) -> proc_macro2::TokenStream {
     let field_types = fields.iter().map(|field| field.ty.to_token_stream());
-    if field_types.len() == 1 {
+    let named = match fields {
+        Fields::Named(_) => true,
+        Fields::Unnamed(_) => false,
+        Fields::Unit => panic!("signature_for_struct must not be called for unit fields"),
+    };
+    if !named && field_types.len() == 1 {
         quote! {
             #(
                 <#field_types as zvariant::Type>::signature()
