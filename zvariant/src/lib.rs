@@ -738,21 +738,16 @@ mod tests {
         use crate as zvariant;
         use serde::{Deserialize, Serialize};
 
-        let mut hm = HashMap::new();
-        hm.insert("key".into(), "value".into());
+        let mut hmap = HashMap::new();
+        hmap.insert("key".into(), "value".into());
 
         #[derive(Type, Deserialize, Serialize, PartialEq, Debug)]
         struct Foo {
-            some: String,
             hmap: HashMap<String, String>,
-            other: String,
         }
 
-        let foo = Foo {
-            some: "some".into(),
-            hmap: hm,
-            other: "other".into(),
-        };
+        let foo = Foo { hmap };
+        assert_eq!(Foo::signature(), "(a{ss})");
 
         let ctxt = Context::<LE>::new_dbus(0);
         let encoded = to_bytes(ctxt, &(&foo, 1)).unwrap();
