@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::str;
 
-use crate::Basic;
+use crate::{Basic, Signature, Type};
 
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
 #[serde(rename(serialize = "zvariant::Str", deserialize = "zvariant::Str"))]
@@ -23,6 +23,12 @@ impl<'a> Basic for Str<'a> {
     const SIGNATURE_CHAR: char = <&str>::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = <&str>::SIGNATURE_STR;
     const ALIGNMENT: usize = <&str>::ALIGNMENT;
+}
+
+impl<'a> Type for Str<'a> {
+    fn signature() -> Signature<'static> {
+        Signature::from_str_unchecked(Self::SIGNATURE_STR)
+    }
 }
 
 impl<'a> From<&'a str> for Str<'a> {
