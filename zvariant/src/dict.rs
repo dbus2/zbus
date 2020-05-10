@@ -59,7 +59,7 @@ impl<'k, 'v> Dict<'k, 'v> {
     /// Add a new entry.
     pub fn add<K, V>(&mut self, key: K, value: V) -> Result<(), Error>
     where
-        K: Basic + Type + Into<Value<'k>> + std::hash::Hash + std::cmp::Eq,
+        K: Basic + Into<Value<'k>> + std::hash::Hash + std::cmp::Eq,
         V: Into<Value<'v>> + Type,
     {
         if K::signature() != self.key_signature || V::signature() != self.value_signature {

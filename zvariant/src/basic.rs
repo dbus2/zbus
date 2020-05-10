@@ -6,7 +6,7 @@ use crate::{Signature, Type};
 ///
 /// [`Type`]: trait.Type.html
 /// [`Value`]: enum.Value.html
-pub trait Basic {
+pub trait Basic: Type {
     const SIGNATURE_CHAR: char;
     const SIGNATURE_STR: &'static str;
     const ALIGNMENT: usize;
