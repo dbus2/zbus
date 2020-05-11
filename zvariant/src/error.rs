@@ -13,7 +13,6 @@ pub enum Error {
     InsufficientData,
     PaddingNot0,
     UnknownFd,
-    InvalidObjectPath(String),
 }
 
 impl error::Error for Error {
@@ -36,7 +35,6 @@ impl fmt::Display for Error {
             Error::InsufficientData => write!(f, "insufficient data"),
             Error::PaddingNot0 => write!(f, "non-0 padding byte(s)"),
             Error::UnknownFd => write!(f, "File descriptor not in the given FD index"),
-            Error::InvalidObjectPath(s) => write!(f, "invalid object path: \"{}\"", s),
         }
     }
 }
