@@ -8,7 +8,6 @@ pub enum Error {
     Message(String),
 
     Io(std::io::Error),
-    ExcessData,
     IncorrectType,
     IncorrectValue,
     InvalidUtf8,
@@ -31,7 +30,6 @@ impl fmt::Display for Error {
         match self {
             Error::Message(s) => write!(f, "{}", s),
             Error::Io(e) => e.fmt(f),
-            Error::ExcessData => write!(f, "excess data"),
             Error::IncorrectType => write!(f, "incorrect type"),
             Error::IncorrectValue => write!(f, "incorrect value"),
             Error::InvalidUtf8 => write!(f, "invalid UTF-8"),
