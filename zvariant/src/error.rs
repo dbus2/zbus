@@ -9,7 +9,6 @@ pub enum Error {
 
     Io(std::io::Error),
     IncorrectType,
-    IncorrectValue,
     InvalidUtf8,
     InsufficientData,
     PaddingNot0,
@@ -31,7 +30,6 @@ impl fmt::Display for Error {
             Error::Message(s) => write!(f, "{}", s),
             Error::Io(e) => e.fmt(f),
             Error::IncorrectType => write!(f, "incorrect type"),
-            Error::IncorrectValue => write!(f, "incorrect value"),
             Error::InvalidUtf8 => write!(f, "invalid UTF-8"),
             Error::InsufficientData => write!(f, "insufficient data"),
             Error::PaddingNot0 => write!(f, "non-0 padding byte(s)"),
