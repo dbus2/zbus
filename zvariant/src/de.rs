@@ -201,7 +201,7 @@ where
             .map(|fds| fds.get(idx as usize))
             .flatten()
             .copied()
-            .ok_or(Error::InsufficientData)
+            .ok_or(Error::UnknownFd)
     }
 
     fn parse_padding(&mut self, alignment: usize) -> Result<usize> {
