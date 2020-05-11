@@ -249,7 +249,7 @@ where
     }
 
     fn abs_pos(&self) -> usize {
-        self.ctxt.n_bytes_before() + self.pos
+        self.ctxt.position() + self.pos
     }
 }
 

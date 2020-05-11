@@ -20,7 +20,7 @@ impl Default for EncodingFormat {
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct EncodingContext<B> {
     format: EncodingFormat,
-    n_bytes_before: usize,
+    position: usize,
 
     b: PhantomData<B>,
 }
@@ -29,23 +29,23 @@ impl<B> EncodingContext<B>
 where
     B: byteorder::ByteOrder,
 {
-    pub fn new(format: EncodingFormat, n_bytes_before: usize) -> Self {
+    pub fn new(format: EncodingFormat, position: usize) -> Self {
         Self {
             format,
-            n_bytes_before,
+            position,
             b: PhantomData,
         }
     }
 
-    pub fn new_dbus(n_bytes_before: usize) -> Self {
-        Self::new(EncodingFormat::DBus, n_bytes_before)
+    pub fn new_dbus(position: usize) -> Self {
+        Self::new(EncodingFormat::DBus, position)
     }
 
     pub fn format(self) -> EncodingFormat {
         self.format
     }
 
-    pub fn n_bytes_before(self) -> usize {
-        self.n_bytes_before
+    pub fn position(self) -> usize {
+        self.position
     }
 }
