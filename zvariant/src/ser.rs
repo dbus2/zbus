@@ -352,7 +352,7 @@ where
                 self.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
 
                 if c == VARIANT_SIGNATURE_CHAR {
-                    self.value_sign = Some(crate::signature_string!(v));
+                    self.value_sign = Some(signature_string!(v));
                 }
             }
             _ => {

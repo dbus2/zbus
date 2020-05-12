@@ -94,7 +94,6 @@ pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
 }
 
 // Given an &str, create an owned (String-based) Signature w/ appropriate capacity
-#[macro_export]
 macro_rules! signature_string {
     ($signature:expr) => {{
         let mut s = String::with_capacity(255);
