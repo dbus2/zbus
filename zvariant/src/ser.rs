@@ -633,8 +633,7 @@ where
                     .serializer
                     .value_sign
                     .take()
-                    // FIXME: Better error?
-                    .ok_or_else(|| Error::IncorrectValue)?;
+                    .expect("Incorrect Value encoding");
 
                 let sign_parser = SignatureParser::new(signature);
                 let mut serializer = Serializer::<B, W> {
