@@ -279,9 +279,10 @@ where
             VARIANT_SIGNATURE_CHAR => self.deserialize_seq(visitor),
             ARRAY_SIGNATURE_CHAR => self.deserialize_seq(visitor),
             STRUCT_SIG_START_CHAR => self.deserialize_seq(visitor),
-            _ => Err(Error::InvalidSignature(String::from(
-                self.sign_parser.signature(),
-            ))),
+            c => Err(de::Error::invalid_value(
+                de::Unexpected::Char(c),
+                &"a valid signature character",
+            )),
         }
     }
 
