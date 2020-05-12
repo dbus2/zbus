@@ -440,7 +440,7 @@ where
         };
         self.sign_parser.parse_char(None)?;
         let slice = self.next_slice(len)?;
-        let s = str::from_utf8(slice).map_err(|_| Error::InvalidUtf8)?;
+        let s = str::from_utf8(slice).map_err(Error::Utf8)?;
         self.pos += 1; // skip trailing null byte
 
         visitor.visit_borrowed_str(s)
@@ -791,7 +791,7 @@ where
 
                 let slice = &self.de.bytes[self.start..(self.de.pos - 1)];
                 let signature = str::from_utf8(slice)
-                    .map_err(|_| Error::InvalidUtf8)
+                    .map_err(Error::Utf8)
                     .and_then(Signature::try_from)?;
                 let sign_parser = SignatureParser::new(signature);
 
