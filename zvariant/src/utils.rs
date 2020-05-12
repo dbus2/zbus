@@ -103,6 +103,20 @@ macro_rules! signature_string {
     }};
 }
 
+macro_rules! check_child_value_signature {
+    ($expected_signature:expr, $child_signature:expr, $child_name:literal) => {{
+        if $child_signature != $expected_signature {
+            let unexpected = format!("{} with signature `{}`", $child_name, $child_signature,);
+            let expected = format!("{} with signature `{}`", $child_name, $expected_signature);
+
+            return Err(serde::de::Error::invalid_type(
+                serde::de::Unexpected::Str(&unexpected),
+                &expected.as_str(),
+            ));
+        }
+    }};
+}
+
 fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
     if signature.len() < 2 {
         return Err(Error::InsufficientData);

@@ -35,9 +35,7 @@ impl<'a> Array<'a> {
     ///
     /// if `element`'s signature doesn't match the element signature `self` was created for.
     pub fn append<'e: 'a>(&mut self, element: Value<'e>) -> Result<()> {
-        if element.value_signature() != self.element_signature {
-            return Err(Error::IncorrectType);
-        }
+        check_child_value_signature!(self.element_signature, element.value_signature(), "element");
 
         self.elements.push(element);
 
