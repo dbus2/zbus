@@ -208,8 +208,9 @@ where
         let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
             for i in 0..padding {
-                if self.bytes[self.pos + i] != 0 {
-                    return Err(Error::PaddingNot0);
+                let byte = self.bytes[self.pos + i];
+                if byte != 0 {
+                    return Err(Error::PaddingNot0(byte));
                 }
             }
             self.pos += padding;
