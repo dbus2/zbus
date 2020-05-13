@@ -82,9 +82,11 @@ impl<'k, 'v> Dict<'k, 'v> {
         for entry in &self.entries {
             let entry_key = entry.key.downcast_ref::<K>().ok_or(Error::IncorrectType)?;
             if *entry_key == *key {
-                return Ok(Some(
-                    entry.value.downcast_ref().ok_or(Error::IncorrectType)?,
-                ));
+                return entry
+                    .value
+                    .downcast_ref()
+                    .ok_or(Error::IncorrectType)
+                    .map(Some);
             }
         }
 
