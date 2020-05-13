@@ -41,10 +41,10 @@ impl<'a> PropertiesProxy<'a> {
     }
 
     pub fn set(&self, interface_name: &str, property_name: &str, value: &Value) -> Result<()> {
-        let reply = self
+        let _ = self
             .0
             .call("Set", &(interface_name, property_name, value))?;
-        Ok(reply)
+        Ok(())
     }
 
     pub fn get_all(&self, interface_name: &str) -> Result<HashMap<String, OwnedValue>> {

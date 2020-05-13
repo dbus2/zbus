@@ -70,7 +70,7 @@ impl<'a> Proxy<'a> {
                 reply.disown_fds();
                 Ok(r)
             }
-            Err(e) => Err(e.into()),
+            Err(e) => Err(e),
         }
     }
 }
