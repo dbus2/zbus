@@ -1,6 +1,7 @@
 use crate::{Basic, EncodingFormat, Error, Fd, ObjectPath, Signature};
 
 pub const ARRAY_SIGNATURE_CHAR: char = 'a';
+pub const ARRAY_SIGNATURE_STR: &str = "a";
 pub const ARRAY_ALIGNMENT: usize = 4;
 pub const STRUCT_SIG_START_CHAR: char = '(';
 pub const STRUCT_SIG_END_CHAR: char = ')';
