@@ -231,7 +231,10 @@ where
 
     fn next_slice(&mut self, len: usize) -> Result<&'de [u8]> {
         if self.pos + len > self.bytes.len() {
-            return Err(Error::InsufficientData);
+            return Err(serde::de::Error::invalid_length(
+                self.bytes.len(),
+                &format!(">= {}", self.pos + len).as_str(),
+            ));
         }
 
         let slice = &self.bytes[self.pos..self.pos + len];
@@ -688,7 +691,10 @@ where
 
         let v = seed.deserialize(&mut *self.de).map(Some);
         if self.de.pos > self.start + self.len {
-            return Err(Error::InsufficientData);
+            return Err(serde::de::Error::invalid_length(
+                self.len,
+                &format!(">= {}", self.de.pos - self.start).as_str(),
+            ));
         }
 
         v
@@ -722,7 +728,10 @@ where
 
         let v = seed.deserialize(&mut *self.de).map(Some);
         if self.de.pos > self.start + self.len {
-            return Err(Error::InsufficientData);
+            return Err(serde::de::Error::invalid_length(
+                self.len,
+                &format!(">= {}", self.de.pos - self.start).as_str(),
+            ));
         }
 
         v
@@ -735,7 +744,10 @@ where
         // TODO: Ensure we can handle empty dict
         let v = seed.deserialize(&mut *self.de);
         if self.de.pos > self.start + self.len {
-            return Err(Error::InsufficientData);
+            return Err(serde::de::Error::invalid_length(
+                self.len,
+                &format!(">= {}", self.de.pos - self.start).as_str(),
+            ));
         }
 
         v

@@ -74,7 +74,11 @@ pub(crate) fn alignment_for_signature_char(signature_char: char, _format: Encodi
 }
 
 pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
-    match signature.chars().next().ok_or(Error::InsufficientData)? {
+    match signature
+        .chars()
+        .next()
+        .ok_or_else(|| serde::de::Error::invalid_length(0, &">= 1 character"))?
+    {
         u8::SIGNATURE_CHAR
         | bool::SIGNATURE_CHAR
         | i16::SIGNATURE_CHAR

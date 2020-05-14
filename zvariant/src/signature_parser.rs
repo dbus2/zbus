@@ -1,5 +1,5 @@
+use crate::Result;
 use crate::Signature;
-use crate::{Error, Result};
 
 pub(crate) struct SignatureParser<'s> {
     signature: Signature<'s>,
@@ -48,8 +48,10 @@ impl<'s> SignatureParser<'s> {
 
         // We'll be going one char beyond at the end of parsing but not beyond that.
         if self.pos > self.signature.len() {
-            // TODO: Better error
-            return Err(Error::InsufficientData);
+            return Err(serde::de::Error::invalid_length(
+                self.signature.len(),
+                &format!(">= {} characters", self.pos).as_str(),
+            ));
         }
 
         Ok(())
