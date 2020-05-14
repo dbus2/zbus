@@ -9,7 +9,6 @@ pub enum Error {
     Io(std::io::Error),
     IncorrectType,
     Utf8(std::str::Utf8Error),
-    InsufficientData,
     PaddingNot0(u8),
     UnknownFd,
 }
@@ -31,7 +30,6 @@ impl fmt::Display for Error {
             Error::Io(e) => e.fmt(f),
             Error::IncorrectType => write!(f, "incorrect type"),
             Error::Utf8(e) => write!(f, "{}", e),
-            Error::InsufficientData => write!(f, "insufficient data"),
             Error::PaddingNot0(b) => write!(f, "Unexpected non-0 padding byte `{}`", b),
             Error::UnknownFd => write!(f, "File descriptor not in the given FD index"),
         }
