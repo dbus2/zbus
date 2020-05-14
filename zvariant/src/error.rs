@@ -37,6 +37,8 @@ impl fmt::Display for Error {
 }
 
 impl de::Error for Error {
+    // TODO: Add more specific error variants to Error enum above so we can implement other methods
+    // here too.
     fn custom<T>(msg: T) -> Error
     where
         T: fmt::Display,
