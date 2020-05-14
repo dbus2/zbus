@@ -1,27 +1,25 @@
 use serde::{de, ser};
 use std::{error, fmt, result};
 
-// TODO: See if we can avoid allocated String
 #[derive(Debug)]
 pub enum Error {
     // Generic error needed by Serde
     Message(String),
 
     Io(std::io::Error),
-    ExcessData,
     IncorrectType,
-    IncorrectValue,
-    InvalidUtf8,
-    InsufficientData,
-    PaddingNot0,
-    InvalidSignature(String),
-    InvalidObjectPath(String),
+    Utf8(std::str::Utf8Error),
+    PaddingNot0(u8),
+    UnknownFd,
 }
 
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        // FIXME: is it true for Error::Io as well?
-        None
+        match self {
+            Error::Io(e) => Some(e),
+            Error::Utf8(e) => Some(e),
+            _ => None,
+        }
     }
 }
 
@@ -30,19 +28,17 @@ impl fmt::Display for Error {
         match self {
             Error::Message(s) => write!(f, "{}", s),
             Error::Io(e) => e.fmt(f),
-            Error::ExcessData => write!(f, "excess data"),
             Error::IncorrectType => write!(f, "incorrect type"),
-            Error::IncorrectValue => write!(f, "incorrect value"),
-            Error::InvalidUtf8 => write!(f, "invalid UTF-8"),
-            Error::InsufficientData => write!(f, "insufficient data"),
-            Error::PaddingNot0 => write!(f, "non-0 padding byte(s)"),
-            Error::InvalidSignature(s) => write!(f, "invalid signature: \"{}\"", s),
-            Error::InvalidObjectPath(s) => write!(f, "invalid object path: \"{}\"", s),
+            Error::Utf8(e) => write!(f, "{}", e),
+            Error::PaddingNot0(b) => write!(f, "Unexpected non-0 padding byte `{}`", b),
+            Error::UnknownFd => write!(f, "File descriptor not in the given FD index"),
         }
     }
 }
 
 impl de::Error for Error {
+    // TODO: Add more specific error variants to Error enum above so we can implement other methods
+    // here too.
     fn custom<T>(msg: T) -> Error
     where
         T: fmt::Display,

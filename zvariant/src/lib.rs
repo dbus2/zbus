@@ -1,3 +1,7 @@
+#[macro_use]
+mod utils;
+pub use utils::*;
+
 mod array;
 pub use array::*;
 
@@ -48,10 +52,6 @@ pub use into_value::*;
 
 mod owned_value;
 pub use owned_value::*;
-
-#[macro_use]
-mod utils;
-pub use utils::*;
 
 mod signature_parser;
 

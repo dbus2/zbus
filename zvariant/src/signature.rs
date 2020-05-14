@@ -167,27 +167,42 @@ impl<'de> Visitor<'de> for SignatureVisitor {
 
 fn ensure_correct_signature_str(signature: &str) -> Result<()> {
     if signature.len() > 255 {
-        return Err(Error::InvalidSignature(String::from(signature)));
+        return Err(serde::de::Error::invalid_length(
+            signature.len(),
+            &"<= 255 characters",
+        ));
     }
 
     let (mut parsed, end) = match signature.chars().next() {
         Some(crate::ARRAY_SIGNATURE_CHAR) => {
             if signature.len() == 1 {
-                return Err(Error::InvalidSignature(String::from(signature)));
+                return Err(serde::de::Error::invalid_length(1, &"> 1 character"));
             }
 
             (1, signature.len())
         }
         Some(crate::STRUCT_SIG_START_CHAR) => {
             if !signature.ends_with(crate::STRUCT_SIG_END_CHAR) {
-                return Err(Error::InvalidSignature(String::from(signature)));
+                // We can't get None here cause we already established there is at least 1 char
+                let c = signature.chars().last().expect("empty signature");
+
+                return Err(serde::de::Error::invalid_value(
+                    serde::de::Unexpected::Char(c),
+                    &crate::STRUCT_SIG_END_STR,
+                ));
             }
 
             (1, signature.len() - 1)
         }
         Some(crate::DICT_ENTRY_SIG_START_CHAR) => {
             if !signature.ends_with(crate::DICT_ENTRY_SIG_END_CHAR) {
-                return Err(Error::InvalidSignature(String::from(signature)));
+                // We can't get None here cause we already established there is at least 1 char
+                let c = signature.chars().last().expect("empty signature");
+
+                return Err(serde::de::Error::invalid_value(
+                    serde::de::Unexpected::Char(c),
+                    &crate::DICT_ENTRY_SIG_END_STR,
+                ));
             }
 
             (1, signature.len() - 1)

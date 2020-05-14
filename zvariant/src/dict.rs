@@ -45,11 +45,8 @@ impl<'k, 'v> Dict<'k, 'v> {
         key: Value<'kv>,
         value: Value<'vv>,
     ) -> Result<(), Error> {
-        if key.value_signature() != self.key_signature
-            || value.value_signature() != self.value_signature
-        {
-            return Err(Error::IncorrectType);
-        }
+        check_child_value_signature!(self.key_signature, key.value_signature(), "key");
+        check_child_value_signature!(self.value_signature, value.value_signature(), "value");
 
         self.entries.push(DictEntry { key, value });
 
@@ -62,9 +59,8 @@ impl<'k, 'v> Dict<'k, 'v> {
         K: Basic + Into<Value<'k>> + std::hash::Hash + std::cmp::Eq,
         V: Into<Value<'v>> + Type,
     {
-        if K::signature() != self.key_signature || V::signature() != self.value_signature {
-            return Err(Error::IncorrectType);
-        }
+        check_child_value_signature!(self.key_signature, K::signature(), "key");
+        check_child_value_signature!(self.value_signature, V::signature(), "value");
 
         self.entries.push(DictEntry {
             key: Value::new(key),
@@ -86,9 +82,11 @@ impl<'k, 'v> Dict<'k, 'v> {
         for entry in &self.entries {
             let entry_key = entry.key.downcast_ref::<K>().ok_or(Error::IncorrectType)?;
             if *entry_key == *key {
-                return Ok(Some(
-                    entry.value.downcast_ref().ok_or(Error::IncorrectType)?,
-                ));
+                return entry
+                    .value
+                    .downcast_ref()
+                    .ok_or(Error::IncorrectType)
+                    .map(Some);
             }
         }
 

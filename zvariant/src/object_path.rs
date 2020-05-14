@@ -167,16 +167,30 @@ fn ensure_correct_object_path_str(path: &str) -> Result<()> {
     // * No `//`
     // * Only ASCII alphanumeric, `_` or '/'
     if path.is_empty() {
-        return Err(Error::InvalidObjectPath(String::from(path)));
+        return Err(serde::de::Error::invalid_length(0, &"> 0 character"));
     }
 
     for (i, c) in path.chars().enumerate() {
-        if (i == 0 && c != '/')
-            || (c == '/' && prev == '/')
-            || (path.len() > 1 && i == (path.len() - 1) && c == '/')
-            || (!c.is_ascii_alphanumeric() && c != '/' && c != '_')
-        {
-            return Err(Error::InvalidObjectPath(String::from(path)));
+        if i == 0 && c != '/' {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Char(c),
+                &"/",
+            ));
+        } else if c == '/' && prev == '/' {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str("//"),
+                &"/",
+            ));
+        } else if path.len() > 1 && i == (path.len() - 1) && c == '/' {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Char('/'),
+                &"an alphanumeric character or `_`",
+            ));
+        } else if !c.is_ascii_alphanumeric() && c != '/' && c != '_' {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Char(c),
+                &"an alphanumeric character, `_` or `/`",
+            ));
         }
         prev = c;
     }

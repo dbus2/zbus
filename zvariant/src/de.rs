@@ -201,15 +201,16 @@ where
             .map(|fds| fds.get(idx as usize))
             .flatten()
             .copied()
-            .ok_or(Error::InsufficientData)
+            .ok_or(Error::UnknownFd)
     }
 
     fn parse_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
             for i in 0..padding {
-                if self.bytes[self.pos + i] != 0 {
-                    return Err(Error::PaddingNot0);
+                let byte = self.bytes[self.pos + i];
+                if byte != 0 {
+                    return Err(Error::PaddingNot0(byte));
                 }
             }
             self.pos += padding;
@@ -230,7 +231,10 @@ where
 
     fn next_slice(&mut self, len: usize) -> Result<&'de [u8]> {
         if self.pos + len > self.bytes.len() {
-            return Err(Error::InsufficientData);
+            return Err(serde::de::Error::invalid_length(
+                self.bytes.len(),
+                &format!(">= {}", self.pos + len).as_str(),
+            ));
         }
 
         let slice = &self.bytes[self.pos..self.pos + len];
@@ -249,7 +253,7 @@ where
     }
 
     fn abs_pos(&self) -> usize {
-        self.ctxt.n_bytes_before() + self.pos
+        self.ctxt.position() + self.pos
     }
 }
 
@@ -279,9 +283,10 @@ where
             VARIANT_SIGNATURE_CHAR => self.deserialize_seq(visitor),
             ARRAY_SIGNATURE_CHAR => self.deserialize_seq(visitor),
             STRUCT_SIG_START_CHAR => self.deserialize_seq(visitor),
-            _ => Err(Error::InvalidSignature(String::from(
-                self.sign_parser.signature(),
-            ))),
+            c => Err(de::Error::invalid_value(
+                de::Unexpected::Char(c),
+                &"a valid signature character",
+            )),
         }
     }
 
@@ -440,7 +445,7 @@ where
         };
         self.sign_parser.parse_char(None)?;
         let slice = self.next_slice(len)?;
-        let s = str::from_utf8(slice).map_err(|_| Error::InvalidUtf8)?;
+        let s = str::from_utf8(slice).map_err(Error::Utf8)?;
         self.pos += 1; // skip trailing null byte
 
         visitor.visit_borrowed_str(s)
@@ -686,7 +691,10 @@ where
 
         let v = seed.deserialize(&mut *self.de).map(Some);
         if self.de.pos > self.start + self.len {
-            return Err(Error::InsufficientData);
+            return Err(serde::de::Error::invalid_length(
+                self.len,
+                &format!(">= {}", self.de.pos - self.start).as_str(),
+            ));
         }
 
         v
@@ -720,7 +728,10 @@ where
 
         let v = seed.deserialize(&mut *self.de).map(Some);
         if self.de.pos > self.start + self.len {
-            return Err(Error::InsufficientData);
+            return Err(serde::de::Error::invalid_length(
+                self.len,
+                &format!(">= {}", self.de.pos - self.start).as_str(),
+            ));
         }
 
         v
@@ -733,7 +744,10 @@ where
         // TODO: Ensure we can handle empty dict
         let v = seed.deserialize(&mut *self.de);
         if self.de.pos > self.start + self.len {
-            return Err(Error::InsufficientData);
+            return Err(serde::de::Error::invalid_length(
+                self.len,
+                &format!(">= {}", self.de.pos - self.start).as_str(),
+            ));
         }
 
         v
@@ -791,7 +805,7 @@ where
 
                 let slice = &self.de.bytes[self.start..(self.de.pos - 1)];
                 let signature = str::from_utf8(slice)
-                    .map_err(|_| Error::InvalidUtf8)
+                    .map_err(Error::Utf8)
                     .and_then(Signature::try_from)?;
                 let sign_parser = SignatureParser::new(signature);
 
