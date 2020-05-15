@@ -34,11 +34,10 @@ where
     T: Serialize + Type,
 {
     let signature = T::signature();
-    let mut fds = vec![];
     let mut null = NullWriteSeek;
 
     let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
-    let len = to_write_for_signature(&mut null, &mut fds, ctxt, &signature, value)?;
+    let (len, fds) = to_write_for_signature(&mut null, ctxt, &signature, value)?;
     Ok((len, fds.len()))
 }
 
@@ -72,21 +71,19 @@ where
     T: Serialize + Type,
 {
     let signature = T::signature();
-    let mut fds = vec![];
 
-    let r = to_write_for_signature(write, &mut fds, ctxt, &signature, value);
+    let (len, fds) = to_write_for_signature(write, ctxt, &signature, value)?;
     if !fds.is_empty() {
         panic!("can't serialize with FDs")
     }
-    r
+    Ok(len)
 }
 
 pub fn to_write_fds<B, W, T: ?Sized>(
     write: &mut W,
-    fds: &mut Vec<RawFd>,
     ctxt: EncodingContext<B>,
     value: &T,
-) -> Result<usize>
+) -> Result<(usize, Vec<RawFd>)>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -94,7 +91,7 @@ where
 {
     let signature = T::signature();
 
-    to_write_for_signature(write, fds, ctxt, &signature, value)
+    to_write_for_signature(write, ctxt, &signature, value)
 }
 
 pub fn to_bytes<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Vec<u8>>
@@ -114,26 +111,25 @@ where
     T: Serialize + Type,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let mut fds = vec![];
-    to_write_fds(&mut cursor, &mut fds, ctxt, value)?;
+    let (_, fds) = to_write_fds(&mut cursor, ctxt, value)?;
     Ok((cursor.into_inner(), fds))
 }
 
 pub fn to_write_for_signature<'s, 'sig, B, W, T: ?Sized>(
     write: &mut W,
-    fds: &mut Vec<RawFd>,
     ctxt: EncodingContext<B>,
     signature: &'s Signature<'sig>,
     value: &T,
-) -> Result<usize>
+) -> Result<(usize, Vec<RawFd>)>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
     T: Serialize,
 {
-    let mut serializer = Serializer::<B, W>::new(signature, write, fds, ctxt);
+    let mut fds = vec![];
+    let mut serializer = Serializer::<B, W>::new(signature, write, &mut fds, ctxt);
     value.serialize(&mut serializer)?;
-    Ok(serializer.bytes_written)
+    Ok((serializer.bytes_written, fds))
 }
 
 pub fn to_bytes_for_signature<'s, 'sig, B, T: ?Sized>(
@@ -146,8 +142,7 @@ where
     T: Serialize,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let mut fds = vec![];
-    let _ = to_write_for_signature(&mut cursor, &mut fds, ctxt, signature, value);
+    to_write_for_signature(&mut cursor, ctxt, signature, value)?;
     Ok(cursor.into_inner())
 }
 

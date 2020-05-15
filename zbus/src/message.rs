@@ -126,7 +126,6 @@ where
 
     fn build(self) -> Result<Message, MessageError> {
         let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
-        let mut fds = vec![];
 
         let MessageBuilder {
             ty,
@@ -150,7 +149,7 @@ where
         let header = MessageHeader::new(primary, fields);
 
         zvariant::to_write(&mut cursor, ctxt, &header)?;
-        zvariant::to_write_fds(&mut cursor, &mut fds, ctxt, body)?;
+        let (_, fds) = zvariant::to_write_fds(&mut cursor, ctxt, body)?;
 
         Ok(Message {
             bytes,
