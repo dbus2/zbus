@@ -1,15 +1,21 @@
 use serde::{de, ser};
 use std::{error, fmt, result};
 
+/// Error type used by zvariant API.
 #[derive(Debug)]
 pub enum Error {
-    // Generic error needed by Serde
+    /// Generic error. All serde errors gets transformed into this variant.
     Message(String),
 
+    /// Wrapper for [`std::io::Error`](https://doc.rust-lang.org/std/io/struct.Error.html)
     Io(std::io::Error),
+    /// Type conversions errors.
     IncorrectType,
+    /// Wrapper for [`std::str::Utf8Error`](https://doc.rust-lang.org/std/str/struct.Utf8Error.html)
     Utf8(std::str::Utf8Error),
+    /// Non-0 padding byte(s) encountered.
     PaddingNot0(u8),
+    /// The deserialized file descriptor is not in the given FD index.
     UnknownFd,
 }
 
