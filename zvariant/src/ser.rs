@@ -164,10 +164,10 @@ where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
-    pub fn new<'w: 'ser, 's>(
+    pub fn new<'w: 'ser, 'f: 'ser, 's>(
         signature: &'s Signature<'sig>,
         write: &'w mut W,
-        fds: &'w mut Vec<RawFd>,
+        fds: &'f mut Vec<RawFd>,
         ctxt: EncodingContext<B>,
     ) -> Self {
         let sign_parser = SignatureParser::new(signature.clone());
