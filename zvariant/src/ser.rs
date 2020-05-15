@@ -29,7 +29,23 @@ impl Seek for NullWriteSeek {
     }
 }
 
-pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<(usize, usize)>
+pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<usize>
+where
+    B: byteorder::ByteOrder,
+    T: Serialize + Type,
+{
+    let mut null = NullWriteSeek;
+
+    to_write(&mut null, ctxt, value)
+}
+
+/// Calculate the serialized size of `T` that (potentially) contains FDs.
+///
+/// Returns the serialized size of `T` and the number of FDs.
+pub fn serialized_size_fds<B, T: ?Sized>(
+    ctxt: EncodingContext<B>,
+    value: &T,
+) -> Result<(usize, usize)>
 where
     B: byteorder::ByteOrder,
     T: Serialize + Type,
