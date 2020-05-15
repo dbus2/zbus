@@ -42,13 +42,12 @@ where
     Ok((len, fds.len()))
 }
 
-/// Serialize the given data structure as DBus marshalling format into
-/// the IO stream.
+/// Serialize `T` to the given `write`.
 ///
 /// # Panics
 ///
-/// This function will `panic!()` if the value to serialize contains FDs. Use [`to_write_fds`] if
-/// you'd want to potentially pass FDs.
+/// This function will panic if the value to serialize contains file descriptors. Use
+/// [`to_write_fds`] if you'd want to potentially pass FDs.
 ///
 /// # Examples
 ///
