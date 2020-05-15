@@ -37,7 +37,7 @@ where
     let mut null = NullWriteSeek;
 
     let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
-    let (len, fds) = to_write_for_signature(&mut null, ctxt, &signature, value)?;
+    let (len, fds) = to_write_fds_for_signature(&mut null, ctxt, &signature, value)?;
     Ok((len, fds.len()))
 }
 
@@ -72,11 +72,7 @@ where
 {
     let signature = T::signature();
 
-    let (len, fds) = to_write_for_signature(write, ctxt, &signature, value)?;
-    if !fds.is_empty() {
-        panic!("can't serialize with FDs")
-    }
-    Ok(len)
+    to_write_for_signature(write, ctxt, &signature, value)
 }
 
 pub fn to_write_fds<B, W, T: ?Sized>(
@@ -91,7 +87,7 @@ where
 {
     let signature = T::signature();
 
-    to_write_for_signature(write, ctxt, &signature, value)
+    to_write_fds_for_signature(write, ctxt, &signature, value)
 }
 
 pub fn to_bytes<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Vec<u8>>
@@ -116,6 +112,25 @@ where
 }
 
 pub fn to_write_for_signature<'s, 'sig, B, W, T: ?Sized>(
+    write: &mut W,
+    ctxt: EncodingContext<B>,
+    signature: &'s Signature<'sig>,
+    value: &T,
+) -> Result<usize>
+where
+    B: byteorder::ByteOrder,
+    W: Write + Seek,
+    T: Serialize,
+{
+    let (len, fds) = to_write_fds_for_signature(write, ctxt, signature, value)?;
+    if !fds.is_empty() {
+        panic!("can't serialize with FDs")
+    }
+
+    Ok(len)
+}
+
+pub fn to_write_fds_for_signature<'s, 'sig, B, W, T: ?Sized>(
     write: &mut W,
     ctxt: EncodingContext<B>,
     signature: &'s Signature<'sig>,
