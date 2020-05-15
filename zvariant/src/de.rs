@@ -161,6 +161,7 @@ where
     T::deserialize(&mut de)
 }
 
+/// Our deserialization implementation.
 pub struct Deserializer<'de, 'sig, 'f, B> {
     pub(self) ctxt: EncodingContext<B>,
     pub(self) bytes: &'de [u8],
@@ -172,7 +173,6 @@ pub struct Deserializer<'de, 'sig, 'f, B> {
     b: PhantomData<B>,
 }
 
-/// Our Deserialization implementation.
 impl<'de, 'sig, 'f, B> Deserializer<'de, 'sig, 'f, B>
 where
     B: byteorder::ByteOrder,
