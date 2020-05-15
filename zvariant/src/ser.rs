@@ -52,11 +52,12 @@ where
 /// # Examples
 ///
 /// ```
-/// use zvariant::{EncodingContext, to_write};
+/// use zvariant::{EncodingContext, from_slice, to_write};
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// let mut cursor = std::io::Cursor::new(vec![]);
-/// let len = to_write(&mut cursor, ctxt, &42u32).unwrap();
-/// assert_eq!(len, 4);
+/// to_write(&mut cursor, ctxt, &42u32).unwrap();
+/// let value: u32 = from_slice(cursor.get_ref(), ctxt).unwrap();
+/// assert_eq!(value, 42);
 /// ```
 ///
 /// [`to_write_fds`]: fn.to_write_fds.html
