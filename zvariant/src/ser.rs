@@ -156,9 +156,37 @@ where
     B: byteorder::ByteOrder,
     T: Serialize,
 {
+    let (bytes, fds) = to_bytes_fds_for_signature(ctxt, signature, value)?;
+    if !fds.is_empty() {
+        panic!("can't serialize with FDs")
+    }
+
+    Ok(bytes)
+}
+
+/// Serialize `T` that (potentially) contains FDs and has the given signature, to a new byte vector.
+///
+/// Use this function instead of [`to_bytes_fds`] if the value being serialized does not implement
+/// [`Type`].
+///
+/// Please note that the serialized bytes only contain the indices of the file descriptors from the
+/// returned file descriptor vector, which needs to be transferred via an out-of-band platform
+/// specific mechanism.
+///
+/// [`to_bytes_fds`]: fn.to_bytes_fds.html
+/// [`Type`]: trait.Type.html
+pub fn to_bytes_fds_for_signature<'s, 'sig, B, T: ?Sized>(
+    ctxt: EncodingContext<B>,
+    signature: &'s Signature<'sig>,
+    value: &T,
+) -> Result<(Vec<u8>, Vec<RawFd>)>
+where
+    B: byteorder::ByteOrder,
+    T: Serialize,
+{
     let mut cursor = std::io::Cursor::new(vec![]);
-    to_write_for_signature(&mut cursor, ctxt, signature, value)?;
-    Ok(cursor.into_inner())
+    let (_, fds) = to_write_fds_for_signature(&mut cursor, ctxt, signature, value)?;
+    Ok((cursor.into_inner(), fds))
 }
 
 pub struct Serializer<'ser, 'sig, B, W> {
