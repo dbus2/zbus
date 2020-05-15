@@ -29,15 +29,14 @@ impl Seek for NullWriteSeek {
     }
 }
 
-pub fn serialized_size<T: ?Sized>(value: &T) -> Result<(usize, usize)>
+pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<(usize, usize)>
 where
+    B: byteorder::ByteOrder,
     T: Serialize + Type,
 {
-    let signature = T::signature();
     let mut null = NullWriteSeek;
 
-    let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
-    let (len, fds) = to_write_fds_for_signature(&mut null, ctxt, &signature, value)?;
+    let (len, fds) = to_write_fds(&mut null, ctxt, value)?;
     Ok((len, fds.len()))
 }
 

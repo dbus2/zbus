@@ -92,7 +92,8 @@ where
     B: serde::ser::Serialize + Type,
 {
     fn new(ty: MessageType, sender: Option<&'a str>, body: &'a B) -> Result<Self, MessageError> {
-        let (body_len, fds_len) = zvariant::serialized_size(body)?;
+        let ctxt = dbus_context!(0);
+        let (body_len, fds_len) = zvariant::serialized_size(ctxt, body)?;
         let body_len = u32::try_from(body_len).map_err(|_| MessageError::ExcessData)?;
 
         let mut fields = MessageFields::new();
