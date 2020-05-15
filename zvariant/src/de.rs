@@ -31,7 +31,6 @@ use crate::{Fd, ObjectPath, Signature};
 /// assert_eq!(decoded, Fd::from(42));
 /// ```
 ///
-/// [`Fd`]: struct.Fd.html
 /// [`from_slice`]: fn.from_slice.html
 pub fn from_slice_fds<'d, 'r: 'd, 'f, B, T: ?Sized>(
     bytes: &'r [u8],
@@ -142,7 +141,6 @@ where
 /// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
 /// file descriptors and hence the reason, caller must pass a slice of file descriptors.
 ///
-/// [`Fd`]: struct.Fd.html
 /// [`from_slice`]: fn.from_slice.html
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html
 // TODO: Return number of bytes parsed?
