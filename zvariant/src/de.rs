@@ -75,7 +75,7 @@ where
 /// Deserialize `T` from a given slice of bytes with the given signature.
 ///
 /// Use this function instead of [`from_slice`] if the value being deserialized does not implement
-/// `Type`. Also, if `T` is an, or (potentially) contains an [`Fd`], use
+/// [`Type`]. Also, if `T` is an, or (potentially) contains an [`Fd`], use
 /// [`from_slice_fds_for_signature`] instead.
 ///
 /// # Examples
@@ -120,6 +120,7 @@ where
 /// assert_eq!(decoded, Test::Struct { y: 42, t: 42 });
 /// ```
 ///
+/// [`Type`]: trait.Type.html
 /// [`Fd`]: struct.Fd.html
 /// [`from_slice_fds_for_signature`]: fn.from_slice_fds_for_signature.html
 // TODO: Return number of bytes parsed?
