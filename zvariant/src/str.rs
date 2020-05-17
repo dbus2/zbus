@@ -6,7 +6,7 @@ use crate::{Basic, Signature, Type};
 
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
 #[serde(rename(serialize = "zvariant::Str", deserialize = "zvariant::Str"))]
-pub struct Str<'a>(#[serde(borrow)] pub Cow<'a, str>);
+pub struct Str<'a>(#[serde(borrow)] Cow<'a, str>);
 
 impl<'a> Str<'a> {
     pub fn as_str(&self) -> &str {
