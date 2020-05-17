@@ -32,9 +32,9 @@ use crate::{Fd, ObjectPath, Signature};
 /// ```
 ///
 /// [`from_slice`]: fn.from_slice.html
-pub fn from_slice_fds<'d, 'r: 'd, 'f, B, T: ?Sized>(
+pub fn from_slice_fds<'d, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
-    fds: Option<&'f [RawFd]>,
+    fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
 ) -> Result<T>
 where
@@ -124,10 +124,10 @@ where
 /// [`Fd`]: struct.Fd.html
 /// [`from_slice_fds_for_signature`]: fn.from_slice_fds_for_signature.html
 // TODO: Return number of bytes parsed?
-pub fn from_slice_for_signature<'d, 's, 'sig, 'r: 'd, B, T: ?Sized>(
+pub fn from_slice_for_signature<'d, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
     ctxt: EncodingContext<B>,
-    signature: &'s Signature<'sig>,
+    signature: &Signature,
 ) -> Result<T>
 where
     B: byteorder::ByteOrder,
@@ -145,11 +145,11 @@ where
 /// [`from_slice`]: fn.from_slice.html
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html
 // TODO: Return number of bytes parsed?
-pub fn from_slice_fds_for_signature<'d, 's, 'sig, 'r: 'd, 'f, B, T: ?Sized>(
+pub fn from_slice_fds_for_signature<'d, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
-    fds: Option<&'f [RawFd]>,
+    fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
-    signature: &'s Signature<'sig>,
+    signature: &Signature,
 ) -> Result<T>
 where
     B: byteorder::ByteOrder,
@@ -177,10 +177,10 @@ where
     B: byteorder::ByteOrder,
 {
     /// Create a Deserializer struct instance.
-    pub fn new<'r: 'de, 's>(
+    pub fn new<'r: 'de>(
         bytes: &'r [u8],
         fds: Option<&'f [RawFd]>,
-        signature: &'s Signature<'sig>,
+        signature: &Signature<'sig>,
         ctxt: EncodingContext<B>,
     ) -> Self {
         let sign_parser = SignatureParser::new(signature.clone());

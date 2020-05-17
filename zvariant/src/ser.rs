@@ -127,10 +127,10 @@ where
     Ok((cursor.into_inner(), fds))
 }
 
-pub fn to_write_for_signature<'s, 'sig, B, W, T: ?Sized>(
+pub fn to_write_for_signature<B, W, T: ?Sized>(
     write: &mut W,
     ctxt: EncodingContext<B>,
-    signature: &'s Signature<'sig>,
+    signature: &Signature,
     value: &T,
 ) -> Result<usize>
 where
@@ -146,10 +146,10 @@ where
     Ok(len)
 }
 
-pub fn to_write_fds_for_signature<'s, 'sig, B, W, T: ?Sized>(
+pub fn to_write_fds_for_signature<B, W, T: ?Sized>(
     write: &mut W,
     ctxt: EncodingContext<B>,
-    signature: &'s Signature<'sig>,
+    signature: &Signature,
     value: &T,
 ) -> Result<(usize, Vec<RawFd>)>
 where
@@ -163,9 +163,9 @@ where
     Ok((serializer.bytes_written, fds))
 }
 
-pub fn to_bytes_for_signature<'s, 'sig, B, T: ?Sized>(
+pub fn to_bytes_for_signature<B, T: ?Sized>(
     ctxt: EncodingContext<B>,
-    signature: &'s Signature<'sig>,
+    signature: &Signature,
     value: &T,
 ) -> Result<Vec<u8>>
 where
@@ -191,9 +191,9 @@ where
 ///
 /// [`to_bytes_fds`]: fn.to_bytes_fds.html
 /// [`Type`]: trait.Type.html
-pub fn to_bytes_fds_for_signature<'s, 'sig, B, T: ?Sized>(
+pub fn to_bytes_fds_for_signature<B, T: ?Sized>(
     ctxt: EncodingContext<B>,
-    signature: &'s Signature<'sig>,
+    signature: &Signature,
     value: &T,
 ) -> Result<(Vec<u8>, Vec<RawFd>)>
 where
@@ -223,8 +223,8 @@ where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
-    pub fn new<'w: 'ser, 'f: 'ser, 's>(
-        signature: &'s Signature<'sig>,
+    pub fn new<'w: 'ser, 'f: 'ser>(
+        signature: &Signature<'sig>,
         write: &'w mut W,
         fds: &'f mut Vec<RawFd>,
         ctxt: EncodingContext<B>,
