@@ -40,14 +40,14 @@ macro_rules! serialize_value {
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
 ///
-/// Note that this type is defined by the [D-Bus specification] and as such, its encoding is not the
-/// same as that of the enclosed value.
+/// Note that this type correponds to the `VARIANT` data type defined by the [D-Bus specification]
+/// and as such, its encoding is not the same as that of the enclosed value.
 ///
 /// # Example
 ///
 /// TODO
 ///
-/// [D-Bus specification]: https://dbus.freedesktop.org/doc/dbus-specification.html
+/// [D-Bus specification]: https://dbus.freedesktop.org/doc/dbus-specification.html#container-types
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value<'a> {
     // Simple types
