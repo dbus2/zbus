@@ -724,14 +724,17 @@ mod tests {
         let ctxt = Context::<LE>::new_dbus(0);
         let l = crate::serialized_size(ctxt, &()).unwrap();
         assert_eq!(l, 0);
+
         let stdout = std::io::stdout();
         let l = crate::serialized_size_fds(ctxt, &Fd::from(&stdout)).unwrap();
         assert_eq!(l, (4, 1));
-        //FIXME: add more tests, can't get them to work :(
-        //let l = len(&('a', "abc", [1, 2])).unwrap();
-        //let v = vec![1, 2];
-        //let l = len(&('a', "bc", &v)).unwrap();
-        //assert_eq!(l, (4, 0));
+
+        let l = crate::serialized_size(ctxt, &('a', "abc", &(1_u32, 2))).unwrap();
+        assert_eq!(l, 24);
+
+        let v = vec![1, 2];
+        let l = crate::serialized_size(ctxt, &('a', "abc", &v)).unwrap();
+        assert_eq!(l, 28);
     }
 
     #[test]
