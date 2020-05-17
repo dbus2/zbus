@@ -204,16 +204,13 @@ impl<'a> Value<'a> {
     /// use zvariant::Value;
     /// use std::convert::TryInto;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let s = Value::from("hello");
-    /// let val: String = s.try_into()?;
+    /// let val: String = s.try_into().unwrap();
     /// assert_eq!(val, "hello");
     ///
     /// let s = Value::from(42u32);
     /// let val: &u32 = s.downcast_ref().unwrap();
     /// assert_eq!(val, &42);
-    /// # Ok(())
-    /// # }
     /// ```
     ///
     /// [`Value`]: enum.Value.html
