@@ -67,6 +67,7 @@ where
 ///
 /// ```
 /// use zvariant::{EncodingContext, from_slice, to_write};
+///
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// let mut cursor = std::io::Cursor::new(vec![]);
 /// to_write(&mut cursor, ctxt, &42u32).unwrap();
