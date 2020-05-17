@@ -29,35 +29,49 @@ impl Seek for NullWriteSeek {
     }
 }
 
-pub fn serialized_size<T: ?Sized>(value: &T) -> Result<(usize, usize)>
+pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<usize>
 where
+    B: byteorder::ByteOrder,
     T: Serialize + Type,
 {
-    let signature = T::signature();
-    let mut fds = vec![];
     let mut null = NullWriteSeek;
 
-    let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
-    let len = to_write_for_signature(&mut null, &mut fds, ctxt, &signature, value)?;
+    to_write(&mut null, ctxt, value)
+}
+
+/// Calculate the serialized size of `T` that (potentially) contains FDs.
+///
+/// Returns the serialized size of `T` and the number of FDs.
+pub fn serialized_size_fds<B, T: ?Sized>(
+    ctxt: EncodingContext<B>,
+    value: &T,
+) -> Result<(usize, usize)>
+where
+    B: byteorder::ByteOrder,
+    T: Serialize + Type,
+{
+    let mut null = NullWriteSeek;
+
+    let (len, fds) = to_write_fds(&mut null, ctxt, value)?;
     Ok((len, fds.len()))
 }
 
-/// Serialize the given data structure as DBus marshalling format into
-/// the IO stream.
+/// Serialize `T` to the given `write`.
 ///
 /// # Panics
 ///
-/// This function will `panic!()` if the value to serialize contains FDs. Use [`to_write_fds`] if
-/// you'd want to potentially pass FDs.
+/// This function will panic if the value to serialize contains file descriptors. Use
+/// [`to_write_fds`] if you'd want to potentially pass FDs.
 ///
 /// # Examples
 ///
 /// ```
-/// use zvariant::{EncodingContext, to_write};
+/// use zvariant::{EncodingContext, from_slice, to_write};
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// let mut cursor = std::io::Cursor::new(vec![]);
-/// let len = to_write(&mut cursor, ctxt, &42u32).unwrap();
-/// assert_eq!(len, 4);
+/// to_write(&mut cursor, ctxt, &42u32).unwrap();
+/// let value: u32 = from_slice(cursor.get_ref(), ctxt).unwrap();
+/// assert_eq!(value, 42);
 /// ```
 ///
 /// [`to_write_fds`]: fn.to_write_fds.html
@@ -72,21 +86,15 @@ where
     T: Serialize + Type,
 {
     let signature = T::signature();
-    let mut fds = vec![];
 
-    let r = to_write_for_signature(write, &mut fds, ctxt, &signature, value);
-    if !fds.is_empty() {
-        panic!("can't serialize with FDs")
-    }
-    r
+    to_write_for_signature(write, ctxt, &signature, value)
 }
 
 pub fn to_write_fds<B, W, T: ?Sized>(
     write: &mut W,
-    fds: &mut Vec<RawFd>,
     ctxt: EncodingContext<B>,
     value: &T,
-) -> Result<usize>
+) -> Result<(usize, Vec<RawFd>)>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -94,7 +102,7 @@ where
 {
     let signature = T::signature();
 
-    to_write_for_signature(write, fds, ctxt, &signature, value)
+    to_write_fds_for_signature(write, ctxt, &signature, value)
 }
 
 pub fn to_bytes<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Vec<u8>>
@@ -114,14 +122,12 @@ where
     T: Serialize + Type,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let mut fds = vec![];
-    to_write_fds(&mut cursor, &mut fds, ctxt, value)?;
+    let (_, fds) = to_write_fds(&mut cursor, ctxt, value)?;
     Ok((cursor.into_inner(), fds))
 }
 
 pub fn to_write_for_signature<'s, 'sig, B, W, T: ?Sized>(
     write: &mut W,
-    fds: &mut Vec<RawFd>,
     ctxt: EncodingContext<B>,
     signature: &'s Signature<'sig>,
     value: &T,
@@ -131,9 +137,29 @@ where
     W: Write + Seek,
     T: Serialize,
 {
-    let mut serializer = Serializer::<B, W>::new(signature, write, fds, ctxt);
+    let (len, fds) = to_write_fds_for_signature(write, ctxt, signature, value)?;
+    if !fds.is_empty() {
+        panic!("can't serialize with FDs")
+    }
+
+    Ok(len)
+}
+
+pub fn to_write_fds_for_signature<'s, 'sig, B, W, T: ?Sized>(
+    write: &mut W,
+    ctxt: EncodingContext<B>,
+    signature: &'s Signature<'sig>,
+    value: &T,
+) -> Result<(usize, Vec<RawFd>)>
+where
+    B: byteorder::ByteOrder,
+    W: Write + Seek,
+    T: Serialize,
+{
+    let mut fds = vec![];
+    let mut serializer = Serializer::<B, W>::new(signature, write, &mut fds, ctxt);
     value.serialize(&mut serializer)?;
-    Ok(serializer.bytes_written)
+    Ok((serializer.bytes_written, fds))
 }
 
 pub fn to_bytes_for_signature<'s, 'sig, B, T: ?Sized>(
@@ -145,10 +171,37 @@ where
     B: byteorder::ByteOrder,
     T: Serialize,
 {
+    let (bytes, fds) = to_bytes_fds_for_signature(ctxt, signature, value)?;
+    if !fds.is_empty() {
+        panic!("can't serialize with FDs")
+    }
+
+    Ok(bytes)
+}
+
+/// Serialize `T` that (potentially) contains FDs and has the given signature, to a new byte vector.
+///
+/// Use this function instead of [`to_bytes_fds`] if the value being serialized does not implement
+/// [`Type`].
+///
+/// Please note that the serialized bytes only contain the indices of the file descriptors from the
+/// returned file descriptor vector, which needs to be transferred via an out-of-band platform
+/// specific mechanism.
+///
+/// [`to_bytes_fds`]: fn.to_bytes_fds.html
+/// [`Type`]: trait.Type.html
+pub fn to_bytes_fds_for_signature<'s, 'sig, B, T: ?Sized>(
+    ctxt: EncodingContext<B>,
+    signature: &'s Signature<'sig>,
+    value: &T,
+) -> Result<(Vec<u8>, Vec<RawFd>)>
+where
+    B: byteorder::ByteOrder,
+    T: Serialize,
+{
     let mut cursor = std::io::Cursor::new(vec![]);
-    let mut fds = vec![];
-    let _ = to_write_for_signature(&mut cursor, &mut fds, ctxt, signature, value);
-    Ok(cursor.into_inner())
+    let (_, fds) = to_write_fds_for_signature(&mut cursor, ctxt, signature, value)?;
+    Ok((cursor.into_inner(), fds))
 }
 
 pub struct Serializer<'ser, 'sig, B, W> {
@@ -169,10 +222,10 @@ where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
-    pub fn new<'w: 'ser, 's>(
+    pub fn new<'w: 'ser, 'f: 'ser, 's>(
         signature: &'s Signature<'sig>,
         write: &'w mut W,
-        fds: &'w mut Vec<RawFd>,
+        fds: &'f mut Vec<RawFd>,
         ctxt: EncodingContext<B>,
     ) -> Self {
         let sign_parser = SignatureParser::new(signature.clone());

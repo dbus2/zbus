@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 
 use crate::{Array, Dict, Fd, ObjectPath, Signature, Structure, Type, Value};
 
+/// Owned [`Value`](enum.Value.html)
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct OwnedValue(Value<'static>);
 

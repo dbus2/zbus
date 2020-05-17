@@ -31,7 +31,6 @@ use crate::{Fd, ObjectPath, Signature};
 /// assert_eq!(decoded, Fd::from(42));
 /// ```
 ///
-/// [`Fd`]: struct.Fd.html
 /// [`from_slice`]: fn.from_slice.html
 pub fn from_slice_fds<'d, 'r: 'd, 'f, B, T: ?Sized>(
     bytes: &'r [u8],
@@ -76,7 +75,7 @@ where
 /// Deserialize `T` from a given slice of bytes with the given signature.
 ///
 /// Use this function instead of [`from_slice`] if the value being deserialized does not implement
-/// `Type`. Also, if `T` is an, or (potentially) contains an [`Fd`], use
+/// [`Type`]. Also, if `T` is an, or (potentially) contains an [`Fd`], use
 /// [`from_slice_fds_for_signature`] instead.
 ///
 /// # Examples
@@ -121,6 +120,7 @@ where
 /// assert_eq!(decoded, Test::Struct { y: 42, t: 42 });
 /// ```
 ///
+/// [`Type`]: trait.Type.html
 /// [`Fd`]: struct.Fd.html
 /// [`from_slice_fds_for_signature`]: fn.from_slice_fds_for_signature.html
 // TODO: Return number of bytes parsed?
@@ -142,7 +142,6 @@ where
 /// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
 /// file descriptors and hence the reason, caller must pass a slice of file descriptors.
 ///
-/// [`Fd`]: struct.Fd.html
 /// [`from_slice`]: fn.from_slice.html
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html
 // TODO: Return number of bytes parsed?
@@ -161,6 +160,7 @@ where
     T::deserialize(&mut de)
 }
 
+/// Our deserialization implementation.
 pub struct Deserializer<'de, 'sig, 'f, B> {
     pub(self) ctxt: EncodingContext<B>,
     pub(self) bytes: &'de [u8],
@@ -172,7 +172,6 @@ pub struct Deserializer<'de, 'sig, 'f, B> {
     b: PhantomData<B>,
 }
 
-/// Our Deserialization implementation.
 impl<'de, 'sig, 'f, B> Deserializer<'de, 'sig, 'f, B>
 where
     B: byteorder::ByteOrder,

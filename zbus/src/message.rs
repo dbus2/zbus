@@ -92,7 +92,8 @@ where
     B: serde::ser::Serialize + Type,
 {
     fn new(ty: MessageType, sender: Option<&'a str>, body: &'a B) -> Result<Self, MessageError> {
-        let (body_len, fds_len) = zvariant::serialized_size(body)?;
+        let ctxt = dbus_context!(0);
+        let (body_len, fds_len) = zvariant::serialized_size_fds(ctxt, body)?;
         let body_len = u32::try_from(body_len).map_err(|_| MessageError::ExcessData)?;
 
         let mut fields = MessageFields::new();
@@ -126,7 +127,6 @@ where
 
     fn build(self) -> Result<Message, MessageError> {
         let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
-        let mut fds = vec![];
 
         let MessageBuilder {
             ty,
@@ -150,7 +150,7 @@ where
         let header = MessageHeader::new(primary, fields);
 
         zvariant::to_write(&mut cursor, ctxt, &header)?;
-        zvariant::to_write_fds(&mut cursor, &mut fds, ctxt, body)?;
+        let (_, fds) = zvariant::to_write_fds(&mut cursor, ctxt, body)?;
 
         Ok(Message {
             bytes,
