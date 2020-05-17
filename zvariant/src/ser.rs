@@ -29,6 +29,27 @@ impl Seek for NullWriteSeek {
     }
 }
 
+/// Calculate the serialized size of `T`.
+///
+/// # Panics
+///
+/// This function will panic if the value to serialize contains file descriptors. Use
+/// [`serialized_size_fds`] if `T` (potentially) contains FDs.
+///
+/// # Examples
+///
+/// ```
+/// use zvariant::{EncodingContext, serialized_size};
+///
+/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let len = serialized_size(ctxt, "hello world").unwrap();
+/// assert_eq!(len, 16);
+///
+/// let len = serialized_size(ctxt, &("hello world!", 42_u64)).unwrap();
+/// assert_eq!(len, 32);
+/// ```
+///
+/// [`serialized_size_fds`]: fn.serialized_size_fds.html
 pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<usize>
 where
     B: byteorder::ByteOrder,
@@ -57,6 +78,8 @@ where
 }
 
 /// Serialize `T` to the given `write`.
+///
+/// This function returns the number of bytes written to the given `write`.
 ///
 /// # Panics
 ///
@@ -91,6 +114,10 @@ where
     to_write_for_signature(write, ctxt, &signature, value)
 }
 
+/// Serialize `T` that (potentially) contains FDs, to the given `write`.
+///
+/// This function returns the number of bytes written to the given `write` and the file descriptor
+/// vector, which needs to be transferred via an out-of-band platform specific mechanism.
 pub fn to_write_fds<B, W, T: ?Sized>(
     write: &mut W,
     ctxt: EncodingContext<B>,
@@ -106,14 +133,34 @@ where
     to_write_fds_for_signature(write, ctxt, &signature, value)
 }
 
+/// Serialize `T` as a byte vector.
+///
+/// See [`from_slice`] documentation for an example of how to use this function.
+///
+/// # Panics
+///
+/// This function will panic if the value to serialize contains file descriptors. Use
+/// [`to_bytes_fds`] if you'd want to potentially pass FDs.
+///
+/// [`to_bytes_fds`]: fn.to_bytes_fds.html
+/// [`from_slice`]: fn.from_slice.html#examples
 pub fn to_bytes<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Vec<u8>>
 where
     B: byteorder::ByteOrder,
     T: Serialize + Type,
 {
-    Ok(to_bytes_fds(ctxt, value)?.0)
+    let (bytes, fds) = to_bytes_fds(ctxt, value)?;
+    if !fds.is_empty() {
+        panic!("can't serialize with FDs")
+    }
+
+    Ok(bytes)
 }
 
+/// Serialize `T` that (potentially) contains FDs, as a byte vector.
+///
+/// The returned file descriptor needs to be transferred via an out-of-band platform specific
+/// mechanism.
 pub fn to_bytes_fds<B, T: ?Sized>(
     ctxt: EncodingContext<B>,
     value: &T,
@@ -127,6 +174,15 @@ where
     Ok((cursor.into_inner(), fds))
 }
 
+/// Serialize `T` that has the given signature, to the given `write`.
+///
+/// Use this function instead of [`to_write`] if the value being serialized does not implement
+/// [`Type`].
+///
+/// This function returns the number of bytes written to the given `write`.
+///
+/// [`to_write`]: fn.to_write.html
+/// [`Type`]: trait.Type.html
 pub fn to_write_for_signature<B, W, T: ?Sized>(
     write: &mut W,
     ctxt: EncodingContext<B>,
@@ -146,6 +202,16 @@ where
     Ok(len)
 }
 
+/// Serialize `T` that (potentially) contains FDs and has the given signature, to the given `write`.
+///
+/// Use this function instead of [`to_write_fds`] if the value being serialized does not implement
+/// [`Type`].
+///
+/// This function returns the number of bytes written to the given `write` and the file descriptor
+/// vector, which needs to be transferred via an out-of-band platform specific mechanism.
+///
+/// [`to_write_fds`]: fn.to_write_fds.html
+/// [`Type`]: trait.Type.html
 pub fn to_write_fds_for_signature<B, W, T: ?Sized>(
     write: &mut W,
     ctxt: EncodingContext<B>,
@@ -163,6 +229,20 @@ where
     Ok((serializer.bytes_written, fds))
 }
 
+/// Serialize `T` that has the given signature, to a new byte vector.
+///
+/// Use this function instead of [`to_bytes`] if the value being serialized does not implement
+/// [`Type`]. See [`from_slice_for_signature`] documentation for an example of how to use this
+/// function.
+///
+/// # Panics
+///
+/// This function will panic if the value to serialize contains file descriptors. Use
+/// [`to_bytes_fds_for_signature`] if you'd want to potentially pass FDs.
+///
+/// [`to_bytes`]: fn.to_bytes.html
+/// [`Type`]: trait.Type.html
+/// [`from_slice_for_signature`]: fn.from_slice_for_signature.html#examples
 pub fn to_bytes_for_signature<B, T: ?Sized>(
     ctxt: EncodingContext<B>,
     signature: &Signature,
@@ -205,6 +285,7 @@ where
     Ok((cursor.into_inner(), fds))
 }
 
+/// Our serialization implementation.
 pub struct Serializer<'ser, 'sig, B, W> {
     pub(self) ctxt: EncodingContext<B>,
     pub(self) write: &'ser mut W,
@@ -223,6 +304,7 @@ where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
+    /// Create a Serializer struct instance.
     pub fn new<'w: 'ser, 'f: 'ser>(
         signature: &Signature<'sig>,
         write: &'w mut W,
