@@ -12,6 +12,15 @@ pub trait Basic: Type {
     const ALIGNMENT: usize;
 }
 
+impl<B: ?Sized> Basic for &B
+where
+    B: Basic,
+{
+    const SIGNATURE_CHAR: char = B::SIGNATURE_CHAR;
+    const SIGNATURE_STR: &'static str = B::SIGNATURE_STR;
+    const ALIGNMENT: usize = B::ALIGNMENT;
+}
+
 macro_rules! impl_type {
     ($for:ty) => {
         impl Type for $for {
@@ -100,12 +109,6 @@ impl Basic for f64 {
     const ALIGNMENT: usize = 8;
 }
 impl_type!(f64);
-
-impl Basic for &str {
-    const SIGNATURE_CHAR: char = 's';
-    const SIGNATURE_STR: &'static str = "s";
-    const ALIGNMENT: usize = 4;
-}
 
 impl Basic for str {
     const SIGNATURE_CHAR: char = 's';
