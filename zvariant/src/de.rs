@@ -56,7 +56,7 @@ where
 /// use zvariant::EncodingContext;
 ///
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
-/// let encoded = to_bytes(ctxt, &"hello world").unwrap();
+/// let encoded = to_bytes(ctxt, "hello world").unwrap();
 /// let decoded: &str = from_slice(&encoded, ctxt).unwrap();
 /// assert_eq!(decoded, "hello world");
 /// ```

@@ -106,7 +106,13 @@ impl Basic for &str {
     const SIGNATURE_STR: &'static str = "s";
     const ALIGNMENT: usize = 4;
 }
-impl_type!(&str);
+
+impl Basic for str {
+    const SIGNATURE_CHAR: char = 's';
+    const SIGNATURE_STR: &'static str = "s";
+    const ALIGNMENT: usize = 4;
+}
+impl_type!(str);
 
 impl Basic for String {
     const SIGNATURE_CHAR: char = 's';
