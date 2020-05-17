@@ -43,9 +43,48 @@ macro_rules! serialize_value {
 /// Note that this type correponds to the `VARIANT` data type defined by the [D-Bus specification]
 /// and as such, its encoding is not the same as that of the enclosed value.
 ///
-/// # Example
+/// # Examples
 ///
-/// TODO
+/// ```
+/// use std::convert::TryFrom;
+/// use zvariant::{from_slice, to_bytes, EncodingContext, Value};
+///
+/// // Create a Value from an i16
+/// let v = Value::new(i16::max_value());
+///
+/// // Encode it
+/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let encoding = to_bytes(ctxt, &v).unwrap();
+///
+/// // Decode it back
+/// let v: Value = from_slice(&encoding, ctxt).unwrap();
+///
+/// // Check everything is as expected
+/// assert_eq!(i16::try_from(&v).unwrap(), i16::max_value());
+/// ```
+///
+/// Now let's try a more complicated example:
+///
+/// ```
+/// use std::convert::TryFrom;
+/// use zvariant::{from_slice, to_bytes, EncodingContext};
+/// use zvariant::{Structure, Value};
+///
+/// // Create a Value from a tuple this time
+/// let v = Value::new((i16::max_value(), "hello", true));
+///
+/// // Same drill as previous example
+/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let encoding = to_bytes(ctxt, &v).unwrap();
+/// let v: Value = from_slice(&encoding, ctxt).unwrap();
+///
+/// // Check everything is as expected
+/// let s = Structure::try_from(v).unwrap();
+/// assert_eq!(
+///     <(i16, String, bool)>::try_from(s).unwrap(),
+///     (i16::max_value(), String::from("hello"), true),
+/// );
+/// ```
 ///
 /// [D-Bus specification]: https://dbus.freedesktop.org/doc/dbus-specification.html#container-types
 #[derive(Debug, Clone, PartialEq)]
