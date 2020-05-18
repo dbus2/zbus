@@ -188,12 +188,62 @@ impl<'a> Value<'a> {
         serialize_value!(self serializer.serialize_element)
     }
 
-    /// Try to get a reference to the underlying type `T`.
+    /// Try to get the underlying type `T`.
     ///
     /// Note that [`TryFrom<Value>`] is implemented for various types, and it's usually best to use
     /// that instead. However, in generic code where you also want to unwrap [`Value::Value`],
     /// you should use this function (because [`TryFrom<Value>`] can not be implemented for `Value`
     /// itself as [`From<Value>`] is implicitly implemented for `Value`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::convert::TryFrom;
+    /// use zvariant::{Result, Value};
+    ///
+    /// fn value_vec_to_type_vec<'a, T>(values: Vec<Value<'a>>) -> Result<Vec<T>>
+    /// where
+    ///     T: TryFrom<Value<'a>>,
+    /// {
+    ///     let mut res = vec![];
+    ///     for value in values.into_iter() {
+    ///         res.push(value.downcast().unwrap());
+    ///     }
+    ///
+    ///     Ok(res)
+    /// }
+    ///
+    /// // Let's try u32 values first
+    /// let v = vec![Value::U32(42), Value::U32(43)];
+    /// let v = value_vec_to_type_vec::<u32>(v).unwrap();
+    /// assert_eq!(v[0], 42);
+    /// assert_eq!(v[1], 43);
+    ///
+    /// // Now try Value values
+    /// let v = vec![Value::new(Value::U32(42)), Value::new(Value::U32(43))];
+    /// let v = value_vec_to_type_vec::<Value>(v).unwrap();
+    /// assert_eq!(v[0], Value::U32(42));
+    /// assert_eq!(v[1], Value::U32(43));
+    /// ```
+    ///
+    /// [`Value::Value`]: enum.Value.html#variant.Value
+    /// [`TryFrom<Value>`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
+    /// [`From<Value>`]: https://doc.rust-lang.org/std/convert/trait.From.html
+    pub fn downcast<T: ?Sized>(self) -> Option<T>
+    where
+        T: TryFrom<Value<'a>>,
+    {
+        if let Value::Value(v) = self {
+            T::try_from(*v).ok()
+        } else {
+            T::try_from(self).ok()
+        }
+    }
+
+    /// Try to get a reference to the underlying type `T`.
+    ///
+    /// Same as [`downcast`] except it doesn't consume `self` and get a reference to the underlying
+    /// value.
     ///
     /// # Examples
     ///
@@ -226,9 +276,7 @@ impl<'a> Value<'a> {
     /// assert_eq!(*v[1], Value::U32(43));
     /// ```
     ///
-    /// [`Value::Value`]: enum.Value.html#variant.Value
-    /// [`TryFrom<Value>`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
-    /// [`From<Value>`]: https://doc.rust-lang.org/std/convert/trait.From.html
+    /// [`downcast`]: enum.Value.html#method.downcast
     pub fn downcast_ref<T>(&'a self) -> Option<&'a T>
     where
         T: ?Sized,
