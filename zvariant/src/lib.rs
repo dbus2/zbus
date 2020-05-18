@@ -551,6 +551,11 @@ mod tests {
                 *dict.get::<_, Value>("bye").unwrap().unwrap(),
                 Value::Str("now".into())
             );
+
+            // Try converting to a HashMap
+            let map = <HashMap<String, Value>>::try_from(dict).unwrap();
+            assert_eq!(map["hello"], Value::new("there"));
+            assert_eq!(map["bye"], Value::new("now"));
         } else {
             panic!();
         }
