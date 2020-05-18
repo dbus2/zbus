@@ -466,9 +466,12 @@ mod tests {
             panic!();
         }
 
+        // Test conversion of Array of Value to Vec<Value>
         let v = Value::new(vec![Value::new(43), Value::new("bonjour")]);
-        let av = <&Array>::try_from(&v).unwrap();
-        assert_eq!(av[1], Value::new(Value::new("bonjour")));
+        let av = <Array>::try_from(v).unwrap();
+        let av = <Vec<Value>>::try_from(av).unwrap();
+        assert_eq!(av[0], Value::new(43));
+        assert_eq!(av[1], Value::new("bonjour"));
     }
 
     #[test]
