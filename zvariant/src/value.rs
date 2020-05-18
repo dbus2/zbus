@@ -198,16 +198,32 @@ impl<'a> Value<'a> {
     /// # Examples
     ///
     /// ```
-    /// use zvariant::Value;
-    /// use std::convert::TryInto;
+    /// use std::convert::TryFrom;
+    /// use zvariant::{Result, Value};
     ///
-    /// let s = Value::from("hello");
-    /// let val: String = s.try_into().unwrap();
-    /// assert_eq!(val, "hello");
+    /// fn value_vec_to_type_vec<'a, T>(values: &'a Vec<Value<'a>>) -> Result<Vec<&'a T>>
+    /// where
+    ///     &'a T: TryFrom<&'a Value<'a>>,
+    /// {
+    ///     let mut res = vec![];
+    ///     for value in values.into_iter() {
+    ///         res.push(value.downcast_ref().unwrap());
+    ///     }
     ///
-    /// let s = Value::from(42u32);
-    /// let val: &u32 = s.downcast_ref().unwrap();
-    /// assert_eq!(val, &42);
+    ///     Ok(res)
+    /// }
+    ///
+    /// // Let's try u32 values first
+    /// let v = vec![Value::U32(42), Value::U32(43)];
+    /// let v = value_vec_to_type_vec::<u32>(&v).unwrap();
+    /// assert_eq!(*v[0], 42);
+    /// assert_eq!(*v[1], 43);
+    ///
+    /// // Now try Value values
+    /// let v = vec![Value::new(Value::U32(42)), Value::new(Value::U32(43))];
+    /// let v = value_vec_to_type_vec::<Value>(&v).unwrap();
+    /// assert_eq!(*v[0], Value::U32(42));
+    /// assert_eq!(*v[1], Value::U32(43));
     /// ```
     ///
     /// [`Value::Value`]: enum.Value.html#variant.Value
