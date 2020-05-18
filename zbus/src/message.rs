@@ -149,8 +149,8 @@ where
         let primary = MessagePrimaryHeader::new(ty, body_len);
         let header = MessageHeader::new(primary, fields);
 
-        zvariant::to_write(&mut cursor, ctxt, &header)?;
-        let (_, fds) = zvariant::to_write_fds(&mut cursor, ctxt, body)?;
+        zvariant::to_writer(&mut cursor, ctxt, &header)?;
+        let (_, fds) = zvariant::to_writer_fds(&mut cursor, ctxt, body)?;
 
         Ok(Message {
             bytes,
@@ -381,7 +381,7 @@ impl Message {
         modifier(&mut primary)?;
 
         let mut cursor = Cursor::new(&mut self.bytes);
-        zvariant::to_write(&mut cursor, dbus_context!(0), &primary)
+        zvariant::to_writer(&mut cursor, dbus_context!(0), &primary)
             .map(|_| ())
             .map_err(MessageError::from)
     }
