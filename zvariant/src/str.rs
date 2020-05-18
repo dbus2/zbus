@@ -4,11 +4,20 @@ use std::str;
 
 use crate::{Basic, Signature, Type};
 
+/// A string wrapper.
+///
+/// This is used for keeping strings in a [`Value`]. API is provided to convert from, and to a
+/// [`&str`] and [`String`].
+///
+/// [`Value`]: enum.Value.html#variant.Str
+/// [`&str`]: https://doc.rust-lang.org/std/str/index.html
+/// [`String`]: https://doc.rust-lang.org/std/string/struct.String.html
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
 #[serde(rename(serialize = "zvariant::Str", deserialize = "zvariant::Str"))]
-pub struct Str<'a>(#[serde(borrow)] pub Cow<'a, str>);
+pub struct Str<'a>(#[serde(borrow)] Cow<'a, str>);
 
 impl<'a> Str<'a> {
+    /// The underlying string.
     pub fn as_str(&self) -> &str {
         &self.0
     }

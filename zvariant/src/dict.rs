@@ -128,8 +128,8 @@ impl<'k, 'v> Serialize for Dict<'k, 'v> {
 // Conversion of Dict to HashMap
 impl<'k, 'v, K, V, H> TryFrom<Dict<'k, 'v>> for HashMap<K, V, H>
 where
-    K: Basic + TryFrom<Value<'k>, Error = Error> + std::hash::Hash + std::cmp::Eq,
-    V: TryFrom<Value<'v>, Error = Error>,
+    K: Basic + TryFrom<Value<'k>> + std::hash::Hash + std::cmp::Eq,
+    V: TryFrom<Value<'v>>,
     H: BuildHasher + Default,
 {
     type Error = Error;
@@ -137,7 +137,10 @@ where
     fn try_from(v: Dict<'k, 'v>) -> Result<Self, Self::Error> {
         let mut map = HashMap::default();
         for e in v.entries.into_iter() {
-            map.insert(K::try_from(e.key)?, V::try_from(e.value)?);
+            let key = e.key.downcast().ok_or(Error::IncorrectType)?;
+            let value = e.value.downcast().ok_or(Error::IncorrectType)?;
+
+            map.insert(key, value);
         }
         Ok(map)
     }

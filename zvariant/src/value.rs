@@ -40,14 +40,53 @@ macro_rules! serialize_value {
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
 ///
-/// Note that this type is defined by the [D-Bus specification] and as such, its encoding is not the
-/// same as that of the enclosed value.
+/// Note that this type correponds to the `VARIANT` data type defined by the [D-Bus specification]
+/// and as such, its encoding is not the same as that of the enclosed value.
 ///
-/// # Example
+/// # Examples
 ///
-/// TODO
+/// ```
+/// use std::convert::TryFrom;
+/// use zvariant::{from_slice, to_bytes, EncodingContext, Value};
 ///
-/// [D-Bus specification]: https://dbus.freedesktop.org/doc/dbus-specification.html
+/// // Create a Value from an i16
+/// let v = Value::new(i16::max_value());
+///
+/// // Encode it
+/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let encoding = to_bytes(ctxt, &v).unwrap();
+///
+/// // Decode it back
+/// let v: Value = from_slice(&encoding, ctxt).unwrap();
+///
+/// // Check everything is as expected
+/// assert_eq!(i16::try_from(&v).unwrap(), i16::max_value());
+/// ```
+///
+/// Now let's try a more complicated example:
+///
+/// ```
+/// use std::convert::TryFrom;
+/// use zvariant::{from_slice, to_bytes, EncodingContext};
+/// use zvariant::{Structure, Value};
+///
+/// // Create a Value from a tuple this time
+/// let v = Value::new((i16::max_value(), "hello", true));
+///
+/// // Same drill as previous example
+/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let encoding = to_bytes(ctxt, &v).unwrap();
+/// let v: Value = from_slice(&encoding, ctxt).unwrap();
+///
+/// // Check everything is as expected
+/// let s = Structure::try_from(v).unwrap();
+/// assert_eq!(
+///     <(i16, String, bool)>::try_from(s).unwrap(),
+///     (i16::max_value(), String::from("hello"), true),
+/// );
+/// ```
+///
+/// [D-Bus specification]: https://dbus.freedesktop.org/doc/dbus-specification.html#container-types
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value<'a> {
     // Simple types
@@ -188,36 +227,95 @@ impl<'a> Value<'a> {
         serialize_value!(self serializer.serialize_element)
     }
 
-    /// Try to get `&x` from `&Value(x)` for type `T`.
+    /// Try to get the underlying type `T`.
     ///
-    /// [`TryFrom`] is implemented for various `Value->T` conversions,
-    /// and you can use that, as it is usually the most convenient.
-    ///
-    /// However, if you need to unwrap [`Value`] explicitely, and
-    /// handle the `Value(Value) -> Value` case, then you should use
-    /// this function (because [`TryFrom`] is idempotent on [`Value`]
-    /// itself).
+    /// Note that [`TryFrom<Value>`] is implemented for various types, and it's usually best to use
+    /// that instead. However, in generic code where you also want to unwrap [`Value::Value`],
+    /// you should use this function (because [`TryFrom<Value>`] can not be implemented for `Value`
+    /// itself as [`From<Value>`] is implicitly implemented for `Value`).
     ///
     /// # Examples
     ///
     /// ```
-    /// use zvariant::Value;
-    /// use std::convert::TryInto;
+    /// use std::convert::TryFrom;
+    /// use zvariant::{Result, Value};
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let s = Value::from("hello");
-    /// let val: String = s.try_into()?;
-    /// assert_eq!(val, "hello");
+    /// fn value_vec_to_type_vec<'a, T>(values: Vec<Value<'a>>) -> Result<Vec<T>>
+    /// where
+    ///     T: TryFrom<Value<'a>>,
+    /// {
+    ///     let mut res = vec![];
+    ///     for value in values.into_iter() {
+    ///         res.push(value.downcast().unwrap());
+    ///     }
     ///
-    /// let s = Value::from(42u32);
-    /// let val: &u32 = s.downcast_ref().unwrap();
-    /// assert_eq!(val, &42);
-    /// # Ok(())
-    /// # }
+    ///     Ok(res)
+    /// }
+    ///
+    /// // Let's try u32 values first
+    /// let v = vec![Value::U32(42), Value::U32(43)];
+    /// let v = value_vec_to_type_vec::<u32>(v).unwrap();
+    /// assert_eq!(v[0], 42);
+    /// assert_eq!(v[1], 43);
+    ///
+    /// // Now try Value values
+    /// let v = vec![Value::new(Value::U32(42)), Value::new(Value::U32(43))];
+    /// let v = value_vec_to_type_vec::<Value>(v).unwrap();
+    /// assert_eq!(v[0], Value::U32(42));
+    /// assert_eq!(v[1], Value::U32(43));
     /// ```
     ///
-    /// [`Value`]: enum.Value.html
-    /// [`TryFrom`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
+    /// [`Value::Value`]: enum.Value.html#variant.Value
+    /// [`TryFrom<Value>`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
+    /// [`From<Value>`]: https://doc.rust-lang.org/std/convert/trait.From.html
+    pub fn downcast<T: ?Sized>(self) -> Option<T>
+    where
+        T: TryFrom<Value<'a>>,
+    {
+        if let Value::Value(v) = self {
+            T::try_from(*v).ok()
+        } else {
+            T::try_from(self).ok()
+        }
+    }
+
+    /// Try to get a reference to the underlying type `T`.
+    ///
+    /// Same as [`downcast`] except it doesn't consume `self` and get a reference to the underlying
+    /// value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::convert::TryFrom;
+    /// use zvariant::{Result, Value};
+    ///
+    /// fn value_vec_to_type_vec<'a, T>(values: &'a Vec<Value<'a>>) -> Result<Vec<&'a T>>
+    /// where
+    ///     &'a T: TryFrom<&'a Value<'a>>,
+    /// {
+    ///     let mut res = vec![];
+    ///     for value in values.into_iter() {
+    ///         res.push(value.downcast_ref().unwrap());
+    ///     }
+    ///
+    ///     Ok(res)
+    /// }
+    ///
+    /// // Let's try u32 values first
+    /// let v = vec![Value::U32(42), Value::U32(43)];
+    /// let v = value_vec_to_type_vec::<u32>(&v).unwrap();
+    /// assert_eq!(*v[0], 42);
+    /// assert_eq!(*v[1], 43);
+    ///
+    /// // Now try Value values
+    /// let v = vec![Value::new(Value::U32(42)), Value::new(Value::U32(43))];
+    /// let v = value_vec_to_type_vec::<Value>(&v).unwrap();
+    /// assert_eq!(*v[0], Value::U32(42));
+    /// assert_eq!(*v[1], Value::U32(43));
+    /// ```
+    ///
+    /// [`downcast`]: enum.Value.html#method.downcast
     pub fn downcast_ref<T>(&'a self) -> Option<&'a T>
     where
         T: ?Sized,

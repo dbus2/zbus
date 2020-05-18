@@ -131,7 +131,7 @@ where
 
 impl<'a, T> TryFrom<Array<'a>> for Vec<T>
 where
-    T: TryFrom<Value<'a>, Error = Error>,
+    T: TryFrom<Value<'a>>,
 {
     type Error = Error;
 
@@ -139,7 +139,7 @@ where
         // there is no try_map yet..
         let mut res = vec![];
         for e in v.elements.into_iter() {
-            res.push(T::try_from(e)?);
+            res.push(e.downcast().ok_or(Error::IncorrectType)?);
         }
         Ok(res)
     }

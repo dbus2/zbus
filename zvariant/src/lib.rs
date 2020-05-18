@@ -223,7 +223,7 @@ mod tests {
         // As Value
         let v: Value = string.into();
         assert_eq!(v.value_signature(), "s");
-        assert_eq!(v, Value::Str("hello world".into()));
+        assert_eq!(v, Value::new("hello world"));
         basic_type_test!(LE, v, 20, Value);
 
         let v: String = v.try_into().unwrap();
@@ -241,7 +241,7 @@ mod tests {
         let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 10);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
-        assert_eq!(v, Value::Str("c".into()));
+        assert_eq!(v, Value::new("c"));
     }
 
     #[test]
@@ -383,8 +383,8 @@ mod tests {
         if let Value::Array(array) = v {
             assert_eq!(*array.element_signature(), "s");
             assert_eq!(array.len(), 4);
-            assert_eq!(array.get()[0], Value::Str("Hello".into()));
-            assert_eq!(array.get()[1], Value::Str("World".into()));
+            assert_eq!(array.get()[0], Value::new("Hello"));
+            assert_eq!(array.get()[1], Value::new("World"));
         } else {
             panic!();
         }
@@ -450,15 +450,15 @@ mod tests {
                     assert_eq!(fields[2], Value::I64(i64::max_value()));
                     if let Value::Array(as_) = &fields[3] {
                         assert_eq!(as_.len(), 2);
-                        assert_eq!(as_.get()[0], Value::Str("Hello".into()));
-                        assert_eq!(as_.get()[1], Value::Str("World".into()));
+                        assert_eq!(as_.get()[0], Value::new("Hello"));
+                        assert_eq!(as_.get()[1], Value::new("World"));
                     } else {
                         panic!();
                     }
                 } else {
                     panic!();
                 }
-                assert_eq!(fields[3], Value::Str("hello".into()));
+                assert_eq!(fields[3], Value::new("hello"));
             } else {
                 panic!();
             }
@@ -466,9 +466,12 @@ mod tests {
             panic!();
         }
 
+        // Test conversion of Array of Value to Vec<Value>
         let v = Value::new(vec![Value::new(43), Value::new("bonjour")]);
-        let av = <&Array>::try_from(&v).unwrap();
-        assert_eq!(av[1], Value::new(Value::new("bonjour")));
+        let av = <Array>::try_from(v).unwrap();
+        let av = <Vec<Value>>::try_from(av).unwrap();
+        assert_eq!(av[0], Value::new(43));
+        assert_eq!(av[1], Value::new("bonjour"));
     }
 
     #[test]
@@ -484,8 +487,8 @@ mod tests {
         assert_eq!(
             decoded,
             Value::Structure(Structure::from_vec(vec![
-                Value::Str("a".into()),
-                Value::Str("b".into()),
+                Value::new("a"),
+                Value::new("b"),
                 Value::Structure(Structure::from_vec(vec![Value::I32(1), Value::I32(2)]))
             ],))
         );
@@ -542,12 +545,17 @@ mod tests {
         if let Value::Dict(dict) = v {
             assert_eq!(
                 *dict.get::<_, Value>("hello").unwrap().unwrap(),
-                Value::Str("there".into())
+                Value::new("there")
             );
             assert_eq!(
                 *dict.get::<_, Value>("bye").unwrap().unwrap(),
-                Value::Str("now".into())
+                Value::new("now")
             );
+
+            // Try converting to a HashMap
+            let map = <HashMap<String, Value>>::try_from(dict).unwrap();
+            assert_eq!(map["hello"], Value::new("there"));
+            assert_eq!(map["bye"], Value::new("now"));
         } else {
             panic!();
         }
@@ -724,14 +732,17 @@ mod tests {
         let ctxt = Context::<LE>::new_dbus(0);
         let l = crate::serialized_size(ctxt, &()).unwrap();
         assert_eq!(l, 0);
+
         let stdout = std::io::stdout();
         let l = crate::serialized_size_fds(ctxt, &Fd::from(&stdout)).unwrap();
         assert_eq!(l, (4, 1));
-        //FIXME: add more tests, can't get them to work :(
-        //let l = len(&('a', "abc", [1, 2])).unwrap();
-        //let v = vec![1, 2];
-        //let l = len(&('a', "bc", &v)).unwrap();
-        //assert_eq!(l, (4, 0));
+
+        let l = crate::serialized_size(ctxt, &('a', "abc", &(1_u32, 2))).unwrap();
+        assert_eq!(l, 24);
+
+        let v = vec![1, 2];
+        let l = crate::serialized_size(ctxt, &('a', "abc", &v)).unwrap();
+        assert_eq!(l, 28);
     }
 
     #[test]
