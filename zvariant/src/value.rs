@@ -188,15 +188,12 @@ impl<'a> Value<'a> {
         serialize_value!(self serializer.serialize_element)
     }
 
-    /// Try to get `&x` from `&Value(x)` for type `T`.
+    /// Try to get a reference to the underlying type `T`.
     ///
-    /// [`TryFrom`] is implemented for various `Value->T` conversions,
-    /// and you can use that, as it is usually the most convenient.
-    ///
-    /// However, if you need to unwrap [`Value`] explicitely, and
-    /// handle the `Value(Value) -> Value` case, then you should use
-    /// this function (because [`TryFrom`] is idempotent on [`Value`]
-    /// itself).
+    /// Note that [`TryFrom<Value>`] is implemented for various types, and it's usually best to use
+    /// that instead. However, in generic code where you also want to unwrap [`Value::Value`],
+    /// you should use this function (because [`TryFrom<Value>`] can not be implemented for `Value`
+    /// itself as [`From<Value>`] is implicitly implemented for `Value`).
     ///
     /// # Examples
     ///
@@ -213,8 +210,9 @@ impl<'a> Value<'a> {
     /// assert_eq!(val, &42);
     /// ```
     ///
-    /// [`Value`]: enum.Value.html
-    /// [`TryFrom`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
+    /// [`Value::Value`]: enum.Value.html#variant.Value
+    /// [`TryFrom<Value>`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
+    /// [`From<Value>`]: https://doc.rust-lang.org/std/convert/trait.From.html
     pub fn downcast_ref<T>(&'a self) -> Option<&'a T>
     where
         T: ?Sized,
