@@ -6,7 +6,16 @@ pub trait Type {
     ///
     /// # Example
     ///
-    /// TODO
+    /// ```
+    /// use std::collections::HashMap;
+    /// use zvariant::Type;
+    ///
+    /// assert_eq!(u32::signature(), "u");
+    /// assert_eq!(String::signature(), "s");
+    /// assert_eq!(<(u32, &str, u64)>::signature(), "(ust)");
+    /// assert_eq!(<(u32, &str, &[u64])>::signature(), "(usat)");
+    /// assert_eq!(<HashMap<u8, &str>>::signature(), "a{ys}");
+    /// ```
     ///
     fn signature() -> Signature<'static>;
 }
