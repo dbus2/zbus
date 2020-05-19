@@ -7,10 +7,6 @@ use crate::{Signature, Type, Value};
 /// This is mostly just a way to support custom data structures. You only use this for structures
 /// inside [`Value`].
 ///
-/// # Example
-///
-/// TODO
-///
 /// [`Value`]: enum.Value.html
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Structure<'a>(Vec<Value<'a>>);
