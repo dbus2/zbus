@@ -324,6 +324,12 @@ where
         }
     }
 
+    /// Unwrap the `Writer` reference from the `Serializer`.
+    #[inline]
+    pub fn into_inner(self) -> &'ser mut W {
+        self.writer
+    }
+
     fn add_fd(&mut self, fd: RawFd) -> Result<u32> {
         if let Some(idx) = self.fds.iter().position(|&x| x == fd) {
             return Ok(idx as u32);
