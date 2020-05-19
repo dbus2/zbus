@@ -72,7 +72,7 @@ mod tests {
     use crate::{to_bytes, to_bytes_fds, to_bytes_for_signature};
 
     use crate::{Array, Dict, EncodingContext as Context};
-    use crate::{Fd, ObjectPath, Signature, Structure};
+    use crate::{Fd, ObjectPath, Signature, Str, Structure};
     use crate::{Type, Value};
 
     // Test through both generic and specific API (wrt byte order)
@@ -483,15 +483,14 @@ mod tests {
         let encoded = to_bytes(ctxt, &s).unwrap();
         assert_eq!(dbg!(encoded.len()), 40);
         let decoded: Value = from_slice(&encoded, ctxt).unwrap();
+        let s = <Structure>::try_from(decoded).unwrap();
+        let outer = <(Str, Str, Structure)>::try_from(s).unwrap();
+        assert_eq!(outer.0, "a");
+        assert_eq!(outer.1, "b");
 
-        assert_eq!(
-            decoded,
-            Value::Structure(Structure::from_vec(vec![
-                Value::new("a"),
-                Value::new("b"),
-                Value::Structure(Structure::from_vec(vec![Value::I32(1), Value::I32(2)]))
-            ],))
-        );
+        let inner = <(i32, i32)>::try_from(outer.2).unwrap();
+        assert_eq!(inner.0, 1);
+        assert_eq!(inner.1, 2);
     }
 
     #[test]
