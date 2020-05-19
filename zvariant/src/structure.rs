@@ -32,13 +32,11 @@ impl<'a> Structure<'a> {
     ///
     /// This method returns `Self` so that you can use the builder pattern to create a complex
     /// structure.
-    pub fn add_field<T>(mut self, field: T) -> Self
+    pub fn add_field<T>(self, field: T) -> Self
     where
         T: Type + Into<Value<'a>>,
     {
-        self.0.push(Value::new(field));
-
-        self
+        self.append_field(Value::new(field))
     }
 
     pub fn append_field<'e: 'a>(mut self, field: Value<'e>) -> Self {
