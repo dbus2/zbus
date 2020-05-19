@@ -1,6 +1,20 @@
 use crate::utils::*;
 use crate::Signature;
 
+/// Trait implemented by all serializable types.
+///
+/// This very simple trait provides the signature for the implementing type. Since the [D-Bus type
+/// system] relies on these signatures, our [serialization and deserialization] API requires this
+/// trait in addition to [`Serialize`] and [`Deserialize`], respectively.
+///
+/// Please note, that API is [also provided] to serialize and deserialize types that do not implement
+/// this trait but then you have to provide the correct signature yourself.
+///
+/// [D-Bus type system]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
+/// [serialization and deserialization]: index.html#functions
+/// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
+/// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
+/// [also provided]: fn.to_bytes_for_signature.html
 pub trait Type {
     /// Get the signature for the implementing type.
     ///
