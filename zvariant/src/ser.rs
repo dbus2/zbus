@@ -57,7 +57,7 @@ where
 {
     let mut null = NullWriteSeek;
 
-    to_write(&mut null, ctxt, value)
+    to_writer(&mut null, ctxt, value)
 }
 
 /// Calculate the serialized size of `T` that (potentially) contains FDs.
@@ -73,34 +73,34 @@ where
 {
     let mut null = NullWriteSeek;
 
-    let (len, fds) = to_write_fds(&mut null, ctxt, value)?;
+    let (len, fds) = to_writer_fds(&mut null, ctxt, value)?;
     Ok((len, fds.len()))
 }
 
-/// Serialize `T` to the given `write`.
+/// Serialize `T` to the given `writer`.
 ///
-/// This function returns the number of bytes written to the given `write`.
+/// This function returns the number of bytes written to the given `writer`.
 ///
 /// # Panics
 ///
 /// This function will panic if the value to serialize contains file descriptors. Use
-/// [`to_write_fds`] if you'd want to potentially pass FDs.
+/// [`to_writer_fds`] if you'd want to potentially pass FDs.
 ///
 /// # Examples
 ///
 /// ```
-/// use zvariant::{EncodingContext, from_slice, to_write};
+/// use zvariant::{EncodingContext, from_slice, to_writer};
 ///
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// let mut cursor = std::io::Cursor::new(vec![]);
-/// to_write(&mut cursor, ctxt, &42u32).unwrap();
+/// to_writer(&mut cursor, ctxt, &42u32).unwrap();
 /// let value: u32 = from_slice(cursor.get_ref(), ctxt).unwrap();
 /// assert_eq!(value, 42);
 /// ```
 ///
-/// [`to_write_fds`]: fn.to_write_fds.html
-pub fn to_write<B, W, T: ?Sized>(
-    write: &mut W,
+/// [`to_writer_fds`]: fn.to_writer_fds.html
+pub fn to_writer<B, W, T: ?Sized>(
+    writer: &mut W,
     ctxt: EncodingContext<B>,
     value: &T,
 ) -> Result<usize>
@@ -111,15 +111,15 @@ where
 {
     let signature = T::signature();
 
-    to_write_for_signature(write, ctxt, &signature, value)
+    to_writer_for_signature(writer, ctxt, &signature, value)
 }
 
-/// Serialize `T` that (potentially) contains FDs, to the given `write`.
+/// Serialize `T` that (potentially) contains FDs, to the given `writer`.
 ///
-/// This function returns the number of bytes written to the given `write` and the file descriptor
+/// This function returns the number of bytes written to the given `writer` and the file descriptor
 /// vector, which needs to be transferred via an out-of-band platform specific mechanism.
-pub fn to_write_fds<B, W, T: ?Sized>(
-    write: &mut W,
+pub fn to_writer_fds<B, W, T: ?Sized>(
+    writer: &mut W,
     ctxt: EncodingContext<B>,
     value: &T,
 ) -> Result<(usize, Vec<RawFd>)>
@@ -130,7 +130,7 @@ where
 {
     let signature = T::signature();
 
-    to_write_fds_for_signature(write, ctxt, &signature, value)
+    to_writer_fds_for_signature(writer, ctxt, &signature, value)
 }
 
 /// Serialize `T` as a byte vector.
@@ -170,21 +170,21 @@ where
     T: Serialize + Type,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let (_, fds) = to_write_fds(&mut cursor, ctxt, value)?;
+    let (_, fds) = to_writer_fds(&mut cursor, ctxt, value)?;
     Ok((cursor.into_inner(), fds))
 }
 
-/// Serialize `T` that has the given signature, to the given `write`.
+/// Serialize `T` that has the given signature, to the given `writer`.
 ///
-/// Use this function instead of [`to_write`] if the value being serialized does not implement
+/// Use this function instead of [`to_writer`] if the value being serialized does not implement
 /// [`Type`].
 ///
-/// This function returns the number of bytes written to the given `write`.
+/// This function returns the number of bytes written to the given `writer`.
 ///
-/// [`to_write`]: fn.to_write.html
+/// [`to_writer`]: fn.to_writer.html
 /// [`Type`]: trait.Type.html
-pub fn to_write_for_signature<B, W, T: ?Sized>(
-    write: &mut W,
+pub fn to_writer_for_signature<B, W, T: ?Sized>(
+    writer: &mut W,
     ctxt: EncodingContext<B>,
     signature: &Signature,
     value: &T,
@@ -194,7 +194,7 @@ where
     W: Write + Seek,
     T: Serialize,
 {
-    let (len, fds) = to_write_fds_for_signature(write, ctxt, signature, value)?;
+    let (len, fds) = to_writer_fds_for_signature(writer, ctxt, signature, value)?;
     if !fds.is_empty() {
         panic!("can't serialize with FDs")
     }
@@ -202,18 +202,18 @@ where
     Ok(len)
 }
 
-/// Serialize `T` that (potentially) contains FDs and has the given signature, to the given `write`.
+/// Serialize `T` that (potentially) contains FDs and has the given signature, to the given `writer`.
 ///
-/// Use this function instead of [`to_write_fds`] if the value being serialized does not implement
+/// Use this function instead of [`to_writer_fds`] if the value being serialized does not implement
 /// [`Type`].
 ///
-/// This function returns the number of bytes written to the given `write` and the file descriptor
+/// This function returns the number of bytes written to the given `writer` and the file descriptor
 /// vector, which needs to be transferred via an out-of-band platform specific mechanism.
 ///
-/// [`to_write_fds`]: fn.to_write_fds.html
+/// [`to_writer_fds`]: fn.to_writer_fds.html
 /// [`Type`]: trait.Type.html
-pub fn to_write_fds_for_signature<B, W, T: ?Sized>(
-    write: &mut W,
+pub fn to_writer_fds_for_signature<B, W, T: ?Sized>(
+    writer: &mut W,
     ctxt: EncodingContext<B>,
     signature: &Signature,
     value: &T,
@@ -224,7 +224,7 @@ where
     T: Serialize,
 {
     let mut fds = vec![];
-    let mut serializer = Serializer::<B, W>::new(signature, write, &mut fds, ctxt);
+    let mut serializer = Serializer::<B, W>::new(signature, writer, &mut fds, ctxt);
     value.serialize(&mut serializer)?;
     Ok((serializer.bytes_written, fds))
 }
@@ -281,14 +281,14 @@ where
     T: Serialize,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let (_, fds) = to_write_fds_for_signature(&mut cursor, ctxt, signature, value)?;
+    let (_, fds) = to_writer_fds_for_signature(&mut cursor, ctxt, signature, value)?;
     Ok((cursor.into_inner(), fds))
 }
 
 /// Our serialization implementation.
 pub struct Serializer<'ser, 'sig, B, W> {
     pub(self) ctxt: EncodingContext<B>,
-    pub(self) write: &'ser mut W,
+    pub(self) writer: &'ser mut W,
     pub(self) bytes_written: usize,
     pub(self) fds: &'ser mut Vec<RawFd>,
 
@@ -307,7 +307,7 @@ where
     /// Create a Serializer struct instance.
     pub fn new<'w: 'ser, 'f: 'ser>(
         signature: &Signature<'sig>,
-        write: &'w mut W,
+        writer: &'w mut W,
         fds: &'f mut Vec<RawFd>,
         ctxt: EncodingContext<B>,
     ) -> Self {
@@ -316,12 +316,18 @@ where
         Self {
             ctxt,
             sign_parser,
-            write,
+            writer,
             fds,
             bytes_written: 0,
             value_sign: None,
             b: PhantomData,
         }
+    }
+
+    /// Unwrap the `Writer` reference from the `Serializer`.
+    #[inline]
+    pub fn into_inner(self) -> &'ser mut W {
+        self.writer
     }
 
     fn add_fd(&mut self, fd: RawFd) -> Result<u32> {
@@ -375,7 +381,7 @@ where
 {
     /// Write `buf` and increment internal bytes written counter.
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.write.write(buf).map(|n| {
+        self.writer.write(buf).map(|n| {
             self.bytes_written += n;
 
             n
@@ -383,7 +389,7 @@ where
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.write.flush()
+        self.writer.flush()
     }
 }
 
@@ -704,15 +710,15 @@ where
         let array_len = self.serializer.bytes_written - self.start;
         let len = usize_to_u32(array_len - self.first_padding);
         self.serializer
-            .write
+            .writer
             .seek(std::io::SeekFrom::Current(-(array_len as i64) - 4))
             .map_err(Error::Io)?;
         self.serializer
-            .write
+            .writer
             .write_u32::<B>(len)
             .map_err(Error::Io)?;
         self.serializer
-            .write
+            .writer
             .seek(std::io::SeekFrom::Current(array_len as i64))
             .map_err(Error::Io)?;
 
@@ -775,7 +781,7 @@ where
                 let mut serializer = Serializer::<B, W> {
                     ctxt: self.serializer.ctxt,
                     sign_parser,
-                    write: &mut self.serializer.write,
+                    writer: &mut self.serializer.writer,
                     fds: self.serializer.fds,
                     bytes_written: self.serializer.bytes_written,
                     value_sign: None,
