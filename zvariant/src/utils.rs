@@ -13,8 +13,8 @@ pub const DICT_ENTRY_SIG_END_CHAR: char = '}';
 pub const DICT_ENTRY_SIG_START_STR: &str = "{";
 pub const DICT_ENTRY_SIG_END_STR: &str = "}";
 pub(crate) const DICT_ENTRY_ALIGNMENT: usize = 8;
-pub const VARIANT_SIGNATURE_CHAR: char = 'v';
-pub const VARIANT_SIGNATURE_STR: &str = "v";
+pub(crate) const VARIANT_SIGNATURE_CHAR: char = 'v';
+pub(crate) const VARIANT_SIGNATURE_STR: &str = "v";
 pub(crate) const VARIANT_ALIGNMENT: usize = 1;
 
 pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
