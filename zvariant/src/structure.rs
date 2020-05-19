@@ -5,7 +5,7 @@ use crate::{Signature, Type, Value};
 /// An ordered collection of items of arbitrary types.
 ///
 /// This is mostly just a way to support custom data structures. You only use this for structures
-/// inside [`Value`].
+/// inside [`Value`]. API is provided to convert from, and to tuples.
 ///
 /// [`Value`]: enum.Value.html
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -35,12 +35,16 @@ impl<'a> Structure<'a> {
         self.append_field(Value::new(field))
     }
 
+    /// Append `field` to `self`.
+    ///
+    /// Identical to `add_field`, except the field must be in the form of a `Value`.
     pub fn append_field<'e: 'a>(mut self, field: Value<'e>) -> Self {
         self.0.push(field);
 
         self
     }
 
+    /// Get the signature of this `Structure`.
     pub fn signature(&self) -> Signature<'static> {
         let mut signature = String::from("(");
         for field in &self.0 {
