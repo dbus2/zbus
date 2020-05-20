@@ -30,7 +30,6 @@ pub trait Type {
     /// assert_eq!(<(u32, &str, &[u64])>::signature(), "(usat)");
     /// assert_eq!(<HashMap<u8, &str>>::signature(), "a{ys}");
     /// ```
-    ///
     fn signature() -> Signature<'static>;
 }
 
