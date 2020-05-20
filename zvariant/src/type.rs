@@ -7,6 +7,10 @@ use crate::Signature;
 /// system] relies on these signatures, our [serialization and deserialization] API requires this
 /// trait in addition to [`Serialize`] and [`Deserialize`], respectively.
 ///
+/// Implementation is provided for all the [basic types] and blanket implementations for common
+/// container types, such as, arrays, slices, tuples, [`Vec`] and [`HashMap`]. For easy
+/// implementation for custom types, use `Type` derive macro from [zvariant_derive] crate.
+///
 /// Please note, that API is [also provided] to serialize and deserialize types that do not implement
 /// this trait but then you have to provide the correct signature yourself.
 ///
@@ -14,6 +18,10 @@ use crate::Signature;
 /// [serialization and deserialization]: index.html#functions
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
+/// [basic types]: trait.Basic.html
+/// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+/// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
+/// [zvariant_derive]: https://docs.rs/zvariant_derive/2.0.0/zvariant_derive/
 /// [also provided]: fn.to_bytes_for_signature.html
 pub trait Type {
     /// Get the signature for the implementing type.
