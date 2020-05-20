@@ -11,8 +11,8 @@ use crate::Signature;
 /// container types, such as, arrays, slices, tuples, [`Vec`] and [`HashMap`]. For easy
 /// implementation for custom types, use `Type` derive macro from [zvariant_derive] crate.
 ///
-/// Please note, that API is [also provided] to serialize and deserialize types that do not implement
-/// this trait but then you have to provide the correct signature yourself.
+/// Please note, that API is [also provided] to serialize and deserialize types that do not
+/// implement this trait but then you have to provide the correct signature yourself.
 ///
 /// [D-Bus type system]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
 /// [serialization and deserialization]: index.html#functions
