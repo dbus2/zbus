@@ -68,7 +68,7 @@ macro_rules! serialize_value {
 /// ```
 /// use std::convert::TryFrom;
 /// use zvariant::{from_slice, to_bytes, EncodingContext};
-/// use zvariant::{Structure, Value};
+/// use zvariant::{Structure, Value, Str};
 ///
 /// // Create a Value from a tuple this time
 /// let v = Value::new((i16::max_value(), "hello", true));
@@ -81,8 +81,8 @@ macro_rules! serialize_value {
 /// // Check everything is as expected
 /// let s = Structure::try_from(v).unwrap();
 /// assert_eq!(
-///     <(i16, String, bool)>::try_from(s).unwrap(),
-///     (i16::max_value(), String::from("hello"), true),
+///     <(i16, Str, bool)>::try_from(s).unwrap(),
+///     (i16::max_value(), Str::from("hello"), true),
 /// );
 /// ```
 ///

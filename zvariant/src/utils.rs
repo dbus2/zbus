@@ -1,21 +1,31 @@
 use crate::{Basic, EncodingFormat, Error, Fd, ObjectPath, Signature};
 
+/// The prefix of ARRAY type signature, as a character. Provided for manual signature creation.
 pub const ARRAY_SIGNATURE_CHAR: char = 'a';
+/// The prefix of ARRAY type signature, as a string. Provided for manual signature creation.
 pub const ARRAY_SIGNATURE_STR: &str = "a";
-pub const ARRAY_ALIGNMENT: usize = 4;
+pub(crate) const ARRAY_ALIGNMENT: usize = 4;
+/// The opening character of STRUCT type signature. Provided for manual signature creation.
 pub const STRUCT_SIG_START_CHAR: char = '(';
+/// The closing character of STRUCT type signature. Provided for manual signature creation.
 pub const STRUCT_SIG_END_CHAR: char = ')';
+/// The opening character of STRUCT type signature, as a string. Provided for manual signature creation.
 pub const STRUCT_SIG_START_STR: &str = "(";
+/// The closing character of STRUCT type signature, as a string. Provided for manual signature creation.
 pub const STRUCT_SIG_END_STR: &str = ")";
-pub const STRUCT_ALIGNMENT: usize = 8;
+pub(crate) const STRUCT_ALIGNMENT: usize = 8;
+/// The opening character of DICT_ENTRY type signature. Provided for manual signature creation.
 pub const DICT_ENTRY_SIG_START_CHAR: char = '{';
+/// The closing character of DICT_ENTRY type signature. Provided for manual signature creation.
 pub const DICT_ENTRY_SIG_END_CHAR: char = '}';
+/// The opening character of DICT_ENTRY type signature, as a string. Provided for manual signature creation.
 pub const DICT_ENTRY_SIG_START_STR: &str = "{";
+/// The closing character of DICT_ENTRY type signature, as a string. Provided for manual signature creation.
 pub const DICT_ENTRY_SIG_END_STR: &str = "}";
-pub const DICT_ENTRY_ALIGNMENT: usize = 8;
-pub const VARIANT_SIGNATURE_CHAR: char = 'v';
-pub const VARIANT_SIGNATURE_STR: &str = "v";
-pub const VARIANT_ALIGNMENT: usize = 1;
+pub(crate) const DICT_ENTRY_ALIGNMENT: usize = 8;
+pub(crate) const VARIANT_SIGNATURE_CHAR: char = 'v';
+pub(crate) const VARIANT_SIGNATURE_STR: &str = "v";
+pub(crate) const VARIANT_ALIGNMENT: usize = 1;
 
 pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
     let len_rounded_up = value.wrapping_add(align).wrapping_sub(1) & !align.wrapping_sub(1);

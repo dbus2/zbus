@@ -6,7 +6,7 @@ use std::borrow::Cow;
 
 use crate::{Basic, Error, Result, Type};
 
-/// String that identifies the type of an encoded value.
+/// String that [identifies] the type of an encoded value.
 ///
 /// # Examples
 ///
@@ -34,6 +34,8 @@ use crate::{Basic, Error, Result, Type};
 /// Signature::try_from("a").unwrap_err();
 /// Signature::try_from("a{yz}").unwrap_err();
 /// ```
+///
+/// [identifies]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Clone)]
 #[serde(rename(serialize = "zvariant::Signature", deserialize = "zvariant::Signature"))]
 pub struct Signature<'a>(#[serde(borrow)] Cow<'a, str>);
