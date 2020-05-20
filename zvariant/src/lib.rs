@@ -55,8 +55,6 @@ pub use owned_value::*;
 
 mod signature_parser;
 
-// TODO: Tests for all *serde* types and import all existing ones from zvariant.
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
