@@ -655,7 +655,7 @@ mod tests {
         use serde::{Deserialize, Serialize};
         use serde_repr::{Deserialize_repr, Serialize_repr};
 
-        #[derive(Deserialize, Serialize, Type)]
+        #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
         struct Struct<'s> {
             field1: u16,
             field2: i64,
@@ -672,9 +672,7 @@ mod tests {
         let encoded = to_bytes(ctxt, &s).unwrap();
         assert_eq!(encoded.len(), 26);
         let decoded: Struct = from_slice(&encoded, ctxt).unwrap();
-        assert_eq!(decoded.field1, 0xFF_FF);
-        assert_eq!(decoded.field2, 0xFF_FF_FF_FF_FF_FF);
-        assert_eq!(decoded.field3, "hello");
+        assert_eq!(decoded, s);
 
         #[derive(Deserialize, Serialize, Type)]
         struct UnitStruct;
