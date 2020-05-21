@@ -4,10 +4,9 @@ use std::convert::TryFrom;
 use crate::{Error, Result};
 use crate::{Signature, Type, Value};
 
-/// An unordered collection of items of the same type.
+/// A helper type to wrap arrays in a [`Value`].
 ///
-/// This is used for keeping arrays in a [`Value`]. API is provided to convert from, and to a
-/// [`Vec`].
+/// API is provided to convert from, and to a [`Vec`].
 ///
 /// [`Value`]: enum.Value.html#variant.Array
 /// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html

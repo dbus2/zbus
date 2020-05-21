@@ -7,10 +7,9 @@ use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 use crate::{Basic, Error, Signature};
 use crate::{Type, Value};
 
-/// A dictionary.
+/// A helper type to wrap dictionaries in a [`Value`].
 ///
-/// This is used for keeping dictionaries in a [`Value`]. API is provided to convert from, and to a
-/// [`HashMap`].
+/// API is provided to convert from, and to a [`HashMap`].
 ///
 /// [`Value`]: enum.Value.html#variant.Dict
 /// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
