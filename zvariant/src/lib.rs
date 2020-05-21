@@ -61,8 +61,10 @@ mod tests {
     use std::convert::{TryFrom, TryInto};
 
     #[cfg(feature = "arrayvec")]
-    use arrayvec::ArrayVec;
+    use arrayvec::{ArrayString, ArrayVec};
     use byteorder::{self, ByteOrder, BE, LE};
+    #[cfg(feature = "arrayvec")]
+    use std::str::FromStr;
 
     use zvariant_derive::Type;
 
@@ -240,6 +242,17 @@ mod tests {
         assert_eq!(encoded.len(), 10);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
         assert_eq!(v, Value::new("c"));
+    }
+
+    #[cfg(feature = "arrayvec")]
+    #[test]
+    fn array_string_value() {
+        let s = ArrayString::<[_; 32]>::from_str("hello world!").unwrap();
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &s).unwrap();
+        assert_eq!(encoded.len(), 17);
+        let decoded: ArrayString<[_; 32]> = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(&decoded, "hello world!");
     }
 
     #[test]

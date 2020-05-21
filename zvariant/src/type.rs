@@ -70,6 +70,17 @@ where
     }
 }
 
+#[cfg(feature = "arrayvec")]
+impl<A> Type for arrayvec::ArrayString<A>
+where
+    A: arrayvec::Array<Item = u8> + Copy,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <&str>::signature()
+    }
+}
+
 // Empty type deserves empty signature
 impl Type for () {
     #[inline]
