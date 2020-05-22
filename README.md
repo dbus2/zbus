@@ -5,7 +5,7 @@
 A Rust API for [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html) communication. The aim is to provide a safe and simple high- and low-level API akin to
 [GDBus](https://developer.gnome.org/gio/stable/gdbus-convenience.html), that doesn't depend on C libraries.
 
-The project is divided into two crates:
+The project is divided into three crates:
 
 ## zvariant
 
@@ -23,6 +23,20 @@ Documentation can be found [here](https://docs.rs/zvariant/).
 * serde
 * arrayvec (optional)
 * enumflags2 (optional)
+
+## zvariant_derive
+
+This crate provides a derive macro to easily implement [`Type` trait](https://docs.rs/zvariant/2.0.0/zvariant/trait.Type.html) on structs and enums.
+
+Status: Stable.
+
+Documentation can be found [here](https://docs.rs/zvariant_derive/).
+
+### Dependencies
+
+* proc-macro2
+* syn
+* quote
 
 ## zbus
 
