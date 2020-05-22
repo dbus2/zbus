@@ -17,20 +17,29 @@ Status: Stable.
 
 Documentation can be found [here](https://docs.rs/zvariant/).
 
+### Dependencies
+
+* byteorder
+* serde
+* arrayvec (optional)
+* enumflags2 (optional)
+
 ## zbus
 
 That's the main crate that you'll use to actually communicate with services and apps over D-Bus. At the moment you can
 only connect to the session bus and call methods synchronously.
 
-Status: Early development. You've been warned!
+Status: Unstable. You've been warned!
+
+### Dependencies
+
+  * nix
+  * byteorder
+  * serde
+  * serde_repr
+  * enumflags2
+  * serde-xml-rs (optional)
 
 # License
 
 MIT license [LICENSE-MIT](LICENSE-MIT)
-
-# Dependencies
-
-  * nix
-  * byteorder
-
-Don't be impressed. I'm sure this list will grow soon. :)
