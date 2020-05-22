@@ -10,33 +10,6 @@ use serde::ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct,
 use crate::utils::*;
 use crate::{Array, Basic, Dict, Fd, ObjectPath, OwnedValue, Signature, Str, Structure, Type};
 
-macro_rules! serialize_value {
-    ($self:ident $serializer:ident.$method:ident $($first_arg:expr)*) => {
-        match $self {
-            Value::U8(value) => $serializer.$method($($first_arg,)* value),
-            Value::Bool(value) => $serializer.$method($($first_arg,)* value),
-            Value::I16(value) => $serializer.$method($($first_arg,)* value),
-            Value::U16(value) => $serializer.$method($($first_arg,)* value),
-            Value::I32(value) => $serializer.$method($($first_arg,)* value),
-            Value::U32(value) => $serializer.$method($($first_arg,)* value),
-            Value::I64(value) => $serializer.$method($($first_arg,)* value),
-            Value::U64(value) => $serializer.$method($($first_arg,)* value),
-            Value::F64(value) => $serializer.$method($($first_arg,)* value),
-            Value::Str(value) => $serializer.$method($($first_arg,)* value),
-            Value::Signature(value) => $serializer.$method($($first_arg,)* value),
-            Value::ObjectPath(value) => $serializer.$method($($first_arg,)* value),
-            Value::Value(value) => $serializer.$method($($first_arg,)* value),
-
-            // Container types
-            Value::Array(value) => $serializer.$method($($first_arg,)* value),
-            Value::Dict(value) => $serializer.$method($($first_arg,)* value),
-            Value::Structure(value) => $serializer.$method($($first_arg,)* value),
-
-            Value::Fd(value) => $serializer.$method($($first_arg,)* value),
-        }
-    }
-}
-
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
 ///
@@ -110,6 +83,33 @@ pub enum Value<'a> {
     Structure(Structure<'a>),
 
     Fd(Fd),
+}
+
+macro_rules! serialize_value {
+    ($self:ident $serializer:ident.$method:ident $($first_arg:expr)*) => {
+        match $self {
+            Value::U8(value) => $serializer.$method($($first_arg,)* value),
+            Value::Bool(value) => $serializer.$method($($first_arg,)* value),
+            Value::I16(value) => $serializer.$method($($first_arg,)* value),
+            Value::U16(value) => $serializer.$method($($first_arg,)* value),
+            Value::I32(value) => $serializer.$method($($first_arg,)* value),
+            Value::U32(value) => $serializer.$method($($first_arg,)* value),
+            Value::I64(value) => $serializer.$method($($first_arg,)* value),
+            Value::U64(value) => $serializer.$method($($first_arg,)* value),
+            Value::F64(value) => $serializer.$method($($first_arg,)* value),
+            Value::Str(value) => $serializer.$method($($first_arg,)* value),
+            Value::Signature(value) => $serializer.$method($($first_arg,)* value),
+            Value::ObjectPath(value) => $serializer.$method($($first_arg,)* value),
+            Value::Value(value) => $serializer.$method($($first_arg,)* value),
+
+            // Container types
+            Value::Array(value) => $serializer.$method($($first_arg,)* value),
+            Value::Dict(value) => $serializer.$method($($first_arg,)* value),
+            Value::Structure(value) => $serializer.$method($($first_arg,)* value),
+
+            Value::Fd(value) => $serializer.$method($($first_arg,)* value),
+        }
+    }
 }
 
 impl<'a> Value<'a> {

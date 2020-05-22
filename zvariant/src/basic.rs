@@ -7,8 +7,11 @@ use crate::{Signature, Type};
 /// [`Type`]: trait.Type.html
 /// [`Value`]: enum.Value.html
 pub trait Basic: Type {
+    /// The type signature, as a character.
     const SIGNATURE_CHAR: char;
+    /// The type signature, as a string.
     const SIGNATURE_STR: &'static str;
+    /// The required padding alignment.
     const ALIGNMENT: usize;
 }
 

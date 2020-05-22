@@ -2,10 +2,9 @@ use serde::ser::{Serialize, SerializeTupleStruct, Serializer};
 
 use crate::{Signature, Type, Value};
 
-/// An ordered collection of items of arbitrary types.
+/// A helper type to wrap structs in [`Value`].
 ///
-/// This is mostly just a way to support custom data structures. You only use this for structures
-/// inside [`Value`]. API is provided to convert from, and to tuples.
+/// API is provided to convert from, and to tuples.
 ///
 /// [`Value`]: enum.Value.html
 #[derive(Debug, Clone, Default, PartialEq)]

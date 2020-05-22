@@ -1,3 +1,111 @@
+//! This crate provides API for serialization/deserialization of data to/from [D-Bus] wire format.
+//! This binary wire format is simple and very efficient and hence useful outside of D-Bus context
+//! as well. A slightly modified form of this format, [GVariant] is also very common and will be
+//! supported by a future version of this crate.
+//!
+//! Since version 2.0, the API is [serde]-based and hence you'll find it very intuitive if you're
+//! already familiar with serde. If you're not familiar with serde, you may want to first read its
+//! [tutorial] before learning further about this crate.
+//!
+//! Serialization and deserialization is achieved through the [toplevel functions]:
+//!
+//! ```rust
+//! use std::collections::HashMap;
+//! use byteorder::LE;
+//! use zvariant::{from_slice, to_bytes};
+//! use zvariant::EncodingContext as Context;
+//!
+//! // All serialization and deserialization API, needs a context.
+//! let ctxt = Context::<LE>::new_dbus(0);
+//!
+//! // i16
+//! let encoded = to_bytes(ctxt, &42i16).unwrap();
+//! let decoded: i16 = from_slice(&encoded, ctxt).unwrap();
+//! assert_eq!(decoded, 42);
+//!
+//! // strings
+//! let encoded = to_bytes(ctxt, &"hello").unwrap();
+//! let decoded: &str = from_slice(&encoded, ctxt).unwrap();
+//! assert_eq!(decoded, "hello");
+//!
+//! // tuples
+//! let t = ("hello", 42i32, true);
+//! let encoded = to_bytes(ctxt, &t).unwrap();
+//! let decoded: (&str, i32, bool) = from_slice(&encoded, ctxt).unwrap();
+//! assert_eq!(decoded, t);
+//!
+//! // Vec
+//! let v = vec!["hello", "world!"];
+//! let encoded = to_bytes(ctxt, &v).unwrap();
+//! let decoded: Vec<&str> = from_slice(&encoded, ctxt).unwrap();
+//! assert_eq!(decoded, v);
+//!
+//! // Dictionary
+//! let mut map: HashMap<i64, &str> = HashMap::new();
+//! map.insert(1, "123");
+//! map.insert(2, "456");
+//! let encoded = to_bytes(ctxt, &map).unwrap();
+//! let decoded: HashMap<i64, &str> = from_slice(&encoded, ctxt).unwrap();
+//! assert_eq!(decoded[&1], "123");
+//! assert_eq!(decoded[&2], "456");
+//! ```
+//!
+//! Apart from the obvious requirement of [`EncodingContext`] instance by the main serialization and
+//! deserialization API, the type being serialized or deserialized must also implement `Type`
+//! trait in addition to [`Serialize`] or [`Deserialize`], respectively. Please refer to [`Type`
+//! module documentation] for more details.
+//!
+//! Most of the [basic types] of D-Bus match 1-1 wit all the primitive Rust types. The only two
+//! exceptions being, [`Signature`] and [`ObjectPath`], which are really just strings. These types
+//! are covered by the [`Basic`] trait.
+//!
+//! Similarly, most of the [container types] also map nicely to the usual Rust types and
+//! collections (as can be seen in the example code above). The only note worthy exception being
+//! ARRAY type. As arrays in Rust are fixed-sized, serde treats them as tuples and so does this
+//! crate. This means they are encoded as STRUCT type of D-Bus. If you need to serialize to, or
+//! deserialize from a D-Bus array, you'll need to use a [slice] (array can easily be converted to a
+//! slice), a [`Vec`] or an [`arrayvec::ArrayVec`].
+//!
+//! The generic D-Bus type, `VARIANT` is represented by `Value`, an enum that holds exactly one
+//! value of any of the other types. Please refer to [`Value` module documentation] for examples.
+//!
+//! # no-std
+//!
+//! While `std` is currently a hard requirement, optional `no-std` support is planned in the future.
+//! On the other hand, `noalloc` support is not planned as it will be an extremely difficult to
+//! accomplish, if at all possible.
+//!
+//! # Optional features
+//!
+//! | Feature | Description |
+//! | ---     | ----------- |
+//! | arrayvec | Implement `Type` for [`arrayvec::ArrayVec`] and [`arrayvec::ArrayString`] |
+//! | enumflags2 | Implement `Type` for [`enumflags2::BitFlags<F>`] |
+//!
+//! # Portability
+//!
+//! zvariant is currently Unix-only and will fail to build on non-unix. This is hopefully a
+//! temporary limitation.
+//!
+//! [D-Bus]: https://dbus.freedesktop.org/doc/dbus-specification.html
+//! [GVariant]: https://developer.gnome.org/glib/stable/glib-GVariant.html
+//! [serde]: https://crates.io/crates/serde
+//! [tutorial]: https://serde.rs/
+//! [toplevel functions]: #functions
+//! [`EncodingContext`]: struct.EncodingContext.html
+//! [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
+//! [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
+//! [`Type` module documentation]: trait.Type.html
+//! [basic types]: https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
+//! [`Signature`]: struct.Signature.html
+//! [`ObjectPath`]: struct.ObjectPath.html
+//! [`Basic`]: trait.Basic.html
+//! [container types]: https://dbus.freedesktop.org/doc/dbus-specification.html#container-types
+//! [slice]: https://doc.rust-lang.org/std/primitive.slice.html
+//! [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+//! [`arrayvec::ArrayVec`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayVec.html
+//! [`Value` module documentation]: enum.Value.html
+
 #[macro_use]
 mod utils;
 pub use utils::*;
@@ -55,16 +163,16 @@ pub use owned_value::*;
 
 mod signature_parser;
 
-// TODO: Tests for all *serde* types and import all existing ones from zvariant.
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
     use std::convert::{TryFrom, TryInto};
 
     #[cfg(feature = "arrayvec")]
-    use arrayvec::ArrayVec;
+    use arrayvec::{ArrayString, ArrayVec};
     use byteorder::{self, ByteOrder, BE, LE};
+    #[cfg(feature = "arrayvec")]
+    use std::str::FromStr;
 
     use zvariant_derive::Type;
 
@@ -242,6 +350,17 @@ mod tests {
         assert_eq!(encoded.len(), 10);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
         assert_eq!(v, Value::new("c"));
+    }
+
+    #[cfg(feature = "arrayvec")]
+    #[test]
+    fn array_string_value() {
+        let s = ArrayString::<[_; 32]>::from_str("hello world!").unwrap();
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &s).unwrap();
+        assert_eq!(encoded.len(), 17);
+        let decoded: ArrayString<[_; 32]> = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(&decoded, "hello world!");
     }
 
     #[test]
@@ -655,7 +774,7 @@ mod tests {
         use serde::{Deserialize, Serialize};
         use serde_repr::{Deserialize_repr, Serialize_repr};
 
-        #[derive(Deserialize, Serialize, Type)]
+        #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
         struct Struct<'s> {
             field1: u16,
             field2: i64,
@@ -672,9 +791,7 @@ mod tests {
         let encoded = to_bytes(ctxt, &s).unwrap();
         assert_eq!(encoded.len(), 26);
         let decoded: Struct = from_slice(&encoded, ctxt).unwrap();
-        assert_eq!(decoded.field1, 0xFF_FF);
-        assert_eq!(decoded.field2, 0xFF_FF_FF_FF_FF_FF);
-        assert_eq!(decoded.field3, "hello");
+        assert_eq!(decoded, s);
 
         #[derive(Deserialize, Serialize, Type)]
         struct UnitStruct;

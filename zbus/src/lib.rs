@@ -1,3 +1,6 @@
+#[cfg(doctest)]
+doc_comment::doctest!("../../README.md");
+
 mod address;
 pub use address::*;
 
