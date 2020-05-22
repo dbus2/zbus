@@ -131,6 +131,12 @@ If you need help in using these crates, are looking for ways to contribute or ju
 with the cool kids, please come chat with us on our IRC channel, #zbus on irc.freenode.net. If
 something doesn't seem right, please [file an issue](https://gitlab.freedesktop.org/zeenix/zbus/-/issues/new).
 
+# Portability
+
+All crates are currently Unix-only and will fail to build on non-unix. This is hopefully a temporary
+limitation. Moreover, integration tests of zbus crate currently require a session bus running on the
+build host.
+
 # License
 
 MIT license [LICENSE-MIT](LICENSE-MIT)
