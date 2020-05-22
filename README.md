@@ -125,6 +125,12 @@ only connect to the session bus and call methods synchronously.
   * enumflags2
   * serde-xml-rs (optional)
 
+# Getting Help
+
+If you need help in using these crates, are looking for ways to contribute or just want to hang out
+with the cool kids, please come chat with us on our IRC channel, #zbus on irc.freenode.net. If
+something doesn't seem right, please [file an issue](https://gitlab.freedesktop.org/zeenix/zbus/-/issues/new).
+
 # License
 
 MIT license [LICENSE-MIT](LICENSE-MIT)
