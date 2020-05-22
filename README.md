@@ -9,13 +9,13 @@ The project is divided into three crates:
 
 ## zvariant
 
+[![](https://docs.rs/zvariant/badge.svg)](https://docs.rs/zvariant/)
+
 This crate provides API for encoding/decoding of data to/from D-Bus wire format. This crate is already in good shape
 and can and should be used by other projects. This binary wire format is simple and very efficient and hence useful
 outside of D-Bus context as well.
 
-Status: Stable.
-
-Documentation can be found [here](https://docs.rs/zvariant/).
+**Status:** Stable.
 
 ### Dependencies
 
@@ -26,11 +26,11 @@ Documentation can be found [here](https://docs.rs/zvariant/).
 
 ## zvariant_derive
 
+[![](https://docs.rs/zvariant_derive/badge.svg)](https://docs.rs/zvariant_derive/)
+
 This crate provides a derive macro to easily implement [`Type` trait](https://docs.rs/zvariant/2.0.0/zvariant/trait.Type.html) on structs and enums.
 
-Status: Stable.
-
-Documentation can be found [here](https://docs.rs/zvariant_derive/).
+**Status:** Stable.
 
 ### Dependencies
 
@@ -43,7 +43,7 @@ Documentation can be found [here](https://docs.rs/zvariant_derive/).
 That's the main crate that you'll use to actually communicate with services and apps over D-Bus. At the moment you can
 only connect to the session bus and call methods synchronously.
 
-Status: Unstable. You've been warned!
+**Status:** Unstable. You've been warned!
 
 ### Dependencies
 
