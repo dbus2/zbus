@@ -13,8 +13,8 @@ reporting a bug or asking for help, please include enough details so that the pe
 can reproduce the behavior you are seeing. For some tips on how to approach this, read about how to
 produce a [Minimal, Complete, and Verifiable example](https://stackoverflow.com/help/mcve).
 
-If the issue is pertaining to a specific crate only, please prefix the title with the crate name (
-the first two letters are sufficient) followed by a colon. For example: `zb: It's broken on Windows`.
+Please consider choosing the appropriate labels when creating the issue. This will help us
+prioritise better.
 
 When making a feature request, please make it clear what problem you intend to solve with the
 feature, any ideas for how the crate in question could support solving that problem, any possible
