@@ -244,11 +244,11 @@ impl Connection {
         self.unique_name.as_deref()
     }
 
-    /// Return the next message from the connection.
+    /// Fetch the next message from the connection.
     ///
     /// Read from the connection until a message is received or an error is reached. Return the
     /// message on success.
-    pub fn next_message(&self) -> Result<Message, ConnectionError> {
+    pub fn receive_message(&self) -> Result<Message, ConnectionError> {
         let mut buf = [0; MIN_MESSAGE_SIZE];
         let mut fds = read_exact(&self.socket, &mut buf[..])?;
 
@@ -305,7 +305,7 @@ impl Connection {
 
         // FIXME: We need to read incoming messages in a separate thread and maintain a queue
         loop {
-            let m = self.next_message()?;
+            let m = self.receive_message()?;
             let h = m.header()?;
 
             if h.reply_serial()? != Some(serial) {
