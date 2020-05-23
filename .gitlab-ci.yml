@@ -6,10 +6,6 @@ variables:
   CARGO_HOME: $CI_PROJECT_DIR/cargo
   APT_CACHE_DIR: $CI_PROJECT_DIR/apt
 
-before_script:
-  - apt-get --allow-unauthenticated update -yq
-  - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y dbus
-
 check:
   image: "rustdocker/rustfmt_clippy:stable"
   stage: "lint"
@@ -29,6 +25,8 @@ test:
     - cargo --version
     - mkdir -p /run/user/$UID
     - sed s/UID/$UID/ gitlab/dbus-session.conf > /tmp/dbus-session.conf
+    - apt-get --allow-unauthenticated update -yq
+    - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y dbus
     - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- --skip fdpass_systemd
     - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
 
