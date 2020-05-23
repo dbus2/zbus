@@ -18,6 +18,8 @@ check:
     - cargo --version
     - cargo fmt --all -- --check
     - cargo clippy -- -D warnings
+    - cargo install cargo-audit
+    - cargo audit
 
 test:
   image: "rustdocker/rustfmt_clippy:stable"
