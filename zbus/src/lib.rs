@@ -114,13 +114,20 @@ mod tests {
 
     #[test]
     fn freedesktop_api() {
-        let connection = crate::Connection::new_session()
+        let mut connection = crate::Connection::new_session()
             .map_err(|e| {
                 println!("error: {}", e);
 
                 e
             })
             .unwrap();
+
+        connection.set_default_message_handler(Box::new(|msg| {
+            // Debug implementation will test it a bit
+            println!("Received while waiting for a reply: {}", msg);
+
+            Some(msg)
+        }));
 
         // Let's try getting us a fancy name on the bus
         #[repr(u32)]
