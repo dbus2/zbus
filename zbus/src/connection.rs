@@ -24,7 +24,7 @@ pub struct Connection {
     serial: AtomicU32,
 
     #[derivative(Debug = "ignore")]
-    default_msg_handler: Option<Box<dyn Fn(Message) -> Option<Message>>>,
+    default_msg_handler: Option<Box<dyn FnMut(Message) -> Option<Message>>>,
 }
 
 #[derive(Debug)]
@@ -259,7 +259,7 @@ impl Connection {
     /// message.
     ///
     /// [`set_default_message_handler`]: struct.Connection.html#method.set_default_message_handler
-    pub fn receive_message(&self) -> Result<Message, ConnectionError> {
+    pub fn receive_message(&mut self) -> Result<Message, ConnectionError> {
         let mut buf = [0; MIN_MESSAGE_SIZE];
 
         loop {
@@ -275,7 +275,7 @@ impl Connection {
             incoming.add_bytes(&buf[..])?;
             incoming.set_owned_fds(fds);
 
-            if let Some(handler) = self.default_msg_handler.as_ref() {
+            if let Some(handler) = self.default_msg_handler.as_mut() {
                 // Let's see if the default handler wants the message first
                 match handler(incoming) {
                     // Message was returned to us so we can return that
@@ -305,7 +305,7 @@ impl Connection {
     }
 
     pub fn call_method<B>(
-        &self,
+        &mut self,
         destination: Option<&str>,
         path: &str,
         iface: Option<&str>,
@@ -405,7 +405,7 @@ impl Connection {
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     pub fn set_default_message_handler(
         &mut self,
-        handler: Box<dyn Fn(Message) -> Option<Message>>,
+        handler: Box<dyn FnMut(Message) -> Option<Message>>,
     ) {
         self.default_msg_handler = Some(handler);
     }

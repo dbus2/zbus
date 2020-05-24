@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn basic_connection() {
-        let connection = crate::Connection::new_session()
+        let mut connection = crate::Connection::new_session()
             .map_err(|e| {
                 println!("error: {}", e);
 
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn fdpass_systemd() {
-        let connection = crate::Connection::new_system().unwrap();
+        let mut connection = crate::Connection::new_system().unwrap();
 
         let mut reply = connection
             .call_method(
