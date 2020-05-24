@@ -123,6 +123,7 @@ only connect to the session bus and call methods synchronously.
   * serde
   * serde_repr
   * enumflags2
+  * derivative
   * serde-xml-rs (optional)
 
 # Getting Help
