@@ -19,6 +19,6 @@ arrayvec = { version = "0.5.1", features = [ "serde" ], optional = true }
 enumflags2 = { version = "0.6.4", features = [ "serde" ], optional = true }
 
 [dev-dependencies]
-zvariant_derive = { path = "../zvariant_derive" }
+zvariant_derive = { path = "../zvariant_derive", version = "2" }
 serde_json = "1.0"
 serde_repr = "0.1"
