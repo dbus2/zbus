@@ -470,19 +470,23 @@ impl fmt::Debug for Message {
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let header = self.header();
-        let (ty, error_name, sender) = if let Ok(h) = header.as_ref() {
+        let (ty, error_name, sender, member) = if let Ok(h) = header.as_ref() {
             (
                 h.message_type().ok(),
                 h.error_name().ok().flatten(),
                 h.sender().ok().flatten(),
+                h.member().ok().flatten(),
             )
         } else {
-            (None, None, None)
+            (None, None, None, None)
         };
 
         match ty {
             Some(MessageType::MethodCall) => {
                 write!(f, "Method call")?;
+                if let Some(m) = member {
+                    write!(f, " {}", m)?;
+                }
             }
             Some(MessageType::MethodReturn) => {
                 write!(f, "Method return")?;
@@ -500,6 +504,9 @@ impl fmt::Display for Message {
             }
             Some(MessageType::Signal) => {
                 write!(f, "Signal")?;
+                if let Some(m) = member {
+                    write!(f, " {}", m)?;
+                }
             }
             _ => {
                 write!(f, "Unknown message")?;
@@ -535,7 +542,7 @@ mod tests {
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
         assert_eq!(m.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
 
-        assert_eq!(m.to_string(), "Method call from :1.72");
+        assert_eq!(m.to_string(), "Method call do from :1.72");
         let r = Message::method_reply(None, &m, &("all fine!")).unwrap();
         assert_eq!(r.to_string(), "Method return");
         let e = Message::method_error(None, &m, "org.freedesktop.zbus.Error", &("kaboom!", 32))

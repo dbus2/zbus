@@ -12,7 +12,8 @@ use crate::message_field;
 use crate::utils::{read_exact, write_all};
 use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
-#[derive(Debug)]
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 pub struct Connection {
     server_guid: String,
     cap_unix_fd: bool,
@@ -21,6 +22,9 @@ pub struct Connection {
     socket: UnixStream,
     // Serial number for next outgoing message
     serial: AtomicU32,
+
+    #[derivative(Debug = "ignore")]
+    default_msg_handler: Option<Box<dyn FnMut(Message) -> Option<Message>>>,
 }
 
 #[derive(Debug)]
@@ -210,6 +214,7 @@ impl Connection {
             cap_unix_fd,
             serial: AtomicU32::new(1),
             unique_name: None,
+            default_msg_handler: None,
         };
 
         // Now that daemon has approved us, we must send a hello as per specs
@@ -244,25 +249,43 @@ impl Connection {
         self.unique_name.as_deref()
     }
 
-    /// Return the next message from the connection.
+    /// Fetch the next message from the connection.
     ///
     /// Read from the connection until a message is received or an error is reached. Return the
     /// message on success.
-    pub fn next_message(&self) -> Result<Message, ConnectionError> {
+    ///
+    /// If a default message handler has been registered on this connection through
+    /// [`set_default_message_handler`], it will first get to decide the fate of the received
+    /// message.
+    ///
+    /// [`set_default_message_handler`]: struct.Connection.html#method.set_default_message_handler
+    pub fn receive_message(&mut self) -> Result<Message, ConnectionError> {
         let mut buf = [0; MIN_MESSAGE_SIZE];
-        let mut fds = read_exact(&self.socket, &mut buf[..])?;
 
-        let mut incoming = Message::from_bytes(&buf)?;
-        let bytes_left = incoming.bytes_to_completion()?;
-        if bytes_left == 0 {
-            return Err(ConnectionError::Handshake);
+        loop {
+            let mut fds = read_exact(&self.socket, &mut buf[..])?;
+
+            let mut incoming = Message::from_bytes(&buf)?;
+            let bytes_left = incoming.bytes_to_completion()?;
+            if bytes_left == 0 {
+                return Err(ConnectionError::Handshake);
+            }
+            let mut buf = vec![0; bytes_left as usize];
+            fds.append(&mut read_exact(&self.socket, &mut buf[..])?);
+            incoming.add_bytes(&buf[..])?;
+            incoming.set_owned_fds(fds);
+
+            if let Some(handler) = self.default_msg_handler.as_mut() {
+                // Let's see if the default handler wants the message first
+                match handler(incoming) {
+                    // Message was returned to us so we can return that
+                    Some(m) => return Ok(m),
+                    None => continue,
+                }
+            }
+
+            return Ok(incoming);
         }
-        let mut buf = vec![0; bytes_left as usize];
-        fds.append(&mut read_exact(&self.socket, &mut buf[..])?);
-        incoming.add_bytes(&buf[..])?;
-        incoming.set_owned_fds(fds);
-
-        Ok(incoming)
     }
 
     fn send_message(&self, mut msg: Message) -> Result<u32, ConnectionError> {
@@ -282,7 +305,7 @@ impl Connection {
     }
 
     pub fn call_method<B>(
-        &self,
+        &mut self,
         destination: Option<&str>,
         path: &str,
         iface: Option<&str>,
@@ -303,9 +326,8 @@ impl Connection {
 
         let serial = self.send_message(m)?;
 
-        // FIXME: We need to read incoming messages in a separate thread and maintain a queue
         loop {
-            let m = self.next_message()?;
+            let m = self.receive_message()?;
             let h = m.header()?;
 
             if h.reply_serial()? != Some(serial) {
@@ -372,6 +394,24 @@ impl Connection {
     {
         let m = Message::method_error(self.unique_name.as_deref(), call, error_name, body)?;
         self.send_message(m)
+    }
+
+    /// Set a default handler for incoming messages on this connection.
+    ///
+    /// This is the handler that will be called on all messages received during [`receive_message`]
+    /// call. If the handler callback returns a message (which could be a different message than it
+    /// was given), `receive_message` will return it to its caller.
+    ///
+    /// [`receive_message`]: struct.Connection.html#method.receive_message
+    pub fn set_default_message_handler(
+        &mut self,
+        handler: Box<dyn FnMut(Message) -> Option<Message>>,
+    ) {
+        self.default_msg_handler = Some(handler);
+    }
+
+    pub fn reset_default_message_handler(&mut self) {
+        self.default_msg_handler = None;
     }
 
     fn next_serial(&self) -> u32 {
