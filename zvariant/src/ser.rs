@@ -330,13 +330,14 @@ where
         self.writer
     }
 
-    fn add_fd(&mut self, fd: RawFd) -> Result<u32> {
+    fn add_fd(&mut self, fd: RawFd) -> u32 {
         if let Some(idx) = self.fds.iter().position(|&x| x == fd) {
-            return Ok(idx as u32);
+            return idx as u32;
         }
         let idx = self.fds.len();
         self.fds.push(fd);
-        Ok(idx as u32)
+
+        idx as u32
     }
 
     fn add_padding(&mut self, alignment: usize) -> Result<usize> {
@@ -430,7 +431,7 @@ where
             'h' => {
                 self.sign_parser.parse_char(None)?;
                 self.add_padding(u32::ALIGNMENT)?;
-                let v = self.add_fd(v)?;
+                let v = self.add_fd(v);
                 self.write_u32::<B>(v).map_err(Error::Io)
             }
             _ => {
