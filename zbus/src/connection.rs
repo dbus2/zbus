@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -12,6 +13,8 @@ use crate::message_field;
 use crate::utils::{read_exact, write_all};
 use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
+type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
+
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 pub struct Connection {
@@ -24,7 +27,7 @@ pub struct Connection {
     serial: AtomicU32,
 
     #[derivative(Debug = "ignore")]
-    default_msg_handler: Option<Box<dyn Fn(Message) -> Option<Message>>>,
+    default_msg_handler: Option<RefCell<MessageHandlerFn>>,
 }
 
 #[derive(Debug)]
@@ -275,9 +278,9 @@ impl Connection {
             incoming.add_bytes(&buf[..])?;
             incoming.set_owned_fds(fds);
 
-            if let Some(handler) = self.default_msg_handler.as_ref() {
+            if let Some(ref handler) = self.default_msg_handler {
                 // Let's see if the default handler wants the message first
-                match handler(incoming) {
+                match (&mut *handler.borrow_mut())(incoming) {
                     // Message was returned to us so we can return that
                     Some(m) => return Ok(m),
                     None => continue,
@@ -403,11 +406,8 @@ impl Connection {
     /// was given), `receive_message` will return it to its caller.
     ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
-    pub fn set_default_message_handler(
-        &mut self,
-        handler: Box<dyn Fn(Message) -> Option<Message>>,
-    ) {
-        self.default_msg_handler = Some(handler);
+    pub fn set_default_message_handler(&mut self, handler: MessageHandlerFn) {
+        self.default_msg_handler = Some(RefCell::new(handler));
     }
 
     pub fn reset_default_message_handler(&mut self) {
