@@ -417,7 +417,7 @@ where
 
     fn serialize_i8(self, v: i8) -> Result<()> {
         // No i8 type in D-Bus/GVariant, let's pretend it's i16
-        self.write_i16::<B>(v as i16).map_err(Error::Io)
+        self.serialize_i16(v as i16)
     }
 
     // TODO: Use macro to avoid code-duplication here
