@@ -180,8 +180,8 @@ mod tests {
     use crate::{to_bytes, to_bytes_fds, to_bytes_for_signature};
 
     use crate::{Array, Dict, EncodingContext as Context};
+    use crate::{Basic, Type, Value};
     use crate::{Fd, ObjectPath, Signature, Str, Structure};
-    use crate::{Type, Value};
 
     // Test through both generic and specific API (wrt byte order)
     macro_rules! basic_type_test {
@@ -201,121 +201,77 @@ mod tests {
 
             encoded
         }};
+        ($trait:ty, $test_value:expr, $expected_len:expr, $expected_ty:ty, $kind:ident, $expected_value_len:expr) => {{
+            let encoded = basic_type_test!($trait, $test_value, $expected_len, $expected_ty);
+
+            // As Value
+            let v: Value = $test_value.into();
+            assert_eq!(v.value_signature(), <$expected_ty>::SIGNATURE_STR);
+            assert_eq!(v, Value::$kind($test_value));
+            let ctxt = Context::<$trait>::new_dbus(0);
+            let (encoded_value, fds) = to_bytes_fds(ctxt, &v).unwrap();
+            assert_eq!(
+                encoded_value.len(),
+                $expected_value_len,
+                "invalid encoding using `to_bytes`"
+            );
+            let decoded: Value = from_slice_fds(&encoded_value, Some(&fds), ctxt).unwrap();
+            assert!(
+                decoded == Value::$kind($test_value),
+                "invalid decoding using `from_slice`"
+            );
+
+            let v: $expected_ty = v.try_into().unwrap();
+            assert_eq!(v, $test_value);
+
+            encoded
+        }};
     }
 
     #[test]
     fn u8_value() {
-        basic_type_test!(LE, 77_u8, 1, u8);
-
-        // As Value
-        let v: Value = 77_u8.into();
-        assert_eq!(v.value_signature(), "y");
-        assert_eq!(v, Value::U8(77));
-        basic_type_test!(LE, v, 4, Value);
-
-        let v: u8 = v.try_into().unwrap();
-        assert_eq!(v, 77_u8);
+        basic_type_test!(LE, 77_u8, 1, u8, U8, 4);
     }
 
     #[test]
     fn fd_value() {
-        basic_type_test!(LE, Fd::from(42), 4, Fd);
-
-        // As Value
-        let v: Value = Fd::from(42).into();
-        assert_eq!(v.value_signature(), "h");
-        assert_eq!(v, Value::Fd(Fd::from(42)));
-        basic_type_test!(LE, v, 8, Value);
+        basic_type_test!(LE, Fd::from(42), 4, Fd, Fd, 8);
     }
 
     #[test]
     fn u16_value() {
-        basic_type_test!(BE, 0xABBA_u16, 2, u16);
-
-        // As Value
-        let v: Value = 0xFEFE_u16.into();
-        assert_eq!(v.value_signature(), "q");
-        assert_eq!(v, Value::U16(0xFEFE));
-        basic_type_test!(LE, v, 6, Value);
-
-        let v: u16 = v.try_into().unwrap();
-        assert_eq!(v, 0xFEFE_u16);
+        basic_type_test!(BE, 0xABBA_u16, 2, u16, U16, 6);
     }
 
     #[test]
     fn i16_value() {
-        let encoded = basic_type_test!(BE, -0xAB0_i16, 2, i16);
+        let encoded = basic_type_test!(BE, -0xAB0_i16, 2, i16, I16, 6);
         assert_eq!(LE::read_i16(&encoded), 0x50F5_i16);
-
-        // As Value
-        let v: Value = 0xAB_i16.into();
-        assert_eq!(v.value_signature(), "n");
-        assert_eq!(v, Value::I16(0xAB));
-        basic_type_test!(LE, v, 6, Value);
-
-        let v: i16 = v.try_into().unwrap();
-        assert_eq!(v, 0xAB_i16);
     }
 
     #[test]
     fn u32_value() {
-        basic_type_test!(BE, 0xABBA_ABBA_u32, 4, u32);
-
-        // As Value
-        let v: Value = 0xABBA_ABBA_u32.into();
-        assert_eq!(v.value_signature(), "u");
-        assert_eq!(v, Value::U32(0xABBA_ABBA));
-        basic_type_test!(LE, v, 8, Value);
-
-        let v: u32 = v.try_into().unwrap();
-        assert_eq!(v, 0xABBA_ABBA_u32);
+        basic_type_test!(BE, 0xABBA_ABBA_u32, 4, u32, U32, 8);
     }
 
     #[test]
     fn i32_value() {
-        let encoded = basic_type_test!(BE, -0xABBA_AB0_i32, 4, i32);
+        let encoded = basic_type_test!(BE, -0xABBA_AB0_i32, 4, i32, I32, 8);
         assert_eq!(LE::read_i32(&encoded), 0x5055_44F5_i32);
-
-        // As Value
-        let v: Value = 0xABBA_AB0_i32.into();
-        assert_eq!(v.value_signature(), "i");
-        assert_eq!(v, Value::I32(0xABBA_AB0));
-        basic_type_test!(LE, v, 8, Value);
-
-        let v: i32 = v.try_into().unwrap();
-        assert_eq!(v, 0xABBA_AB0_i32);
     }
 
     // u64 is covered by `value_value` test below
 
     #[test]
     fn i64_value() {
-        let encoded = basic_type_test!(BE, -0xABBA_ABBA_ABBA_AB0_i64, 8, i64);
+        let encoded = basic_type_test!(BE, -0xABBA_ABBA_ABBA_AB0_i64, 8, i64, I64, 16);
         assert_eq!(LE::read_i64(&encoded), 0x5055_4455_4455_44F5_i64);
-
-        // As Value
-        let v: Value = 0xABBA_AB0i64.into();
-        assert_eq!(v.value_signature(), "x");
-        assert_eq!(v, Value::I64(0xABBA_AB0));
-        basic_type_test!(LE, v, 16, Value);
-
-        let v: i64 = v.try_into().unwrap();
-        assert_eq!(v, 0xABBA_AB0_i64);
     }
 
     #[test]
     fn f64_value() {
-        let encoded = basic_type_test!(BE, 99999.99999_f64, 8, f64);
+        let encoded = basic_type_test!(BE, 99999.99999_f64, 8, f64, F64, 16);
         assert_eq!(LE::read_f64(&encoded), -5759340900185448e-143);
-
-        // As Value
-        let v: Value = 99999.99999_f64.into();
-        assert_eq!(v.value_signature(), "d");
-        assert_eq!(v, Value::F64(99999.99999));
-        basic_type_test!(LE, v, 16, Value);
-
-        let v: f64 = v.try_into().unwrap();
-        assert_eq!(v, 99999.99999_f64);
     }
 
     #[test]
