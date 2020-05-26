@@ -254,6 +254,11 @@ mod tests {
     }
 
     #[test]
+    fn i8_value() {
+        basic_type_test!(LE, 77_i8, 2, i8, 2);
+    }
+
+    #[test]
     fn fd_value() {
         basic_type_test!(LE, Fd::from(42), 4, Fd, 4, Fd, 8);
     }
