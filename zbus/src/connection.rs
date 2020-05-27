@@ -8,7 +8,7 @@ use nix::unistd::Uid;
 
 use crate::address::{self, Address};
 use crate::utils::{read_exact, write_all};
-use crate::{Error, Message, MessageType, MIN_MESSAGE_SIZE};
+use crate::{Error, Message, MessageType, Result, MIN_MESSAGE_SIZE};
 
 type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
 
@@ -27,7 +27,7 @@ pub struct Connection {
     default_msg_handler: Option<RefCell<MessageHandlerFn>>,
 }
 
-fn connect(addr: &Address) -> Result<UnixStream, Error> {
+fn connect(addr: &Address) -> Result<UnixStream> {
     match addr {
         Address::Path(p) => Ok(UnixStream::connect(p)?),
         Address::Abstract(_) => Err(io::Error::new(
@@ -41,7 +41,7 @@ fn connect(addr: &Address) -> Result<UnixStream, Error> {
 /// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
 /// variable. If we don't recognize the value (or it's not set) we fall back to
 /// /run/user/UID/bus
-fn session_socket() -> Result<UnixStream, Error> {
+fn session_socket() -> Result<UnixStream> {
     match env::var("DBUS_SESSION_BUS_ADDRESS") {
         Ok(val) => connect(&address::parse_dbus_address(&val)?),
         _ => {
@@ -55,14 +55,14 @@ fn session_socket() -> Result<UnixStream, Error> {
 /// Get a system socket respecting the DBUS_SYSTEM_BUS_ADDRESS environment
 /// variable. If we don't recognize the value (or it's not set) we fall back to
 /// /var/run/dbus/system_bus_socket
-fn system_socket() -> Result<UnixStream, Error> {
+fn system_socket() -> Result<UnixStream> {
     match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
         Ok(val) => connect(&address::parse_dbus_address(&val)?),
         _ => Ok(UnixStream::connect("/var/run/dbus/system_bus_socket")?),
     }
 }
 
-fn read_reply(socket: &UnixStream) -> Result<Vec<String>, Error> {
+fn read_reply(socket: &UnixStream) -> Result<Vec<String>> {
     let mut buf_reader = BufReader::new(socket);
     let mut buf = String::new();
 
@@ -73,7 +73,7 @@ fn read_reply(socket: &UnixStream) -> Result<Vec<String>, Error> {
 }
 
 impl Connection {
-    fn new(mut socket: UnixStream) -> Result<Self, Error> {
+    fn new(mut socket: UnixStream) -> Result<Self> {
         let uid = Uid::current();
 
         // SASL Handshake
@@ -120,11 +120,11 @@ impl Connection {
         Ok(connection)
     }
 
-    pub fn new_session() -> Result<Self, Error> {
+    pub fn new_session() -> Result<Self> {
         Self::new(session_socket()?)
     }
 
-    pub fn new_system() -> Result<Self, Error> {
+    pub fn new_system() -> Result<Self> {
         Self::new(system_socket()?)
     }
 
@@ -148,7 +148,7 @@ impl Connection {
     /// message.
     ///
     /// [`set_default_message_handler`]: struct.Connection.html#method.set_default_message_handler
-    pub fn receive_message(&self) -> Result<Message, Error> {
+    pub fn receive_message(&self) -> Result<Message> {
         let mut buf = [0; MIN_MESSAGE_SIZE];
 
         loop {
@@ -177,7 +177,7 @@ impl Connection {
         }
     }
 
-    fn send_message(&self, mut msg: Message) -> Result<u32, Error> {
+    fn send_message(&self, mut msg: Message) -> Result<u32> {
         if !msg.fds().is_empty() && !self.cap_unix_fd {
             return Err(Error::Unsupported);
         }
@@ -200,7 +200,7 @@ impl Connection {
         iface: Option<&str>,
         method_name: &str,
         body: &B,
-    ) -> Result<Message, Error>
+    ) -> Result<Message>
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
@@ -238,7 +238,7 @@ impl Connection {
         iface: &str,
         signal_name: &str,
         body: &B,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
@@ -260,7 +260,7 @@ impl Connection {
     ///
     /// Given an existing message (likely a method call), send a reply back to the caller with the
     /// given `body`.
-    pub fn reply<B>(&self, call: &Message, body: &B) -> Result<u32, Error>
+    pub fn reply<B>(&self, call: &Message, body: &B) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
@@ -272,7 +272,7 @@ impl Connection {
     ///
     /// Given an existing message (likely a method call), send an error reply back to the caller
     /// with the given `error_name` and `body`.
-    pub fn reply_error<B>(&self, call: &Message, error_name: &str, body: &B) -> Result<u32, Error>
+    pub fn reply_error<B>(&self, call: &Message, error_name: &str, body: &B) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
