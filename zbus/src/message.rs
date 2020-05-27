@@ -11,7 +11,7 @@ use crate::owned_fd::OwnedFd;
 use crate::utils::padding_for_8_bytes;
 use crate::{EndianSig, MessageHeader, MessagePrimaryHeader, MessageType};
 use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
-use crate::{MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG};
+use crate::{MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE};
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
 macro_rules! dbus_context {
@@ -146,7 +146,9 @@ where
         let header = MessageHeader::new(primary, fields);
 
         let ctxt = dbus_context!(0);
-        let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
+        // 1K for all the fields should be enough for most messages?
+        let mut bytes: Vec<u8> =
+            Vec::with_capacity(PRIMARY_HEADER_SIZE + 1024 + (body_len as usize));
         let mut cursor = Cursor::new(&mut bytes);
 
         zvariant::to_writer(&mut cursor, ctxt, &header)?;
