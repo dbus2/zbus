@@ -222,7 +222,7 @@ where
     where
         T: Basic,
     {
-        self.sign_parser.parse_char(Some(T::SIGNATURE_CHAR))?;
+        self.sign_parser.skip_char()?;
         self.parse_padding(T::ALIGNMENT)?;
 
         Ok(())
@@ -332,7 +332,7 @@ where
     {
         let v = match self.sign_parser.next_char()? {
             Fd::SIGNATURE_CHAR => {
-                self.sign_parser.parse_char(None)?;
+                self.sign_parser.skip_char()?;
                 self.parse_padding(u32::ALIGNMENT)?;
                 let idx = B::read_u32(self.next_slice(u32::ALIGNMENT)?);
                 self.get_fd(idx)?
@@ -442,7 +442,7 @@ where
                 ));
             }
         };
-        self.sign_parser.parse_char(None)?;
+        self.sign_parser.skip_char()?;
         let slice = self.next_slice(len)?;
         let s = str::from_utf8(slice).map_err(Error::Utf8)?;
         self.pos += 1; // skip trailing null byte
@@ -516,7 +516,7 @@ where
                 visitor.visit_seq(value_de)
             }
             ARRAY_SIGNATURE_CHAR => {
-                self.sign_parser.parse_char(Some(ARRAY_SIGNATURE_CHAR))?;
+                self.sign_parser.skip_char()?;
                 self.parse_padding(ARRAY_ALIGNMENT)?;
                 let len = B::read_u32(self.next_slice(4)?) as usize;
 
@@ -530,8 +530,7 @@ where
 
                 let element_signature_pos = self.sign_parser.pos();
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
-                    self.sign_parser
-                        .parse_char(Some(DICT_ENTRY_SIG_START_CHAR))?;
+                    self.sign_parser.skip_char()?;
                 }
                 let rest_of_signature = Signature::from_str_unchecked(
                     &self.sign_parser.signature()[element_signature_pos..],
@@ -549,7 +548,7 @@ where
                             element_signature_len,
                         })
                         .and_then(|v| {
-                            self.sign_parser.parse_char(Some(DICT_ENTRY_SIG_END_CHAR))?;
+                            self.sign_parser.skip_char()?;
 
                             Ok(v)
                         })
@@ -564,13 +563,13 @@ where
                 }
             }
             STRUCT_SIG_START_CHAR => {
-                self.sign_parser.parse_char(Some(STRUCT_SIG_START_CHAR))?;
+                self.sign_parser.skip_char()?;
                 self.parse_padding(STRUCT_ALIGNMENT)?;
 
                 visitor
                     .visit_seq(StructureDeserializer { de: self })
                     .and_then(|v| {
-                        self.sign_parser.parse_char(Some(STRUCT_SIG_END_CHAR))?;
+                        self.sign_parser.skip_char()?;
 
                         Ok(v)
                     })
@@ -854,7 +853,7 @@ where
     type Error = Error;
 
     fn unit_variant(self) -> Result<()> {
-        self.de.sign_parser.parse_char(Some(u32::SIGNATURE_CHAR))?;
+        self.de.sign_parser.skip_char()?;
 
         Ok(())
     }
