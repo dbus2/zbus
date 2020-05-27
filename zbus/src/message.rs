@@ -126,8 +126,6 @@ where
     }
 
     fn build(self) -> Result<Message, MessageError> {
-        let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
-
         let MessageBuilder {
             ty,
             body,
@@ -135,8 +133,6 @@ where
             mut fields,
             reply_to,
         } = self;
-        let mut cursor = Cursor::new(&mut bytes);
-        let ctxt = dbus_context!(0);
 
         if let Some(reply_to) = reply_to.as_ref() {
             let destination = reply_to.sender()?.ok_or(MessageError::MissingSender)?;
@@ -148,6 +144,10 @@ where
 
         let primary = MessagePrimaryHeader::new(ty, body_len);
         let header = MessageHeader::new(primary, fields);
+
+        let ctxt = dbus_context!(0);
+        let mut bytes: Vec<u8> = Vec::with_capacity(MIN_MESSAGE_SIZE);
+        let mut cursor = Cursor::new(&mut bytes);
 
         zvariant::to_writer(&mut cursor, ctxt, &header)?;
         let (_, fds) = zvariant::to_writer_fds(&mut cursor, ctxt, body)?;
