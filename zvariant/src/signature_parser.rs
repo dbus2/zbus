@@ -43,6 +43,11 @@ impl<'s> SignatureParser<'s> {
         Ok(())
     }
 
+    #[inline]
+    pub fn skip_char(&mut self) -> Result<()> {
+        self.skip_chars(1)
+    }
+
     pub fn skip_chars(&mut self, num_chars: usize) -> Result<()> {
         self.pos += num_chars;
 
