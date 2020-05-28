@@ -10,7 +10,7 @@ use zvariant::{Signature, Type};
 use crate::owned_fd::OwnedFd;
 use crate::utils::padding_for_8_bytes;
 use crate::{EndianSig, MessageHeader, MessagePrimaryHeader, MessageType};
-use crate::{MessageField, MessageFieldCode, MessageFieldError, MessageFields};
+use crate::{MessageField, MessageFieldCode, MessageFields};
 use crate::{MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE};
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
@@ -29,7 +29,6 @@ pub enum MessageError {
     Io(IOError),
     NoBodySignature,
     MissingSender,
-    MessageField(MessageFieldError),
     Variant(VariantError),
 }
 
@@ -37,7 +36,6 @@ impl error::Error for MessageError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             MessageError::Io(e) => Some(e),
-            MessageError::MessageField(e) => Some(e),
             MessageError::Variant(e) => Some(e),
             _ => None,
         }
@@ -54,15 +52,8 @@ impl fmt::Display for MessageError {
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
             MessageError::NoBodySignature => write!(f, "missing body signature"),
             MessageError::MissingSender => write!(f, "missing sender"),
-            MessageError::MessageField(e) => write!(f, "{}", e),
             MessageError::Variant(e) => write!(f, "{}", e),
         }
-    }
-}
-
-impl From<MessageFieldError> for MessageError {
-    fn from(val: MessageFieldError) -> MessageError {
-        MessageError::MessageField(val)
     }
 }
 

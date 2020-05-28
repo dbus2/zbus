@@ -1,8 +1,10 @@
 #[cfg(doctest)]
 doc_comment::doctest!("../../README.md");
 
+mod error;
+pub use error::*;
+
 mod address;
-pub use address::*;
 
 mod message;
 pub use message::*;
@@ -80,7 +82,7 @@ mod tests {
             "Hello",
             &(),
         ) {
-            Err(crate::ConnectionError::MethodError(_, _, _)) => (),
+            Err(crate::Error::MethodError(_, _, _)) => (),
             Err(e) => panic!("{}", e),
             _ => panic!(),
         };

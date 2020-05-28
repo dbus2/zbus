@@ -1,11 +1,7 @@
-use std::error;
-use std::fmt;
-
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use zvariant::{Error as VariantError, Value};
-use zvariant::{ObjectPath, Signature};
+use zvariant::{ObjectPath, Signature, Value};
 use zvariant_derive::Type;
 
 #[repr(u8)]
@@ -37,40 +33,6 @@ impl From<u8> for MessageFieldCode {
             9 => MessageFieldCode::UnixFDs,
             _ => MessageFieldCode::Invalid,
         }
-    }
-}
-
-#[derive(Debug)]
-pub enum MessageFieldError {
-    InsufficientData,
-    InvalidCode,
-    InvalidUtf8,
-    Variant(VariantError),
-}
-
-impl error::Error for MessageFieldError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            MessageFieldError::Variant(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl fmt::Display for MessageFieldError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MessageFieldError::InsufficientData => write!(f, "insufficient data"),
-            MessageFieldError::InvalidCode => write!(f, "invalid field code"),
-            MessageFieldError::InvalidUtf8 => write!(f, "invalid UTF-8"),
-            MessageFieldError::Variant(e) => write!(f, "{}", e),
-        }
-    }
-}
-
-impl From<VariantError> for MessageFieldError {
-    fn from(val: VariantError) -> MessageFieldError {
-        MessageFieldError::Variant(val)
     }
 }
 
