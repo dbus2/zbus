@@ -1,11 +1,11 @@
 use std::{error, fmt, io};
 use zvariant::Error as VariantError;
 
-use crate::{AddressError, Message, MessageError, MessageType};
+use crate::{Message, MessageError, MessageType};
 
 #[derive(Debug)]
 pub enum Error {
-    Address(AddressError),
+    Address(String),
     IO(io::Error),
     Message(MessageError),
     Variant(VariantError),
@@ -20,7 +20,7 @@ pub enum Error {
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            Error::Address(e) => Some(e),
+            Error::Address(_) => None,
             Error::IO(e) => Some(e),
             Error::Handshake => None,
             Error::Message(e) => Some(e),
@@ -49,12 +49,6 @@ impl fmt::Display for Error {
             ),
             Error::Unsupported => write!(f, "Connection support is lacking"),
         }
-    }
-}
-
-impl From<AddressError> for Error {
-    fn from(val: AddressError) -> Self {
-        Error::Address(val)
     }
 }
 

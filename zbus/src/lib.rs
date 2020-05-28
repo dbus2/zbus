@@ -5,7 +5,6 @@ mod error;
 pub use error::*;
 
 mod address;
-pub use address::*;
 
 mod message;
 pub use message::*;

@@ -1,20 +1,4 @@
-use std::{error, fmt};
-
-/// An error that can happen when parsing a D-Bus address
-#[derive(Debug, PartialEq)]
-pub struct AddressError(String);
-
-impl error::Error for AddressError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        None
-    }
-}
-
-impl fmt::Display for AddressError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+use crate::{Error, Result};
 
 /// A bus address
 #[derive(Debug, PartialEq)]
@@ -26,15 +10,15 @@ pub(crate) enum Address {
 }
 
 /// Parse a D-BUS address and return its path if we recognize it
-pub(crate) fn parse_dbus_address(address: &str) -> Result<Address, AddressError> {
+pub(crate) fn parse_dbus_address(address: &str) -> Result<Address> {
     // Options are given separated by commas
     let first = address.split(',').next().unwrap();
     let parts = first.split(':').collect::<Vec<&str>>();
     if parts.len() != 2 {
-        return Err(AddressError("address has no colon".into()));
+        return Err(Error::Address("address has no colon".into()));
     }
     if parts[0] != "unix" {
-        return Err(AddressError(format!(
+        return Err(Error::Address(format!(
             "unsupported transport '{}'",
             parts[0]
         )));
@@ -42,12 +26,12 @@ pub(crate) fn parse_dbus_address(address: &str) -> Result<Address, AddressError>
 
     let pathparts = parts[1].split('=').collect::<Vec<&str>>();
     if pathparts.len() != 2 {
-        return Err(AddressError("address is missing '='".into()));
+        return Err(Error::Address("address is missing '='".into()));
     }
     match pathparts[0] {
         "path" => Ok(Address::Path(pathparts[1].to_owned())),
         "abstract" => Ok(Address::Abstract(pathparts[1].to_owned())),
-        _ => Err(AddressError(
+        _ => Err(Error::Address(
             "unix address is missing path or abstract".to_owned(),
         )),
     }
@@ -55,18 +39,19 @@ pub(crate) fn parse_dbus_address(address: &str) -> Result<Address, AddressError>
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_dbus_address, Address, AddressError};
+    use super::{parse_dbus_address, Address};
+    use crate::Error;
 
     #[test]
     fn parse_dbus_addresses() {
-        assert_eq!(
-            Err(AddressError("address has no colon".into())),
-            parse_dbus_address("foo")
-        );
-        assert_eq!(
-            Err(AddressError("unsupported transport 'tcp'".into())),
-            parse_dbus_address("tcp:localhost")
-        );
+        match parse_dbus_address("foo").unwrap_err() {
+            Error::Address(e) => assert_eq!(e, "address has no colon"),
+            _ => panic!(),
+        }
+        match parse_dbus_address("tcp:localhost").unwrap_err() {
+            Error::Address(e) => assert_eq!(e, "unsupported transport 'tcp'"),
+            _ => panic!(),
+        }
         assert_eq!(
             Address::Path("/tmp/dbus-foo".into()),
             parse_dbus_address("unix:path=/tmp/dbus-foo").unwrap()
