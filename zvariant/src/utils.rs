@@ -85,8 +85,9 @@ pub(crate) fn alignment_for_signature_char(signature_char: char, _format: Encodi
 
 pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
     match signature
-        .chars()
-        .next()
+        .as_bytes()
+        .first()
+        .map(|b| *b as char)
         .ok_or_else(|| serde::de::Error::invalid_length(0, &">= 1 character"))?
     {
         u8::SIGNATURE_CHAR
@@ -146,7 +147,11 @@ fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'
     }
 
     // We can't get None here cause we already established there is are least 2 chars above
-    let c = signature.chars().next().expect("empty signature");
+    let c = signature
+        .as_bytes()
+        .first()
+        .map(|b| *b as char)
+        .expect("empty signature");
     if c != ARRAY_SIGNATURE_CHAR {
         return Err(serde::de::Error::invalid_value(
             serde::de::Unexpected::Char(c),
@@ -169,7 +174,11 @@ fn slice_structure_signature<'a>(signature: &'a Signature<'a>) -> Result<Signatu
     }
 
     // We can't get None here cause we already established there are at least 2 chars above
-    let c = signature.chars().next().expect("empty signature");
+    let c = signature
+        .as_bytes()
+        .first()
+        .map(|b| *b as char)
+        .expect("empty signature");
     if c != STRUCT_SIG_START_CHAR {
         return Err(serde::de::Error::invalid_value(
             serde::de::Unexpected::Char(c),
@@ -212,7 +221,11 @@ fn slice_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
     }
 
     // We can't get None here cause we already established there are at least 4 chars above
-    let c = signature.chars().next().expect("empty signature");
+    let c = signature
+        .as_bytes()
+        .first()
+        .map(|b| *b as char)
+        .expect("empty signature");
     if c != DICT_ENTRY_SIG_START_CHAR {
         return Err(serde::de::Error::invalid_value(
             serde::de::Unexpected::Char(c),

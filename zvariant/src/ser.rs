@@ -427,7 +427,7 @@ where
     }
 
     fn serialize_i32(self, v: i32) -> Result<()> {
-        match self.sign_parser.next_char()? {
+        match self.sign_parser.next_char() {
             'h' => {
                 self.sign_parser.skip_char()?;
                 self.add_padding(u32::ALIGNMENT)?;
@@ -483,7 +483,7 @@ where
     }
 
     fn serialize_str(self, v: &str) -> Result<()> {
-        let c = self.sign_parser.next_char()?;
+        let c = self.sign_parser.next_char();
 
         match c {
             ObjectPath::SIGNATURE_CHAR | <&str>::SIGNATURE_CHAR => {
@@ -589,7 +589,7 @@ where
         // set to 0.
         self.write_u32::<B>(0_u32).map_err(Error::Io)?;
 
-        let next_signature_char = self.sign_parser.next_char()?;
+        let next_signature_char = self.sign_parser.next_char();
         let alignment = alignment_for_signature_char(next_signature_char, self.ctxt.format());
         let start = self.bytes_written;
         // D-Bus expects us to add padding for the first element even when there is no first
@@ -638,7 +638,7 @@ where
     }
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-        let c = self.sign_parser.next_char()?;
+        let c = self.sign_parser.next_char();
         let end_parens;
         if c == VARIANT_SIGNATURE_CHAR {
             end_parens = false;
