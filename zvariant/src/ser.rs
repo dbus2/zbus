@@ -356,7 +356,7 @@ where
     where
         T: Basic,
     {
-        self.sign_parser.parse_char(Some(T::SIGNATURE_CHAR))?;
+        self.sign_parser.skip_char()?;
         self.add_padding(T::ALIGNMENT)?;
 
         Ok(())
@@ -429,7 +429,7 @@ where
     fn serialize_i32(self, v: i32) -> Result<()> {
         match self.sign_parser.next_char()? {
             'h' => {
-                self.sign_parser.parse_char(None)?;
+                self.sign_parser.skip_char()?;
                 self.add_padding(u32::ALIGNMENT)?;
                 let v = self.add_fd(v);
                 self.write_u32::<B>(v).map_err(Error::Io)
@@ -512,7 +512,7 @@ where
                 ));
             }
         }
-        self.sign_parser.parse_char(None)?;
+        self.sign_parser.skip_char()?;
         self.write_all(&v.as_bytes()).map_err(Error::Io)?;
         self.write_all(&b"\0"[..]).map_err(Error::Io)?;
 
@@ -583,7 +583,7 @@ where
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-        self.sign_parser.parse_char(Some(ARRAY_SIGNATURE_CHAR))?;
+        self.sign_parser.skip_char()?;
         self.add_padding(ARRAY_ALIGNMENT)?;
         // Length in bytes (unfortunately not the same as len passed to us here) which we initially
         // set to 0.
@@ -641,15 +641,13 @@ where
         let c = self.sign_parser.next_char()?;
         let end_parens;
         if c == VARIANT_SIGNATURE_CHAR {
-            end_parens = None;
+            end_parens = false;
         } else {
-            self.sign_parser.parse_char(Some(c))?;
+            self.sign_parser.skip_char()?;
             self.add_padding(STRUCT_ALIGNMENT)?;
 
-            if c == STRUCT_SIG_START_CHAR {
-                end_parens = Some(STRUCT_SIG_END_CHAR);
-            } else if c == DICT_ENTRY_SIG_START_CHAR {
-                end_parens = Some(DICT_ENTRY_SIG_END_CHAR);
+            if c == STRUCT_SIG_START_CHAR || c == DICT_ENTRY_SIG_START_CHAR {
+                end_parens = true;
             } else {
                 let expected = format!(
                     "`{}`, `{}`, `{}` or `{}`",
@@ -756,7 +754,7 @@ where
 #[doc(hidden)]
 pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
     serializer: &'b mut Serializer<'ser, 'sig, B, W>,
-    end_parens: Option<char>,
+    end_parens: bool,
 }
 
 impl<'ser, 'sig, 'b, B, W> StructSerializer<'ser, 'sig, 'b, B, W>
@@ -798,8 +796,8 @@ where
     }
 
     fn end_struct(self) -> Result<()> {
-        if let Some(c) = self.end_parens {
-            self.serializer.sign_parser.parse_char(Some(c))?;
+        if self.end_parens {
+            self.serializer.sign_parser.skip_char()?;
         }
 
         Ok(())
@@ -887,9 +885,7 @@ where
     {
         if self.start + self.first_padding == self.serializer.bytes_written {
             // First key
-            self.serializer
-                .sign_parser
-                .parse_char(Some(DICT_ENTRY_SIG_START_CHAR))?;
+            self.serializer.sign_parser.skip_char()?;
         } else {
             // The signature needs to be rewinded before encoding each element.
             self.serializer
@@ -911,9 +907,7 @@ where
     fn end(self) -> Result<()> {
         if self.start + self.first_padding != self.serializer.bytes_written {
             // Non-empty map, take }
-            self.serializer
-                .sign_parser
-                .parse_char(Some(DICT_ENTRY_SIG_END_CHAR))?;
+            self.serializer.sign_parser.skip_char()?;
         }
         self.end_seq()
     }
