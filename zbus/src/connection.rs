@@ -9,7 +9,6 @@ use nix::unistd::Uid;
 use zvariant::Error as VariantError;
 
 use crate::address::{self, Address, AddressError};
-use crate::message_field;
 use crate::utils::{read_exact, write_all};
 use crate::{Message, MessageError, MessageType, MIN_MESSAGE_SIZE};
 
@@ -35,7 +34,6 @@ pub enum ConnectionError {
     Address(AddressError),
     IO(io::Error),
     Message(MessageError),
-    MessageField(message_field::MessageFieldError),
     Variant(VariantError),
     Handshake,
     InvalidReply,
@@ -52,7 +50,6 @@ impl error::Error for ConnectionError {
             ConnectionError::IO(e) => Some(e),
             ConnectionError::Handshake => None,
             ConnectionError::Message(e) => Some(e),
-            ConnectionError::MessageField(e) => Some(e),
             ConnectionError::Variant(e) => Some(e),
             ConnectionError::InvalidReply => None,
             ConnectionError::MethodError(_, _, _) => None,
@@ -68,7 +65,6 @@ impl fmt::Display for ConnectionError {
             ConnectionError::IO(e) => write!(f, "I/O error: {}", e),
             ConnectionError::Handshake => write!(f, "D-Bus handshake failed"),
             ConnectionError::Message(e) => write!(f, "Message creation error: {}", e),
-            ConnectionError::MessageField(e) => write!(f, "Message field parsing error: {}", e),
             ConnectionError::Variant(e) => write!(f, "{}", e),
             ConnectionError::InvalidReply => write!(f, "Invalid D-Bus method reply"),
             ConnectionError::MethodError(name, detail, _reply) => write!(
@@ -97,12 +93,6 @@ impl From<io::Error> for ConnectionError {
 impl From<MessageError> for ConnectionError {
     fn from(val: MessageError) -> Self {
         ConnectionError::Message(val)
-    }
-}
-
-impl From<message_field::MessageFieldError> for ConnectionError {
-    fn from(val: message_field::MessageFieldError) -> Self {
-        ConnectionError::MessageField(val)
     }
 }
 
