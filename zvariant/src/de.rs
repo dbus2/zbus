@@ -266,7 +266,7 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.sign_parser.next_char()? {
+        match self.sign_parser.next_char() {
             u8::SIGNATURE_CHAR => self.deserialize_u8(visitor),
             bool::SIGNATURE_CHAR => self.deserialize_bool(visitor),
             i16::SIGNATURE_CHAR => self.deserialize_i16(visitor),
@@ -330,7 +330,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let v = match self.sign_parser.next_char()? {
+        let v = match self.sign_parser.next_char() {
             Fd::SIGNATURE_CHAR => {
                 self.sign_parser.skip_char()?;
                 self.parse_padding(u32::ALIGNMENT)?;
@@ -416,7 +416,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let len = match self.sign_parser.next_char()? {
+        let len = match self.sign_parser.next_char() {
             Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
                 let len_slice = self.next_slice(1)?;
 
@@ -504,7 +504,7 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.sign_parser.next_char()? {
+        match self.sign_parser.next_char() {
             VARIANT_SIGNATURE_CHAR => {
                 let start = self.pos + 1; // skip length byte
                 let value_de = ValueDeserializer::<B> {
@@ -520,7 +520,7 @@ where
                 self.parse_padding(ARRAY_ALIGNMENT)?;
                 let len = B::read_u32(self.next_slice(4)?) as usize;
 
-                let next_signature_char = self.sign_parser.next_char()?;
+                let next_signature_char = self.sign_parser.next_char();
                 let alignment =
                     alignment_for_signature_char(next_signature_char, self.ctxt.format());
                 // D-Bus requires padding for the first element even when there is no first element
@@ -802,9 +802,8 @@ where
                 self.stage = ValueParseStage::Done;
 
                 let slice = &self.de.bytes[self.start..(self.de.pos - 1)];
-                let signature = str::from_utf8(slice)
-                    .map_err(Error::Utf8)
-                    .and_then(Signature::try_from)?;
+                // FIXME: Can we just use `Signature::from_bytes_unchecked`?
+                let signature = Signature::try_from(slice)?;
                 let sign_parser = SignatureParser::new(signature);
 
                 let mut de = Deserializer::<B> {

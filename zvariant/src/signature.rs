@@ -1,7 +1,7 @@
 use core::convert::TryFrom;
 use core::str;
 use serde::de::{Deserialize, Deserializer, Visitor};
-use serde::Serialize;
+use serde::ser::{Serialize, Serializer};
 use std::borrow::Cow;
 
 use crate::{Basic, Error, Result, Type};
@@ -36,27 +36,47 @@ use crate::{Basic, Error, Result, Type};
 /// ```
 ///
 /// [identifies]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
-#[derive(Debug, PartialEq, Eq, Hash, Serialize, Clone)]
-#[serde(rename(serialize = "zvariant::Signature", deserialize = "zvariant::Signature"))]
-pub struct Signature<'a>(#[serde(borrow)] Cow<'a, str>);
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct Signature<'a>(Cow<'a, [u8]>);
 
 impl<'a> Signature<'a> {
     /// The signature as a string.
     pub fn as_str(&self) -> &str {
+        // SAFETY: non-UTF8 characters in Signature should NEVER happen
+        unsafe { str::from_utf8_unchecked(&self.0) }
+    }
+
+    /// The signature bytes.
+    pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 
-    /// Create a new Signature from given string.
+    /// Create a new Signature from given bytes.
     ///
-    /// Since the passed string is not checked for correctness, it's provided for ease of
+    /// Since the passed bytes are not checked for correctness, it's provided for ease of
     /// `Type` implementations.
+    pub fn from_bytes_unchecked<'s: 'a>(bytes: &'s [u8]) -> Self {
+        Self(Cow::from(bytes))
+    }
+
+    /// Same as `from_bytes_unchecked`, except it takes a string reference.
     pub fn from_str_unchecked<'s: 'a>(signature: &'s str) -> Self {
-        Self(Cow::from(signature))
+        Self::from_bytes_unchecked(signature.as_bytes())
     }
 
     /// Same as `from_str_unchecked`, except it takes an owned `String`.
     pub fn from_string_unchecked(signature: String) -> Self {
-        Self(Cow::from(signature))
+        Self(Cow::from(signature.as_bytes().to_owned()))
+    }
+
+    /// the signature's length.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// if the signature is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub(crate) fn to_owned(&self) -> Signature<'static> {
@@ -77,14 +97,22 @@ impl<'a> Type for Signature<'a> {
     }
 }
 
+impl<'a> TryFrom<&'a [u8]> for Signature<'a> {
+    type Error = Error;
+
+    fn try_from(value: &'a [u8]) -> Result<Self> {
+        ensure_correct_signature_str(value)?;
+
+        Ok(Self::from_bytes_unchecked(value))
+    }
+}
+
 /// Try to create a Signature from a string.
 impl<'a> TryFrom<&'a str> for Signature<'a> {
     type Error = Error;
 
     fn try_from(value: &'a str) -> Result<Self> {
-        ensure_correct_signature_str(value)?;
-
-        Ok(Self(Cow::from(value)))
+        Self::try_from(value.as_bytes())
     }
 }
 
@@ -92,9 +120,9 @@ impl<'a> TryFrom<String> for Signature<'a> {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
-        ensure_correct_signature_str(&value)?;
+        ensure_correct_signature_str(value.as_bytes())?;
 
-        Ok(Self(Cow::from(value)))
+        Ok(Self::from_string_unchecked(value))
     }
 }
 
@@ -126,7 +154,16 @@ impl<'a> PartialEq<&str> for Signature<'a> {
 
 impl<'a> std::fmt::Display for Signature<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        self.as_str().fmt(f)
+    }
+}
+
+impl<'a> Serialize for Signature<'a> {
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
     }
 }
 
@@ -167,7 +204,7 @@ impl<'de> Visitor<'de> for SignatureVisitor {
     }
 }
 
-fn ensure_correct_signature_str(signature: &str) -> Result<()> {
+fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
     if signature.len() > 255 {
         return Err(serde::de::Error::invalid_length(
             signature.len(),
@@ -175,19 +212,22 @@ fn ensure_correct_signature_str(signature: &str) -> Result<()> {
         ));
     }
 
-    let (mut parsed, end) = match signature.chars().next() {
-        Some(crate::ARRAY_SIGNATURE_CHAR) => {
+    if signature.is_empty() {
+        return Ok(());
+    }
+
+    let (mut parsed, end) = match signature[0] as char {
+        crate::ARRAY_SIGNATURE_CHAR => {
             if signature.len() == 1 {
                 return Err(serde::de::Error::invalid_length(1, &"> 1 character"));
             }
 
             (1, signature.len())
         }
-        Some(crate::STRUCT_SIG_START_CHAR) => {
-            if !signature.ends_with(crate::STRUCT_SIG_END_CHAR) {
-                // We can't get None here cause we already established there is at least 1 char
-                let c = signature.chars().last().expect("empty signature");
-
+        crate::STRUCT_SIG_START_CHAR => {
+            // We can't get None here cause we already established there is at least 1 char
+            let c = *signature.last().expect("empty signature") as char;
+            if c != crate::STRUCT_SIG_END_CHAR {
                 return Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Char(c),
                     &crate::STRUCT_SIG_END_STR,
@@ -196,11 +236,10 @@ fn ensure_correct_signature_str(signature: &str) -> Result<()> {
 
             (1, signature.len() - 1)
         }
-        Some(crate::DICT_ENTRY_SIG_START_CHAR) => {
-            if !signature.ends_with(crate::DICT_ENTRY_SIG_END_CHAR) {
-                // We can't get None here cause we already established there is at least 1 char
-                let c = signature.chars().last().expect("empty signature");
-
+        crate::DICT_ENTRY_SIG_START_CHAR => {
+            // We can't get None here cause we already established there is at least 1 char
+            let c = *signature.last().expect("empty signature") as char;
+            if c != crate::DICT_ENTRY_SIG_END_CHAR {
                 return Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Char(c),
                     &crate::DICT_ENTRY_SIG_END_STR,
@@ -209,12 +248,12 @@ fn ensure_correct_signature_str(signature: &str) -> Result<()> {
 
             (1, signature.len() - 1)
         }
-        Some(_) | None => (0, signature.len()),
+        _ => (0, signature.len()),
     };
 
     while parsed < end {
         let rest_of_signature = &signature[parsed..end];
-        let signature = Signature::from_str_unchecked(rest_of_signature);
+        let signature = Signature::from_bytes_unchecked(rest_of_signature);
         let slice = crate::utils::slice_signature(&signature)?;
 
         parsed += slice.len();

@@ -19,13 +19,10 @@ impl<'s> SignatureParser<'s> {
         self.pos
     }
 
-    pub fn next_char(&self) -> Result<char> {
-        self.signature.chars().nth(self.pos).ok_or_else(|| {
-            serde::de::Error::invalid_value(
-                serde::de::Unexpected::Other("end of signature"),
-                &"a signature character",
-            )
-        })
+    pub fn next_char(&self) -> char {
+        // SAFETY: Other methods that increment `self.pos` must ensure we don't go beyond signature
+        // length.
+        char::from(self.signature.as_bytes()[self.pos])
     }
 
     #[inline]

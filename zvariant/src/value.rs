@@ -534,13 +534,13 @@ where
     where
         E: serde::de::Error,
     {
-        let v = match self.signature.chars().next().ok_or_else(|| {
+        let v = match self.signature.as_bytes().first().ok_or_else(|| {
             Error::invalid_value(
                 Unexpected::Other("nothing"),
                 &"i32 or fd signature character",
             )
         })? {
-            'h' => Fd::from(value).into(),
+            b'h' => Fd::from(value).into(),
             _ => value.into(),
         };
 
@@ -562,18 +562,18 @@ where
     where
         V: SeqAccess<'de>,
     {
-        match self.signature.chars().next().ok_or_else(|| {
+        match self.signature.as_bytes().first().ok_or_else(|| {
             Error::invalid_value(
                 Unexpected::Other("nothing"),
                 &"Array or Struct signature character",
             )
         })? {
             // For some reason rustc doesn't like us using ARRAY_SIGNATURE_CHAR const
-            'a' => self.visit_array(visitor),
-            '(' => self.visit_struct(visitor),
-            'v' => self.visit_variant(visitor),
-            c => Err(Error::invalid_value(
-                Unexpected::Char(c),
+            b'a' => self.visit_array(visitor),
+            b'(' => self.visit_struct(visitor),
+            b'v' => self.visit_variant(visitor),
+            b => Err(Error::invalid_value(
+                Unexpected::Char(*b as char),
                 &"a Value signature",
             )),
         }
