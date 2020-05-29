@@ -1,54 +1,24 @@
 use std::collections::HashMap;
+use zbus_derive::dbus_proxy;
 use zvariant::{OwnedValue, Value};
 
-use crate::{Connection, Proxy, Result};
+use crate as zbus;
 
-// These implementations will be replaced by macro-generated code.
-
-pub struct IntrospectableProxy<'a>(Proxy<'a>);
-
-impl<'a> IntrospectableProxy<'a> {
-    pub fn new_for(conn: &'a Connection, destination: &'a str, path: &'a str) -> Result<Self> {
-        Ok(Self(Proxy::new(
-            conn,
-            destination,
-            path,
-            "org.freedesktop.DBus.Introspectable",
-        )?))
-    }
-
-    pub fn introspect(&self) -> Result<String> {
-        let reply = self.0.call("Introspect", &())?;
-        Ok(reply)
-    }
+#[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
+trait Introspectable {
+    /// Returns an XML description of the object, including its interfaces (with signals and
+    /// methods), objects below it in the object path tree, and its properties.
+    fn introspect(&self) -> zbus::Result<String>;
 }
 
-pub struct PropertiesProxy<'a>(Proxy<'a>);
+#[dbus_proxy(interface = "org.freedesktop.DBus.Properties")]
+trait Properties {
+    /// Get a property value.
+    fn get(&self, interface_name: &str, property_name: &str) -> zbus::Result<OwnedValue>;
 
-impl<'a> PropertiesProxy<'a> {
-    pub fn new_for(conn: &'a Connection, destination: &'a str, path: &'a str) -> Result<Self> {
-        Ok(Self(Proxy::new(
-            conn,
-            destination,
-            path,
-            "org.freedesktop.DBus.Properties",
-        )?))
-    }
+    /// Set a property value.
+    fn set(&self, interface_name: &str, property_name: &str, value: &Value) -> zbus::Result<()>;
 
-    pub fn get(&self, interface_name: &str, property_name: &str) -> Result<OwnedValue> {
-        let reply = self.0.call("Get", &(interface_name, property_name))?;
-        Ok(reply)
-    }
-
-    pub fn set(&self, interface_name: &str, property_name: &str, value: &Value) -> Result<()> {
-        let _ = self
-            .0
-            .call("Set", &(interface_name, property_name, value))?;
-        Ok(())
-    }
-
-    pub fn get_all(&self, interface_name: &str) -> Result<HashMap<String, OwnedValue>> {
-        let reply = self.0.call("GetAll", &(interface_name))?;
-        Ok(reply)
-    }
+    /// Get all properties.
+    fn get_all(&self, interface_name: &str) -> zbus::Result<HashMap<String, OwnedValue>>;
 }
