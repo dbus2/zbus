@@ -189,7 +189,9 @@ mod tests {
     #[cfg(feature = "arrayvec")]
     use std::str::FromStr;
 
+    use glib::{Bytes, Variant};
     use serde::{Deserialize, Serialize};
+
     use zvariant_derive::{DeserializeDict, SerializeDict, Type, TypeDict};
 
     use crate::{from_slice, from_slice_fds, from_slice_for_signature};
@@ -270,9 +272,20 @@ mod tests {
         }};
     }
 
+    fn decode_with_gvariant<B, T>(encoded: B) -> T
+    where
+        B: AsRef<[u8]> + Send + 'static,
+        T: glib::variant::FromVariant,
+    {
+        let bytes = Bytes::from_owned(encoded);
+        let gv = Variant::from_bytes::<T>(&bytes);
+        gv.get::<T>().unwrap()
+    }
+
     #[test]
     fn u8_value() {
-        basic_type_test!(LE, DBus, 77_u8, 1, u8, 1, U8, 4);
+        let encoded = basic_type_test!(LE, DBus, 77_u8, 1, u8, 1, U8, 4);
+        assert_eq!(decode_with_gvariant::<_, u8>(encoded), 77u8);
     }
 
     #[test]
@@ -287,24 +300,28 @@ mod tests {
 
     #[test]
     fn u16_value() {
-        basic_type_test!(BE, DBus, 0xABBA_u16, 2, u16, 2, U16, 6);
+        let encoded = basic_type_test!(BE, DBus, 0xABBA_u16, 2, u16, 2, U16, 6);
+        assert_eq!(decode_with_gvariant::<_, u16>(encoded), 0xBAAB_u16);
     }
 
     #[test]
     fn i16_value() {
         let encoded = basic_type_test!(BE, DBus, -0xAB0_i16, 2, i16, 2, I16, 6);
         assert_eq!(LE::read_i16(&encoded), 0x50F5_i16);
+        assert_eq!(decode_with_gvariant::<_, i16>(encoded), 0x50F5_i16);
     }
 
     #[test]
     fn u32_value() {
-        basic_type_test!(BE, DBus, 0xABBA_ABBA_u32, 4, u32, 4, U32, 8);
+        let encoded = basic_type_test!(BE, DBus, 0xABBA_ABBA_u32, 4, u32, 4, U32, 8);
+        assert_eq!(decode_with_gvariant::<_, u32>(encoded), 0xBAAB_BAAB_u32);
     }
 
     #[test]
     fn i32_value() {
         let encoded = basic_type_test!(BE, DBus, -0xABBA_AB0_i32, 4, i32, 4, I32, 8);
         assert_eq!(LE::read_i32(&encoded), 0x5055_44F5_i32);
+        assert_eq!(decode_with_gvariant::<_, i32>(encoded), 0x5055_44F5_i32);
     }
 
     // u64 is covered by `value_value` test below
@@ -313,12 +330,20 @@ mod tests {
     fn i64_value() {
         let encoded = basic_type_test!(BE, DBus, -0xABBA_ABBA_ABBA_AB0_i64, 8, i64, 8, I64, 16);
         assert_eq!(LE::read_i64(&encoded), 0x5055_4455_4455_44F5_i64);
+        assert_eq!(
+            decode_with_gvariant::<_, i64>(encoded),
+            0x5055_4455_4455_44F5_i64
+        );
     }
 
     #[test]
     fn f64_value() {
         let encoded = basic_type_test!(BE, DBus, 99999.99999_f64, 8, f64, 8, F64, 16);
         assert_eq!(LE::read_f64(&encoded), -5759340900185448e-143);
+        assert_eq!(
+            decode_with_gvariant::<_, f64>(encoded),
+            -5759340900185448e-143
+        );
     }
 
     #[test]
