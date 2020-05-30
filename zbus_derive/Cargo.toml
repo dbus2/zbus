@@ -1,0 +1,27 @@
+[package]
+name = "zbus_derive"
+# Keep version in sync with zbus crate
+version = "1.0.0"
+authors = ["Marc-André Lureau <marcandre.lureau@redhat.com"]
+edition = "2018"
+
+description = "proc-macros for zbus"
+repository = "https://gitlab.freedesktop.org/zeenix/zbus/"
+documentation = "http://docs.rs/zbus/"
+keywords = ["D-Bus", "DBus", "IPC"]
+license = "MIT"
+categories = ["data-structures", "encoding", "parsing"]
+readme = "../README.md"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+syn = { version = "1.0.18", features = ["extra-traits", "full"] }
+quote = "1.0.3"
+proc-macro-crate = "0.1.4"
+
+[dev-dependencies]
+zvariant = { path = "../zvariant" }
+zbus = { path = "../zbus" }

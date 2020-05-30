@@ -21,8 +21,13 @@ pub use message_fields::*;
 mod connection;
 pub use connection::*;
 
+mod proxy;
+pub use proxy::*;
+
 mod owned_fd;
 mod utils;
+
+pub mod fdo;
 
 pub mod xml;
 
