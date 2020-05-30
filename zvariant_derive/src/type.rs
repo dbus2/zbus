@@ -11,7 +11,7 @@ pub fn expand_derive(ast: DeriveInput) -> TokenStream {
             Fields::Unit => impl_unit_struct(ast.ident, ast.generics),
         },
         Data::Enum(data) => impl_enum(ast.ident, ast.generics, ast.attrs, data),
-        _ => panic!("Only structures supported at the moment"),
+        _ => panic!("Only structures and enums supported at the moment"),
     }
 }
 
