@@ -167,7 +167,7 @@ pub struct Deserializer<'de, 'sig, 'f, B> {
     pub(self) fds: Option<&'f [RawFd]>,
     pub(self) pos: usize,
 
-    pub(self) sign_parser: SignatureParser<'sig>,
+    pub(self) sig_parser: SignatureParser<'sig>,
 
     b: PhantomData<B>,
 }
@@ -183,11 +183,11 @@ where
         signature: &Signature<'sig>,
         ctxt: EncodingContext<B>,
     ) -> Self {
-        let sign_parser = SignatureParser::new(signature.clone());
+        let sig_parser = SignatureParser::new(signature.clone());
 
         Self {
             ctxt,
-            sign_parser,
+            sig_parser,
             bytes,
             fds,
             pos: 0,
@@ -222,7 +222,7 @@ where
     where
         T: Basic,
     {
-        self.sign_parser.skip_char()?;
+        self.sig_parser.skip_char()?;
         self.parse_padding(T::ALIGNMENT)?;
 
         Ok(())
@@ -266,7 +266,7 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.sign_parser.next_char() {
+        match self.sig_parser.next_char() {
             u8::SIGNATURE_CHAR => self.deserialize_u8(visitor),
             bool::SIGNATURE_CHAR => self.deserialize_bool(visitor),
             i16::SIGNATURE_CHAR => self.deserialize_i16(visitor),
@@ -330,9 +330,9 @@ where
     where
         V: Visitor<'de>,
     {
-        let v = match self.sign_parser.next_char() {
+        let v = match self.sig_parser.next_char() {
             Fd::SIGNATURE_CHAR => {
-                self.sign_parser.skip_char()?;
+                self.sig_parser.skip_char()?;
                 self.parse_padding(u32::ALIGNMENT)?;
                 let idx = B::read_u32(self.next_slice(u32::ALIGNMENT)?);
                 self.get_fd(idx)?
@@ -416,7 +416,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let len = match self.sign_parser.next_char() {
+        let len = match self.sig_parser.next_char() {
             Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
                 let len_slice = self.next_slice(1)?;
 
@@ -442,7 +442,7 @@ where
                 ));
             }
         };
-        self.sign_parser.skip_char()?;
+        self.sig_parser.skip_char()?;
         let slice = self.next_slice(len)?;
         let s = str::from_utf8(slice).map_err(Error::Utf8)?;
         self.pos += 1; // skip trailing null byte
@@ -504,7 +504,7 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.sign_parser.next_char() {
+        match self.sig_parser.next_char() {
             VARIANT_SIGNATURE_CHAR => {
                 let start = self.pos + 1; // skip length byte
                 let value_de = ValueDeserializer::<B> {
@@ -516,11 +516,11 @@ where
                 visitor.visit_seq(value_de)
             }
             ARRAY_SIGNATURE_CHAR => {
-                self.sign_parser.skip_char()?;
+                self.sig_parser.skip_char()?;
                 self.parse_padding(ARRAY_ALIGNMENT)?;
                 let len = B::read_u32(self.next_slice(4)?) as usize;
 
-                let next_signature_char = self.sign_parser.next_char();
+                let next_signature_char = self.sig_parser.next_char();
                 let alignment =
                     alignment_for_signature_char(next_signature_char, self.ctxt.format());
                 // D-Bus requires padding for the first element even when there is no first element
@@ -528,12 +528,12 @@ where
                 self.parse_padding(alignment)?;
                 let start = self.pos;
 
-                let element_signature_pos = self.sign_parser.pos();
+                let element_signature_pos = self.sig_parser.pos();
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
-                    self.sign_parser.skip_char()?;
+                    self.sig_parser.skip_char()?;
                 }
                 let rest_of_signature = Signature::from_str_unchecked(
-                    &self.sign_parser.signature()[element_signature_pos..],
+                    &self.sig_parser.signature()[element_signature_pos..],
                 );
                 let element_signature = slice_signature(&rest_of_signature)?;
 
@@ -548,7 +548,7 @@ where
                             element_signature_len,
                         })
                         .and_then(|v| {
-                            self.sign_parser.skip_char()?;
+                            self.sig_parser.skip_char()?;
 
                             Ok(v)
                         })
@@ -563,13 +563,13 @@ where
                 }
             }
             STRUCT_SIG_START_CHAR => {
-                self.sign_parser.skip_char()?;
+                self.sig_parser.skip_char()?;
                 self.parse_padding(STRUCT_ALIGNMENT)?;
 
                 visitor
                     .visit_seq(StructureDeserializer { de: self })
                     .and_then(|v| {
-                        self.sign_parser.skip_char()?;
+                        self.sig_parser.skip_char()?;
 
                         Ok(v)
                     })
@@ -676,7 +676,7 @@ where
         if self.de.pos == self.start + self.len {
             if self.len == 0 {
                 // Empty sequence so we need to parse the element signature.
-                self.de.sign_parser.skip_chars(self.element_signature_len)?;
+                self.de.sig_parser.skip_chars(self.element_signature_len)?;
             }
 
             return Ok(None);
@@ -684,7 +684,7 @@ where
 
         if self.start != self.de.pos {
             // The signature needs to be rewinded before encoding each element.
-            self.de.sign_parser.rewind_chars(self.element_signature_len);
+            self.de.sig_parser.rewind_chars(self.element_signature_len);
         }
 
         let v = seed.deserialize(&mut *self.de).map(Some);
@@ -712,7 +712,7 @@ where
         if self.de.pos == self.start + self.len {
             if self.len == 0 {
                 // Empty sequence so we need to parse the element signature.
-                self.de.sign_parser.skip_chars(self.element_signature_len)?;
+                self.de.sig_parser.skip_chars(self.element_signature_len)?;
             }
 
             return Ok(None);
@@ -720,7 +720,7 @@ where
 
         if self.start != self.de.pos {
             // The signature needs to be rewinded before encoding each element.
-            self.de.sign_parser.rewind_chars(self.element_signature_len);
+            self.de.sig_parser.rewind_chars(self.element_signature_len);
             self.de.parse_padding(DICT_ENTRY_ALIGNMENT)?;
         }
 
@@ -804,11 +804,11 @@ where
                 let slice = &self.de.bytes[self.start..(self.de.pos - 1)];
                 // FIXME: Can we just use `Signature::from_bytes_unchecked`?
                 let signature = Signature::try_from(slice)?;
-                let sign_parser = SignatureParser::new(signature);
+                let sig_parser = SignatureParser::new(signature);
 
                 let mut de = Deserializer::<B> {
                     ctxt: self.de.ctxt,
-                    sign_parser,
+                    sig_parser,
                     bytes: self.de.bytes,
                     fds: self.de.fds,
                     pos: self.de.pos,
@@ -852,7 +852,7 @@ where
     type Error = Error;
 
     fn unit_variant(self) -> Result<()> {
-        self.de.sign_parser.skip_char()?;
+        self.de.sig_parser.skip_char()?;
 
         Ok(())
     }

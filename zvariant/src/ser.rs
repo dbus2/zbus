@@ -292,7 +292,7 @@ pub struct Serializer<'ser, 'sig, B, W> {
     pub(self) bytes_written: usize,
     pub(self) fds: &'ser mut Vec<RawFd>,
 
-    pub(self) sign_parser: SignatureParser<'sig>,
+    pub(self) sig_parser: SignatureParser<'sig>,
 
     pub(self) value_sign: Option<Signature<'static>>,
 
@@ -311,11 +311,11 @@ where
         fds: &'f mut Vec<RawFd>,
         ctxt: EncodingContext<B>,
     ) -> Self {
-        let sign_parser = SignatureParser::new(signature.clone());
+        let sig_parser = SignatureParser::new(signature.clone());
 
         Self {
             ctxt,
-            sign_parser,
+            sig_parser,
             writer,
             fds,
             bytes_written: 0,
@@ -356,7 +356,7 @@ where
     where
         T: Basic,
     {
-        self.sign_parser.skip_char()?;
+        self.sig_parser.skip_char()?;
         self.add_padding(T::ALIGNMENT)?;
 
         Ok(())
@@ -427,9 +427,9 @@ where
     }
 
     fn serialize_i32(self, v: i32) -> Result<()> {
-        match self.sign_parser.next_char() {
+        match self.sig_parser.next_char() {
             'h' => {
-                self.sign_parser.skip_char()?;
+                self.sig_parser.skip_char()?;
                 self.add_padding(u32::ALIGNMENT)?;
                 let v = self.add_fd(v);
                 self.write_u32::<B>(v).map_err(Error::Io)
@@ -483,7 +483,7 @@ where
     }
 
     fn serialize_str(self, v: &str) -> Result<()> {
-        let c = self.sign_parser.next_char();
+        let c = self.sig_parser.next_char();
 
         match c {
             ObjectPath::SIGNATURE_CHAR | <&str>::SIGNATURE_CHAR => {
@@ -512,7 +512,7 @@ where
                 ));
             }
         }
-        self.sign_parser.skip_char()?;
+        self.sig_parser.skip_char()?;
         self.write_all(&v.as_bytes()).map_err(Error::Io)?;
         self.write_all(&b"\0"[..]).map_err(Error::Io)?;
 
@@ -583,21 +583,21 @@ where
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-        self.sign_parser.skip_char()?;
+        self.sig_parser.skip_char()?;
         self.add_padding(ARRAY_ALIGNMENT)?;
         // Length in bytes (unfortunately not the same as len passed to us here) which we initially
         // set to 0.
         self.write_u32::<B>(0_u32).map_err(Error::Io)?;
 
-        let next_signature_char = self.sign_parser.next_char();
+        let next_signature_char = self.sig_parser.next_char();
         let alignment = alignment_for_signature_char(next_signature_char, self.ctxt.format());
         let start = self.bytes_written;
         // D-Bus expects us to add padding for the first element even when there is no first
         // element (i-e empty array) so we add padding already.
         let first_padding = self.add_padding(alignment)?;
-        let element_signature_pos = self.sign_parser.pos();
+        let element_signature_pos = self.sig_parser.pos();
         let rest_of_signature =
-            Signature::from_str_unchecked(&self.sign_parser.signature()[element_signature_pos..]);
+            Signature::from_str_unchecked(&self.sig_parser.signature()[element_signature_pos..]);
         let element_signature = slice_signature(&rest_of_signature)?;
         let element_signature_len = element_signature.len();
 
@@ -638,12 +638,12 @@ where
     }
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-        let c = self.sign_parser.next_char();
+        let c = self.sig_parser.next_char();
         let end_parens;
         if c == VARIANT_SIGNATURE_CHAR {
             end_parens = false;
         } else {
-            self.sign_parser.skip_char()?;
+            self.sig_parser.skip_char()?;
             self.add_padding(STRUCT_ALIGNMENT)?;
 
             if c == STRUCT_SIG_START_CHAR || c == DICT_ENTRY_SIG_START_CHAR {
@@ -701,7 +701,7 @@ where
         if self.start + self.first_padding == self.serializer.bytes_written {
             // Empty sequence so we need to parse the element signature.
             self.serializer
-                .sign_parser
+                .sig_parser
                 .skip_chars(self.element_signature_len)?;
         }
 
@@ -740,7 +740,7 @@ where
         if self.start + self.first_padding != self.serializer.bytes_written {
             // The signature needs to be rewinded before encoding each element.
             self.serializer
-                .sign_parser
+                .sig_parser
                 .rewind_chars(self.element_signature_len);
         }
         value.serialize(&mut *self.serializer)
@@ -776,10 +776,10 @@ where
                     .take()
                     .expect("Incorrect Value encoding");
 
-                let sign_parser = SignatureParser::new(signature);
+                let sig_parser = SignatureParser::new(signature);
                 let mut serializer = Serializer::<B, W> {
                     ctxt: self.serializer.ctxt,
-                    sign_parser,
+                    sig_parser,
                     writer: &mut self.serializer.writer,
                     fds: self.serializer.fds,
                     bytes_written: self.serializer.bytes_written,
@@ -797,7 +797,7 @@ where
 
     fn end_struct(self) -> Result<()> {
         if self.end_parens {
-            self.serializer.sign_parser.skip_char()?;
+            self.serializer.sig_parser.skip_char()?;
         }
 
         Ok(())
@@ -885,11 +885,11 @@ where
     {
         if self.start + self.first_padding == self.serializer.bytes_written {
             // First key
-            self.serializer.sign_parser.skip_char()?;
+            self.serializer.sig_parser.skip_char()?;
         } else {
             // The signature needs to be rewinded before encoding each element.
             self.serializer
-                .sign_parser
+                .sig_parser
                 .rewind_chars(self.element_signature_len - 2);
         }
         self.serializer.add_padding(DICT_ENTRY_ALIGNMENT)?;
@@ -907,7 +907,7 @@ where
     fn end(self) -> Result<()> {
         if self.start + self.first_padding != self.serializer.bytes_written {
             // Non-empty map, take }
-            self.serializer.sign_parser.skip_char()?;
+            self.serializer.sig_parser.skip_char()?;
         }
         self.end_seq()
     }
