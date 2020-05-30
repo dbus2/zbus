@@ -22,3 +22,4 @@ enumflags2 = { version = "0.6.4", features = [ "serde" ], optional = true }
 zvariant_derive = { path = "../zvariant_derive", version = "2" }
 serde_json = "1.0"
 serde_repr = "0.1"
+glib = { git = "https://github.com/gtk-rs/glib", rev = "c9ee583cea0" }
