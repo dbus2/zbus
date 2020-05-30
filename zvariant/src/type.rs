@@ -164,8 +164,10 @@ macro_rules! array_impls {
                 fn signature() -> Signature<'static> {
                     let mut sig = String::with_capacity(255);
                     sig.push(STRUCT_SIG_START_CHAR);
-                    for _ in 0..$len {
-                        sig.push_str(T::signature().as_str());
+                    if ($len > 0) {
+                        for _ in 0..$len {
+                            sig.push_str(T::signature().as_str());
+                        }
                     }
                     sig.push(STRUCT_SIG_END_CHAR);
 
