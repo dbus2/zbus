@@ -191,7 +191,7 @@ mod tests {
     #[cfg(feature = "arrayvec")]
     use std::str::FromStr;
 
-    use glib::{Bytes, Variant};
+    use glib::{Bytes, FromVariant, Variant};
     use serde::{Deserialize, Serialize};
 
     use zvariant_derive::{DeserializeDict, SerializeDict, Type, TypeDict};
@@ -502,11 +502,25 @@ mod tests {
         let ctxt = Context::<LE>::new_dbus(0);
         let encoded = to_bytes(ctxt, &ay).unwrap();
         assert_eq!(encoded.len(), 6);
+
         #[cfg(feature = "arrayvec")]
         let decoded: ArrayVec<[u8; 2]> = from_slice(&encoded, ctxt).unwrap();
         #[cfg(not(feature = "arrayvec"))]
         let decoded: Vec<u8> = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(&decoded.as_slice(), &[77u8, 88]);
+
+        // GVariant format now
+        let ctxt = Context::<LE>::new_gvariant(0);
+        let gv_encoded = to_bytes(ctxt, &ay).unwrap();
+        assert_eq!(gv_encoded.len(), 2);
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(gv_encoded);
+        let variant = Variant::from_bytes::<&[u8]>(&bytes);
+        assert_eq!(variant.n_children(), 2);
+        assert_eq!(variant.get_child_value(0).get::<u8>().unwrap(), 77);
+        assert_eq!(variant.get_child_value(1).get::<u8>().unwrap(), 88);
+        let ctxt = Context::<LE>::new_dbus(0);
 
         // As Value
         let v: Value = ay[..].into();
@@ -539,6 +553,14 @@ mod tests {
         let encoded = to_bytes::<LE, _>(ctxt, &at).unwrap();
         assert_eq!(encoded.len(), 8);
 
+        // GVariant format now
+        let ctxt = Context::<LE>::new_gvariant(0);
+        let gv_encoded = to_bytes(ctxt, &at).unwrap();
+        assert_eq!(gv_encoded.len(), 0);
+        let at = from_slice::<LE, Vec<u64>>(&gv_encoded, ctxt).unwrap();
+        assert_eq!(at.len(), 0);
+        let ctxt = Context::<LE>::new_dbus(0);
+
         // As Value
         let v: Value = at[..].into();
         assert_eq!(v.value_signature(), "at");
@@ -551,6 +573,25 @@ mod tests {
         } else {
             panic!();
         }
+
+        // GVariant format now
+        let ctxt = Context::<LE>::new_gvariant(0);
+        let v: Value = at[..].into();
+        let gv_encoded = to_bytes(ctxt, &v).unwrap();
+        assert_eq!(gv_encoded.len(), 3);
+        let v = from_slice::<LE, Value>(&gv_encoded, ctxt).unwrap();
+        if let Value::Array(array) = v {
+            assert_eq!(*array.element_signature(), "t");
+            assert_eq!(array.len(), 0);
+        } else {
+            panic!();
+        }
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(gv_encoded);
+        let variant = Variant::from_bytes::<&[&str]>(&bytes);
+        assert_eq!(variant.n_children(), 0);
+        let ctxt = Context::<LE>::new_dbus(0);
 
         //
         // Array of strings
@@ -592,6 +633,20 @@ mod tests {
         let a: Array = v.try_into().unwrap();
         let _ve: Vec<String> = a.try_into().unwrap();
 
+        // GVariant format now
+        let ctxt = Context::<LE>::new_gvariant(0);
+        let v: Value = as_[..].into();
+        let gv_encoded = to_bytes(ctxt, &v).unwrap();
+        assert_eq!(gv_encoded.len(), 28);
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(gv_encoded);
+        let variant = Variant::from_bytes::<Variant>(&bytes);
+        assert_eq!(variant.n_children(), 1);
+        let decoded: Vec<String> = variant.get_child_value(0).get().unwrap();
+        assert_eq!(decoded[0], "Hello");
+        assert_eq!(decoded[1], "World");
+
         // Array of Struct, which in turn containin an Array (We gotta go deeper!)
         // Signature: "a(yu(xbxas)s)");
         let ar = vec![(
@@ -609,6 +664,7 @@ mod tests {
             // one more top-most simple field
             "hello",
         )];
+        let ctxt = Context::<LE>::new_dbus(0);
         let encoded = to_bytes(ctxt, &ar).unwrap();
         assert_eq!(encoded.len(), 78);
         let decoded =
@@ -727,6 +783,23 @@ mod tests {
         assert_eq!(decoded[&1], "123");
         assert_eq!(decoded[&2], "456");
 
+        // GVariant format now
+        let ctxt = Context::<LE>::new_gvariant(0);
+        let gv_encoded = to_bytes(ctxt, &map).unwrap();
+        assert_eq!(gv_encoded.len(), 30);
+        let map: HashMap<i64, &str> = from_slice(&gv_encoded, ctxt).unwrap();
+        assert_eq!(map[&1], "123");
+        assert_eq!(map[&2], "456");
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(gv_encoded);
+        let variant = Variant::from_bytes::<HashMap<i64, &str>>(&bytes);
+        assert_eq!(variant.n_children(), 2);
+        let map: HashMap<i64, String> = HashMap::from_variant(&variant).unwrap();
+        assert_eq!(map[&1], "123");
+        assert_eq!(map[&2], "456");
+        let ctxt = Context::<LE>::new_dbus(0);
+
         // As Value
         let v: Value = Dict::from(map).into();
         assert_eq!(v.value_signature(), "a{xs}");
@@ -745,6 +818,27 @@ mod tests {
         } else {
             panic!();
         }
+
+        // GVariant-format requires framing offsets for dict entries with variable-length keys so
+        // let's test that.
+        let mut map: HashMap<&str, &str> = HashMap::new();
+        map.insert("hi", "1234");
+        map.insert("world", "561");
+        let ctxt = Context::<LE>::new_gvariant(0);
+        let gv_encoded = to_bytes(ctxt, &map).unwrap();
+        assert_eq!(gv_encoded.len(), 22);
+        let map: HashMap<&str, &str> = from_slice(&gv_encoded, ctxt).unwrap();
+        assert_eq!(map["hi"], "1234");
+        assert_eq!(map["world"], "561");
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(gv_encoded);
+        let variant = Variant::from_bytes::<HashMap<&str, &str>>(&bytes);
+        assert_eq!(variant.n_children(), 2);
+        let map: HashMap<String, String> = HashMap::from_variant(&variant).unwrap();
+        assert_eq!(map["hi"], "1234");
+        assert_eq!(map["world"], "561");
+        let ctxt = Context::<LE>::new_dbus(0);
 
         // Now a hand-crafted Dict Value but with a Value as value
         let mut dict = Dict::new(<&str>::signature(), Value::signature());

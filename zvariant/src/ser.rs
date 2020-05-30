@@ -4,6 +4,8 @@ use std::io::{Seek, Write};
 use std::os::unix::io::RawFd;
 use std::{marker::PhantomData, str};
 
+use crate::framing_offset_size::FramingOffsetSize;
+use crate::framing_offsets::FramingOffsets;
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
 use crate::Type;
@@ -591,27 +593,57 @@ where
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
         self.sig_parser.skip_char()?;
-        self.add_padding(ARRAY_ALIGNMENT_DBUS)?;
-        // Length in bytes (unfortunately not the same as len passed to us here) which we initially
-        // set to 0.
-        self.write_u32::<B>(0_u32).map_err(Error::Io)?;
+        if let EncodingFormat::DBus = self.ctxt.format() {
+            self.add_padding(ARRAY_ALIGNMENT_DBUS)?;
+            // Length in bytes (unfortunately not the same as len passed to us here) which we
+            // initially set to 0.
+            self.write_u32::<B>(0_u32).map_err(Error::Io)?;
+        }
 
         let element_signature_pos = self.sig_parser.pos();
         let rest_of_signature =
             Signature::from_str_unchecked(&self.sig_parser.signature()[element_signature_pos..]);
         let element_signature = slice_signature(&rest_of_signature)?;
         let element_signature_len = element_signature.len();
-        let alignment = alignment_for_signature(&element_signature, self.ctxt.format());
+        let element_alignment = alignment_for_signature(&element_signature, self.ctxt.format());
+        let (offsets, key_start) = match self.ctxt.format() {
+            EncodingFormat::GVariant => {
+                let fixed_sized_child = crate::utils::is_fixed_sized_signature(&element_signature)?;
+                let offsets = if !fixed_sized_child {
+                    Some(FramingOffsets::new())
+                } else {
+                    None
+                };
+
+                let key_start = if self.sig_parser.next_char() == DICT_ENTRY_SIG_START_CHAR {
+                    let key_signature = Signature::from_str_unchecked(&element_signature[1..2]);
+                    if !crate::utils::is_fixed_sized_signature(&key_signature)? {
+                        Some(0)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                (offsets, key_start)
+            }
+            _ => (None, None),
+        };
         // D-Bus expects us to add padding for the first element even when there is no first
-        // element (i-e empty array) so we add padding already.
-        let first_padding = self.add_padding(alignment)?;
+        // element (i-e empty array) so we add padding already. In case of GVariant this is just
+        // the padding of the array itself since array starts with first element.
+        let first_padding = self.add_padding(element_alignment)?;
         let start = self.bytes_written;
 
         Ok(SeqSerializer {
             ser: self,
             start,
+            element_alignment,
             element_signature_len,
             first_padding,
+            offsets,
+            key_start,
         })
     }
 
@@ -697,10 +729,17 @@ where
 pub struct SeqSerializer<'ser, 'sig, 'b, B, W> {
     ser: &'b mut Serializer<'ser, 'sig, B, W>,
     start: usize,
+    // alignement of element
+    element_alignment: usize,
     // size of element signature
     element_signature_len: usize,
     // First element's padding
     first_padding: usize,
+    // FIXME: Best to create a separate struct for all of these GVariant-specific fields.
+    // All offsets (GVariant-specific)
+    offsets: Option<FramingOffsets>,
+    // start of last dict-entry key written (GVariant-specific)
+    key_start: Option<usize>,
 }
 
 impl<'ser, 'sig, 'b, B, W> SeqSerializer<'ser, 'sig, 'b, B, W>
@@ -709,6 +748,13 @@ where
     W: Write + Seek,
 {
     pub(self) fn end_seq(self) -> Result<()> {
+        match self.ser.ctxt.format() {
+            EncodingFormat::DBus => self.end_dbus_seq(),
+            EncodingFormat::GVariant => self.end_gvariant_seq(),
+        }
+    }
+
+    fn end_dbus_seq(self) -> Result<()> {
         if self.start == self.ser.bytes_written {
             // Empty sequence so we need to parse the element signature.
             self.ser.sig_parser.skip_chars(self.element_signature_len)?;
@@ -730,6 +776,24 @@ where
 
         Ok(())
     }
+
+    fn end_gvariant_seq(self) -> Result<()> {
+        let offsets = match self.offsets {
+            Some(offsets) => offsets,
+            None => return Ok(()),
+        };
+        let array_len = self.ser.bytes_written - self.start;
+        if array_len == 0 {
+            // Empty sequence
+            assert!(offsets.is_empty());
+
+            return Ok(());
+        }
+
+        offsets.write_all(self.ser, array_len)?;
+
+        Ok(())
+    }
 }
 
 impl<'ser, 'sig, 'b, B, W> ser::SerializeSeq for SeqSerializer<'ser, 'sig, 'b, B, W>
@@ -748,7 +812,15 @@ where
             // The signature needs to be rewinded before encoding each element.
             self.ser.sig_parser.rewind_chars(self.element_signature_len);
         }
-        value.serialize(&mut *self.ser)
+        let v = value.serialize(&mut *self.ser);
+        if let Some(ref mut offsets) = self.offsets {
+            assert_eq!(self.ser.ctxt.format(), EncodingFormat::GVariant);
+            let offset = self.ser.bytes_written - self.start;
+
+            offsets.push(offset);
+        }
+
+        v
     }
 
     fn end(self) -> Result<()> {
@@ -895,6 +967,10 @@ where
     where
         T: ?Sized + Serialize,
     {
+        if self.key_start.is_some() {
+            self.key_start.replace(self.ser.bytes_written);
+        }
+
         if self.start == self.ser.bytes_written {
             // First key
             self.ser.sig_parser.skip_char()?;
@@ -904,7 +980,7 @@ where
                 .sig_parser
                 .rewind_chars(self.element_signature_len - 2);
         }
-        self.ser.add_padding(DICT_ENTRY_ALIGNMENT_DBUS)?;
+        self.ser.add_padding(self.element_alignment)?;
 
         key.serialize(&mut *self.ser)
     }
@@ -913,7 +989,29 @@ where
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(&mut *self.ser)
+        match self.ser.ctxt.format() {
+            EncodingFormat::DBus => value.serialize(&mut *self.ser),
+            EncodingFormat::GVariant => {
+                // For non-fixed-sized keys, we must add the key offset after the value
+                let key_offset = self.key_start.map(|start| self.ser.bytes_written - start);
+
+                let v = value.serialize(&mut *self.ser);
+
+                if let Some(key_offset) = key_offset {
+                    let offset_size = FramingOffsetSize::for_encoded_container(key_offset);
+                    offset_size.write_offset(self.ser, key_offset)?;
+                }
+
+                // And now the offset of the array element end (which is encoded later)
+                if let Some(ref mut offsets) = self.offsets {
+                    let offset = self.ser.bytes_written - self.start;
+
+                    offsets.push(offset);
+                }
+
+                v
+            }
+        }
     }
 
     fn end(self) -> Result<()> {

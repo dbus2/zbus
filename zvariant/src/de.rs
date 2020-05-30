@@ -7,6 +7,8 @@ use std::ffi::CStr;
 use std::os::unix::io::RawFd;
 use std::{marker::PhantomData, str};
 
+use crate::framing_offset_size::FramingOffsetSize;
+use crate::framing_offsets::FramingOffsets;
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
 use crate::Type;
@@ -555,11 +557,7 @@ where
                 let array_de = ArrayDeserializer::new(self)?;
 
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
-                    visitor.visit_map(array_de).and_then(|v| {
-                        self.sig_parser.skip_char()?; // and the last `}`
-
-                        Ok(v)
-                    })
+                    visitor.visit_map(array_de)
                 } else {
                     visitor.visit_seq(array_de)
                 }
@@ -661,8 +659,16 @@ struct ArrayDeserializer<'d, 'de, 'sig, 'f, B> {
     de: &'d mut Deserializer<'de, 'sig, 'f, B>,
     len: usize,
     start: usize,
+    // alignement of element
+    element_alignment: usize,
     // where value signature starts
     element_signature_len: usize,
+    // All offsets (GVariant-specific)
+    offsets: Option<FramingOffsets>,
+    // Length of all the offsets after the arrray
+    offsets_len: usize,
+    // size of the framing offset of last dict-entry key read (GVariant-specific)
+    key_offset_size: Option<FramingOffsetSize>,
 }
 
 impl<'d, 'de, 'sig, 'f, B> ArrayDeserializer<'d, 'de, 'sig, 'f, B>
@@ -670,38 +676,98 @@ where
     B: byteorder::ByteOrder,
 {
     fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>) -> Result<Self> {
-        de.parse_padding(ARRAY_ALIGNMENT_DBUS)?;
-        let len = B::read_u32(de.next_slice(4)?) as usize;
+        let mut len = match de.ctxt.format() {
+            EncodingFormat::DBus => {
+                de.parse_padding(ARRAY_ALIGNMENT_DBUS)?;
+
+                B::read_u32(de.next_slice(4)?) as usize
+            }
+            EncodingFormat::GVariant => de.bytes.len() - de.pos,
+        };
 
         let element_signature_pos = de.sig_parser.pos();
         let rest_of_signature =
             Signature::from_str_unchecked(&de.sig_parser.signature()[element_signature_pos..]);
         let element_signature = slice_signature(&rest_of_signature)?;
-        let alignment = alignment_for_signature(&element_signature, de.ctxt.format());
+        let element_alignment = alignment_for_signature(&element_signature, de.ctxt.format());
         let element_signature_len = element_signature.len();
+        let fixed_sized_child = crate::utils::is_fixed_sized_signature(&element_signature)?;
+        let fixed_sized_key = if de.sig_parser.next_char() == DICT_ENTRY_SIG_START_CHAR {
+            // Key signature can only be 1 char
+            let key_signature = Signature::from_str_unchecked(&element_signature[1..2]);
+
+            crate::utils::is_fixed_sized_signature(&key_signature)?
+        } else {
+            false
+        };
 
         // D-Bus requires padding for the first element even when there is no first element
-        // (i-e empty array) so we parse padding already.
-        de.parse_padding(alignment)?;
+        // (i-e empty array) so we parse padding already. In case of GVariant this is just
+        // the padding of the array itself since array starts with first element.
+        let padding = de.parse_padding(element_alignment)?;
+        let (offsets, offsets_len, key_offset_size) = match de.ctxt.format() {
+            EncodingFormat::GVariant => {
+                len -= padding;
+
+                if !fixed_sized_child {
+                    let (array_offsets, offsets_len) =
+                        FramingOffsets::from_encoded_array(&de.bytes[de.pos..]);
+                    len -= offsets_len;
+                    let key_offset_size = if !fixed_sized_key {
+                        // The actual offset for keys is calculated per key later, this is just to
+                        // put Some value to indicate at key is not fixed sized and thus uses
+                        // offsets.
+                        Some(FramingOffsetSize::U8)
+                    } else {
+                        None
+                    };
+
+                    (Some(array_offsets), offsets_len, key_offset_size)
+                } else {
+                    (None, 0, None)
+                }
+            }
+            EncodingFormat::DBus => (None, 0, None),
+        };
         let start = de.pos;
 
-        let next_signature_char = de.sig_parser.next_char();
-        if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
+        if de.sig_parser.next_char() == DICT_ENTRY_SIG_START_CHAR {
             de.sig_parser.skip_char()?;
         }
-
-        let element_signature_len = match next_signature_char {
-            // Everything except the starting and ending brackets
-            DICT_ENTRY_SIG_START_CHAR => element_signature_len - 2,
-            _ => element_signature_len,
-        };
 
         Ok(Self {
             de,
             len,
             start,
+            element_alignment,
             element_signature_len,
+            offsets,
+            offsets_len,
+            key_offset_size,
         })
+    }
+
+    fn element_end(&mut self, pop: bool) -> Result<usize> {
+        match self.offsets.as_mut() {
+            Some(offsets) => {
+                assert_eq!(self.de.ctxt.format(), EncodingFormat::GVariant);
+
+                let offset = if pop { offsets.pop() } else { offsets.peek() };
+                match offset {
+                    Some(offset) => Ok(self.start + offset),
+                    None => Err(Error::MissingFramingOffset),
+                }
+            }
+            None => Ok(self.start + self.len),
+        }
+    }
+
+    fn done(&self) -> bool {
+        match self.offsets.as_ref() {
+            // If all offsets have been popped/used, we're already at the end
+            Some(offsets) => offsets.is_empty(),
+            None => self.de.pos == self.start + self.len,
+        }
     }
 }
 
@@ -715,21 +781,29 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        if self.de.pos == self.start + self.len {
-            if self.len == 0 {
-                // Empty sequence so we need to parse the element signature.
-                self.de.sig_parser.skip_chars(self.element_signature_len)?;
-            }
+        if self.done() {
+            self.de.sig_parser.skip_chars(self.element_signature_len)?;
+            self.de.pos += self.offsets_len;
 
             return Ok(None);
         }
 
-        if self.start != self.de.pos {
-            // The signature needs to be rewinded before encoding each element.
-            self.de.sig_parser.rewind_chars(self.element_signature_len);
-        }
+        let ctxt =
+            EncodingContext::new(self.de.ctxt.format(), self.de.ctxt.position() + self.de.pos);
+        let end = self.element_end(true)?;
 
-        let v = seed.deserialize(&mut *self.de).map(Some);
+        let mut de = Deserializer::<B> {
+            ctxt,
+            sig_parser: self.de.sig_parser.clone(),
+            bytes: &self.de.bytes[self.de.pos..end],
+            fds: self.de.fds,
+            pos: 0,
+            b: PhantomData,
+        };
+
+        let v = seed.deserialize(&mut de).map(Some);
+        self.de.pos += de.pos;
+
         if self.de.pos > self.start + self.len {
             return Err(serde::de::Error::invalid_length(
                 self.len,
@@ -751,22 +825,46 @@ where
     where
         K: DeserializeSeed<'de>,
     {
-        if self.de.pos == self.start + self.len {
-            if self.len == 0 {
-                // Empty sequence so we need to parse the element signature.
-                self.de.sig_parser.skip_chars(self.element_signature_len)?;
-            }
+        if self.done() {
+            // Starting bracket was already skipped
+            self.de
+                .sig_parser
+                .skip_chars(self.element_signature_len - 1)?;
+            self.de.pos += self.offsets_len;
 
             return Ok(None);
         }
 
-        if self.start != self.de.pos {
-            // The signature needs to be rewinded before encoding each element.
-            self.de.sig_parser.rewind_chars(self.element_signature_len);
-            self.de.parse_padding(DICT_ENTRY_ALIGNMENT_DBUS)?;
-        }
+        self.de.parse_padding(self.element_alignment)?;
 
-        let v = seed.deserialize(&mut *self.de).map(Some);
+        let ctxt =
+            EncodingContext::new(self.de.ctxt.format(), self.de.ctxt.position() + self.de.pos);
+        let element_end = self.element_end(false)?;
+
+        let key_end = match self.key_offset_size {
+            Some(_) => {
+                let offset_size =
+                    FramingOffsetSize::for_encoded_container(element_end - self.de.pos);
+                self.key_offset_size.replace(offset_size);
+
+                self.de.pos
+                    + offset_size
+                        .read_last_offset_from_buffer(&self.de.bytes[self.de.pos..element_end])
+            }
+            None => element_end,
+        };
+
+        let mut de = Deserializer::<B> {
+            ctxt,
+            sig_parser: self.de.sig_parser.clone(),
+            bytes: &self.de.bytes[self.de.pos..key_end],
+            fds: self.de.fds,
+            pos: 0,
+            b: PhantomData,
+        };
+        let v = seed.deserialize(&mut de).map(Some);
+        self.de.pos += de.pos;
+
         if self.de.pos > self.start + self.len {
             return Err(serde::de::Error::invalid_length(
                 self.len,
@@ -781,8 +879,32 @@ where
     where
         V: DeserializeSeed<'de>,
     {
-        // TODO: Ensure we can handle empty dict
-        let v = seed.deserialize(&mut *self.de);
+        let ctxt =
+            EncodingContext::new(self.de.ctxt.format(), self.de.ctxt.position() + self.de.pos);
+        let element_end = self.element_end(true)?;
+        let value_end = match self.key_offset_size {
+            Some(key_offset_size) => element_end - key_offset_size as usize,
+            None => element_end,
+        };
+        let mut sig_parser = self.de.sig_parser.clone();
+        // Skip key signature (always 1 char)
+        sig_parser.skip_char()?;
+
+        let mut de = Deserializer::<B> {
+            ctxt,
+            sig_parser,
+            bytes: &self.de.bytes[self.de.pos..value_end],
+            fds: self.de.fds,
+            pos: 0,
+            b: PhantomData,
+        };
+        let v = seed.deserialize(&mut de);
+        self.de.pos += de.pos;
+
+        if let Some(key_offset_size) = self.key_offset_size {
+            self.de.pos += key_offset_size as usize;
+        }
+
         if self.de.pos > self.start + self.len {
             return Err(serde::de::Error::invalid_length(
                 self.len,
