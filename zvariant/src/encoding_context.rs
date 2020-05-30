@@ -2,13 +2,13 @@ use std::marker::PhantomData;
 
 /// The encoding format.
 ///
-/// Currently only D-Bus format is supported but [GVariant] support is also planned.
-///
-/// [GVariant]: https://developer.gnome.org/glib/stable/glib-GVariant.html
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EncodingFormat {
+    /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-marshaling)
+    /// format.
     DBus,
-    // TODO: GVariant
+    /// [GVariant](https://developer.gnome.org/glib/stable/glib-GVariant.html) format.
+    GVariant,
 }
 
 impl Default for EncodingFormat {
@@ -72,6 +72,13 @@ where
     /// [`new`]: #method.new
     pub fn new_dbus(position: usize) -> Self {
         Self::new(EncodingFormat::DBus, position)
+    }
+
+    /// Convenient wrapper for [`new`] to create a context for GVariant format.
+    ///
+    /// [`new`]: #method.new
+    pub fn new_gvariant(position: usize) -> Self {
+        Self::new(EncodingFormat::GVariant, position)
     }
 
     /// The [`EncodingFormat`] of this context.
