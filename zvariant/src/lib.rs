@@ -195,15 +195,15 @@ mod tests {
     use crate::{from_slice, from_slice_fds, from_slice_for_signature};
     use crate::{to_bytes, to_bytes_fds, to_bytes_for_signature};
 
-    use crate::{Array, Dict, EncodingContext as Context};
+    use crate::{Array, Dict, EncodingContext as Context, EncodingFormat};
     use crate::{Basic, DeserializeValue, Error, Result, SerializeValue, Type, Value};
     use crate::{Fd, ObjectPath, Signature, Str, Structure};
 
     // Test through both generic and specific API (wrt byte order)
     macro_rules! basic_type_test {
-        ($trait:ty, $test_value:expr, $expected_len:expr, $expected_ty:ty, $align:literal) => {{
+        ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr, $expected_ty:ty, $align:literal) => {{
             // Lie that we're starting at byte 1 in the overall message to test padding
-            let ctxt = Context::<$trait>::new_dbus(1);
+            let ctxt = Context::<$trait>::new(EncodingFormat::$format, 1);
             let (encoded, fds) = to_bytes_fds(ctxt, &$test_value).unwrap();
             let padding = crate::padding_for_n_bytes(1, $align);
             assert_eq!(
@@ -218,7 +218,7 @@ mod tests {
             );
 
             // Now encode w/o padding
-            let ctxt = Context::<$trait>::new_dbus(0);
+            let ctxt = Context::<$trait>::new(EncodingFormat::$format, 0);
             let (encoded, _) = to_bytes_fds(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
@@ -228,15 +228,21 @@ mod tests {
 
             encoded
         }};
-        ($trait:ty, $test_value:expr, $expected_len:expr, $expected_ty:ty, $align:literal, $kind:ident, $expected_value_len:expr) => {{
-            let encoded =
-                basic_type_test!($trait, $test_value, $expected_len, $expected_ty, $align);
+        ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr, $expected_ty:ty, $align:literal, $kind:ident, $expected_value_len:expr) => {{
+            let encoded = basic_type_test!(
+                $trait,
+                $format,
+                $test_value,
+                $expected_len,
+                $expected_ty,
+                $align
+            );
 
             // As Value
             let v: Value = $test_value.into();
             assert_eq!(v.value_signature(), <$expected_ty>::SIGNATURE_STR);
             assert_eq!(v, Value::$kind($test_value));
-            value_test!(LE, v, $expected_value_len);
+            value_test!(LE, $format, v, $expected_value_len);
 
             let v: $expected_ty = v.try_into().unwrap();
             assert_eq!(v, $test_value);
@@ -246,8 +252,8 @@ mod tests {
     }
 
     macro_rules! value_test {
-        ($trait:ty, $test_value:expr, $expected_len:expr) => {{
-            let ctxt = Context::<$trait>::new_dbus(0);
+        ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr) => {{
+            let ctxt = Context::<$trait>::new(EncodingFormat::$format, 0);
             let (encoded, fds) = to_bytes_fds(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
@@ -266,38 +272,38 @@ mod tests {
 
     #[test]
     fn u8_value() {
-        basic_type_test!(LE, 77_u8, 1, u8, 1, U8, 4);
+        basic_type_test!(LE, DBus, 77_u8, 1, u8, 1, U8, 4);
     }
 
     #[test]
     fn i8_value() {
-        basic_type_test!(LE, 77_i8, 2, i8, 2);
+        basic_type_test!(LE, DBus, 77_i8, 2, i8, 2);
     }
 
     #[test]
     fn fd_value() {
-        basic_type_test!(LE, Fd::from(42), 4, Fd, 4, Fd, 8);
+        basic_type_test!(LE, DBus, Fd::from(42), 4, Fd, 4, Fd, 8);
     }
 
     #[test]
     fn u16_value() {
-        basic_type_test!(BE, 0xABBA_u16, 2, u16, 2, U16, 6);
+        basic_type_test!(BE, DBus, 0xABBA_u16, 2, u16, 2, U16, 6);
     }
 
     #[test]
     fn i16_value() {
-        let encoded = basic_type_test!(BE, -0xAB0_i16, 2, i16, 2, I16, 6);
+        let encoded = basic_type_test!(BE, DBus, -0xAB0_i16, 2, i16, 2, I16, 6);
         assert_eq!(LE::read_i16(&encoded), 0x50F5_i16);
     }
 
     #[test]
     fn u32_value() {
-        basic_type_test!(BE, 0xABBA_ABBA_u32, 4, u32, 4, U32, 8);
+        basic_type_test!(BE, DBus, 0xABBA_ABBA_u32, 4, u32, 4, U32, 8);
     }
 
     #[test]
     fn i32_value() {
-        let encoded = basic_type_test!(BE, -0xABBA_AB0_i32, 4, i32, 4, I32, 8);
+        let encoded = basic_type_test!(BE, DBus, -0xABBA_AB0_i32, 4, i32, 4, I32, 8);
         assert_eq!(LE::read_i32(&encoded), 0x5055_44F5_i32);
     }
 
@@ -305,31 +311,31 @@ mod tests {
 
     #[test]
     fn i64_value() {
-        let encoded = basic_type_test!(BE, -0xABBA_ABBA_ABBA_AB0_i64, 8, i64, 8, I64, 16);
+        let encoded = basic_type_test!(BE, DBus, -0xABBA_ABBA_ABBA_AB0_i64, 8, i64, 8, I64, 16);
         assert_eq!(LE::read_i64(&encoded), 0x5055_4455_4455_44F5_i64);
     }
 
     #[test]
     fn f64_value() {
-        let encoded = basic_type_test!(BE, 99999.99999_f64, 8, f64, 8, F64, 16);
+        let encoded = basic_type_test!(BE, DBus, 99999.99999_f64, 8, f64, 8, F64, 16);
         assert_eq!(LE::read_f64(&encoded), -5759340900185448e-143);
     }
 
     #[test]
     fn str_value() {
         let string = String::from("hello world");
-        basic_type_test!(LE, string, 16, String, 4);
-        basic_type_test!(LE, string, 16, &str, 4);
+        basic_type_test!(LE, DBus, string, 16, String, 4);
+        basic_type_test!(LE, DBus, string, 16, &str, 4);
 
         let string = "hello world";
-        basic_type_test!(LE, string, 16, &str, 4);
-        basic_type_test!(LE, string, 16, String, 4);
+        basic_type_test!(LE, DBus, string, 16, &str, 4);
+        basic_type_test!(LE, DBus, string, 16, String, 4);
 
         // As Value
         let v: Value = string.into();
         assert_eq!(v.value_signature(), "s");
         assert_eq!(v, Value::new("hello world"));
-        value_test!(LE, v, 20);
+        value_test!(LE, DBus, v, 20);
 
         let v: String = v.try_into().unwrap();
         assert_eq!(v, "hello world");
@@ -337,7 +343,7 @@ mod tests {
         assert_eq!(v, "hello world");
 
         // Characters are treated as strings
-        basic_type_test!(LE, 'c', 6, char, 4);
+        basic_type_test!(LE, DBus, 'c', 6, char, 4);
 
         // As Value
         let v: Value = "c".into();
@@ -363,12 +369,12 @@ mod tests {
     #[test]
     fn signature_value() {
         let sig = Signature::try_from("yys").unwrap();
-        basic_type_test!(LE, sig, 5, Signature, 1);
+        basic_type_test!(LE, DBus, sig, 5, Signature, 1);
 
         // As Value
         let v: Value = sig.into();
         assert_eq!(v.value_signature(), "g");
-        let encoded = value_test!(LE, v, 8);
+        let encoded = value_test!(LE, DBus, v, 8);
         let ctxt = Context::new_dbus(0);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
         assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
@@ -377,12 +383,12 @@ mod tests {
     #[test]
     fn object_path_value() {
         let o = ObjectPath::try_from("/hello/world").unwrap();
-        basic_type_test!(LE, o, 17, ObjectPath, 4);
+        basic_type_test!(LE, DBus, o, 17, ObjectPath, 4);
 
         // As Value
         let v: Value = o.into();
         assert_eq!(v.value_signature(), "o");
-        let encoded = value_test!(LE, v, 21);
+        let encoded = value_test!(LE, DBus, v, 21);
         let ctxt = Context::new_dbus(0);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
         assert_eq!(
