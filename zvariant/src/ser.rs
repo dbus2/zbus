@@ -7,7 +7,7 @@ use std::{marker::PhantomData, str};
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
 use crate::Type;
-use crate::{Basic, EncodingContext};
+use crate::{Basic, EncodingContext, EncodingFormat};
 use crate::{Error, Result};
 use crate::{ObjectPath, Signature};
 
@@ -484,32 +484,34 @@ where
 
     fn serialize_str(self, v: &str) -> Result<()> {
         let c = self.sig_parser.next_char();
+        if c == VARIANT_SIGNATURE_CHAR {
+            self.value_sign = Some(signature_string!(v));
+        }
 
-        match c {
-            ObjectPath::SIGNATURE_CHAR | <&str>::SIGNATURE_CHAR => {
-                self.add_padding(<&str>::alignment(self.ctxt.format()))?;
-                self.write_u32::<B>(usize_to_u32(v.len()))
-                    .map_err(Error::Io)?;
-            }
-            Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
-                self.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
-
-                if c == VARIANT_SIGNATURE_CHAR {
-                    self.value_sign = Some(signature_string!(v));
+        // Strings in GVariant format require no alignment or
+        if self.ctxt.format() == EncodingFormat::DBus {
+            match c {
+                ObjectPath::SIGNATURE_CHAR | <&str>::SIGNATURE_CHAR => {
+                    self.add_padding(<&str>::alignment(self.ctxt.format()))?;
+                    self.write_u32::<B>(usize_to_u32(v.len()))
+                        .map_err(Error::Io)?;
                 }
-            }
-            _ => {
-                let expected = format!(
-                    "`{}`, `{}`, `{}` or `{}`",
-                    <&str>::SIGNATURE_STR,
-                    Signature::SIGNATURE_STR,
-                    ObjectPath::SIGNATURE_STR,
-                    VARIANT_SIGNATURE_CHAR,
-                );
-                return Err(serde::de::Error::invalid_type(
-                    serde::de::Unexpected::Char(c),
-                    &expected.as_str(),
-                ));
+                Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
+                    self.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
+                }
+                _ => {
+                    let expected = format!(
+                        "`{}`, `{}`, `{}` or `{}`",
+                        <&str>::SIGNATURE_STR,
+                        Signature::SIGNATURE_STR,
+                        ObjectPath::SIGNATURE_STR,
+                        VARIANT_SIGNATURE_CHAR,
+                    );
+                    return Err(serde::de::Error::invalid_type(
+                        serde::de::Unexpected::Char(c),
+                        &expected.as_str(),
+                    ));
+                }
             }
         }
         self.sig_parser.skip_char()?;

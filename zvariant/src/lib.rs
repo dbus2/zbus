@@ -352,6 +352,10 @@ mod tests {
         basic_type_test!(LE, DBus, string, 16, String, 4);
         basic_type_test!(LE, DBus, string, 16, &str, 4);
 
+        // GVariant format now
+        let encoded = basic_type_test!(LE, GVariant, string, 12, String, 1);
+        assert_eq!(decode_with_gvariant::<_, String>(encoded), "hello world");
+
         let string = "hello world";
         basic_type_test!(LE, DBus, string, 16, &str, 4);
         basic_type_test!(LE, DBus, string, 16, String, 4);
@@ -396,6 +400,9 @@ mod tests {
         let sig = Signature::try_from("yys").unwrap();
         basic_type_test!(LE, DBus, sig, 5, Signature, 1);
 
+        let encoded = basic_type_test!(LE, GVariant, sig, 4, Signature, 1);
+        assert_eq!(decode_with_gvariant::<_, String>(encoded), "yys");
+
         // As Value
         let v: Value = sig.into();
         assert_eq!(v.value_signature(), "g");
@@ -409,6 +416,9 @@ mod tests {
     fn object_path_value() {
         let o = ObjectPath::try_from("/hello/world").unwrap();
         basic_type_test!(LE, DBus, o, 17, ObjectPath, 4);
+
+        let encoded = basic_type_test!(LE, GVariant, o, 13, ObjectPath, 1);
+        assert_eq!(decode_with_gvariant::<_, String>(encoded), "/hello/world");
 
         // As Value
         let v: Value = o.into();

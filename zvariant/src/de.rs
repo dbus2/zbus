@@ -3,13 +3,14 @@ use core::convert::TryFrom;
 use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor};
 use serde::Deserialize;
 
+use std::ffi::CStr;
 use std::os::unix::io::RawFd;
 use std::{marker::PhantomData, str};
 
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
 use crate::Type;
-use crate::{Basic, EncodingContext};
+use crate::{Basic, EncodingContext, EncodingFormat};
 use crate::{Error, Result};
 use crate::{Fd, ObjectPath, Signature};
 
@@ -424,35 +425,53 @@ where
     where
         V: Visitor<'de>,
     {
-        let len = match self.sig_parser.next_char() {
-            Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
-                let len_slice = self.next_slice(1)?;
+        let s = match self.ctxt.format() {
+            EncodingFormat::DBus => {
+                let len = match self.sig_parser.next_char() {
+                    Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
+                        let len_slice = self.next_slice(1)?;
 
-                len_slice[0] as usize
-            }
-            <&str>::SIGNATURE_CHAR | ObjectPath::SIGNATURE_CHAR => {
-                self.parse_padding(u32::alignment(self.ctxt.format()))?;
-                let len_slice = self.next_slice(u32::alignment(self.ctxt.format()))?;
+                        len_slice[0] as usize
+                    }
+                    <&str>::SIGNATURE_CHAR | ObjectPath::SIGNATURE_CHAR => {
+                        let alignment = u32::alignment(self.ctxt.format());
+                        self.parse_padding(alignment)?;
+                        let len_slice = self.next_slice(alignment)?;
 
-                B::read_u32(len_slice) as usize
+                        B::read_u32(len_slice) as usize
+                    }
+                    c => {
+                        let expected = format!(
+                            "`{}`, `{}`, `{}` or `{}`",
+                            <&str>::SIGNATURE_STR,
+                            Signature::SIGNATURE_STR,
+                            ObjectPath::SIGNATURE_STR,
+                            VARIANT_SIGNATURE_CHAR,
+                        );
+                        return Err(de::Error::invalid_type(
+                            de::Unexpected::Char(c),
+                            &expected.as_str(),
+                        ));
+                    }
+                };
+                let slice = self.next_slice(len)?;
+                str::from_utf8(slice).map_err(Error::Utf8)?
             }
-            c => {
-                let expected = format!(
-                    "`{}`, `{}`, `{}` or `{}`",
-                    <&str>::SIGNATURE_STR,
-                    Signature::SIGNATURE_STR,
-                    ObjectPath::SIGNATURE_STR,
-                    VARIANT_SIGNATURE_CHAR,
-                );
-                return Err(de::Error::invalid_type(
-                    de::Unexpected::Char(c),
-                    &expected.as_str(),
-                ));
+            EncodingFormat::GVariant => {
+                let cstr = CStr::from_bytes_with_nul(&self.bytes[self.pos..]).map_err(|_| {
+                    let c = self.bytes[self.bytes.len() - 1] as char;
+                    de::Error::invalid_value(
+                        de::Unexpected::Char(c),
+                        &"nul byte expected at the end of strings",
+                    )
+                })?;
+                let s = cstr.to_str().map_err(Error::Utf8)?;
+                self.pos += s.len();
+
+                s
             }
         };
         self.sig_parser.skip_char()?;
-        let slice = self.next_slice(len)?;
-        let s = str::from_utf8(slice).map_err(Error::Utf8)?;
         self.pos += 1; // skip trailing null byte
 
         visitor.visit_borrowed_str(s)
