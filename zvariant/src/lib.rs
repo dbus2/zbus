@@ -282,26 +282,34 @@ mod tests {
         gv.get::<T>().unwrap()
     }
 
+    // All fixed size types have the same encoding in DBus and GVariant formats.
+    //
+    // NB: Value (i-e VARIANT type) isn't a fixed size type.
+
     #[test]
     fn u8_value() {
         let encoded = basic_type_test!(LE, DBus, 77_u8, 1, u8, 1, U8, 4);
         assert_eq!(decode_with_gvariant::<_, u8>(encoded), 77u8);
+        basic_type_test!(LE, GVariant, 77_u8, 1, u8, 1, U8, 3);
     }
 
     #[test]
     fn i8_value() {
         basic_type_test!(LE, DBus, 77_i8, 2, i8, 2);
+        basic_type_test!(LE, GVariant, 77_i8, 2, i8, 2);
     }
 
     #[test]
     fn fd_value() {
         basic_type_test!(LE, DBus, Fd::from(42), 4, Fd, 4, Fd, 8);
+        basic_type_test!(LE, GVariant, Fd::from(42), 4, Fd, 4, Fd, 6);
     }
 
     #[test]
     fn u16_value() {
         let encoded = basic_type_test!(BE, DBus, 0xABBA_u16, 2, u16, 2, U16, 6);
         assert_eq!(decode_with_gvariant::<_, u16>(encoded), 0xBAAB_u16);
+        basic_type_test!(BE, GVariant, 0xABBA_u16, 2, u16, 2, U16, 4);
     }
 
     #[test]
@@ -309,12 +317,14 @@ mod tests {
         let encoded = basic_type_test!(BE, DBus, -0xAB0_i16, 2, i16, 2, I16, 6);
         assert_eq!(LE::read_i16(&encoded), 0x50F5_i16);
         assert_eq!(decode_with_gvariant::<_, i16>(encoded), 0x50F5_i16);
+        basic_type_test!(BE, GVariant, -0xAB0_i16, 2, i16, 2, I16, 4);
     }
 
     #[test]
     fn u32_value() {
         let encoded = basic_type_test!(BE, DBus, 0xABBA_ABBA_u32, 4, u32, 4, U32, 8);
         assert_eq!(decode_with_gvariant::<_, u32>(encoded), 0xBAAB_BAAB_u32);
+        basic_type_test!(BE, GVariant, 0xABBA_ABBA_u32, 4, u32, 4, U32, 6);
     }
 
     #[test]
@@ -322,6 +332,7 @@ mod tests {
         let encoded = basic_type_test!(BE, DBus, -0xABBA_AB0_i32, 4, i32, 4, I32, 8);
         assert_eq!(LE::read_i32(&encoded), 0x5055_44F5_i32);
         assert_eq!(decode_with_gvariant::<_, i32>(encoded), 0x5055_44F5_i32);
+        basic_type_test!(BE, GVariant, -0xABBA_AB0_i32, 4, i32, 4, I32, 6);
     }
 
     // u64 is covered by `value_value` test below
@@ -334,6 +345,7 @@ mod tests {
             decode_with_gvariant::<_, i64>(encoded),
             0x5055_4455_4455_44F5_i64
         );
+        basic_type_test!(BE, GVariant, -0xABBA_ABBA_ABBA_AB0_i64, 8, i64, 8, I64, 10);
     }
 
     #[test]
@@ -344,6 +356,7 @@ mod tests {
             decode_with_gvariant::<_, f64>(encoded),
             -5759340900185448e-143
         );
+        basic_type_test!(BE, GVariant, 99999.99999_f64, 8, f64, 8, F64, 10);
     }
 
     #[test]
@@ -365,6 +378,13 @@ mod tests {
         assert_eq!(v.value_signature(), "s");
         assert_eq!(v, Value::new("hello world"));
         value_test!(LE, DBus, v, 20);
+        let encoded = value_test!(LE, GVariant, v, 14);
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(encoded);
+        let gv = Variant::from_bytes::<Variant>(&bytes);
+        let variant = gv.get_variant().unwrap();
+        assert_eq!(variant.get_str().unwrap(), "hello world");
 
         let v: String = v.try_into().unwrap();
         assert_eq!(v, "hello world");
@@ -373,6 +393,7 @@ mod tests {
 
         // Characters are treated as strings
         basic_type_test!(LE, DBus, 'c', 6, char, 4);
+        basic_type_test!(LE, GVariant, 'c', 2, char, 1);
 
         // As Value
         let v: Value = "c".into();
@@ -410,6 +431,12 @@ mod tests {
         let ctxt = Context::new_dbus(0);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
         assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
+
+        // GVariant format now
+        let encoded = value_test!(LE, GVariant, v, 6);
+        let ctxt = Context::new_gvariant(0);
+        let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
+        assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
     }
 
     #[test]
@@ -425,6 +452,15 @@ mod tests {
         assert_eq!(v.value_signature(), "o");
         let encoded = value_test!(LE, DBus, v, 21);
         let ctxt = Context::new_dbus(0);
+        let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
+        assert_eq!(
+            v,
+            Value::ObjectPath(ObjectPath::try_from("/hello/world").unwrap())
+        );
+
+        // GVariant format now
+        let encoded = value_test!(LE, GVariant, v, 15);
+        let ctxt = Context::new_gvariant(0);
         let v = from_slice::<LE, Value>(&encoded, ctxt).unwrap();
         assert_eq!(
             v,

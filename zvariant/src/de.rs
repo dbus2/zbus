@@ -455,24 +455,30 @@ where
                     }
                 };
                 let slice = self.next_slice(len)?;
+                self.pos += 1; // skip trailing null byte
                 str::from_utf8(slice).map_err(Error::Utf8)?
             }
             EncodingFormat::GVariant => {
-                let cstr = CStr::from_bytes_with_nul(&self.bytes[self.pos..]).map_err(|_| {
-                    let c = self.bytes[self.bytes.len() - 1] as char;
-                    de::Error::invalid_value(
-                        de::Unexpected::Char(c),
-                        &"nul byte expected at the end of strings",
-                    )
-                })?;
-                let s = cstr.to_str().map_err(Error::Utf8)?;
-                self.pos += s.len();
+                if self.sig_parser.next_char() == VARIANT_SIGNATURE_CHAR {
+                    // GVariant decided to skip the trailing nul at the end of signature string
+                    str::from_utf8(&self.bytes[self.pos..]).map_err(Error::Utf8)?
+                } else {
+                    let cstr =
+                        CStr::from_bytes_with_nul(&self.bytes[self.pos..]).map_err(|_| {
+                            let c = self.bytes[self.bytes.len() - 1] as char;
+                            de::Error::invalid_value(
+                                de::Unexpected::Char(c),
+                                &"nul byte expected at the end of strings",
+                            )
+                        })?;
+                    let s = cstr.to_str().map_err(Error::Utf8)?;
+                    self.pos += s.len() + 1; // string and trailing null byte
 
-                s
+                    s
+                }
             }
         };
         self.sig_parser.skip_char()?;
-        self.pos += 1; // skip trailing null byte
 
         visitor.visit_borrowed_str(s)
     }
@@ -533,12 +539,13 @@ where
     {
         match self.sig_parser.next_char() {
             VARIANT_SIGNATURE_CHAR => {
-                let start = self.pos + 1; // skip length byte
-                let value_de = ValueDeserializer::<B> {
-                    de: self,
-                    stage: ValueParseStage::Signature,
-                    start,
+                self.sig_parser.skip_char()?;
+                let alignment = match self.ctxt.format() {
+                    EncodingFormat::DBus => VARIANT_ALIGNMENT_DBUS,
+                    EncodingFormat::GVariant => VARIANT_ALIGNMENT_GVARIANT,
                 };
+                self.parse_padding(alignment)?;
+                let value_de = ValueDeserializer::new(self)?;
 
                 visitor.visit_seq(value_de)
             }
@@ -809,7 +816,60 @@ enum ValueParseStage {
 struct ValueDeserializer<'d, 'de, 'sig, 'f, B> {
     de: &'d mut Deserializer<'de, 'sig, 'f, B>,
     stage: ValueParseStage,
-    start: usize,
+    sig_start: usize,
+    sig_end: usize,
+    value_start: usize,
+    value_end: usize,
+}
+
+impl<'d, 'de, 'sig, 'f, B> ValueDeserializer<'d, 'de, 'sig, 'f, B>
+where
+    B: byteorder::ByteOrder,
+{
+    fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>) -> Result<Self> {
+        // GVariant format has signature at the end
+        let (sig_start, sig_end, value_start, value_end) = match de.ctxt.format() {
+            EncodingFormat::DBus => {
+                let sig_len = de.bytes[de.pos] as usize;
+                let sig_end = de.pos + sig_len + 2;
+                // value_end not necessarily correct but in this case this doesn't matter.
+                (de.pos, sig_end, sig_end, de.bytes.len())
+            }
+            EncodingFormat::GVariant => {
+                let mut seperator_pos = None;
+
+                // Search for the nul byte seperator
+                for i in (de.pos..de.bytes.len() - 1).rev() {
+                    if de.bytes[i] == b'\0' {
+                        seperator_pos = Some(i);
+
+                        break;
+                    }
+                }
+
+                match seperator_pos {
+                    None => {
+                        return Err(de::Error::invalid_value(
+                            de::Unexpected::Bytes(&de.bytes[de.pos..]),
+                            &"nul byte seperator between Variant's value & signature",
+                        ));
+                    }
+                    Some(seperator_pos) => {
+                        (seperator_pos + 1, de.bytes.len(), de.pos, seperator_pos)
+                    }
+                }
+            }
+        };
+
+        Ok(ValueDeserializer::<B> {
+            de,
+            stage: ValueParseStage::Signature,
+            sig_start,
+            sig_end,
+            value_start,
+            value_end,
+        })
+    }
 }
 
 impl<'d, 'de, 'sig, 'f, B> SeqAccess<'de> for ValueDeserializer<'d, 'de, 'sig, 'f, B>
@@ -826,27 +886,61 @@ where
             ValueParseStage::Signature => {
                 self.stage = ValueParseStage::Value;
 
-                seed.deserialize(&mut *self.de).map(Some)
+                let signature = Signature::from_str_unchecked(VARIANT_SIGNATURE_STR);
+                let sig_parser = SignatureParser::new(signature);
+
+                let mut de = Deserializer::<B> {
+                    // No padding in signatures so just pass the same context
+                    ctxt: self.de.ctxt,
+                    sig_parser,
+                    bytes: &self.de.bytes[self.sig_start..self.sig_end],
+                    fds: self.de.fds,
+                    pos: 0,
+                    b: PhantomData,
+                };
+
+                let s = seed.deserialize(&mut de).map(Some);
+
+                self.de.pos = match self.de.ctxt.format() {
+                    EncodingFormat::DBus => self.de.pos + de.pos,
+                    // No incremement needed in this case; we'll set pos after value parsing below.
+                    EncodingFormat::GVariant => 0,
+                };
+
+                s
             }
             ValueParseStage::Value => {
                 self.stage = ValueParseStage::Done;
 
-                let slice = &self.de.bytes[self.start..(self.de.pos - 1)];
+                let (sig_start, sig_end) = match self.de.ctxt.format() {
+                    // skip length byte & // trim trailing nul byte
+                    EncodingFormat::DBus => (self.sig_start + 1, self.sig_end - 1),
+                    EncodingFormat::GVariant => (self.sig_start, self.sig_end),
+                };
+                let slice = &self.de.bytes[sig_start..sig_end];
                 // FIXME: Can we just use `Signature::from_bytes_unchecked`?
                 let signature = Signature::try_from(slice)?;
                 let sig_parser = SignatureParser::new(signature);
 
+                let ctxt = EncodingContext::new(
+                    self.de.ctxt.format(),
+                    self.de.ctxt.position() + self.value_start,
+                );
                 let mut de = Deserializer::<B> {
-                    ctxt: self.de.ctxt,
+                    ctxt,
                     sig_parser,
-                    bytes: self.de.bytes,
+                    bytes: &self.de.bytes[self.value_start..self.value_end],
                     fds: self.de.fds,
-                    pos: self.de.pos,
+                    pos: 0,
                     b: PhantomData,
                 };
 
                 let v = seed.deserialize(&mut de).map(Some);
-                self.de.pos = de.pos;
+
+                self.de.pos = match self.de.ctxt.format() {
+                    EncodingFormat::DBus => self.de.pos + de.pos,
+                    EncodingFormat::GVariant => self.sig_end,
+                };
 
                 v
             }

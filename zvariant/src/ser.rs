@@ -486,6 +486,11 @@ where
         let c = self.sig_parser.next_char();
         if c == VARIANT_SIGNATURE_CHAR {
             self.value_sign = Some(signature_string!(v));
+
+            if self.ctxt.format() == EncodingFormat::GVariant {
+                // signature is serialized after the value in GVariant
+                return Ok(());
+            }
         }
 
         // Strings in GVariant format require no alignment or
@@ -642,6 +647,11 @@ where
         let c = self.sig_parser.next_char();
         let end_parens;
         if c == VARIANT_SIGNATURE_CHAR {
+            let alignment = match self.ctxt.format() {
+                EncodingFormat::DBus => VARIANT_ALIGNMENT_DBUS,
+                EncodingFormat::GVariant => VARIANT_ALIGNMENT_GVARIANT,
+            };
+            self.add_padding(alignment)?;
             end_parens = false;
         } else {
             self.sig_parser.skip_char()?;
@@ -770,7 +780,7 @@ where
                     .take()
                     .expect("Incorrect Value encoding");
 
-                let sig_parser = SignatureParser::new(signature);
+                let sig_parser = SignatureParser::new(signature.clone());
                 let mut ser = Serializer::<B, W> {
                     ctxt: self.ser.ctxt,
                     sig_parser,
@@ -782,6 +792,13 @@ where
                 };
                 value.serialize(&mut ser)?;
                 self.ser.bytes_written = ser.bytes_written;
+
+                if self.ser.ctxt.format() == EncodingFormat::GVariant {
+                    self.ser.write_all(&b"\0"[..]).map_err(Error::Io)?;
+                    self.ser
+                        .write_all(&signature.as_bytes())
+                        .map_err(Error::Io)?;
+                }
 
                 Ok(())
             }
