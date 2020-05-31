@@ -43,6 +43,9 @@ use syn::{
     Signature,
 };
 
+mod utils;
+use utils::*;
+
 #[proc_macro_attribute]
 pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
     let args = syn::parse_macro_input!(attr as AttributeArgs);
@@ -209,20 +212,4 @@ fn arg_ident(arg: &FnArg) -> Option<&Ident> {
         }
         _ => None,
     }
-}
-
-fn pascal_case(s: &str) -> String {
-    let mut pascal = String::new();
-    let mut capitalize = true;
-    for ch in s.chars() {
-        if ch == '_' {
-            capitalize = true;
-        } else if capitalize {
-            pascal.push(ch.to_ascii_uppercase());
-            capitalize = false;
-        } else {
-            pascal.push(ch);
-        }
-    }
-    pascal
 }
