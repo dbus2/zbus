@@ -40,8 +40,11 @@ use proc_macro_crate::crate_name;
 use quote::quote;
 use syn::{
     self, Attribute, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta, Pat, PatIdent, PatType,
-    Signature,
+    TraitItemMethod,
 };
+
+mod utils;
+use utils::*;
 
 #[proc_macro_attribute]
 pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
@@ -91,6 +94,7 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
 
     if gen_impl {
         let input = syn::parse_macro_input!(item as ItemTrait);
+        let doc = get_doc_attrs(&input.attrs);
         let proxy_name = Ident::new(&format!("{}Proxy", input.ident), Span::call_site());
         let ident = input.ident.to_string();
         let name = iface_name.unwrap_or(format!("org.freedesktop.{}", ident));
@@ -105,18 +109,12 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
                     has_introspect_method = true;
                 }
 
-                if is_proxy_property(&m.attrs) {
-                    methods.extend(gen_proxy_property(&method_name, &m.sig));
+                let m = if is_proxy_property(&m.attrs) {
+                    gen_proxy_property(&method_name, &m)
                 } else {
-                    let args = m
-                        .sig
-                        .inputs
-                        .iter()
-                        .filter_map(|arg| arg_ident(arg))
-                        .collect::<Vec<_>>();
-
-                    methods.extend(gen_proxy_method_call(&method_name, &m.sig, &args));
-                }
+                    gen_proxy_method_call(&method_name, &m)
+                };
+                methods.extend(m);
             }
         }
 
@@ -129,9 +127,11 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
         };
 
         let proxy_impl = quote! {
+            #(#doc)*
             pub struct #proxy_name<'c>(#zbus::Proxy<'c>);
 
             impl<'c> #proxy_name<'c> {
+                /// Creates a new proxy with the default service & path.
                 pub fn new(conn: &'c #zbus::Connection) -> #zbus::Result<Self> {
                     Ok(Self(#zbus::Proxy::new(
                         conn,
@@ -141,6 +141,7 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
                     )?))
                 }
 
+                /// Creates a new proxy for the given `destination` and `path`.
                 pub fn new_for(conn: &'c #zbus::Connection, destination: &'c str, path: &'c str) -> #zbus::Result<Self> {
                     Ok(Self(#zbus::Proxy::new(
                         conn,
@@ -165,13 +166,18 @@ fn is_proxy_property(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|a| a.tokens.to_string() == "(property)")
 }
 
-fn gen_proxy_method_call(
-    method_name: &str,
-    sig: &Signature,
-    args: &[&Ident],
-) -> proc_macro2::TokenStream {
+fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> proc_macro2::TokenStream {
+    let doc = get_doc_attrs(&m.attrs);
+    let args = m
+        .sig
+        .inputs
+        .iter()
+        .filter_map(|arg| arg_ident(arg))
+        .collect::<Vec<_>>();
     let method_name = pascal_case(method_name);
+    let sig = &m.sig;
     quote! {
+        #(#doc)*
         pub #sig {
             let reply = self.0.call(#method_name, &(#(#args),*))?;
             Ok(reply)
@@ -179,12 +185,15 @@ fn gen_proxy_method_call(
     }
 }
 
-fn gen_proxy_property(property_name: &str, sig: &Signature) -> proc_macro2::TokenStream {
+fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> proc_macro2::TokenStream {
+    let doc = get_doc_attrs(&m.attrs);
+    let sig = &m.sig;
     if sig.inputs.len() > 1 {
         assert!(property_name.starts_with("set_"));
         let property_name = pascal_case(&property_name[4..]);
         let value = arg_ident(sig.inputs.last().unwrap()).unwrap();
         quote! {
+            #(#doc)*
             pub #sig {
                 self.0.try_set(#property_name, #value)
             }
@@ -192,6 +201,7 @@ fn gen_proxy_property(property_name: &str, sig: &Signature) -> proc_macro2::Toke
     } else {
         let property_name = pascal_case(property_name);
         quote! {
+            #(#doc)*
             pub #sig {
                 self.0.try_get(#property_name)
             }
@@ -209,20 +219,4 @@ fn arg_ident(arg: &FnArg) -> Option<&Ident> {
         }
         _ => None,
     }
-}
-
-fn pascal_case(s: &str) -> String {
-    let mut pascal = String::new();
-    let mut capitalize = true;
-    for ch in s.chars() {
-        if ch == '_' {
-            capitalize = true;
-        } else if capitalize {
-            pascal.push(ch.to_ascii_uppercase());
-            capitalize = false;
-        } else {
-            pascal.push(ch);
-        }
-    }
-    pascal
 }
