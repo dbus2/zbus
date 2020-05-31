@@ -429,7 +429,7 @@ impl Message {
 impl fmt::Debug for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut msg = f.debug_struct("Msg");
-        let _ = self.header().and_then(|h| {
+        let _ = self.header().map(|h| {
             if let Ok(t) = h.message_type() {
                 msg.field("type", &t);
             }
@@ -448,7 +448,6 @@ impl fmt::Debug for Message {
             if let Ok(Some(member)) = h.member() {
                 msg.field("member", &member);
             }
-            Ok(())
         });
         if let Ok(s) = self.body_signature() {
             msg.field("body", &s);
