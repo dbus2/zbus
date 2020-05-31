@@ -40,7 +40,7 @@ use proc_macro_crate::crate_name;
 use quote::quote;
 use syn::{
     self, Attribute, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta, Pat, PatIdent, PatType,
-    Signature,
+    TraitItemMethod,
 };
 
 mod utils;
@@ -108,18 +108,12 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
                     has_introspect_method = true;
                 }
 
-                if is_proxy_property(&m.attrs) {
-                    methods.extend(gen_proxy_property(&method_name, &m.sig));
+                let m = if is_proxy_property(&m.attrs) {
+                    gen_proxy_property(&method_name, &m)
                 } else {
-                    let args = m
-                        .sig
-                        .inputs
-                        .iter()
-                        .filter_map(|arg| arg_ident(arg))
-                        .collect::<Vec<_>>();
-
-                    methods.extend(gen_proxy_method_call(&method_name, &m.sig, &args));
-                }
+                    gen_proxy_method_call(&method_name, &m)
+                };
+                methods.extend(m);
             }
         }
 
@@ -168,12 +162,15 @@ fn is_proxy_property(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|a| a.tokens.to_string() == "(property)")
 }
 
-fn gen_proxy_method_call(
-    method_name: &str,
-    sig: &Signature,
-    args: &[&Ident],
-) -> proc_macro2::TokenStream {
+fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> proc_macro2::TokenStream {
+    let args = m
+        .sig
+        .inputs
+        .iter()
+        .filter_map(|arg| arg_ident(arg))
+        .collect::<Vec<_>>();
     let method_name = pascal_case(method_name);
+    let sig = &m.sig;
     quote! {
         pub #sig {
             let reply = self.0.call(#method_name, &(#(#args),*))?;
@@ -182,7 +179,8 @@ fn gen_proxy_method_call(
     }
 }
 
-fn gen_proxy_property(property_name: &str, sig: &Signature) -> proc_macro2::TokenStream {
+fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> proc_macro2::TokenStream {
+    let sig = &m.sig;
     if sig.inputs.len() > 1 {
         assert!(property_name.starts_with("set_"));
         let property_name = pascal_case(&property_name[4..]);
