@@ -94,6 +94,7 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
 
     if gen_impl {
         let input = syn::parse_macro_input!(item as ItemTrait);
+        let doc = get_doc_attrs(&input.attrs);
         let proxy_name = Ident::new(&format!("{}Proxy", input.ident), Span::call_site());
         let ident = input.ident.to_string();
         let name = iface_name.unwrap_or(format!("org.freedesktop.{}", ident));
@@ -126,9 +127,11 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
         };
 
         let proxy_impl = quote! {
+            #(#doc)*
             pub struct #proxy_name<'c>(#zbus::Proxy<'c>);
 
             impl<'c> #proxy_name<'c> {
+                /// Creates a new proxy with the default service & path.
                 pub fn new(conn: &'c #zbus::Connection) -> #zbus::Result<Self> {
                     Ok(Self(#zbus::Proxy::new(
                         conn,
@@ -138,6 +141,7 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
                     )?))
                 }
 
+                /// Creates a new proxy for the given `destination` and `path`.
                 pub fn new_for(conn: &'c #zbus::Connection, destination: &'c str, path: &'c str) -> #zbus::Result<Self> {
                     Ok(Self(#zbus::Proxy::new(
                         conn,
@@ -163,6 +167,7 @@ fn is_proxy_property(attrs: &[Attribute]) -> bool {
 }
 
 fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> proc_macro2::TokenStream {
+    let doc = get_doc_attrs(&m.attrs);
     let args = m
         .sig
         .inputs
@@ -172,6 +177,7 @@ fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> proc_macro2:
     let method_name = pascal_case(method_name);
     let sig = &m.sig;
     quote! {
+        #(#doc)*
         pub #sig {
             let reply = self.0.call(#method_name, &(#(#args),*))?;
             Ok(reply)
@@ -180,12 +186,14 @@ fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> proc_macro2:
 }
 
 fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> proc_macro2::TokenStream {
+    let doc = get_doc_attrs(&m.attrs);
     let sig = &m.sig;
     if sig.inputs.len() > 1 {
         assert!(property_name.starts_with("set_"));
         let property_name = pascal_case(&property_name[4..]);
         let value = arg_ident(sig.inputs.last().unwrap()).unwrap();
         quote! {
+            #(#doc)*
             pub #sig {
                 self.0.try_set(#property_name, #value)
             }
@@ -193,6 +201,7 @@ fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> proc_macro2::
     } else {
         let property_name = pascal_case(property_name);
         quote! {
+            #(#doc)*
             pub #sig {
                 self.0.try_get(#property_name)
             }
