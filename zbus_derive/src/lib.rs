@@ -39,7 +39,7 @@ use proc_macro2::Span;
 use proc_macro_crate::crate_name;
 use quote::quote;
 use syn::{
-    self, Attribute, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta, Pat, PatIdent, PatType,
+    self, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta, Pat, PatIdent, PatType,
     TraitItemMethod,
 };
 
@@ -109,7 +109,8 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
                     has_introspect_method = true;
                 }
 
-                let m = if is_proxy_property(&m.attrs) {
+                let attrs = parse_item_attributes(&m.attrs).unwrap();
+                let m = if attrs.iter().any(|x| x.is_property()) {
                     gen_proxy_property(&method_name, &m)
                 } else {
                     gen_proxy_method_call(&method_name, &m)
@@ -158,12 +159,6 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
         item = proc_macro::TokenStream::from(proxy_impl)
     }
     item
-}
-
-fn is_proxy_property(attrs: &[Attribute]) -> bool {
-    // TODO: match on structure, not on string representation
-    // TODO: add DBus method/property name override
-    attrs.iter().any(|a| a.tokens.to_string() == "(property)")
 }
 
 fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> proc_macro2::TokenStream {
