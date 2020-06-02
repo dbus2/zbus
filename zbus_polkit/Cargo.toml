@@ -1,0 +1,21 @@
+[package]
+name = "zbus_polkit"
+version = "1.0.0"
+authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
+edition = "2018"
+
+description = "PolicyKit binding"
+repository = "https://gitlab.freedesktop.org/zeenix/zbus/"
+documentation = "http://docs.rs/zbus_polkit"
+keywords = ["D-Bus", "DBus", "IPC"]
+license = "MIT"
+categories = ["os::unix-apis"]
+
+[dependencies]
+zbus = { path = "../zbus", version = "1" }
+zbus_derive = { path = "../zbus_derive", version = "1" }
+zvariant = { path = "../zvariant", version = "2", features = [ "enumflags2" ] }
+zvariant_derive = { path = "../zvariant_derive", version = "2" }
+serde = { version = "1.0", features = [ "derive" ] }
+serde_repr = "0.1"
+enumflags2 = { version = "0.6.4", features = [ "serde" ] }
