@@ -39,7 +39,7 @@ use proc_macro2::Span;
 use proc_macro_crate::crate_name;
 use quote::quote;
 use syn::{
-    self, Attribute, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta, Pat, PatIdent, PatType,
+    self, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta, Pat, PatIdent, PatType,
     TraitItemMethod,
 };
 
@@ -109,10 +109,27 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
                     has_introspect_method = true;
                 }
 
-                let m = if is_proxy_property(&m.attrs) {
-                    gen_proxy_property(&method_name, &m)
+                let attrs = parse_item_attributes(&m.attrs).unwrap();
+                let is_property = attrs.iter().any(|x| x.is_property());
+                let has_inputs = m.sig.inputs.len() > 1;
+                let name = attrs
+                    .iter()
+                    .find_map(|x| match x {
+                        ItemAttribute::Name(n) => Some(n.to_string()),
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| {
+                        pascal_case(if is_property && has_inputs {
+                            assert!(method_name.starts_with("set_"));
+                            &method_name[4..]
+                        } else {
+                            &method_name
+                        })
+                    });
+                let m = if is_property {
+                    gen_proxy_property(&name, &m)
                 } else {
-                    gen_proxy_method_call(&method_name, &m)
+                    gen_proxy_method_call(&name, &m)
                 };
                 methods.extend(m);
             }
@@ -160,12 +177,6 @@ pub fn dbus_proxy(attr: TokenStream, mut item: TokenStream) -> TokenStream {
     item
 }
 
-fn is_proxy_property(attrs: &[Attribute]) -> bool {
-    // TODO: match on structure, not on string representation
-    // TODO: add DBus method/property name override
-    attrs.iter().any(|a| a.tokens.to_string() == "(property)")
-}
-
 fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> proc_macro2::TokenStream {
     let doc = get_doc_attrs(&m.attrs);
     let args = m
@@ -174,7 +185,6 @@ fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> proc_macro2:
         .iter()
         .filter_map(|arg| arg_ident(arg))
         .collect::<Vec<_>>();
-    let method_name = pascal_case(method_name);
     let sig = &m.sig;
     quote! {
         #(#doc)*
@@ -189,8 +199,6 @@ fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> proc_macro2::
     let doc = get_doc_attrs(&m.attrs);
     let sig = &m.sig;
     if sig.inputs.len() > 1 {
-        assert!(property_name.starts_with("set_"));
-        let property_name = pascal_case(&property_name[4..]);
         let value = arg_ident(sig.inputs.last().unwrap()).unwrap();
         quote! {
             #(#doc)*
@@ -199,7 +207,6 @@ fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> proc_macro2::
             }
         }
     } else {
-        let property_name = pascal_case(property_name);
         quote! {
             #(#doc)*
             pub #sig {
