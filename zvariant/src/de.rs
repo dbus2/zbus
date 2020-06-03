@@ -161,6 +161,7 @@ where
 }
 
 /// Our deserialization implementation.
+#[derive(Debug)]
 pub struct Deserializer<'de, 'sig, 'f, B> {
     pub(self) ctxt: EncodingContext<B>,
     pub(self) bytes: &'de [u8],
@@ -759,6 +760,7 @@ where
     }
 }
 
+#[derive(Debug)]
 struct StructureDeserializer<'d, 'de, 'sig, 'f, B> {
     de: &'d mut Deserializer<'de, 'sig, 'f, B>,
 }
@@ -777,12 +779,14 @@ where
     }
 }
 
+#[derive(Debug)]
 enum ValueParseStage {
     Signature,
     Value,
     Done,
 }
 
+#[derive(Debug)]
 struct ValueDeserializer<'d, 'de, 'sig, 'f, B> {
     de: &'d mut Deserializer<'de, 'sig, 'f, B>,
     stage: ValueParseStage,
