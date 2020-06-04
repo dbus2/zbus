@@ -1,6 +1,5 @@
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use proc_macro_crate::crate_name;
 use quote::quote;
 use syn::{self, AttributeArgs, Ident, ItemTrait, NestedMeta, TraitItemMethod};
 
@@ -12,13 +11,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     let mut default_service = None;
     let mut has_introspect_method = false;
 
-    let zbus = Ident::new(
-        &match crate_name("zbus") {
-            Ok(x) => x,
-            Err(_) => "zbus".into(),
-        },
-        Span::call_site(),
-    );
+    let zbus = get_crate_ident("zbus");
 
     for arg in args {
         match arg {

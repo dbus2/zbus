@@ -1,6 +1,18 @@
+use proc_macro2::Span;
+use proc_macro_crate::crate_name;
 use syn::{
     Attribute, FnArg, Ident, Lit, Meta, MetaList, NestedMeta, Pat, PatIdent, PatType, Result,
 };
+
+pub fn get_crate_ident(name: &str) -> Ident {
+    Ident::new(
+        &match crate_name(name) {
+            Ok(x) => x,
+            Err(_) => name.into(),
+        },
+        Span::call_site(),
+    )
+}
 
 pub fn arg_ident(arg: &FnArg) -> Option<&Ident> {
     match arg {
