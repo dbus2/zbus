@@ -1,4 +1,18 @@
-use syn::{Attribute, Lit, Meta, MetaList, NestedMeta, Result};
+use syn::{
+    Attribute, FnArg, Ident, Lit, Meta, MetaList, NestedMeta, Pat, PatIdent, PatType, Result,
+};
+
+pub fn arg_ident(arg: &FnArg) -> Option<&Ident> {
+    match arg {
+        FnArg::Typed(PatType { pat, .. }) => {
+            if let Pat::Ident(PatIdent { ident, .. }) = &**pat {
+                return Some(ident);
+            }
+            None
+        }
+        _ => None,
+    }
+}
 
 pub fn get_doc_attrs(attrs: &[Attribute]) -> Vec<&Attribute> {
     attrs.iter().filter(|x| x.path.is_ident("doc")).collect()
