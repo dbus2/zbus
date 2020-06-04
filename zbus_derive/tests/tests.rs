@@ -1,5 +1,5 @@
 use zbus;
-use zbus_derive::dbus_proxy;
+use zbus_derive::{dbus_proxy, DBusError};
 
 #[test]
 fn test_proxy() {
@@ -20,5 +20,19 @@ fn test_proxy() {
 
         #[dbus_proxy(property)]
         fn set_property(&self, val: u16) -> zbus::Result<()>;
+    }
+}
+
+#[test]
+fn test_derive_error() {
+    #[derive(Debug, DBusError)]
+    #[dbus_error(prefix = "org.freedesktop.zbus")]
+    enum Test {
+        SomeExcuse,
+        #[dbus_error(name = "I.Am.Sorry.Dave")]
+        IAmSorryDave(String),
+        LetItBe {
+            desc: String,
+        },
     }
 }

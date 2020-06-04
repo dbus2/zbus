@@ -123,3 +123,29 @@ pub fn proxy_parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttrib
 
     Ok(v)
 }
+
+fn error_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
+    let (ident, v) = parse_attribute(meta)?;
+
+    match ident.as_ref() {
+        "name" => Ok(ItemAttribute::Name(v)),
+        s => panic!("Unknown item meta {}", s),
+    }
+}
+
+// Parse optional item attributes such as:
+// #[dbus_error(name = "MyName")]
+pub fn error_parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> {
+    let meta = find_attribute_meta(attrs, "dbus_error")?;
+
+    let v = match meta {
+        Some(meta) => meta
+            .nested
+            .iter()
+            .map(|m| error_parse_item_attribute(&m).unwrap())
+            .collect(),
+        None => Vec::new(),
+    };
+
+    Ok(v)
+}

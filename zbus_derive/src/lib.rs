@@ -33,8 +33,9 @@
 //! [`Proxy`]: https://docs.rs/zbus/2.0.0/zbus/struct.Proxy.html
 //!
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, AttributeArgs, ItemTrait};
+use syn::{parse_macro_input, AttributeArgs, DeriveInput, ItemTrait};
 
+mod error;
 mod proxy;
 mod utils;
 
@@ -43,4 +44,10 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
     let input = parse_macro_input!(item as ItemTrait);
     proxy::expand(args, input)
+}
+
+#[proc_macro_derive(DBusError, attributes(dbus_error))]
+pub fn derive_dbus_error(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    error::expand_derive(input)
 }
