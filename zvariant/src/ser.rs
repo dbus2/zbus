@@ -224,9 +224,9 @@ where
     T: Serialize,
 {
     let mut fds = vec![];
-    let mut serializer = Serializer::<B, W>::new(signature, writer, &mut fds, ctxt);
-    value.serialize(&mut serializer)?;
-    Ok((serializer.bytes_written, fds))
+    let mut ser = Serializer::<B, W>::new(signature, writer, &mut fds, ctxt);
+    value.serialize(&mut ser)?;
+    Ok((ser.bytes_written, fds))
 }
 
 /// Serialize `T` that has the given signature, to a new byte vector.
@@ -602,7 +602,7 @@ where
         let element_signature_len = element_signature.len();
 
         Ok(SeqSerializer {
-            serializer: self,
+            ser: self,
             start,
             element_signature_len,
             first_padding,
@@ -664,7 +664,7 @@ where
         }
 
         Ok(StructSerializer {
-            serializer: self,
+            ser: self,
             end_parens,
         })
     }
@@ -684,7 +684,7 @@ where
 
 #[doc(hidden)]
 pub struct SeqSerializer<'ser, 'sig, 'b, B, W> {
-    serializer: &'b mut Serializer<'ser, 'sig, B, W>,
+    ser: &'b mut Serializer<'ser, 'sig, B, W>,
     start: usize,
     // where value signature starts
     element_signature_len: usize,
@@ -698,25 +698,20 @@ where
     W: Write + Seek,
 {
     pub(self) fn end_seq(self) -> Result<()> {
-        if self.start + self.first_padding == self.serializer.bytes_written {
+        if self.start + self.first_padding == self.ser.bytes_written {
             // Empty sequence so we need to parse the element signature.
-            self.serializer
-                .sig_parser
-                .skip_chars(self.element_signature_len)?;
+            self.ser.sig_parser.skip_chars(self.element_signature_len)?;
         }
 
         // Set size of array in bytes
-        let array_len = self.serializer.bytes_written - self.start;
+        let array_len = self.ser.bytes_written - self.start;
         let len = usize_to_u32(array_len - self.first_padding);
-        self.serializer
+        self.ser
             .writer
             .seek(std::io::SeekFrom::Current(-(array_len as i64) - 4))
             .map_err(Error::Io)?;
-        self.serializer
-            .writer
-            .write_u32::<B>(len)
-            .map_err(Error::Io)?;
-        self.serializer
+        self.ser.writer.write_u32::<B>(len).map_err(Error::Io)?;
+        self.ser
             .writer
             .seek(std::io::SeekFrom::Current(array_len as i64))
             .map_err(Error::Io)?;
@@ -737,13 +732,11 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.start + self.first_padding != self.serializer.bytes_written {
+        if self.start + self.first_padding != self.ser.bytes_written {
             // The signature needs to be rewinded before encoding each element.
-            self.serializer
-                .sig_parser
-                .rewind_chars(self.element_signature_len);
+            self.ser.sig_parser.rewind_chars(self.element_signature_len);
         }
-        value.serialize(&mut *self.serializer)
+        value.serialize(&mut *self.ser)
     }
 
     fn end(self) -> Result<()> {
@@ -753,7 +746,7 @@ where
 
 #[doc(hidden)]
 pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
-    serializer: &'b mut Serializer<'ser, 'sig, B, W>,
+    ser: &'b mut Serializer<'ser, 'sig, B, W>,
     end_parens: bool,
 }
 
@@ -771,33 +764,33 @@ where
                 // Serializing the value of a Value, which means signature was serialized
                 // already, and also put aside for us to be picked here.
                 let signature = self
-                    .serializer
+                    .ser
                     .value_sign
                     .take()
                     .expect("Incorrect Value encoding");
 
                 let sig_parser = SignatureParser::new(signature);
-                let mut serializer = Serializer::<B, W> {
-                    ctxt: self.serializer.ctxt,
+                let mut ser = Serializer::<B, W> {
+                    ctxt: self.ser.ctxt,
                     sig_parser,
-                    writer: &mut self.serializer.writer,
-                    fds: self.serializer.fds,
-                    bytes_written: self.serializer.bytes_written,
+                    writer: &mut self.ser.writer,
+                    fds: self.ser.fds,
+                    bytes_written: self.ser.bytes_written,
                     value_sign: None,
                     b: PhantomData,
                 };
-                value.serialize(&mut serializer)?;
-                self.serializer.bytes_written = serializer.bytes_written;
+                value.serialize(&mut ser)?;
+                self.ser.bytes_written = ser.bytes_written;
 
                 Ok(())
             }
-            _ => value.serialize(&mut *self.serializer),
+            _ => value.serialize(&mut *self.ser),
         }
     }
 
     fn end_struct(self) -> Result<()> {
         if self.end_parens {
-            self.serializer.sig_parser.skip_char()?;
+            self.ser.sig_parser.skip_char()?;
         }
 
         Ok(())
@@ -883,31 +876,31 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.start + self.first_padding == self.serializer.bytes_written {
+        if self.start + self.first_padding == self.ser.bytes_written {
             // First key
-            self.serializer.sig_parser.skip_char()?;
+            self.ser.sig_parser.skip_char()?;
         } else {
             // The signature needs to be rewinded before encoding each element.
-            self.serializer
+            self.ser
                 .sig_parser
                 .rewind_chars(self.element_signature_len - 2);
         }
-        self.serializer.add_padding(DICT_ENTRY_ALIGNMENT)?;
+        self.ser.add_padding(DICT_ENTRY_ALIGNMENT)?;
 
-        key.serialize(&mut *self.serializer)
+        key.serialize(&mut *self.ser)
     }
 
     fn serialize_value<T>(&mut self, value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(&mut *self.serializer)
+        value.serialize(&mut *self.ser)
     }
 
     fn end(self) -> Result<()> {
-        if self.start + self.first_padding != self.serializer.bytes_written {
+        if self.start + self.first_padding != self.ser.bytes_written {
             // Non-empty map, take }
-            self.serializer.sig_parser.skip_char()?;
+            self.ser.sig_parser.skip_char()?;
         }
         self.end_seq()
     }
