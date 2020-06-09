@@ -525,29 +525,30 @@ where
             }
             ARRAY_SIGNATURE_CHAR => {
                 self.sig_parser.skip_char()?;
-                self.parse_padding(ARRAY_ALIGNMENT)?;
+                self.parse_padding(ARRAY_ALIGNMENT_DBUS)?;
                 let len = B::read_u32(self.next_slice(4)?) as usize;
 
-                let next_signature_char = self.sig_parser.next_char();
-                let alignment =
-                    alignment_for_signature_char(next_signature_char, self.ctxt.format());
+                let element_signature_pos = self.sig_parser.pos();
+                let rest_of_signature = Signature::from_str_unchecked(
+                    &self.sig_parser.signature()[element_signature_pos..],
+                );
+                let element_signature = slice_signature(&rest_of_signature)?;
+                let alignment = alignment_for_signature(&element_signature, self.ctxt.format());
+                let element_signature_len = element_signature.len();
+
                 // D-Bus requires padding for the first element even when there is no first element
                 // (i-e empty array) so we parse padding already.
                 self.parse_padding(alignment)?;
                 let start = self.pos;
 
-                let element_signature_pos = self.sig_parser.pos();
+                let next_signature_char = self.sig_parser.next_char();
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
                     self.sig_parser.skip_char()?;
                 }
-                let rest_of_signature = Signature::from_str_unchecked(
-                    &self.sig_parser.signature()[element_signature_pos..],
-                );
-                let element_signature = slice_signature(&rest_of_signature)?;
 
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
                     // Everything except the starting and ending brackets
-                    let element_signature_len = element_signature.len() - 2;
+                    let element_signature_len = element_signature_len - 2;
                     visitor
                         .visit_map(ArrayDeserializer {
                             de: self,
@@ -561,7 +562,6 @@ where
                             Ok(v)
                         })
                 } else {
-                    let element_signature_len = element_signature.len();
                     visitor.visit_seq(ArrayDeserializer {
                         de: self,
                         len,
@@ -572,7 +572,7 @@ where
             }
             STRUCT_SIG_START_CHAR => {
                 self.sig_parser.skip_char()?;
-                self.parse_padding(STRUCT_ALIGNMENT)?;
+                self.parse_padding(STRUCT_ALIGNMENT_DBUS)?;
 
                 visitor
                     .visit_seq(StructureDeserializer { de: self })
@@ -729,7 +729,7 @@ where
         if self.start != self.de.pos {
             // The signature needs to be rewinded before encoding each element.
             self.de.sig_parser.rewind_chars(self.element_signature_len);
-            self.de.parse_padding(DICT_ENTRY_ALIGNMENT)?;
+            self.de.parse_padding(DICT_ENTRY_ALIGNMENT_DBUS)?;
         }
 
         let v = seed.deserialize(&mut *self.de).map(Some);

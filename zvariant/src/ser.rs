@@ -584,22 +584,21 @@ where
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
         self.sig_parser.skip_char()?;
-        self.add_padding(ARRAY_ALIGNMENT)?;
+        self.add_padding(ARRAY_ALIGNMENT_DBUS)?;
         // Length in bytes (unfortunately not the same as len passed to us here) which we initially
         // set to 0.
         self.write_u32::<B>(0_u32).map_err(Error::Io)?;
 
-        let next_signature_char = self.sig_parser.next_char();
-        let alignment = alignment_for_signature_char(next_signature_char, self.ctxt.format());
-        let start = self.bytes_written;
-        // D-Bus expects us to add padding for the first element even when there is no first
-        // element (i-e empty array) so we add padding already.
-        let first_padding = self.add_padding(alignment)?;
         let element_signature_pos = self.sig_parser.pos();
         let rest_of_signature =
             Signature::from_str_unchecked(&self.sig_parser.signature()[element_signature_pos..]);
         let element_signature = slice_signature(&rest_of_signature)?;
         let element_signature_len = element_signature.len();
+        let alignment = alignment_for_signature(&element_signature, self.ctxt.format());
+        let start = self.bytes_written;
+        // D-Bus expects us to add padding for the first element even when there is no first
+        // element (i-e empty array) so we add padding already.
+        let first_padding = self.add_padding(alignment)?;
 
         Ok(SeqSerializer {
             ser: self,
@@ -644,7 +643,7 @@ where
             end_parens = false;
         } else {
             self.sig_parser.skip_char()?;
-            self.add_padding(STRUCT_ALIGNMENT)?;
+            self.add_padding(STRUCT_ALIGNMENT_DBUS)?;
 
             if c == STRUCT_SIG_START_CHAR || c == DICT_ENTRY_SIG_START_CHAR {
                 end_parens = true;
@@ -885,7 +884,7 @@ where
                 .sig_parser
                 .rewind_chars(self.element_signature_len - 2);
         }
-        self.ser.add_padding(DICT_ENTRY_ALIGNMENT)?;
+        self.ser.add_padding(DICT_ENTRY_ALIGNMENT_DBUS)?;
 
         key.serialize(&mut *self.ser)
     }

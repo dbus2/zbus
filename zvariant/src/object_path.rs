@@ -101,7 +101,10 @@ impl<'a> Basic for ObjectPath<'a> {
     const ALIGNMENT: usize = <&str>::ALIGNMENT;
 
     fn alignment(format: EncodingFormat) -> usize {
-        <&str>::alignment(format)
+        match format {
+            EncodingFormat::DBus => <&str>::alignment(format),
+            EncodingFormat::GVariant => 1,
+        }
     }
 }
 
