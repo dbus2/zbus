@@ -57,7 +57,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 has_introspect_method = true;
             }
 
-            let attrs = parse_item_attributes(&m.attrs).unwrap();
+            let attrs = proxy_parse_item_attributes(&m.attrs).unwrap();
             let is_property = attrs.iter().any(|x| x.is_property());
             let has_inputs = m.sig.inputs.len() > 1;
             let name = attrs

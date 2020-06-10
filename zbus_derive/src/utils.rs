@@ -97,7 +97,7 @@ fn parse_attribute(meta: &NestedMeta) -> Result<(String, String)> {
     Ok((ident.to_string(), value))
 }
 
-fn parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
+fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
     let (ident, v) = parse_attribute(meta)?;
 
     match ident.as_ref() {
@@ -109,14 +109,14 @@ fn parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
 
 // Parse optional item attributes such as:
 // #[dbus_proxy(name = "MyName", property)]
-pub fn parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> {
+pub fn proxy_parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> {
     let meta = find_attribute_meta(attrs, "dbus_proxy")?;
 
     let v = match meta {
         Some(meta) => meta
             .nested
             .iter()
-            .map(|m| parse_item_attribute(&m).unwrap())
+            .map(|m| proxy_parse_item_attribute(&m).unwrap())
             .collect(),
         None => Vec::new(),
     };
