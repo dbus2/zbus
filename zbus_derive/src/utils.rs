@@ -1,4 +1,30 @@
-use syn::{Attribute, Lit, Meta, MetaList, NestedMeta, Result};
+use proc_macro2::Span;
+use proc_macro_crate::crate_name;
+use syn::{
+    Attribute, FnArg, Ident, Lit, Meta, MetaList, NestedMeta, Pat, PatIdent, PatType, Result,
+};
+
+pub fn get_crate_ident(name: &str) -> Ident {
+    Ident::new(
+        &match crate_name(name) {
+            Ok(x) => x,
+            Err(_) => name.into(),
+        },
+        Span::call_site(),
+    )
+}
+
+pub fn arg_ident(arg: &FnArg) -> Option<&Ident> {
+    match arg {
+        FnArg::Typed(PatType { pat, .. }) => {
+            if let Pat::Ident(PatIdent { ident, .. }) = &**pat {
+                return Some(ident);
+            }
+            None
+        }
+        _ => None,
+    }
+}
 
 pub fn get_doc_attrs(attrs: &[Attribute]) -> Vec<&Attribute> {
     attrs.iter().filter(|x| x.path.is_ident("doc")).collect()
@@ -71,7 +97,7 @@ fn parse_attribute(meta: &NestedMeta) -> Result<(String, String)> {
     Ok((ident.to_string(), value))
 }
 
-fn parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
+fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
     let (ident, v) = parse_attribute(meta)?;
 
     match ident.as_ref() {
@@ -83,14 +109,40 @@ fn parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
 
 // Parse optional item attributes such as:
 // #[dbus_proxy(name = "MyName", property)]
-pub fn parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> {
+pub fn proxy_parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> {
     let meta = find_attribute_meta(attrs, "dbus_proxy")?;
 
     let v = match meta {
         Some(meta) => meta
             .nested
             .iter()
-            .map(|m| parse_item_attribute(&m).unwrap())
+            .map(|m| proxy_parse_item_attribute(&m).unwrap())
+            .collect(),
+        None => Vec::new(),
+    };
+
+    Ok(v)
+}
+
+fn error_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
+    let (ident, v) = parse_attribute(meta)?;
+
+    match ident.as_ref() {
+        "name" => Ok(ItemAttribute::Name(v)),
+        s => panic!("Unknown item meta {}", s),
+    }
+}
+
+// Parse optional item attributes such as:
+// #[dbus_error(name = "MyName")]
+pub fn error_parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> {
+    let meta = find_attribute_meta(attrs, "dbus_error")?;
+
+    let v = match meta {
+        Some(meta) => meta
+            .nested
+            .iter()
+            .map(|m| error_parse_item_attribute(&m).unwrap())
             .collect(),
         None => Vec::new(),
     };
