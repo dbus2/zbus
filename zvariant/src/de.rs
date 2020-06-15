@@ -551,49 +551,17 @@ where
             }
             ARRAY_SIGNATURE_CHAR => {
                 self.sig_parser.skip_char()?;
-                self.parse_padding(ARRAY_ALIGNMENT_DBUS)?;
-                let len = B::read_u32(self.next_slice(4)?) as usize;
-
-                let element_signature_pos = self.sig_parser.pos();
-                let rest_of_signature = Signature::from_str_unchecked(
-                    &self.sig_parser.signature()[element_signature_pos..],
-                );
-                let element_signature = slice_signature(&rest_of_signature)?;
-                let alignment = alignment_for_signature(&element_signature, self.ctxt.format());
-                let element_signature_len = element_signature.len();
-
-                // D-Bus requires padding for the first element even when there is no first element
-                // (i-e empty array) so we parse padding already.
-                self.parse_padding(alignment)?;
-                let start = self.pos;
-
                 let next_signature_char = self.sig_parser.next_char();
-                if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
-                    self.sig_parser.skip_char()?;
-                }
+                let array_de = ArrayDeserializer::new(self)?;
 
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
-                    // Everything except the starting and ending brackets
-                    let element_signature_len = element_signature_len - 2;
-                    visitor
-                        .visit_map(ArrayDeserializer {
-                            de: self,
-                            len,
-                            start,
-                            element_signature_len,
-                        })
-                        .and_then(|v| {
-                            self.sig_parser.skip_char()?;
+                    visitor.visit_map(array_de).and_then(|v| {
+                        self.sig_parser.skip_char()?; // and the last `}`
 
-                            Ok(v)
-                        })
-                } else {
-                    visitor.visit_seq(ArrayDeserializer {
-                        de: self,
-                        len,
-                        start,
-                        element_signature_len,
+                        Ok(v)
                     })
+                } else {
+                    visitor.visit_seq(array_de)
                 }
             }
             STRUCT_SIG_START_CHAR => {
@@ -695,6 +663,46 @@ struct ArrayDeserializer<'d, 'de, 'sig, 'f, B> {
     start: usize,
     // where value signature starts
     element_signature_len: usize,
+}
+
+impl<'d, 'de, 'sig, 'f, B> ArrayDeserializer<'d, 'de, 'sig, 'f, B>
+where
+    B: byteorder::ByteOrder,
+{
+    fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>) -> Result<Self> {
+        de.parse_padding(ARRAY_ALIGNMENT_DBUS)?;
+        let len = B::read_u32(de.next_slice(4)?) as usize;
+
+        let element_signature_pos = de.sig_parser.pos();
+        let rest_of_signature =
+            Signature::from_str_unchecked(&de.sig_parser.signature()[element_signature_pos..]);
+        let element_signature = slice_signature(&rest_of_signature)?;
+        let alignment = alignment_for_signature(&element_signature, de.ctxt.format());
+        let element_signature_len = element_signature.len();
+
+        // D-Bus requires padding for the first element even when there is no first element
+        // (i-e empty array) so we parse padding already.
+        de.parse_padding(alignment)?;
+        let start = de.pos;
+
+        let next_signature_char = de.sig_parser.next_char();
+        if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
+            de.sig_parser.skip_char()?;
+        }
+
+        let element_signature_len = match next_signature_char {
+            // Everything except the starting and ending brackets
+            DICT_ENTRY_SIG_START_CHAR => element_signature_len - 2,
+            _ => element_signature_len,
+        };
+
+        Ok(Self {
+            de,
+            len,
+            start,
+            element_signature_len,
+        })
+    }
 }
 
 impl<'d, 'de, 'sig, 'f, B> SeqAccess<'de> for ArrayDeserializer<'d, 'de, 'sig, 'f, B>
