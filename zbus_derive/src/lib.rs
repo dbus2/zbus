@@ -1,8 +1,9 @@
 //! This crate provides derive macros helpers for zbus.
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, AttributeArgs, DeriveInput, ItemTrait};
+use syn::{parse_macro_input, AttributeArgs, DeriveInput, ItemImpl, ItemTrait};
 
 mod error;
+mod iface;
 mod proxy;
 mod utils;
 
@@ -65,6 +66,71 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
     let input = parse_macro_input!(item as ItemTrait);
     proxy::expand(args, input)
+}
+
+/// Attribute macro for implementing a D-Bus interface.
+///
+/// The macro must be applied on an `impl T`. All methods will be exported, either as methods,
+/// properties or signal depending on the item attributes. It will implement the [`Interface`] trait
+/// `for T` on your behalf, to handle the message dispatching and introspection support.
+///
+/// The methods accept the `dbus_interface` attributes:
+///
+/// * `name` - override the D-Bus name (pascal case form of the method by default)
+///
+/// * `property` - expose the method as a property. If the method takes an argument, it must be a
+///   setter, with a `set_` prefix. Otherwise, it's a getter.
+///
+/// * `signal` - the method is a "signal". It must be a method declaration (without body). Its code
+///   block will be expanded to emit the signal from the object path associated with the interface
+///   instance.
+///
+///   (TODO: there is no facility yet to emit a signal outside of a dispatched handler - use
+///   the [`Connection::emit_signal()`] manually as a lower-level solution).
+///
+/// # Example
+///
+/// ```
+///# use std::error::Error;
+/// use zbus_derive::dbus_interface;
+/// use std::rc::Rc;
+/// use std::cell::RefCell;
+///
+/// struct Example {
+///     some_data: String,
+/// }
+///
+/// #[dbus_interface(name = "org.myservice.Example")]
+/// impl Example {
+///     // "Quit" method. A method may throw errors.
+///     fn quit(&self) -> zbus::fdo::Result<()> {
+///         Err(zbus::fdo::Error::Failed("You are leaving me?".to_string()))
+///     }
+///
+///     // "TheAnswer" property (note: the "name" attribute), with its associated getter.
+///     #[dbus_interface(property, name = "TheAnswer")]
+///     fn answer(&self) -> u32 {
+///         2 * 3 * 7
+///     }
+///
+///     // "Notify" signal (note: no implementation body).
+///     #[dbus_interface(signal)]
+///     fn notify(&self, message: &str) -> zbus::Result<()>;
+/// }
+///
+///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+/// ```
+///
+/// See also [`ObjectServer`] documentation to learn how to export an interface over a `Connection`.
+///
+/// [`ObjectServer`]: https://docs.rs/zbus/1.0.0/zbus/struct.ObjectServer.html
+/// [`Connection::emit_signal()`]: https://docs.rs/zbus/1.0.0/zbus/struct.Connection.html#method.emit_signal
+/// [`Interface`]: https://docs.rs/zbus/1.0.0/zbus/trait.Interface.html
+#[proc_macro_attribute]
+pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(attr as AttributeArgs);
+    let input = syn::parse_macro_input!(item as ItemImpl);
+    iface::expand(args, input)
 }
 
 /// Derive macro for defining a D-Bus error.

@@ -1,5 +1,5 @@
 use zbus;
-use zbus_derive::{dbus_proxy, DBusError};
+use zbus_derive::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]
 fn test_proxy() {
@@ -34,5 +34,90 @@ fn test_derive_error() {
         LetItBe {
             desc: String,
         },
+    }
+}
+
+#[test]
+fn test_interface() {
+    use zbus::Interface;
+
+    struct Test;
+
+    #[dbus_interface(name = "org.freedesktop.zbus.Test")]
+    impl Test {
+        fn no_arg(&self) {
+            unimplemented!()
+        }
+
+        fn str_u32(&self, val: &str) -> zbus::fdo::Result<u32> {
+            val.parse()
+                .map_err(|e| zbus::fdo::Error::Failed(format!("Invalid val: {}", e)))
+        }
+
+        // TODO: naming output arguments after "RFC: Structural Records #2584"
+        fn many_output(&self) -> zbus::fdo::Result<(u32, String)> {
+            unimplemented!()
+        }
+
+        fn pair_output(&self) -> zbus::fdo::Result<((u32, String),)> {
+            unimplemented!()
+        }
+
+        #[dbus_interface(name = "CheckVEC")]
+        fn check_vec(&self) -> Vec<u8> {
+            unimplemented!()
+        }
+
+        #[dbus_interface(property)]
+        fn my_prop(&self) -> u16 {
+            unimplemented!()
+        }
+
+        #[dbus_interface(property)]
+        fn set_my_prop(&self, _val: u16) {
+            unimplemented!()
+        }
+
+        #[dbus_interface(signal)]
+        fn signal(&self, arg: u8, other: &str) -> zbus::Result<()>;
+    }
+
+    const EXPECTED_XML: &'static str = r#"<interface name="org.freedesktop.zbus.Test">
+  <method name="NoArg">
+  </method>
+  <method name="StrU32">
+    <arg name="val" type="s" direction="in"/>
+    <arg type="u" direction="out"/>
+  </method>
+  <method name="ManyOutput">
+    <arg type="u" direction="out"/>
+    <arg type="s" direction="out"/>
+  </method>
+  <method name="PairOutput">
+    <arg type="(us)" direction="out"/>
+  </method>
+  <method name="CheckVEC">
+    <arg type="ay" direction="out"/>
+  </method>
+  <signal name="Signal">
+    <arg name="arg" type="y"/>
+    <arg name="other" type="s"/>
+  </signal>
+  <property name="MyProp" type="q" access="readwrite"/>
+</interface>
+"#;
+    let t = Test;
+    let mut xml = String::new();
+    t.introspect_to_writer(&mut xml, 0);
+    assert_eq!(xml, EXPECTED_XML);
+
+    assert_eq!(Test::name(), "org.freedesktop.zbus.Test");
+
+    if false {
+        // check compilation
+        let c = zbus::Connection::new_session().unwrap();
+        let m = zbus::Message::method(None, None, "/", None, "StrU32", &(42,)).unwrap();
+        let _ = t.call(&c, &m, "StrU32").unwrap();
+        t.signal(23, "ergo sum").unwrap();
     }
 }
