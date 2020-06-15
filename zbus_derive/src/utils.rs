@@ -112,8 +112,8 @@ fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
 
 // Parse optional item attributes such as:
 // #[dbus_proxy(name = "MyName", property)]
-pub fn proxy_parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> {
-    let meta = find_attribute_meta(attrs, "dbus_proxy")?;
+pub fn parse_item_attributes(attrs: &[Attribute], attr_name: &str) -> Result<Vec<ItemAttribute>> {
+    let meta = find_attribute_meta(attrs, attr_name)?;
 
     let v = match meta {
         Some(meta) => meta
