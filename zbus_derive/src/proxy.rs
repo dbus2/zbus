@@ -16,7 +16,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     for arg in args {
         match arg {
             NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
-                if nv.path.is_ident("interface") {
+                if nv.path.is_ident("interface") || nv.path.is_ident("name") {
                     if let syn::Lit::Str(lit) = nv.lit {
                         iface_name = Some(lit.value());
                     } else {
