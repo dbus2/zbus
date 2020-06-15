@@ -54,10 +54,8 @@ pub enum ItemAttribute {
 
 impl ItemAttribute {
     pub fn is_property(&self) -> bool {
-        match self {
-            Self::Property => true,
-            _ => false,
-        }
+        self == &Self::Property
+    }
     }
 }
 
