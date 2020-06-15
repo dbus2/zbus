@@ -343,6 +343,31 @@ pub enum Error {
     NotContainer(String),
 }
 
+pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<zbus::MessageError> for Error {
+    fn from(val: zbus::MessageError) -> Self {
+        match val {
+            zbus::MessageError::StrTooLarge => Self::LimitsExceeded("string too large".to_string()),
+            zbus::MessageError::InsufficientData => {
+                Self::InconsistentMessage("insufficient data".to_string())
+            }
+            zbus::MessageError::ExcessData => Self::InconsistentMessage("excess data".to_string()),
+            zbus::MessageError::IncorrectEndian => {
+                Self::InconsistentMessage("incorrect endian".to_string())
+            }
+            zbus::MessageError::Io(e) => Self::IOError(e.to_string()),
+            zbus::MessageError::NoBodySignature => {
+                Self::InvalidSignature("missing body signature".to_string())
+            }
+            zbus::MessageError::MissingSender => {
+                Self::InconsistentMessage("missing sender".to_string())
+            }
+            zbus::MessageError::Variant(e) => Self::InconsistentMessage(e.to_string()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::fdo;
