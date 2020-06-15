@@ -49,6 +49,7 @@ pub fn pascal_case(s: &str) -> String {
 #[derive(Debug, PartialEq)]
 pub enum ItemAttribute {
     Property,
+    Signal,
     Name(String),
 }
 
@@ -56,6 +57,9 @@ impl ItemAttribute {
     pub fn is_property(&self) -> bool {
         self == &Self::Property
     }
+
+    pub fn is_signal(&self) -> bool {
+        self == &Self::Signal
     }
 }
 
@@ -101,6 +105,7 @@ fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
     match ident.as_ref() {
         "name" => Ok(ItemAttribute::Name(v)),
         "property" => Ok(ItemAttribute::Property),
+        "signal" => Ok(ItemAttribute::Signal),
         s => panic!("Unknown item meta {}", s),
     }
 }
