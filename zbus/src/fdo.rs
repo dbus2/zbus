@@ -147,7 +147,7 @@ trait DBus {
     fn remove_match(&self, rule: &str) -> zbus::Result<()>;
 
     /// Ask the message bus to assign the given name to the method caller.
-    fn request_name(&self, name: &str, flags: RequestNameFlags) -> zbus::Result<u32>;
+    fn request_name(&self, name: &str, flags: BitFlags<RequestNameFlags>) -> zbus::Result<u32>;
 
     /// Tries to launch the executable associated with a name (service
     /// activation), as an explicit request.
