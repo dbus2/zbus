@@ -128,6 +128,13 @@ impl Connection {
         Self::new(system_socket()?)
     }
 
+    /// Create a `Connection` for the given [D-Bus address].
+    ///
+    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
+    pub fn new_for_address(address: &str) -> Result<Self> {
+        Self::new(connect(&address::parse_dbus_address(address)?)?)
+    }
+
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
         &self.server_guid
