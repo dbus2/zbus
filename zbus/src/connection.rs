@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::io::{BufRead, BufReader, Write};
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{env, io};
@@ -25,6 +26,12 @@ pub struct Connection {
 
     #[derivative(Debug = "ignore")]
     default_msg_handler: Option<RefCell<MessageHandlerFn>>,
+}
+
+impl AsRawFd for Connection {
+    fn as_raw_fd(&self) -> RawFd {
+        self.socket.as_raw_fd()
+    }
 }
 
 fn connect(addr: &Address) -> Result<UnixStream> {
@@ -126,6 +133,13 @@ impl Connection {
 
     pub fn new_system() -> Result<Self> {
         Self::new(system_socket()?)
+    }
+
+    /// Create a `Connection` for the given [D-Bus address].
+    ///
+    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
+    pub fn new_for_address(address: &str) -> Result<Self> {
+        Self::new(connect(&address::parse_dbus_address(address)?)?)
     }
 
     /// The server's GUID.
