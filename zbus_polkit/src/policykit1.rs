@@ -318,7 +318,7 @@ trait Authority {
         subject: &Subject,
         action_id: &str,
         details: std::collections::HashMap<&str, &str>,
-        flags: CheckAuthorizationFlags,
+        flags: BitFlags<CheckAuthorizationFlags>,
         cancellation_id: &str,
     ) -> zbus::Result<AuthorizationResult>;
 

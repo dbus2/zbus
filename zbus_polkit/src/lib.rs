@@ -14,7 +14,7 @@
 //!     &subject,
 //!     "org.zbus.BeAwesome",
 //!     std::collections::HashMap::new(),
-//!     CheckAuthorizationFlags::AllowUserInteraction,
+//!     CheckAuthorizationFlags::AllowUserInteraction.into(),
 //!     "",
 //! );
 //! ```
