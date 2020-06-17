@@ -163,7 +163,7 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
         impl std::convert::TryFrom<#zbus::Error> for #name {
             type Error = #zbus::Error;
 
-            fn try_from(value: #zbus::Error) -> Result<Self, Self::Error> {
+            fn try_from(value: #zbus::Error) -> std::result::Result<Self, Self::Error> {
                 if let #zbus::Error::MethodError(name, desc, msg) = value {
                     let desc = desc.unwrap_or_else(|| "".to_string());
                     match name.as_ref() {

@@ -27,6 +27,9 @@ pub use proxy::*;
 mod owned_fd;
 mod utils;
 
+mod object_server;
+pub use object_server::*;
+
 pub mod fdo;
 
 pub mod xml;

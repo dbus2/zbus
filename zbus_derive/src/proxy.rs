@@ -16,7 +16,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     for arg in args {
         match arg {
             NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
-                if nv.path.is_ident("interface") {
+                if nv.path.is_ident("interface") || nv.path.is_ident("name") {
                     if let syn::Lit::Str(lit) = nv.lit {
                         iface_name = Some(lit.value());
                     } else {
@@ -57,7 +57,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 has_introspect_method = true;
             }
 
-            let attrs = proxy_parse_item_attributes(&m.attrs).unwrap();
+            let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
             let is_property = attrs.iter().any(|x| x.is_property());
             let has_inputs = m.sig.inputs.len() > 1;
             let name = attrs

@@ -49,15 +49,17 @@ pub fn pascal_case(s: &str) -> String {
 #[derive(Debug, PartialEq)]
 pub enum ItemAttribute {
     Property,
+    Signal,
     Name(String),
 }
 
 impl ItemAttribute {
     pub fn is_property(&self) -> bool {
-        match self {
-            Self::Property => true,
-            _ => false,
-        }
+        self == &Self::Property
+    }
+
+    pub fn is_signal(&self) -> bool {
+        self == &Self::Signal
     }
 }
 
@@ -103,14 +105,15 @@ fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
     match ident.as_ref() {
         "name" => Ok(ItemAttribute::Name(v)),
         "property" => Ok(ItemAttribute::Property),
+        "signal" => Ok(ItemAttribute::Signal),
         s => panic!("Unknown item meta {}", s),
     }
 }
 
 // Parse optional item attributes such as:
 // #[dbus_proxy(name = "MyName", property)]
-pub fn proxy_parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> {
-    let meta = find_attribute_meta(attrs, "dbus_proxy")?;
+pub fn parse_item_attributes(attrs: &[Attribute], attr_name: &str) -> Result<Vec<ItemAttribute>> {
+    let meta = find_attribute_meta(attrs, attr_name)?;
 
     let v = match meta {
         Some(meta) => meta

@@ -15,6 +15,8 @@ pub enum Error {
     // string description.
     MethodError(String, Option<String>, Message),
     Unsupported,
+    NoTLSConnection,
+    NoTLSNode,
 }
 
 impl error::Error for Error {
@@ -28,6 +30,8 @@ impl error::Error for Error {
             Error::InvalidReply => None,
             Error::MethodError(_, _, _) => None,
             Error::Unsupported => None,
+            Error::NoTLSConnection => None,
+            Error::NoTLSNode => None,
         }
     }
 }
@@ -48,6 +52,8 @@ impl fmt::Display for Error {
                 detail.as_ref().map(|s| s.as_str()).unwrap_or("no details")
             ),
             Error::Unsupported => write!(f, "Connection support is lacking"),
+            Error::NoTLSConnection => write!(f, "No TLS connection"),
+            Error::NoTLSNode => write!(f, "No TLS node"),
         }
     }
 }

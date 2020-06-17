@@ -1,0 +1,427 @@
+use proc_macro::TokenStream;
+use quote::quote;
+use std::collections::HashMap;
+use syn::{
+    self, parse_quote, AngleBracketedGenericArguments, AttributeArgs, FnArg, ImplItem, ItemImpl,
+    NestedMeta, PatType, PathArguments, ReturnType, Signature, Type, TypePath,
+};
+
+use crate::utils::*;
+
+#[derive(Debug)]
+struct Property<'a> {
+    read: bool,
+    write: bool,
+    ty: Option<&'a Type>,
+}
+
+impl<'a> Property<'a> {
+    fn new() -> Self {
+        Self {
+            read: false,
+            write: false,
+            ty: None,
+        }
+    }
+}
+
+pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
+    let zbus = get_crate_ident("zbus");
+    let zvariant = get_crate_ident("zvariant");
+
+    let mut properties = HashMap::new();
+    let mut set_dispatch = quote!();
+    let mut get_dispatch = quote!();
+    let mut get_all = quote!();
+    let mut call_dispatch = quote!();
+    let mut call_mut_dispatch = quote!();
+    let mut introspect = quote!();
+
+    // the impl Type
+    let ty = match input.self_ty.as_ref() {
+        Type::Path(p) => p.path.get_ident().unwrap(),
+        _ => panic!("Invalid type"),
+    };
+
+    let mut iface_name = None;
+    for arg in args {
+        match arg {
+            NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
+                if nv.path.is_ident("interface") || nv.path.is_ident("name") {
+                    if let syn::Lit::Str(lit) = nv.lit {
+                        iface_name = Some(lit.value());
+                    } else {
+                        panic!("Invalid interface argument")
+                    }
+                } else {
+                    panic!("Unsupported argument");
+                }
+            }
+            _ => panic!("Unknown attribute"),
+        }
+    }
+    let iface_name = iface_name.unwrap_or(format!("org.freedesktop.{}", ty));
+
+    for method in input.items.iter_mut().filter_map(|i| {
+        if let ImplItem::Method(m) = i {
+            Some(m)
+        } else {
+            None
+        }
+    }) {
+        let Signature {
+            ident,
+            inputs,
+            output,
+            ..
+        } = &method.sig;
+
+        let attrs = parse_item_attributes(&method.attrs, "dbus_interface").unwrap();
+        method.attrs.clear(); // TODO: clear only dbus_interface attributes
+
+        let is_property = attrs.iter().any(|x| x.is_property());
+        let is_signal = attrs.iter().any(|x| x.is_signal());
+        assert_eq!(is_property && is_signal, false);
+
+        let has_inputs = inputs.len() > 1;
+
+        let is_mut = if let FnArg::Receiver(r) = inputs.first().unwrap() {
+            r.mutability.is_some()
+        } else {
+            panic!("The method is missing a self receiver");
+        };
+
+        let inputs = inputs
+            .iter()
+            .skip(1)
+            .filter_map(|i| {
+                if let FnArg::Typed(t) = i {
+                    Some(t)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let mut intro_args = quote!();
+        introspect_add_input_args(&mut intro_args, &inputs, is_signal);
+        let is_result_output = introspect_add_output_args(&mut intro_args, &output);
+
+        let (args_from_msg, args) = get_args_from_inputs(&inputs);
+
+        let reply = if is_result_output {
+            quote!(match &reply {
+                Ok(r) => c.reply(m, r),
+                Err(e) => e.reply(c, m),
+            })
+        } else {
+            quote!(c.reply(m, &reply))
+        };
+
+        let member_name = attrs
+            .iter()
+            .find_map(|x| match x {
+                ItemAttribute::Name(n) => Some(n.to_string()),
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                let mut name = ident.to_string();
+                if is_property && has_inputs {
+                    assert!(name.starts_with("set_"));
+                    name = name[4..].to_string();
+                }
+                pascal_case(&name)
+            });
+
+        if is_signal {
+            introspect_add_signal(&mut introspect, &member_name, &intro_args);
+
+            method.block = parse_quote!({
+                #zbus::ObjectServer::local_node_emit_signal(None, #iface_name, #member_name, &(#args))
+            });
+        } else if is_property {
+            let p = properties
+                .entry(member_name.to_string())
+                .or_insert_with(Property::new);
+
+            if has_inputs {
+                p.write = true;
+
+                let set_call = if is_result_output {
+                    quote!(self.#ident(val))
+                } else {
+                    quote!(Ok(self.#ident(val)))
+                };
+                let q = quote!(
+                    #member_name => {
+                        let val = match value.try_into() {
+                            Ok(val) => val,
+                            Err(e) => return Some(Err(#zbus::MessageError::Variant(e).into())),
+                        };
+                        Some(#set_call)
+                    }
+                );
+                set_dispatch.extend(q);
+            } else {
+                p.ty = Some(get_property_type(output));
+                p.read = true;
+
+                let q = quote!(
+                    #member_name => {
+                        Some(Ok(#zvariant::Value::from(self.#ident()).into()))
+                    },
+                );
+                get_dispatch.extend(q);
+
+                let q = quote!(
+                    props.insert(#member_name.to_string(), #zvariant::Value::from(self.#ident()).into());
+                );
+                get_all.extend(q)
+            }
+        } else {
+            introspect_add_method(&mut introspect, &member_name, &intro_args);
+
+            let m = quote!(
+                #member_name => {
+                    #args_from_msg
+                    let reply = self.#ident(#args);
+                    Some(#reply)
+                },
+            );
+
+            if is_mut {
+                call_mut_dispatch.extend(m);
+            } else {
+                call_dispatch.extend(m);
+            }
+        }
+    }
+
+    introspect_add_properties(&mut introspect, &properties);
+
+    let iface_impl = quote! {
+        #input
+
+        impl #zbus::Interface for #ty {
+            fn name() -> &'static str {
+                #iface_name
+            }
+
+            fn get(&self, property_name: &str) -> Option<#zbus::fdo::Result<#zvariant::OwnedValue>> {
+                match property_name {
+                    #get_dispatch
+                    _ => None,
+                }
+            }
+
+            fn get_all(&self) -> std::collections::HashMap<String, #zvariant::OwnedValue> {
+                let mut props: std::collections::HashMap<String, #zvariant::OwnedValue> = std::collections::HashMap::new();
+                #get_all
+                props
+            }
+
+            fn set(&mut self, property_name: &str, value: &#zvariant::Value) -> Option<#zbus::fdo::Result<()>> {
+                use std::convert::TryInto;
+
+                match property_name {
+                    #set_dispatch
+                    _ => None,
+                }
+            }
+
+            fn call(&self, c: &#zbus::Connection, m: &#zbus::Message, name: &str) -> std::option::Option<#zbus::Result<u32>> {
+                match name {
+                    #call_dispatch
+                    _ => None,
+                }
+            }
+
+            fn call_mut(&mut self, c: &#zbus::Connection, m: &#zbus::Message, name: &str) -> std::option::Option<#zbus::Result<u32>> {
+                match name {
+                    #call_mut_dispatch
+                    _ => None,
+                }
+            }
+
+            fn introspect_to_writer(&self, writer: &mut dyn std::fmt::Write, level: usize) {
+                writeln!(
+                    writer,
+                    r#"{:indent$}<interface name="{}">"#,
+                    "",
+                    Self::name(),
+                    indent = level
+                ).unwrap();
+                {
+                    use #zvariant::Type;
+
+                    let level = level + 2;
+                    #introspect
+                }
+                writeln!(writer, r#"{:indent$}</interface>"#, "", indent = level).unwrap();
+            }
+        }
+    };
+
+    iface_impl.into()
+}
+
+fn get_args_from_inputs(
+    inputs: &[&PatType],
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    if inputs.is_empty() {
+        (quote!(), quote!())
+    } else {
+        let zbus = get_crate_ident("zbus");
+        let args = inputs.iter().map(|t| &t.pat).collect::<Vec<_>>();
+        let tys = inputs.iter().map(|t| &t.ty).collect::<Vec<_>>();
+
+        let args = quote!(#(#args),*);
+        let args_from_msg = quote!(
+            let (#args): (#(#tys),*) =
+                match m.body().map_err(#zbus::fdo::Error::from) {
+                    Ok(r) => r,
+                    Err(e) => return Some(e.reply(c, m)),
+                };
+        );
+
+        (args_from_msg, args)
+    }
+}
+
+fn introspect_add_signal(
+    introspect: &mut proc_macro2::TokenStream,
+    name: &str,
+    args: &proc_macro2::TokenStream,
+) {
+    let intro = quote!(
+        writeln!(writer, "{:indent$}<signal name=\"{}\">", "", #name, indent = level).unwrap();
+        {
+            let level = level + 2;
+            #args
+        }
+        writeln!(writer, "{:indent$}</signal>", "", indent = level).unwrap();
+    );
+
+    introspect.extend(intro);
+}
+
+fn introspect_add_method(
+    introspect: &mut proc_macro2::TokenStream,
+    name: &str,
+    args: &proc_macro2::TokenStream,
+) {
+    let intro = quote!(
+        writeln!(writer, "{:indent$}<method name=\"{}\">", "", #name, indent = level).unwrap();
+        {
+            let level = level + 2;
+            #args
+        }
+        writeln!(writer, "{:indent$}</method>", "", indent = level).unwrap();
+    );
+
+    introspect.extend(intro);
+}
+
+fn introspect_add_input_args(
+    args: &mut proc_macro2::TokenStream,
+    inputs: &[&PatType],
+    is_signal: bool,
+) {
+    for PatType { pat, ty, .. } in inputs {
+        let arg_name = quote!(#pat).to_string();
+        let dir = if is_signal { "" } else { " direction=\"in\"" };
+        let arg = quote!(
+            writeln!(writer, "{:indent$}<arg name=\"{}\" type=\"{}\"{}/>", "",
+                     #arg_name, <#ty>::signature(), #dir, indent = level).unwrap();
+        );
+        args.extend(arg);
+    }
+}
+
+fn introspect_add_output_arg(args: &mut proc_macro2::TokenStream, ty: &Type) {
+    let arg = quote!(
+        writeln!(writer, "{:indent$}<arg type=\"{}\" direction=\"out\"/>", "",
+                 <#ty>::signature(), indent = level).unwrap();
+    );
+    args.extend(arg);
+}
+
+fn get_result_type(p: &TypePath) -> &Type {
+    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
+        &p.path.segments.last().unwrap().arguments
+    {
+        if let Some(syn::GenericArgument::Type(ty)) = args.first() {
+            return &ty;
+        }
+    }
+
+    panic!("unhandled Result return {:?}", p);
+}
+
+fn introspect_add_output_args(args: &mut proc_macro2::TokenStream, output: &ReturnType) -> bool {
+    let mut is_result_output = false;
+
+    if let ReturnType::Type(_, ty) = output {
+        let mut ty = ty.as_ref();
+
+        if let Type::Path(p) = ty {
+            is_result_output = p.path.segments.last().unwrap().ident == "Result";
+            if is_result_output {
+                ty = get_result_type(p);
+            }
+        }
+
+        if let Type::Tuple(t) = ty {
+            for ty in &t.elems {
+                introspect_add_output_arg(args, ty);
+            }
+        } else {
+            introspect_add_output_arg(args, ty);
+        }
+    }
+
+    is_result_output
+}
+
+fn get_property_type(output: &ReturnType) -> &Type {
+    if let ReturnType::Type(_, ty) = output {
+        let ty = ty.as_ref();
+
+        if let Type::Path(p) = ty {
+            let is_result_output = p.path.segments.last().unwrap().ident == "Result";
+            if is_result_output {
+                return get_result_type(p);
+            }
+        }
+
+        ty
+    } else {
+        panic!("Invalid property getter")
+    }
+}
+
+fn introspect_add_properties(
+    introspect: &mut proc_macro2::TokenStream,
+    properties: &HashMap<String, Property>,
+) {
+    for (name, prop) in properties {
+        let access = if prop.read && prop.write {
+            "readwrite"
+        } else if prop.read {
+            "read"
+        } else if prop.write {
+            "write"
+        } else {
+            eprintln!("Property '{}' is not readable nor writable!", name);
+            continue;
+        };
+        let ty = prop
+            .ty
+            .expect("Write-only properties aren't supported yet.");
+
+        let intro = quote!(
+            writeln!(writer, "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>", "", #name, <#ty>::signature(), #access, indent = level).unwrap();
+        );
+        introspect.extend(intro);
+    }
+}
