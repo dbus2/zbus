@@ -152,3 +152,7 @@ pub fn error_parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttrib
 
     Ok(v)
 }
+
+pub fn is_blank(s: &str) -> bool {
+    s.trim().is_empty()
+}

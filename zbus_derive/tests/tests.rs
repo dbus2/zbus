@@ -45,6 +45,7 @@ fn test_interface() {
 
     #[dbus_interface(name = "org.freedesktop.zbus.Test")]
     impl Test {
+        /// Testing `no_arg` documentation is reflected in XML.
         fn no_arg(&self) {
             unimplemented!()
         }
@@ -68,6 +69,9 @@ fn test_interface() {
             unimplemented!()
         }
 
+        /// Testing my_prop documentation is reflected in XML.
+        ///
+        /// And that too.
         #[dbus_interface(property)]
         fn my_prop(&self) -> u16 {
             unimplemented!()
@@ -78,11 +82,15 @@ fn test_interface() {
             unimplemented!()
         }
 
+        /// Emit a signal.
         #[dbus_interface(signal)]
         fn signal(&self, arg: u8, other: &str) -> zbus::Result<()>;
     }
 
     const EXPECTED_XML: &'static str = r#"<interface name="org.freedesktop.zbus.Test">
+  <!--
+   Testing `no_arg` documentation is reflected in XML.
+   -->
   <method name="NoArg">
   </method>
   <method name="StrU32">
@@ -99,10 +107,18 @@ fn test_interface() {
   <method name="CheckVEC">
     <arg type="ay" direction="out"/>
   </method>
+  <!--
+   Emit a signal.
+   -->
   <signal name="Signal">
     <arg name="arg" type="y"/>
     <arg name="other" type="s"/>
   </signal>
+  <!--
+   Testing my_prop documentation is reflected in XML.
+
+   And that too.
+   -->
   <property name="MyProp" type="q" access="readwrite"/>
 </interface>
 "#;
