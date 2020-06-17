@@ -3,7 +3,8 @@ use quote::quote;
 use std::collections::HashMap;
 use syn::{
     self, parse_quote, AngleBracketedGenericArguments, AttributeArgs, FnArg, ImplItem, ItemImpl,
-    NestedMeta, PatType, PathArguments, ReturnType, Signature, Type, TypePath,
+    Lit::Str, Meta::NameValue, MetaNameValue, NestedMeta, PatType, PathArguments, ReturnType,
+    Signature, Type, TypePath,
 };
 
 use crate::utils::*;
@@ -13,6 +14,7 @@ struct Property<'a> {
     read: bool,
     write: bool,
     ty: Option<&'a Type>,
+    doc_comments: proc_macro2::TokenStream,
 }
 
 impl<'a> Property<'a> {
@@ -21,6 +23,7 @@ impl<'a> Property<'a> {
             read: false,
             write: false,
             ty: None,
+            doc_comments: quote!(),
         }
     }
 }
@@ -46,9 +49,9 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
     let mut iface_name = None;
     for arg in args {
         match arg {
-            NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
+            NestedMeta::Meta(NameValue(nv)) => {
                 if nv.path.is_ident("interface") || nv.path.is_ident("name") {
-                    if let syn::Lit::Str(lit) = nv.lit {
+                    if let Str(lit) = nv.lit {
                         iface_name = Some(lit.value());
                     } else {
                         panic!("Invalid interface argument")
@@ -77,8 +80,23 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
         } = &method.sig;
 
         let attrs = parse_item_attributes(&method.attrs, "dbus_interface").unwrap();
-        method.attrs.clear(); // TODO: clear only dbus_interface attributes
+        method
+            .attrs
+            .retain(|attr| !attr.path.is_ident("dbus_interface"));
+        let docs = get_doc_attrs(&method.attrs)
+            .iter()
+            .filter_map(|attr| {
+                if let Ok(NameValue(MetaNameValue { lit: Str(s), .. })) = attr.parse_meta() {
+                    Some(s.value())
+                } else {
+                    // non #[doc = "..."] attributes are not our concern
+                    // we leave them for rustc to handle
+                    None
+                }
+            })
+            .collect();
 
+        let doc_comments = to_xml_docs(docs);
         let is_property = attrs.iter().any(|x| x.is_property());
         let is_signal = attrs.iter().any(|x| x.is_signal());
         assert_eq!(is_property && is_signal, false);
@@ -134,6 +152,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
             });
 
         if is_signal {
+            introspect.extend(doc_comments);
             introspect_add_signal(&mut introspect, &member_name, &intro_args);
 
             method.block = parse_quote!({
@@ -144,6 +163,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                 .entry(member_name.to_string())
                 .or_insert_with(Property::new);
 
+            p.doc_comments.extend(doc_comments);
             if has_inputs {
                 p.write = true;
 
@@ -179,6 +199,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                 get_all.extend(q)
             }
         } else {
+            introspect.extend(doc_comments);
             introspect_add_method(&mut introspect, &member_name, &intro_args);
 
             let m = quote!(
@@ -197,7 +218,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
         }
     }
 
-    introspect_add_properties(&mut introspect, &properties);
+    introspect_add_properties(&mut introspect, properties);
 
     let iface_impl = quote! {
         #input
@@ -402,7 +423,7 @@ fn get_property_type(output: &ReturnType) -> &Type {
 
 fn introspect_add_properties(
     introspect: &mut proc_macro2::TokenStream,
-    properties: &HashMap<String, Property>,
+    properties: HashMap<String, Property>,
 ) {
     for (name, prop) in properties {
         let access = if prop.read && prop.write {
@@ -419,9 +440,42 @@ fn introspect_add_properties(
             .ty
             .expect("Write-only properties aren't supported yet.");
 
+        introspect.extend(prop.doc_comments);
         let intro = quote!(
             writeln!(writer, "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>", "", #name, <#ty>::signature(), #access, indent = level).unwrap();
         );
         introspect.extend(intro);
     }
+}
+
+pub fn to_xml_docs(lines: Vec<String>) -> proc_macro2::TokenStream {
+    let mut docs = quote!();
+
+    let mut lines: Vec<&str> = lines
+        .iter()
+        .skip_while(|s| is_blank(s))
+        .flat_map(|s| s.split('\n'))
+        .collect();
+
+    while let Some(true) = lines.last().map(|s| is_blank(s)) {
+        lines.pop();
+    }
+
+    if lines.is_empty() {
+        return docs;
+    }
+
+    docs.extend(quote!(writeln!(writer, "{:indent$}<!--", "", indent = level).unwrap();));
+    for line in lines {
+        if !line.is_empty() {
+            docs.extend(
+                quote!(writeln!(writer, "{:indent$}{}", "", #line, indent = level).unwrap();),
+            );
+        } else {
+            docs.extend(quote!(writeln!(writer, "").unwrap();));
+        }
+    }
+    docs.extend(quote!(writeln!(writer, "{:indent$} -->", "", indent = level).unwrap();));
+
+    docs
 }
