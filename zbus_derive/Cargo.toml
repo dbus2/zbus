@@ -25,3 +25,4 @@ proc-macro-crate = "0.1.4"
 [dev-dependencies]
 zvariant = { path = "../zvariant" }
 zbus = { path = "../zbus" }
+serde = { version = "1.0", features = [ "derive" ] }

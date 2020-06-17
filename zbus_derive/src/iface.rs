@@ -42,7 +42,13 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
 
     // the impl Type
     let ty = match input.self_ty.as_ref() {
-        Type::Path(p) => p.path.get_ident().expect("Unsupported 'impl' type"),
+        Type::Path(p) => {
+            &p.path
+                .segments
+                .last()
+                .expect("Unsupported 'impl' type")
+                .ident
+        }
         _ => panic!("Invalid type"),
     };
 
@@ -221,10 +227,15 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
 
     introspect_add_properties(&mut introspect, properties);
 
+    let self_ty = &input.self_ty;
+    let generics = &input.generics;
+    let where_clause = &generics.where_clause;
     let iface_impl = quote! {
         #input
 
-        impl #zbus::Interface for #ty {
+        impl #generics #zbus::Interface for #self_ty
+        #where_clause
+        {
             fn name() -> &'static str {
                 #iface_name
             }

@@ -39,12 +39,19 @@ fn test_derive_error() {
 
 #[test]
 fn test_interface() {
+    use serde;
     use zbus::Interface;
 
-    struct Test;
+    struct Test<'a, T> {
+        something: &'a str,
+        generic: T,
+    }
 
     #[dbus_interface(name = "org.freedesktop.zbus.Test")]
-    impl Test {
+    impl<'a, T> Test<'a, T>
+    where
+        T: serde::ser::Serialize + zvariant::Type,
+    {
         /// Testing `no_arg` documentation is reflected in XML.
         fn no_arg(&self) {
             unimplemented!()
@@ -56,8 +63,8 @@ fn test_interface() {
         }
 
         // TODO: naming output arguments after "RFC: Structural Records #2584"
-        fn many_output(&self) -> zbus::fdo::Result<(u32, String)> {
-            unimplemented!()
+        fn many_output(&self) -> zbus::fdo::Result<(&T, String)> {
+            Ok((&self.generic, self.something.to_string()))
         }
 
         fn pair_output(&self) -> zbus::fdo::Result<((u32, String),)> {
@@ -122,12 +129,15 @@ fn test_interface() {
   <property name="MyProp" type="q" access="readwrite"/>
 </interface>
 "#;
-    let t = Test;
+    let t = Test {
+        something: &"somewhere",
+        generic: 42u32,
+    };
     let mut xml = String::new();
     t.introspect_to_writer(&mut xml, 0);
     assert_eq!(xml, EXPECTED_XML);
 
-    assert_eq!(Test::name(), "org.freedesktop.zbus.Test");
+    assert_eq!(Test::<u32>::name(), "org.freedesktop.zbus.Test");
 
     if false {
         // check compilation
