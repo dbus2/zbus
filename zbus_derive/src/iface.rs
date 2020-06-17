@@ -42,7 +42,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
 
     // the impl Type
     let ty = match input.self_ty.as_ref() {
-        Type::Path(p) => p.path.get_ident().unwrap(),
+        Type::Path(p) => p.path.get_ident().expect("Unsupported 'impl' type"),
         _ => panic!("Invalid type"),
     };
 
@@ -79,7 +79,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
             ..
         } = &method.sig;
 
-        let attrs = parse_item_attributes(&method.attrs, "dbus_interface").unwrap();
+        let attrs = parse_item_attributes(&method.attrs, "dbus_interface")
+            .expect("bad dbus_interface attributes");
         method
             .attrs
             .retain(|attr| !attr.path.is_ident("dbus_interface"));
@@ -103,7 +104,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
 
         let has_inputs = inputs.len() > 1;
 
-        let is_mut = if let FnArg::Receiver(r) = inputs.first().unwrap() {
+        let is_mut = if let FnArg::Receiver(r) = inputs.first().expect("not &self method") {
             r.mutability.is_some()
         } else {
             panic!("The method is missing a self receiver");
@@ -368,8 +369,12 @@ fn introspect_add_output_arg(args: &mut proc_macro2::TokenStream, ty: &Type) {
 }
 
 fn get_result_type(p: &TypePath) -> &Type {
-    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
-        &p.path.segments.last().unwrap().arguments
+    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &p
+        .path
+        .segments
+        .last()
+        .expect("unsupported result type")
+        .arguments
     {
         if let Some(syn::GenericArgument::Type(ty)) = args.first() {
             return &ty;
@@ -386,7 +391,13 @@ fn introspect_add_output_args(args: &mut proc_macro2::TokenStream, output: &Retu
         let mut ty = ty.as_ref();
 
         if let Type::Path(p) = ty {
-            is_result_output = p.path.segments.last().unwrap().ident == "Result";
+            is_result_output = p
+                .path
+                .segments
+                .last()
+                .expect("unsupported output type")
+                .ident
+                == "Result";
             if is_result_output {
                 ty = get_result_type(p);
             }
@@ -409,7 +420,13 @@ fn get_property_type(output: &ReturnType) -> &Type {
         let ty = ty.as_ref();
 
         if let Type::Path(p) = ty {
-            let is_result_output = p.path.segments.last().unwrap().ident == "Result";
+            let is_result_output = p
+                .path
+                .segments
+                .last()
+                .expect("unsupported property type")
+                .ident
+                == "Result";
             if is_result_output {
                 return get_result_type(p);
             }
