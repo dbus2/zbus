@@ -1,6 +1,7 @@
 stages:
   - lint
   - test
+  - pages
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/cargo
@@ -35,3 +36,20 @@ cache:
     - apt/
     - cargo/
     - target/
+
+pages:
+  image: "rustlang/rust:nightly"
+  stage: pages
+  script:
+    - mkdir public
+    - cargo install mdbook --no-default-features
+    - mdbook build book
+    - cp -r ./book/book/* ./public
+    - find $PWD/public | grep "\.html\$"
+
+  artifacts:
+    paths:
+      - public
+
+  only:
+    - master
