@@ -1,5 +1,14 @@
 #[cfg(doctest)]
-doc_comment::doctest!("../../README.md");
+mod doctests {
+    doc_comment::doctest!("../../README.md");
+    // Book markdown checks
+    doc_comment::doctest!("../../book/src/client.md");
+    doc_comment::doctest!("../../book/src/concepts.md");
+    doc_comment::doctest!("../../book/src/connection.md");
+    doc_comment::doctest!("../../book/src/contributors.md");
+    doc_comment::doctest!("../../book/src/introduction.md");
+    doc_comment::doctest!("../../book/src/server.md");
+}
 
 mod error;
 pub use error::*;

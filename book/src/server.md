@@ -18,8 +18,10 @@ would change every time.
 To ask for a name, we send a [`RequestName`] method call to the bus, using
 `zbus::fdo` module:
 
-```rust
-use zbus::Connection
+```rust,no_run
+use std::error::Error;
+
+use zbus::Connection;
 use zbus::fdo;
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {

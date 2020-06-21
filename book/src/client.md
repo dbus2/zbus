@@ -56,7 +56,7 @@ See [`busctl`] man page for more details.
 
 zbus `Connection` has a `call_method()` method, which you can use directly:
 
-```rust
+```rust,no_run
 use std::collections::HashMap;
 use std::error::Error;
 
@@ -95,11 +95,10 @@ A trait declaration `T` with a `dbus_proxy` attribute will have a derived
 `TProxy` implemented thanks to procedural macros. The trait methods will have
 respective `impl` methods wrapping the D-Bus calls:
 
-```rust
+```rust,no_run
 use std::collections::HashMap;
 use std::error::Error;
 
-use zbus;
 use zbus_derive::dbus_proxy;
 use zvariant::Value;
 
