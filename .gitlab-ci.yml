@@ -40,9 +40,11 @@ cache:
 pages:
   image: "rustlang/rust:nightly"
   stage: pages
+  before_script:
+    - export PATH="$PATH:$CARGO_HOME/bin"
+    - mdbook --version || cargo install --debug mdbook
   script:
     - mkdir public
-    - cargo install mdbook --no-default-features
     - mdbook build book
     - cp -r ./book/book/* ./public
     - find $PWD/public | grep "\.html\$"
