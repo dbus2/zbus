@@ -602,10 +602,10 @@ where
         let element_signature = slice_signature(&rest_of_signature)?;
         let element_signature_len = element_signature.len();
         let alignment = alignment_for_signature(&element_signature, self.ctxt.format());
-        let start = self.bytes_written;
         // D-Bus expects us to add padding for the first element even when there is no first
         // element (i-e empty array) so we add padding already.
         let first_padding = self.add_padding(alignment)?;
+        let start = self.bytes_written;
 
         Ok(SeqSerializer {
             ser: self,
@@ -709,22 +709,23 @@ where
     W: Write + Seek,
 {
     pub(self) fn end_seq(self) -> Result<()> {
-        if self.start + self.first_padding == self.ser.bytes_written {
+        if self.start == self.ser.bytes_written {
             // Empty sequence so we need to parse the element signature.
             self.ser.sig_parser.skip_chars(self.element_signature_len)?;
         }
 
         // Set size of array in bytes
         let array_len = self.ser.bytes_written - self.start;
-        let len = usize_to_u32(array_len - self.first_padding);
+        let len = usize_to_u32(array_len);
+        let total_array_len = (array_len + self.first_padding + 4) as i64;
         self.ser
             .writer
-            .seek(std::io::SeekFrom::Current(-(array_len as i64) - 4))
+            .seek(std::io::SeekFrom::Current(-total_array_len))
             .map_err(Error::Io)?;
         self.ser.writer.write_u32::<B>(len).map_err(Error::Io)?;
         self.ser
             .writer
-            .seek(std::io::SeekFrom::Current(array_len as i64))
+            .seek(std::io::SeekFrom::Current(total_array_len - 4))
             .map_err(Error::Io)?;
 
         Ok(())
@@ -743,7 +744,7 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.start + self.first_padding != self.ser.bytes_written {
+        if self.start != self.ser.bytes_written {
             // The signature needs to be rewinded before encoding each element.
             self.ser.sig_parser.rewind_chars(self.element_signature_len);
         }
@@ -894,7 +895,7 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.start + self.first_padding == self.ser.bytes_written {
+        if self.start == self.ser.bytes_written {
             // First key
             self.ser.sig_parser.skip_char()?;
         } else {
@@ -916,7 +917,7 @@ where
     }
 
     fn end(self) -> Result<()> {
-        if self.start + self.first_padding != self.ser.bytes_written {
+        if self.start != self.ser.bytes_written {
             // Non-empty map, take }
             self.ser.sig_parser.skip_char()?;
         }
