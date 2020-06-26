@@ -21,7 +21,7 @@ pub struct Connection {
     cap_unix_fd: bool,
     unique_name: Option<String>,
 
-    socket: UnixStream,
+    stream: UnixStream,
     // Serial number for next outgoing message
     serial: AtomicU32,
 
@@ -31,7 +31,7 @@ pub struct Connection {
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.socket.as_raw_fd()
+        self.stream.as_raw_fd()
     }
 }
 
@@ -70,8 +70,8 @@ fn system_socket() -> Result<UnixStream> {
     }
 }
 
-fn read_reply(socket: &UnixStream) -> Result<Vec<String>> {
-    let mut buf_reader = BufReader::new(socket);
+fn read_reply(stream: &UnixStream) -> Result<Vec<String>> {
+    let mut buf_reader = BufReader::new(stream);
     let mut buf = String::new();
 
     buf_reader.read_line(&mut buf)?;
@@ -81,7 +81,7 @@ fn read_reply(socket: &UnixStream) -> Result<Vec<String>> {
 }
 
 impl Connection {
-    fn new(mut socket: UnixStream) -> Result<Self> {
+    fn new(mut stream: UnixStream) -> Result<Self> {
         let uid = Uid::current();
 
         // SASL Handshake
@@ -90,23 +90,23 @@ impl Connection {
             .chars()
             .map(|c| format!("{:x}", c as u32))
             .collect::<String>();
-        socket.write_all(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
-        let server_guid = match read_reply(&socket)?.as_slice() {
+        stream.write_all(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
+        let server_guid = match read_reply(&stream)?.as_slice() {
             [ok, guid] if ok == "OK" => guid.as_str().try_into()?,
             _ => return Err(Error::Handshake),
         };
 
-        socket.write_all(b"NEGOTIATE_UNIX_FD\r\n")?;
-        let cap_unix_fd = match read_reply(&socket)?.as_slice() {
+        stream.write_all(b"NEGOTIATE_UNIX_FD\r\n")?;
+        let cap_unix_fd = match read_reply(&stream)?.as_slice() {
             [agree] if agree == "AGREE_UNIX_FD" => true,
             [error] if error == "ERROR" => false,
             _ => return Err(Error::Handshake),
         };
 
-        socket.write_all(b"BEGIN\r\n")?;
+        stream.write_all(b"BEGIN\r\n")?;
 
         let mut connection = Self {
-            socket,
+            stream,
             server_guid,
             cap_unix_fd,
             serial: AtomicU32::new(1),
@@ -167,7 +167,7 @@ impl Connection {
         let mut buf = [0; MIN_MESSAGE_SIZE];
 
         loop {
-            let mut fds = read_exact(&self.socket, &mut buf[..])?;
+            let mut fds = read_exact(&self.stream, &mut buf[..])?;
 
             let mut incoming = Message::from_bytes(&buf)?;
             let bytes_left = incoming.bytes_to_completion()?;
@@ -175,7 +175,7 @@ impl Connection {
                 return Err(Error::Handshake);
             }
             let mut buf = vec![0; bytes_left as usize];
-            fds.append(&mut read_exact(&self.socket, &mut buf[..])?);
+            fds.append(&mut read_exact(&self.stream, &mut buf[..])?);
             incoming.add_bytes(&buf[..])?;
             incoming.set_owned_fds(fds);
 
@@ -204,7 +204,7 @@ impl Connection {
             Ok(())
         })?;
 
-        write_all(&self.socket, msg.as_bytes(), &msg.fds())?;
+        write_all(&self.stream, msg.as_bytes(), &msg.fds())?;
         Ok(serial)
     }
 
