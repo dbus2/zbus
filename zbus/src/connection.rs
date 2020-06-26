@@ -81,7 +81,7 @@ fn read_reply(stream: &UnixStream) -> Result<Vec<String>> {
 }
 
 impl Connection {
-    fn new(mut stream: UnixStream) -> Result<Self> {
+    pub fn new(mut stream: UnixStream) -> Result<Self> {
         let uid = Uid::current();
 
         // SASL Handshake
