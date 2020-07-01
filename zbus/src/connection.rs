@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::convert::TryInto;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -70,8 +70,10 @@ fn system_socket() -> Result<UnixStream> {
     }
 }
 
-fn read_reply(stream: &UnixStream) -> Result<Vec<String>> {
-    let mut buf_reader = BufReader::new(stream);
+fn read_command<R: Read>(inner: R) -> Result<Vec<String>> {
+    // Note: the stateful auth DBus protocol should guarantee that the server will not pipeline
+    // answers, and thus bufreader shouldn't lose any data, hopefully.
+    let mut buf_reader = BufReader::new(inner);
     let mut buf = String::new();
 
     buf_reader.read_line(&mut buf)?;
@@ -91,13 +93,13 @@ impl Connection {
             .map(|c| format!("{:x}", c as u32))
             .collect::<String>();
         stream.write_all(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
-        let server_guid = match read_reply(&stream)?.as_slice() {
+        let server_guid = match read_command(&stream)?.as_slice() {
             [ok, guid] if ok == "OK" => guid.as_str().try_into()?,
             _ => return Err(Error::Handshake),
         };
 
         stream.write_all(b"NEGOTIATE_UNIX_FD\r\n")?;
-        let cap_unix_fd = match read_reply(&stream)?.as_slice() {
+        let cap_unix_fd = match read_command(&stream)?.as_slice() {
             [agree] if agree == "AGREE_UNIX_FD" => true,
             [error] if error == "ERROR" => false,
             _ => return Err(Error::Handshake),
