@@ -105,14 +105,7 @@ impl Connection {
 
         stream.write_all(b"BEGIN\r\n")?;
 
-        let mut connection = Self {
-            stream,
-            server_guid,
-            cap_unix_fd,
-            serial: AtomicU32::new(1),
-            unique_name: None,
-            default_msg_handler: None,
-        };
+        let mut connection = Connection::new_authenticated(stream, server_guid, cap_unix_fd);
 
         // Now that daemon has approved us, we must send a hello as per specs
         let reply = connection.call_method(
@@ -308,6 +301,17 @@ impl Connection {
 
     pub fn reset_default_message_handler(&mut self) {
         self.default_msg_handler = None;
+    }
+
+    fn new_authenticated(stream: UnixStream, server_guid: Guid, cap_unix_fd: bool) -> Self {
+        Self {
+            stream,
+            server_guid,
+            cap_unix_fd,
+            serial: AtomicU32::new(1),
+            unique_name: None,
+            default_msg_handler: None,
+        }
     }
 
     fn next_serial(&self) -> u32 {
