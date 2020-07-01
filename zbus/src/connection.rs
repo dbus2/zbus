@@ -83,7 +83,7 @@ fn read_command<R: Read>(inner: R) -> Result<Vec<String>> {
 }
 
 impl Connection {
-    pub fn new(mut stream: UnixStream, bus_connection: bool) -> Result<Self> {
+    pub fn new_unix_client(mut stream: UnixStream, bus_connection: bool) -> Result<Self> {
         let uid = Uid::current();
 
         // SASL Handshake
@@ -126,18 +126,18 @@ impl Connection {
     }
 
     pub fn new_session() -> Result<Self> {
-        Self::new(session_socket()?, true)
+        Self::new_unix_client(session_socket()?, true)
     }
 
     pub fn new_system() -> Result<Self> {
-        Self::new(system_socket()?, true)
+        Self::new_unix_client(system_socket()?, true)
     }
 
     /// Create a `Connection` for the given [D-Bus address].
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
-        Self::new(
+        Self::new_unix_client(
             connect(&address::parse_dbus_address(address)?)?,
             bus_connection,
         )
