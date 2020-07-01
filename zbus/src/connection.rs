@@ -81,7 +81,7 @@ fn read_reply(stream: &UnixStream) -> Result<Vec<String>> {
 }
 
 impl Connection {
-    pub fn new(mut stream: UnixStream) -> Result<Self> {
+    pub fn new(mut stream: UnixStream, bus_connection: bool) -> Result<Self> {
         let uid = Uid::current();
 
         // SASL Handshake
@@ -107,33 +107,38 @@ impl Connection {
 
         let mut connection = Connection::new_authenticated(stream, server_guid, cap_unix_fd);
 
-        // Now that daemon has approved us, we must send a hello as per specs
-        let reply = connection.call_method(
-            Some("org.freedesktop.DBus"),
-            "/org/freedesktop/DBus",
-            Some("org.freedesktop.DBus"),
-            "Hello",
-            &(),
-        )?;
+        if bus_connection {
+            // Now that daemon has approved us, we must send a hello as per specs
+            let reply = connection.call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "Hello",
+                &(),
+            )?;
 
-        connection.unique_name = Some(reply.body::<&str>().map(String::from)?);
+            connection.unique_name = Some(reply.body::<&str>().map(String::from)?);
+        }
 
         Ok(connection)
     }
 
     pub fn new_session() -> Result<Self> {
-        Self::new(session_socket()?)
+        Self::new(session_socket()?, true)
     }
 
     pub fn new_system() -> Result<Self> {
-        Self::new(system_socket()?)
+        Self::new(system_socket()?, true)
     }
 
     /// Create a `Connection` for the given [D-Bus address].
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub fn new_for_address(address: &str) -> Result<Self> {
-        Self::new(connect(&address::parse_dbus_address(address)?)?)
+    pub fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
+        Self::new(
+            connect(&address::parse_dbus_address(address)?)?,
+            bus_connection,
+        )
     }
 
     /// The server's GUID.
