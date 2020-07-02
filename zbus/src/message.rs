@@ -126,11 +126,12 @@ where
         } = self;
 
         if let Some(reply_to) = reply_to.as_ref() {
-            let destination = reply_to.sender()?.ok_or(MessageError::MissingSender)?;
             let serial = reply_to.primary().serial_num();
-
-            fields.add(MessageField::destination(destination));
             fields.add(MessageField::reply_serial(serial));
+
+            if let Some(sender) = reply_to.sender()? {
+                fields.add(MessageField::destination(sender));
+            }
         }
 
         let primary = MessagePrimaryHeader::new(ty, body_len);
