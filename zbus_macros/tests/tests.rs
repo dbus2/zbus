@@ -1,5 +1,5 @@
 use zbus;
-use zbus_derive::{dbus_interface, dbus_proxy, DBusError};
+use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]
 fn test_proxy() {
