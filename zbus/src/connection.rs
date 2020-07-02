@@ -10,7 +10,7 @@ use nix::unistd::Uid;
 
 use crate::address::{self, Address};
 use crate::utils::{read_exact, write_all};
-use crate::{Error, Guid, Message, MessageType, Result, MIN_MESSAGE_SIZE};
+use crate::{Error, Guid, Message, MessageError, MessageType, Result, MIN_MESSAGE_SIZE};
 
 type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
 
@@ -95,14 +95,18 @@ impl Connection {
         stream.write_all(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
         let server_guid = match read_command(&stream)?.as_slice() {
             [ok, guid] if ok == "OK" => guid.as_str().try_into()?,
-            _ => return Err(Error::Handshake),
+            _ => return Err(Error::Handshake("Unexpected server AUTH reply".to_string())),
         };
 
         stream.write_all(b"NEGOTIATE_UNIX_FD\r\n")?;
         let cap_unix_fd = match read_command(&stream)?.as_slice() {
             [agree] if agree == "AGREE_UNIX_FD" => true,
             [error] if error == "ERROR" => false,
-            _ => return Err(Error::Handshake),
+            _ => {
+                return Err(Error::Handshake(
+                    "Unexpected server UNIX_FD reply".to_string(),
+                ))
+            }
         };
 
         stream.write_all(b"BEGIN\r\n")?;
@@ -172,7 +176,7 @@ impl Connection {
             let mut incoming = Message::from_bytes(&buf)?;
             let bytes_left = incoming.bytes_to_completion()?;
             if bytes_left == 0 {
-                return Err(Error::Handshake);
+                return Err(Error::Message(MessageError::InsufficientData));
             }
             let mut buf = vec![0; bytes_left as usize];
             fds.append(&mut read_exact(&self.stream, &mut buf[..])?);
