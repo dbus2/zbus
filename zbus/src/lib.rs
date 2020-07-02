@@ -43,6 +43,8 @@ pub mod fdo;
 
 pub mod xml;
 
+pub use zbus_derive::{dbus_interface, dbus_proxy, DBusError};
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;

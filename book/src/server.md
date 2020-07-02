@@ -105,7 +105,7 @@ Let see how to use it:
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus_derive::dbus_interface;
+# use zbus::dbus_interface;
 # use std::convert::TryInto;
 #
 struct Greeter;

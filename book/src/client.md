@@ -99,7 +99,7 @@ respective `impl` methods wrapping the D-Bus calls:
 use std::collections::HashMap;
 use std::error::Error;
 
-use zbus_derive::dbus_proxy;
+use zbus::dbus_proxy;
 use zvariant::Value;
 
 #[dbus_proxy]
@@ -144,7 +144,7 @@ Interfaces can have associated properties, which can be read or set with the
 attribute comes to the rescue to help you. You can annotate a trait method to be a getter:
 
 ```rust
-# use zbus_derive::dbus_proxy;
+# use zbus::dbus_proxy;
 #
 #[dbus_proxy]
 trait MyInterface {
@@ -243,7 +243,7 @@ This will give back effortlessly the corresponding Rust traits boilerplate
 code:
 
 ```rust
-# use zbus_derive::dbus_proxy;
+# use zbus::dbus_proxy;
 #
 #[dbus_proxy(interface = "org.freedesktop.Notifications")]
 trait Notifications {
@@ -272,7 +272,7 @@ nicer version:
 ```rust
 # use serde::{Serialize, Deserialize};
 # use zvariant_derive::Type;
-# use zbus_derive::dbus_proxy;
+# use zbus::dbus_proxy;
 #
 #[derive(Debug, Type, Serialize, Deserialize)]
 pub struct ServerInformation {

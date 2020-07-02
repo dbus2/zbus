@@ -5,11 +5,10 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use scoped_tls::scoped_thread_local;
-use zbus_derive::dbus_interface;
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate as zbus;
-use crate::{fdo, Connection, Error, Message, MessageHeader, MessageType, Result};
+use crate::{dbus_interface, fdo, Connection, Error, Message, MessageHeader, MessageType, Result};
 
 scoped_thread_local!(static LOCAL_NODE: Node);
 scoped_thread_local!(static LOCAL_CONNECTION: Connection);
@@ -17,10 +16,10 @@ scoped_thread_local!(static LOCAL_CONNECTION: Connection);
 /// The trait used to dispatch messages to an interface instance.
 ///
 /// Note: you shoulnd't have to implement this trait by hand. It is implemented by
-/// [`zbus_derive::dbus_interface`] on your behalf. Nevertheless, the trait is public, but might be
+/// [`dbus_interface`] on your behalf. Nevertheless, the trait is public, but might be
 /// subject to changes, as it is considered mostly an internal implementation detail.
 ///
-/// [`zbus_derive::dbus_interface`]: https://docs.rs/zbus_derive/1.0.0/zbus_derive/attr.dbus_interface.html
+/// [`dbus_interface`]: attr.dbus_interface.html
 pub trait Interface {
     /// Return the name of the interface. Ex: "org.foo.MyInterface"
     fn name() -> &'static str
@@ -256,8 +255,7 @@ impl Node {
 /// ```no_run
 ///# use std::error::Error;
 ///# use std::convert::TryInto;
-/// use zbus::{Connection, ObjectServer};
-/// use zbus_derive::dbus_interface;
+/// use zbus::{Connection, ObjectServer, dbus_interface};
 /// use std::rc::Rc;
 /// use std::cell::RefCell;
 ///
@@ -282,7 +280,7 @@ impl Node {
 ///         *self.quit.borrow_mut() = true;
 ///     }
 ///
-///     // See zbus_derive::dbus_interface documentation to learn
+///     // See `dbus_interface` documentation to learn
 ///     // how to expose properties & signals as well.
 /// }
 ///
@@ -360,9 +358,9 @@ impl<'a> ObjectServer<'a> {
     ///
     /// This is an internal helper function to emit a signal on on the current node. You shouldn't
     /// call this method directly, rather with the derived signal implementation from
-    /// [`zbus_derive::dbus_interface`].
+    /// [`dbus_interface`].
     ///
-    /// [`zbus_derive::dbus_interface`]: https://docs.rs/zbus_derive/1.0.0/zbus_derive/attr.dbus_interface.html
+    /// [`dbus_interface`]: attr.dbus_interface.html
     pub fn local_node_emit_signal<B>(
         destination: Option<&str>,
         iface: &str,
@@ -492,11 +490,9 @@ mod tests {
     use std::rc::Rc;
     use std::thread;
 
-    use zbus_derive::{dbus_interface, dbus_proxy};
-
     use crate as zbus;
     use crate::fdo;
-    use crate::{Connection, ObjectServer};
+    use crate::{dbus_interface, dbus_proxy, Connection, ObjectServer};
 
     #[dbus_proxy]
     trait MyIface {

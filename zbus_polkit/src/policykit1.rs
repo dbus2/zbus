@@ -6,7 +6,7 @@ use std::result::Result;
 use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use zbus_derive::dbus_proxy;
+use zbus::dbus_proxy;
 use zvariant::{OwnedValue, Value};
 use zvariant_derive::Type;
 

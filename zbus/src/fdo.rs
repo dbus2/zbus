@@ -2,11 +2,11 @@ use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
-use zbus_derive::{dbus_proxy, DBusError};
 use zvariant::{OwnedValue, Value};
 use zvariant_derive::Type;
 
 use crate as zbus;
+use crate::{dbus_proxy, DBusError};
 
 #[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
 trait Introspectable {
