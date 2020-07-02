@@ -15,9 +15,8 @@ scoped_thread_local!(static LOCAL_CONNECTION: Connection);
 
 /// The trait used to dispatch messages to an interface instance.
 ///
-/// Note: you shoulnd't have to implement this trait by hand. It is implemented by
-/// [`dbus_interface`] on your behalf. Nevertheless, the trait is public, but might be
-/// subject to changes, as it is considered mostly an internal implementation detail.
+/// Note: It is not recommended to manually implement this trait. The [`dbus_interface`] macro
+/// implements it for you.
 ///
 /// [`dbus_interface`]: attr.dbus_interface.html
 pub trait Interface {
