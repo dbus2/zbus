@@ -82,6 +82,21 @@ fn read_command<R: Read>(inner: R) -> Result<Vec<String>> {
     Ok(components.map(String::from).collect())
 }
 
+fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
+    let mut id = String::new();
+    for s in s.as_bytes().chunks(2) {
+        let c = char::from(u8::from_str_radix(std::str::from_utf8(s)?, 16)?);
+        id.push(c);
+    }
+    Ok(id.parse::<u32>()?)
+}
+
+enum ServerState {
+    WaitingForAuth,
+    // WaitingForData,
+    WaitingForBegin,
+}
+
 impl Connection {
     pub fn new_unix_client(mut stream: UnixStream, bus_connection: bool) -> Result<Self> {
         let uid = Uid::current();
@@ -145,6 +160,82 @@ impl Connection {
             connect(&address::parse_dbus_address(address)?)?,
             bus_connection,
         )
+    }
+
+    pub fn new_unix_server(mut stream: UnixStream, guid: &Guid) -> Result<Self> {
+        use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+
+        let creds = getsockopt(stream.as_raw_fd(), PeerCredentials)
+            .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
+
+        // TODO: read byte with other credentials?
+        let mut nul = [0; 1];
+        stream.read_exact(&mut nul)?;
+        if nul[0] != 0 {
+            return Err(Error::Handshake(
+                "First client byte is not NUL!".to_string(),
+            ));
+        }
+
+        let mut state = ServerState::WaitingForAuth;
+        let mut cap_unix_fd = false;
+        loop {
+            match read_command(&stream) {
+                Ok(cmd) => match state {
+                    ServerState::WaitingForAuth => match cmd.as_slice() {
+                        [auth, ..] if auth == "AUTH" => {
+                            if cmd.len() != 3 || cmd[1] != "EXTERNAL" {
+                                stream.write_all(b"REJECTED EXTERNAL\r\n")?;
+                            } else {
+                                let uid = &cmd[2];
+                                let uid = id_from_str(uid)
+                                    .map_err(|e| Error::Handshake(format!("Invalid UID: {}", e)))?;
+                                if uid != creds.uid() {
+                                    stream.write_all(b"REJECTED EXTERNAL\r\n")?;
+                                } else {
+                                    stream.write_all(format!("OK {}\r\n", guid).as_bytes())?;
+                                    state = ServerState::WaitingForBegin;
+                                }
+                            }
+                        }
+                        [begin] if begin == "BEGIN" => {
+                            return Err(Error::Handshake(
+                                "Received BEGIN while not authenticated".to_string(),
+                            ));
+                        }
+                        [error, ..] if error == "ERROR" => {
+                            stream.write_all(b"REJECTED EXTERNAL\r\n")?;
+                        }
+                        _ => {
+                            stream.write_all(b"ERROR Unsupported command\r\n")?;
+                        }
+                    },
+                    ServerState::WaitingForBegin => match cmd.as_slice() {
+                        [begin] if begin == "BEGIN" => {
+                            break;
+                        }
+                        [neg] if neg == "NEGOTIATE_UNIX_FD" => {
+                            cap_unix_fd = true;
+                            stream.write_all(b"AGREE_UNIX_FD\r\n")?;
+                        }
+                        [cancel] if cancel == "CANCEL" => {
+                            stream.write_all(b"REJECTED EXTERNAL\r\n")?;
+                            state = ServerState::WaitingForAuth;
+                        }
+                        [error, ..] if error == "ERROR" => {
+                            stream.write_all(b"REJECTED EXTERNAL\r\n")?;
+                            state = ServerState::WaitingForAuth;
+                        }
+                        _ => {
+                            stream.write_all(b"ERROR Unsupported command\r\n")?;
+                        }
+                    },
+                },
+                Err(err) => return Err(Error::Handshake(format!("Read command failed: {}", err))),
+            }
+        }
+
+        Ok(Self::new_authenticated(stream, guid.clone(), cap_unix_fd))
     }
 
     /// The server's GUID.
@@ -327,5 +418,48 @@ impl Connection {
 
     fn next_serial(&self) -> u32 {
         self.serial.fetch_add(1, Ordering::SeqCst)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
+    use std::os::unix::io::FromRawFd;
+    use std::os::unix::net::UnixStream;
+    use std::thread;
+
+    use crate::{Connection, Guid};
+
+    #[test]
+    fn unix_p2p() {
+        let guid = Guid::generate();
+
+        let sp = socketpair(
+            AddressFamily::Unix,
+            SockType::Stream,
+            None,
+            SockFlag::empty(),
+        )
+        .unwrap();
+        let p0 = unsafe { UnixStream::from_raw_fd(sp.0) };
+        let p1 = unsafe { UnixStream::from_raw_fd(sp.1) };
+
+        let server_thread = thread::spawn(move || {
+            let c = Connection::new_unix_server(p0, &guid).unwrap();
+            let reply = c
+                .call_method(None, "/", Some("org.zbus.p2p"), "Test", &())
+                .unwrap();
+            assert_eq!(reply.to_string(), "Method return");
+            let val: String = reply.body().unwrap();
+            val
+        });
+
+        let c = Connection::new_unix_client(p1, false).unwrap();
+        let m = c.receive_message().unwrap();
+        assert_eq!(m.to_string(), "Method call Test");
+        c.reply(&m, &("yay")).unwrap();
+
+        let val = server_thread.join().expect("failed to join server thread");
+        assert_eq!(val, "yay");
     }
 }
