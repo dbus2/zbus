@@ -1,5 +1,5 @@
 [package]
-name = "zbus_derive"
+name = "zbus_macros"
 # Keep version in sync with zbus crate
 version = "1.0.0"
 authors = ["Marc-André Lureau <marcandre.lureau@redhat.com"]

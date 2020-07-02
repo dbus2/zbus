@@ -30,7 +30,7 @@ mod utils;
 ///
 /// ```
 ///# use std::error::Error;
-/// use zbus_derive::dbus_proxy;
+/// use zbus_macros::dbus_proxy;
 /// use zbus::{Connection, Result};
 /// use zvariant::Value;
 ///
@@ -92,7 +92,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ```
 ///# use std::error::Error;
-/// use zbus_derive::dbus_interface;
+/// use zbus_macros::dbus_interface;
 /// use std::rc::Rc;
 /// use std::cell::RefCell;
 ///
@@ -154,7 +154,7 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```
-/// use zbus_derive::DBusError;
+/// use zbus_macros::DBusError;
 ///
 /// #[derive(DBusError, Debug)]
 /// #[dbus_error(prefix = "org.myservice.App")]
