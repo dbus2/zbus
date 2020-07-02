@@ -1,5 +1,7 @@
 use std::convert::TryFrom;
 use std::fmt;
+use std::iter::repeat_with;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// A D-Bus server GUID.
 ///
@@ -10,6 +12,20 @@ use std::fmt;
 pub struct Guid(String);
 
 impl Guid {
+    /// Generate a D-Bus GUID that can be used with e.g. [`Connection::new_unix_server`].
+    ///
+    /// [`Connection::new_unix_server`]: struct.Connection.html#method.new_unix_server
+    pub fn generate() -> Self {
+        let r: Vec<u32> = repeat_with(|| fastrand::u32(..)).take(3).collect();
+        let r3 = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(n) => n.as_secs() as u32,
+            Err(_) => fastrand::u32(..),
+        };
+
+        let s = format!("{:08x}{:08x}{:08x}{:08x}", r[0], r[1], r[2], r3);
+        Self(s)
+    }
+
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -30,5 +46,20 @@ impl TryFrom<&str> for Guid {
         } else {
             Ok(Guid(value.to_string()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Guid;
+
+    #[test]
+    fn generate() {
+        let u1 = Guid::generate();
+        let u2 = Guid::generate();
+        assert_eq!(u1.as_str().len(), 32);
+        assert_eq!(u2.as_str().len(), 32);
+        assert_ne!(u1, u2);
+        assert_ne!(u1.as_str(), u2.as_str());
     }
 }
