@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::convert::TryInto;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
@@ -9,14 +10,14 @@ use nix::unistd::Uid;
 
 use crate::address::{self, Address};
 use crate::utils::{read_exact, write_all};
-use crate::{Error, Message, MessageType, Result, MIN_MESSAGE_SIZE};
+use crate::{Error, Guid, Message, MessageType, Result, MIN_MESSAGE_SIZE};
 
 type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 pub struct Connection {
-    server_guid: String,
+    server_guid: Guid,
     cap_unix_fd: bool,
     unique_name: Option<String>,
 
@@ -91,7 +92,7 @@ impl Connection {
             .collect::<String>();
         socket.write_all(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
         let server_guid = match read_reply(&socket)?.as_slice() {
-            [ok, guid] if ok == "OK" => guid.clone(),
+            [ok, guid] if ok == "OK" => guid.as_str().try_into()?,
             _ => return Err(Error::Handshake),
         };
 
@@ -144,7 +145,7 @@ impl Connection {
 
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
-        &self.server_guid
+        self.server_guid.as_str()
     }
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.

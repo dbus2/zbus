@@ -14,6 +14,7 @@ pub enum Error {
     // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds anything more than a
     // string description.
     MethodError(String, Option<String>, Message),
+    InvalidGUID,
     Unsupported,
     NoTLSConnection,
     NoTLSNode,
@@ -29,6 +30,7 @@ impl error::Error for Error {
             Error::Variant(e) => Some(e),
             Error::InvalidReply => None,
             Error::MethodError(_, _, _) => None,
+            Error::InvalidGUID => None,
             Error::Unsupported => None,
             Error::NoTLSConnection => None,
             Error::NoTLSNode => None,
@@ -51,6 +53,7 @@ impl fmt::Display for Error {
                 name,
                 detail.as_ref().map(|s| s.as_str()).unwrap_or("no details")
             ),
+            Error::InvalidGUID => write!(f, "Invalid GUID"),
             Error::Unsupported => write!(f, "Connection support is lacking"),
             Error::NoTLSConnection => write!(f, "No TLS connection"),
             Error::NoTLSNode => write!(f, "No TLS node"),
