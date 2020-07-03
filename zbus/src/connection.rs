@@ -10,7 +10,7 @@ use nix::unistd::Uid;
 
 use crate::address::{self, Address};
 use crate::utils::{read_exact, write_all};
-use crate::{Error, Guid, Message, MessageError, MessageType, Result, MIN_MESSAGE_SIZE};
+use crate::{fdo, Error, Guid, Message, MessageError, MessageType, Result, MIN_MESSAGE_SIZE};
 
 type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
 
@@ -129,16 +129,8 @@ impl Connection {
         let mut connection = Connection::new_authenticated(stream, server_guid, cap_unix_fd);
 
         if bus_connection {
-            // Now that daemon has approved us, we must send a hello as per specs
-            let reply = connection.call_method(
-                Some("org.freedesktop.DBus"),
-                "/org/freedesktop/DBus",
-                Some("org.freedesktop.DBus"),
-                "Hello",
-                &(),
-            )?;
-
-            connection.unique_name = Some(reply.body::<&str>().map(String::from)?);
+            // Now that the server has approved us, we must send the bus Hello, as per specs
+            connection.unique_name = Some(fdo::DBusProxy::new(&connection)?.hello()?);
         }
 
         Ok(connection)
