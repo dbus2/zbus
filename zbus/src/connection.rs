@@ -1,5 +1,6 @@
 use std::cell::RefCell;
-use std::io::{BufRead, BufReader, Write};
+use std::convert::TryInto;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -9,18 +10,18 @@ use nix::unistd::Uid;
 
 use crate::address::{self, Address};
 use crate::utils::{read_exact, write_all};
-use crate::{Error, Message, MessageType, Result, MIN_MESSAGE_SIZE};
+use crate::{fdo, Error, Guid, Message, MessageError, MessageType, Result, MIN_MESSAGE_SIZE};
 
 type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 pub struct Connection {
-    server_guid: String,
+    server_guid: Guid,
     cap_unix_fd: bool,
     unique_name: Option<String>,
 
-    socket: UnixStream,
+    stream: UnixStream,
     // Serial number for next outgoing message
     serial: AtomicU32,
 
@@ -30,7 +31,7 @@ pub struct Connection {
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.socket.as_raw_fd()
+        self.stream.as_raw_fd()
     }
 }
 
@@ -69,8 +70,10 @@ fn system_socket() -> Result<UnixStream> {
     }
 }
 
-fn read_reply(socket: &UnixStream) -> Result<Vec<String>> {
-    let mut buf_reader = BufReader::new(socket);
+fn read_command<R: Read>(inner: R) -> Result<Vec<String>> {
+    // Note: the stateful auth DBus protocol should guarantee that the server will not pipeline
+    // answers, and thus bufreader shouldn't lose any data, hopefully.
+    let mut buf_reader = BufReader::new(inner);
     let mut buf = String::new();
 
     buf_reader.read_line(&mut buf)?;
@@ -79,8 +82,23 @@ fn read_reply(socket: &UnixStream) -> Result<Vec<String>> {
     Ok(components.map(String::from).collect())
 }
 
+fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
+    let mut id = String::new();
+    for s in s.as_bytes().chunks(2) {
+        let c = char::from(u8::from_str_radix(std::str::from_utf8(s)?, 16)?);
+        id.push(c);
+    }
+    Ok(id.parse::<u32>()?)
+}
+
+enum ServerState {
+    WaitingForAuth,
+    // WaitingForData,
+    WaitingForBegin,
+}
+
 impl Connection {
-    fn new(mut socket: UnixStream) -> Result<Self> {
+    pub fn new_unix_client(mut stream: UnixStream, bus_connection: bool) -> Result<Self> {
         let uid = Uid::current();
 
         // SASL Handshake
@@ -89,62 +107,132 @@ impl Connection {
             .chars()
             .map(|c| format!("{:x}", c as u32))
             .collect::<String>();
-        socket.write_all(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
-        let server_guid = match read_reply(&socket)?.as_slice() {
-            [ok, guid] if ok == "OK" => guid.clone(),
-            _ => return Err(Error::Handshake),
+        stream.write_all(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
+        let server_guid = match read_command(&stream)?.as_slice() {
+            [ok, guid] if ok == "OK" => guid.as_str().try_into()?,
+            _ => return Err(Error::Handshake("Unexpected server AUTH reply".to_string())),
         };
 
-        socket.write_all(b"NEGOTIATE_UNIX_FD\r\n")?;
-        let cap_unix_fd = match read_reply(&socket)?.as_slice() {
+        stream.write_all(b"NEGOTIATE_UNIX_FD\r\n")?;
+        let cap_unix_fd = match read_command(&stream)?.as_slice() {
             [agree] if agree == "AGREE_UNIX_FD" => true,
             [error] if error == "ERROR" => false,
-            _ => return Err(Error::Handshake),
+            _ => {
+                return Err(Error::Handshake(
+                    "Unexpected server UNIX_FD reply".to_string(),
+                ))
+            }
         };
 
-        socket.write_all(b"BEGIN\r\n")?;
+        stream.write_all(b"BEGIN\r\n")?;
 
-        let mut connection = Self {
-            socket,
-            server_guid,
-            cap_unix_fd,
-            serial: AtomicU32::new(1),
-            unique_name: None,
-            default_msg_handler: None,
-        };
+        let mut connection = Connection::new_authenticated(stream, server_guid, cap_unix_fd);
 
-        // Now that daemon has approved us, we must send a hello as per specs
-        let reply = connection.call_method(
-            Some("org.freedesktop.DBus"),
-            "/org/freedesktop/DBus",
-            Some("org.freedesktop.DBus"),
-            "Hello",
-            &(),
-        )?;
-
-        connection.unique_name = Some(reply.body::<&str>().map(String::from)?);
+        if bus_connection {
+            // Now that the server has approved us, we must send the bus Hello, as per specs
+            connection.unique_name = Some(fdo::DBusProxy::new(&connection)?.hello()?);
+        }
 
         Ok(connection)
     }
 
     pub fn new_session() -> Result<Self> {
-        Self::new(session_socket()?)
+        Self::new_unix_client(session_socket()?, true)
     }
 
     pub fn new_system() -> Result<Self> {
-        Self::new(system_socket()?)
+        Self::new_unix_client(system_socket()?, true)
     }
 
     /// Create a `Connection` for the given [D-Bus address].
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub fn new_for_address(address: &str) -> Result<Self> {
-        Self::new(connect(&address::parse_dbus_address(address)?)?)
+    pub fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
+        Self::new_unix_client(
+            connect(&address::parse_dbus_address(address)?)?,
+            bus_connection,
+        )
+    }
+
+    pub fn new_unix_server(mut stream: UnixStream, guid: &Guid) -> Result<Self> {
+        use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+
+        let creds = getsockopt(stream.as_raw_fd(), PeerCredentials)
+            .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
+
+        // TODO: read byte with other credentials?
+        let mut nul = [0; 1];
+        stream.read_exact(&mut nul)?;
+        if nul[0] != 0 {
+            return Err(Error::Handshake(
+                "First client byte is not NUL!".to_string(),
+            ));
+        }
+
+        let mut state = ServerState::WaitingForAuth;
+        let mut cap_unix_fd = false;
+        loop {
+            match read_command(&stream) {
+                Ok(cmd) => match state {
+                    ServerState::WaitingForAuth => match cmd.as_slice() {
+                        [auth, ..] if auth == "AUTH" => {
+                            if cmd.len() != 3 || cmd[1] != "EXTERNAL" {
+                                stream.write_all(b"REJECTED EXTERNAL\r\n")?;
+                            } else {
+                                let uid = &cmd[2];
+                                let uid = id_from_str(uid)
+                                    .map_err(|e| Error::Handshake(format!("Invalid UID: {}", e)))?;
+                                if uid != creds.uid() {
+                                    stream.write_all(b"REJECTED EXTERNAL\r\n")?;
+                                } else {
+                                    stream.write_all(format!("OK {}\r\n", guid).as_bytes())?;
+                                    state = ServerState::WaitingForBegin;
+                                }
+                            }
+                        }
+                        [begin] if begin == "BEGIN" => {
+                            return Err(Error::Handshake(
+                                "Received BEGIN while not authenticated".to_string(),
+                            ));
+                        }
+                        [error, ..] if error == "ERROR" => {
+                            stream.write_all(b"REJECTED EXTERNAL\r\n")?;
+                        }
+                        _ => {
+                            stream.write_all(b"ERROR Unsupported command\r\n")?;
+                        }
+                    },
+                    ServerState::WaitingForBegin => match cmd.as_slice() {
+                        [begin] if begin == "BEGIN" => {
+                            break;
+                        }
+                        [neg] if neg == "NEGOTIATE_UNIX_FD" => {
+                            cap_unix_fd = true;
+                            stream.write_all(b"AGREE_UNIX_FD\r\n")?;
+                        }
+                        [cancel] if cancel == "CANCEL" => {
+                            stream.write_all(b"REJECTED EXTERNAL\r\n")?;
+                            state = ServerState::WaitingForAuth;
+                        }
+                        [error, ..] if error == "ERROR" => {
+                            stream.write_all(b"REJECTED EXTERNAL\r\n")?;
+                            state = ServerState::WaitingForAuth;
+                        }
+                        _ => {
+                            stream.write_all(b"ERROR Unsupported command\r\n")?;
+                        }
+                    },
+                },
+                Err(err) => return Err(Error::Handshake(format!("Read command failed: {}", err))),
+            }
+        }
+
+        Ok(Self::new_authenticated(stream, guid.clone(), cap_unix_fd))
     }
 
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
-        &self.server_guid
+        self.server_guid.as_str()
     }
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
@@ -166,15 +254,15 @@ impl Connection {
         let mut buf = [0; MIN_MESSAGE_SIZE];
 
         loop {
-            let mut fds = read_exact(&self.socket, &mut buf[..])?;
+            let mut fds = read_exact(&self.stream, &mut buf[..])?;
 
             let mut incoming = Message::from_bytes(&buf)?;
             let bytes_left = incoming.bytes_to_completion()?;
             if bytes_left == 0 {
-                return Err(Error::Handshake);
+                return Err(Error::Message(MessageError::InsufficientData));
             }
             let mut buf = vec![0; bytes_left as usize];
-            fds.append(&mut read_exact(&self.socket, &mut buf[..])?);
+            fds.append(&mut read_exact(&self.stream, &mut buf[..])?);
             incoming.add_bytes(&buf[..])?;
             incoming.set_owned_fds(fds);
 
@@ -203,7 +291,7 @@ impl Connection {
             Ok(())
         })?;
 
-        write_all(&self.socket, msg.as_bytes(), &msg.fds())?;
+        write_all(&self.stream, msg.as_bytes(), &msg.fds())?;
         Ok(serial)
     }
 
@@ -309,7 +397,61 @@ impl Connection {
         self.default_msg_handler = None;
     }
 
+    fn new_authenticated(stream: UnixStream, server_guid: Guid, cap_unix_fd: bool) -> Self {
+        Self {
+            stream,
+            server_guid,
+            cap_unix_fd,
+            serial: AtomicU32::new(1),
+            unique_name: None,
+            default_msg_handler: None,
+        }
+    }
+
     fn next_serial(&self) -> u32 {
         self.serial.fetch_add(1, Ordering::SeqCst)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
+    use std::os::unix::io::FromRawFd;
+    use std::os::unix::net::UnixStream;
+    use std::thread;
+
+    use crate::{Connection, Guid};
+
+    #[test]
+    fn unix_p2p() {
+        let guid = Guid::generate();
+
+        let sp = socketpair(
+            AddressFamily::Unix,
+            SockType::Stream,
+            None,
+            SockFlag::empty(),
+        )
+        .unwrap();
+        let p0 = unsafe { UnixStream::from_raw_fd(sp.0) };
+        let p1 = unsafe { UnixStream::from_raw_fd(sp.1) };
+
+        let server_thread = thread::spawn(move || {
+            let c = Connection::new_unix_server(p0, &guid).unwrap();
+            let reply = c
+                .call_method(None, "/", Some("org.zbus.p2p"), "Test", &())
+                .unwrap();
+            assert_eq!(reply.to_string(), "Method return");
+            let val: String = reply.body().unwrap();
+            val
+        });
+
+        let c = Connection::new_unix_client(p1, false).unwrap();
+        let m = c.receive_message().unwrap();
+        assert_eq!(m.to_string(), "Method call Test");
+        c.reply(&m, &("yay")).unwrap();
+
+        let val = server_thread.join().expect("failed to join server thread");
+        assert_eq!(val, "yay");
     }
 }

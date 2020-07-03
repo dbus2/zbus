@@ -9,11 +9,12 @@ pub enum Error {
     IO(io::Error),
     Message(MessageError),
     Variant(VariantError),
-    Handshake,
+    Handshake(String),
     InvalidReply,
     // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds anything more than a
     // string description.
     MethodError(String, Option<String>, Message),
+    InvalidGUID,
     Unsupported,
     NoTLSConnection,
     NoTLSNode,
@@ -24,11 +25,12 @@ impl error::Error for Error {
         match self {
             Error::Address(_) => None,
             Error::IO(e) => Some(e),
-            Error::Handshake => None,
+            Error::Handshake(_) => None,
             Error::Message(e) => Some(e),
             Error::Variant(e) => Some(e),
             Error::InvalidReply => None,
             Error::MethodError(_, _, _) => None,
+            Error::InvalidGUID => None,
             Error::Unsupported => None,
             Error::NoTLSConnection => None,
             Error::NoTLSNode => None,
@@ -41,7 +43,7 @@ impl fmt::Display for Error {
         match self {
             Error::Address(e) => write!(f, "address error: {}", e),
             Error::IO(e) => write!(f, "I/O error: {}", e),
-            Error::Handshake => write!(f, "D-Bus handshake failed"),
+            Error::Handshake(e) => write!(f, "D-Bus handshake failed: {}", e),
             Error::Message(e) => write!(f, "Message creation error: {}", e),
             Error::Variant(e) => write!(f, "{}", e),
             Error::InvalidReply => write!(f, "Invalid D-Bus method reply"),
@@ -51,6 +53,7 @@ impl fmt::Display for Error {
                 name,
                 detail.as_ref().map(|s| s.as_str()).unwrap_or("no details")
             ),
+            Error::InvalidGUID => write!(f, "Invalid GUID"),
             Error::Unsupported => write!(f, "Connection support is lacking"),
             Error::NoTLSConnection => write!(f, "No TLS connection"),
             Error::NoTLSNode => write!(f, "No TLS node"),

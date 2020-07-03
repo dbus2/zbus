@@ -15,6 +15,9 @@ pub use error::*;
 
 mod address;
 
+mod guid;
+pub use guid::*;
+
 mod message;
 pub use message::*;
 
