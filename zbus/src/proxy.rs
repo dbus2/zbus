@@ -12,6 +12,17 @@ pub struct Proxy<'a> {
     interface: &'a str,
 }
 
+pub struct ProxyCallResponse(crate::Message);
+
+impl ProxyCallResponse {
+    pub fn parse<'de, R>(&'de self) -> Result<R>
+    where
+        R: serde::de::Deserialize<'de> + zvariant::Type,
+    {
+        self.0.body().map_err(Error::Message)
+    }
+}
+
 impl<'a> Proxy<'a> {
     pub fn new(
         conn: &'a Connection,
@@ -52,10 +63,16 @@ impl<'a> Proxy<'a> {
         )
     }
 
-    pub fn call<B, R>(&self, method_name: &str, body: &B) -> Result<R>
+    /// Call a method and return the response.
+    ///
+    /// Typically, you would want to use [`call`] method instead. Use this method if you need to
+    /// parse the response manually. Typical use case would be avoid avoid memory
+    /// allocations/copying, by parsing the response to an unowned type.
+    ///
+    /// [`call`]: struct.Proxy.html#method.call
+    pub fn call_method<B>(&self, method_name: &str, body: &B) -> Result<ProxyCallResponse>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        R: serde::de::DeserializeOwned + zvariant::Type,
     {
         let reply = self.conn.call_method(
             Some(self.destination),
@@ -66,19 +83,32 @@ impl<'a> Proxy<'a> {
         );
         match reply {
             Ok(mut reply) => {
-                let r = reply.body()?;
                 reply.disown_fds();
-                Ok(r)
+
+                Ok(ProxyCallResponse(reply))
             }
             Err(e) => Err(e),
         }
+    }
+
+    /// Call a method and parse the reponse.
+    ///
+    /// Use [`call_method`] instead if you need to parse the response manually/separately.
+    ///
+    /// [`call_method`]: struct.Proxy.html#method.call_method
+    pub fn call<B, R>(&self, method_name: &str, body: &B) -> Result<R>
+    where
+        B: serde::ser::Serialize + zvariant::Type,
+        R: serde::de::DeserializeOwned + zvariant::Type,
+    {
+        self.call_method(method_name, body)?.parse()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Proxy;
-    use crate::{Connection, Result};
+    use crate::Connection;
 
     #[test]
     fn basic() {
@@ -87,9 +117,10 @@ mod tests {
             &c,
             "org.freedesktop.DBus",
             "/org/freedesktop/DBus",
-            "org.freedesktop.DBus.Peer",
+            "org.freedesktop.DBus",
         )
         .unwrap();
-        let _id: Result<String> = p.call("GetMachineId", &());
+        let _id: &str = p.call_method("GetId", &()).unwrap().parse().unwrap();
+        let _owned_id: String = p.call("GetId", &()).unwrap();
     }
 }
