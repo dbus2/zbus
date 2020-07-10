@@ -257,7 +257,17 @@ trait Notifications {
     fn get_server_information(&self) -> zbus::Result<(String, String, String, String)>;
 
     /// Notify method
-    fn notify(&self, arg_0: &str, arg_1: u32, arg_2: &str, arg_3: &str, arg_4: &str, arg_5: &[&str], arg_6: std::collections::HashMap<&str, zvariant::Value>, arg_7: i32) -> zbus::Result<u32>;
+    fn notify(
+        &self,
+        arg_0: &str,
+        arg_1: u32,
+        arg_2: &str,
+        arg_3: &str,
+        arg_4: &str,
+        arg_5: &[&str],
+        arg_6: std::collections::HashMap<&str, zvariant::Value>,
+        arg_7: i32,
+    ) -> zbus::Result<u32>;
 }
 ```
 
