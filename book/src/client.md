@@ -30,7 +30,7 @@ does not, your desktop does not support the notification service, and this
 example will be less interactive. Nonetheless you can use a similar approach for
 other services.
 
-This command shows us several aspects of a D-Bus communication:
+This command shows us several aspects of the D-Bus communication:
 
  - `--user`: Connect to and use the user/session bus.
 
@@ -266,7 +266,7 @@ arguments, use better types (using `BitFlags`, structs or other custom types),
 add extra documentation, and other functions to make the binding more pleasing
 to use from Rust.
 
-For example, the generated `GetServerInformation` method can be pimped to a
+For example, the generated `GetServerInformation` method can be improved to a
 nicer version:
 
 ```rust
