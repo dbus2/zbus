@@ -163,7 +163,12 @@ To set the property, prefix the name of the property with `set_`.
 zbus git repository contains a [developer-friendly tool], that can generate Rust traits from a given
 D-Bus introspection XML for you.
 
-Let's first get the XML interface of the notification service:
+**Note:** This tool should not be considered a drop-in Rust-specific replacement for similar tools
+available for low-level languages, such as [`gdbus-codegen`]. Unlike those tools, this is only meant
+as a starting point to generate the code, once. In many cases, you will want to tweak the generated
+code.
+
+Let's first fetch the XML interface of the notification service:
 
 ```bash
 busctl --user --xml-interface introspect \
@@ -317,3 +322,4 @@ There you have it, a Rust-friendly binding for your D-Bus service!
 
 [`busctl`]: https://www.freedesktop.org/software/systemd/man/busctl.html
 [developer-friendly tool]: https://gitlab.freedesktop.org/zeenix/zbus/-/tree/master/zbus_xmlgen
+[`gdbus-codegen`]: https://developer.gnome.org/gio/stable/gdbus-codegen.html
