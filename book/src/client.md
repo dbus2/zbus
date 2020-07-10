@@ -160,8 +160,8 @@ To set the property, prefix the name of the property with `set_`.
 
 ## Generating the trait from an XML interface
 
-zbus git repository has a developper-friendly tool under the `zbus_xmlgen/`
-directory. It generates Rust traits from a D-Bus introspection XML.
+zbus git repository contains a [developer-friendly tool], that can generate Rust traits from a given
+D-Bus introspection XML for you.
 
 Let's first get the XML interface of the notification service:
 
@@ -316,3 +316,4 @@ for example, which was implemented starting from the *xmlgen* output.
 There you have it, a Rust-friendly binding for your D-Bus service!
 
 [`busctl`]: https://www.freedesktop.org/software/systemd/man/busctl.html
+[developer-friendly tool]: https://gitlab.freedesktop.org/zeenix/zbus/-/tree/master/zbus_xmlgen
