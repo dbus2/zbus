@@ -37,10 +37,18 @@ specification.
 
 ## Interfaces
 
-A D-Bus interface can have methods, properties and signals. The XML description
-of an interface is mostly a machine-level detail. zbus macros will handle the
-introspection of your interfaces for you. In the next chapters, we will see how
-to translate an introspection XML to a Rust proxy.
+An interface defines the API exposed by object on the bus. They are akin to the concept of
+interfaces in many programming languages and traits in Rust. Each object can (and typically do)
+provide multiple interfaces at the same time. A D-Bus interface can have methods, properties and
+signals.
+
+While each interface of a service is identified by a [unique name], its API is described by an XML
+description. It is mostly a machine-level detail. Most services can be queried for this description
+through a D-Bus standard [introspection interface].
+
+zbus provides convenient macro that implements the introspection interface for services, and helper
+to generate client-side Rust API, given an XML description. We'll see both of these in action in the
+following chapters.
 
 ## Good practices & API design
 
@@ -63,3 +71,5 @@ Onwards to implementation details & examples!
 [D-Bus API Design Guidelines]: https://dbus.freedesktop.org/doc/dbus-api-design.html
 [Bus names chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
 [Basic types chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
+[unique name]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface
+[introspection interface]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-introspectable
