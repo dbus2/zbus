@@ -22,15 +22,18 @@ An example would be the [FreeDesktop Notifications Service] that uses
 
 For further details on bus names, please refer to the [Bus names chapter] of the D-Bus specification.
 
-## Object path
+## Objects and Object paths
 
-It is quite typical for a service to expose a single object path, such as
-`/org/freedesktop/Notifications`, and you may not have to care much about this
-concept after all.
+An object is akin to the concept of an object or an instance in many programming languages. All
+services expose at least one object on the bus and all clients interact with the service through
+these objects. These objects can be ephemeral or they could live as long as the service itself.
 
-But it is worth to understand that D-Bus organizes the interfaces by object
-paths, which roughly should match instances of various objects in the process,
-organized in a tree fashion.
+Every object is identified by a string, which is referred to as its path. An example of an object
+path is `/org/freedesktop/Notifications`, which identies the only object exposed by the
+[FreeDesktop Notifications Service].
+
+For further details on object paths, please refer to the [Basic types chapter] of the D-Bus
+specification.
 
 ## Interfaces
 
@@ -59,3 +62,4 @@ Onwards to implementation details & examples!
 [FreeDesktop Notifications Service]: https://people.gnome.org/~mccann/docs/notification-spec/notification-spec-latest.html
 [D-Bus API Design Guidelines]: https://dbus.freedesktop.org/doc/dbus-api-design.html
 [Bus names chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
+[Basic types chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
