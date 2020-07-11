@@ -45,11 +45,10 @@ server will time out (including the shell completion!).
 
 ## Handling low-level messages
 
-At the low-level, you can handle method calls by checking the incoming messages
-manually.
+At the low-level, you can handle method calls by checking the incoming messages manually.
 
-Let's write a `SayHello` method, that takes a string as argument, and reply with
-a "hello" greeting by replacing the loop above with this code:
+Let's write a `SayHello` method, that takes a string as argument, and reply with a "hello" greeting
+by replacing the loop above with this code:
 
 ```rust,no_run
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
