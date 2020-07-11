@@ -10,15 +10,15 @@ To connect to the session bus (the *per-user* bus), simply call
 went well).
 
 Similarly, to connect to the system bus (to communicate with services such as
-[NetworkManager], [BlueZ] or [PID1]), you should use `Connection::new_system()`.
+[NetworkManager], [BlueZ] or [PID1]), use `Connection::new_system()`.
 
 **Note:** it is common for a D-Bus library to provide a "shared" connection to a
 bus for a process: all `new_session()` share the same underlying connection for
-example. At this point, zbus doesn't attempt to do that.
+example. At the time of this writing, zbus doesn't do that.
 
 ## Using a custom bus address
 
-You may also specify a custom D-Bus address with `Connection::new_for_address()`
+You may also specify a custom bus with `Connection::new_for_address()`
 which takes a D-Bus address [as specified in the
 specification](https://dbus.freedesktop.org/doc/dbus-specification.html#addresses).
 
@@ -35,10 +35,11 @@ connections), and hand over the socket FDs to `Connection::new_unix_server` and
 `Connection::new_unix_client` for each side. After success, you can call the
 `Connection` methods to send and receive messages on both ends.
 
-Check the `unix_p2p` test in the zbus source code for a simple example.
+See the `unix_p2p` test in the [zbus source code] for a simple example.
 
 [NetworkManager]: https://developer.gnome.org/NetworkManager/stable/spec.html
 [BlueZ]: https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc
 [PID1]: https://www.freedesktop.org/wiki/Software/systemd/dbus/
+[zbus source code]: https://gitlab.freedesktop.org/zeenix/zbus/-/blob/master/zbus/src/connection.rs
 
 [^bus-less] Unless you implemented them, none of the bus methods will exist.
