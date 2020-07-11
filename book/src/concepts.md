@@ -13,11 +13,14 @@ peer-to-peer communication instead).
 ## Bus name / service name
 
 An endpoint can have various names, which allows to address messages to it on
-the bus.
+the bus. All endpoints are assigned a unique name by the bus at start. Since this name is not
+static, most services use something called a *well-known bus name* and typically it's this name,
+that you'll be concerned with.
 
-Usually, you care about the *well-known bus name*, which is typically the name
-of a service on your system (for example, the [`org.freedesktop.Notifications`]
-service).
+An example would be the [FreeDesktop Notifications Service] that uses
+`org.freedesktop.Notifications` as its well-known bus name.
+
+For further details on bus names, please refer to the [Bus names chapter] of the D-Bus specification.
 
 ## Object path
 
@@ -53,5 +56,6 @@ Nevertheless, this is high in our priority list.
 
 Onwards to implementation details & examples!
 
-[`org.freedesktop.Notifications`]: https://people.gnome.org/~mccann/docs/notification-spec/notification-spec-latest.html
+[FreeDesktop Notifications Service]: https://people.gnome.org/~mccann/docs/notification-spec/notification-spec-latest.html
 [D-Bus API Design Guidelines]: https://dbus.freedesktop.org/doc/dbus-api-design.html
+[Bus names chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
