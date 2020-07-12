@@ -45,12 +45,6 @@ server will time out (including the shell completion!).
 
 ## Handling low-level messages
 
-As of today (*pre-1.0*), zbus doesn't have a high-level message dispatching
-mechanism. Your code has to run a loop to continuously read incoming messages
-(register the associated FD for input in poll/select to avoid blocking). We are
-evaluating different options to make this easier, especially with *async*
-support.
-
 At the low-level, you can handle method calls by checking the incoming messages
 manually.
 
@@ -147,6 +141,12 @@ org.zbus.MyGreeter1                 interface -         -            -
 ```
 
 Easy-peasy!
+
+> **Note:** As you must have noticed, your code needed to run a loop to continuously read incoming
+messages (register the associated FD for input in poll/select to avoid blocking). This is because
+at the time of the this writing (*pre-1.0*), zbus neither provides an event loop API, nor any
+integration with other event loop implementations. We are evaluating different options to make this
+easier, especially with *async* support.
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
 [`RequestName`]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-request-name
