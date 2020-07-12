@@ -1,4 +1,9 @@
-# <img src="https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png" width="48" height="48"/> Introduction to zbus
+<p align="center">
+  <img src="https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
+       width="128" height="128"/>
+</p>
+
+# Introduction
 
 **[zbus]** is a **[Rust]** binding for **[D-Bus]**. If you are not familiar with
 D-Bus, you should read [what is D-Bus?] first[^outdated]. In short, zbus allows
