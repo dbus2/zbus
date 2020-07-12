@@ -13,10 +13,6 @@ NetworkManager) and desktop environments (e.g GNOME and KDE), rely on D-Bus for 
 There are many tools and implementations available, making it easy to interact with D-Bus programs
 from different languages and environments.
 
-<p align="center">
-  <img src="https://www.freedesktop.org/png/freedesktop-logo.png" height="32"/>
-</p>
-
 zbus is a 100% Rust-native implementation of the D-Bus protocol. It provides both an API to send
 and receive messages over a connection, as well as API to interact with peers through high-level
 concepts like method calls, signals and properties[^high-level-api]. Thanks to the power of Rust
@@ -37,6 +33,7 @@ messages (method calls, signals etc) for you.
 
 zbus crate is currently Linux-specific[^otheros].
 
+
 [zbus]: https://gitlab.freedesktop.org/zeenix/zbus
 [Rust]: https://www.rust-lang.org/
 [D-Bus]: https://dbus.freedesktop.org/
@@ -56,3 +53,7 @@ zbus crate is currently Linux-specific[^otheros].
     extent. D-Bus clients in javascript (running from any browser) do exist
     though. And zbus may also be working from the browser sometime in the future
     too, thanks to Rust 🦀 and WebAssembly 🕸.
+
+<p align="center">
+  <img src="https://www.freedesktop.org/png/freedesktop-logo.png" height="32"/>
+</p>
