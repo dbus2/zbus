@@ -83,6 +83,7 @@ And check if it works as expected:
 $ busctl --user call org.zbus.MyGreeter /org/zbus/MyGreeter org.zbus.MyGreeter1 SayHello s "zbus"
 s "Hello zbus!"
 ```
+
 This is the crust of low-level message handling. It should give you all the
 flexibility you ever need, but it is also easy to get it wrong. Fortunately,
 zbus has a simpler solution to offer.
