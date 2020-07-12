@@ -4,18 +4,13 @@ Let see how to provide a server method "SayHello", to greet a client.
 
 ## Taking a service name
 
-Each connection to the bus is given a unique name (such as ":1.27"), which is
-enough to be reachable.
+As we know from the chapter on [D-Bus concepts], each connection on the bus is given a unique name
+(such as ":1.27"). This could be all you need, depending on your use case, and the design of your
+D-Bus API. However, typically services use a service name (aka *well-known name*) so peers (clients,
+in this context) can easily discover them.
 
-Depending on your use case, and the design of your program and protocol, it
-might be enough.
-
-In this example, we would like a simple way to reliably talk to our server. We
-will ask the bus to associate our client with a service name (also called a
-*[well-known name]*). This way, we don't have to lookup the unique name, which
-would change every time.
-
-To ask for a name, we send a [`RequestName`] method call to the bus, using
+In this example, that is exactly what we're going to do and request the bus for the service name of
+our choice. To achieve that, we will we call the [`RequestName`] method on the bus, using
 `zbus::fdo` module:
 
 ```rust,no_run
@@ -153,5 +148,5 @@ org.zbus.MyGreeter1                 interface -         -            -
 
 Easy-peasy!
 
-[well-known name]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
+[D-Bus concepts]: concepts.html#bus-name--service-name
 [`RequestName`]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-request-name
