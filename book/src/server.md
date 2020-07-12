@@ -90,10 +90,10 @@ zbus has a simpler solution to offer.
 
 ## Using the `ObjectServer`
 
-One can write an `impl` with a set of methods and let the `dbus_interface`
-procedural macro write the D-Bus details for us. It will export all the methods,
-handle message dispatching, and introspection. It also has supports for
-properties and some support for signals.
+One can write an `impl` with a set of methods and let the `dbus_interface` procedural macro write
+the D-Bus details for us. It will dispatch all the incoming method calls to their respective
+handlers, and implicilty handle introspection requests. It also has support for properties and
+signal emission.
 
 Let see how to use it:
 
@@ -124,7 +124,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-(check it works with the `busctl` call command)
+(check it works with the same `busctl` command as last time)
 
 This time, we can also introspect the server:
 
