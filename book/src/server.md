@@ -54,6 +54,10 @@ a "hello" greeting by replacing the loop above with this code:
 ```rust,no_run
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
 #    let connection = zbus::Connection::new_session()?;
+#    zbus::fdo::DBusProxy::new(&connection)?.request_name(
+#        "org.zbus.MyGreeter",
+#        zbus::fdo::RequestNameFlags::ReplaceExisting.into(),
+#    )?;
 #
 loop {
     let msg = connection.receive_message()?;
