@@ -99,8 +99,8 @@ Let see how to use it:
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::dbus_interface;
 # use std::convert::TryInto;
+# use zbus::{dbus_interface, fdo};
 #
 struct Greeter;
 
@@ -113,8 +113,13 @@ impl Greeter {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = zbus::Connection::new_session()?;
+#     fdo::DBusProxy::new(&connection)?.request_name(
+#         "org.zbus.MyGreeter",
+#         fdo::RequestNameFlags::ReplaceExisting.into(),
+#     )?;
+
     let mut object_server = zbus::ObjectServer::new(&connection);
-    object_server.at(&"/org/zbus/MyGreeter".try_into()?, Greeter);
+    object_server.at(&"/org/zbus/MyGreeter".try_into()?, Greeter)?;
     loop {
         if let Err(err) = object_server.try_handle_next() {
             eprintln!("{}", err);
