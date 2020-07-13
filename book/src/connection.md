@@ -1,4 +1,4 @@
-# Making a connection
+# Establishing a connection
 
 The first thing you will have to do is to connect to a D-Bus bus or to a D-Bus
 peer. This is the entry point of the zbus API.
