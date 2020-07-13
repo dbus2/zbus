@@ -5,5 +5,5 @@ authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
 edition = "2018"
 
 [dependencies]
-zbus = { path = "../zbus", features = [ "xml" ] }
+zbus = { path = "../zbus", version = "1", features = [ "xml" ] }
 snakecase = "0.1.0"
