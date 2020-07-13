@@ -5,7 +5,7 @@
 A Rust API for [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html) communication. The aim is to provide a safe and simple high- and low-level API akin to
 [GDBus](https://developer.gnome.org/gio/stable/gdbus-convenience.html), that doesn't depend on C libraries.
 
-The project is divided into three crates:
+The project is divided into three main crates:
 
 ## zvariant
 
@@ -227,6 +227,53 @@ Hello Maria!
 s
 ```
 
+## Other crates
+
+Apart from the three crates described above, zbus project also provides a few other crates:
+
+### zbus_macros
+
+[![](https://docs.rs/zbus_macros/badge.svg)](https://docs.rs/zbus_macros/) [![](https://img.shields.io/crates/v/zbus_macros)](https://crates.io/crates/zbus_macros)
+
+This crate provides the convenient zbus macros that we already saw in action in the sample code
+above. However, `zbus` crate re-exports the macros for your convenience so you do not need to use
+this crate directly.
+
+**Status:** Stable.
+
+### zbus_polkit
+
+[![](https://docs.rs/zbus_polkit/badge.svg)](https://docs.rs/zbus_polkit/) [![](https://img.shields.io/crates/v/zbus_polkit)](https://crates.io/crates/zbus_polkit)
+
+A crate to interact with [PolicyKit], a toolkit for defining and handling authorizations. It is used
+for allowing unprivileged processes to speak to privileged processes.
+
+**Status:** Stable.
+
+#### Dependencies
+
+  * serde
+  * serde_repr
+  * enumflags2
+
+#### Example code
+
+```rust,no_run
+use zbus::Connection;
+use zbus_polkit::policykit1::*;
+
+let connection = Connection::new_system().unwrap();
+let proxy = AuthorityProxy::new(&connection).unwrap();
+let subject = Subject::new_for_owner(std::process::id(), None, None).unwrap();
+let result = proxy.check_authorization(
+    &subject,
+    "org.zbus.BeAwesome",
+    std::collections::HashMap::new(),
+    CheckAuthorizationFlags::AllowUserInteraction.into(),
+    "",
+);
+```
+
 # Getting Help
 
 If you need help in using these crates, are looking for ways to contribute or just want to hang out
@@ -242,6 +289,8 @@ build host.
 # License
 
 MIT license [LICENSE-MIT](LICENSE-MIT)
+
+[PolicyKit]: https://gitlab.freedesktop.org/polkit/polkit/
 
 [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus clients in
   javascript (running from any browser) do exist though. And zbus may also be working from the
