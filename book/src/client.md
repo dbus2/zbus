@@ -157,6 +157,56 @@ The `state()` method will translate to a `"State"` property `Get` call.
 
 To set the property, prefix the name of the property with `set_`.
 
+For a more real world example, let's try and read two properties from systemd's main service:
+
+```rust,no_run
+# use std::error::Error;
+# use zbus::dbus_proxy;
+#
+#[dbus_proxy(
+    interface = "org.freedesktop.systemd1.Manager",
+    default_service = "org.freedesktop.systemd1",
+    default_path = "/org/freedesktop/systemd1"
+)]
+trait SystemdManager {
+    #[dbus_proxy(property)]
+    fn architecture(&self) -> zbus::Result<String>;
+    #[dbus_proxy(property)]
+    fn environment(&self) -> zbus::Result<Vec<String>>;
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let connection = zbus::Connection::new_session()?;
+
+    let proxy = SystemdManagerProxy::new(&connection)?;
+    println!("Host architecture: {}", proxy.architecture()?);
+    println!("Environment:");
+    for env in proxy.environment()? {
+        println!("  {}", env);
+    }
+
+    Ok(())
+}
+```
+
+You should get an output similar to this:
+
+```none
+Host architecture: x86-64
+Environment variables:
+  HOME=/home/zeenix
+  LANG=en_US.UTF-8
+  LC_ADDRESS=de_DE.UTF-8
+  LC_IDENTIFICATION=de_DE.UTF-8
+  LC_MEASUREMENT=de_DE.UTF-8
+  LC_MONETARY=de_DE.UTF-8
+  LC_NAME=de_DE.UTF-8
+  LC_NUMERIC=de_DE.UTF-8
+  LC_PAPER=de_DE.UTF-8
+  LC_TELEPHONE=de_DE.UTF-8
+  LC_TIME=de_DE.UTF-8
+  ...
+```
 
 ## Generating the trait from an XML interface
 
