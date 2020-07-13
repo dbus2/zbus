@@ -1,7 +1,6 @@
 # Contributors
 
-Here is a list of the contributors who have helped improving zbus. Big
-shout-out to them!
+Here is a list of the contributors who have helped improving zbus. Big shout-out to them!
 
 - Zeeshan Ali ([@zeenix](https://gitlab.freedesktop.org/zeenix))
 - Marc-André Lureau ([@elmarco](https://gitlab.freedesktop.org/elmarco))

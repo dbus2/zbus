@@ -4,18 +4,13 @@ Let see how to provide a server method "SayHello", to greet a client.
 
 ## Taking a service name
 
-Each connection to the bus is given a unique name (such as ":1.27"), which is
-enough to be reachable.
+As we know from the chapter on [D-Bus concepts], each connection on the bus is given a unique name
+(such as ":1.27"). This could be all you need, depending on your use case, and the design of your
+D-Bus API. However, typically services use a service name (aka *well-known name*) so peers (clients,
+in this context) can easily discover them.
 
-Depending on your use case, and the design of your program and protocol, it
-might be enough.
-
-In this example, we would like a simple way to reliably talk to our server. We
-will ask the bus to associate our client with a service name (also called a
-*[well-known name]*). This way, we don't have to lookup the unique name, which
-would change every time.
-
-To ask for a name, we send a [`RequestName`] method call to the bus, using
+In this example, that is exactly what we're going to do and request the bus for the service name of
+our choice. To achieve that, we will we call the [`RequestName`] method on the bus, using
 `zbus::fdo` module:
 
 ```rust,no_run
@@ -50,21 +45,18 @@ server will time out (including the shell completion!).
 
 ## Handling low-level messages
 
-As of today (*pre-1.0*), zbus doesn't have a high-level message dispatching
-mechanism. Your code has to run a loop to continuously read incoming messages
-(register the associated FD for input in poll/select to avoid blocking). We are
-evaluating different options to make this easier, especially with *async*
-support.
+At the low-level, you can handle method calls by checking the incoming messages manually.
 
-At the low-level, you can handle method calls by checking the incoming messages
-manually.
-
-Let's write a `SayHello` method, that takes a string as argument, and reply with
-a "hello" greeting:
+Let's write a `SayHello` method, that takes a string as argument, and reply with a "hello" greeting
+by replacing the loop above with this code:
 
 ```rust,no_run
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
 #    let connection = zbus::Connection::new_session()?;
+#    zbus::fdo::DBusProxy::new(&connection)?.request_name(
+#        "org.zbus.MyGreeter",
+#        zbus::fdo::RequestNameFlags::ReplaceExisting.into(),
+#    )?;
 #
 loop {
     let msg = connection.receive_message()?;
@@ -90,23 +82,24 @@ And check if it works as expected:
 $ busctl --user call org.zbus.MyGreeter /org/zbus/MyGreeter org.zbus.MyGreeter1 SayHello s "zbus"
 s "Hello zbus!"
 ```
+
 This is the crust of low-level message handling. It should give you all the
 flexibility you ever need, but it is also easy to get it wrong. Fortunately,
 zbus has a simpler solution to offer.
 
 ## Using the `ObjectServer`
 
-One can write an `impl` with a set of methods and let the `dbus_interface`
-procedural macro write the D-Bus details for us. It will export all the methods,
-handle message dispatching, and introspection. It also has supports for
-properties and some support for signals.
+One can write an `impl` with a set of methods and let the `dbus_interface` procedural macro write
+the D-Bus details for us. It will dispatch all the incoming method calls to their respective
+handlers, and implicilty handle introspection requests. It also has support for properties and
+signal emission.
 
 Let see how to use it:
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::dbus_interface;
 # use std::convert::TryInto;
+# use zbus::{dbus_interface, fdo};
 #
 struct Greeter;
 
@@ -119,8 +112,13 @@ impl Greeter {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = zbus::Connection::new_session()?;
+#     fdo::DBusProxy::new(&connection)?.request_name(
+#         "org.zbus.MyGreeter",
+#         fdo::RequestNameFlags::ReplaceExisting.into(),
+#     )?;
+
     let mut object_server = zbus::ObjectServer::new(&connection);
-    object_server.at(&"/org/zbus/MyGreeter".try_into()?, Greeter);
+    object_server.at(&"/org/zbus/MyGreeter".try_into()?, Greeter)?;
     loop {
         if let Err(err) = object_server.try_handle_next() {
             eprintln!("{}", err);
@@ -130,7 +128,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-(check it works with the `busctl` call command)
+(check it works with the same `busctl` command as last time)
 
 This time, we can also introspect the server:
 
@@ -153,5 +151,11 @@ org.zbus.MyGreeter1                 interface -         -            -
 
 Easy-peasy!
 
-[well-known name]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
+> **Note:** As you must have noticed, your code needed to run a loop to continuously read incoming
+messages (register the associated FD for input in poll/select to avoid blocking). This is because
+at the time of the this writing (*pre-1.0*), zbus neither provides an event loop API, nor any
+integration with other event loop implementations. We are evaluating different options to make this
+easier, especially with *async* support.
+
+[D-Bus concepts]: concepts.html#bus-name--service-name
 [`RequestName`]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-request-name

@@ -1,17 +1,15 @@
 # Writing a client proxy
 
-In this chapter, we are going to see how to make low-level D-Bus method calls.
-Then we are going to dive in, and derive from a trait to make a convenient Rust
-binding. Finally, we will learn about *xmlgen*, a tool to help us generate a
-boilerplate trait from the XML of an introspected service.
+In this chapter, we are going to see how to make low-level D-Bus method calls. Then we are going to
+dive in, and derive from a trait to make a convenient Rust binding. Finally, we will learn about
+*xmlgen*, a tool to help us generate a boilerplate trait from the XML of an introspected service.
 
-To make this learning "hands-on", we are going to call and bind the
-cross-desktop notification service (please refer to this
+To make this learning "hands-on", we are going to call and bind the cross-desktop notification
+service (please refer to this
 [reference](https://people.gnome.org/~mccann/docs/notification-spec/notification-spec-latest.html)
 document for further details on this API).
 
-Let's start by playing with the service from the shell, and notify the desktop
-with [`busctl`]:
+Let's start by playing with the service from the shell, and notify the desktop with [`busctl`]:
 
 ```bash
 busctl --user call \
@@ -25,16 +23,16 @@ busctl --user call \
 
 **Note**: `busctl` has very good auto-completion support in bash or zsh.
 
-Running this command should pop-up a notification dialog on your desktop. If it
-does not, your desktop does not support the notification service, and this
-example will be less interactive. Nonetheless you can use a similar approach for
-other services.
+Running this command should pop-up a notification dialog on your desktop. If it does not, your
+desktop does not support the notification service, and this example will be less interactive.
+Nonetheless you can use a similar approach for other services.
 
-This command shows us several aspects of a D-Bus communication:
+This command shows us several aspects of the D-Bus communication:
 
  - `--user`: Connect to and use the user/session bus.
 
- - `call`: Send a method call message. (D-Bus also supports signals, error messages, and method replies)
+ - `call`: Send a method call message. (D-Bus also supports signals, error messages, and method
+   replies)
 
  - **destination**: The name of the service (`org.freedesktop.Notifications`).
 
@@ -45,8 +43,8 @@ This command shows us several aspects of a D-Bus communication:
 
  - **method**: The name of the method to call, `Notify`.
 
- - **signature**: That `susssasa{sv}i` means the method takes 8 arguments of
-   various types. 's', for example, is for a string. 'as' is for array of strings.
+ - **signature**: That `susssasa{sv}i` means the method takes 8 arguments of various types. 's', for
+   example, is for a string. 'as' is for array of strings.
 
  - The method arguments.
 
@@ -80,20 +78,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-Although this is already quite flexible, and handles various details for you
-(such as the message signature), it is also somewhat inconvenient and
-error-prone: you can easily miss arguments, or give arguments with the wrong
-type or other kind of errors (what would happen if you typed `0`, instead of
-`0u32`?).
+Although this is already quite flexible, and handles various details for you (such as the message
+signature), it is also somewhat inconvenient and error-prone: you can easily miss arguments, or give
+arguments with the wrong type or other kind of errors (what would happen if you typed `0`, instead
+of `0u32`?).
 
-Instead, we want to wrap this `Notify` D-Bus method in a Rust function. Let's
-see how next.
+Instead, we want to wrap this `Notify` D-Bus method in a Rust function. Let's see how next.
 
 ## Trait-derived proxy call
 
-A trait declaration `T` with a `dbus_proxy` attribute will have a derived
-`TProxy` implemented thanks to procedural macros. The trait methods will have
-respective `impl` methods wrapping the D-Bus calls:
+A trait declaration `T` with a `dbus_proxy` attribute will have a derived `TProxy` implemented
+thanks to procedural macros. The trait methods will have respective `impl` methods wrapping the
+D-Bus calls:
 
 ```rust,no_run
 use std::collections::HashMap;
@@ -128,20 +124,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-A `TProxy` has a few associated methods, such as `new(connection)`, using the
-default associated service name and object path, and `new_for(connection,
-service_name, object_path)` if you need to specify something different.
+A `TProxy` has a few associated methods, such as `new(connection)`, using the default associated
+service name and object path, and `new_for(connection, service_name, object_path)` if you need to
+specify something different.
 
-This should help to avoid the kind of mistakes we saw earlier. It's also a bit
-easier to use, thanks to Rust type inference. This makes it also possible to
-have higher-level types, they fit more naturally with the rest of the code. You
-can further document the D-Bus API or provide additional helpers.
+This should help to avoid the kind of mistakes we saw earlier. It's also a bit easier to use, thanks
+to Rust type inference. This makes it also possible to have higher-level types, they fit more
+naturally with the rest of the code. You can further document the D-Bus API or provide additional
+helpers.
 
 ### Properties
 
 Interfaces can have associated properties, which can be read or set with the
-`org.freedesktop.DBus.Properties` interface. Here again, the `#[dbus_proxy]`
-attribute comes to the rescue to help you. You can annotate a trait method to be a getter:
+`org.freedesktop.DBus.Properties` interface. Here again, the `#[dbus_proxy]` attribute comes to the
+rescue to help you. You can annotate a trait method to be a getter:
 
 ```rust
 # use zbus::dbus_proxy;
@@ -157,13 +153,68 @@ The `state()` method will translate to a `"State"` property `Get` call.
 
 To set the property, prefix the name of the property with `set_`.
 
+For a more real world example, let's try and read two properties from systemd's main service:
+
+```rust,no_run
+# use std::error::Error;
+# use zbus::dbus_proxy;
+#
+#[dbus_proxy(
+    interface = "org.freedesktop.systemd1.Manager",
+    default_service = "org.freedesktop.systemd1",
+    default_path = "/org/freedesktop/systemd1"
+)]
+trait SystemdManager {
+    #[dbus_proxy(property)]
+    fn architecture(&self) -> zbus::Result<String>;
+    #[dbus_proxy(property)]
+    fn environment(&self) -> zbus::Result<Vec<String>>;
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let connection = zbus::Connection::new_session()?;
+
+    let proxy = SystemdManagerProxy::new(&connection)?;
+    println!("Host architecture: {}", proxy.architecture()?);
+    println!("Environment:");
+    for env in proxy.environment()? {
+        println!("  {}", env);
+    }
+
+    Ok(())
+}
+```
+
+You should get an output similar to this:
+
+```none
+Host architecture: x86-64
+Environment variables:
+  HOME=/home/zeenix
+  LANG=en_US.UTF-8
+  LC_ADDRESS=de_DE.UTF-8
+  LC_IDENTIFICATION=de_DE.UTF-8
+  LC_MEASUREMENT=de_DE.UTF-8
+  LC_MONETARY=de_DE.UTF-8
+  LC_NAME=de_DE.UTF-8
+  LC_NUMERIC=de_DE.UTF-8
+  LC_PAPER=de_DE.UTF-8
+  LC_TELEPHONE=de_DE.UTF-8
+  LC_TIME=de_DE.UTF-8
+  ...
+```
 
 ## Generating the trait from an XML interface
 
-zbus git repository has a developper-friendly tool under the `zbus_xmlgen/`
-directory. It generates Rust traits from a D-Bus introspection XML.
+zbus git repository contains a [developer-friendly tool], that can generate Rust traits from a given
+D-Bus introspection XML for you.
 
-Let's first get the XML interface of the notification service:
+**Note:** This tool should not be considered a drop-in Rust-specific replacement for similar tools
+available for low-level languages, such as [`gdbus-codegen`]. Unlike those tools, this is only meant
+as a starting point to generate the code, once. In many cases, you will want to tweak the generated
+code.
+
+Let's first fetch the XML interface of the notification service:
 
 ```bash
 busctl --user --xml-interface introspect \
@@ -257,17 +308,25 @@ trait Notifications {
     fn get_server_information(&self) -> zbus::Result<(String, String, String, String)>;
 
     /// Notify method
-    fn notify(&self, arg_0: &str, arg_1: u32, arg_2: &str, arg_3: &str, arg_4: &str, arg_5: &[&str], arg_6: std::collections::HashMap<&str, zvariant::Value>, arg_7: i32) -> zbus::Result<u32>;
+    fn notify(
+        &self,
+        arg_0: &str,
+        arg_1: u32,
+        arg_2: &str,
+        arg_3: &str,
+        arg_4: &str,
+        arg_5: &[&str],
+        arg_6: std::collections::HashMap<&str, zvariant::Value>,
+        arg_7: i32,
+    ) -> zbus::Result<u32>;
 }
 ```
 
-It should be usable as such. But you may as well improve a bit the naming of the
-arguments, use better types (using `BitFlags`, structs or other custom types),
-add extra documentation, and other functions to make the binding more pleasing
-to use from Rust.
+It should be usable as such. But you may as well improve a bit the naming of the arguments, use
+better types (using `BitFlags`, structs or other custom types), add extra documentation, and other
+functions to make the binding more pleasing to use from Rust.
 
-For example, the generated `GetServerInformation` method can be pimped to a
-nicer version:
+For example, the generated `GetServerInformation` method can be improved to a nicer version:
 
 ```rust
 # use serde::{Serialize, Deserialize};
@@ -306,3 +365,5 @@ for example, which was implemented starting from the *xmlgen* output.
 There you have it, a Rust-friendly binding for your D-Bus service!
 
 [`busctl`]: https://www.freedesktop.org/software/systemd/man/busctl.html
+[developer-friendly tool]: https://gitlab.freedesktop.org/zeenix/zbus/-/tree/master/zbus_xmlgen
+[`gdbus-codegen`]: https://developer.gnome.org/gio/stable/gdbus-codegen.html
