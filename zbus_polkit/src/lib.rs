@@ -1,7 +1,8 @@
-//! A crate to interact with PolicyKit (with [zbus]).
+//! A crate to interact with PolicyKit.
 //!
 //! [PolicyKit] is a toolkit for defining and handling authorizations. It is used for allowing
-//! unprivileged processes to speak to privileged processes.
+//! unprivileged processes to speak to privileged processes. As you can guess from the name, it is
+//! based on [zbus].
 //!
 //! ```no_run
 //! use zbus::Connection;
