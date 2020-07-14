@@ -21,7 +21,7 @@
 //! ```
 //!
 //! [PolicyKit]: https://gitlab.freedesktop.org/polkit/polkit/
-//! [zbus]: https://gitlab.freedesktop.org/zeenix/zbus
+//! [zbus]: https://crates.io/crates/zbus
 
 mod error;
 pub use error::*;
