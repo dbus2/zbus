@@ -8,4 +8,4 @@
 
 -----------
 
-[Contriubtors](contributors.md)
+[Contributors](contributors.md)
