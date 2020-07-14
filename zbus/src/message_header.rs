@@ -33,8 +33,10 @@ impl TryFrom<u8> for EndianSig {
 }
 
 #[cfg(target_endian = "big")]
+/// Signature of the target's native endian.
 pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Big;
 #[cfg(target_endian = "little")]
+/// Signature of the target's native endian.
 pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Little;
 
 #[repr(u8)]
