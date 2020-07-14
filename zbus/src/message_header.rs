@@ -9,8 +9,8 @@ use zvariant_derive::Type;
 
 use crate::{MessageError, MessageFieldCode, MessageFields};
 
-pub const PRIMARY_HEADER_SIZE: usize = 12;
-pub const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
+pub(crate) const PRIMARY_HEADER_SIZE: usize = 12;
+pub(crate) const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, Type)]
