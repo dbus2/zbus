@@ -1,3 +1,116 @@
+//! This crate provides the main API you will use to interact with D-Bus from Rust. It takes care of
+//! the establishment of a connection, the creation, sending and receiving of different kind of
+//! D-Bus messages (method calls, signals etc) for you.
+//!
+//! zbus crate is currently Linux-specific[^otheros].
+//!
+//! ### Getting Started
+//!
+//! The best way to get started with zbus is the [book], where we start with basic D-Bus concepts
+//! and explain with code samples, how zbus makes D-Bus easy.
+//!
+//! ### Example code
+//!
+//! #### Client
+//!
+//! This code display a notification on your Freedesktop.org-compatible OS:
+//!
+//! ```rust,no_run
+//! use std::collections::HashMap;
+//! use std::error::Error;
+//!
+//! use zbus::dbus_proxy;
+//! use zvariant::Value;
+//!
+//! #[dbus_proxy]
+//! trait Notifications {
+//!     fn notify(
+//!         &self,
+//!         app_name: &str,
+//!         replaces_id: u32,
+//!         app_icon: &str,
+//!         summary: &str,
+//!         body: &str,
+//!         actions: &[&str],
+//!         hints: HashMap<&str, &Value>,
+//!         expire_timeout: i32,
+//!     ) -> zbus::Result<u32>;
+//! }
+//!
+//! fn main() -> Result<(), Box<dyn Error>> {
+//!     let connection = zbus::Connection::new_session()?;
+//!
+//!     let proxy = NotificationsProxy::new(&connection)?;
+//!     let reply = proxy.notify(
+//!         "my-app",
+//!         0,
+//!         "dialog-information",
+//!         "A summary",
+//!         "Some body",
+//!         &[],
+//!         HashMap::new(),
+//!         5000,
+//!     )?;
+//!     dbg!(reply);
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! #### Server
+//!
+//! A simple service that politely greets whoever calls its `SayHello` method:
+//!
+//! ```rust,no_run
+//! use std::error::Error;
+//! use std::convert::TryInto;
+//! use zbus::{dbus_interface, fdo};
+//!
+//! struct Greeter;
+//!
+//! #[dbus_interface(name = "org.zbus.MyGreeter1")]
+//! impl Greeter {
+//!     fn say_hello(&self, name: &str) -> String {
+//!         format!("Hello {}!", name)
+//!     }
+//! }
+//!
+//! fn main() -> Result<(), Box<dyn Error>> {
+//!     let connection = zbus::Connection::new_session()?;
+//!     fdo::DBusProxy::new(&connection)?.request_name(
+//!         "org.zbus.MyGreeter",
+//!         fdo::RequestNameFlags::ReplaceExisting.into(),
+//!     )?;
+//!
+//!     let mut object_server = zbus::ObjectServer::new(&connection);
+//!     object_server.at(&"/org/zbus/MyGreeter".try_into()?, Greeter)?;
+//!     loop {
+//!         if let Err(err) = object_server.try_handle_next() {
+//!             eprintln!("{}", err);
+//!         }
+//!     }
+//! }
+//! ```
+//!
+//! You can use the following command to test it:
+//!
+//! ```bash
+//! $ busctl --user call \
+//!     org.zbus.MyGreeter \
+//!     /org/zbus/MyGreeter \
+//!     org.zbus.MyGreeter1 \
+//!     SayHello s "Maria"
+//! Hello Maria!
+//! $
+//! ```
+//!
+//! [book]: https://zeenix.pages.freedesktop.org/zbus/
+//!
+//! [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus
+//!   clients in javascript (running from any browser) do exist though. And zbus may also be
+//!   working from the browser sometime in the future too, thanks to Rust 🦀 and WebAssembly 🕸.
+//!
+
 #[cfg(doctest)]
 mod doctests {
     doc_comment::doctest!("../../README.md");
