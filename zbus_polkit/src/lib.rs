@@ -1,3 +1,7 @@
+#![doc(
+    html_logo_url = "https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
+)]
+
 //! A crate to interact with PolicyKit.
 //!
 //! [PolicyKit] is a toolkit for defining and handling authorizations. It is used for allowing

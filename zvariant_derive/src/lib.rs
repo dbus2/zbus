@@ -1,3 +1,7 @@
+#![doc(
+    html_logo_url = "https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
+)]
+
 //! This crate provides a derive macro to add [`Type`] implementation to structs and enums.
 //!
 //! # Examples
