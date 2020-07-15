@@ -1,3 +1,8 @@
+//! D-Bus standard interfaces.
+//!
+//! The D-Bus specification defines the message bus messages and some standard interfaces that may
+//! be useful across various D-Bus applications. This module provides their proxy.
+
 use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -8,6 +13,7 @@ use zvariant_derive::Type;
 use crate as zbus;
 use crate::{dbus_proxy, DBusError};
 
+/// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
 trait Introspectable {
     /// Returns an XML description of the object, including its interfaces (with signals and
@@ -15,6 +21,7 @@ trait Introspectable {
     fn introspect(&self) -> zbus::Result<String>;
 }
 
+/// Proxy for the `org.freedesktop.DBus.Properties` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Properties")]
 trait Properties {
     /// Get a property value.
@@ -29,6 +36,7 @@ trait Properties {
 
 type ManagedObjects = HashMap<String, HashMap<String, HashMap<String, OwnedValue>>>;
 
+/// Proxy for the `org.freedesktop.DBus.ObjectManager` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.ObjectManager")]
 trait ObjectManager {
     /// The return value of this method is a dict whose keys are object paths. All returned object
@@ -42,6 +50,7 @@ trait ObjectManager {
     fn get_managed_objects(&self) -> zbus::Result<ManagedObjects>;
 }
 
+/// Proxy for the `org.freedesktop.DBus.Peer` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Peer")]
 trait Peer {
     /// On receipt, an application should do nothing other than reply as usual. It does not matter
@@ -56,6 +65,7 @@ trait Peer {
     fn get_machine_id(&self) -> zbus::Result<String>;
 }
 
+/// Proxy for the `org.freedesktop.DBus.Monitoring` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Monitoring")]
 trait Monitoring {
     /// Converts the connection into a monitor connection which can be used as a
@@ -63,35 +73,86 @@ trait Monitoring {
     fn become_monitor(&self, n1: &[&str], n2: u32) -> zbus::Result<()>;
 }
 
+/// Proxy for the `org.freedesktop.DBus.Stats` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Debug.Stats")]
 trait Stats {
-    /// GetStats
+    /// GetStats (undocumented)
     fn get_stats(&self) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
 
-    /// GetConnectionStats
+    /// GetConnectionStats (undocumented)
     fn get_connection_stats(&self, n1: &str) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
 
-    /// GetAllMatchRules
+    /// GetAllMatchRules (undocumented)
     fn get_all_match_rules(&self) -> zbus::Result<Vec<HashMap<String, Vec<String>>>>;
 }
 
+/// The flags used by the bus [`request_name`] method.
+///
+/// [`request_name`]: struct.DBusProxy.html#method.request_name
 #[repr(u32)]
 #[derive(Type, BitFlags, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum RequestNameFlags {
+    /// If an application A specifies this flag and succeeds in becoming the owner of the name, and
+    /// another application B later calls [`request_name`] with the [`ReplaceExisting`] flag, then
+    /// application A will lose ownership and receive a `org.freedesktop.DBus.NameLost` signal, and
+    /// application B will become the new owner. If [`AllowReplacement`] is not specified by
+    /// application A, or [`ReplaceExisting`] is not specified by application B, then application B
+    /// will not replace application A as the owner.
+    ///
+    /// [`ReplaceExisting`]: enum.RequestNameFlags.html#variant.ReplaceExisting
+    /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
+    /// [`request_name`]: struct.DBusProxy.html#method.request_name
     AllowReplacement = 0x01,
+    /// Try to replace the current owner if there is one. If this flag is not set the application
+    /// will only become the owner of the name if there is no current owner. If this flag is set,
+    /// the application will replace the current owner if the current owner specified
+    /// [`AllowReplacement`].
+    ///
+    /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
     ReplaceExisting = 0x02,
+    ///  Without this flag, if an application requests a name that is already owned, the application
+    ///  will be placed in a queue to own the name when the current owner gives it up. If this flag
+    ///  is given, the application will not be placed in the queue, the request for the name will
+    ///  simply fail. This flag also affects behavior when an application is replaced as name owner;
+    ///  by default the application moves back into the waiting queue, unless this flag was provided
+    ///  when the application became the name owner.
     DoNotQueue = 0x04,
 }
 
+/// The return code of the [`request_name`] method.
+///
+/// [`request_name`]: struct.DBusProxy.html#method.request_name
 #[repr(u32)]
 #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
 pub enum RequestNameReply {
+    /// The caller is now the primary owner of the name, replacing any previous owner. Either the
+    /// name had no owner before, or the caller specified [`ReplaceExisting`] and the current owner
+    /// specified [`AllowReplacement`].
+    ///
+    /// [`ReplaceExisting`]: enum.RequestNameFlags.html#variant.ReplaceExisting
+    /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
     PrimaryOwner = 0x01,
+    /// The name already had an owner, [`DoNotQueue`] was not specified, and either the current
+    /// owner did not specify [`AllowReplacement`] or the requesting application did not specify
+    /// [`ReplaceExisting`].
+    ///
+    /// [`DoNotQueue`]: enum.RequestNameFlags.html#variant.DoNotQueue
+    /// [`ReplaceExisting`]: enum.RequestNameFlags.html#variant.ReplaceExisting
+    /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
     InQueue = 0x02,
+    /// The name already has an owner, [`DoNotQueue`] was specified, and either [`AllowReplacement`]
+    /// was not specified by the current owner, or [`ReplaceExisting`] was not specified by the
+    /// requesting application.
+    ///
+    /// [`DoNotQueue`]: enum.RequestNameFlags.html#variant.DoNotQueue
+    /// [`ReplaceExisting`]: enum.RequestNameFlags.html#variant.ReplaceExisting
+    /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
     Exists = 0x03,
+    /// The application trying to request ownership of a name is already the owner of it.
     AlreadyOwner = 0x04,
 }
 
+/// Proxy for the `org.freedesktop.DBus` interface.
 #[dbus_proxy]
 trait DBus {
     /// Adds a match rule to match messages going through the message bus
@@ -179,10 +240,21 @@ trait DBus {
     #[dbus_proxy(property)]
     fn features(&self) -> zbus::Result<Vec<String>>;
 
+    /// This property lists interfaces provided by the `/org/freedesktop/DBus` object, and can be
+    /// used by clients to detect the capabilities of the message bus with which they are
+    /// communicating. Unlike the standard Introspectable interface, querying this property does ot
+    /// require parsing XML. This property was added in version 1.11.x of the reference
+    /// implementation of the message bus.
+    ///
+    /// The standard `org.freedesktop.DBus` and `org.freedesktop.DBus.Properties` interfaces are not
+    /// included in the value of this property, because their presence can be inferred from the fact
+    /// that a method call on `org.freedesktop.DBus.Properties` asking for properties of
+    /// `org.freedesktop.DBus` was successful. The standard `org.freedesktop.DBus.Peer` and
+    /// `org.freedesktop.DBus.Introspectable` interfaces are not included in the value of this
+    /// property either, because they do not indicate features of the message bus implementation.
     #[dbus_proxy(property)]
     fn interfaces(&self) -> zbus::Result<Vec<String>>;
 }
-
 /// Errors from https://gitlab.freedesktop.org/dbus/dbus/-/blob/master/dbus/dbus-protocol.h
 #[derive(Debug, DBusError, PartialEq)]
 #[dbus_error(prefix = "org.freedesktop.DBus.Error")]
