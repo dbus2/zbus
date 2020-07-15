@@ -5,7 +5,125 @@
 A Rust API for [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html) communication. The aim is to provide a safe and simple high- and low-level API akin to
 [GDBus](https://developer.gnome.org/gio/stable/gdbus-convenience.html), that doesn't depend on C libraries.
 
-The project is divided into three crates:
+The project is divided into three main crates:
+
+## zbus
+
+[![](https://docs.rs/zbus/badge.svg)](https://docs.rs/zbus/) [![](https://img.shields.io/crates/v/zbus)](https://crates.io/crates/zbus)
+
+The zbus crate provides the main API you will use to interact with D-Bus from Rust. It takes care of
+the establishment of a connection, the creation, sending and receiving of different kind of D-Bus
+messages (method calls, signals etc) for you.
+
+zbus crate is currently Linux-specific[^otheros].
+
+**Status:** Stable[^stability].
+
+### Dependencies
+
+  * nix
+  * byteorder
+  * serde
+  * serde_repr
+  * enumflags2
+  * derivative
+  * serde-xml-rs (optional)
+
+### Getting Started
+
+The best way to get started with zbus is the [book](https://zeenix.pages.freedesktop.org/zbus/),
+where we start with basic D-Bus concepts and explain with code samples, how zbus makes D-Bus easy.
+
+### Example code
+
+#### Client
+
+This code display a notification on your Freedesktop.org-compatible OS:
+
+```rust,no_run
+use std::collections::HashMap;
+use std::error::Error;
+
+use zbus::dbus_proxy;
+use zvariant::Value;
+
+#[dbus_proxy]
+trait Notifications {
+    fn notify(
+        &self,
+        app_name: &str,
+        replaces_id: u32,
+        app_icon: &str,
+        summary: &str,
+        body: &str,
+        actions: &[&str],
+        hints: HashMap<&str, &Value>,
+        expire_timeout: i32,
+    ) -> zbus::Result<u32>;
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let connection = zbus::Connection::new_session()?;
+
+    let proxy = NotificationsProxy::new(&connection)?;
+    let reply = proxy.notify(
+        "my-app",
+        0,
+        "dialog-information",
+        "A summary",
+        "Some body",
+        &[],
+        HashMap::new(),
+        5000,
+    )?;
+    dbg!(reply);
+
+    Ok(())
+}
+```
+
+#### Server
+
+A simple service that politely greets whoever calls its `SayHello` method:
+
+```rust,no_run
+use std::error::Error;
+use std::convert::TryInto;
+use zbus::{dbus_interface, fdo};
+
+struct Greeter;
+
+#[dbus_interface(name = "org.zbus.MyGreeter1")]
+impl Greeter {
+    fn say_hello(&self, name: &str) -> String {
+        format!("Hello {}!", name)
+    }
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let connection = zbus::Connection::new_session()?;
+    fdo::DBusProxy::new(&connection)?.request_name(
+        "org.zbus.MyGreeter",
+        fdo::RequestNameFlags::ReplaceExisting.into(),
+    )?;
+
+    let mut object_server = zbus::ObjectServer::new(&connection);
+    object_server.at(&"/org/zbus/MyGreeter".try_into()?, Greeter)?;
+    loop {
+        if let Err(err) = object_server.try_handle_next() {
+            eprintln!("{}", err);
+        }
+    }
+}
+```
+
+You can use the following command to test it:
+
+```bash
+$ busctl --user call org.zbus.MyGreeter /org/zbus/MyGreeter org.zbus.MyGreeter1 SayHello s "Maria"
+Hello Maria!
+s
+```
 
 ## zvariant
 
@@ -109,22 +227,52 @@ let decoded: Struct = from_slice(&encoded, ctxt).unwrap();
 assert_eq!(decoded, s);
 ```
 
-## zbus
+## Other crates
 
-That's the main crate that you'll use to actually communicate with services and apps over D-Bus. At the moment you can
-only connect to the session bus and call methods synchronously.
+Apart from the three crates described above, zbus project also provides a few other crates:
 
-**Status:** Unstable. You've been warned!
+### zbus_macros
 
-### Dependencies
+[![](https://docs.rs/zbus_macros/badge.svg)](https://docs.rs/zbus_macros/) [![](https://img.shields.io/crates/v/zbus_macros)](https://crates.io/crates/zbus_macros)
 
-  * nix
-  * byteorder
+This crate provides the convenient zbus macros that we already saw in action in the sample code
+above. However, `zbus` crate re-exports the macros for your convenience so you do not need to use
+this crate directly.
+
+**Status:** Stable.
+
+### zbus_polkit
+
+[![](https://docs.rs/zbus_polkit/badge.svg)](https://docs.rs/zbus_polkit/) [![](https://img.shields.io/crates/v/zbus_polkit)](https://crates.io/crates/zbus_polkit)
+
+A crate to interact with [PolicyKit], a toolkit for defining and handling authorizations. It is used
+for allowing unprivileged processes to speak to privileged processes.
+
+**Status:** Stable.
+
+#### Dependencies
+
   * serde
   * serde_repr
   * enumflags2
-  * derivative
-  * serde-xml-rs (optional)
+
+#### Example code
+
+```rust,no_run
+use zbus::Connection;
+use zbus_polkit::policykit1::*;
+
+let connection = Connection::new_system().unwrap();
+let proxy = AuthorityProxy::new(&connection).unwrap();
+let subject = Subject::new_for_owner(std::process::id(), None, None).unwrap();
+let result = proxy.check_authorization(
+    &subject,
+    "org.zbus.BeAwesome",
+    std::collections::HashMap::new(),
+    CheckAuthorizationFlags::AllowUserInteraction.into(),
+    "",
+);
+```
 
 # Getting Help
 
@@ -141,3 +289,12 @@ build host.
 # License
 
 MIT license [LICENSE-MIT](LICENSE-MIT)
+
+[PolicyKit]: https://gitlab.freedesktop.org/polkit/polkit/
+
+[^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus clients in
+  javascript (running from any browser) do exist though. And zbus may also be working from the
+  browser sometime in the future too, thanks to Rust 🦀 and WebAssembly 🕸.
+
+[^stability]: We might have to change the API but zbus follows semver convention so your code
+  won't just break out of the blue. Just make sure you depend on a specific major version of zbus.
