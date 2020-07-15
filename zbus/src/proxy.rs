@@ -42,7 +42,7 @@ impl<'a> Proxy<'a> {
         IntrospectableProxy::new_for(self.conn, self.destination, self.path)?.introspect()
     }
 
-    pub fn try_get<T>(&self, property_name: &str) -> Result<T>
+    pub fn get_property<T>(&self, property_name: &str) -> Result<T>
     where
         T: TryFrom<OwnedValue>,
     {
@@ -52,7 +52,7 @@ impl<'a> Proxy<'a> {
             .map_err(|_| Error::InvalidReply)
     }
 
-    pub fn try_set<'t, T: 't>(&self, property_name: &str, value: T) -> Result<()>
+    pub fn set_property<'t, T: 't>(&self, property_name: &str, value: T) -> Result<()>
     where
         T: Into<Value<'t>>,
     {
