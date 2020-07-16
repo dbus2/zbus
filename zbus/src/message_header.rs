@@ -262,9 +262,9 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// The signature of the message body.
-    pub fn signature(&self) -> Result<Option<Signature>, MessageError> {
+    pub fn signature(&self) -> Result<Option<&Signature>, MessageError> {
         match self.fields().get_field(MessageFieldCode::Signature) {
-            Some(MessageField::Signature(signature)) => Ok(Some(signature.clone())),
+            Some(MessageField::Signature(signature)) => Ok(Some(signature)),
             Some(_) => Err(MessageError::InvalidField),
             None => Ok(None),
         }
@@ -328,7 +328,7 @@ mod tests {
         assert_eq!(h.destination()?, Some(":1.11".into()));
         assert_eq!(h.reply_serial()?, Some(88));
         assert_eq!(h.sender()?, None);
-        assert_eq!(h.signature()?, Some(Signature::from_str_unchecked("say")));
+        assert_eq!(h.signature()?, Some(&Signature::from_str_unchecked("say")));
         assert_eq!(h.unix_fds()?, Some(12));
 
         Ok(())
