@@ -5,6 +5,47 @@ use crate::{Connection, Error, Message, Result};
 
 use crate::fdo::{IntrospectableProxy, PropertiesProxy};
 
+/// A client-side interface proxy.
+///
+/// A `Proxy` is a helper to interact with an interface on a remote object.
+///
+/// # Example
+///
+/// ```
+/// use std::result::Result;
+/// use std::error::Error;
+/// use zbus::{Connection, Proxy};
+///
+/// fn main() -> Result<(), Box<dyn Error>> {
+///     let connection = Connection::new_session()?;
+///     let p = Proxy::new(
+///         &connection,
+///         "org.freedesktop.DBus",
+///         "/org/freedesktop/DBus",
+///         "org.freedesktop.DBus",
+///     )?;
+///     // owned return value
+///     let _id: String = p.call("GetId", &())?;
+///     // borrowed return value
+///     let _id: &str = p.call_method("GetId", &())?.body()?;
+///     Ok(())
+/// }
+/// ```
+///
+/// # Note
+///
+/// It is recommended to use the [`dbus_proxy`] macro, which provides a more convenient and
+/// type-safe *façade* `Proxy` derived from a Rust trait.
+///
+/// ## Current limitations:
+///
+/// At this point, the `Proxy` is "simple". Notably, it doesn't:
+/// - have any signal handling
+/// - cache properties
+/// - track the current name owner
+/// - prevent auto-launching
+///
+/// [`dbus_proxy`]: attr.dbus_proxy.html
 pub struct Proxy<'a> {
     conn: &'a Connection,
     destination: &'a str,
@@ -13,6 +54,7 @@ pub struct Proxy<'a> {
 }
 
 impl<'a> Proxy<'a> {
+    /// Create a new `Proxy` for the given destination/path/interface.
     pub fn new(
         conn: &'a Connection,
         destination: &'a str,
@@ -27,10 +69,16 @@ impl<'a> Proxy<'a> {
         })
     }
 
+    /// Introspect the associated object, and return the XML description.
+    ///
+    /// See the [xml](xml/index.html) module for parsing the result.
     pub fn introspect(&self) -> Result<String> {
         IntrospectableProxy::new_for(self.conn, self.destination, self.path)?.introspect()
     }
 
+    /// Get the property `property_name`.
+    ///
+    /// Effectively, call the `Get` method of the `org.freedesktop.DBus.Properties` interface.
     pub fn get_property<T>(&self, property_name: &str) -> Result<T>
     where
         T: TryFrom<OwnedValue>,
@@ -41,6 +89,9 @@ impl<'a> Proxy<'a> {
             .map_err(|_| Error::InvalidReply)
     }
 
+    /// Set the property `property_name`.
+    ///
+    /// Effectively, call the `Set` method of the `org.freedesktop.DBus.Properties` interface.
     pub fn set_property<'t, T: 't>(&self, property_name: &str, value: T) -> Result<()>
     where
         T: Into<Value<'t>>,
@@ -52,11 +103,11 @@ impl<'a> Proxy<'a> {
         )
     }
 
-    /// Call a method and return the response.
+    /// Call a method and return the reply.
     ///
     /// Typically, you would want to use [`call`] method instead. Use this method if you need to
-    /// parse the response manually. Typical use case would be avoid avoid memory
-    /// allocations/copying, by parsing the response to an unowned type.
+    /// deserialize the reply message manually (this way, you can avoid avoid the memory
+    /// allocation/copying, by deserializing the reply to an unowned type).
     ///
     /// [`call`]: struct.Proxy.html#method.call
     pub fn call_method<B>(&self, method_name: &str, body: &B) -> Result<Message>
@@ -80,9 +131,9 @@ impl<'a> Proxy<'a> {
         }
     }
 
-    /// Call a method and parse the reponse.
+    /// Call a method and return the reply body.
     ///
-    /// Use [`call_method`] instead if you need to parse the response manually/separately.
+    /// Use [`call_method`] instead if you need to deserialize the reply manually/separately.
     ///
     /// [`call_method`]: struct.Proxy.html#method.call_method
     pub fn call<B, R>(&self, method_name: &str, body: &B) -> Result<R>
@@ -91,25 +142,5 @@ impl<'a> Proxy<'a> {
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
         Ok(self.call_method(method_name, body)?.body()?)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Proxy;
-    use crate::Connection;
-
-    #[test]
-    fn basic() {
-        let c = Connection::new_session().unwrap();
-        let p = Proxy::new(
-            &c,
-            "org.freedesktop.DBus",
-            "/org/freedesktop/DBus",
-            "org.freedesktop.DBus",
-        )
-        .unwrap();
-        let _id: &str = p.call_method("GetId", &()).unwrap().body().unwrap();
-        let _owned_id: String = p.call("GetId", &()).unwrap();
     }
 }
