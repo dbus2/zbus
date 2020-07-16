@@ -1,7 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 use zvariant::{OwnedValue, Value};
 
-use crate::{Connection, Error, Result};
+use crate::{Connection, Error, Message, Result};
 
 use crate::fdo::{IntrospectableProxy, PropertiesProxy};
 
@@ -10,17 +10,6 @@ pub struct Proxy<'a> {
     destination: &'a str,
     path: &'a str,
     interface: &'a str,
-}
-
-pub struct ProxyCallResponse(crate::Message);
-
-impl ProxyCallResponse {
-    pub fn parse<'de, R>(&'de self) -> Result<R>
-    where
-        R: serde::de::Deserialize<'de> + zvariant::Type,
-    {
-        self.0.body().map_err(Error::Message)
-    }
 }
 
 impl<'a> Proxy<'a> {
@@ -70,7 +59,7 @@ impl<'a> Proxy<'a> {
     /// allocations/copying, by parsing the response to an unowned type.
     ///
     /// [`call`]: struct.Proxy.html#method.call
-    pub fn call_method<B>(&self, method_name: &str, body: &B) -> Result<ProxyCallResponse>
+    pub fn call_method<B>(&self, method_name: &str, body: &B) -> Result<Message>
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
@@ -85,7 +74,7 @@ impl<'a> Proxy<'a> {
             Ok(mut reply) => {
                 reply.disown_fds();
 
-                Ok(ProxyCallResponse(reply))
+                Ok(reply)
             }
             Err(e) => Err(e),
         }
@@ -101,7 +90,7 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::Type,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
-        self.call_method(method_name, body)?.parse()
+        Ok(self.call_method(method_name, body)?.body()?)
     }
 }
 
@@ -120,7 +109,7 @@ mod tests {
             "org.freedesktop.DBus",
         )
         .unwrap();
-        let _id: &str = p.call_method("GetId", &()).unwrap().parse().unwrap();
+        let _id: &str = p.call_method("GetId", &()).unwrap().body().unwrap();
         let _owned_id: String = p.call("GetId", &()).unwrap();
     }
 }
