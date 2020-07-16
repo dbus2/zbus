@@ -160,6 +160,32 @@ impl MessagePrimaryHeader {
     }
 }
 
+macro_rules! get_field {
+    ($self:ident, $kind:ident) => {
+        get_field!($self, $kind, (|v| v))
+    };
+    ($self:ident, $kind:ident, $closure:tt) => {
+        #[allow(clippy::redundant_closure_call)]
+        match $self.fields().get_field(MessageFieldCode::$kind) {
+            Some(MessageField::$kind(value)) => Ok(Some($closure(value))),
+            Some(_) => Err(MessageError::InvalidField),
+            None => Ok(None),
+        }
+    };
+}
+
+macro_rules! get_field_str {
+    ($self:ident, $kind:ident) => {
+        get_field!($self, $kind, (|v: &'s zvariant::Str| v.as_str()))
+    };
+}
+
+macro_rules! get_field_u32 {
+    ($self:ident, $kind:ident) => {
+        get_field!($self, $kind, (|v: &u32| *v))
+    };
+}
+
 impl<'m> MessageHeader<'m> {
     pub fn new(primary: MessagePrimaryHeader, fields: MessageFields<'m>) -> Self {
         Self {
@@ -200,83 +226,47 @@ impl<'m> MessageHeader<'m> {
 
     /// The object to send a call to, or the object a signal is emitted from.
     pub fn path(&self) -> Result<Option<&ObjectPath>, MessageError> {
-        match self.fields().get_field(MessageFieldCode::Path) {
-            Some(MessageField::Path(path)) => Ok(Some(path)),
-            Some(_) => Err(MessageError::InvalidField),
-            None => Ok(None),
-        }
+        get_field!(self, Path)
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
-    pub fn interface(&self) -> Result<Option<&str>, MessageError> {
-        match self.fields().get_field(MessageFieldCode::Interface) {
-            Some(MessageField::Interface(interface)) => Ok(Some(&interface)),
-            Some(_) => Err(MessageError::InvalidField),
-            None => Ok(None),
-        }
+    pub fn interface<'s>(&'s self) -> Result<Option<&'s str>, MessageError> {
+        get_field_str!(self, Interface)
     }
 
     /// The member, either the method name or signal name.
-    pub fn member(&self) -> Result<Option<&str>, MessageError> {
-        match self.fields().get_field(MessageFieldCode::Member) {
-            Some(MessageField::Member(member)) => Ok(Some(&member)),
-            Some(_) => Err(MessageError::InvalidField),
-            None => Ok(None),
-        }
+    pub fn member<'s>(&'s self) -> Result<Option<&'s str>, MessageError> {
+        get_field_str!(self, Member)
     }
 
     /// The name of the error that occurred, for errors.
-    pub fn error_name(&self) -> Result<Option<&str>, MessageError> {
-        match self.fields().get_field(MessageFieldCode::ErrorName) {
-            Some(MessageField::ErrorName(error_name)) => Ok(Some(&error_name)),
-            Some(_) => Err(MessageError::InvalidField),
-            None => Ok(None),
-        }
+    pub fn error_name<'s>(&'s self) -> Result<Option<&'s str>, MessageError> {
+        get_field_str!(self, ErrorName)
     }
 
     /// The serial number of the message this message is a reply to.
     pub fn reply_serial(&self) -> Result<Option<u32>, MessageError> {
-        match self.fields().get_field(MessageFieldCode::ReplySerial) {
-            Some(MessageField::ReplySerial(reply_serial)) => Ok(Some(*reply_serial)),
-            Some(_) => Err(MessageError::InvalidField),
-            None => Ok(None),
-        }
+        get_field_u32!(self, ReplySerial)
     }
 
     /// The name of the connection this message is intended for.
-    pub fn destination(&self) -> Result<Option<&str>, MessageError> {
-        match self.fields().get_field(MessageFieldCode::Destination) {
-            Some(MessageField::Destination(destination)) => Ok(Some(&destination)),
-            Some(_) => Err(MessageError::InvalidField),
-            None => Ok(None),
-        }
+    pub fn destination<'s>(&'s self) -> Result<Option<&'s str>, MessageError> {
+        get_field_str!(self, Destination)
     }
 
     /// Unique name of the sending connection.
-    pub fn sender(&self) -> Result<Option<&str>, MessageError> {
-        match self.fields().get_field(MessageFieldCode::Sender) {
-            Some(MessageField::Sender(sender)) => Ok(Some(&sender)),
-            Some(_) => Err(MessageError::InvalidField),
-            None => Ok(None),
-        }
+    pub fn sender<'s>(&'s self) -> Result<Option<&'s str>, MessageError> {
+        get_field_str!(self, Sender)
     }
 
     /// The signature of the message body.
     pub fn signature(&self) -> Result<Option<&Signature>, MessageError> {
-        match self.fields().get_field(MessageFieldCode::Signature) {
-            Some(MessageField::Signature(signature)) => Ok(Some(signature)),
-            Some(_) => Err(MessageError::InvalidField),
-            None => Ok(None),
-        }
+        get_field!(self, Signature)
     }
 
     /// The number of Unix file descriptors that accompany the message.
     pub fn unix_fds(&self) -> Result<Option<u32>, MessageError> {
-        match self.fields().get_field(MessageFieldCode::UnixFDs) {
-            Some(MessageField::UnixFDs(fds)) => Ok(Some(*fds)),
-            Some(_) => Err(MessageError::InvalidField),
-            None => Ok(None),
-        }
+        get_field_u32!(self, UnixFDs)
     }
 }
 
