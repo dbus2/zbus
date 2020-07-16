@@ -4,10 +4,10 @@ use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use zvariant::{ObjectPath, Signature, Value};
+use zvariant::{ObjectPath, Signature};
 use zvariant_derive::Type;
 
-use crate::{MessageError, MessageFieldCode, MessageFields};
+use crate::{MessageError, MessageField, MessageFieldCode, MessageFields};
 
 pub(crate) const PRIMARY_HEADER_SIZE: usize = 12;
 pub(crate) const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
@@ -198,60 +198,85 @@ impl<'m> MessageHeader<'m> {
         Ok(self.primary().msg_type())
     }
 
-    fn field<'s, T>(&'s self, code: MessageFieldCode) -> Result<Option<T>, MessageError>
-    where
-        T: TryFrom<&'s Value<'s>, Error = zvariant::Error>,
-    {
-        if let Some(f) = self.fields().get_field(code) {
-            Ok(Some(<T>::try_from(f.value())?))
-        } else {
-            Ok(None)
-        }
-    }
-
     /// The object to send a call to, or the object a signal is emitted from.
     pub fn path(&self) -> Result<Option<ObjectPath>, MessageError> {
-        self.field(MessageFieldCode::Path)
+        match self.fields().get_field(MessageFieldCode::Path) {
+            Some(MessageField::Path(path)) => Ok(Some(path.clone())),
+            Some(_) => Err(MessageError::InvalidField),
+            None => Ok(None),
+        }
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
     pub fn interface(&self) -> Result<Option<&str>, MessageError> {
-        self.field(MessageFieldCode::Interface)
+        match self.fields().get_field(MessageFieldCode::Interface) {
+            Some(MessageField::Interface(interface)) => Ok(Some(&interface)),
+            Some(_) => Err(MessageError::InvalidField),
+            None => Ok(None),
+        }
     }
 
     /// The member, either the method name or signal name.
     pub fn member(&self) -> Result<Option<&str>, MessageError> {
-        self.field(MessageFieldCode::Member)
+        match self.fields().get_field(MessageFieldCode::Member) {
+            Some(MessageField::Member(member)) => Ok(Some(&member)),
+            Some(_) => Err(MessageError::InvalidField),
+            None => Ok(None),
+        }
     }
 
     /// The name of the error that occurred, for errors.
     pub fn error_name(&self) -> Result<Option<&str>, MessageError> {
-        self.field(MessageFieldCode::ErrorName)
+        match self.fields().get_field(MessageFieldCode::ErrorName) {
+            Some(MessageField::ErrorName(error_name)) => Ok(Some(&error_name)),
+            Some(_) => Err(MessageError::InvalidField),
+            None => Ok(None),
+        }
     }
 
     /// The serial number of the message this message is a reply to.
     pub fn reply_serial(&self) -> Result<Option<u32>, MessageError> {
-        self.field(MessageFieldCode::ReplySerial)
+        match self.fields().get_field(MessageFieldCode::ReplySerial) {
+            Some(MessageField::ReplySerial(reply_serial)) => Ok(Some(*reply_serial)),
+            Some(_) => Err(MessageError::InvalidField),
+            None => Ok(None),
+        }
     }
 
     /// The name of the connection this message is intended for.
     pub fn destination(&self) -> Result<Option<&str>, MessageError> {
-        self.field(MessageFieldCode::Destination)
+        match self.fields().get_field(MessageFieldCode::Destination) {
+            Some(MessageField::Destination(destination)) => Ok(Some(&destination)),
+            Some(_) => Err(MessageError::InvalidField),
+            None => Ok(None),
+        }
     }
 
     /// Unique name of the sending connection.
     pub fn sender(&self) -> Result<Option<&str>, MessageError> {
-        self.field(MessageFieldCode::Sender)
+        match self.fields().get_field(MessageFieldCode::Sender) {
+            Some(MessageField::Sender(sender)) => Ok(Some(&sender)),
+            Some(_) => Err(MessageError::InvalidField),
+            None => Ok(None),
+        }
     }
 
     /// The signature of the message body.
     pub fn signature(&self) -> Result<Option<Signature>, MessageError> {
-        self.field(MessageFieldCode::Signature)
+        match self.fields().get_field(MessageFieldCode::Signature) {
+            Some(MessageField::Signature(signature)) => Ok(Some(signature.clone())),
+            Some(_) => Err(MessageError::InvalidField),
+            None => Ok(None),
+        }
     }
 
     /// The number of Unix file descriptors that accompany the message.
     pub fn unix_fds(&self) -> Result<Option<u32>, MessageError> {
-        self.field(MessageFieldCode::UnixFDs)
+        match self.fields().get_field(MessageFieldCode::UnixFDs) {
+            Some(MessageField::UnixFDs(fds)) => Ok(Some(*fds)),
+            Some(_) => Err(MessageError::InvalidField),
+            None => Ok(None),
+        }
     }
 }
 
@@ -268,10 +293,10 @@ mod tests {
     fn header() -> Result<(), Box<dyn Error>> {
         let path = ObjectPath::try_from("/some/path")?;
         let mut f = MessageFields::new();
-        f.add(MessageField::path(path.clone()));
-        f.add(MessageField::interface("some.interface"));
-        f.add(MessageField::member("Member"));
-        f.add(MessageField::sender(":1.84"));
+        f.add(MessageField::Path(path.clone()));
+        f.add(MessageField::Interface("some.interface".into()));
+        f.add(MessageField::Member("Member".into()));
+        f.add(MessageField::Sender(":1.84".into()));
         let h = MessageHeader::new(MessagePrimaryHeader::new(MessageType::Signal, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::Signal);
@@ -286,13 +311,13 @@ mod tests {
         assert_eq!(h.unix_fds()?, None);
 
         let mut f = MessageFields::new();
-        f.add(MessageField::error_name("org.zbus.Error"));
-        f.add(MessageField::destination(":1.11"));
-        f.add(MessageField::reply_serial(88));
-        f.add(MessageField::signature(Signature::from_str_unchecked(
+        f.add(MessageField::ErrorName("org.zbus.Error".into()));
+        f.add(MessageField::Destination(":1.11".into()));
+        f.add(MessageField::ReplySerial(88));
+        f.add(MessageField::Signature(Signature::from_str_unchecked(
             "say",
         )));
-        f.add(MessageField::unix_fds(12));
+        f.add(MessageField::UnixFDs(12));
         let h = MessageHeader::new(MessagePrimaryHeader::new(MessageType::MethodReturn, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::MethodReturn);

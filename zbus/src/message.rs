@@ -99,14 +99,14 @@ where
                     &signature[1..signature.len() - 1],
                 ));
             }
-            fields.add(MessageField::signature(signature));
+            fields.add(MessageField::Signature(signature));
         }
         if let Some(sender) = sender {
-            fields.add(MessageField::sender(sender));
+            fields.add(MessageField::Sender(sender.into()));
         }
 
         if fds_len > 0 {
-            fields.add(MessageField::unix_fds(fds_len as u32));
+            fields.add(MessageField::UnixFDs(fds_len as u32));
         }
 
         Ok(Self {
@@ -129,10 +129,10 @@ where
 
         if let Some(reply_to) = reply_to.as_ref() {
             let serial = reply_to.primary().serial_num();
-            fields.add(MessageField::reply_serial(serial));
+            fields.add(MessageField::ReplySerial(serial));
 
             if let Some(sender) = reply_to.sender()? {
-                fields.add(MessageField::destination(sender));
+                fields.add(MessageField::Destination(sender.into()));
             }
         }
 
@@ -180,7 +180,7 @@ where
     ) -> Result<Self, MessageError> {
         Self::new(MessageType::Error, sender, body)?
             .set_reply_to(reply_to)?
-            .set_field(MessageField::error_name(error_name))
+            .set_field(MessageField::ErrorName(error_name.into()))
     }
 
     fn method(
@@ -192,8 +192,8 @@ where
         let path = path.try_into()?;
 
         Self::new(MessageType::MethodCall, sender, body)?
-            .set_field(MessageField::path(path))?
-            .set_field(MessageField::member(method_name))
+            .set_field(MessageField::Path(path))?
+            .set_field(MessageField::Member(method_name.into()))
     }
 
     fn signal(
@@ -206,9 +206,9 @@ where
         let path = path.try_into()?;
 
         Self::new(MessageType::Signal, sender, body)?
-            .set_field(MessageField::path(path))?
-            .set_field(MessageField::interface(iface))?
-            .set_field(MessageField::member(signal_name))
+            .set_field(MessageField::Path(path))?
+            .set_field(MessageField::Interface(iface.into()))?
+            .set_field(MessageField::Member(signal_name.into()))
     }
 }
 
@@ -256,10 +256,10 @@ impl Message {
     {
         let mut b = MessageBuilder::method(sender, path, method_name, body)?;
         if let Some(destination) = destination {
-            b = b.set_field(MessageField::destination(destination))?;
+            b = b.set_field(MessageField::Destination(destination.into()))?;
         }
         if let Some(iface) = iface {
-            b = b.set_field(MessageField::interface(iface))?;
+            b = b.set_field(MessageField::Interface(iface.into()))?;
         }
         b.build()
     }
@@ -277,7 +277,7 @@ impl Message {
     {
         let mut b = MessageBuilder::signal(sender, path, iface, signal_name, body)?;
         if let Some(destination) = destination {
-            b = b.set_field(MessageField::destination(destination))?;
+            b = b.set_field(MessageField::Destination(destination.into()))?;
         }
         b.build()
     }
@@ -356,13 +356,15 @@ impl Message {
     }
 
     pub fn body_signature(&self) -> Result<Signature, MessageError> {
-        let field = self
+        match self
             .header()?
             .into_fields()
             .into_field(MessageFieldCode::Signature)
-            .ok_or(MessageError::NoBodySignature)?;
-
-        Ok(field.into_value().try_into()?)
+            .ok_or(MessageError::NoBodySignature)?
+        {
+            MessageField::Signature(signature) => Ok(signature),
+            _ => Err(MessageError::InvalidField),
+        }
     }
 
     pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {
