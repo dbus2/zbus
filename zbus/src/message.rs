@@ -29,6 +29,7 @@ pub enum MessageError {
     Io(IOError),
     NoBodySignature,
     MissingSender,
+    InvalidField,
     Variant(VariantError),
 }
 
@@ -50,6 +51,7 @@ impl fmt::Display for MessageError {
             MessageError::Io(e) => e.fmt(f),
             MessageError::ExcessData => write!(f, "excess data"),
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
+            MessageError::InvalidField => write!(f, "invalid message field"),
             MessageError::NoBodySignature => write!(f, "missing body signature"),
             MessageError::MissingSender => write!(f, "missing sender"),
             MessageError::Variant(e) => write!(f, "{}", e),
