@@ -199,9 +199,9 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// The object to send a call to, or the object a signal is emitted from.
-    pub fn path(&self) -> Result<Option<ObjectPath>, MessageError> {
+    pub fn path(&self) -> Result<Option<&ObjectPath>, MessageError> {
         match self.fields().get_field(MessageFieldCode::Path) {
-            Some(MessageField::Path(path)) => Ok(Some(path.clone())),
+            Some(MessageField::Path(path)) => Ok(Some(path)),
             Some(_) => Err(MessageError::InvalidField),
             None => Ok(None),
         }
@@ -300,7 +300,7 @@ mod tests {
         let h = MessageHeader::new(MessagePrimaryHeader::new(MessageType::Signal, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::Signal);
-        assert_eq!(h.path()?, Some(path));
+        assert_eq!(h.path()?, Some(&path));
         assert_eq!(h.interface()?, Some("some.interface".into()));
         assert_eq!(h.member()?, Some("Member".into()));
         assert_eq!(h.error_name()?, None);

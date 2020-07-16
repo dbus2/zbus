@@ -387,7 +387,6 @@ impl<'a> ObjectServer<'a> {
             .ok()
             .flatten()
             .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
-        let path = ObjectPath::from_string_unchecked((*path).into());
         let iface = msg_header
             .interface()
             .ok()
