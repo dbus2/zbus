@@ -12,7 +12,7 @@ pub enum MessageFieldCode {
     Interface = 2,   // The interface to invoke a method call on, or that a signal is emitted from.
     Member = 3,      // The member, either the method name or signal name.
     ErrorName = 4,   // The name of the error that occurred, for errors
-    ReplySerial = 5, //	The serial number of the message this message is a reply to.
+    ReplySerial = 5, // The serial number of the message this message is a reply to.
     Destination = 6, // The name of the connection this message is intended for.
     Sender = 7,      // Unique name of the sending connection.
     Signature = 8,   // The signature of the message body.
