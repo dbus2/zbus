@@ -149,14 +149,14 @@ fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> proc_macro2::
         quote! {
             #(#doc)*
             pub #sig {
-                self.0.try_set(#property_name, #value)
+                self.0.set_property(#property_name, #value)
             }
         }
     } else {
         quote! {
             #(#doc)*
             pub #sig {
-                self.0.try_get(#property_name)
+                self.0.get_property(#property_name)
             }
         }
     }

@@ -3,20 +3,34 @@ use zvariant::Error as VariantError;
 
 use crate::{Message, MessageError, MessageType};
 
+/// The error type for `zbus`.
+///
+/// The various errors that can be reported by this crate.
 #[derive(Debug)]
 pub enum Error {
+    /// Invalid D-Bus address.
     Address(String),
+    /// An I/O error.
     IO(io::Error),
+    /// Message parsing error.
     Message(MessageError),
+    /// A [zvariant](../zvariant/index.html) error.
     Variant(VariantError),
+    /// Initial handshake error.
     Handshake(String),
+    /// Unexpected or incorrect reply.
     InvalidReply,
+    /// A D-Bus method error reply.
     // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds anything more than a
     // string description.
     MethodError(String, Option<String>, Message),
+    /// Invalid D-Bus GUID.
     InvalidGUID,
+    /// Unsupported function, or support currently lacking.
     Unsupported,
+    /// Thread-local connection is not set.
     NoTLSConnection,
+    /// Thread-local node is not set.
     NoTLSNode,
 }
 

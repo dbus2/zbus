@@ -1,3 +1,7 @@
+#![doc(
+    html_logo_url = "https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
+)]
+
 //! This crate provides the main API you will use to interact with D-Bus from Rust. It takes care of
 //! the establishment of a connection, the creation, sending and receiving of different kind of
 //! D-Bus messages (method calls, signals etc) for you.

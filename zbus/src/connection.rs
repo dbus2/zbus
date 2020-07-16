@@ -14,6 +14,29 @@ use crate::{fdo, Error, Guid, Message, MessageError, MessageType, Result, MIN_ME
 
 type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
 
+/// A D-Bus connection.
+///
+/// A connection to a D-Bus bus, or a direct peer.
+///
+/// Once created, the connection is authenticated and negotiated and messages can be sent or
+/// received, such as [method calls] or [signals].
+///
+/// For higher-level message handling (typed functions, introspection, documentation reasons etc),
+/// it is recommended to wrap the low-level D-Bus messages into Rust functions with the
+/// [`dbus_proxy`] and [`dbus_interface`] macros instead of doing it directly on a `Connection`.
+///
+/// Typically, a connection is made to the session bus with [`new_session`], or to the system bus
+/// with [`new_system`]. Then the connection is shared with the [`Proxy`] and [`ObjectServer`]
+/// instances.
+///
+/// [method calls]: struct.Connection.html#method.call_method
+/// [signals]: struct.Connection.html#method.emit_signal
+/// [`new_system`]: struct.Connection.html#method.new_system
+/// [`new_session`]: struct.Connection.html#method.new_session
+/// [`Proxy`]: struct.Proxy.html
+/// [`ObjectServer`]: struct.ObjectServer.html
+/// [`dbus_proxy`]: attr.dbus_proxy.html
+/// [`dbus_interface`]: attr.dbus_interface.html
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 pub struct Connection {
@@ -98,6 +121,13 @@ enum ServerState {
 }
 
 impl Connection {
+    /// Create and open a D-Bus connection from a `UnixStream`.
+    ///
+    /// The connection may either be set up for a *bus* connection, or not (for peer-to-peer
+    /// communications).
+    ///
+    /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
+    /// can be sent and received.
     pub fn new_unix_client(mut stream: UnixStream, bus_connection: bool) -> Result<Self> {
         let uid = Uid::current();
 
@@ -136,10 +166,12 @@ impl Connection {
         Ok(connection)
     }
 
+    /// Create a `Connection` to the session/user message bus.
     pub fn new_session() -> Result<Self> {
         Self::new_unix_client(session_socket()?, true)
     }
 
+    /// Create a `Connection` to the system-wide message bus.
     pub fn new_system() -> Result<Self> {
         Self::new_unix_client(system_socket()?, true)
     }
@@ -154,6 +186,13 @@ impl Connection {
         )
     }
 
+    /// Create a server `Connection` for the given `UnixStream` and the server `guid`.
+    ///
+    /// The connection will wait for incoming client authentication handshake & negotiation messages,
+    /// for peer-to-peer communications.
+    ///
+    /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
+    /// can be sent and received.
     pub fn new_unix_server(mut stream: UnixStream, guid: &Guid) -> Result<Self> {
         use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
 
@@ -295,6 +334,17 @@ impl Connection {
         Ok(serial)
     }
 
+    /// Send a method call.
+    ///
+    /// Create a method-call message, send it over the connection, then wait for the reply. Incoming
+    /// messages are received through [`receive_message`] (and by the default message handler)
+    /// until the matching method reply (error or return) is received.
+    ///
+    /// On succesful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
+    /// error replies are returned as [`MethodError`].
+    ///
+    /// [`receive_message`]: struct.Connection.html#method.receive_message
+    /// [`MethodError`]: enum.Error.html#variant.MethodError
     pub fn call_method<B>(
         &self,
         destination: Option<&str>,
@@ -333,6 +383,9 @@ impl Connection {
         }
     }
 
+    /// Emit a signal.
+    ///
+    /// Create a signal message, and send it over the connection.
     pub fn emit_signal<B>(
         &self,
         destination: Option<&str>,
@@ -362,6 +415,8 @@ impl Connection {
     ///
     /// Given an existing message (likely a method call), send a reply back to the caller with the
     /// given `body`.
+    ///
+    /// Returns the message serial number.
     pub fn reply<B>(&self, call: &Message, body: &B) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
@@ -374,6 +429,8 @@ impl Connection {
     ///
     /// Given an existing message (likely a method call), send an error reply back to the caller
     /// with the given `error_name` and `body`.
+    ///
+    /// Returns the message serial number.
     pub fn reply_error<B>(&self, call: &Message, error_name: &str, body: &B) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
@@ -393,6 +450,9 @@ impl Connection {
         self.default_msg_handler = Some(RefCell::new(handler));
     }
 
+    /// Reset the default message handler.
+    ///
+    /// Remove the previously set message handler from `set_default_message_handler`.
     pub fn reset_default_message_handler(&mut self) {
         self.default_msg_handler = None;
     }

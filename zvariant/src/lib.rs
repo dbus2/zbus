@@ -1,3 +1,7 @@
+#![doc(
+    html_logo_url = "https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
+)]
+
 //! This crate provides API for serialization/deserialization of data to/from [D-Bus] wire format.
 //! This binary wire format is simple and very efficient and hence useful outside of D-Bus context
 //! as well. A slightly modified form of this format, [GVariant] is also very common and will be
