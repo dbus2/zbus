@@ -1,7 +1,10 @@
-use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
+
+use serde::de::{Deserialize, Deserializer, Error};
+use serde::ser::{Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use zvariant::{ObjectPath, Signature, Value};
+use zvariant::{ObjectPath, Signature, Str, Type, Value};
 use zvariant_derive::Type;
 
 #[repr(u8)]
@@ -12,7 +15,7 @@ pub enum MessageFieldCode {
     Interface = 2,   // The interface to invoke a method call on, or that a signal is emitted from.
     Member = 3,      // The member, either the method name or signal name.
     ErrorName = 4,   // The name of the error that occurred, for errors
-    ReplySerial = 5, //	The serial number of the message this message is a reply to.
+    ReplySerial = 5, // The serial number of the message this message is a reply to.
     Destination = 6, // The name of the connection this message is intended for.
     Sender = 7,      // Unique name of the sending connection.
     Signature = 8,   // The signature of the message body.
@@ -36,86 +39,114 @@ impl From<u8> for MessageFieldCode {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Type)]
-pub struct MessageField<'v> {
-    code: MessageFieldCode,
-    #[serde(borrow)]
-    value: Value<'v>,
-}
-
 impl<'v> MessageField<'v> {
     pub fn code(&self) -> MessageFieldCode {
-        self.code
-    }
-
-    pub fn value(&self) -> &Value {
-        &self.value
-    }
-
-    pub fn into_value(self) -> Value<'v> {
-        self.value
-    }
-
-    pub fn path<'o: 'v>(path: ObjectPath<'o>) -> Self {
-        Self {
-            code: MessageFieldCode::Path,
-            value: path.into(),
+        match self {
+            MessageField::Path(_) => MessageFieldCode::Path,
+            MessageField::Interface(_) => MessageFieldCode::Interface,
+            MessageField::Member(_) => MessageFieldCode::Member,
+            MessageField::ErrorName(_) => MessageFieldCode::ErrorName,
+            MessageField::ReplySerial(_) => MessageFieldCode::ReplySerial,
+            MessageField::Destination(_) => MessageFieldCode::Destination,
+            MessageField::Sender(_) => MessageFieldCode::Sender,
+            MessageField::Signature(_) => MessageFieldCode::Signature,
+            MessageField::UnixFDs(_) => MessageFieldCode::UnixFDs,
+            MessageField::Invalid => MessageFieldCode::Invalid,
         }
     }
+}
 
-    pub fn interface<'i: 'v>(interface: &'i str) -> Self {
-        Self {
-            code: MessageFieldCode::Interface,
-            value: interface.into(),
-        }
+#[derive(Clone, Debug, PartialEq)]
+pub enum MessageField<'v> {
+    Invalid,                  // Not a valid field name.
+    Path(ObjectPath<'v>), // The object to send a call to, or the object a signal is emitted from.
+    Interface(Str<'v>), // The interface to invoke a method call on, or that a signal is emitted from.
+    Member(Str<'v>),    // The member, either the method name or signal name.
+    ErrorName(Str<'v>), // The name of the error that occurred, for errors
+    ReplySerial(u32),   // The serial number of the message this message is a reply to.
+    Destination(Str<'v>), // The name of the connection this message is intended for.
+    Sender(Str<'v>),    // Unique name of the sending connection.
+    Signature(Signature<'v>), // The signature of the message body.
+    UnixFDs(u32),       // The number of Unix file descriptors that accompany the message.
+}
+
+impl<'v> Type for MessageField<'v> {
+    fn signature() -> Signature<'static> {
+        Signature::from_str_unchecked("(yv)")
     }
+}
 
-    pub fn member<'m: 'v>(member: &'m str) -> Self {
-        Self {
-            code: MessageFieldCode::Member,
-            value: member.into(),
-        }
+impl<'v> Serialize for MessageField<'v> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let tuple: (MessageFieldCode, Value) = match self {
+            MessageField::Path(value) => (MessageFieldCode::Path, value.clone().into()),
+            MessageField::Interface(value) => (MessageFieldCode::Interface, value.as_str().into()),
+            MessageField::Member(value) => (MessageFieldCode::Member, value.as_str().into()),
+            MessageField::ErrorName(value) => (MessageFieldCode::ErrorName, value.as_str().into()),
+            MessageField::ReplySerial(value) => (MessageFieldCode::ReplySerial, (*value).into()),
+            MessageField::Destination(value) => {
+                (MessageFieldCode::Destination, value.as_str().into())
+            }
+            MessageField::Sender(value) => (MessageFieldCode::Sender, value.as_str().into()),
+            MessageField::Signature(value) => (MessageFieldCode::Signature, value.clone().into()),
+            MessageField::UnixFDs(value) => (MessageFieldCode::UnixFDs, (*value).into()),
+            // This is a programmer error
+            MessageField::Invalid => panic!("Attempt to serialize invalid MessageField"),
+        };
+
+        tuple.serialize(serializer)
     }
+}
 
-    pub fn error_name<'e: 'v>(error_name: &'e str) -> Self {
-        Self {
-            code: MessageFieldCode::ErrorName,
-            value: error_name.into(),
-        }
-    }
-
-    pub fn reply_serial(serial: u32) -> Self {
-        Self {
-            code: MessageFieldCode::ReplySerial,
-            value: serial.into(),
-        }
-    }
-
-    pub fn destination<'d: 'v>(destination: &'d str) -> Self {
-        Self {
-            code: MessageFieldCode::Destination,
-            value: destination.into(),
-        }
-    }
-
-    pub fn sender<'s: 'v>(sender: &'s str) -> Self {
-        Self {
-            code: MessageFieldCode::Sender,
-            value: sender.into(),
-        }
-    }
-
-    pub fn signature<'s: 'v>(signature: Signature<'s>) -> Self {
-        Self {
-            code: MessageFieldCode::Signature,
-            value: signature.into(),
-        }
-    }
-
-    pub fn unix_fds(fd: u32) -> Self {
-        Self {
-            code: MessageFieldCode::UnixFDs,
-            value: fd.into(),
-        }
+impl<'de: 'v, 'v> Deserialize<'de> for MessageField<'v> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let (code, value) = <(MessageFieldCode, Value)>::deserialize(deserializer)?;
+        Ok(match code {
+            MessageFieldCode::Path => {
+                MessageField::Path(ObjectPath::try_from(value).map_err(D::Error::custom)?)
+            }
+            MessageFieldCode::Interface => {
+                MessageField::Interface(Str::try_from(value).map_err(D::Error::custom)?)
+            }
+            MessageFieldCode::Member => {
+                MessageField::Member(Str::try_from(value).map_err(D::Error::custom)?)
+            }
+            MessageFieldCode::ErrorName => MessageField::ErrorName(
+                Str::try_from(value)
+                    .map(Into::into)
+                    .map_err(D::Error::custom)?,
+            ),
+            MessageFieldCode::ReplySerial => {
+                MessageField::ReplySerial(u32::try_from(value).map_err(D::Error::custom)?)
+            }
+            MessageFieldCode::Destination => MessageField::Destination(
+                Str::try_from(value)
+                    .map(Into::into)
+                    .map_err(D::Error::custom)?,
+            ),
+            MessageFieldCode::Sender => MessageField::Sender(
+                Str::try_from(value)
+                    .map(Into::into)
+                    .map_err(D::Error::custom)?,
+            ),
+            MessageFieldCode::Signature => {
+                MessageField::Signature(Signature::try_from(value).map_err(D::Error::custom)?)
+            }
+            MessageFieldCode::UnixFDs => {
+                MessageField::UnixFDs(u32::try_from(value).map_err(D::Error::custom)?)
+            }
+            MessageFieldCode::Invalid => {
+                return Err(Error::invalid_value(
+                    serde::de::Unexpected::Unsigned(code as u64),
+                    &"A valid D-Bus message field code",
+                ));
+            }
+        })
     }
 }

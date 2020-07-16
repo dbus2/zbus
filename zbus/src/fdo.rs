@@ -363,6 +363,9 @@ impl From<zbus::MessageError> for Error {
             zbus::MessageError::MissingSender => {
                 Self::InconsistentMessage("missing sender".to_string())
             }
+            zbus::MessageError::InvalidField => {
+                Self::InconsistentMessage("invalid message field".to_string())
+            }
             zbus::MessageError::Variant(e) => Self::InconsistentMessage(e.to_string()),
         }
     }
