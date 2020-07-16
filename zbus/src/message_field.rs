@@ -58,7 +58,7 @@ impl From<u8> for MessageFieldCode {
     }
 }
 
-impl<'v> MessageField<'v> {
+impl<'f> MessageField<'f> {
     /// Get the associated code for this field.
     pub fn code(&self) -> MessageFieldCode {
         match self {
@@ -88,36 +88,36 @@ impl<'v> MessageField<'v> {
 /// [are fixed]: struct.MessagePrimaryHeader.html
 /// [Message Format]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-messages
 #[derive(Clone, Debug, PartialEq)]
-pub enum MessageField<'v> {
+pub enum MessageField<'f> {
     /// Not a valid field.
     Invalid,
     /// The object to send a call to, or the object a signal is emitted from.
-    Path(ObjectPath<'v>),
+    Path(ObjectPath<'f>),
     /// The interface to invoke a method call on, or that a signal is emitted from.
-    Interface(Str<'v>),
+    Interface(Str<'f>),
     /// The member, either the method name or signal name.
-    Member(Str<'v>),
+    Member(Str<'f>),
     /// The name of the error that occurred, for errors
-    ErrorName(Str<'v>),
+    ErrorName(Str<'f>),
     /// The serial number of the message this message is a reply to.
     ReplySerial(u32),
     /// The name of the connection this message is intended for.
-    Destination(Str<'v>),
+    Destination(Str<'f>),
     /// Unique name of the sending connection.
-    Sender(Str<'v>),
+    Sender(Str<'f>),
     /// The signature of the message body.
-    Signature(Signature<'v>),
+    Signature(Signature<'f>),
     /// The number of Unix file descriptors that accompany the message.
     UnixFDs(u32),
 }
 
-impl<'v> Type for MessageField<'v> {
+impl<'f> Type for MessageField<'f> {
     fn signature() -> Signature<'static> {
         Signature::from_str_unchecked("(yv)")
     }
 }
 
-impl<'v> Serialize for MessageField<'v> {
+impl<'f> Serialize for MessageField<'f> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -142,7 +142,7 @@ impl<'v> Serialize for MessageField<'v> {
     }
 }
 
-impl<'de: 'v, 'v> Deserialize<'de> for MessageField<'v> {
+impl<'de: 'f, 'f> Deserialize<'de> for MessageField<'f> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
