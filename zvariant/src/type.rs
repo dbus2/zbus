@@ -161,6 +161,7 @@ macro_rules! array_impls {
                 T: Type,
             {
                 #[inline]
+                #[allow(clippy::reversed_empty_ranges)]
                 fn signature() -> Signature<'static> {
                     let mut sig = String::with_capacity(255);
                     sig.push(STRUCT_SIG_START_CHAR);
