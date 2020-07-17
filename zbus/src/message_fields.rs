@@ -6,6 +6,9 @@ use crate::{MessageField, MessageFieldCode};
 // It's actually 10 (and even not that) but let's round it to next 8-byte alignment
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
 
+/// A collection of [`MessageField`] instances.
+///
+/// [`MessageField`]: enum.MessageField.html
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct MessageFields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
 
