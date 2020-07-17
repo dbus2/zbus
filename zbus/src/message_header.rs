@@ -92,14 +92,6 @@ pub struct MessagePrimaryHeader {
     serial_num: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Type)]
-pub struct MessageHeader<'m> {
-    primary: MessagePrimaryHeader,
-    #[serde(borrow)]
-    fields: MessageFields<'m>,
-    end: ((),), // To ensure header end on 8-byte boundry
-}
-
 impl MessagePrimaryHeader {
     pub fn new(msg_type: MessageType, body_len: u32) -> Self {
         Self {
@@ -158,6 +150,14 @@ impl MessagePrimaryHeader {
     pub fn set_serial_num(&mut self, serial: u32) {
         self.serial_num = serial;
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Type)]
+pub struct MessageHeader<'m> {
+    primary: MessagePrimaryHeader,
+    #[serde(borrow)]
+    fields: MessageFields<'m>,
+    end: ((),), // To ensure header end on 8-byte boundry
 }
 
 macro_rules! get_field {
