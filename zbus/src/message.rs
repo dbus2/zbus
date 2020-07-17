@@ -241,7 +241,6 @@ pub struct Message {
 //
 // * multiple args needing to be a tuple or struct
 // * pass unit ref for empty body
-// * Only primary header can be modified after creation.
 impl Message {
     pub fn method<B>(
         sender: Option<&str>,
@@ -305,7 +304,7 @@ impl Message {
         MessageBuilder::error(sender, call, name, body)?.build()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
         if bytes.len() < MIN_MESSAGE_SIZE {
             return Err(MessageError::InsufficientData);
         }
@@ -319,7 +318,7 @@ impl Message {
         Ok(Self { bytes, fds })
     }
 
-    pub fn add_bytes(&mut self, bytes: &[u8]) -> Result<(), MessageError> {
+    pub(crate) fn add_bytes(&mut self, bytes: &[u8]) -> Result<(), MessageError> {
         if bytes.len() > self.bytes_to_completion()? {
             return Err(MessageError::ExcessData);
         }
@@ -346,7 +345,7 @@ impl Message {
         }
     }
 
-    pub fn bytes_to_completion(&self) -> Result<usize, MessageError> {
+    pub(crate) fn bytes_to_completion(&self) -> Result<usize, MessageError> {
         let header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         let body_padding = padding_for_8_bytes(header_len);
         let body_len = self.primary_header()?.body_len();
@@ -371,7 +370,7 @@ impl Message {
         zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
     }
 
-    pub fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
+    pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
     where
         F: FnMut(&mut MessagePrimaryHeader) -> Result<(), MessageError>,
     {
