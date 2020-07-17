@@ -18,7 +18,7 @@ impl<'i> Display for GenTrait<'i> {
         let mut methods = iface.methods().to_vec();
         methods.sort_by(|a, b| a.name().partial_cmp(b.name()).unwrap());
         for m in &methods {
-            let (inputs, output) = inputs_output_from_args(m.args());
+            let (inputs, output) = inputs_output_from_args(&m.args());
             writeln!(f)?;
             writeln!(f, "    /// {} method", m.name())?;
             writeln!(
@@ -73,7 +73,7 @@ fn read_write_from_access(access: &str) -> (bool, bool) {
     }
 }
 
-fn inputs_output_from_args(args: &[Arg]) -> (String, String) {
+fn inputs_output_from_args(args: &[&Arg]) -> (String, String) {
     let mut inputs = vec!["&self".to_string()];
     let mut output = vec![];
     let mut n = 0;

@@ -21,6 +21,17 @@ use serde_xml_rs::{from_reader, to_writer, Error};
 use std::io::{Read, Write};
 use std::result::Result;
 
+// note: serde-xml-rs doesnt handle nicely interleaved elements, so we have to use enums:
+// https://github.com/RReverser/serde-xml-rs/issues/55
+
+macro_rules! get_vec {
+    ($vec:expr, $kind:path) => {
+        $vec.iter()
+            .filter_map(|e| if let $kind(m) = e { Some(m) } else { None })
+            .collect()
+    };
+}
+
 /// Annotations are generic key/value pairs of metadata.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Annotation {
@@ -67,9 +78,16 @@ impl Arg {
     }
 
     /// Return the associated annotations.
-    pub fn annotations(&self) -> &[Annotation] {
-        &self.annotations
+    pub fn annotations(&self) -> Vec<&Annotation> {
+        self.annotations.iter().collect()
     }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "lowercase")]
+enum MethodElement {
+    Arg(Arg),
+    Annotation(Annotation),
 }
 
 /// A method
@@ -77,10 +95,8 @@ impl Arg {
 pub struct Method {
     name: String,
 
-    #[serde(rename = "arg", default)]
-    args: Vec<Arg>,
-    #[serde(rename = "annotation", default)]
-    annotations: Vec<Annotation>,
+    #[serde(rename = "$value", default)]
+    elems: Vec<MethodElement>,
 }
 
 impl Method {
@@ -90,14 +106,21 @@ impl Method {
     }
 
     /// Return the method arguments.
-    pub fn args(&self) -> &[Arg] {
-        &self.args
+    pub fn args(&self) -> Vec<&Arg> {
+        get_vec!(self.elems, MethodElement::Arg)
     }
 
     /// Return the method annotations.
-    pub fn annotations(&self) -> &[Annotation] {
-        &self.annotations
+    pub fn annotations(&self) -> Vec<&Annotation> {
+        get_vec!(self.elems, MethodElement::Annotation)
     }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "lowercase")]
+enum SignalElement {
+    Arg(Arg),
+    Annotation(Annotation),
 }
 
 /// A signal
@@ -105,10 +128,8 @@ impl Method {
 pub struct Signal {
     name: String,
 
-    #[serde(rename = "arg", default)]
-    args: Vec<Arg>,
-    #[serde(rename = "annotation", default)]
-    annotations: Vec<Annotation>,
+    #[serde(rename = "$value", default)]
+    elems: Vec<SignalElement>,
 }
 
 impl Signal {
@@ -118,13 +139,13 @@ impl Signal {
     }
 
     /// Return the signal arguments.
-    pub fn args(&self) -> &[Arg] {
-        &self.args
+    pub fn args(&self) -> Vec<&Arg> {
+        get_vec!(self.elems, SignalElement::Arg)
     }
 
     /// Return the signal annotations.
-    pub fn annotations(&self) -> &[Annotation] {
-        &self.annotations
+    pub fn annotations(&self) -> Vec<&Annotation> {
+        get_vec!(self.elems, SignalElement::Annotation)
     }
 }
 
@@ -156,9 +177,18 @@ impl Property {
     }
 
     /// Return the associated annotations.
-    pub fn annotations(&self) -> &[Annotation] {
-        &self.annotations
+    pub fn annotations(&self) -> Vec<&Annotation> {
+        self.annotations.iter().collect()
     }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "lowercase")]
+enum InterfaceElement {
+    Method(Method),
+    Signal(Signal),
+    Property(Property),
+    Annotation(Annotation),
 }
 
 /// An interface
@@ -166,14 +196,8 @@ impl Property {
 pub struct Interface {
     name: String,
 
-    #[serde(rename = "method", default)]
-    methods: Vec<Method>,
-    #[serde(rename = "signal", default)]
-    signals: Vec<Signal>,
-    #[serde(rename = "property", default)]
-    properties: Vec<Property>,
-    #[serde(rename = "annotation", default)]
-    annotations: Vec<Annotation>,
+    #[serde(rename = "$value", default)]
+    elems: Vec<InterfaceElement>,
 }
 
 impl Interface {
@@ -183,24 +207,31 @@ impl Interface {
     }
 
     /// Returns the interface methods.
-    pub fn methods(&self) -> &[Method] {
-        &self.methods
+    pub fn methods(&self) -> Vec<&Method> {
+        get_vec!(self.elems, InterfaceElement::Method)
     }
 
     /// Returns the interface signals.
-    pub fn signals(&self) -> &[Signal] {
-        &self.signals
+    pub fn signals(&self) -> Vec<&Signal> {
+        get_vec!(self.elems, InterfaceElement::Signal)
     }
 
     /// Returns the interface properties.
-    pub fn properties(&self) -> &[Property] {
-        &self.properties
+    pub fn properties(&self) -> Vec<&Property> {
+        get_vec!(self.elems, InterfaceElement::Property)
     }
 
     /// Return the associated annotations.
-    pub fn annotations(&self) -> &[Annotation] {
-        &self.annotations
+    pub fn annotations(&self) -> Vec<&Annotation> {
+        get_vec!(self.elems, InterfaceElement::Annotation)
     }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "lowercase")]
+enum NodeElement {
+    Node(Node),
+    Interface(Interface),
 }
 
 /// An introspection tree node (typically the root of the XML document).
@@ -208,10 +239,8 @@ impl Interface {
 pub struct Node {
     name: Option<String>,
 
-    #[serde(rename = "node", default)]
-    nodes: Vec<Node>,
-    #[serde(rename = "interface", default)]
-    interfaces: Vec<Interface>,
+    #[serde(rename = "$value", default)]
+    elems: Vec<NodeElement>,
 }
 
 impl Node {
@@ -231,13 +260,13 @@ impl Node {
     }
 
     /// Returns the children nodes.
-    pub fn nodes(&self) -> &[Node] {
-        &self.nodes
+    pub fn nodes(&self) -> Vec<&Node> {
+        get_vec!(self.elems, NodeElement::Node)
     }
 
     /// Returns the interfaces on this node.
-    pub fn interfaces(&self) -> &[Interface] {
-        &self.interfaces
+    pub fn interfaces(&self) -> Vec<&Interface> {
+        get_vec!(self.elems, NodeElement::Interface)
     }
 }
 
@@ -251,6 +280,7 @@ mod tests {
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
   "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
  <node name="/com/example/sample_object0">
+   <node name="first"/>
    <interface name="com.example.SampleInterface0">
      <method name="Frobate">
        <arg name="foo" type="i" direction="in"/>
@@ -279,7 +309,7 @@ mod tests {
     fn serde() -> Result<(), Box<dyn Error>> {
         let node = Node::from_reader(EXAMPLE.as_bytes())?;
         assert_eq!(node.interfaces().len(), 1);
-        assert_eq!(node.nodes().len(), 2);
+        assert_eq!(node.nodes().len(), 3);
 
         // TODO: Fails at the moment, this seems fresh & related:
         // https://github.com/RReverser/serde-xml-rs/pull/129
