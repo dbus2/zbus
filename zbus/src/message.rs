@@ -237,10 +237,6 @@ pub struct Message {
 }
 
 // TODO: Make generic over byteorder
-// TODO: Document
-//
-// * multiple args needing to be a tuple or struct
-// * pass unit ref for empty body
 impl Message {
     pub fn method<B>(
         sender: Option<&str>,
