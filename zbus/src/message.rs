@@ -22,13 +22,11 @@ macro_rules! dbus_context {
 
 #[derive(Debug)]
 pub enum MessageError {
-    StrTooLarge,
     InsufficientData,
     ExcessData,
     IncorrectEndian,
     IO(IOError),
     NoBodySignature,
-    MissingSender,
     InvalidField,
     Variant(VariantError),
 }
@@ -46,14 +44,12 @@ impl error::Error for MessageError {
 impl fmt::Display for MessageError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MessageError::StrTooLarge => write!(f, "string too large"),
             MessageError::InsufficientData => write!(f, "insufficient data"),
             MessageError::IO(e) => e.fmt(f),
             MessageError::ExcessData => write!(f, "excess data"),
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
             MessageError::InvalidField => write!(f, "invalid message field"),
             MessageError::NoBodySignature => write!(f, "missing body signature"),
-            MessageError::MissingSender => write!(f, "missing sender"),
             MessageError::Variant(e) => write!(f, "{}", e),
         }
     }
