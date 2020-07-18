@@ -20,14 +20,24 @@ macro_rules! dbus_context {
     };
 }
 
+/// Error type returned by [`Message`] methods.
+///
+/// [`Message`]: struct.Message.html
 #[derive(Debug)]
 pub enum MessageError {
+    /// Insufficient data provided.
     InsufficientData,
+    /// Data too large.
     ExcessData,
+    /// Endian signature invalid or doesn't match expectation.
     IncorrectEndian,
+    /// An I/O error.
     IO(IOError),
+    /// Missing body signature.
     NoBodySignature,
+    /// Invalid message field.
     InvalidField,
+    /// Data serializing/deserializing error.
     Variant(VariantError),
 }
 
