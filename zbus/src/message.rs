@@ -218,19 +218,22 @@ enum Fds {
     Raw(Vec<RawFd>),
 }
 
-/// A DBus Message
+/// A D-Bus Message.
 ///
-/// The content of the serialized Message is in `bytes`. To
-/// deserialize the body of the message, use the [`body`] method. You
-/// may also access the header and other details with the various
-/// other getters.
+/// The content of the message are stored in serialized format. To deserialize the body of the
+/// message, use the [`body`] method. You may also access the header and other details with the
+/// various other getters.
 ///
-/// *Note*: The message owns the received FDs and will close them when
-/// dropped. You may call [`disown_fds`] after deserializing to
-/// `RawFD` with [`body`] if you want to.
+/// Also provided are constructors for messages of different types. These will mainly be useful for
+/// very advanced use cases as typically you will want to create a message for immediate dispatch
+/// and hence use the API provided by [`Connection`], even when using the low-level API.
+///
+/// **Note**: The message owns the received FDs and will close them when dropped. You can call
+/// [`disown_fds`] after deserializing to `RawFD` using [`body`] if you want to take the ownership.
 ///
 /// [`body`]: #method.body
 /// [`disown_fds`]: #method.disown_fds
+/// [`Connection`]: struct.Connection#method.call_method
 pub struct Message {
     bytes: Vec<u8>,
     fds: Fds,
