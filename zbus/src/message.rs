@@ -241,6 +241,9 @@ pub struct Message {
 
 // TODO: Handle non-native byte order: https://gitlab.freedesktop.org/zeenix/zbus/-/issues/19
 impl Message {
+    /// Create a message of type [`MessageType::MethodCall`].
+    ///
+    /// [`MessageType::MethodCall`]: enum.MessageType.html#variant.MethodCall
     pub fn method<B>(
         sender: Option<&str>,
         destination: Option<&str>,
@@ -262,6 +265,9 @@ impl Message {
         b.build()
     }
 
+    /// Create a message of type [`MessageType::Signal`].
+    ///
+    /// [`MessageType::Signal`]: enum.MessageType.html#variant.Signal
     pub fn signal<B>(
         sender: Option<&str>,
         destination: Option<&str>,
@@ -280,6 +286,9 @@ impl Message {
         b.build()
     }
 
+    /// Create a message of type [`MessageType::MethodReturn`].
+    ///
+    /// [`MessageType::MethodReturn`]: enum.MessageType.html#variant.MethodReturn
     pub fn method_reply<B>(
         sender: Option<&str>,
         call: &Self,
@@ -291,6 +300,9 @@ impl Message {
         MessageBuilder::reply(sender, call, body)?.build()
     }
 
+    /// Create a message of type [`MessageType::MethodError`].
+    ///
+    /// [`MessageType::MethodError`]: enum.MessageType.html#variant.MethodError
     pub fn method_error<B>(
         sender: Option<&str>,
         call: &Self,
@@ -353,6 +365,12 @@ impl Message {
         Ok(required - self.bytes.len())
     }
 
+    /// The signature of the body.
+    ///
+    /// **Note:** While zbus treats multiple arguments as a struct (to allow you to use the tuple
+    /// syntax), D-Bus does not. Since this method gives you the signature expected on the wire by
+    /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
+    /// multiple arguments.
     pub fn body_signature(&self) -> Result<Signature, MessageError> {
         match self
             .header()?
@@ -365,6 +383,7 @@ impl Message {
         }
     }
 
+    /// Deserialize the primary header.
     pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {
         zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
     }
@@ -382,16 +401,19 @@ impl Message {
             .map_err(MessageError::from)
     }
 
+    /// Deserialize the header.
     pub fn header(&self) -> Result<MessageHeader, MessageError> {
         zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
     }
 
+    /// Deserialize the fields.
     pub fn fields(&self) -> Result<MessageFields, MessageError> {
         let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
         zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt)
             .map_err(MessageError::from)
     }
 
+    /// Deserialize the body.
     pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
     where
         B: serde::de::Deserialize<'d> + Type,
@@ -418,6 +440,7 @@ impl Message {
         }
     }
 
+    /// Get a reference to the byte encoding of the message.
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
     }
