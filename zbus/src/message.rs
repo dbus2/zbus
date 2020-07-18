@@ -26,7 +26,7 @@ pub enum MessageError {
     InsufficientData,
     ExcessData,
     IncorrectEndian,
-    Io(IOError),
+    IO(IOError),
     NoBodySignature,
     MissingSender,
     InvalidField,
@@ -36,7 +36,7 @@ pub enum MessageError {
 impl error::Error for MessageError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            MessageError::Io(e) => Some(e),
+            MessageError::IO(e) => Some(e),
             MessageError::Variant(e) => Some(e),
             _ => None,
         }
@@ -48,7 +48,7 @@ impl fmt::Display for MessageError {
         match self {
             MessageError::StrTooLarge => write!(f, "string too large"),
             MessageError::InsufficientData => write!(f, "insufficient data"),
-            MessageError::Io(e) => e.fmt(f),
+            MessageError::IO(e) => e.fmt(f),
             MessageError::ExcessData => write!(f, "excess data"),
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
             MessageError::InvalidField => write!(f, "invalid message field"),
@@ -67,7 +67,7 @@ impl From<VariantError> for MessageError {
 
 impl From<IOError> for MessageError {
     fn from(val: IOError) -> MessageError {
-        MessageError::Io(val)
+        MessageError::IO(val)
     }
 }
 
