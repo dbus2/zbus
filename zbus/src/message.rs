@@ -41,6 +41,15 @@ pub enum MessageError {
     Variant(VariantError),
 }
 
+impl PartialEq for MessageError {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            MessageError::Io(_) => false,
+            _ => self == other,
+        }
+    }
+}
+
 impl error::Error for MessageError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
