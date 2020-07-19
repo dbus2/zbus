@@ -28,7 +28,7 @@ trait Properties {
     fn get(&self, interface_name: &str, property_name: &str) -> Result<OwnedValue>;
 
     /// Set a property value.
-    fn set(&self, interface_name: &str, property_name: &str, value: &Value) -> zbus::Result<()>;
+    fn set(&self, interface_name: &str, property_name: &str, value: &Value) -> Result<()>;
 
     /// Get all properties.
     fn get_all(&self, interface_name: &str) -> zbus::Result<HashMap<String, OwnedValue>>;

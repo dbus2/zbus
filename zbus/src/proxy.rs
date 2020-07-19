@@ -92,7 +92,7 @@ impl<'a> Proxy<'a> {
     /// Set the property `property_name`.
     ///
     /// Effectively, call the `Set` method of the `org.freedesktop.DBus.Properties` interface.
-    pub fn set_property<'t, T: 't>(&self, property_name: &str, value: T) -> Result<()>
+    pub fn set_property<'t, T: 't>(&self, property_name: &str, value: T) -> fdo::Result<()>
     where
         T: Into<Value<'t>>,
     {

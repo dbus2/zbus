@@ -19,7 +19,7 @@ fn test_proxy() {
         fn property(&self) -> fdo::Result<Vec<String>>;
 
         #[dbus_proxy(property)]
-        fn set_property(&self, val: u16) -> zbus::Result<()>;
+        fn set_property(&self, val: u16) -> fdo::Result<()>;
     }
 }
 

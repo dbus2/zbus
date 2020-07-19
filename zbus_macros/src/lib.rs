@@ -50,7 +50,7 @@ mod utils;
 ///     fn a_property(&self) -> fdo::Result<String>;
 ///
 ///     #[dbus_proxy(property)]
-///     fn set_a_property(&self, a_property: &str) -> Result<()>;
+///     fn set_a_property(&self, a_property: &str) -> fdo::Result<()>;
 /// };
 ///
 /// let connection = Connection::new_session()?;
