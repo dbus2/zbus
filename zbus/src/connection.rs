@@ -262,7 +262,12 @@ impl Connection {
         }
     }
 
-    fn send_message(&self, mut msg: Message) -> Result<u32> {
+    /// Send `msg` to the peer.
+    ///
+    /// The connection sets a unique serial number on the message before sending it off.
+    ///
+    /// On successfully sending off `msg`, the assigned serial number is returned.
+    pub fn send_message(&self, mut msg: Message) -> Result<u32> {
         if !msg.fds().is_empty() && !self.cap_unix_fd {
             return Err(Error::Unsupported);
         }
