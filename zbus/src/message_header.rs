@@ -173,14 +173,14 @@ impl MessagePrimaryHeader {
     /// The serial number of the message.
     ///
     /// This is used to match a reply to a method call.
+    ///
+    /// **Note:** There is no setter provided for this in the public API since this is set by the
+    /// [`Connection`](struct.Connection.html) the message is sent over.
     pub fn serial_num(&self) -> u32 {
         self.serial_num
     }
 
-    /// Set the serial number of the message.
-    ///
-    /// This is typically done by the [`Connection`](struct.Connection.html) for you.
-    pub fn set_serial_num(&mut self, serial: u32) {
+    pub(crate) fn set_serial_num(&mut self, serial: u32) {
         self.serial_num = serial;
     }
 }
