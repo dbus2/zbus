@@ -12,6 +12,7 @@ use crate::{MessageError, MessageField, MessageFieldCode, MessageFields};
 pub(crate) const PRIMARY_HEADER_SIZE: usize = 12;
 pub(crate) const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
 
+/// D-Bus code for endianness.
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, Type)]
 pub enum EndianSig {
@@ -39,13 +40,19 @@ pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Big;
 /// Signature of the target's native endian.
 pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Little;
 
+/// Message header representing the D-Bus type of the message.
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, Type)]
 pub enum MessageType {
+    /// Invalid message type. All unknown types on received messages are treated as invalid.
     Invalid = 0,
+    /// Method call. This message type may prompt a reply (and typically does).
     MethodCall = 1,
+    /// A reply to a method call.
     MethodReturn = 2,
+    /// An error in response to a method call.
     Error = 3,
+    /// Signal emission.
     Signal = 4,
 }
 
@@ -62,6 +69,7 @@ impl From<u8> for MessageType {
     }
 }
 
+/// Pre-defined flags that can be passed in Message header.
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, BitFlags, Type)]
 pub enum MessageFlags {
@@ -82,6 +90,9 @@ pub enum MessageFlags {
     AllowInteractiveAuth = 0x4,
 }
 
+/// The primary message header, which is present in all D-Bus messages.
+///
+/// This header contains all the essential information about a message, regardless of its type.
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct MessagePrimaryHeader {
     endian_sig: EndianSig,
@@ -92,15 +103,8 @@ pub struct MessagePrimaryHeader {
     serial_num: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Type)]
-pub struct MessageHeader<'m> {
-    primary: MessagePrimaryHeader,
-    #[serde(borrow)]
-    fields: MessageFields<'m>,
-    end: ((),), // To ensure header end on 8-byte boundry
-}
-
 impl MessagePrimaryHeader {
+    /// Create a new `MessagePrimaryHeader` instance.
     pub fn new(msg_type: MessageType, body_len: u32) -> Self {
         Self {
             endian_sig: NATIVE_ENDIAN_SIG,
@@ -111,53 +115,88 @@ impl MessagePrimaryHeader {
             serial_num: u32::max_value(),
         }
     }
+
+    /// D-Bus code for bytorder encoding of the message.
     pub fn endian_sig(&self) -> EndianSig {
         self.endian_sig
     }
 
+    /// Set the D-Bus code for bytorder encoding of the message.
     pub fn set_endian_sig(&mut self, sig: EndianSig) {
         self.endian_sig = sig;
     }
 
+    /// The message type.
     pub fn msg_type(&self) -> MessageType {
         self.msg_type
     }
 
+    /// Set the message type.
     pub fn set_msg_type(&mut self, msg_type: MessageType) {
         self.msg_type = msg_type;
     }
 
+    /// The message flags.
     pub fn flags(&self) -> BitFlags<MessageFlags> {
         self.flags
     }
 
+    /// Set the message flags.
     pub fn set_flags(&mut self, flags: BitFlags<MessageFlags>) {
         self.flags = flags;
     }
 
+    /// The major version of the protocol the message is compliant to.
+    ///
+    /// Currently only `1` is valid.
     pub fn protocol_version(&self) -> u8 {
         self.protocol_version
     }
 
+    /// Set the major version of the protocol the message is compliant to.
+    ///
+    /// Currently only `1` is valid.
     pub fn set_protocol_version(&mut self, version: u8) {
         self.protocol_version = version;
     }
 
+    /// The byte length of the message body.
     pub fn body_len(&self) -> u32 {
         self.body_len
     }
 
+    /// Set the byte length of the message body.
     pub fn set_body_len(&mut self, len: u32) {
         self.body_len = len;
     }
 
+    /// The serial number of the message.
+    ///
+    /// This is used to match a reply to a method call.
+    ///
+    /// **Note:** There is no setter provided for this in the public API since this is set by the
+    /// [`Connection`](struct.Connection.html) the message is sent over.
     pub fn serial_num(&self) -> u32 {
         self.serial_num
     }
 
-    pub fn set_serial_num(&mut self, serial: u32) {
+    pub(crate) fn set_serial_num(&mut self, serial: u32) {
         self.serial_num = serial;
     }
+}
+
+/// The message header, containing all the metadata about the message.
+///
+/// This includes both the [`MessagePrimaryHeader`] and [`MessageFields`].
+///
+/// [`MessagePrimaryHeader`]: struct.MessagePrimaryHeader.html
+/// [`MessageFields`]: struct.MessageFields.html
+#[derive(Debug, Serialize, Deserialize, Type)]
+pub struct MessageHeader<'m> {
+    primary: MessagePrimaryHeader,
+    #[serde(borrow)]
+    fields: MessageFields<'m>,
+    end: ((),), // To ensure header end on 8-byte boundry
 }
 
 macro_rules! get_field {
@@ -187,6 +226,7 @@ macro_rules! get_field_u32 {
 }
 
 impl<'m> MessageHeader<'m> {
+    /// Create a new `MessageHeader` instance.
     pub fn new(primary: MessagePrimaryHeader, fields: MessageFields<'m>) -> Self {
         Self {
             primary,
@@ -195,26 +235,32 @@ impl<'m> MessageHeader<'m> {
         }
     }
 
+    /// Get a reference to the primary header.
     pub fn primary(&self) -> &MessagePrimaryHeader {
         &self.primary
     }
 
+    /// Get a mutable reference to the primary header.
     pub fn primary_mut(&mut self) -> &mut MessagePrimaryHeader {
         &mut self.primary
     }
 
+    /// Get the primary header, consuming `self`.
     pub fn into_primary(self) -> MessagePrimaryHeader {
         self.primary
     }
 
+    /// Get a reference to the message fields.
     pub fn fields<'s>(&'s self) -> &'s MessageFields<'m> {
         &self.fields
     }
 
+    /// Get a mutable reference to the message fields.
     pub fn fields_mut<'s>(&'s mut self) -> &'s mut MessageFields<'m> {
         &mut self.fields
     }
 
+    /// Get the message fields, consuming `self`.
     pub fn into_fields(self) -> MessageFields<'m> {
         self.fields
     }

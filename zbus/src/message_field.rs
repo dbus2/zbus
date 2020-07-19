@@ -7,19 +7,38 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use zvariant::{ObjectPath, Signature, Str, Type, Value};
 use zvariant_derive::Type;
 
+/// The message field code.
+///
+/// Every [`MessageField`] has an associated code. This is mostly an internal D-Bus protocol detail
+/// that you would not need to ever care about when using the high-level API. When using the
+/// low-level API, this is how you can [retrieve a specific field] from [`MessageFields`].
+///
+/// [`MessageField`]: enum.MessageField.html
+/// [retrieve a specific field]: struct.MessageFields.html#method.get_field
+/// [`MessageFields`]: struct.MessageFields.html
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Serialize_repr, Type)]
 pub enum MessageFieldCode {
-    Invalid = 0,     // Not a valid field name.
-    Path = 1,        // The object to send a call to, or the object a signal is emitted from.
-    Interface = 2,   // The interface to invoke a method call on, or that a signal is emitted from.
-    Member = 3,      // The member, either the method name or signal name.
-    ErrorName = 4,   // The name of the error that occurred, for errors
-    ReplySerial = 5, // The serial number of the message this message is a reply to.
-    Destination = 6, // The name of the connection this message is intended for.
-    Sender = 7,      // Unique name of the sending connection.
-    Signature = 8,   // The signature of the message body.
-    UnixFDs = 9,     // The number of Unix file descriptors that accompany the message.
+    /// Code for [`MessageField::Invalid`](enum.MessageField.html#variant.Invalid)
+    Invalid = 0,
+    /// Code for [`MessageField::Path`](enum.MessageField.html#variant.Path)
+    Path = 1,
+    /// Code for [`MessageField::Interface`](enum.MessageField.html#variant.Interface)
+    Interface = 2,
+    /// Code for [`MessageField::Member`](enum.MessageField.html#variant.Member)
+    Member = 3,
+    /// Code for [`MessageField::ErrorName`](enum.MessageField.html#variant.ErrorName)
+    ErrorName = 4,
+    /// Code for [`MessageField::ReplySerial`](enum.MessageField.html#variant.ReplySerial)
+    ReplySerial = 5,
+    /// Code for [`MessageField::Destinatione`](enum.MessageField.html#variant.Destination)
+    Destination = 6,
+    /// Code for [`MessageField::Sender`](enum.MessageField.html#variant.Sender)
+    Sender = 7,
+    /// Code for [`MessageField::Signature`](enum.MessageField.html#variant.Signature)
+    Signature = 8,
+    /// Code for [`MessageField::UnixFDs`](enum.MessageField.html#variant.UnixFDs)
+    UnixFDs = 9,
 }
 
 impl From<u8> for MessageFieldCode {
@@ -39,7 +58,8 @@ impl From<u8> for MessageFieldCode {
     }
 }
 
-impl<'v> MessageField<'v> {
+impl<'f> MessageField<'f> {
+    /// Get the associated code for this field.
     pub fn code(&self) -> MessageFieldCode {
         match self {
             MessageField::Path(_) => MessageFieldCode::Path,
@@ -56,27 +76,48 @@ impl<'v> MessageField<'v> {
     }
 }
 
+/// The dynamic message header.
+///
+/// All D-Bus messages contain a set of metadata [headers]. Some of these headers [are fixed] for
+/// all types of messages, while others depend on the type of the message in question. The latter
+/// are called message fields.
+///
+/// Please consult the [Message Format] section of the D-Bus spec for more details.
+///
+/// [headers]: struct.MessageHeader.html
+/// [are fixed]: struct.MessagePrimaryHeader.html
+/// [Message Format]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-messages
 #[derive(Clone, Debug, PartialEq)]
-pub enum MessageField<'v> {
-    Invalid,                  // Not a valid field name.
-    Path(ObjectPath<'v>), // The object to send a call to, or the object a signal is emitted from.
-    Interface(Str<'v>), // The interface to invoke a method call on, or that a signal is emitted from.
-    Member(Str<'v>),    // The member, either the method name or signal name.
-    ErrorName(Str<'v>), // The name of the error that occurred, for errors
-    ReplySerial(u32),   // The serial number of the message this message is a reply to.
-    Destination(Str<'v>), // The name of the connection this message is intended for.
-    Sender(Str<'v>),    // Unique name of the sending connection.
-    Signature(Signature<'v>), // The signature of the message body.
-    UnixFDs(u32),       // The number of Unix file descriptors that accompany the message.
+pub enum MessageField<'f> {
+    /// Not a valid field.
+    Invalid,
+    /// The object to send a call to, or the object a signal is emitted from.
+    Path(ObjectPath<'f>),
+    /// The interface to invoke a method call on, or that a signal is emitted from.
+    Interface(Str<'f>),
+    /// The member, either the method name or signal name.
+    Member(Str<'f>),
+    /// The name of the error that occurred, for errors
+    ErrorName(Str<'f>),
+    /// The serial number of the message this message is a reply to.
+    ReplySerial(u32),
+    /// The name of the connection this message is intended for.
+    Destination(Str<'f>),
+    /// Unique name of the sending connection.
+    Sender(Str<'f>),
+    /// The signature of the message body.
+    Signature(Signature<'f>),
+    /// The number of Unix file descriptors that accompany the message.
+    UnixFDs(u32),
 }
 
-impl<'v> Type for MessageField<'v> {
+impl<'f> Type for MessageField<'f> {
     fn signature() -> Signature<'static> {
         Signature::from_str_unchecked("(yv)")
     }
 }
 
-impl<'v> Serialize for MessageField<'v> {
+impl<'f> Serialize for MessageField<'f> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -101,7 +142,7 @@ impl<'v> Serialize for MessageField<'v> {
     }
 }
 
-impl<'de: 'v, 'v> Deserialize<'de> for MessageField<'v> {
+impl<'de: 'f, 'f> Deserialize<'de> for MessageField<'f> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,

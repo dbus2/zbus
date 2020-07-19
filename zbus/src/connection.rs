@@ -58,62 +58,6 @@ impl AsRawFd for Connection {
     }
 }
 
-fn connect(addr: &Address) -> Result<UnixStream> {
-    match addr {
-        Address::Path(p) => Ok(UnixStream::connect(p)?),
-        Address::Abstract(_) => Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "abstract sockets are not currently supported",
-        )
-        .into()),
-    }
-}
-
-/// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
-/// variable. If we don't recognize the value (or it's not set) we fall back to
-/// /run/user/UID/bus
-fn session_socket() -> Result<UnixStream> {
-    match env::var("DBUS_SESSION_BUS_ADDRESS") {
-        Ok(val) => connect(&address::parse_dbus_address(&val)?),
-        _ => {
-            let uid = Uid::current();
-            let path = format!("/run/user/{}/bus", uid);
-            Ok(UnixStream::connect(path)?)
-        }
-    }
-}
-
-/// Get a system socket respecting the DBUS_SYSTEM_BUS_ADDRESS environment
-/// variable. If we don't recognize the value (or it's not set) we fall back to
-/// /var/run/dbus/system_bus_socket
-fn system_socket() -> Result<UnixStream> {
-    match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
-        Ok(val) => connect(&address::parse_dbus_address(&val)?),
-        _ => Ok(UnixStream::connect("/var/run/dbus/system_bus_socket")?),
-    }
-}
-
-fn read_command<R: Read>(inner: R) -> Result<Vec<String>> {
-    // Note: the stateful auth DBus protocol should guarantee that the server will not pipeline
-    // answers, and thus bufreader shouldn't lose any data, hopefully.
-    let mut buf_reader = BufReader::new(inner);
-    let mut buf = String::new();
-
-    buf_reader.read_line(&mut buf)?;
-    let components = buf.split_whitespace();
-
-    Ok(components.map(String::from).collect())
-}
-
-fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
-    let mut id = String::new();
-    for s in s.as_bytes().chunks(2) {
-        let c = char::from(u8::from_str_radix(std::str::from_utf8(s)?, 16)?);
-        id.push(c);
-    }
-    Ok(id.parse::<u32>()?)
-}
-
 enum ServerState {
     WaitingForAuth,
     // WaitingForData,
@@ -318,7 +262,12 @@ impl Connection {
         }
     }
 
-    fn send_message(&self, mut msg: Message) -> Result<u32> {
+    /// Send `msg` to the peer.
+    ///
+    /// The connection sets a unique serial number on the message before sending it off.
+    ///
+    /// On successfully sending off `msg`, the assigned serial number is returned.
+    pub fn send_message(&self, mut msg: Message) -> Result<u32> {
         if !msg.fds().is_empty() && !self.cap_unix_fd {
             return Err(Error::Unsupported);
         }
@@ -471,6 +420,62 @@ impl Connection {
     fn next_serial(&self) -> u32 {
         self.serial.fetch_add(1, Ordering::SeqCst)
     }
+}
+
+fn connect(addr: &Address) -> Result<UnixStream> {
+    match addr {
+        Address::Path(p) => Ok(UnixStream::connect(p)?),
+        Address::Abstract(_) => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "abstract sockets are not currently supported",
+        )
+        .into()),
+    }
+}
+
+/// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
+/// variable. If we don't recognize the value (or it's not set) we fall back to
+/// /run/user/UID/bus
+fn session_socket() -> Result<UnixStream> {
+    match env::var("DBUS_SESSION_BUS_ADDRESS") {
+        Ok(val) => connect(&address::parse_dbus_address(&val)?),
+        _ => {
+            let uid = Uid::current();
+            let path = format!("/run/user/{}/bus", uid);
+            Ok(UnixStream::connect(path)?)
+        }
+    }
+}
+
+/// Get a system socket respecting the DBUS_SYSTEM_BUS_ADDRESS environment
+/// variable. If we don't recognize the value (or it's not set) we fall back to
+/// /var/run/dbus/system_bus_socket
+fn system_socket() -> Result<UnixStream> {
+    match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
+        Ok(val) => connect(&address::parse_dbus_address(&val)?),
+        _ => Ok(UnixStream::connect("/var/run/dbus/system_bus_socket")?),
+    }
+}
+
+fn read_command<R: Read>(inner: R) -> Result<Vec<String>> {
+    // Note: the stateful auth DBus protocol should guarantee that the server will not pipeline
+    // answers, and thus bufreader shouldn't lose any data, hopefully.
+    let mut buf_reader = BufReader::new(inner);
+    let mut buf = String::new();
+
+    buf_reader.read_line(&mut buf)?;
+    let components = buf.split_whitespace();
+
+    Ok(components.map(String::from).collect())
+}
+
+fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
+    let mut id = String::new();
+    for s in s.as_bytes().chunks(2) {
+        let c = char::from(u8::from_str_radix(std::str::from_utf8(s)?, 16)?);
+        id.push(c);
+    }
+    Ok(id.parse::<u32>()?)
 }
 
 #[cfg(test)]

@@ -20,23 +20,31 @@ macro_rules! dbus_context {
     };
 }
 
+/// Error type returned by [`Message`] methods.
+///
+/// [`Message`]: struct.Message.html
 #[derive(Debug)]
 pub enum MessageError {
-    StrTooLarge,
+    /// Insufficient data provided.
     InsufficientData,
+    /// Data too large.
     ExcessData,
+    /// Endian signature invalid or doesn't match expectation.
     IncorrectEndian,
-    Io(IOError),
+    /// An I/O error.
+    IO(IOError),
+    /// Missing body signature.
     NoBodySignature,
-    MissingSender,
+    /// Invalid message field.
     InvalidField,
+    /// Data serializing/deserializing error.
     Variant(VariantError),
 }
 
 impl error::Error for MessageError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            MessageError::Io(e) => Some(e),
+            MessageError::IO(e) => Some(e),
             MessageError::Variant(e) => Some(e),
             _ => None,
         }
@@ -46,14 +54,12 @@ impl error::Error for MessageError {
 impl fmt::Display for MessageError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MessageError::StrTooLarge => write!(f, "string too large"),
             MessageError::InsufficientData => write!(f, "insufficient data"),
-            MessageError::Io(e) => e.fmt(f),
+            MessageError::IO(e) => e.fmt(f),
             MessageError::ExcessData => write!(f, "excess data"),
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
             MessageError::InvalidField => write!(f, "invalid message field"),
             MessageError::NoBodySignature => write!(f, "missing body signature"),
-            MessageError::MissingSender => write!(f, "missing sender"),
             MessageError::Variant(e) => write!(f, "{}", e),
         }
     }
@@ -67,7 +73,7 @@ impl From<VariantError> for MessageError {
 
 impl From<IOError> for MessageError {
     fn from(val: IOError) -> MessageError {
-        MessageError::Io(val)
+        MessageError::IO(val)
     }
 }
 
@@ -218,31 +224,32 @@ enum Fds {
     Raw(Vec<RawFd>),
 }
 
-/// A DBus Message
+/// A D-Bus Message.
 ///
-/// The content of the serialized Message is in `bytes`. To
-/// deserialize the body of the message, use the [`body`] method. You
-/// may also access the header and other details with the various
-/// other getters.
+/// The content of the message are stored in serialized format. To deserialize the body of the
+/// message, use the [`body`] method. You may also access the header and other details with the
+/// various other getters.
 ///
-/// *Note*: The message owns the received FDs and will close them when
-/// dropped. You may call [`disown_fds`] after deserializing to
-/// `RawFD` with [`body`] if you want to.
+/// Also provided are constructors for messages of different types. These will mainly be useful for
+/// very advanced use cases as typically you will want to create a message for immediate dispatch
+/// and hence use the API provided by [`Connection`], even when using the low-level API.
+///
+/// **Note**: The message owns the received FDs and will close them when dropped. You can call
+/// [`disown_fds`] after deserializing to `RawFD` using [`body`] if you want to take the ownership.
 ///
 /// [`body`]: #method.body
 /// [`disown_fds`]: #method.disown_fds
+/// [`Connection`]: struct.Connection#method.call_method
 pub struct Message {
     bytes: Vec<u8>,
     fds: Fds,
 }
 
-// TODO: Make generic over byteorder
-// TODO: Document
-//
-// * multiple args needing to be a tuple or struct
-// * pass unit ref for empty body
-// * Only primary header can be modified after creation.
+// TODO: Handle non-native byte order: https://gitlab.freedesktop.org/zeenix/zbus/-/issues/19
 impl Message {
+    /// Create a message of type [`MessageType::MethodCall`].
+    ///
+    /// [`MessageType::MethodCall`]: enum.MessageType.html#variant.MethodCall
     pub fn method<B>(
         sender: Option<&str>,
         destination: Option<&str>,
@@ -264,6 +271,9 @@ impl Message {
         b.build()
     }
 
+    /// Create a message of type [`MessageType::Signal`].
+    ///
+    /// [`MessageType::Signal`]: enum.MessageType.html#variant.Signal
     pub fn signal<B>(
         sender: Option<&str>,
         destination: Option<&str>,
@@ -282,6 +292,9 @@ impl Message {
         b.build()
     }
 
+    /// Create a message of type [`MessageType::MethodReturn`].
+    ///
+    /// [`MessageType::MethodReturn`]: enum.MessageType.html#variant.MethodReturn
     pub fn method_reply<B>(
         sender: Option<&str>,
         call: &Self,
@@ -293,6 +306,9 @@ impl Message {
         MessageBuilder::reply(sender, call, body)?.build()
     }
 
+    /// Create a message of type [`MessageType::MethodError`].
+    ///
+    /// [`MessageType::MethodError`]: enum.MessageType.html#variant.MethodError
     pub fn method_error<B>(
         sender: Option<&str>,
         call: &Self,
@@ -305,7 +321,7 @@ impl Message {
         MessageBuilder::error(sender, call, name, body)?.build()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
         if bytes.len() < MIN_MESSAGE_SIZE {
             return Err(MessageError::InsufficientData);
         }
@@ -319,7 +335,7 @@ impl Message {
         Ok(Self { bytes, fds })
     }
 
-    pub fn add_bytes(&mut self, bytes: &[u8]) -> Result<(), MessageError> {
+    pub(crate) fn add_bytes(&mut self, bytes: &[u8]) -> Result<(), MessageError> {
         if bytes.len() > self.bytes_to_completion()? {
             return Err(MessageError::ExcessData);
         }
@@ -346,7 +362,7 @@ impl Message {
         }
     }
 
-    pub fn bytes_to_completion(&self) -> Result<usize, MessageError> {
+    pub(crate) fn bytes_to_completion(&self) -> Result<usize, MessageError> {
         let header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         let body_padding = padding_for_8_bytes(header_len);
         let body_len = self.primary_header()?.body_len();
@@ -355,6 +371,12 @@ impl Message {
         Ok(required - self.bytes.len())
     }
 
+    /// The signature of the body.
+    ///
+    /// **Note:** While zbus treats multiple arguments as a struct (to allow you to use the tuple
+    /// syntax), D-Bus does not. Since this method gives you the signature expected on the wire by
+    /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
+    /// multiple arguments.
     pub fn body_signature(&self) -> Result<Signature, MessageError> {
         match self
             .header()?
@@ -367,11 +389,12 @@ impl Message {
         }
     }
 
+    /// Deserialize the primary header.
     pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {
         zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
     }
 
-    pub fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
+    pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
     where
         F: FnMut(&mut MessagePrimaryHeader) -> Result<(), MessageError>,
     {
@@ -384,16 +407,19 @@ impl Message {
             .map_err(MessageError::from)
     }
 
+    /// Deserialize the header.
     pub fn header(&self) -> Result<MessageHeader, MessageError> {
         zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
     }
 
+    /// Deserialize the fields.
     pub fn fields(&self) -> Result<MessageFields, MessageError> {
         let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
         zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt)
             .map_err(MessageError::from)
     }
 
+    /// Deserialize the body.
     pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
     where
         B: serde::de::Deserialize<'d> + Type,
@@ -420,6 +446,7 @@ impl Message {
         }
     }
 
+    /// Get a reference to the byte encoding of the message.
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
     }
