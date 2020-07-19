@@ -18,7 +18,7 @@ use crate::{dbus_proxy, DBusError};
 trait Introspectable {
     /// Returns an XML description of the object, including its interfaces (with signals and
     /// methods), objects below it in the object path tree, and its properties.
-    fn introspect(&self) -> zbus::Result<String>;
+    fn introspect(&self) -> Result<String>;
 }
 
 /// Proxy for the `org.freedesktop.DBus.Properties` interface.

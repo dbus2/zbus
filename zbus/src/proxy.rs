@@ -72,7 +72,7 @@ impl<'a> Proxy<'a> {
     /// Introspect the associated object, and return the XML description.
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
-    pub fn introspect(&self) -> Result<String> {
+    pub fn introspect(&self) -> fdo::Result<String> {
         IntrospectableProxy::new_for(self.conn, self.destination, self.path)?.introspect()
     }
 
