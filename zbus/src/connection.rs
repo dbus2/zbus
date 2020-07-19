@@ -104,7 +104,11 @@ impl Connection {
 
         if bus_connection {
             // Now that the server has approved us, we must send the bus Hello, as per specs
-            connection.unique_name = Some(fdo::DBusProxy::new(&connection)?.hello()?);
+            connection.unique_name = Some(
+                fdo::DBusProxy::new(&connection)?
+                    .hello()
+                    .map_err(|e| Error::Handshake(format!("Hello failed: {}", e)))?,
+            );
         }
 
         Ok(connection)

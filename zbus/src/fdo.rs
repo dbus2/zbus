@@ -184,7 +184,7 @@ trait DBus {
     fn get_name_owner(&self, name: &str) -> zbus::Result<String>;
 
     /// Returns the unique name assigned to the connection.
-    fn hello(&self) -> zbus::Result<String>;
+    fn hello(&self) -> Result<String>;
 
     /// Returns a list of all names that can be activated on the bus.
     fn list_activatable_names(&self) -> zbus::Result<Vec<String>>;
