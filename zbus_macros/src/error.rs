@@ -169,6 +169,7 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
         impl From<#zbus::Error> for #name {
             fn from(value: #zbus::Error) -> #name {
                 if let #zbus::Error::MethodError(ref name, ref desc, _) = value {
+                    // FIXME: 100% sure this String cloning is not needed.
                     let desc = desc.as_ref().map(String::from).unwrap_or_else(|| String::from(""));
                     match name.as_ref() {
                         #error_converts
