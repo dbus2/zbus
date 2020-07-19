@@ -25,7 +25,7 @@ trait Introspectable {
 #[dbus_proxy(interface = "org.freedesktop.DBus.Properties")]
 trait Properties {
     /// Get a property value.
-    fn get(&self, interface_name: &str, property_name: &str) -> zbus::Result<OwnedValue>;
+    fn get(&self, interface_name: &str, property_name: &str) -> Result<OwnedValue>;
 
     /// Set a property value.
     fn set(&self, interface_name: &str, property_name: &str, value: &Value) -> zbus::Result<()>;
@@ -238,7 +238,7 @@ trait DBus {
     /// This property lists abstract “features” provided by the message bus, and can be used by
     /// clients to detect the capabilities of the message bus with which they are communicating.
     #[dbus_proxy(property)]
-    fn features(&self) -> zbus::Result<Vec<String>>;
+    fn features(&self) -> Result<Vec<String>>;
 
     /// This property lists interfaces provided by the `/org/freedesktop/DBus` object, and can be
     /// used by clients to detect the capabilities of the message bus with which they are
@@ -253,7 +253,7 @@ trait DBus {
     /// `org.freedesktop.DBus.Introspectable` interfaces are not included in the value of this
     /// property either, because they do not indicate features of the message bus implementation.
     #[dbus_proxy(property)]
-    fn interfaces(&self) -> zbus::Result<Vec<String>>;
+    fn interfaces(&self) -> Result<Vec<String>>;
 }
 
 /// Errors from https://gitlab.freedesktop.org/dbus/dbus/-/blob/master/dbus/dbus-protocol.h

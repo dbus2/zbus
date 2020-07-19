@@ -6,7 +6,7 @@ use std::result::Result;
 use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use zbus::dbus_proxy;
+use zbus::{dbus_proxy, fdo};
 use zvariant::{OwnedValue, Value};
 use zvariant_derive::Type;
 
@@ -391,13 +391,13 @@ trait Authority {
 
     /// The features supported by the currently used Authority backend.
     #[dbus_proxy(property)]
-    fn backend_features(&self) -> zbus::Result<AuthorityFeatures>;
+    fn backend_features(&self) -> fdo::Result<AuthorityFeatures>;
 
     /// The name of the currently used Authority backend.
     #[dbus_proxy(property)]
-    fn backend_name(&self) -> zbus::Result<String>;
+    fn backend_name(&self) -> fdo::Result<String>;
 
     /// The version of the currently used Authority backend.
     #[dbus_proxy(property)]
-    fn backend_version(&self) -> zbus::Result<String>;
+    fn backend_version(&self) -> fdo::Result<String>;
 }

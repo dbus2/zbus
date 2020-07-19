@@ -3,7 +3,7 @@ use zvariant::{OwnedValue, Value};
 
 use crate::{Connection, Error, Message, Result};
 
-use crate::fdo::{IntrospectableProxy, PropertiesProxy};
+use crate::fdo::{self, IntrospectableProxy, PropertiesProxy};
 
 /// A client-side interface proxy.
 ///
@@ -79,14 +79,14 @@ impl<'a> Proxy<'a> {
     /// Get the property `property_name`.
     ///
     /// Effectively, call the `Get` method of the `org.freedesktop.DBus.Properties` interface.
-    pub fn get_property<T>(&self, property_name: &str) -> Result<T>
+    pub fn get_property<T>(&self, property_name: &str) -> fdo::Result<T>
     where
         T: TryFrom<OwnedValue>,
     {
         PropertiesProxy::new_for(self.conn, self.destination, self.path)?
             .get(self.interface, property_name)?
             .try_into()
-            .map_err(|_| Error::InvalidReply)
+            .map_err(|_| Error::InvalidReply.into())
     }
 
     /// Set the property `property_name`.

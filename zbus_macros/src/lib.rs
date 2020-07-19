@@ -35,7 +35,7 @@ mod utils;
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_proxy;
-/// use zbus::{Connection, Result};
+/// use zbus::{Connection, Result, fdo};
 /// use zvariant::Value;
 ///
 /// #[dbus_proxy(
@@ -47,7 +47,7 @@ mod utils;
 ///     fn do_this(&self, with: &str, some: u32, arg: &Value) -> Result<bool>;
 ///
 ///     #[dbus_proxy(property)]
-///     fn a_property(&self) -> Result<String>;
+///     fn a_property(&self) -> fdo::Result<String>;
 ///
 ///     #[dbus_proxy(property)]
 ///     fn set_a_property(&self, a_property: &str) -> Result<()>;

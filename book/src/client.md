@@ -140,12 +140,12 @@ Interfaces can have associated properties, which can be read or set with the
 rescue to help you. You can annotate a trait method to be a getter:
 
 ```rust
-# use zbus::dbus_proxy;
+# use zbus::{dbus_proxy, fdo};
 #
 #[dbus_proxy]
 trait MyInterface {
     #[dbus_proxy(property)]
-    fn state(&self) -> zbus::Result<String>;
+    fn state(&self) -> fdo::Result<String>;
 }
 ```
 
@@ -157,7 +157,7 @@ For a more real world example, let's try and read two properties from systemd's 
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::dbus_proxy;
+# use zbus::{dbus_proxy, fdo};
 #
 #[dbus_proxy(
     interface = "org.freedesktop.systemd1.Manager",
@@ -166,9 +166,9 @@ For a more real world example, let's try and read two properties from systemd's 
 )]
 trait SystemdManager {
     #[dbus_proxy(property)]
-    fn architecture(&self) -> zbus::Result<String>;
+    fn architecture(&self) -> fdo::Result<String>;
     #[dbus_proxy(property)]
-    fn environment(&self) -> zbus::Result<Vec<String>>;
+    fn environment(&self) -> fdo::Result<Vec<String>>;
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
