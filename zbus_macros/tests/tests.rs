@@ -1,4 +1,4 @@
-use zbus;
+use zbus::{self, fdo};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]
@@ -16,10 +16,10 @@ fn test_proxy() {
         fn check_renaming(&self) -> zbus::Result<Vec<u8>>;
 
         #[dbus_proxy(property)]
-        fn property(&self) -> zbus::Result<Vec<String>>;
+        fn property(&self) -> fdo::Result<Vec<String>>;
 
         #[dbus_proxy(property)]
-        fn set_property(&self, val: u16) -> zbus::Result<()>;
+        fn set_property(&self, val: u16) -> fdo::Result<()>;
     }
 }
 
@@ -28,6 +28,7 @@ fn test_derive_error() {
     #[derive(Debug, DBusError)]
     #[dbus_error(prefix = "org.freedesktop.zbus")]
     enum Test {
+        ZBus(zbus::Error),
         SomeExcuse,
         #[dbus_error(name = "I.Am.Sorry.Dave")]
         IAmSorryDave(String),

@@ -27,20 +27,20 @@ use crate::{dbus_proxy, DBusError};
 trait Introspectable {
     /// Returns an XML description of the object, including its interfaces (with signals and
     /// methods), objects below it in the object path tree, and its properties.
-    fn introspect(&self) -> zbus::Result<String>;
+    fn introspect(&self) -> Result<String>;
 }
 
 /// Proxy for the `org.freedesktop.DBus.Properties` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Properties")]
 trait Properties {
     /// Get a property value.
-    fn get(&self, interface_name: &str, property_name: &str) -> zbus::Result<OwnedValue>;
+    fn get(&self, interface_name: &str, property_name: &str) -> Result<OwnedValue>;
 
     /// Set a property value.
-    fn set(&self, interface_name: &str, property_name: &str, value: &Value) -> zbus::Result<()>;
+    fn set(&self, interface_name: &str, property_name: &str, value: &Value) -> Result<()>;
 
     /// Get all properties.
-    fn get_all(&self, interface_name: &str) -> zbus::Result<HashMap<String, OwnedValue>>;
+    fn get_all(&self, interface_name: &str) -> Result<HashMap<String, OwnedValue>>;
 }
 
 type ManagedObjects = HashMap<String, HashMap<String, HashMap<String, OwnedValue>>>;
@@ -56,7 +56,7 @@ trait ObjectManager {
     /// same dict that would be returned by the org.freedesktop.DBus.Properties.GetAll() method for
     /// that combination of object path and interface. If an interface has no properties, the empty
     /// dict is returned.
-    fn get_managed_objects(&self) -> zbus::Result<ManagedObjects>;
+    fn get_managed_objects(&self) -> Result<ManagedObjects>;
 }
 
 /// Proxy for the `org.freedesktop.DBus.Peer` interface.
@@ -64,14 +64,14 @@ trait ObjectManager {
 trait Peer {
     /// On receipt, an application should do nothing other than reply as usual. It does not matter
     /// which object path a ping is sent to.
-    fn ping(&self) -> zbus::Result<()>;
+    fn ping(&self) -> Result<()>;
 
     /// An application should reply the containing a hex-encoded UUID representing the identity of
     /// the machine the process is running on. This UUID must be the same for all processes on a
     /// single system at least until that system next reboots. It should be the same across reboots
     /// if possible, but this is not always possible to implement and is not guaranteed. It does not
     /// matter which object path a GetMachineId is sent to.
-    fn get_machine_id(&self) -> zbus::Result<String>;
+    fn get_machine_id(&self) -> Result<String>;
 }
 
 /// Proxy for the `org.freedesktop.DBus.Monitoring` interface.
@@ -79,20 +79,20 @@ trait Peer {
 trait Monitoring {
     /// Converts the connection into a monitor connection which can be used as a
     /// debugging/monitoring tool.
-    fn become_monitor(&self, n1: &[&str], n2: u32) -> zbus::Result<()>;
+    fn become_monitor(&self, n1: &[&str], n2: u32) -> Result<()>;
 }
 
 /// Proxy for the `org.freedesktop.DBus.Stats` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Debug.Stats")]
 trait Stats {
     /// GetStats (undocumented)
-    fn get_stats(&self) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
+    fn get_stats(&self) -> Result<Vec<HashMap<String, OwnedValue>>>;
 
     /// GetConnectionStats (undocumented)
-    fn get_connection_stats(&self, n1: &str) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
+    fn get_connection_stats(&self, n1: &str) -> Result<Vec<HashMap<String, OwnedValue>>>;
 
     /// GetAllMatchRules (undocumented)
-    fn get_all_match_rules(&self) -> zbus::Result<Vec<HashMap<String, Vec<String>>>>;
+    fn get_all_match_rules(&self) -> Result<Vec<HashMap<String, Vec<String>>>>;
 }
 
 /// The flags used by the bus [`request_name`] method.
@@ -165,70 +165,67 @@ pub enum RequestNameReply {
 #[dbus_proxy]
 trait DBus {
     /// Adds a match rule to match messages going through the message bus
-    fn add_match(&self, rule: &str) -> zbus::Result<()>;
+    fn add_match(&self, rule: &str) -> Result<()>;
 
     /// Returns auditing data used by Solaris ADT, in an unspecified binary format.
-    fn get_adt_audit_session_data(&self, bus_name: &str) -> zbus::Result<Vec<u8>>;
+    fn get_adt_audit_session_data(&self, bus_name: &str) -> Result<Vec<u8>>;
 
     /// Returns as many credentials as possible for the process connected to the server.
-    fn get_connection_credentials(
-        &self,
-        bus_name: &str,
-    ) -> zbus::Result<HashMap<String, OwnedValue>>;
+    fn get_connection_credentials(&self, bus_name: &str) -> Result<HashMap<String, OwnedValue>>;
 
     /// Returns the security context used by SELinux, in an unspecified format.
     #[dbus_proxy(name = "GetConnectionSELinuxSecurityContext")]
-    fn get_connection_selinux_security_context(&self, bus_name: &str) -> zbus::Result<Vec<u8>>;
+    fn get_connection_selinux_security_context(&self, bus_name: &str) -> Result<Vec<u8>>;
 
     /// Returns the Unix process ID of the process connected to the server.
-    fn get_connection_unix_process_id(&self, bus_name: &str) -> zbus::Result<u32>;
+    fn get_connection_unix_process_id(&self, bus_name: &str) -> Result<u32>;
 
     /// Returns the Unix user ID of the process connected to the server.
-    fn get_connection_unix_user(&self, bus_name: &str) -> zbus::Result<u32>;
+    fn get_connection_unix_user(&self, bus_name: &str) -> Result<u32>;
 
     /// Gets the unique ID of the bus.
-    fn get_id(&self) -> zbus::Result<String>;
+    fn get_id(&self) -> Result<String>;
 
     /// Returns the unique connection name of the primary owner of the name given.
-    fn get_name_owner(&self, name: &str) -> zbus::Result<String>;
+    fn get_name_owner(&self, name: &str) -> Result<String>;
 
     /// Returns the unique name assigned to the connection.
-    fn hello(&self) -> zbus::Result<String>;
+    fn hello(&self) -> Result<String>;
 
     /// Returns a list of all names that can be activated on the bus.
-    fn list_activatable_names(&self) -> zbus::Result<Vec<String>>;
+    fn list_activatable_names(&self) -> Result<Vec<String>>;
 
     /// Returns a list of all currently-owned names on the bus.
-    fn list_names(&self) -> zbus::Result<Vec<String>>;
+    fn list_names(&self) -> Result<Vec<String>>;
 
     /// List the connections currently queued for a bus name.
-    fn list_queued_owners(&self, name: &str) -> zbus::Result<Vec<String>>;
+    fn list_queued_owners(&self, name: &str) -> Result<Vec<String>>;
 
     /// Checks if the specified name exists (currently has an owner).
-    fn name_has_owner(&self, name: &str) -> zbus::Result<bool>;
+    fn name_has_owner(&self, name: &str) -> Result<bool>;
 
     /// Ask the message bus to release the method caller's claim to the given name.
-    fn release_name(&self, name: &str) -> zbus::Result<()>;
+    fn release_name(&self, name: &str) -> Result<()>;
 
     /// Reload server configuration.
-    fn reload_config(&self) -> zbus::Result<()>;
+    fn reload_config(&self) -> Result<()>;
 
     /// Removes the first rule that matches.
-    fn remove_match(&self, rule: &str) -> zbus::Result<()>;
+    fn remove_match(&self, rule: &str) -> Result<()>;
 
     /// Ask the message bus to assign the given name to the method caller.
     fn request_name(
         &self,
         name: &str,
         flags: BitFlags<RequestNameFlags>,
-    ) -> zbus::Result<RequestNameReply>;
+    ) -> Result<RequestNameReply>;
 
     /// Tries to launch the executable associated with a name (service
     /// activation), as an explicit request.
-    fn start_service_by_name(&self, name: &str, flags: u32) -> zbus::Result<u32>;
+    fn start_service_by_name(&self, name: &str, flags: u32) -> Result<u32>;
 
     /// This method adds to or modifies that environment when activating services.
-    fn update_activation_environment(&self, environment: HashMap<&str, &str>) -> zbus::Result<()>;
+    fn update_activation_environment(&self, environment: HashMap<&str, &str>) -> Result<()>;
 
     /// This signal indicates that the owner of a name has
     /// changed. It's also the signal to use to detect the appearance
@@ -247,7 +244,7 @@ trait DBus {
     /// This property lists abstract “features” provided by the message bus, and can be used by
     /// clients to detect the capabilities of the message bus with which they are communicating.
     #[dbus_proxy(property)]
-    fn features(&self) -> zbus::Result<Vec<String>>;
+    fn features(&self) -> Result<Vec<String>>;
 
     /// This property lists interfaces provided by the `/org/freedesktop/DBus` object, and can be
     /// used by clients to detect the capabilities of the message bus with which they are
@@ -262,12 +259,16 @@ trait DBus {
     /// `org.freedesktop.DBus.Introspectable` interfaces are not included in the value of this
     /// property either, because they do not indicate features of the message bus implementation.
     #[dbus_proxy(property)]
-    fn interfaces(&self) -> zbus::Result<Vec<String>>;
+    fn interfaces(&self) -> Result<Vec<String>>;
 }
+
 /// Errors from https://gitlab.freedesktop.org/dbus/dbus/-/blob/master/dbus/dbus-protocol.h
 #[derive(Debug, DBusError, PartialEq)]
 #[dbus_error(prefix = "org.freedesktop.DBus.Error")]
 pub enum Error {
+    /// Unknown or fall-through ZBus error.
+    ZBus(zbus::Error),
+
     /// A generic error; "something went wrong" - see the error message for more.
     Failed(String),
 
@@ -440,7 +441,7 @@ impl From<zbus::MessageError> for Error {
             zbus::MessageError::IncorrectEndian => {
                 Self::InconsistentMessage("incorrect endian".to_string())
             }
-            zbus::MessageError::IO(e) => Self::IOError(e.to_string()),
+            zbus::MessageError::Io(e) => Self::IOError(e.to_string()),
             zbus::MessageError::NoBodySignature => {
                 Self::InvalidSignature("missing body signature".to_string())
             }

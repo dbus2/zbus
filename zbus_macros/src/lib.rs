@@ -35,7 +35,7 @@ mod utils;
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_proxy;
-/// use zbus::{Connection, Result};
+/// use zbus::{Connection, Result, fdo};
 /// use zvariant::Value;
 ///
 /// #[dbus_proxy(
@@ -47,10 +47,10 @@ mod utils;
 ///     fn do_this(&self, with: &str, some: u32, arg: &Value) -> Result<bool>;
 ///
 ///     #[dbus_proxy(property)]
-///     fn a_property(&self) -> Result<String>;
+///     fn a_property(&self) -> fdo::Result<String>;
 ///
 ///     #[dbus_proxy(property)]
-///     fn set_a_property(&self, a_property: &str) -> Result<()>;
+///     fn set_a_property(&self, a_property: &str) -> fdo::Result<()>;
 /// };
 ///
 /// let connection = Connection::new_session()?;
@@ -140,8 +140,10 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Derive macro for defining a D-Bus error.
 ///
 /// This macro helps to implement an [`Error`] suitable for D-Bus handling with zbus. It will expand
-/// an `enum E` with [`Error`] traits implementation, and `TryFrom<zbus::Error>`. The later will
-/// help to match received method errors to known or expected errors.
+/// an `enum E` with [`Error`] traits implementation, and `From<zbus::Error>`. The latter makes it
+/// possible for you to declare proxy methods to directly return this type, rather than
+/// [`zbus::Error`]. However, for this to work, we require a variant by the name `ZBus` that
+/// contains an unnamed field of type [`zbus::Error`].
 ///
 /// Additionnally, the derived `impl E` will provide the following convenience methods:
 ///
@@ -163,6 +165,7 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[derive(DBusError, Debug)]
 /// #[dbus_error(prefix = "org.myservice.App")]
 /// enum Error {
+///     ZBus(zbus::Error),
 ///     FileNotFound(String),
 ///     OutOfMemory,
 /// }

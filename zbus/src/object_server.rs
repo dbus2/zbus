@@ -501,10 +501,10 @@ mod tests {
         fn test_error(&self) -> zbus::Result<()>;
 
         #[dbus_proxy(property)]
-        fn count(&self) -> zbus::Result<u32>;
+        fn count(&self) -> fdo::Result<u32>;
 
         #[dbus_proxy(property)]
-        fn set_count(&self, count: u32) -> zbus::Result<()>;
+        fn set_count(&self, count: u32) -> fdo::Result<()>;
     }
 
     #[derive(Debug)]

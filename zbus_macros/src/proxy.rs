@@ -85,7 +85,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
 
     if !has_introspect_method {
         methods.extend(quote! {
-            pub fn introspect(&self) -> #zbus::Result<String> {
+            pub fn introspect(&self) -> #zbus::fdo::Result<String> {
                 self.0.introspect()
             }
         });
