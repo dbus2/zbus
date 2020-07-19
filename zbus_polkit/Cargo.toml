@@ -10,6 +10,7 @@ documentation = "http://docs.rs/zbus_polkit"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"
 categories = ["os::unix-apis"]
+readme = "../README.md"
 
 [dependencies]
 zbus = { path = "../zbus", version = "1" }
