@@ -140,8 +140,10 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Derive macro for defining a D-Bus error.
 ///
 /// This macro helps to implement an [`Error`] suitable for D-Bus handling with zbus. It will expand
-/// an `enum E` with [`Error`] traits implementation, and `TryFrom<zbus::Error>`. The later will
-/// help to match received method errors to known or expected errors.
+/// an `enum E` with [`Error`] traits implementation, and `From<zbus::Error>`. The latter makes it
+/// possible for you to declare proxy methods to directly return this type, rather than
+/// [`zbus::Error`]. However, for this to work, we require a variant by the name `ZBus` that
+/// contains an unnamed field of type [`zbus::Error`].
 ///
 /// Additionnally, the derived `impl E` will provide the following convenience methods:
 ///
@@ -163,6 +165,7 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[derive(DBusError, Debug)]
 /// #[dbus_error(prefix = "org.myservice.App")]
 /// enum Error {
+///     ZBus(zbus::Error),
 ///     FileNotFound(String),
 ///     OutOfMemory,
 /// }

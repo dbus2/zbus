@@ -56,6 +56,9 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
                 _ => None,
             })
             .unwrap_or_else(|| ident.to_string());
+        if name == "ZBus" {
+            continue;
+        }
         let fqn = format!("{}.{}", prefix, name);
 
         let e = match variant.fields {
@@ -92,13 +95,13 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
         // FIXME: deserialize msg to error field instead, to support variable args
         let e = match variant.fields {
             Fields::Unit => quote! {
-                #fqn => Ok(Self::#ident),
+                #fqn => Self::#ident,
             },
             Fields::Unnamed(_) => quote! {
-                #fqn => Ok(Self::#ident(desc)),
+                #fqn => Self::#ident(desc),
             },
             Fields::Named(_) => quote! {
-                #fqn => Ok(Self::#ident { desc }),
+                #fqn => Self::#ident { desc },
             },
         };
         error_converts.extend(e);
@@ -134,12 +137,14 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
             #vis fn name(&self) -> &str {
                 match self {
                     #error_names
+                    Self::ZBus(_) => "Unknown",
                 }
             }
 
             #vis fn description(&self) -> &str {
                 match self {
                     #error_descriptions
+                    Self::ZBus(_) => "Unknown",
                 }
             }
 
@@ -148,6 +153,7 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
 
                 match self {
                     #replies
+                    Self::ZBus(_) => panic!("Can not reply with ZBus error type"),
                 }
             }
         }
@@ -160,18 +166,16 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
 
         impl std::error::Error for #name {}
 
-        impl std::convert::TryFrom<#zbus::Error> for #name {
-            type Error = #zbus::Error;
-
-            fn try_from(value: #zbus::Error) -> std::result::Result<Self, Self::Error> {
-                if let #zbus::Error::MethodError(name, desc, msg) = value {
-                    let desc = desc.unwrap_or_else(|| "".to_string());
+        impl From<#zbus::Error> for #name {
+            fn from(value: #zbus::Error) -> #name {
+                if let #zbus::Error::MethodError(ref name, ref desc, _) = value {
+                    let desc = desc.as_ref().map(String::from).unwrap_or_else(|| String::from(""));
                     match name.as_ref() {
                         #error_converts
-                        _ => Err(#zbus::Error::Unsupported),
+                        _ => Self::ZBus(value),
                     }
                 } else {
-                    Err(#zbus::Error::Unsupported)
+                    Self::ZBus(value)
                 }
             }
         }
