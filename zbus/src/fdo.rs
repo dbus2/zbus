@@ -2,15 +2,6 @@
 //!
 //! The D-Bus specification defines the message bus messages and some standard interfaces that may
 //! be useful across various D-Bus applications. This module provides their proxy.
-//!
-//! **NOTE:** All the proxy methods currently return [`zbus::Result`] and not [`zbus::fdo::Result`]
-//! and in case of an error, you have to explicitly convert the error using the provided
-//! [`TryFrom` implementation]. We intend to fix this but since it will require an API break, it
-//! will have to be in zbus 2.0.
-//!
-//! [`zbus::Result`]: ../type.Result.html
-//! [`zbus::fdo::Result`]: type.Result.html
-//! [`TryFrom` implementation]: enum.Error.html#impl-TryFrom<Error>
 
 use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
