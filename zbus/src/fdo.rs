@@ -431,7 +431,7 @@ impl From<zbus::MessageError> for Error {
             zbus::MessageError::IncorrectEndian => {
                 Self::InconsistentMessage("incorrect endian".to_string())
             }
-            zbus::MessageError::IO(e) => Self::IOError(e.to_string()),
+            zbus::MessageError::Io(e) => Self::IOError(e.to_string()),
             zbus::MessageError::NoBodySignature => {
                 Self::InvalidSignature("missing body signature".to_string())
             }

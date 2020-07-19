@@ -11,7 +11,7 @@ pub enum Error {
     /// Invalid D-Bus address.
     Address(String),
     /// An I/O error.
-    IO(io::Error),
+    Io(io::Error),
     /// Message parsing error.
     Message(MessageError),
     /// A [zvariant](../zvariant/index.html) error.
@@ -38,7 +38,7 @@ impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Error::Address(_) => None,
-            Error::IO(e) => Some(e),
+            Error::Io(e) => Some(e),
             Error::Handshake(_) => None,
             Error::Message(e) => Some(e),
             Error::Variant(e) => Some(e),
@@ -56,7 +56,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Error::Address(e) => write!(f, "address error: {}", e),
-            Error::IO(e) => write!(f, "I/O error: {}", e),
+            Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::Handshake(e) => write!(f, "D-Bus handshake failed: {}", e),
             Error::Message(e) => write!(f, "Message creation error: {}", e),
             Error::Variant(e) => write!(f, "{}", e),
@@ -77,7 +77,7 @@ impl fmt::Display for Error {
 
 impl From<io::Error> for Error {
     fn from(val: io::Error) -> Self {
-        Error::IO(val)
+        Error::Io(val)
     }
 }
 

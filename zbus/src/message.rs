@@ -32,7 +32,7 @@ pub enum MessageError {
     /// Endian signature invalid or doesn't match expectation.
     IncorrectEndian,
     /// An I/O error.
-    IO(IOError),
+    Io(IOError),
     /// Missing body signature.
     NoBodySignature,
     /// Invalid message field.
@@ -44,7 +44,7 @@ pub enum MessageError {
 impl error::Error for MessageError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            MessageError::IO(e) => Some(e),
+            MessageError::Io(e) => Some(e),
             MessageError::Variant(e) => Some(e),
             _ => None,
         }
@@ -55,7 +55,7 @@ impl fmt::Display for MessageError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MessageError::InsufficientData => write!(f, "insufficient data"),
-            MessageError::IO(e) => e.fmt(f),
+            MessageError::Io(e) => e.fmt(f),
             MessageError::ExcessData => write!(f, "excess data"),
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
             MessageError::InvalidField => write!(f, "invalid message field"),
@@ -73,7 +73,7 @@ impl From<VariantError> for MessageError {
 
 impl From<IOError> for MessageError {
     fn from(val: IOError) -> MessageError {
-        MessageError::IO(val)
+        MessageError::Io(val)
     }
 }
 
