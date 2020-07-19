@@ -34,6 +34,15 @@ pub enum Error {
     NoTLSNode,
 }
 
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Error::Io(_) => false,
+            _ => self == other,
+        }
+    }
+}
+
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
