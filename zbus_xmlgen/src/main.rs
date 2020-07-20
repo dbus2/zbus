@@ -13,6 +13,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let fmtconfig = ::rustfmt::config::Config::default();
 
     let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        println!("usage: zbus-xmlgen <interface.xml>");
+        return Ok(());
+    }
+
     let f = File::open(&args[1])?;
 
     let node = Node::from_reader(f)?;
