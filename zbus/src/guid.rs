@@ -26,6 +26,7 @@ impl Guid {
         Self(s)
     }
 
+    /// Returns a string slice for the GUID.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
