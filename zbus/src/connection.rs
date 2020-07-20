@@ -484,8 +484,6 @@ fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> 
 
 #[cfg(test)]
 mod tests {
-    use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
-    use std::os::unix::io::FromRawFd;
     use std::os::unix::net::UnixStream;
     use std::thread;
 
@@ -495,15 +493,7 @@ mod tests {
     fn unix_p2p() {
         let guid = Guid::generate();
 
-        let sp = socketpair(
-            AddressFamily::Unix,
-            SockType::Stream,
-            None,
-            SockFlag::empty(),
-        )
-        .unwrap();
-        let p0 = unsafe { UnixStream::from_raw_fd(sp.0) };
-        let p1 = unsafe { UnixStream::from_raw_fd(sp.1) };
+        let (p0, p1) = UnixStream::pair().unwrap();
 
         let server_thread = thread::spawn(move || {
             let c = Connection::new_unix_server(p0, &guid).unwrap();
