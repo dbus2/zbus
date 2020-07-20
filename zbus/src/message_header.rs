@@ -16,7 +16,10 @@ pub(crate) const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, Type)]
 pub enum EndianSig {
+    /// The D-Bus message is in big-endian (network) byte order.
     Big = b'B',
+
+    /// The D-Bus message is in little-endian byte order.
     Little = b'l',
 }
 
