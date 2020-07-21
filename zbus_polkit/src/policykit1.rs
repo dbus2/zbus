@@ -57,6 +57,7 @@ impl TryFrom<OwnedValue> for AuthorityFeatures {
     }
 }
 
+/// Details of a temporary authorization as provided by the /org/freedesktop/PolicyKit1/Authority object in the system bus.
 #[derive(Debug, Type, Deserialize)]
 pub struct TemporaryAuthorization {
     /// An opaque identifier for the temporary authorization.

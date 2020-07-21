@@ -420,6 +420,9 @@ pub enum Error {
     NotContainer(String),
 }
 
+/// Alias for a `Result` with the error type [`zbus::fdo::Error`].
+///
+/// [`zbus::fdo::Error`]: enum.Error.html
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl From<zbus::MessageError> for Error {

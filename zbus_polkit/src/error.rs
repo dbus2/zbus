@@ -1,8 +1,14 @@
 use std::fmt::Display;
 
+/// The error type for `zbus_polkit`.
+///
+/// The various errors that can be reported by this crate.
 #[derive(Debug)]
 pub enum Error {
+    /// I/O errors.
     Io(std::io::Error),
+
+    /// Could not parse a number for a Process ID or an User ID.
     ParseInt(std::num::ParseIntError),
 }
 

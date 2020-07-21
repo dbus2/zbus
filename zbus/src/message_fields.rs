@@ -13,22 +13,39 @@ const MAX_FIELDS_IN_MESSAGE: usize = 16;
 pub struct MessageFields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
 
 impl<'m> MessageFields<'m> {
+    /// Creates an empty collection of fields.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Appends a [`MessageField`] to the collection of fields in the message.
+    ///
+    /// [`MessageField`]: enum.MessageField.html
     pub fn add<'f: 'm>(&mut self, field: MessageField<'f>) {
         self.0.push(field);
     }
 
+    /// Returns a slice with all the [`MessageField`] in the message.
+    ///
+    /// [`MessageField`]: enum.MessageField.html
     pub fn get(&self) -> &[MessageField<'m>] {
         &self.0
     }
 
+    /// Gets a reference to a specific [`MessageField`] by its code.
+    ///
+    /// Returns `None` if the message has no such field.
+    ///
+    /// [`MessageField`]: enum.MessageField.html
     pub fn get_field(&self, code: MessageFieldCode) -> Option<&MessageField<'m>> {
         self.0.iter().find(|f| f.code() == code)
     }
 
+    /// Consumes the `MessageFields` and returns a specific [`MessageField`] by its code.
+    ///
+    /// Returns `None` if the message has no such field.
+    ///
+    /// [`MessageField`]: enum.MessageField.html
     pub fn into_field(self, code: MessageFieldCode) -> Option<MessageField<'m>> {
         for field in self.0 {
             if field.code() == code {
