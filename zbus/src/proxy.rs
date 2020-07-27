@@ -47,7 +47,7 @@ use crate::fdo::{self, IntrospectableProxy, PropertiesProxy};
 ///
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 pub struct Proxy<'a> {
-    conn: &'a Connection,
+    conn: Connection,
     destination: &'a str,
     path: &'a str,
     interface: &'a str,
@@ -56,13 +56,13 @@ pub struct Proxy<'a> {
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
     pub fn new(
-        conn: &'a Connection,
+        conn: &Connection,
         destination: &'a str,
         path: &'a str,
         interface: &'a str,
     ) -> Result<Self> {
         Ok(Self {
-            conn,
+            conn: conn.clone(),
             destination,
             path,
             interface,
@@ -73,7 +73,7 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub fn introspect(&self) -> fdo::Result<String> {
-        IntrospectableProxy::new_for(self.conn, self.destination, self.path)?.introspect()
+        IntrospectableProxy::new_for(&self.conn, self.destination, self.path)?.introspect()
     }
 
     /// Get the property `property_name`.
@@ -83,7 +83,7 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        PropertiesProxy::new_for(self.conn, self.destination, self.path)?
+        PropertiesProxy::new_for(&self.conn, self.destination, self.path)?
             .get(self.interface, property_name)?
             .try_into()
             .map_err(|_| Error::InvalidReply.into())
@@ -96,7 +96,7 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        PropertiesProxy::new_for(self.conn, self.destination, self.path)?.set(
+        PropertiesProxy::new_for(&self.conn, self.destination, self.path)?.set(
             self.interface,
             property_name,
             &value.into(),
