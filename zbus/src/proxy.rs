@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
 use zvariant::{OwnedValue, Value};
 
@@ -48,9 +49,9 @@ use crate::fdo::{self, IntrospectableProxy, PropertiesProxy};
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 pub struct Proxy<'a> {
     conn: Connection,
-    destination: &'a str,
-    path: &'a str,
-    interface: &'a str,
+    destination: Cow<'a, str>,
+    path: Cow<'a, str>,
+    interface: Cow<'a, str>,
 }
 
 impl<'a> Proxy<'a> {
@@ -63,9 +64,25 @@ impl<'a> Proxy<'a> {
     ) -> Result<Self> {
         Ok(Self {
             conn: conn.clone(),
-            destination,
-            path,
-            interface,
+            destination: Cow::from(destination),
+            path: Cow::from(path),
+            interface: Cow::from(interface),
+        })
+    }
+
+    /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
+    /// passed arguments.
+    pub fn new_owned(
+        conn: Connection,
+        destination: String,
+        path: String,
+        interface: String,
+    ) -> Result<Self> {
+        Ok(Self {
+            conn,
+            destination: Cow::from(destination),
+            path: Cow::from(path),
+            interface: Cow::from(interface),
         })
     }
 
@@ -73,7 +90,7 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub fn introspect(&self) -> fdo::Result<String> {
-        IntrospectableProxy::new_for(&self.conn, self.destination, self.path)?.introspect()
+        IntrospectableProxy::new_for(&self.conn, &self.destination, &self.path)?.introspect()
     }
 
     /// Get the property `property_name`.
@@ -83,8 +100,8 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        PropertiesProxy::new_for(&self.conn, self.destination, self.path)?
-            .get(self.interface, property_name)?
+        PropertiesProxy::new_for(&self.conn, &self.destination, &self.path)?
+            .get(&self.interface, property_name)?
             .try_into()
             .map_err(|_| Error::InvalidReply.into())
     }
@@ -96,8 +113,8 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        PropertiesProxy::new_for(&self.conn, self.destination, self.path)?.set(
-            self.interface,
+        PropertiesProxy::new_for(&self.conn, &self.destination, &self.path)?.set(
+            &self.interface,
             property_name,
             &value.into(),
         )
@@ -115,9 +132,9 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::Type,
     {
         let reply = self.conn.call_method(
-            Some(self.destination),
-            self.path,
-            Some(self.interface),
+            Some(&self.destination),
+            &self.path,
+            Some(&self.interface),
             method_name,
             body,
         );
