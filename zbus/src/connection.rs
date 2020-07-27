@@ -3,16 +3,33 @@ use std::convert::TryInto;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{env, io};
 
 use nix::unistd::Uid;
+use once_cell::unsync::OnceCell;
 
 use crate::address::{self, Address};
 use crate::utils::{read_exact, write_all};
 use crate::{fdo, Error, Guid, Message, MessageError, MessageType, Result, MIN_MESSAGE_SIZE};
 
 type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
+
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
+struct ConnectionInner {
+    server_guid: Guid,
+    cap_unix_fd: bool,
+    unique_name: OnceCell<String>,
+
+    stream: UnixStream,
+    // Serial number for next outgoing message
+    serial: AtomicU32,
+
+    #[derivative(Debug = "ignore")]
+    default_msg_handler: RefCell<Option<MessageHandlerFn>>,
+}
 
 /// A D-Bus connection.
 ///
@@ -29,6 +46,12 @@ type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
 /// with [`new_system`]. Then the connection is shared with the [`Proxy`] and [`ObjectServer`]
 /// instances.
 ///
+/// `Connection` implements [`Clone`] and cloning it is a very cheap operation, as the underlying
+/// data is not cloned. This makes it very convenient to share the connection between different
+/// parts of your code. Please note however, that sharing or sending of a connection instance
+/// across threads is not supported. If you've a valid use cas for that, please [file an issue]
+/// about it and we'll consider adding this feature.
+///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
 /// [`new_system`]: struct.Connection.html#method.new_system
@@ -37,24 +60,14 @@ type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
 /// [`ObjectServer`]: struct.ObjectServer.html
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 /// [`dbus_interface`]: attr.dbus_interface.html
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
-pub struct Connection {
-    server_guid: Guid,
-    cap_unix_fd: bool,
-    unique_name: Option<String>,
-
-    stream: UnixStream,
-    // Serial number for next outgoing message
-    serial: AtomicU32,
-
-    #[derivative(Debug = "ignore")]
-    default_msg_handler: Option<RefCell<MessageHandlerFn>>,
-}
+/// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
+/// [file an issue]: https://gitlab.freedesktop.org/zeenix/zbus/-/issues/new
+#[derive(Debug, Clone)]
+pub struct Connection(Rc<ConnectionInner>);
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.stream.as_raw_fd()
+        self.0.stream.as_raw_fd()
     }
 }
 
@@ -100,15 +113,19 @@ impl Connection {
 
         stream.write_all(b"BEGIN\r\n")?;
 
-        let mut connection = Connection::new_authenticated(stream, server_guid, cap_unix_fd);
+        let connection = Connection::new_authenticated(stream, server_guid, cap_unix_fd);
 
         if bus_connection {
             // Now that the server has approved us, we must send the bus Hello, as per specs
-            connection.unique_name = Some(
-                fdo::DBusProxy::new(&connection)?
-                    .hello()
-                    .map_err(|e| Error::Handshake(format!("Hello failed: {}", e)))?,
-            );
+            let name = fdo::DBusProxy::new(&connection)?
+                .hello()
+                .map_err(|e| Error::Handshake(format!("Hello failed: {}", e)))?;
+            connection
+                .0
+                .unique_name
+                .set(name)
+                // programmer (probably our) error if this fails.
+                .expect("Attempted to set unique_name twice");
         }
 
         Ok(connection)
@@ -219,12 +236,12 @@ impl Connection {
 
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
-        self.server_guid.as_str()
+        self.0.server_guid.as_str()
     }
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
     pub fn unique_name(&self) -> Option<&str> {
-        self.unique_name.as_deref()
+        self.0.unique_name.get().map(|s| s.as_str())
     }
 
     /// Fetch the next message from the connection.
@@ -241,7 +258,7 @@ impl Connection {
         let mut buf = [0; MIN_MESSAGE_SIZE];
 
         loop {
-            let mut fds = read_exact(&self.stream, &mut buf[..])?;
+            let mut fds = read_exact(&self.0.stream, &mut buf[..])?;
 
             let mut incoming = Message::from_bytes(&buf)?;
             let bytes_left = incoming.bytes_to_completion()?;
@@ -249,13 +266,13 @@ impl Connection {
                 return Err(Error::Message(MessageError::InsufficientData));
             }
             let mut buf = vec![0; bytes_left as usize];
-            fds.append(&mut read_exact(&self.stream, &mut buf[..])?);
+            fds.append(&mut read_exact(&self.0.stream, &mut buf[..])?);
             incoming.add_bytes(&buf[..])?;
             incoming.set_owned_fds(fds);
 
-            if let Some(ref handler) = self.default_msg_handler {
+            if let Some(ref mut handler) = &mut *self.0.default_msg_handler.borrow_mut() {
                 // Let's see if the default handler wants the message first
-                match (&mut *handler.borrow_mut())(incoming) {
+                match handler(incoming) {
                     // Message was returned to us so we can return that
                     Some(m) => return Ok(m),
                     None => continue,
@@ -272,7 +289,7 @@ impl Connection {
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
     pub fn send_message(&self, mut msg: Message) -> Result<u32> {
-        if !msg.fds().is_empty() && !self.cap_unix_fd {
+        if !msg.fds().is_empty() && !self.0.cap_unix_fd {
             return Err(Error::Unsupported);
         }
 
@@ -283,7 +300,7 @@ impl Connection {
             Ok(())
         })?;
 
-        write_all(&self.stream, msg.as_bytes(), &msg.fds())?;
+        write_all(&self.0.stream, msg.as_bytes(), &msg.fds())?;
         Ok(serial)
     }
 
@@ -310,7 +327,7 @@ impl Connection {
         B: serde::ser::Serialize + zvariant::Type,
     {
         let m = Message::method(
-            self.unique_name.as_deref(),
+            self.unique_name(),
             destination,
             path,
             iface,
@@ -351,7 +368,7 @@ impl Connection {
         B: serde::ser::Serialize + zvariant::Type,
     {
         let m = Message::signal(
-            self.unique_name.as_deref(),
+            self.unique_name(),
             destination,
             path,
             iface,
@@ -374,7 +391,7 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        let m = Message::method_reply(self.unique_name.as_deref(), call, body)?;
+        let m = Message::method_reply(self.unique_name(), call, body)?;
         self.send_message(m)
     }
 
@@ -388,7 +405,7 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        let m = Message::method_error(self.unique_name.as_deref(), call, error_name, body)?;
+        let m = Message::method_error(self.unique_name(), call, error_name, body)?;
         self.send_message(m)
     }
 
@@ -400,29 +417,29 @@ impl Connection {
     ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     pub fn set_default_message_handler(&mut self, handler: MessageHandlerFn) {
-        self.default_msg_handler = Some(RefCell::new(handler));
+        self.0.default_msg_handler.borrow_mut().replace(handler);
     }
 
     /// Reset the default message handler.
     ///
     /// Remove the previously set message handler from `set_default_message_handler`.
     pub fn reset_default_message_handler(&mut self) {
-        self.default_msg_handler = None;
+        self.0.default_msg_handler.borrow_mut().take();
     }
 
     fn new_authenticated(stream: UnixStream, server_guid: Guid, cap_unix_fd: bool) -> Self {
-        Self {
+        Self(Rc::new(ConnectionInner {
             stream,
             server_guid,
             cap_unix_fd,
             serial: AtomicU32::new(1),
-            unique_name: None,
-            default_msg_handler: None,
-        }
+            unique_name: OnceCell::new(),
+            default_msg_handler: RefCell::new(None),
+        }))
     }
 
     fn next_serial(&self) -> u32 {
-        self.serial.fetch_add(1, Ordering::SeqCst)
+        self.0.serial.fetch_add(1, Ordering::SeqCst)
     }
 }
 
