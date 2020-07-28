@@ -874,6 +874,7 @@ mod tests {
 
     #[test]
     fn issue_59() {
+        // Ensure we don't panic on deserializing tuple of smaller than expected length.
         let ctxt = Context::<LE>::new_dbus(0);
         let (encoded, _) = to_bytes_fds(ctxt, &("hello",)).unwrap();
         let result: Result<(&str, &str)> = from_slice(&encoded, ctxt);

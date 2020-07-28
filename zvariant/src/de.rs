@@ -206,6 +206,13 @@ where
     fn parse_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
+            if self.pos + padding > self.bytes.len() {
+                return Err(serde::de::Error::invalid_length(
+                    self.bytes.len(),
+                    &format!(">= {}", self.pos + padding).as_str(),
+                ));
+            }
+
             for i in 0..padding {
                 let byte = self.bytes[self.pos + i];
                 if byte != 0 {
