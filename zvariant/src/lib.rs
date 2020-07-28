@@ -184,7 +184,7 @@ mod tests {
     use crate::{to_bytes, to_bytes_fds, to_bytes_for_signature};
 
     use crate::{Array, Dict, EncodingContext as Context};
-    use crate::{Basic, Type, Value};
+    use crate::{Basic, Result, Type, Value};
     use crate::{Fd, ObjectPath, Signature, Str, Structure};
 
     // Test through both generic and specific API (wrt byte order)
@@ -870,5 +870,13 @@ mod tests {
         let encoded = to_bytes(ctxt, &(&foo, 1)).unwrap();
         let f: Foo = from_slice_fds(&encoded, None, ctxt).unwrap();
         assert_eq!(f, foo);
+    }
+
+    #[test]
+    fn issue_59() {
+        let ctxt = Context::<LE>::new_dbus(0);
+        let (encoded, _) = to_bytes_fds(ctxt, &("hello",)).unwrap();
+        let result: Result<(&str, &str)> = from_slice(&encoded, ctxt);
+        assert!(result.is_err());
     }
 }
