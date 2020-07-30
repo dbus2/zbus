@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use scoped_tls::scoped_thread_local;
@@ -303,16 +304,18 @@ impl Node {
 /// ```
 #[derive(Debug)]
 pub struct ObjectServer<'a> {
-    conn: &'a Connection,
+    conn: Connection,
     root: Node,
+    phantom: PhantomData<&'a ()>,
 }
 
 impl<'a> ObjectServer<'a> {
     /// Creates a new D-Bus `ObjectServer` for a given connection.
-    pub fn new(connection: &'a Connection) -> Self {
+    pub fn new(connection: &Connection) -> Self {
         Self {
-            conn: connection,
+            conn: connection.clone(),
             root: Node::new("/"),
+            phantom: PhantomData,
         }
     }
 
@@ -381,7 +384,7 @@ impl<'a> ObjectServer<'a> {
         msg_header: &MessageHeader,
         msg: &Message,
     ) -> fdo::Result<Result<u32>> {
-        let conn = self.conn;
+        let conn = self.conn.clone();
         let path = msg_header
             .path()
             .ok()
@@ -409,10 +412,10 @@ impl<'a> ObjectServer<'a> {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
         })?;
 
-        LOCAL_CONNECTION.set(conn, || {
+        LOCAL_CONNECTION.set(&conn, || {
             LOCAL_NODE.set(node, || {
-                let res = iface.borrow().call(conn, &msg, member);
-                res.or_else(|| iface.borrow_mut().call_mut(conn, &msg, member))
+                let res = iface.borrow().call(&conn, &msg, member);
+                res.or_else(|| iface.borrow_mut().call_mut(&conn, &msg, member))
                     .ok_or_else(|| {
                         fdo::Error::UnknownMethod(format!("Unknown method '{}'", member))
                     })
@@ -422,7 +425,7 @@ impl<'a> ObjectServer<'a> {
 
     fn dispatch_method_call(&mut self, msg_header: &MessageHeader, msg: &Message) -> Result<u32> {
         match self.dispatch_method_call_try(msg_header, msg) {
-            Err(e) => e.reply(self.conn, msg),
+            Err(e) => e.reply(&self.conn, msg),
             Ok(r) => r,
         }
     }
