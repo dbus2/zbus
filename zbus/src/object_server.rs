@@ -247,6 +247,10 @@ impl Node {
 /// All object paths will have the standard interfaces implemented on your behalf, such as
 /// `org.freedesktop.DBus.Introspectable` or `org.freedesktop.DBus.Properties`.
 ///
+/// **NOTE:** The lifetime `'a` on the `ObjectServer` struct is bogus and only exists for
+/// backwards-compatibility and will be dropped in the next major release (i-e 2.0). This means
+/// that `'a` can be considered `'static` for all intents and purposes.
+///
 /// # Example
 ///
 /// This example exposes the `org.myiface.Example.Quit` method on the `/org/zbus/path`
