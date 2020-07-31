@@ -97,7 +97,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
 
         impl<'c> #proxy_name<'c> {
             /// Creates a new proxy with the default service & path.
-            pub fn new(conn: &'c #zbus::Connection) -> #zbus::Result<Self> {
+            pub fn new(conn: &#zbus::Connection) -> #zbus::Result<Self> {
                 Ok(Self(#zbus::Proxy::new(
                     conn,
                     #default_service,
@@ -107,7 +107,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             }
 
             /// Creates a new proxy for the given `destination` and `path`.
-            pub fn new_for(conn: &'c #zbus::Connection, destination: &'c str, path: &'c str) -> #zbus::Result<Self> {
+            pub fn new_for(conn: &#zbus::Connection, destination: &'c str, path: &'c str) -> #zbus::Result<Self> {
                 Ok(Self(#zbus::Proxy::new(
                     conn,
                     destination,
