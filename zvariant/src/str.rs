@@ -1,8 +1,11 @@
+// FIXME: Drop this when the deprecated `Basic::ALIGNMENT` is dropped in the next API break.
+#![allow(deprecated)]
+
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::str;
 
-use crate::{Basic, Signature, Type};
+use crate::{Basic, EncodingFormat, Signature, Type};
 
 /// A string wrapper.
 ///
@@ -32,6 +35,10 @@ impl<'a> Basic for Str<'a> {
     const SIGNATURE_CHAR: char = <&str>::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = <&str>::SIGNATURE_STR;
     const ALIGNMENT: usize = <&str>::ALIGNMENT;
+
+    fn alignment(format: EncodingFormat) -> usize {
+        <&str>::alignment(format)
+    }
 }
 
 impl<'a> Type for Str<'a> {

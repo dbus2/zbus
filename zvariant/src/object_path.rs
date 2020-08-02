@@ -1,10 +1,13 @@
+// FIXME: Drop this when the deprecated `Basic::ALIGNMENT` is dropped in the next API break.
+#![allow(deprecated)]
+
 use core::convert::TryFrom;
 use core::str;
 use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
 use std::borrow::Cow;
 
-use crate::{Basic, Error, Result, Signature, Type};
+use crate::{Basic, EncodingFormat, Error, Result, Signature, Type};
 
 /// String that identifies objects at a given destination on the D-Bus bus.
 ///
@@ -90,6 +93,10 @@ impl<'a> Basic for ObjectPath<'a> {
     const SIGNATURE_CHAR: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
     const ALIGNMENT: usize = <&str>::ALIGNMENT;
+
+    fn alignment(format: EncodingFormat) -> usize {
+        <&str>::alignment(format)
+    }
 }
 
 impl<'a> Type for ObjectPath<'a> {

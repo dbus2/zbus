@@ -230,7 +230,7 @@ where
         T: Basic,
     {
         self.sig_parser.skip_char()?;
-        self.parse_padding(T::ALIGNMENT)?;
+        self.parse_padding(T::alignment(self.ctxt.format()))?;
 
         Ok(())
     }
@@ -255,7 +255,7 @@ where
     {
         self.prep_deserialize_basic::<T>()?;
 
-        self.next_slice(T::ALIGNMENT)
+        self.next_slice(T::alignment(self.ctxt.format()))
     }
 
     fn abs_pos(&self) -> usize {
@@ -340,8 +340,8 @@ where
         let v = match self.sig_parser.next_char() {
             Fd::SIGNATURE_CHAR => {
                 self.sig_parser.skip_char()?;
-                self.parse_padding(u32::ALIGNMENT)?;
-                let idx = B::read_u32(self.next_slice(u32::ALIGNMENT)?);
+                self.parse_padding(u32::alignment(self.ctxt.format()))?;
+                let idx = B::read_u32(self.next_slice(u32::alignment(self.ctxt.format()))?);
                 self.get_fd(idx)?
             }
             _ => B::read_i32(self.next_const_size_slice::<i32>()?),
@@ -430,8 +430,8 @@ where
                 len_slice[0] as usize
             }
             <&str>::SIGNATURE_CHAR | ObjectPath::SIGNATURE_CHAR => {
-                self.parse_padding(u32::ALIGNMENT)?;
-                let len_slice = self.next_slice(u32::ALIGNMENT)?;
+                self.parse_padding(u32::alignment(self.ctxt.format()))?;
+                let len_slice = self.next_slice(u32::alignment(self.ctxt.format()))?;
 
                 B::read_u32(len_slice) as usize
             }
@@ -647,9 +647,9 @@ where
         V: Visitor<'de>,
     {
         // Not using serialize_u32 cause identifier isn't part of the signature
-        self.parse_padding(u32::ALIGNMENT)?;
+        self.parse_padding(u32::alignment(self.ctxt.format()))?;
         let variant_index = from_slice_fds::<B, _>(&self.bytes[self.pos..], self.fds, self.ctxt)?;
-        self.pos += u32::ALIGNMENT;
+        self.pos += u32::alignment(self.ctxt.format());
 
         visitor.visit_u32(variant_index)
     }

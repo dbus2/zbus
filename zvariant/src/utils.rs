@@ -57,20 +57,20 @@ pub(crate) fn f64_to_f32(value: f64) -> f32 {
     value as f32
 }
 
-pub(crate) fn alignment_for_signature_char(signature_char: char, _format: EncodingFormat) -> usize {
+pub(crate) fn alignment_for_signature_char(signature_char: char, format: EncodingFormat) -> usize {
     match signature_char {
-        u8::SIGNATURE_CHAR => u8::ALIGNMENT,
-        bool::SIGNATURE_CHAR => bool::ALIGNMENT,
-        i16::SIGNATURE_CHAR => i16::ALIGNMENT,
-        u16::SIGNATURE_CHAR => u16::ALIGNMENT,
-        i32::SIGNATURE_CHAR => i32::ALIGNMENT,
-        u32::SIGNATURE_CHAR | Fd::SIGNATURE_CHAR => u32::ALIGNMENT,
-        i64::SIGNATURE_CHAR => i64::ALIGNMENT,
-        u64::SIGNATURE_CHAR => u64::ALIGNMENT,
-        f64::SIGNATURE_CHAR => f64::ALIGNMENT,
-        <&str>::SIGNATURE_CHAR => <&str>::ALIGNMENT,
-        ObjectPath::SIGNATURE_CHAR => ObjectPath::ALIGNMENT,
-        Signature::SIGNATURE_CHAR => Signature::ALIGNMENT,
+        u8::SIGNATURE_CHAR => u8::alignment(format),
+        bool::SIGNATURE_CHAR => bool::alignment(format),
+        i16::SIGNATURE_CHAR => i16::alignment(format),
+        u16::SIGNATURE_CHAR => u16::alignment(format),
+        i32::SIGNATURE_CHAR => i32::alignment(format),
+        u32::SIGNATURE_CHAR | Fd::SIGNATURE_CHAR => u32::alignment(format),
+        i64::SIGNATURE_CHAR => i64::alignment(format),
+        u64::SIGNATURE_CHAR => u64::alignment(format),
+        f64::SIGNATURE_CHAR => f64::alignment(format),
+        <&str>::SIGNATURE_CHAR => <&str>::alignment(format),
+        ObjectPath::SIGNATURE_CHAR => ObjectPath::alignment(format),
+        Signature::SIGNATURE_CHAR => Signature::alignment(format),
         VARIANT_SIGNATURE_CHAR => VARIANT_ALIGNMENT,
         ARRAY_SIGNATURE_CHAR => ARRAY_ALIGNMENT,
         STRUCT_SIG_START_CHAR => STRUCT_ALIGNMENT,

@@ -1,4 +1,7 @@
-use crate::{Signature, Type};
+// FIXME: Drop this when the deprecated `Basic::ALIGNMENT` is dropped in the next API break.
+#![allow(deprecated)]
+
+use crate::{EncodingFormat, Signature, Type};
 
 /// Trait for basic types.
 ///
@@ -11,8 +14,12 @@ pub trait Basic: Type {
     const SIGNATURE_CHAR: char;
     /// The type signature, as a string.
     const SIGNATURE_STR: &'static str;
+    #[deprecated(since = "2.0.2", note = "Please use the `alignment` function instead")]
     /// The required padding alignment.
     const ALIGNMENT: usize;
+
+    /// The required padding alignment for the given format.
+    fn alignment(format: EncodingFormat) -> usize;
 }
 
 impl<B: ?Sized> Basic for &B
@@ -22,6 +29,10 @@ where
     const SIGNATURE_CHAR: char = B::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = B::SIGNATURE_STR;
     const ALIGNMENT: usize = B::ALIGNMENT;
+
+    fn alignment(format: EncodingFormat) -> usize {
+        B::alignment(format)
+    }
 }
 
 macro_rules! impl_type {
@@ -34,10 +45,22 @@ macro_rules! impl_type {
     };
 }
 
+macro_rules! alignment_method {
+    () => {
+        fn alignment(format: EncodingFormat) -> usize {
+            match format {
+                EncodingFormat::DBus => Self::ALIGNMENT,
+            }
+        }
+    };
+}
+
 impl Basic for u8 {
     const SIGNATURE_CHAR: char = 'y';
     const SIGNATURE_STR: &'static str = "y";
     const ALIGNMENT: usize = 1;
+
+    alignment_method!();
 }
 impl_type!(u8);
 
@@ -46,6 +69,8 @@ impl Basic for i8 {
     const SIGNATURE_CHAR: char = i16::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = i16::SIGNATURE_STR;
     const ALIGNMENT: usize = i16::ALIGNMENT;
+
+    alignment_method!();
 }
 impl_type!(i8);
 
@@ -53,6 +78,8 @@ impl Basic for bool {
     const SIGNATURE_CHAR: char = 'b';
     const SIGNATURE_STR: &'static str = "b";
     const ALIGNMENT: usize = 4;
+
+    alignment_method!();
 }
 impl_type!(bool);
 
@@ -60,6 +87,8 @@ impl Basic for i16 {
     const SIGNATURE_CHAR: char = 'n';
     const SIGNATURE_STR: &'static str = "n";
     const ALIGNMENT: usize = 2;
+
+    alignment_method!();
 }
 impl_type!(i16);
 
@@ -67,6 +96,8 @@ impl Basic for u16 {
     const SIGNATURE_CHAR: char = 'q';
     const SIGNATURE_STR: &'static str = "q";
     const ALIGNMENT: usize = 2;
+
+    alignment_method!();
 }
 impl_type!(u16);
 
@@ -74,6 +105,8 @@ impl Basic for i32 {
     const SIGNATURE_CHAR: char = 'i';
     const SIGNATURE_STR: &'static str = "i";
     const ALIGNMENT: usize = 4;
+
+    alignment_method!();
 }
 impl_type!(i32);
 
@@ -81,6 +114,8 @@ impl Basic for u32 {
     const SIGNATURE_CHAR: char = 'u';
     const SIGNATURE_STR: &'static str = "u";
     const ALIGNMENT: usize = 4;
+
+    alignment_method!();
 }
 impl_type!(u32);
 
@@ -88,6 +123,8 @@ impl Basic for i64 {
     const SIGNATURE_CHAR: char = 'x';
     const SIGNATURE_STR: &'static str = "x";
     const ALIGNMENT: usize = 8;
+
+    alignment_method!();
 }
 impl_type!(i64);
 
@@ -95,6 +132,8 @@ impl Basic for u64 {
     const SIGNATURE_CHAR: char = 't';
     const SIGNATURE_STR: &'static str = "t";
     const ALIGNMENT: usize = 8;
+
+    alignment_method!();
 }
 impl_type!(u64);
 
@@ -103,6 +142,8 @@ impl Basic for f32 {
     const SIGNATURE_CHAR: char = f64::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = f64::SIGNATURE_STR;
     const ALIGNMENT: usize = f64::ALIGNMENT;
+
+    alignment_method!();
 }
 impl_type!(f32);
 
@@ -110,6 +151,8 @@ impl Basic for f64 {
     const SIGNATURE_CHAR: char = 'd';
     const SIGNATURE_STR: &'static str = "d";
     const ALIGNMENT: usize = 8;
+
+    alignment_method!();
 }
 impl_type!(f64);
 
@@ -117,6 +160,8 @@ impl Basic for str {
     const SIGNATURE_CHAR: char = 's';
     const SIGNATURE_STR: &'static str = "s";
     const ALIGNMENT: usize = 4;
+
+    alignment_method!();
 }
 impl_type!(str);
 
@@ -124,6 +169,8 @@ impl Basic for String {
     const SIGNATURE_CHAR: char = 's';
     const SIGNATURE_STR: &'static str = "s";
     const ALIGNMENT: usize = 4;
+
+    alignment_method!();
 }
 impl_type!(String);
 
@@ -131,5 +178,7 @@ impl Basic for char {
     const SIGNATURE_CHAR: char = <&str>::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = <&str>::SIGNATURE_STR;
     const ALIGNMENT: usize = <&str>::ALIGNMENT;
+
+    alignment_method!();
 }
 impl_type!(char);
