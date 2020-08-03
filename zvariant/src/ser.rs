@@ -357,14 +357,14 @@ where
         T: Basic,
     {
         self.sig_parser.skip_char()?;
-        self.add_padding(T::ALIGNMENT)?;
+        self.add_padding(T::alignment(self.ctxt.format()))?;
 
         Ok(())
     }
 
     fn prep_serialize_enum_variant(&mut self, variant_index: u32) -> Result<()> {
         // Encode enum variants as a struct with first field as variant index
-        self.add_padding(u32::ALIGNMENT)?;
+        self.add_padding(u32::alignment(self.ctxt.format()))?;
         self.write_u32::<B>(variant_index).map_err(Error::Io)?;
 
         Ok(())
@@ -430,7 +430,7 @@ where
         match self.sig_parser.next_char() {
             'h' => {
                 self.sig_parser.skip_char()?;
-                self.add_padding(u32::ALIGNMENT)?;
+                self.add_padding(u32::alignment(self.ctxt.format()))?;
                 let v = self.add_fd(v);
                 self.write_u32::<B>(v).map_err(Error::Io)
             }
@@ -487,7 +487,7 @@ where
 
         match c {
             ObjectPath::SIGNATURE_CHAR | <&str>::SIGNATURE_CHAR => {
-                self.add_padding(<&str>::ALIGNMENT)?;
+                self.add_padding(<&str>::alignment(self.ctxt.format()))?;
                 self.write_u32::<B>(usize_to_u32(v.len()))
                     .map_err(Error::Io)?;
             }

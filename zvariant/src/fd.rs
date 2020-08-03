@@ -1,7 +1,10 @@
+// FIXME: Drop this when the deprecated `Basic::ALIGNMENT` is dropped in the next API break.
+#![allow(deprecated)]
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::os::unix::io;
 
-use crate::{Basic, Signature, Type};
+use crate::{Basic, EncodingFormat, Signature, Type};
 
 /// A [`RawFd`](https://doc.rust-lang.org/std/os/unix/io/type.RawFd.html) wrapper.
 ///
@@ -20,6 +23,10 @@ impl Basic for Fd {
     const SIGNATURE_CHAR: char = 'h';
     const SIGNATURE_STR: &'static str = "h";
     const ALIGNMENT: usize = <u32>::ALIGNMENT;
+
+    fn alignment(format: EncodingFormat) -> usize {
+        u32::alignment(format)
+    }
 }
 
 impl Type for Fd {
