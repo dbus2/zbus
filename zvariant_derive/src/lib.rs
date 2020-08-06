@@ -9,7 +9,9 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use syn::{self, DeriveInput};
 
+mod dict;
 mod r#type;
+mod utils;
 
 /// Derive macro to add [`Type`] implementation to structs and enums.
 ///
@@ -93,4 +95,98 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
 
     r#type::expand_derive(ast)
+}
+
+/// Derive macro to add [`Type`] implementation to structs serialized as `a{sv}` type.
+///
+/// # Examples
+///
+/// ```
+/// use zvariant::{Signature, Type};
+/// use zvariant_derive::TypeDict;
+///
+/// #[derive(TypeDict)]
+/// struct Struct {
+///     field: u32,
+/// }
+///
+/// assert_eq!(Struct::signature(), Signature::from_str_unchecked("a{sv}"));
+/// ```
+///
+/// [`Type`]: ../zvariant/trait.Type.html
+#[proc_macro_derive(TypeDict)]
+pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+
+    dict::expand_type_derive(ast)
+}
+
+/// Adds [`Serialize`] implementation to structs to be serialized as `a{sv}` type.
+///
+/// This macro serializes the deriving struct as a D-Bus dictionary type, where keys are strings and
+/// values are generic values. Such dictionary types are very commonly used with
+/// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
+/// and GVariant.
+///
+/// # Examples
+///
+/// For structs it works just like serde's [`Serialize`] macros:
+///
+/// ```
+/// use zvariant::{EncodingContext, to_bytes};
+/// use zvariant_derive::{SerializeDict, TypeDict};
+///
+/// #[derive(SerializeDict, TypeDict)]
+/// struct Struct {
+///     field1: u16,
+///     #[zvariant(rename = "another-name")]
+///     field2: i64,
+///     optional_field: Option<String>,
+/// }
+/// ```
+///
+/// The serialized D-Bus version of `Struct {42, 77, None}`
+/// will be `{"field1": 42, "another-name": 77}`.
+///
+/// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
+#[proc_macro_derive(SerializeDict, attributes(zvariant))]
+pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
+    let input: DeriveInput = syn::parse(input).unwrap();
+
+    dict::expand_serialize_derive(input)
+}
+
+/// Adds [`Deserialize`] implementation to structs to be deserialized from `a{sv}` type.
+///
+/// This macro deserializes a D-Bus dictionary type as a struct, where keys are strings and values
+/// are generic values. Such dictionary types are very commonly used with
+/// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
+/// and GVariant.
+///
+/// # Examples
+///
+/// For structs it works just like serde's [`Deserialize`] macros:
+///
+/// ```
+/// use zvariant::{EncodingContext, to_bytes};
+/// use zvariant_derive::{DeserializeDict, TypeDict};
+///
+/// #[derive(DeserializeDict, TypeDict)]
+/// struct Struct {
+///     field1: u16,
+///     #[zvariant(rename = "another-name")]
+///     field2: i64,
+///     optional_field: Option<String>,
+/// }
+/// ```
+///
+/// The deserialized D-Bus dictionary `{"field1": 42, "another-name": 77}` will be `Struct {42, 77,
+/// None}`.
+///
+/// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
+#[proc_macro_derive(DeserializeDict, attributes(zvariant))]
+pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
+    let input: DeriveInput = syn::parse(input).unwrap();
+
+    dict::expand_deserialize_derive(input)
 }
