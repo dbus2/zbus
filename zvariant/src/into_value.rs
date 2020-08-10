@@ -60,3 +60,9 @@ where
         Value::Array(v.into())
     }
 }
+
+impl<'v> From<&'v String> for Value<'v> {
+    fn from(v: &'v String) -> Value<'v> {
+        Value::Str(v.into())
+    }
+}
