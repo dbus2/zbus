@@ -12,6 +12,12 @@ macro_rules! into_value {
                 Value::$kind(v.into())
             }
         }
+
+        impl<'a> From<&'a $from> for Value<'a> {
+            fn from(v: &'a $from) -> Self {
+                Value::from(v.clone())
+            }
+        }
     };
 }
 
