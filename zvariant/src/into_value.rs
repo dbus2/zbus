@@ -67,6 +67,15 @@ where
     }
 }
 
+impl<'v, V> From<&'v Vec<V>> for Value<'v>
+where
+    &'v Vec<V>: Into<Array<'v>>,
+{
+    fn from(v: &'v Vec<V>) -> Value<'v> {
+        Value::Array(v.into())
+    }
+}
+
 impl<'v> From<&'v String> for Value<'v> {
     fn from(v: &'v String) -> Value<'v> {
         Value::Str(v.into())

@@ -580,6 +580,10 @@ mod tests {
         let av = <Vec<Value>>::try_from(av).unwrap();
         assert_eq!(av[0], Value::new(43));
         assert_eq!(av[1], Value::new("bonjour"));
+
+        let vec = vec![1, 2];
+        let val = Value::new(&vec);
+        assert_eq!(TryInto::<Vec<i32>>::try_into(val).unwrap(), vec);
     }
 
     #[test]
