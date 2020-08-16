@@ -83,7 +83,8 @@ impl<'a> ObjectPath<'a> {
         self.0.is_empty()
     }
 
-    pub(crate) fn to_owned(&self) -> ObjectPath<'static> {
+    /// Creates an owned clone of `self`.
+    pub fn to_owned(&self) -> ObjectPath<'static> {
         let s = self.0.clone().into_owned();
         ObjectPath(Cow::Owned(s))
     }

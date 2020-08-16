@@ -25,7 +25,8 @@ impl<'a> Str<'a> {
         &self.0
     }
 
-    pub(crate) fn to_owned(&self) -> Str<'static> {
+    /// Creates an owned clone of `self`.
+    pub fn to_owned(&self) -> Str<'static> {
         let s = self.0.clone().into_owned();
         Str(Cow::Owned(s))
     }

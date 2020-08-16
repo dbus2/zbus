@@ -79,7 +79,8 @@ impl<'a> Signature<'a> {
         self.0.is_empty()
     }
 
-    pub(crate) fn to_owned(&self) -> Signature<'static> {
+    /// Creates an owned clone of `self`.
+    pub fn to_owned(&self) -> Signature<'static> {
         let s = self.0.clone().into_owned();
         Signature(Cow::Owned(s))
     }
