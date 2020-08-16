@@ -160,6 +160,7 @@ impl Node {
         node.at(Peer::name(), Peer);
         node.at(Introspectable::name(), Introspectable);
         node.at(Properties::name(), Properties);
+
         node
     }
 
