@@ -174,7 +174,7 @@ impl Node {
     {
         match self.interfaces.entry(name) {
             Entry::Vacant(e) => e.insert(Rc::new(RefCell::new(iface))),
-            _ => return false,
+            Entry::Occupied(_) => return false,
         };
 
         true
