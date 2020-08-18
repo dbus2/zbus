@@ -53,6 +53,12 @@ impl<'a> From<&'a str> for Str<'a> {
     }
 }
 
+impl<'a> From<&'a String> for Str<'a> {
+    fn from(value: &'a String) -> Self {
+        Self(Cow::from(value.as_str()))
+    }
+}
+
 impl<'a> From<String> for Str<'a> {
     fn from(value: String) -> Self {
         Self(Cow::from(value))
@@ -88,5 +94,17 @@ impl<'a> PartialEq<&str> for Str<'a> {
 impl<'a> std::fmt::Display for Str<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Str;
+
+    #[test]
+    fn from_string() {
+        let string = String::from("value");
+        let v = Str::from(&string);
+        assert_eq!(v.as_str(), "value");
     }
 }

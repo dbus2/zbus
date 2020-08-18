@@ -178,14 +178,16 @@ mod tests {
     #[cfg(feature = "arrayvec")]
     use std::str::FromStr;
 
-    use zvariant_derive::Type;
+    use zvariant_derive::{DeserializeDict, SerializeDict, Type, TypeDict};
 
     use crate::{from_slice, from_slice_fds, from_slice_for_signature};
     use crate::{to_bytes, to_bytes_fds, to_bytes_for_signature};
 
     use crate::{Array, Dict, EncodingContext as Context};
-    use crate::{Basic, Result, Type, Value};
+    use crate::{Basic, Error, Result, Type, Value};
     use crate::{Fd, ObjectPath, Signature, Str, Structure};
+
+    use crate as zvariant;
 
     // Test through both generic and specific API (wrt byte order)
     macro_rules! basic_type_test {
@@ -580,6 +582,10 @@ mod tests {
         let av = <Vec<Value>>::try_from(av).unwrap();
         assert_eq!(av[0], Value::new(43));
         assert_eq!(av[1], Value::new("bonjour"));
+
+        let vec = vec![1, 2];
+        let val = Value::new(&vec);
+        assert_eq!(TryInto::<Vec<i32>>::try_into(val).unwrap(), vec);
     }
 
     #[test]
@@ -620,6 +626,54 @@ mod tests {
         let decoded: HashMap<i64, &str> = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(decoded[&1], "123");
         assert_eq!(decoded[&2], "456");
+
+        #[derive(SerializeDict, DeserializeDict, TypeDict, PartialEq, Debug)]
+        struct Test {
+            process_id: Option<u32>,
+            group_id: Option<u32>,
+            user: String,
+        };
+        let test = Test {
+            process_id: Some(42),
+            group_id: None,
+            user: "me".to_string(),
+        };
+
+        let encoded = to_bytes(ctxt, &test).unwrap();
+        assert_eq!(encoded.len(), 51);
+
+        let decoded: HashMap<&str, Value> = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded["process_id"], Value::U32(42));
+        assert_eq!(decoded["user"], Value::new("me"));
+        assert!(!decoded.contains_key("group_id"));
+
+        let decoded: Test = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, test);
+
+        #[derive(SerializeDict, DeserializeDict, TypeDict, PartialEq, Debug)]
+        struct TestMissing {
+            process_id: Option<u32>,
+            group_id: Option<u32>,
+            user: String,
+            quota: u8,
+        };
+        let decoded: Result<TestMissing> = from_slice(&encoded, ctxt);
+        assert_eq!(
+            decoded.unwrap_err(),
+            Error::Message("missing field `quota`".to_string())
+        );
+
+        #[derive(SerializeDict, DeserializeDict, TypeDict, PartialEq, Debug)]
+        #[zvariant(deny_unknown_fields)]
+        struct TestUnknown {
+            process_id: Option<u32>,
+            group_id: Option<u32>,
+        };
+        let decoded: Result<TestUnknown> = from_slice(&encoded, ctxt);
+        assert_eq!(
+            decoded.unwrap_err(),
+            Error::Message("unknown field `user`, expected `process_id` or `group_id`".to_string())
+        );
 
         // As Value
         let v: Value = Dict::from(map).into();

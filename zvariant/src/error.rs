@@ -21,9 +21,14 @@ pub enum Error {
 
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {
-        match self {
-            Error::Io(_) => false,
-            _ => self == other,
+        match (self, other) {
+            (Error::Message(msg), Error::Message(other)) => msg == other,
+            // Io is false
+            (Error::IncorrectType, Error::IncorrectType) => true,
+            (Error::Utf8(msg), Error::Utf8(other)) => msg == other,
+            (Error::PaddingNot0(p), Error::PaddingNot0(other)) => p == other,
+            (Error::UnknownFd, Error::UnknownFd) => true,
+            (_, _) => false,
         }
     }
 }
