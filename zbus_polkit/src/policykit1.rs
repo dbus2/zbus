@@ -185,6 +185,32 @@ impl Subject {
             subject_details: hashmap,
         })
     }
+
+    /// Create a `Subject` for a message for querying if the sender of a Message is permitted to
+    /// execute an action.
+    ///
+    /// # Arguments
+    ///
+    /// * `message_header` - The header of the message which caused an authentication to be necessary.
+    pub fn new_for_message_header(message_header: &zbus::MessageHeader) -> Result<Self, Error> {
+        let mut subject_details = HashMap::new();
+        match message_header.sender() {
+            Ok(Some(sender)) => {
+                subject_details.insert("name".to_string(), Value::from(sender).into());
+            }
+            Ok(None) => {
+                return Err(Error::MissingSender);
+            }
+            Err(e) => {
+                return Err(Error::BadSender(e));
+            }
+        }
+
+        Ok(Self {
+            subject_kind: "system-bus-name".to_string(),
+            subject_details,
+        })
+    }
 }
 
 /// This struct describes actions registered with the PolicyKit daemon.
