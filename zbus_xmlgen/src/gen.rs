@@ -144,7 +144,7 @@ fn to_rust_type(ty: &str, input: bool) -> String {
                 let c = it.peek().unwrap();
                 match **c as char {
                     '{' => format!(
-                        "std::collection::HashMap<{}>",
+                        "std::collections::HashMap<{}>",
                         iter_to_rust_type(it, input, false)
                     ),
                     _ => {
