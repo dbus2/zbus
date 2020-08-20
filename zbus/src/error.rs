@@ -62,9 +62,30 @@ assert_impl_all!(Error: Send, Sync, Unpin);
 
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {
-        match self {
-            Error::Io(_) => false,
-            _ => self == other,
+        match (self, other) {
+            (Self::Address(_), Self::Address(_)) => true,
+            (Self::InsufficientData, Self::InsufficientData) => true,
+            (Self::InterfaceNotFound, Self::InterfaceNotFound) => true,
+            (Self::Handshake(_), Self::Handshake(_)) => true,
+            (Self::InvalidReply, Self::InvalidReply) => true,
+            (Self::ExcessData, Self::ExcessData) => true,
+            (Self::IncorrectEndian, Self::IncorrectEndian) => true,
+            (Self::MethodError(_, _, _), Self::MethodError(_, _, _)) => true,
+            (Self::MissingField, Self::MissingField) => true,
+            (Self::InvalidGUID, Self::InvalidGUID) => true,
+            (Self::Unsupported, Self::Unsupported) => true,
+            (Self::FDO(s), Self::FDO(o)) => s == o,
+            (Self::NoBodySignature, Self::NoBodySignature) => true,
+            (Self::UnmatchedBodySignature, Self::UnmatchedBodySignature) => true,
+            (Self::InvalidField, Self::InvalidField) => true,
+            (Self::InvalidBusName(_, _), Self::InvalidBusName(_, _)) => true,
+            (Self::InvalidWellKnownName(_), Self::InvalidWellKnownName(_)) => true,
+            (Self::InvalidUniqueName(_), Self::InvalidUniqueName(_)) => true,
+            (Self::Variant(s), Self::Variant(o)) => s == o,
+            (Error::Io(_), Self::Io(_)) => false,
+            #[cfg(feature = "xml")]
+            (Self::SerdeXml(_), Self::SerdeXml(_)) => false,
+            (_, _) => false,
         }
     }
 }
