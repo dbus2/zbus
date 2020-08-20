@@ -35,6 +35,8 @@ pub enum MessageError {
     Io(IOError),
     /// Missing body signature.
     NoBodySignature,
+    /// Unmatching/bad body signature.
+    UnmatchedBodySignature,
     /// Invalid message field.
     InvalidField,
     /// Data serializing/deserializing error.
@@ -49,6 +51,7 @@ impl PartialEq for MessageError {
             (Self::IncorrectEndian, Self::IncorrectEndian) => true,
             // Io is false
             (Self::NoBodySignature, Self::NoBodySignature) => true,
+            (Self::UnmatchedBodySignature, Self::UnmatchedBodySignature) => true,
             (Self::InvalidField, Self::InvalidField) => true,
             (Self::Variant(s), Self::Variant(o)) => s == o,
             (_, _) => false,
@@ -75,6 +78,7 @@ impl fmt::Display for MessageError {
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
             MessageError::InvalidField => write!(f, "invalid message field"),
             MessageError::NoBodySignature => write!(f, "missing body signature"),
+            MessageError::UnmatchedBodySignature => write!(f, "unmatched body signature"),
             MessageError::Variant(e) => write!(f, "{}", e),
         }
     }
