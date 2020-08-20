@@ -43,9 +43,15 @@ pub enum MessageError {
 
 impl PartialEq for MessageError {
     fn eq(&self, other: &Self) -> bool {
-        match self {
-            MessageError::Io(_) => false,
-            _ => self == other,
+        match (self, other) {
+            (Self::InsufficientData, Self::InsufficientData) => true,
+            (Self::ExcessData, Self::ExcessData) => true,
+            (Self::IncorrectEndian, Self::IncorrectEndian) => true,
+            // Io is false
+            (Self::NoBodySignature, Self::NoBodySignature) => true,
+            (Self::InvalidField, Self::InvalidField) => true,
+            (Self::Variant(s), Self::Variant(o)) => s == o,
+            (_, _) => false,
         }
     }
 }
