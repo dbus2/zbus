@@ -3,7 +3,7 @@
 We welcomes contribution from everyone in the form of suggestions, bug reports, merge requests, and
 feedback. This document gives some guidance if you are thinking of helping us.
 
-Please reach out here in a Gitlab issue or in the #zbus IRC channel on
+Please reach out here in a Gitlab (or Github) issue or in the #zbus IRC channel on
 [`irc.freenode.net`](freenode.net) if we can do anything to help you contribute.
 
 ## Submitting bug reports and feature requests
@@ -19,6 +19,28 @@ prioritise better.
 When making a feature request, please make it clear what problem you intend to solve with the
 feature, any ideas for how the crate in question could support solving that problem, any possible
 alternatives, and any disadvantages.
+
+## Github
+
+Although Gitlab is our main and preferred code repository host, the
+[Github mirror](https://github.com/zeenix/zbus) can also be used to submit PRs and issues. Although
+PRs on Github requires us to merge manually, we will gladly do that for you. :-)
+
+### Merging PRs from Github (for maintainers only)
+
+Here is how to manually merge PRs from Github:
+
+```sh
+# If you haven't yet added the remote
+git remote add gh git@github.com:zeenix/zbus.git
+git remote update
+git checkout master # If you aren't on master already
+git fetch gh pull/PULL_ID/head:BRANCH_NAME # You choose the BRANCH_NAME
+git merge --no-ff BRANCH_NAME
+git push origin master
+# Only needed until https://gitlab.freedesktop.org/freedesktop/freedesktop/-/issues/286 is resolved
+git push gh master
+```
 
 ## Running the test suite
 
