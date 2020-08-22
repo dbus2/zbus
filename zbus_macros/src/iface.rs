@@ -311,7 +311,7 @@ fn get_args_from_inputs(
         let args = quote!(#(#args),*);
         let args_from_msg = quote!(
             let (#args): (#(#tys),*) =
-                match m.body().map_err(#zbus::fdo::Error::from) {
+                match m.body_unchecked().map_err(#zbus::fdo::Error::from) {
                     Ok(r) => r,
                     Err(e) => return Some(e.reply(c, m)),
                 };

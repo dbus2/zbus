@@ -438,8 +438,8 @@ impl Message {
             .map_err(MessageError::from)
     }
 
-    /// Deserialize the body.
-    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
+    /// Deserialize the body (without checking signature matching).
+    pub fn body_unchecked<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
     where
         B: serde::de::Deserialize<'d> + Type,
     {
@@ -540,7 +540,7 @@ impl fmt::Display for Message {
                     write!(f, " {}", e)?;
                 }
 
-                let msg = self.body::<&str>();
+                let msg = self.body_unchecked::<&str>();
                 if let Ok(msg) = msg {
                     write!(f, ": {}", msg)?;
                 }

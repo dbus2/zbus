@@ -28,7 +28,7 @@ use crate::fdo::{self, IntrospectableProxy, PropertiesProxy};
 ///     // owned return value
 ///     let _id: String = p.call("GetId", &())?;
 ///     // borrowed return value
-///     let _id: &str = p.call_method("GetId", &())?.body()?;
+///     let _id: &str = p.call_method("GetId", &())?.body_unchecked()?;
 ///     Ok(())
 /// }
 /// ```
@@ -158,6 +158,6 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::Type,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
-        Ok(self.call_method(method_name, body)?.body()?)
+        Ok(self.call_method(method_name, body)?.body_unchecked()?)
     }
 }

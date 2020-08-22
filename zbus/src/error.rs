@@ -119,7 +119,7 @@ impl From<Message> for Error {
 
         if let Ok(Some(name)) = header.error_name() {
             let name = String::from(name);
-            match message.body::<&str>() {
+            match message.body_unchecked::<&str>() {
                 Ok(detail) => Error::MethodError(name, Some(String::from(detail)), message),
                 Err(_) => Error::MethodError(name, None, message),
             }

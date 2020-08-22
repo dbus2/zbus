@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         &("my-app", 0u32, "dialog-information", "A summary", "Some body",
           vec![""; 0], HashMap::<&str, &Value>::new(), 5000),
     )?;
-    let reply: u32 = m.body().unwrap();
+    let reply: u32 = m.body_unchecked().unwrap();
     dbg!(reply);
     Ok(())
 }
