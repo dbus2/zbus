@@ -518,7 +518,7 @@ mod tests {
                 .call_method(None, "/", Some("org.zbus.p2p"), "Test", &())
                 .unwrap();
             assert_eq!(reply.to_string(), "Method return");
-            let val: String = reply.body_unchecked().unwrap();
+            let val: String = reply.body().unwrap();
             val
         });
 

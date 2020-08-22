@@ -67,7 +67,7 @@ loop {
         zbus::MessageType::MethodCall => {
             // real code would check msg_header path(), interface() and member()
             // handle invalid calls, introspection, errors etc
-            let arg: &str = msg.body_unchecked()?;
+            let arg: &str = msg.body()?;
             connection.reply(&msg, &(format!("Hello {}!", arg)))?;
         }
         _ => continue,

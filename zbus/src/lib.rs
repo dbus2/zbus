@@ -246,7 +246,7 @@ mod tests {
             .map(|s| s == <Fd>::signature())
             .unwrap());
 
-        let fd: Fd = reply.body_unchecked().unwrap();
+        let fd: Fd = reply.body().unwrap();
         reply.disown_fds();
         assert!(fd.as_raw_fd() >= 0);
         let f = unsafe { File::from_raw_fd(fd.as_raw_fd()) };
@@ -302,7 +302,7 @@ mod tests {
             .unwrap();
 
         assert!(reply.body_signature().map(|s| s == "u").unwrap());
-        let reply: RequestNameReply = reply.body_unchecked().unwrap();
+        let reply: RequestNameReply = reply.body().unwrap();
         assert_eq!(reply, RequestNameReply::PrimaryOwner);
 
         let reply = connection
@@ -319,7 +319,7 @@ mod tests {
             .body_signature()
             .map(|s| s == <&str>::signature())
             .unwrap());
-        let id: &str = reply.body_unchecked().unwrap();
+        let id: &str = reply.body().unwrap();
         println!("Unique ID of the bus: {}", id);
 
         let reply = connection
@@ -336,7 +336,7 @@ mod tests {
             .body_signature()
             .map(|s| s == bool::signature())
             .unwrap());
-        assert!(reply.body_unchecked::<bool>().unwrap());
+        assert!(reply.body::<bool>().unwrap());
 
         let reply = connection
             .call_method(
@@ -353,7 +353,7 @@ mod tests {
             .map(|s| s == <&str>::signature())
             .unwrap());
         assert_eq!(
-            Some(reply.body_unchecked::<&str>().unwrap()),
+            Some(reply.body::<&str>().unwrap()),
             connection.unique_name()
         );
 
@@ -368,7 +368,7 @@ mod tests {
             .unwrap();
 
         assert!(reply.body_signature().map(|s| s == "a{sv}").unwrap());
-        let hashmap: HashMap<&str, OwnedValue> = reply.body_unchecked().unwrap();
+        let hashmap: HashMap<&str, OwnedValue> = reply.body().unwrap();
 
         let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
         println!("DBus bus PID: {}", pid);

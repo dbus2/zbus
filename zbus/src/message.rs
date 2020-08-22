@@ -458,6 +458,30 @@ impl Message {
         .map_err(MessageError::from)
     }
 
+    /// Check the signature and deserialize the body.
+    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
+    where
+        B: serde::de::Deserialize<'d> + Type,
+    {
+        let b_sig = B::signature();
+        let sig = match self.body_signature() {
+            Ok(sig) => sig,
+            Err(MessageError::NoBodySignature) => Signature::from_str_unchecked(""),
+            Err(e) => return Err(e),
+        };
+
+        let b_sig = if b_sig.len() >= 2 && b_sig.starts_with(zvariant::STRUCT_SIG_START_CHAR) {
+            &b_sig[1..b_sig.len() - 1]
+        } else {
+            &b_sig
+        };
+        if b_sig != sig.as_str() {
+            return Err(MessageError::UnmatchedBodySignature);
+        }
+
+        self.body_unchecked()
+    }
+
     pub(crate) fn fds(&self) -> Vec<RawFd> {
         match &self.fds {
             Fds::Raw(fds) => fds.clone(),
@@ -566,7 +590,7 @@ impl fmt::Display for Message {
 
 #[cfg(test)]
 mod tests {
-    use super::{Fds, Message};
+    use super::{Fds, Message, MessageError};
     use std::os::unix::io::AsRawFd;
     use zvariant::Fd;
 
@@ -584,6 +608,9 @@ mod tests {
         .unwrap();
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
         assert_eq!(m.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
+
+        let body: Result<u32, MessageError> = m.body();
+        assert_eq!(body.unwrap_err(), MessageError::UnmatchedBodySignature);
 
         assert_eq!(m.to_string(), "Method call do from :1.72");
         let r = Message::method_reply(None, &m, &("all fine!")).unwrap();

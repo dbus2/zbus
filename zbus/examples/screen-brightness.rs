@@ -31,6 +31,6 @@ fn main() {
         )
         .unwrap();
 
-    let (percent, _) = reply.body_unchecked::<(u32, &str)>().unwrap();
+    let (percent, _) = reply.body::<(u32, &str)>().unwrap();
     println!("New level: {}%", percent);
 }
