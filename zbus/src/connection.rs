@@ -4,7 +4,6 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::{env, io};
 
 use nix::unistd::Uid;
@@ -27,7 +26,7 @@ struct ConnectionInner {
 
     stream: UnixStream,
     // Serial number for next outgoing message
-    serial: AtomicU32,
+    serial: Cell<u32>,
 
     // Queue of incoming messages
     incoming_queue: RefCell<Vec<Message>>,
@@ -493,7 +492,7 @@ impl Connection {
             stream,
             server_guid,
             cap_unix_fd,
-            serial: AtomicU32::new(1),
+            serial: Cell::new(1),
             unique_name: OnceCell::new(),
             incoming_queue: RefCell::new(vec![]),
             max_queued: Cell::new(DEFAULT_MAX_QUEUED),
@@ -502,7 +501,9 @@ impl Connection {
     }
 
     fn next_serial(&self) -> u32 {
-        self.0.serial.fetch_add(1, Ordering::SeqCst)
+        let next = self.0.serial.get() + 1;
+
+        self.0.serial.replace(next)
     }
 }
 
@@ -592,5 +593,15 @@ mod tests {
 
         let val = server_thread.join().expect("failed to join server thread");
         assert_eq!(val, "yay");
+    }
+
+    #[test]
+    fn serial_monotonically_increases() {
+        let c = Connection::new_session().unwrap();
+        let serial = c.next_serial() + 1;
+
+        for next in serial..serial + 10 {
+            assert_eq!(next, c.next_serial());
+        }
     }
 }
