@@ -173,12 +173,13 @@ mod tests {
     use std::os::unix::io::{FromRawFd, RawFd};
 
     use enumflags2::BitFlags;
+    use ntest::timeout;
     use serde_repr::{Deserialize_repr, Serialize_repr};
 
     use zvariant::{Fd, OwnedValue, Type};
     use zvariant_derive::Type;
 
-    use crate::{Message, MessageFlags};
+    use crate::{Connection, Message, MessageFlags};
 
     #[test]
     fn msg() {
@@ -375,5 +376,39 @@ mod tests {
 
         let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
         println!("DBus bus UID: {}", uid);
+    }
+
+    #[test]
+    #[timeout(1000)]
+    fn issue_68() {
+        // Tests the fix for https://gitlab.freedesktop.org/zeenix/zbus/-/issues/68
+        //
+        // While this is not an exact reproduction of the issue 68, the underlying problem it
+        // produces is exactly the same: `Connection::call_method` dropping all incoming messages
+        // while waiting for the reply to the method call.
+        let conn = Connection::new_session().unwrap();
+
+        // Send a message as client before service starts to process messages
+        let client_conn = Connection::new_session().unwrap();
+        let msg = Message::method(
+            None,
+            conn.unique_name(),
+            "/org/freedesktop/Issue68",
+            Some("org.freedesktop.Issue68"),
+            "Ping",
+            &(),
+        )
+        .unwrap();
+        let serial = client_conn.send_message(msg).unwrap();
+
+        crate::fdo::DBusProxy::new(&conn).unwrap().get_id().unwrap();
+
+        loop {
+            let msg = conn.receive_message().unwrap();
+
+            if msg.primary_header().unwrap().serial_num() == serial {
+                break;
+            }
+        }
     }
 }
