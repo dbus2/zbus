@@ -170,7 +170,7 @@ mod tests {
     use std::collections::HashMap;
     use std::convert::TryInto;
     use std::fs::File;
-    use std::os::unix::io::{FromRawFd, RawFd};
+    use std::os::unix::io::{AsRawFd, FromRawFd};
 
     use enumflags2::BitFlags;
     use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -246,10 +246,10 @@ mod tests {
             .map(|s| s == <Fd>::signature())
             .unwrap());
 
-        let fd: RawFd = reply.body().unwrap();
+        let fd: Fd = reply.body().unwrap();
         reply.disown_fds();
-        assert!(fd >= 0);
-        let f = unsafe { File::from_raw_fd(fd) };
+        assert!(fd.as_raw_fd() >= 0);
+        let f = unsafe { File::from_raw_fd(fd.as_raw_fd()) };
         f.metadata().unwrap();
     }
 

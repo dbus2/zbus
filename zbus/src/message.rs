@@ -35,6 +35,8 @@ pub enum MessageError {
     Io(IOError),
     /// Missing body signature.
     NoBodySignature,
+    /// Unmatching/bad body signature.
+    UnmatchedBodySignature,
     /// Invalid message field.
     InvalidField,
     /// Data serializing/deserializing error.
@@ -43,9 +45,16 @@ pub enum MessageError {
 
 impl PartialEq for MessageError {
     fn eq(&self, other: &Self) -> bool {
-        match self {
-            MessageError::Io(_) => false,
-            _ => self == other,
+        match (self, other) {
+            (Self::InsufficientData, Self::InsufficientData) => true,
+            (Self::ExcessData, Self::ExcessData) => true,
+            (Self::IncorrectEndian, Self::IncorrectEndian) => true,
+            // Io is false
+            (Self::NoBodySignature, Self::NoBodySignature) => true,
+            (Self::UnmatchedBodySignature, Self::UnmatchedBodySignature) => true,
+            (Self::InvalidField, Self::InvalidField) => true,
+            (Self::Variant(s), Self::Variant(o)) => s == o,
+            (_, _) => false,
         }
     }
 }
@@ -69,6 +78,7 @@ impl fmt::Display for MessageError {
             MessageError::IncorrectEndian => write!(f, "incorrect endian"),
             MessageError::InvalidField => write!(f, "invalid message field"),
             MessageError::NoBodySignature => write!(f, "missing body signature"),
+            MessageError::UnmatchedBodySignature => write!(f, "unmatched body signature"),
             MessageError::Variant(e) => write!(f, "{}", e),
         }
     }
@@ -428,8 +438,8 @@ impl Message {
             .map_err(MessageError::from)
     }
 
-    /// Deserialize the body.
-    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
+    /// Deserialize the body (without checking signature matching).
+    pub fn body_unchecked<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
     where
         B: serde::de::Deserialize<'d> + Type,
     {
@@ -446,6 +456,30 @@ impl Message {
             dbus_context!(0),
         )
         .map_err(MessageError::from)
+    }
+
+    /// Check the signature and deserialize the body.
+    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
+    where
+        B: serde::de::Deserialize<'d> + Type,
+    {
+        let b_sig = B::signature();
+        let sig = match self.body_signature() {
+            Ok(sig) => sig,
+            Err(MessageError::NoBodySignature) => Signature::from_str_unchecked(""),
+            Err(e) => return Err(e),
+        };
+
+        let b_sig = if b_sig.len() >= 2 && b_sig.starts_with(zvariant::STRUCT_SIG_START_CHAR) {
+            &b_sig[1..b_sig.len() - 1]
+        } else {
+            &b_sig
+        };
+        if b_sig != sig.as_str() {
+            return Err(MessageError::UnmatchedBodySignature);
+        }
+
+        self.body_unchecked()
     }
 
     pub(crate) fn fds(&self) -> Vec<RawFd> {
@@ -530,7 +564,7 @@ impl fmt::Display for Message {
                     write!(f, " {}", e)?;
                 }
 
-                let msg = self.body::<&str>();
+                let msg = self.body_unchecked::<&str>();
                 if let Ok(msg) = msg {
                     write!(f, ": {}", msg)?;
                 }
@@ -556,7 +590,7 @@ impl fmt::Display for Message {
 
 #[cfg(test)]
 mod tests {
-    use super::{Fds, Message};
+    use super::{Fds, Message, MessageError};
     use std::os::unix::io::AsRawFd;
     use zvariant::Fd;
 
@@ -574,6 +608,9 @@ mod tests {
         .unwrap();
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
         assert_eq!(m.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
+
+        let body: Result<u32, MessageError> = m.body();
+        assert_eq!(body.unwrap_err(), MessageError::UnmatchedBodySignature);
 
         assert_eq!(m.to_string(), "Method call do from :1.72");
         let r = Message::method_reply(None, &m, &("all fine!")).unwrap();

@@ -29,6 +29,12 @@ impl Basic for Fd {
     }
 }
 
+impl io::AsRawFd for Fd {
+    fn as_raw_fd(&self) -> io::RawFd {
+        self.0
+    }
+}
+
 impl Type for Fd {
     fn signature() -> Signature<'static> {
         Signature::from_str_unchecked(Self::SIGNATURE_STR)
