@@ -126,7 +126,25 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 )?))
             }
 
+            /// Consumes `self`, returning the underlying `zbus::Proxy`.
+            pub fn into_inner(self) -> #zbus::Proxy<'c> {
+                self.0
+            }
+
+            /// The reference to the underlying `zbus::Proxy`.
+            pub fn inner(&self) -> &#zbus::Proxy {
+                &self.0
+            }
+
             #methods
+        }
+
+        impl<'c> std::ops::Deref for #proxy_name<'c> {
+            type Target = #zbus::Proxy<'c>;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
         }
     };
 
