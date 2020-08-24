@@ -36,7 +36,7 @@ git remote add gh git@github.com:zeenix/zbus.git
 git remote update
 git checkout master # If you aren't on master already
 git fetch gh pull/PULL_ID/head:BRANCH_NAME # You choose the BRANCH_NAME
-git merge --no-ff BRANCH_NAME
+git merge --no-ff BRANCH_NAME -m "Merge Github PR PULL_ID"
 git push origin master
 # Only needed until https://gitlab.freedesktop.org/freedesktop/freedesktop/-/issues/286 is resolved
 git push gh master
