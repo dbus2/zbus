@@ -38,7 +38,7 @@ cache:
     - target/
 
 pages:
-  image: "rustlang/rust:nightly"
+  image: "rustlang/rust:stable"
   stage: pages
   before_script:
     - export PATH="$PATH:$CARGO_HOME/bin"
