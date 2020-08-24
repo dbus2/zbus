@@ -54,4 +54,7 @@ pages:
       - public
 
   only:
-    - master
+    refs:
+      - master
+    changes:
+      - book/**/*
