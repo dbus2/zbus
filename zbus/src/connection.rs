@@ -1,10 +1,9 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::convert::TryInto;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::{env, io};
 
 use nix::unistd::Uid;
@@ -16,6 +15,8 @@ use crate::{fdo, Error, Guid, Message, MessageError, MessageType, Result, MIN_ME
 
 type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
 
+const DEFAULT_MAX_QUEUED: usize = 32;
+
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 struct ConnectionInner {
@@ -25,7 +26,13 @@ struct ConnectionInner {
 
     stream: UnixStream,
     // Serial number for next outgoing message
-    serial: AtomicU32,
+    serial: Cell<u32>,
+
+    // Queue of incoming messages
+    incoming_queue: RefCell<Vec<Message>>,
+
+    // Max number of messages to queue
+    max_queued: Cell<usize>,
 
     #[derivative(Debug = "ignore")]
     default_msg_handler: RefCell<Option<MessageHandlerFn>>,
@@ -52,6 +59,12 @@ struct ConnectionInner {
 /// across threads is not supported. If you've a valid use cas for that, please [file an issue]
 /// about it and we'll consider adding this feature.
 ///
+/// Since there are times when important messages arrive between a method call message is sent and
+/// its reply is received, `Connection` keeps an internal queue of incoming messages so that these
+/// messages are not lost and subsequent calls to [`receive_message`] will retreive messages from
+/// this queue first. The size of this queue is configurable through the [`set_max_queued`] method.
+/// The default size is 32. All messages that are received after the queue is full, are dropped.
+///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
 /// [`new_system`]: struct.Connection.html#method.new_system
@@ -62,6 +75,8 @@ struct ConnectionInner {
 /// [`dbus_interface`]: attr.dbus_interface.html
 /// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
 /// [file an issue]: https://gitlab.freedesktop.org/zeenix/zbus/-/issues/new
+/// [`receive_message`]: struct.Connection.html#method.receive_message
+/// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
 #[derive(Debug, Clone)]
 pub struct Connection(Rc<ConnectionInner>);
 
@@ -234,6 +249,34 @@ impl Connection {
         Ok(Self::new_authenticated(stream, guid.clone(), cap_unix_fd))
     }
 
+    /// Max number of messages to queue.
+    pub fn max_queued(&self) -> usize {
+        self.0.max_queued.get()
+    }
+
+    /// Set the max number of messages to queue.
+    ///
+    /// Since typically you'd want to set this at instantiation time, this method takes ownership
+    /// of `self` and returns an owned `Connection` instance so you can use the builder pattern to
+    /// set the value.
+    ///
+    /// # Example
+    ///
+    /// ```
+    ///# use std::error::Error;
+    ///#
+    /// let conn = zbus::Connection::new_session()?.set_max_queued(30);
+    /// assert_eq!(conn.max_queued(), 30);
+    ///
+    /// // Do something usefull with `conn`..
+    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// ```
+    pub fn set_max_queued(self, max: usize) -> Self {
+        self.0.max_queued.replace(max);
+
+        self
+    }
+
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
         self.0.server_guid.as_str()
@@ -247,7 +290,8 @@ impl Connection {
     /// Fetch the next message from the connection.
     ///
     /// Read from the connection until a message is received or an error is reached. Return the
-    /// message on success.
+    /// message on success. If there are pending messages in the queue, the first one from the
+    /// queue is returned instead.
     ///
     /// If a default message handler has been registered on this connection through
     /// [`set_default_message_handler`], it will first get to decide the fate of the received
@@ -255,6 +299,11 @@ impl Connection {
     ///
     /// [`set_default_message_handler`]: struct.Connection.html#method.set_default_message_handler
     pub fn receive_message(&self) -> Result<Message> {
+        let mut queue = self.0.incoming_queue.borrow_mut();
+        if let Some(msg) = queue.pop() {
+            return Ok(msg);
+        }
+
         let mut buf = [0; MIN_MESSAGE_SIZE];
 
         loop {
@@ -336,13 +385,24 @@ impl Connection {
         )?;
 
         let serial = self.send_message(m)?;
+        let mut tmp_queue = vec![];
 
         loop {
             let m = self.receive_message()?;
             let h = m.header()?;
 
             if h.reply_serial()? != Some(serial) {
+                let queue = self.0.incoming_queue.borrow();
+                if queue.len() + tmp_queue.len() < self.0.max_queued.get() {
+                    // We first push to a temporary queue as otherwise it'll create an infinite loop
+                    // since subsequent `receive_message` call will pick up the message from the main
+                    // queue.
+                    tmp_queue.push(m);
+                }
+
                 continue;
+            } else {
+                self.0.incoming_queue.borrow_mut().append(&mut tmp_queue);
             }
 
             match h.message_type()? {
@@ -432,14 +492,18 @@ impl Connection {
             stream,
             server_guid,
             cap_unix_fd,
-            serial: AtomicU32::new(1),
+            serial: Cell::new(1),
             unique_name: OnceCell::new(),
+            incoming_queue: RefCell::new(vec![]),
+            max_queued: Cell::new(DEFAULT_MAX_QUEUED),
             default_msg_handler: RefCell::new(None),
         }))
     }
 
     fn next_serial(&self) -> u32 {
-        self.0.serial.fetch_add(1, Ordering::SeqCst)
+        let next = self.0.serial.get() + 1;
+
+        self.0.serial.replace(next)
     }
 }
 
@@ -529,5 +593,15 @@ mod tests {
 
         let val = server_thread.join().expect("failed to join server thread");
         assert_eq!(val, "yay");
+    }
+
+    #[test]
+    fn serial_monotonically_increases() {
+        let c = Connection::new_session().unwrap();
+        let serial = c.next_serial() + 1;
+
+        for next in serial..serial + 10 {
+            assert_eq!(next, c.next_serial());
+        }
     }
 }

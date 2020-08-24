@@ -33,6 +33,7 @@ once_cell = "1.4.0"
 [dev-dependencies]
 zbus_polkit = { path = "../zbus_polkit", version = "1" }
 doc-comment = "0.3.3"
+ntest = "0.7.1"
 
 [package.metadata.docs.rs]
 all-features = true
