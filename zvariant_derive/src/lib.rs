@@ -146,7 +146,7 @@ pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// The serialized D-Bus version of `Struct {42, 77, None}`
-/// will be `{"field1": 42, "another-name": 77}`.
+/// will be `{"field1": Value::U16(42), "another-name": Value::I64(77)}`.
 ///
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
 #[proc_macro_derive(SerializeDict, attributes(zvariant))]
@@ -180,8 +180,8 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// }
 /// ```
 ///
-/// The deserialized D-Bus dictionary `{"field1": 42, "another-name": 77}` will be `Struct {42, 77,
-/// None}`.
+/// The deserialized D-Bus dictionary `{"field1": Value::U16(42), "another-name": Value::I64(77)}`
+/// will be `Struct {42, 77, None}`.
 ///
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
 #[proc_macro_derive(DeserializeDict, attributes(zvariant))]
