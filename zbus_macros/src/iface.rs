@@ -2,9 +2,9 @@ use proc_macro::TokenStream;
 use quote::quote;
 use std::collections::HashMap;
 use syn::{
-    self, parse_quote, AngleBracketedGenericArguments, AttributeArgs, FnArg, ImplItem, ItemImpl,
-    Lit::Str, Meta::NameValue, MetaNameValue, NestedMeta, PatType, PathArguments, ReturnType,
-    Signature, Type, TypePath,
+    self, parse_quote, AngleBracketedGenericArguments, AttributeArgs, FnArg, Ident, ImplItem,
+    ItemImpl, Lit::Str, Meta::NameValue, MetaNameValue, NestedMeta, PatType, PathArguments,
+    ReturnType, Signature, Type, TypePath,
 };
 
 use crate::utils::*;
@@ -131,7 +131,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
         introspect_add_input_args(&mut intro_args, &inputs, is_signal);
         let is_result_output = introspect_add_output_args(&mut intro_args, &output);
 
-        let (args_from_msg, args) = get_args_from_inputs(&inputs);
+        let (args_from_msg, args) = get_args_from_inputs(&inputs, &zbus);
 
         let reply = if is_result_output {
             quote!(match &reply {
@@ -329,11 +329,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
 
 fn get_args_from_inputs(
     inputs: &[&PatType],
+    zbus: &Ident,
 ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
     if inputs.is_empty() {
         (quote!(), quote!())
     } else {
-        let zbus = get_zbus_crate_ident();
         let args = inputs.iter().map(|t| &t.pat).collect::<Vec<_>>();
         let tys = inputs.iter().map(|t| &t.ty).collect::<Vec<_>>();
 
