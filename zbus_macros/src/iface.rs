@@ -162,7 +162,12 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
             introspect_add_signal(&mut introspect, &member_name, &intro_args);
 
             method.block = parse_quote!({
-                #zbus::ObjectServer::local_node_emit_signal(None, #iface_name, #member_name, &(#args))
+                #zbus::ObjectServer::local_node_emit_signal(
+                    None,
+                    #iface_name,
+                    #member_name,
+                    &(#args),
+                )
             });
         } else if is_property {
             let p = properties
@@ -200,7 +205,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                 get_dispatch.extend(q);
 
                 let q = quote!(
-                    props.insert(#member_name.to_string(), #zbus::export::zvariant::Value::from(self.#ident()).into());
+                    props.insert(
+                        #member_name.to_string(),
+                        #zbus::export::zvariant::Value::from(self.#ident()).into(),
+                    );
                 );
                 get_all.extend(q)
             }
@@ -239,20 +247,32 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                 #iface_name
             }
 
-            fn get(&self, property_name: &str) -> Option<#zbus::fdo::Result<#zbus::export::zvariant::OwnedValue>> {
+            fn get(
+                &self,
+                property_name: &str,
+            ) -> Option<#zbus::fdo::Result<#zbus::export::zvariant::OwnedValue>> {
                 match property_name {
                     #get_dispatch
                     _ => None,
                 }
             }
 
-            fn get_all(&self) -> std::collections::HashMap<String, #zbus::export::zvariant::OwnedValue> {
-                let mut props: std::collections::HashMap<String, #zbus::export::zvariant::OwnedValue> = std::collections::HashMap::new();
+            fn get_all(
+                &self,
+            ) -> std::collections::HashMap<String, #zbus::export::zvariant::OwnedValue> {
+                let mut props: std::collections::HashMap<
+                    String,
+                    #zbus::export::zvariant::OwnedValue,
+                > = std::collections::HashMap::new();
                 #get_all
                 props
             }
 
-            fn set(&mut self, property_name: &str, value: &#zbus::export::zvariant::Value) -> Option<#zbus::fdo::Result<()>> {
+            fn set(
+                &mut self,
+                property_name: &str,
+                value: &#zbus::export::zvariant::Value,
+            ) -> Option<#zbus::fdo::Result<()>> {
                 use std::convert::TryInto;
 
                 match property_name {
@@ -261,14 +281,24 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                 }
             }
 
-            fn call(&self, c: &#zbus::Connection, m: &#zbus::Message, name: &str) -> std::option::Option<#zbus::Result<u32>> {
+            fn call(
+                &self,
+                c: &#zbus::Connection,
+                m: &#zbus::Message,
+                name: &str,
+            ) -> std::option::Option<#zbus::Result<u32>> {
                 match name {
                     #call_dispatch
                     _ => None,
                 }
             }
 
-            fn call_mut(&mut self, c: &#zbus::Connection, m: &#zbus::Message, name: &str) -> std::option::Option<#zbus::Result<u32>> {
+            fn call_mut(
+                &mut self,
+                c: &#zbus::Connection,
+                m: &#zbus::Message,
+                name: &str,
+            ) -> std::option::Option<#zbus::Result<u32>> {
                 match name {
                     #call_mut_dispatch
                     _ => None,
@@ -469,7 +499,11 @@ fn introspect_add_properties(
 
         introspect.extend(prop.doc_comments);
         let intro = quote!(
-            writeln!(writer, "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>", "", #name, <#ty>::signature(), #access, indent = level).unwrap();
+            writeln!(
+                writer,
+                "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
+                "", #name, <#ty>::signature(), #access, indent = level,
+            ).unwrap();
         );
         introspect.extend(intro);
     }

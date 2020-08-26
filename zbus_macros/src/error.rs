@@ -148,7 +148,11 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
                 }
             }
 
-            #vis fn reply(&self, c: &#zbus::Connection, call: &#zbus::Message) -> std::result::Result<u32, #zbus::Error> {
+            #vis fn reply(
+                &self,
+                c: &#zbus::Connection,
+                call: &#zbus::Message,
+            ) -> std::result::Result<u32, #zbus::Error> {
                 let name = self.name();
 
                 match self {

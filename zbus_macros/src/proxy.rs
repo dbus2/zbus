@@ -107,7 +107,11 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             }
 
             /// Creates a new proxy for the given `destination` and `path`.
-            pub fn new_for(conn: &#zbus::Connection, destination: &'c str, path: &'c str) -> #zbus::Result<Self> {
+            pub fn new_for(
+                conn: &#zbus::Connection,
+                destination: &'c str,
+                path: &'c str,
+            ) -> #zbus::Result<Self> {
                 Ok(Self(#zbus::Proxy::new(
                     conn,
                     destination,
@@ -117,7 +121,11 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             }
 
             /// Same as `new_for` but takes ownership of the passed arguments.
-            pub fn new_for_owned(conn: #zbus::Connection, destination: String, path: String) -> #zbus::Result<Self> {
+            pub fn new_for_owned(
+                conn: #zbus::Connection,
+                destination: String,
+                path: String,
+            ) -> #zbus::Result<Self> {
                 Ok(Self(#zbus::Proxy::new_owned(
                     conn,
                     destination,
