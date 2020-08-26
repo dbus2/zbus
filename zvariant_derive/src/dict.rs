@@ -159,7 +159,10 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
     let fallback = if deny_unknown_fields {
         quote! {
             field => {
-                return Err(<M::Error as #zv::export::serde::de::Error>::unknown_field(field, &[#(#dict_names),*]));
+                return Err(<M::Error as #zv::export::serde::de::Error>::unknown_field(
+                    field,
+                    &[#(#dict_names),*],
+                ));
             }
         }
     } else {
@@ -203,7 +206,10 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
                         formatter.write_str("a dictionary")
                     }
 
-                    fn visit_map<M>(self, mut access: M) -> std::result::Result<Self::Value, M::Error>
+                    fn visit_map<M>(
+                        self,
+                        mut access: M,
+                    ) -> std::result::Result<Self::Value, M::Error>
                     where
                         M: #zv::export::serde::de::MapAccess<'de>,
                     {
@@ -221,7 +227,9 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
                         #(let #req_fields = if let Some(val) = #req_fields {
                             val
                         } else {
-                            return Err(<M::Error as #zv::export::serde::de::Error>::missing_field(stringify!(#req_fields)))
+                            return Err(<M::Error as #zv::export::serde::de::Error>::missing_field(
+                                stringify!(#req_fields),
+                            ));
                         };)*
 
                         Ok(#name { #(#fields),* })
