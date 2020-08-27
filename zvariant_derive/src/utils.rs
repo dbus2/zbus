@@ -5,10 +5,10 @@ use syn::{Attribute, Ident, Lit, Meta, MetaList, NestedMeta, Result};
 
 pub fn get_zvariant_crate_ident() -> Ident {
     Ident::new(
-        &match crate_name("zvariant") {
-            Ok(x) => x,
-            Err(_) => "zvariant".into(),
-        },
+        crate_name("zvariant")
+            .as_ref()
+            .map(String::as_str)
+            .unwrap_or("zvariant"),
         Span::call_site(),
     )
 }
