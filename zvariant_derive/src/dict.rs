@@ -14,7 +14,7 @@ pub fn expand_type_derive(input: DeriveInput) -> TokenStream {
         _ => panic!("Only works with structure"),
     };
 
-    let zv = get_crate_ident("zvariant");
+    let zv = get_zvariant_crate_ident();
     let generics = input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
@@ -37,7 +37,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> TokenStream {
         _ => panic!("Only works with structure"),
     };
 
-    let zv = get_crate_ident("zvariant");
+    let zv = get_zvariant_crate_ident();
     let mut entries = quote! {};
 
     for f in &data.fields {
@@ -116,7 +116,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
     }
 
     let visitor = format_ident!("{}Visitor", name);
-    let zv = get_crate_ident("zvariant");
+    let zv = get_zvariant_crate_ident();
     let mut fields = Vec::new();
     let mut req_fields = Vec::new();
     let mut dict_names = Vec::new();

@@ -3,11 +3,11 @@ use proc_macro_crate::crate_name;
 use syn::Meta::List;
 use syn::{Attribute, Ident, Lit, Meta, MetaList, NestedMeta, Result};
 
-pub fn get_crate_ident(name: &str) -> Ident {
+pub fn get_zvariant_crate_ident() -> Ident {
     Ident::new(
-        &match crate_name(name) {
+        &match crate_name("zvariant") {
             Ok(x) => x,
-            Err(_) => name.into(),
+            Err(_) => "zvariant".into(),
         },
         Span::call_site(),
     )
