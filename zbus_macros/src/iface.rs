@@ -2,9 +2,9 @@ use proc_macro::TokenStream;
 use quote::quote;
 use std::collections::HashMap;
 use syn::{
-    self, parse_quote, AngleBracketedGenericArguments, AttributeArgs, FnArg, ImplItem, ItemImpl,
-    Lit::Str, Meta::NameValue, MetaNameValue, NestedMeta, PatType, PathArguments, ReturnType,
-    Signature, Type, TypePath,
+    self, parse_quote, AngleBracketedGenericArguments, AttributeArgs, FnArg, Ident, ImplItem,
+    ItemImpl, Lit::Str, Meta::NameValue, MetaNameValue, NestedMeta, PatType, PathArguments,
+    ReturnType, Signature, Type, TypePath,
 };
 
 use crate::utils::*;
@@ -29,8 +29,7 @@ impl<'a> Property<'a> {
 }
 
 pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
-    let zbus = get_crate_ident("zbus");
-    let zvariant = get_crate_ident("zvariant");
+    let zbus = get_zbus_crate_ident();
 
     let mut properties = HashMap::new();
     let mut set_dispatch = quote!();
@@ -132,7 +131,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
         introspect_add_input_args(&mut intro_args, &inputs, is_signal);
         let is_result_output = introspect_add_output_args(&mut intro_args, &output);
 
-        let (args_from_msg, args) = get_args_from_inputs(&inputs);
+        let (args_from_msg, args) = get_args_from_inputs(&inputs, &zbus);
 
         let reply = if is_result_output {
             quote!(match &reply {
@@ -163,7 +162,12 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
             introspect_add_signal(&mut introspect, &member_name, &intro_args);
 
             method.block = parse_quote!({
-                #zbus::ObjectServer::local_node_emit_signal(None, #iface_name, #member_name, &(#args))
+                ::#zbus::ObjectServer::local_node_emit_signal(
+                    None,
+                    #iface_name,
+                    #member_name,
+                    &(#args),
+                )
             });
         } else if is_property {
             let p = properties
@@ -183,7 +187,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                     #member_name => {
                         let val = match value.try_into() {
                             Ok(val) => val,
-                            Err(e) => return Some(Err(#zbus::MessageError::Variant(e).into())),
+                            Err(e) => return Some(Err(::#zbus::MessageError::Variant(e).into())),
                         };
                         Some(#set_call)
                     }
@@ -195,13 +199,16 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
 
                 let q = quote!(
                     #member_name => {
-                        Some(Ok(#zvariant::Value::from(self.#ident()).into()))
+                        Some(Ok(::#zbus::export::zvariant::Value::from(self.#ident()).into()))
                     },
                 );
                 get_dispatch.extend(q);
 
                 let q = quote!(
-                    props.insert(#member_name.to_string(), #zvariant::Value::from(self.#ident()).into());
+                    props.insert(
+                        #member_name.to_string(),
+                        ::#zbus::export::zvariant::Value::from(self.#ident()).into(),
+                    );
                 );
                 get_all.extend(q)
             }
@@ -233,27 +240,39 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
     let iface_impl = quote! {
         #input
 
-        impl #generics #zbus::Interface for #self_ty
+        impl #generics ::#zbus::Interface for #self_ty
         #where_clause
         {
             fn name() -> &'static str {
                 #iface_name
             }
 
-            fn get(&self, property_name: &str) -> Option<#zbus::fdo::Result<#zvariant::OwnedValue>> {
+            fn get(
+                &self,
+                property_name: &str,
+            ) -> Option<::#zbus::fdo::Result<::#zbus::export::zvariant::OwnedValue>> {
                 match property_name {
                     #get_dispatch
                     _ => None,
                 }
             }
 
-            fn get_all(&self) -> std::collections::HashMap<String, #zvariant::OwnedValue> {
-                let mut props: std::collections::HashMap<String, #zvariant::OwnedValue> = std::collections::HashMap::new();
+            fn get_all(
+                &self,
+            ) -> std::collections::HashMap<String, ::#zbus::export::zvariant::OwnedValue> {
+                let mut props: std::collections::HashMap<
+                    String,
+                    ::#zbus::export::zvariant::OwnedValue,
+                > = std::collections::HashMap::new();
                 #get_all
                 props
             }
 
-            fn set(&mut self, property_name: &str, value: &#zvariant::Value) -> Option<#zbus::fdo::Result<()>> {
+            fn set(
+                &mut self,
+                property_name: &str,
+                value: &::#zbus::export::zvariant::Value,
+            ) -> Option<::#zbus::fdo::Result<()>> {
                 use std::convert::TryInto;
 
                 match property_name {
@@ -262,14 +281,24 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                 }
             }
 
-            fn call(&self, c: &#zbus::Connection, m: &#zbus::Message, name: &str) -> std::option::Option<#zbus::Result<u32>> {
+            fn call(
+                &self,
+                c: &::#zbus::Connection,
+                m: &::#zbus::Message,
+                name: &str,
+            ) -> std::option::Option<::#zbus::Result<u32>> {
                 match name {
                     #call_dispatch
                     _ => None,
                 }
             }
 
-            fn call_mut(&mut self, c: &#zbus::Connection, m: &#zbus::Message, name: &str) -> std::option::Option<#zbus::Result<u32>> {
+            fn call_mut(
+                &mut self,
+                c: &::#zbus::Connection,
+                m: &::#zbus::Message,
+                name: &str,
+            ) -> std::option::Option<::#zbus::Result<u32>> {
                 match name {
                     #call_mut_dispatch
                     _ => None,
@@ -285,7 +314,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                     indent = level
                 ).unwrap();
                 {
-                    use #zvariant::Type;
+                    use ::#zbus::export::zvariant::Type;
 
                     let level = level + 2;
                     #introspect
@@ -300,18 +329,18 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
 
 fn get_args_from_inputs(
     inputs: &[&PatType],
+    zbus: &Ident,
 ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
     if inputs.is_empty() {
         (quote!(), quote!())
     } else {
-        let zbus = get_crate_ident("zbus");
         let args = inputs.iter().map(|t| &t.pat).collect::<Vec<_>>();
         let tys = inputs.iter().map(|t| &t.ty).collect::<Vec<_>>();
 
         let args = quote!(#(#args),*);
         let args_from_msg = quote!(
             let (#args): (#(#tys),*) =
-                match m.body().map_err(#zbus::fdo::Error::from) {
+                match m.body().map_err(::#zbus::fdo::Error::from) {
                     Ok(r) => r,
                     Err(e) => return Some(e.reply(c, m)),
                 };
@@ -470,7 +499,11 @@ fn introspect_add_properties(
 
         introspect.extend(prop.doc_comments);
         let intro = quote!(
-            writeln!(writer, "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>", "", #name, <#ty>::signature(), #access, indent = level).unwrap();
+            writeln!(
+                writer,
+                "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
+                "", #name, <#ty>::signature(), #access, indent = level,
+            ).unwrap();
         );
         introspect.extend(intro);
     }

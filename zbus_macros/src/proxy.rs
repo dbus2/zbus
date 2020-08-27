@@ -11,7 +11,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     let mut default_service = None;
     let mut has_introspect_method = false;
 
-    let zbus = get_crate_ident("zbus");
+    let zbus = get_zbus_crate_ident();
 
     for arg in args {
         match arg {
@@ -85,7 +85,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
 
     if !has_introspect_method {
         methods.extend(quote! {
-            pub fn introspect(&self) -> #zbus::fdo::Result<String> {
+            pub fn introspect(&self) -> ::#zbus::fdo::Result<String> {
                 self.0.introspect()
             }
         });
@@ -93,12 +93,12 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
 
     let proxy_impl = quote! {
         #(#doc)*
-        pub struct #proxy_name<'c>(#zbus::Proxy<'c>);
+        pub struct #proxy_name<'c>(::#zbus::Proxy<'c>);
 
         impl<'c> #proxy_name<'c> {
             /// Creates a new proxy with the default service & path.
-            pub fn new(conn: &#zbus::Connection) -> #zbus::Result<Self> {
-                Ok(Self(#zbus::Proxy::new(
+            pub fn new(conn: &::#zbus::Connection) -> ::#zbus::Result<Self> {
+                Ok(Self(::#zbus::Proxy::new(
                     conn,
                     #default_service,
                     #default_path,
@@ -107,8 +107,12 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             }
 
             /// Creates a new proxy for the given `destination` and `path`.
-            pub fn new_for(conn: &#zbus::Connection, destination: &'c str, path: &'c str) -> #zbus::Result<Self> {
-                Ok(Self(#zbus::Proxy::new(
+            pub fn new_for(
+                conn: &::#zbus::Connection,
+                destination: &'c str,
+                path: &'c str,
+            ) -> ::#zbus::Result<Self> {
+                Ok(Self(::#zbus::Proxy::new(
                     conn,
                     destination,
                     path,
@@ -117,8 +121,12 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             }
 
             /// Same as `new_for` but takes ownership of the passed arguments.
-            pub fn new_for_owned(conn: #zbus::Connection, destination: String, path: String) -> #zbus::Result<Self> {
-                Ok(Self(#zbus::Proxy::new_owned(
+            pub fn new_for_owned(
+                conn: ::#zbus::Connection,
+                destination: String,
+                path: String,
+            ) -> ::#zbus::Result<Self> {
+                Ok(Self(::#zbus::Proxy::new_owned(
                     conn,
                     destination,
                     path,
@@ -127,12 +135,12 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             }
 
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
-            pub fn into_inner(self) -> #zbus::Proxy<'c> {
+            pub fn into_inner(self) -> ::#zbus::Proxy<'c> {
                 self.0
             }
 
             /// The reference to the underlying `zbus::Proxy`.
-            pub fn inner(&self) -> &#zbus::Proxy {
+            pub fn inner(&self) -> &::#zbus::Proxy {
                 &self.0
             }
 
@@ -140,7 +148,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
         }
 
         impl<'c> std::ops::Deref for #proxy_name<'c> {
-            type Target = #zbus::Proxy<'c>;
+            type Target = ::#zbus::Proxy<'c>;
 
             fn deref(&self) -> &Self::Target {
                 &self.0

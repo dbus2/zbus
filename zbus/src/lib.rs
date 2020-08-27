@@ -165,6 +165,15 @@ pub mod xml;
 
 pub use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
+// Required for the macros to function within this crate.
+extern crate self as zbus;
+
+// Macro support module, not part of the public API.
+#[doc(hidden)]
+pub mod export {
+    pub use zvariant;
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
