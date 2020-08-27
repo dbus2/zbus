@@ -2,7 +2,7 @@
 name = "zbus_macros"
 # Keep version in sync with zbus crate
 version = "1.1.1"
-authors = ["Marc-André Lureau <marcandre.lureau@redhat.com"]
+authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
 edition = "2018"
 
 description = "proc-macros for zbus"
