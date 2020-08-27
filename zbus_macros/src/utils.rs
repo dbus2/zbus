@@ -6,10 +6,10 @@ use syn::{
 
 pub fn get_zbus_crate_ident() -> Ident {
     Ident::new(
-        &match crate_name("zbus") {
-            Ok(x) => x,
-            Err(_) => "zbus".into(),
-        },
+        crate_name("zbus")
+            .as_ref()
+            .map(String::as_str)
+            .unwrap_or("zbus"),
         Span::call_site(),
     )
 }
