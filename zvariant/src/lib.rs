@@ -167,6 +167,9 @@ pub use owned_value::*;
 
 mod signature_parser;
 
+// Required for the macros to function within this crate.
+extern crate self as zvariant;
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -186,8 +189,6 @@ mod tests {
     use crate::{Array, Dict, EncodingContext as Context};
     use crate::{Basic, Error, Result, Type, Value};
     use crate::{Fd, ObjectPath, Signature, Str, Structure};
-
-    use crate as zvariant;
 
     // Test through both generic and specific API (wrt byte order)
     macro_rules! basic_type_test {
@@ -812,8 +813,6 @@ mod tests {
 
     #[test]
     fn derive() {
-        use crate as zvariant;
-
         use serde::{Deserialize, Serialize};
         use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -906,7 +905,6 @@ mod tests {
 
     #[test]
     fn struct_with_hashmap() {
-        use crate as zvariant;
         use serde::{Deserialize, Serialize};
 
         let mut hmap = HashMap::new();
