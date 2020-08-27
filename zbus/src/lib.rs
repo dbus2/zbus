@@ -165,6 +165,9 @@ pub mod xml;
 
 pub use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
+// Required for the macros to function within this crate.
+extern crate self as zbus;
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;

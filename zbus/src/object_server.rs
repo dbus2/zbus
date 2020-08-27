@@ -8,7 +8,6 @@ use std::rc::Rc;
 use scoped_tls::scoped_thread_local;
 use zvariant::{ObjectPath, OwnedValue, Value};
 
-use crate as zbus;
 use crate::{dbus_interface, fdo, Connection, Error, Message, MessageHeader, MessageType, Result};
 
 scoped_thread_local!(static LOCAL_NODE: Node);
@@ -496,7 +495,6 @@ mod tests {
     use std::rc::Rc;
     use std::thread;
 
-    use crate as zbus;
     use crate::fdo;
     use crate::{dbus_interface, dbus_proxy, Connection, ObjectServer};
 

@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use zvariant::{OwnedValue, Value};
 use zvariant_derive::Type;
 
-use crate as zbus;
 use crate::{dbus_proxy, DBusError};
 
 /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
