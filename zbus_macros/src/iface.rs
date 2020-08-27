@@ -30,7 +30,6 @@ impl<'a> Property<'a> {
 
 pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
     let zbus = get_crate_ident("zbus");
-    let zvariant = get_crate_ident("zvariant");
 
     let mut properties = HashMap::new();
     let mut set_dispatch = quote!();
@@ -195,13 +194,13 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
 
                 let q = quote!(
                     #member_name => {
-                        Some(Ok(#zvariant::Value::from(self.#ident()).into()))
+                        Some(Ok(#zbus::export::zvariant::Value::from(self.#ident()).into()))
                     },
                 );
                 get_dispatch.extend(q);
 
                 let q = quote!(
-                    props.insert(#member_name.to_string(), #zvariant::Value::from(self.#ident()).into());
+                    props.insert(#member_name.to_string(), #zbus::export::zvariant::Value::from(self.#ident()).into());
                 );
                 get_all.extend(q)
             }
@@ -240,20 +239,20 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                 #iface_name
             }
 
-            fn get(&self, property_name: &str) -> Option<#zbus::fdo::Result<#zvariant::OwnedValue>> {
+            fn get(&self, property_name: &str) -> Option<#zbus::fdo::Result<#zbus::export::zvariant::OwnedValue>> {
                 match property_name {
                     #get_dispatch
                     _ => None,
                 }
             }
 
-            fn get_all(&self) -> std::collections::HashMap<String, #zvariant::OwnedValue> {
-                let mut props: std::collections::HashMap<String, #zvariant::OwnedValue> = std::collections::HashMap::new();
+            fn get_all(&self) -> std::collections::HashMap<String, #zbus::export::zvariant::OwnedValue> {
+                let mut props: std::collections::HashMap<String, #zbus::export::zvariant::OwnedValue> = std::collections::HashMap::new();
                 #get_all
                 props
             }
 
-            fn set(&mut self, property_name: &str, value: &#zvariant::Value) -> Option<#zbus::fdo::Result<()>> {
+            fn set(&mut self, property_name: &str, value: &#zbus::export::zvariant::Value) -> Option<#zbus::fdo::Result<()>> {
                 use std::convert::TryInto;
 
                 match property_name {
@@ -285,7 +284,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                     indent = level
                 ).unwrap();
                 {
-                    use #zvariant::Type;
+                    use #zbus::export::zvariant::Type;
 
                     let level = level + 2;
                     #introspect
