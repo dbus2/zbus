@@ -170,6 +170,12 @@ mod signature_parser;
 // Required for the macros to function within this crate.
 extern crate self as zvariant;
 
+// Macro support module, not part of the public API.
+#[doc(hidden)]
+pub mod export {
+    pub use serde;
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
