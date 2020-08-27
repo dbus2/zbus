@@ -40,7 +40,7 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
         _ => panic!("Only works with DBus error enums"),
     };
 
-    let zbus = get_crate_ident("zbus");
+    let zbus = get_zbus_crate_ident();
     let mut replies = quote! {};
     let mut error_names = quote! {};
     let mut error_descriptions = quote! {};

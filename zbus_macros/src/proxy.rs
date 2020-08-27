@@ -11,7 +11,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     let mut default_service = None;
     let mut has_introspect_method = false;
 
-    let zbus = get_crate_ident("zbus");
+    let zbus = get_zbus_crate_ident();
 
     for arg in args {
         match arg {

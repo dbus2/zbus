@@ -29,7 +29,7 @@ impl<'a> Property<'a> {
 }
 
 pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
-    let zbus = get_crate_ident("zbus");
+    let zbus = get_zbus_crate_ident();
 
     let mut properties = HashMap::new();
     let mut set_dispatch = quote!();
@@ -303,7 +303,7 @@ fn get_args_from_inputs(
     if inputs.is_empty() {
         (quote!(), quote!())
     } else {
-        let zbus = get_crate_ident("zbus");
+        let zbus = get_zbus_crate_ident();
         let args = inputs.iter().map(|t| &t.pat).collect::<Vec<_>>();
         let tys = inputs.iter().map(|t| &t.ty).collect::<Vec<_>>();
 

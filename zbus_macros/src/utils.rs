@@ -4,11 +4,11 @@ use syn::{
     Attribute, FnArg, Ident, Lit, Meta, MetaList, NestedMeta, Pat, PatIdent, PatType, Result,
 };
 
-pub fn get_crate_ident(name: &str) -> Ident {
+pub fn get_zbus_crate_ident() -> Ident {
     Ident::new(
-        &match crate_name(name) {
+        &match crate_name("zbus") {
             Ok(x) => x,
-            Err(_) => name.into(),
+            Err(_) => "zbus".into(),
         },
         Span::call_site(),
     )
