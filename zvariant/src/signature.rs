@@ -84,6 +84,11 @@ impl<'a> Signature<'a> {
         let s = self.0.clone().into_owned();
         Signature(Cow::Owned(s))
     }
+
+    /// Creates an owned clone of `self`.
+    pub fn into_owned(self) -> Signature<'static> {
+        Signature(Cow::Owned(self.0.into_owned()))
+    }
 }
 
 impl<'a> Basic for Signature<'a> {
