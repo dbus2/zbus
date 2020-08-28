@@ -153,6 +153,7 @@ pub use value::*;
 mod error;
 pub use error::*;
 
+#[macro_use]
 mod r#type;
 pub use r#type::*;
 
