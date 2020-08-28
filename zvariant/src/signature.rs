@@ -4,7 +4,7 @@ use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
 use std::borrow::Cow;
 
-use crate::{Basic, EncodingFormat, Error, Result, Type};
+use crate::{alias_type, Basic, EncodingFormat, Error, Result, Type};
 
 /// String that [identifies] the type of an encoded value.
 ///
@@ -273,3 +273,48 @@ fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
 
     Ok(())
 }
+
+/// Owned [`Signature`](struct.Signature.html)
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct OwnedSignature(Signature<'static>);
+
+impl OwnedSignature {
+    pub fn into_inner(self) -> Signature<'static> {
+        self.0
+    }
+}
+
+impl std::ops::Deref for OwnedSignature {
+    type Target = Signature<'static>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::convert::From<OwnedSignature> for Signature<'static> {
+    fn from(o: OwnedSignature) -> Self {
+        o.into_inner()
+    }
+}
+
+impl<'a> std::convert::From<Signature<'a>> for OwnedSignature {
+    fn from(o: Signature<'a>) -> Self {
+        OwnedSignature(o.into_owned())
+    }
+}
+
+impl<'de> Deserialize<'de> for OwnedSignature {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let visitor = SignatureVisitor;
+
+        deserializer
+            .deserialize_string(visitor)
+            .map(|v| OwnedSignature(v.to_owned()))
+    }
+}
+
+alias_type!(OwnedSignature, Signature);
