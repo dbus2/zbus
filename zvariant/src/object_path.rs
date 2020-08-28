@@ -88,6 +88,11 @@ impl<'a> ObjectPath<'a> {
         let s = self.0.clone().into_owned();
         ObjectPath(Cow::Owned(s))
     }
+
+    /// Creates an owned clone of `self`.
+    pub fn into_owned(self) -> ObjectPath<'static> {
+        ObjectPath(Cow::Owned(self.0.into_owned()))
+    }
 }
 
 impl<'a> Basic for ObjectPath<'a> {
