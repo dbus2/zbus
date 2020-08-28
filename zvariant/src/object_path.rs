@@ -7,7 +7,7 @@ use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
 use std::borrow::Cow;
 
-use crate::{Basic, EncodingFormat, Error, Result, Signature, Type};
+use crate::{alias_type, Basic, EncodingFormat, Error, Result, Signature, Type};
 
 /// String that identifies objects at a given destination on the D-Bus bus.
 ///
@@ -249,3 +249,48 @@ fn ensure_correct_object_path_str(path: &[u8]) -> Result<()> {
 
     Ok(())
 }
+
+/// Owned [`ObjectPath`](struct.ObjectPath.html)
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct OwnedObjectPath(ObjectPath<'static>);
+
+impl OwnedObjectPath {
+    pub fn into_inner(self) -> ObjectPath<'static> {
+        self.0
+    }
+}
+
+impl std::ops::Deref for OwnedObjectPath {
+    type Target = ObjectPath<'static>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::convert::From<OwnedObjectPath> for ObjectPath<'static> {
+    fn from(o: OwnedObjectPath) -> Self {
+        o.into_inner()
+    }
+}
+
+impl<'a> std::convert::From<ObjectPath<'a>> for OwnedObjectPath {
+    fn from(o: ObjectPath<'a>) -> Self {
+        OwnedObjectPath(o.into_owned())
+    }
+}
+
+impl<'de> Deserialize<'de> for OwnedObjectPath {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let visitor = ObjectPathVisitor;
+
+        deserializer
+            .deserialize_string(visitor)
+            .map(|v| OwnedObjectPath(v.to_owned()))
+    }
+}
+
+alias_type!(OwnedObjectPath, ObjectPath);
