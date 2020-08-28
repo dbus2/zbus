@@ -8,6 +8,8 @@ use crate::{Message, MessageError, MessageType};
 /// The various errors that can be reported by this crate.
 #[derive(Debug)]
 pub enum Error {
+    /// Interface not found
+    InterfaceNotFound,
     /// Invalid D-Bus address.
     Address(String),
     /// An I/O error.
@@ -46,6 +48,7 @@ impl PartialEq for Error {
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
+            Error::InterfaceNotFound => None,
             Error::Address(_) => None,
             Error::Io(e) => Some(e),
             Error::Handshake(_) => None,
@@ -64,6 +67,7 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Error::InterfaceNotFound => write!(f, "Interface not found"),
             Error::Address(e) => write!(f, "address error: {}", e),
             Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::Handshake(e) => write!(f, "D-Bus handshake failed: {}", e),
