@@ -4,7 +4,7 @@ use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
 use std::borrow::Cow;
 
-use crate::{alias_type, Basic, EncodingFormat, Error, Result, Type};
+use crate::{Basic, EncodingFormat, Error, Result, Type};
 
 /// String that [identifies] the type of an encoded value.
 ///
@@ -276,7 +276,7 @@ fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
 }
 
 /// Owned [`Signature`](struct.Signature.html)
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, zvariant_derive::Type)]
 pub struct OwnedSignature(Signature<'static>);
 
 impl OwnedSignature {
@@ -317,5 +317,3 @@ impl<'de> Deserialize<'de> for OwnedSignature {
             .map(|v| OwnedSignature(v.to_owned()))
     }
 }
-
-alias_type!(OwnedSignature, Signature);
