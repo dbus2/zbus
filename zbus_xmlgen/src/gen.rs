@@ -129,7 +129,17 @@ fn to_rust_type(ty: &str, input: bool) -> String {
             't' => "u64".into(),
             'd' => "f64".into(),
             'h' => "std::os::unix::io::RawFd".into(),
-            's' | 'o' | 'g' => (if input || as_ref { "&str" } else { "String" }).into(),
+            's' | 'g' => (if input || as_ref { "&str" } else { "String" }).into(),
+            'o' => (if input {
+                if as_ref {
+                    "&zvariant::ObjectPath"
+                } else {
+                    "zvariant::ObjectPath"
+                }
+            } else {
+                "zvariant::OwnedObjectPath"
+            })
+            .into(),
             'v' => (if input {
                 if as_ref {
                     "&zvariant::Value"
