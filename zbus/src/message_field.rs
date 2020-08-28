@@ -4,8 +4,7 @@ use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::{Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use zvariant::{ObjectPath, Signature, Str, Type, Value};
-use zvariant_derive::Type;
+use zvariant::{derive::Type, ObjectPath, Signature, Str, Type, Value};
 
 /// The message field code.
 ///

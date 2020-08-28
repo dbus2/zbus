@@ -15,7 +15,6 @@ readme = "../README.md"
 [dependencies]
 zbus = { path = "../zbus", version = "1" }
 zvariant = { path = "../zvariant", version = "2", features = ["enumflags2"] }
-zvariant_derive = { path = "../zvariant_derive", version = "2" }
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1"
 enumflags2 = { version = "0.6.4", features = ["serde"] }

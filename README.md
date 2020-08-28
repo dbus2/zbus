@@ -208,8 +208,7 @@ This crate provides a derive macro to easily implement [`Type` trait](https://do
 
 ```rust
 use zvariant::{EncodingContext, from_slice, to_bytes};
-use zvariant::Type;
-use zvariant_derive::Type;
+use zvariant::{derive::Type, Type};
 use serde::{Deserialize, Serialize};
 use byteorder::LE;
 

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use zvariant_derive::Type;
+use zvariant::derive::Type;
 
 use crate::{MessageField, MessageFieldCode};
 

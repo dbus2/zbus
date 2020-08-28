@@ -4,8 +4,7 @@ use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use zvariant::{ObjectPath, Signature};
-use zvariant_derive::Type;
+use zvariant::{derive::Type, ObjectPath, Signature};
 
 use crate::{MessageError, MessageField, MessageFieldCode, MessageFields};
 
