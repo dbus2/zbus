@@ -337,7 +337,7 @@ impl<'a> ObjectServer<'a> {
     }
 
     // Get the Node at path. Optionally create one if it doesn't exist.
-    fn get_node(&mut self, path: &ObjectPath, create: bool) -> Option<&mut Node> {
+    fn get_node_mut(&mut self, path: &ObjectPath, create: bool) -> Option<&mut Node> {
         let mut node = &mut self.root;
         let mut node_path = String::new();
 
@@ -370,7 +370,7 @@ impl<'a> ObjectServer<'a> {
     where
         I: Interface,
     {
-        Ok(self.get_node(path, true).unwrap().at(I::name(), iface))
+        Ok(self.get_node_mut(path, true).unwrap().at(I::name(), iface))
     }
 
     /// Emit a signal on the currently dispatched node.
@@ -423,7 +423,7 @@ impl<'a> ObjectServer<'a> {
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
 
         let node = self
-            .get_node(&path, false)
+            .get_node_mut(&path, false)
             .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
         let iface = node.get_interface(iface).ok_or_else(|| {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
