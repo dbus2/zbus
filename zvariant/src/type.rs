@@ -41,6 +41,17 @@ pub trait Type {
     fn signature() -> Signature<'static>;
 }
 
+#[macro_export]
+macro_rules! alias_type {
+    ($t:ty, $alias:ty) => {
+        impl Type for $t {
+            fn signature() -> Signature<'static> {
+                <$alias>::signature()
+            }
+        }
+    };
+}
+
 macro_rules! array_type {
     ($arr:ty) => {
         impl<T> Type for $arr
