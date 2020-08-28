@@ -192,6 +192,20 @@ impl Node {
         true
     }
 
+    fn with_iface_func<F, I>(&self, func: F) -> Result<()>
+    where
+        F: Fn(&I) -> Result<()>,
+        I: Interface,
+    {
+        let iface = self
+            .interfaces
+            .get(I::name())
+            .ok_or(Error::InterfaceNotFound)?
+            .borrow();
+        let iface = iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
+        func(iface)
+    }
+
     fn introspect_to_writer<W: Write>(&self, writer: &mut W, level: usize) {
         if level == 0 {
             writeln!(
@@ -336,6 +350,25 @@ impl<'a> ObjectServer<'a> {
         }
     }
 
+    // Get the Node at path.
+    fn get_node(&self, path: &ObjectPath) -> Option<&Node> {
+        let mut node = &self.root;
+        let mut node_path = String::new();
+
+        for i in path.split('/').skip(1) {
+            if i.is_empty() {
+                continue;
+            }
+            write!(&mut node_path, "/{}", i).unwrap();
+            match node.children.get(i) {
+                Some(n) => node = n,
+                None => return None,
+            }
+        }
+
+        Some(node)
+    }
+
     // Get the Node at path. Optionally create one if it doesn't exist.
     fn get_node_mut(&mut self, path: &ObjectPath, create: bool) -> Option<&mut Node> {
         let mut node = &mut self.root;
@@ -371,6 +404,47 @@ impl<'a> ObjectServer<'a> {
         I: Interface,
     {
         Ok(self.get_node_mut(path, true).unwrap().at(I::name(), iface))
+    }
+
+    /// Run `func` with the given path & interface.
+    ///
+    /// Run the function `func` with the interface at path. If the interface was not found, return
+    /// `Error::InterfaceNotFound`.
+    ///
+    /// This function is useful to emit signals outside of a dispatched handler:
+    /// ```no_run
+    ///# use std::error::Error;
+    ///# use std::convert::TryInto;
+    ///# use zbus::{Connection, ObjectServer, dbus_interface};
+    ///
+    ///# struct MyIface;
+    ///# #[dbus_interface(name = "org.myiface.MyIface")]
+    ///# impl MyIface {
+    ///#     #[dbus_interface(signal)]
+    ///#     fn emit_signal(&self) -> zbus::Result<()>;
+    ///# }
+    ///#
+    ///# let connection = Connection::new_session()?;
+    ///# let mut object_server = ObjectServer::new(&connection);
+    ///#
+    ///# let path = &"/org/zbus/path".try_into()?;
+    ///# object_server.at(path, MyIface)?;
+    /// object_server.with(path, |iface: &MyIface| {
+    ///   iface.emit_signal()
+    /// })?;
+    ///#
+    ///#
+    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// ```
+    pub fn with<F, I>(&self, path: &ObjectPath, func: F) -> Result<()>
+    where
+        F: Fn(&I) -> Result<()>,
+        I: Interface,
+    {
+        let node = self.get_node(path).ok_or(Error::InterfaceNotFound)?;
+        LOCAL_CONNECTION.set(&self.conn, || {
+            LOCAL_NODE.set(node, || node.with_iface_func(func))
+        })
     }
 
     /// Emit a signal on the currently dispatched node.
@@ -611,6 +685,11 @@ mod tests {
             if let Err(e) = object_server.dispatch_message(&m) {
                 eprintln!("{}", e);
             }
+
+            object_server.with(
+                &"/org/freedesktop/MyService".try_into()?,
+                |iface: &MyIfaceImpl| iface.alert_count(51),
+            )?;
 
             if *quit.borrow() {
                 break;
