@@ -340,12 +340,12 @@ mod tests {
 
         assert_eq!(h.message_type()?, MessageType::Signal);
         assert_eq!(h.path()?, Some(&path));
-        assert_eq!(h.interface()?, Some("some.interface".into()));
-        assert_eq!(h.member()?, Some("Member".into()));
+        assert_eq!(h.interface()?, Some("some.interface"));
+        assert_eq!(h.member()?, Some("Member"));
         assert_eq!(h.error_name()?, None);
         assert_eq!(h.destination()?, None);
         assert_eq!(h.reply_serial()?, None);
-        assert_eq!(h.sender()?, Some(":1.84".into()));
+        assert_eq!(h.sender()?, Some(":1.84"));
         assert_eq!(h.signature()?, None);
         assert_eq!(h.unix_fds()?, None);
 
@@ -363,8 +363,8 @@ mod tests {
         assert_eq!(h.path()?, None);
         assert_eq!(h.interface()?, None);
         assert_eq!(h.member()?, None);
-        assert_eq!(h.error_name()?, Some("org.zbus.Error".into()));
-        assert_eq!(h.destination()?, Some(":1.11".into()));
+        assert_eq!(h.error_name()?, Some("org.zbus.Error"));
+        assert_eq!(h.destination()?, Some(":1.11"));
         assert_eq!(h.reply_serial()?, Some(88));
         assert_eq!(h.sender()?, None);
         assert_eq!(h.signature()?, Some(&Signature::from_str_unchecked("say")));
