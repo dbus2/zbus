@@ -23,8 +23,10 @@ pub const DICT_ENTRY_SIG_START_STR: &str = "{";
 /// The closing character of DICT_ENTRY type signature, as a string. Provided for manual signature creation.
 pub const DICT_ENTRY_SIG_END_STR: &str = "}";
 pub(crate) const DICT_ENTRY_ALIGNMENT: usize = 8;
-pub(crate) const VARIANT_SIGNATURE_CHAR: char = 'v';
-pub(crate) const VARIANT_SIGNATURE_STR: &str = "v";
+/// The VARIANT type signature. Provided for manual signature creation.
+pub const VARIANT_SIGNATURE_CHAR: char = 'v';
+/// The VARIANT type signature, as a string. Provided for manual signature creation.
+pub const VARIANT_SIGNATURE_STR: &str = "v";
 pub(crate) const VARIANT_ALIGNMENT: usize = 1;
 
 pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {

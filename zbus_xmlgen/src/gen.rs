@@ -3,6 +3,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use zbus::xml::{Arg, Interface};
+use zvariant::{
+    Basic, Fd, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
+    DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_CHAR, STRUCT_SIG_START_CHAR, VARIANT_SIGNATURE_CHAR,
+};
 
 pub struct GenTrait<'i>(pub &'i Interface);
 
@@ -119,18 +123,18 @@ fn to_rust_type(ty: &str, input: bool) -> String {
     ) -> String {
         let c = it.next().unwrap();
         match *c as char {
-            'y' => "u8".into(),
-            'b' => "bool".into(),
-            'n' => "i16".into(),
-            'q' => "u16".into(),
-            'i' => "i32".into(),
-            'u' => "u32".into(),
-            'x' => "i64".into(),
-            't' => "u64".into(),
-            'd' => "f64".into(),
-            'h' => "std::os::unix::io::RawFd".into(),
-            's' | 'g' => (if input || as_ref { "&str" } else { "String" }).into(),
-            'o' => (if input {
+            u8::SIGNATURE_CHAR => "u8".into(),
+            bool::SIGNATURE_CHAR => "bool".into(),
+            i16::SIGNATURE_CHAR => "i16".into(),
+            u16::SIGNATURE_CHAR => "u16".into(),
+            i32::SIGNATURE_CHAR => "i32".into(),
+            u32::SIGNATURE_CHAR => "u32".into(),
+            i64::SIGNATURE_CHAR => "i64".into(),
+            u64::SIGNATURE_CHAR => "u64".into(),
+            f64::SIGNATURE_CHAR => "f64".into(),
+            Fd::SIGNATURE_CHAR => "std::os::unix::io::RawFd".into(),
+            <&str>::SIGNATURE_CHAR => (if input || as_ref { "&str" } else { "String" }).into(),
+            ObjectPath::SIGNATURE_CHAR => (if input {
                 if as_ref {
                     "&zvariant::ObjectPath"
                 } else {
@@ -140,7 +144,17 @@ fn to_rust_type(ty: &str, input: bool) -> String {
                 "zvariant::OwnedObjectPath"
             })
             .into(),
-            'v' => (if input {
+            Signature::SIGNATURE_CHAR => (if input {
+                if as_ref {
+                    "&zvariant::Signature"
+                } else {
+                    "zvariant::Signature"
+                }
+            } else {
+                "zvariant::OwnedSignature"
+            })
+            .into(),
+            VARIANT_SIGNATURE_CHAR => (if input {
                 if as_ref {
                     "&zvariant::Value"
                 } else {
@@ -150,7 +164,7 @@ fn to_rust_type(ty: &str, input: bool) -> String {
                 "zvariant::OwnedValue"
             })
             .into(),
-            'a' => {
+            ARRAY_SIGNATURE_CHAR => {
                 let c = it.peek().unwrap();
                 match **c as char {
                     '{' => format!(
@@ -167,13 +181,13 @@ fn to_rust_type(ty: &str, input: bool) -> String {
                     }
                 }
             }
-            c @ '(' | c @ '{' => {
+            c @ STRUCT_SIG_START_CHAR | c @ DICT_ENTRY_SIG_START_CHAR => {
                 let dict = c == '{';
                 let mut vec = vec![];
                 loop {
                     let c = it.peek().unwrap();
                     match **c as char {
-                        ')' | '}' => break,
+                        STRUCT_SIG_END_CHAR | DICT_ENTRY_SIG_END_CHAR => break,
                         _ => vec.push(iter_to_rust_type(it, input, false)),
                     }
                 }
