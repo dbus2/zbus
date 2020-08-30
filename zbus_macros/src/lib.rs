@@ -78,7 +78,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// properties or signal depending on the item attributes. It will implement the [`Interface`] trait
 /// `for T` on your behalf, to handle the message dispatching and introspection support.
 ///
-/// The methods accept the `dbus_interface` attributes:
+/// The methods accepts the `dbus_interface` attributes:
 ///
 /// * `name` - override the D-Bus name (pascal case form of the method by default)
 ///
