@@ -1,3 +1,4 @@
+use std::any::{Any, TypeId};
 use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -19,7 +20,7 @@ scoped_thread_local!(static LOCAL_CONNECTION: Connection);
 /// implements it for you.
 ///
 /// [`dbus_interface`]: attr.dbus_interface.html
-pub trait Interface {
+pub trait Interface: Any {
     /// Return the name of the interface. Ex: "org.foo.MyInterface"
     fn name() -> &'static str
     where
@@ -47,6 +48,18 @@ pub trait Interface {
 
     /// Write introspection XML to the writer, with the given indentation level.
     fn introspect_to_writer(&self, writer: &mut dyn Write, level: usize);
+}
+
+impl dyn Interface {
+    /// Return Any of self
+    fn downcast_ref<T: Any>(&self) -> Option<&T> {
+        if <dyn Interface as Any>::type_id(self) == TypeId::of::<T>() {
+            // SAFETY: If type ID matches, it means object is of type T
+            Some(unsafe { &*(self as *const dyn Interface as *const T) })
+        } else {
+            None
+        }
+    }
 }
 
 struct Introspectable;
@@ -163,13 +176,13 @@ impl Node {
         node
     }
 
-    fn get_interface(&self, iface: &str) -> Option<Rc<RefCell<dyn Interface + 'static>>> {
+    fn get_interface(&self, iface: &str) -> Option<Rc<RefCell<dyn Interface>>> {
         self.interfaces.get(iface).cloned()
     }
 
     fn at<I>(&mut self, name: &'static str, iface: I) -> bool
     where
-        I: Interface + 'static,
+        I: Interface,
     {
         match self.interfaces.entry(name) {
             Entry::Vacant(e) => e.insert(Rc::new(RefCell::new(iface))),
@@ -355,7 +368,7 @@ impl<'a> ObjectServer<'a> {
     /// [`Interface`]: trait.Interface.html
     pub fn at<I>(&mut self, path: &ObjectPath, iface: I) -> Result<bool>
     where
-        I: Interface + 'static,
+        I: Interface,
     {
         Ok(self.get_node(path, true).unwrap().at(I::name(), iface))
     }

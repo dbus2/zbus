@@ -49,7 +49,7 @@ fn test_interface() {
     }
 
     #[dbus_interface(name = "org.freedesktop.zbus.Test")]
-    impl<'a, T> Test<'a, T>
+    impl<T: 'static> Test<'static, T>
     where
         T: serde::ser::Serialize + zvariant::Type,
     {
