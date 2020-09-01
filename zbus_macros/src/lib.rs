@@ -78,7 +78,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// properties or signal depending on the item attributes. It will implement the [`Interface`] trait
 /// `for T` on your behalf, to handle the message dispatching and introspection support.
 ///
-/// The methods accept the `dbus_interface` attributes:
+/// The methods accepts the `dbus_interface` attributes:
 ///
 /// * `name` - override the D-Bus name (pascal case form of the method by default)
 ///
@@ -89,8 +89,8 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   block will be expanded to emit the signal from the object path associated with the interface
 ///   instance.
 ///
-///   (TODO: there is no facility yet to emit a signal outside of a dispatched handler - use
-///   the [`Connection::emit_signal()`] manually as a lower-level solution).
+///   You can call a signal method from a an interface method, or from an [`ObjectServer::with`]
+///   function.
 ///
 /// # Example
 ///
@@ -128,6 +128,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// See also [`ObjectServer`] documentation to learn how to export an interface over a `Connection`.
 ///
 /// [`ObjectServer`]: https://docs.rs/zbus/1.0.0/zbus/struct.ObjectServer.html
+/// [`ObjectServer::with`]: https://docs.rs/zbus/1.2.0/zbus/struct.ObjectServer.html#method.with
 /// [`Connection::emit_signal()`]: https://docs.rs/zbus/1.0.0/zbus/struct.Connection.html#method.emit_signal
 /// [`Interface`]: https://docs.rs/zbus/1.0.0/zbus/trait.Interface.html
 #[proc_macro_attribute]

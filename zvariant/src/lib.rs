@@ -108,6 +108,7 @@
 //! [slice]: https://doc.rust-lang.org/std/primitive.slice.html
 //! [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 //! [`arrayvec::ArrayVec`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayVec.html
+//! [`arrayvec::ArrayString`]: https://docs.rs/arrayvec/0.5.1/arrayvec/struct.ArrayString.html
 //! [`Value` module documentation]: enum.Value.html
 
 #[macro_use]
