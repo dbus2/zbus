@@ -1,7 +1,7 @@
 use crate::Result;
 use crate::Signature;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct SignatureParser<'s> {
     signature: Signature<'s>,
     pos: usize,
