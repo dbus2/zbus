@@ -126,6 +126,29 @@ pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
     }
 }
 
+pub(crate) fn is_fixed_sized_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
+    match signature
+        .as_bytes()
+        .first()
+        .map(|b| *b as char)
+        .ok_or_else(|| serde::de::Error::invalid_length(0, &">= 1 character"))?
+    {
+        u8::SIGNATURE_CHAR
+        | bool::SIGNATURE_CHAR
+        | i16::SIGNATURE_CHAR
+        | u16::SIGNATURE_CHAR
+        | i32::SIGNATURE_CHAR
+        | u32::SIGNATURE_CHAR
+        | i64::SIGNATURE_CHAR
+        | u64::SIGNATURE_CHAR
+        | f64::SIGNATURE_CHAR
+        | Fd::SIGNATURE_CHAR => Ok(true),
+        STRUCT_SIG_START_CHAR => is_fixed_sized_struct_signature(signature),
+        DICT_ENTRY_SIG_START_CHAR => is_fixed_sized_dict_entry_signature(signature),
+        _ => Ok(false),
+    }
+}
+
 // Given an &str, create an owned (String-based) Signature w/ appropriate capacity
 macro_rules! signature_string {
     ($signature:expr) => {{
@@ -314,4 +337,36 @@ fn alignment_for_dict_entry_signature(signature: &Signature, format: EncodingFor
             }
         }
     }
+}
+
+fn is_fixed_sized_struct_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
+    let inner_signature = &signature[1..signature.len() - 1];
+    let mut parsed = 0;
+    let mut fixed_sized = true;
+
+    while parsed < inner_signature.len() {
+        let rest_of_signature = Signature::from_str_unchecked(&inner_signature[parsed..]);
+        let child_signature = slice_signature(&rest_of_signature).expect("invalid signature");
+        parsed += child_signature.len();
+
+        if !is_fixed_sized_signature(&child_signature)? {
+            // STRUCT is fixed-sized only if all its children are
+            fixed_sized = false;
+
+            break;
+        }
+    }
+
+    Ok(fixed_sized)
+}
+
+fn is_fixed_sized_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
+    let key_signature = Signature::from_str_unchecked(&signature[1..2]);
+    if !is_fixed_sized_signature(&key_signature)? {
+        return Ok(false);
+    }
+
+    let value_signature = Signature::from_str_unchecked(&signature[2..signature.len() - 1]);
+
+    is_fixed_sized_signature(&value_signature)
 }
