@@ -40,6 +40,12 @@ into_value!(ObjectPath<'a>, ObjectPath);
 into_value!(Array<'a>, Array);
 into_value!(Dict<'a, 'a>, Dict);
 
+impl<'s> From<String> for Value<'s> {
+    fn from(v: String) -> Self {
+        Value::Str(crate::Str::from(v))
+    }
+}
+
 impl<'v, 's: 'v, T> From<T> for Value<'v>
 where
     T: Into<Structure<'s>>,
