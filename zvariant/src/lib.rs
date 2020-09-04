@@ -648,6 +648,52 @@ mod tests {
         assert_eq!(decoded[&1], "123");
         assert_eq!(decoded[&2], "456");
 
+        // As Value
+        let v: Value = Dict::from(map).into();
+        assert_eq!(v.value_signature(), "a{xs}");
+        let encoded = to_bytes(ctxt, &v).unwrap();
+        assert_eq!(encoded.len(), 48);
+        // Convert it back
+        let dict: Dict = v.try_into().unwrap();
+        let map: HashMap<i64, String> = dict.try_into().unwrap();
+        assert_eq!(map[&1], "123");
+        assert_eq!(map[&2], "456");
+        // Also decode it back
+        let v = from_slice(&encoded, ctxt).unwrap();
+        if let Value::Dict(dict) = v {
+            assert_eq!(dict.get::<i64, str>(&1).unwrap().unwrap(), "123");
+            assert_eq!(dict.get::<i64, str>(&2).unwrap().unwrap(), "456");
+        } else {
+            panic!();
+        }
+
+        // Now a hand-crafted Dict Value but with a Value as value
+        let mut dict = Dict::new(<&str>::signature(), Value::signature());
+        dict.add("hello", Value::new("there")).unwrap();
+        dict.add("bye", Value::new("now")).unwrap();
+        let v: Value = dict.into();
+        assert_eq!(v.value_signature(), "a{sv}");
+        let encoded = to_bytes(ctxt, &v).unwrap();
+        assert_eq!(dbg!(encoded.len()), 68);
+        let v: Value = from_slice(&encoded, ctxt).unwrap();
+        if let Value::Dict(dict) = v {
+            assert_eq!(
+                *dict.get::<_, Value>("hello").unwrap().unwrap(),
+                Value::new("there")
+            );
+            assert_eq!(
+                *dict.get::<_, Value>("bye").unwrap().unwrap(),
+                Value::new("now")
+            );
+
+            // Try converting to a HashMap
+            let map = <HashMap<String, Value>>::try_from(dict).unwrap();
+            assert_eq!(map["hello"], Value::new("there"));
+            assert_eq!(map["bye"], Value::new("now"));
+        } else {
+            panic!();
+        }
+
         #[derive(SerializeDict, DeserializeDict, TypeDict, PartialEq, Debug)]
         struct Test {
             process_id: Option<u32>,
@@ -702,52 +748,6 @@ mod tests {
             decoded.unwrap_err(),
             Error::Message("unknown field `user`, expected `process_id` or `group_id`".to_string())
         );
-
-        // As Value
-        let v: Value = Dict::from(map).into();
-        assert_eq!(v.value_signature(), "a{xs}");
-        let encoded = to_bytes(ctxt, &v).unwrap();
-        assert_eq!(encoded.len(), 48);
-        // Convert it back
-        let dict: Dict = v.try_into().unwrap();
-        let map: HashMap<i64, String> = dict.try_into().unwrap();
-        assert_eq!(map[&1], "123");
-        assert_eq!(map[&2], "456");
-        // Also decode it back
-        let v = from_slice(&encoded, ctxt).unwrap();
-        if let Value::Dict(dict) = v {
-            assert_eq!(dict.get::<i64, str>(&1).unwrap().unwrap(), "123");
-            assert_eq!(dict.get::<i64, str>(&2).unwrap().unwrap(), "456");
-        } else {
-            panic!();
-        }
-
-        // Now a hand-crafted Dict Value but with a Value as value
-        let mut dict = Dict::new(<&str>::signature(), Value::signature());
-        dict.add("hello", Value::new("there")).unwrap();
-        dict.add("bye", Value::new("now")).unwrap();
-        let v: Value = dict.into();
-        assert_eq!(v.value_signature(), "a{sv}");
-        let encoded = to_bytes(ctxt, &v).unwrap();
-        assert_eq!(dbg!(encoded.len()), 68);
-        let v: Value = from_slice(&encoded, ctxt).unwrap();
-        if let Value::Dict(dict) = v {
-            assert_eq!(
-                *dict.get::<_, Value>("hello").unwrap().unwrap(),
-                Value::new("there")
-            );
-            assert_eq!(
-                *dict.get::<_, Value>("bye").unwrap().unwrap(),
-                Value::new("now")
-            );
-
-            // Try converting to a HashMap
-            let map = <HashMap<String, Value>>::try_from(dict).unwrap();
-            assert_eq!(map["hello"], Value::new("there"));
-            assert_eq!(map["bye"], Value::new("now"));
-        } else {
-            panic!();
-        }
     }
 
     #[test]
