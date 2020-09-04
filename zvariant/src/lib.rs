@@ -167,6 +167,8 @@ pub use into_value::*;
 mod owned_value;
 pub use owned_value::*;
 
+mod framing_offset_size;
+mod framing_offsets;
 mod signature_parser;
 
 // Required for the macros to function within this crate.
