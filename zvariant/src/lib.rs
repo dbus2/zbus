@@ -189,13 +189,14 @@ mod tests {
     #[cfg(feature = "arrayvec")]
     use std::str::FromStr;
 
+    use serde::{Deserialize, Serialize};
     use zvariant_derive::{DeserializeDict, SerializeDict, Type, TypeDict};
 
     use crate::{from_slice, from_slice_fds, from_slice_for_signature};
     use crate::{to_bytes, to_bytes_fds, to_bytes_for_signature};
 
     use crate::{Array, Dict, EncodingContext as Context};
-    use crate::{Basic, Error, Result, Type, Value};
+    use crate::{Basic, DeserializeValue, Error, Result, SerializeValue, Type, Value};
     use crate::{Fd, ObjectPath, Signature, Str, Structure};
 
     // Test through both generic and specific API (wrt byte order)
@@ -614,6 +615,17 @@ mod tests {
         let inner = <(i32, i32)>::try_from(outer.2).unwrap();
         assert_eq!(inner.0, 1);
         assert_eq!(inner.1, 2);
+
+        #[derive(Serialize, Deserialize, Type, PartialEq, Debug)]
+        struct Foo {
+            val: u32,
+        }
+
+        let foo = Foo { val: 99 };
+        let v = SerializeValue(&foo);
+        let encoded = to_bytes(ctxt, &v).unwrap();
+        let decoded: DeserializeValue<Foo> = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded.0, foo);
     }
 
     #[test]
