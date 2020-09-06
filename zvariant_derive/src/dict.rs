@@ -61,12 +61,12 @@ pub fn expand_serialize_derive(input: DeriveInput) -> TokenStream {
         let e = if is_option {
             quote! {
                 if self.#name.is_some() {
-                    map.serialize_entry(#dict_name, &Value::new(self.#name.as_ref().unwrap()))?;
+                    map.serialize_entry(#dict_name, &#zv::SerializeValue(self.#name.as_ref().unwrap()))?;
                 }
             }
         } else {
             quote! {
-                map.serialize_entry(#dict_name, &Value::new(&self.#name))?;
+                map.serialize_entry(#dict_name, &#zv::SerializeValue(&self.#name))?;
             }
         };
 
@@ -85,7 +85,6 @@ pub fn expand_serialize_derive(input: DeriveInput) -> TokenStream {
                 S: ::#zv::export::serde::ser::Serializer,
             {
                 use ::#zv::export::serde::ser::SerializeMap;
-                use ::#zv::Value;
 
                 // zbus doesn't care about number of entries (it would need bytes instead)
                 let mut map = serializer.serialize_map(None)?;
