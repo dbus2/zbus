@@ -141,8 +141,9 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
 
         entries.push(quote! {
             #dict_name => {
-                if let Ok(val) = value.try_into() {
-                    #name = Some(val);
+                // FIXME: add an option about strict parsing (instead of silently skipping the field)
+                if let Ok(val) = access.next_value::<#zv::DeserializeValue<_>>() {
+                    #name = Some(val.0);
                 }
             }
         });
@@ -212,12 +213,10 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
                     where
                         M: ::#zv::export::serde::de::MapAccess<'de>,
                     {
-                        use std::convert::TryInto;
-
                         #( let mut #fields = Default::default(); )*
 
                         // does not check duplicated fields, since those shouldn't exist in stream
-                        while let Some((key, value)) = access.next_entry::<&str, ::#zv::Value>()? {
+                        while let Some(key) = access.next_key::<&str>()? {
                             match key {
                                 #(#entries)*
                             }
