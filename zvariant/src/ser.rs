@@ -689,8 +689,14 @@ where
             self.add_padding(alignment)?;
             end_parens = false;
         } else {
+            let signature_pos = self.sig_parser.pos();
+            let rest_of_signature =
+                Signature::from_str_unchecked(&self.sig_parser.signature()[signature_pos..]);
+            let signature = slice_signature(&rest_of_signature)?;
+            let alignment = alignment_for_signature(&signature, self.ctxt.format());
+            self.add_padding(alignment)?;
+
             self.sig_parser.skip_char()?;
-            self.add_padding(STRUCT_ALIGNMENT_DBUS)?;
 
             if c == STRUCT_SIG_START_CHAR || c == DICT_ENTRY_SIG_START_CHAR {
                 end_parens = true;
@@ -709,9 +715,19 @@ where
             }
         }
 
+        let offsets =
+            if c == STRUCT_SIG_START_CHAR && self.ctxt.format() == EncodingFormat::GVariant {
+                Some(FramingOffsets::new())
+            } else {
+                None
+            };
+        let start = self.bytes_written;
+
         Ok(StructSerializer {
             ser: self,
+            start,
             end_parens,
+            offsets,
         })
     }
 
@@ -834,7 +850,11 @@ where
 #[doc(hidden)]
 pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
     ser: &'b mut Serializer<'ser, 'sig, B, W>,
+    start: usize,
     end_parens: bool,
+    // FIXME: Best to create a separate struct for all of these GVariant-specific fields.
+    // All offsets (GVariant-specific)
+    offsets: Option<FramingOffsets>,
 }
 
 impl<'ser, 'sig, 'b, B, W> StructSerializer<'ser, 'sig, 'b, B, W>
@@ -878,7 +898,32 @@ where
 
                 Ok(())
             }
-            _ => value.serialize(&mut *self.ser),
+            _ => {
+                let fixed_sized_element = if self.ser.ctxt.format() == EncodingFormat::GVariant {
+                    // FIXME: SignatureParser should provide a method to get rest of the signaure
+                    //        or even the next signature slice.
+                    let element_signature_pos = self.ser.sig_parser.pos();
+                    let rest_of_signature = Signature::from_str_unchecked(
+                        &self.ser.sig_parser.signature()[element_signature_pos..],
+                    );
+                    let element_signature = slice_signature(&rest_of_signature)?;
+
+                    crate::utils::is_fixed_sized_signature(&element_signature)?
+                } else {
+                    true
+                };
+
+                value.serialize(&mut *self.ser)?;
+
+                if let Some(ref mut offsets) = self.offsets {
+                    assert_eq!(self.ser.ctxt.format(), EncodingFormat::GVariant);
+                    if !fixed_sized_element {
+                        offsets.push_front(self.ser.bytes_written - self.start);
+                    }
+                }
+
+                Ok(())
+            }
         }
     }
 
@@ -886,6 +931,23 @@ where
         if self.end_parens {
             self.ser.sig_parser.skip_char()?;
         }
+        let mut offsets = match self.offsets {
+            Some(offsets) => offsets,
+            None => return Ok(()),
+        };
+        let struct_len = self.ser.bytes_written - self.start;
+        if struct_len == 0 {
+            // Empty sequence
+            assert!(offsets.is_empty());
+
+            return Ok(());
+        }
+        if offsets.peek() == Some(struct_len) {
+            // For structs, we don't want offset of last element
+            offsets.pop();
+        }
+
+        offsets.write_all(self.ser, struct_len)?;
 
         Ok(())
     }

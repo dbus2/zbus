@@ -578,16 +578,30 @@ where
                 }
             }
             STRUCT_SIG_START_CHAR => {
+                let signature_pos = self.sig_parser.pos();
+                let rest_of_signature =
+                    Signature::from_str_unchecked(&self.sig_parser.signature()[signature_pos..]);
+                let signature = slice_signature(&rest_of_signature)?;
+                let alignment = alignment_for_signature(&signature, self.ctxt.format());
+                self.parse_padding(alignment)?;
+
                 self.sig_parser.skip_char()?;
-                self.parse_padding(STRUCT_ALIGNMENT_DBUS)?;
 
-                visitor
-                    .visit_seq(StructureDeserializer { de: self })
-                    .and_then(|v| {
-                        self.sig_parser.skip_char()?;
-
-                        Ok(v)
-                    })
+                let start = self.pos;
+                let end = self.bytes.len();
+                let offset_size = match self.ctxt.format() {
+                    EncodingFormat::GVariant => {
+                        Some(FramingOffsetSize::for_encoded_container(end - start))
+                    }
+                    EncodingFormat::DBus => None,
+                };
+                visitor.visit_seq(StructureDeserializer {
+                    de: self,
+                    start,
+                    end,
+                    offsets_len: 0,
+                    offset_size,
+                })
             }
             c => Err(de::Error::invalid_type(
                 de::Unexpected::Char(c),
@@ -934,6 +948,12 @@ where
 #[derive(Debug)]
 struct StructureDeserializer<'d, 'de, 'sig, 'f, B> {
     de: &'d mut Deserializer<'de, 'sig, 'f, B>,
+    start: usize,
+    end: usize,
+    // Length of all the offsets after the arrray
+    offsets_len: usize,
+    // size of the framing offset (GVariant-specific)
+    offset_size: Option<FramingOffsetSize>,
 }
 
 impl<'d, 'de, 'sig, 'f, B> SeqAccess<'de> for StructureDeserializer<'d, 'de, 'sig, 'f, B>
@@ -946,7 +966,66 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        seed.deserialize(&mut *self.de).map(Some)
+        let ctxt =
+            EncodingContext::new(self.de.ctxt.format(), self.de.ctxt.position() + self.de.pos);
+        let element_end = match self.offset_size {
+            Some(offset_size) => {
+                assert_eq!(ctxt.format(), EncodingFormat::GVariant);
+
+                let element_signature_pos = self.de.sig_parser.pos();
+                let rest_of_signature = Signature::from_str_unchecked(
+                    &self.de.sig_parser.signature()[element_signature_pos..],
+                );
+                let element_signature = slice_signature(&rest_of_signature)?;
+                let fixed_sized_element =
+                    crate::utils::is_fixed_sized_signature(&element_signature)?;
+                if !fixed_sized_element {
+                    let next_sig_pos = element_signature.len();
+                    if rest_of_signature.chars().nth(next_sig_pos) == Some(STRUCT_SIG_END_CHAR) {
+                        // This is the last item then and in GVariant format, we don't have offset for it
+                        // even if it's non-fixed-sized.
+                        self.end
+                    } else {
+                        let end = offset_size
+                            .read_last_offset_from_buffer(&self.de.bytes[self.start..self.end])
+                            + self.start;
+                        self.end -= offset_size as usize;
+                        self.offsets_len += offset_size as usize;
+
+                        end
+                    }
+                } else {
+                    self.end
+                }
+            }
+            None => self.end,
+        };
+
+        let sig_parser = self.de.sig_parser.clone();
+        let mut de = Deserializer::<B> {
+            ctxt,
+            sig_parser,
+            bytes: &self.de.bytes[self.de.pos..element_end],
+            fds: self.de.fds,
+            pos: 0,
+            b: PhantomData,
+        };
+        let v = seed.deserialize(&mut de).map(Some);
+        self.de.pos += de.pos;
+
+        if de.sig_parser.next_char() == STRUCT_SIG_END_CHAR {
+            // Last item in the struct
+            de.sig_parser.skip_char()?;
+
+            // Skip over the framing offsets (if any)
+            if self.offset_size.is_some() {
+                self.de.pos += self.offsets_len;
+            }
+        }
+
+        self.de.sig_parser = de.sig_parser;
+
+        v
     }
 }
 
