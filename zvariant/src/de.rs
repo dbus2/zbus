@@ -518,6 +518,21 @@ where
     where
         V: Visitor<'de>,
     {
+        match self.ctxt.format() {
+            EncodingFormat::GVariant => {
+                let byte = self.bytes[self.pos];
+                if byte != 0 {
+                    return Err(de::Error::invalid_value(
+                        de::Unexpected::Bytes(&self.bytes[self.pos..self.pos + 1]),
+                        &"0 byte expected for empty tuples (unit type)",
+                    ));
+                }
+
+                self.pos += 1;
+            }
+            EncodingFormat::DBus => (),
+        }
+
         visitor.visit_unit()
     }
 

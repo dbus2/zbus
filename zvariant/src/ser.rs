@@ -551,7 +551,10 @@ where
     }
 
     fn serialize_unit(self) -> Result<()> {
-        Ok(())
+        match self.ctxt.format() {
+            EncodingFormat::GVariant => self.write_all(&b"\0"[..]).map_err(Error::Io),
+            EncodingFormat::DBus => Ok(()),
+        }
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<()> {
