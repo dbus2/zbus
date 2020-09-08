@@ -29,6 +29,12 @@ pub const VARIANT_SIGNATURE_CHAR: char = 'v';
 pub const VARIANT_SIGNATURE_STR: &str = "v";
 pub(crate) const VARIANT_ALIGNMENT_DBUS: usize = 1;
 pub(crate) const VARIANT_ALIGNMENT_GVARIANT: usize = 8;
+/// The prefix of MAYBE (GVariant-specific) type signature, as a character. Provided for manual
+/// signature creation.
+pub const MAYBE_SIGNATURE_CHAR: char = 'm';
+/// The prefix of MAYBE (GVariant-specific) type signature, as a string. Provided for manual
+/// signature creation.
+pub const MAYBE_SIGNATURE_STR: &str = "m";
 
 pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
     let len_rounded_up = value.wrapping_add(align).wrapping_sub(1) & !align.wrapping_sub(1);
