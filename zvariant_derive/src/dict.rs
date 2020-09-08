@@ -61,12 +61,12 @@ pub fn expand_serialize_derive(input: DeriveInput) -> TokenStream {
         let e = if is_option {
             quote! {
                 if self.#name.is_some() {
-                    map.serialize_entry(#dict_name, &Value::new(self.#name.as_ref().unwrap()))?;
+                    map.serialize_entry(#dict_name, &#zv::SerializeValue(self.#name.as_ref().unwrap()))?;
                 }
             }
         } else {
             quote! {
-                map.serialize_entry(#dict_name, &Value::new(&self.#name))?;
+                map.serialize_entry(#dict_name, &#zv::SerializeValue(&self.#name))?;
             }
         };
 
@@ -85,7 +85,6 @@ pub fn expand_serialize_derive(input: DeriveInput) -> TokenStream {
                 S: ::#zv::export::serde::ser::Serializer,
             {
                 use ::#zv::export::serde::ser::SerializeMap;
-                use ::#zv::Value;
 
                 // zbus doesn't care about number of entries (it would need bytes instead)
                 let mut map = serializer.serialize_map(None)?;
@@ -142,8 +141,9 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
 
         entries.push(quote! {
             #dict_name => {
-                if let Ok(val) = value.try_into() {
-                    #name = Some(val);
+                // FIXME: add an option about strict parsing (instead of silently skipping the field)
+                if let Ok(val) = access.next_value::<#zv::DeserializeValue<_>>() {
+                    #name = Some(val.0);
                 }
             }
         });
@@ -213,12 +213,10 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
                     where
                         M: ::#zv::export::serde::de::MapAccess<'de>,
                     {
-                        use std::convert::TryInto;
-
                         #( let mut #fields = Default::default(); )*
 
                         // does not check duplicated fields, since those shouldn't exist in stream
-                        while let Some((key, value)) = access.next_entry::<&str, ::#zv::Value>()? {
+                        while let Some(key) = access.next_key::<&str>()? {
                             match key {
                                 #(#entries)*
                             }
