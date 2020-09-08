@@ -1214,6 +1214,94 @@ mod tests {
     }
 
     #[test]
+    fn option_value() {
+        let ctxt = Context::<LE>::new_gvariant(0);
+
+        // First a Some fixed-sized value
+        let mn = Some(16i16);
+        let encoded = to_bytes(ctxt, &mn).unwrap();
+        assert_eq!(encoded.len(), 2);
+        let decoded: Option<i16> = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, mn);
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(encoded);
+        let variant = Variant::from_bytes::<Option<i16>>(&bytes);
+        assert_eq!(variant.get::<Option<i16>>().unwrap(), mn);
+
+        // Now a None of the same type
+        let mn: Option<i16> = None;
+        let encoded = to_bytes(ctxt, &mn).unwrap();
+        assert_eq!(encoded.len(), 0);
+        let decoded: Option<i16> = from_slice(&encoded, ctxt).unwrap();
+        assert!(decoded.is_none());
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(encoded);
+        let variant = Variant::from_bytes::<Option<i16>>(&bytes);
+        assert!(variant.get::<Option<i16>>().unwrap().is_none());
+
+        // Next a Some variable-sized value
+        let ms = Some("hello world");
+        let encoded = to_bytes(ctxt, &ms).unwrap();
+        assert_eq!(encoded.len(), 13);
+        let decoded: Option<&str> = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, ms);
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(encoded);
+        let variant = Variant::from_bytes::<Option<String>>(&bytes);
+        assert_eq!(
+            &variant.get::<Option<String>>().unwrap().unwrap(),
+            ms.unwrap()
+        );
+
+        // Now a None of the same type
+        let ms: Option<&str> = None;
+        let encoded = to_bytes(ctxt, &ms).unwrap();
+        assert_eq!(encoded.len(), 0);
+        let decoded: Option<&str> = from_slice(&encoded, ctxt).unwrap();
+        assert!(decoded.is_none());
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(encoded);
+        let variant = Variant::from_bytes::<Option<String>>(&bytes);
+        assert!(variant.get::<Option<String>>().unwrap().is_none());
+
+        // In a seq type
+        let ams = vec![
+            Some(String::from("hello world")),
+            Some(String::from("bye world")),
+        ];
+        let encoded = to_bytes(ctxt, &ams).unwrap();
+        assert_eq!(encoded.len(), 26);
+        let decoded: Vec<Option<String>> = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, ams);
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(encoded);
+        let variant = Variant::from_bytes::<Vec<Option<String>>>(&bytes);
+        let decoded = variant.get::<Vec<Option<String>>>().unwrap();
+        assert_eq!(decoded, ams);
+
+        // In a struct
+        let structure: (Option<String>, u64, Option<String>) =
+            (Some(String::from("hello world")), 42u64, None);
+        let encoded = to_bytes(ctxt, &structure).unwrap();
+        assert_eq!(encoded.len(), 25);
+        let decoded: (Option<String>, u64, Option<String>) = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, structure);
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(encoded);
+        let variant = Variant::from_bytes::<(Option<String>, u64, Option<String>)>(&bytes);
+        let decoded = variant
+            .get::<(Option<String>, u64, Option<String>)>()
+            .unwrap();
+        assert_eq!(decoded, structure);
+    }
+
+    #[test]
     fn struct_with_hashmap() {
         use serde::{Deserialize, Serialize};
 

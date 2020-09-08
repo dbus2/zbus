@@ -93,6 +93,7 @@ pub(crate) fn alignment_for_signature(signature: &Signature, format: EncodingFor
         ARRAY_SIGNATURE_CHAR => alignment_for_array_signature(signature, format),
         STRUCT_SIG_START_CHAR => alignment_for_struct_signature(signature, format),
         DICT_ENTRY_SIG_START_CHAR => alignment_for_dict_entry_signature(signature, format),
+        MAYBE_SIGNATURE_CHAR => alignment_for_maybe_signature(signature, format),
         _ => {
             println!("WARNING: Unsupported signature: {}", signature);
 
@@ -125,6 +126,7 @@ pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
         ARRAY_SIGNATURE_CHAR => slice_array_signature(signature),
         STRUCT_SIG_START_CHAR => slice_structure_signature(signature),
         DICT_ENTRY_SIG_START_CHAR => slice_dict_entry_signature(signature),
+        MAYBE_SIGNATURE_CHAR => slice_maybe_signature(signature),
         c => Err(serde::de::Error::invalid_value(
             serde::de::Unexpected::Char(c),
             &"a valid signature character",
@@ -179,7 +181,10 @@ macro_rules! check_child_value_signature {
     }};
 }
 
-fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
+fn slice_single_child_type_container_signature<'a>(
+    signature: &'a Signature<'a>,
+    expected_sig_prefix: char,
+) -> Result<Signature<'a>, Error> {
     if signature.len() < 2 {
         return Err(serde::de::Error::invalid_length(
             signature.len(),
@@ -193,10 +198,10 @@ fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'
         .first()
         .map(|b| *b as char)
         .expect("empty signature");
-    if c != ARRAY_SIGNATURE_CHAR {
+    if c != expected_sig_prefix {
         return Err(serde::de::Error::invalid_value(
             serde::de::Unexpected::Char(c),
-            &crate::ARRAY_SIGNATURE_STR,
+            &expected_sig_prefix.to_string().as_str(),
         ));
     }
 
@@ -204,6 +209,14 @@ fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'
     let slice_len = slice_signature(&Signature::from_str_unchecked(&signature[1..]))?.len();
 
     Ok(Signature::from_str_unchecked(&signature[0..=slice_len]))
+}
+
+fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
+    slice_single_child_type_container_signature(signature, ARRAY_SIGNATURE_CHAR)
+}
+
+fn slice_maybe_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
+    slice_single_child_type_container_signature(signature, MAYBE_SIGNATURE_CHAR)
 }
 
 fn slice_structure_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
@@ -282,15 +295,27 @@ fn slice_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
     Ok(Signature::from_str_unchecked(&signature[0..slice_len + 3]))
 }
 
-fn alignment_for_array_signature(signature: &Signature, format: EncodingFormat) -> usize {
+fn alignment_for_single_child_type_signature(
+    signature: &Signature,
+    format: EncodingFormat,
+    dbus_align: usize,
+) -> usize {
     match format {
-        EncodingFormat::DBus => ARRAY_ALIGNMENT_DBUS,
+        EncodingFormat::DBus => dbus_align,
         EncodingFormat::GVariant => {
             let child_signature = Signature::from_str_unchecked(&signature[1..]);
 
             alignment_for_signature(&child_signature, format)
         }
     }
+}
+
+fn alignment_for_array_signature(signature: &Signature, format: EncodingFormat) -> usize {
+    alignment_for_single_child_type_signature(signature, format, ARRAY_ALIGNMENT_DBUS)
+}
+
+fn alignment_for_maybe_signature(signature: &Signature, format: EncodingFormat) -> usize {
+    alignment_for_single_child_type_signature(signature, format, 1)
 }
 
 fn alignment_for_struct_signature(signature: &Signature, format: EncodingFormat) -> usize {

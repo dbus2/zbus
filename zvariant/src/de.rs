@@ -506,12 +506,71 @@ where
         self.deserialize_seq(visitor)
     }
 
-    fn deserialize_option<V>(self, _visitor: V) -> Result<V::Value>
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        // FIXME: Corresponds to GVariant's `Maybe` type.
-        todo!();
+        let signature_pos = self.sig_parser.pos();
+        let rest_of_signature =
+            Signature::from_str_unchecked(&self.sig_parser.signature()[signature_pos..]);
+        let signature = slice_signature(&rest_of_signature)?;
+        let child_signature = Signature::from_str_unchecked(&signature[1..]);
+        let child_sig_len = child_signature.len();
+        let alignment = alignment_for_signature(&signature, self.ctxt.format());
+        let fixed_sized_child = crate::utils::is_fixed_sized_signature(&child_signature)?;
+
+        match self.ctxt.format() {
+            EncodingFormat::GVariant => {
+                self.sig_parser.skip_char()?;
+                self.parse_padding(alignment)?;
+
+                if self.pos == self.bytes.len() {
+                    // Empty sequence means None
+                    self.sig_parser.skip_chars(child_sig_len)?;
+
+                    visitor.visit_none()
+                } else {
+                    let ctxt =
+                        EncodingContext::new(self.ctxt.format(), self.ctxt.position() + self.pos);
+                    let end = if fixed_sized_child {
+                        self.bytes.len()
+                    } else {
+                        self.bytes.len() - 1
+                    };
+
+                    let mut de = Deserializer::<B> {
+                        ctxt,
+                        sig_parser: self.sig_parser.clone(),
+                        bytes: &self.bytes[self.pos..end],
+                        fds: self.fds,
+                        pos: 0,
+                        b: PhantomData,
+                    };
+
+                    let v = visitor.visit_some(&mut de)?;
+                    self.pos += de.pos;
+
+                    if !fixed_sized_child {
+                        let byte = self.bytes[self.pos];
+                        if byte != 0 {
+                            return Err(de::Error::invalid_value(
+                                de::Unexpected::Bytes(&byte.to_le_bytes()),
+                                &"0 byte expected at end of Maybe value",
+                            ));
+                        }
+
+                        self.pos += 1;
+                    }
+                    self.sig_parser = de.sig_parser;
+
+                    Ok(v)
+                }
+            }
+            EncodingFormat::DBus => Err(Error::IncompatibleFormat(
+                signature.to_owned(),
+                self.ctxt.format(),
+            )),
+        }
     }
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>

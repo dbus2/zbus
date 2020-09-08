@@ -372,6 +372,47 @@ where
         Ok(())
     }
 
+    fn serialize_maybe<T>(&mut self, value: Option<&T>) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        let signature_pos = self.sig_parser.pos();
+        let rest_of_signature =
+            Signature::from_str_unchecked(&self.sig_parser.signature()[signature_pos..]);
+        let signature = slice_signature(&rest_of_signature)?;
+        let child_signature = Signature::from_str_unchecked(&signature[1..]);
+        let child_sig_len = child_signature.len();
+        let alignment = alignment_for_signature(&signature, self.ctxt.format());
+        let fixed_sized_child = crate::utils::is_fixed_sized_signature(&child_signature)?;
+
+        match self.ctxt.format() {
+            EncodingFormat::GVariant => {
+                self.sig_parser.skip_char()?;
+
+                self.add_padding(alignment)?;
+
+                match value {
+                    Some(value) => {
+                        value.serialize(&mut *self)?;
+
+                        if !fixed_sized_child {
+                            self.write_all(&b"\0"[..]).map_err(Error::Io)?;
+                        }
+                    }
+                    None => {
+                        self.sig_parser.skip_chars(child_sig_len)?;
+                    }
+                }
+
+                Ok(())
+            }
+            EncodingFormat::DBus => Err(Error::IncompatibleFormat(
+                signature.to_owned(),
+                self.ctxt.format(),
+            )),
+        }
+    }
+
     fn abs_pos(&self) -> usize {
         self.ctxt.position() + self.bytes_written
     }
@@ -538,16 +579,14 @@ where
     }
 
     fn serialize_none(self) -> Result<()> {
-        // FIXME: Corresponds to GVariant's `Maybe` type, which is empty (no bytes) for None.
-        todo!();
+        self.serialize_maybe::<()>(None)
     }
 
-    fn serialize_some<T>(self, _value: &T) -> Result<()>
+    fn serialize_some<T>(self, value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        // FIXME: Corresponds to GVariant's `Maybe` type.
-        todo!();
+        self.serialize_maybe(Some(value))
     }
 
     fn serialize_unit(self) -> Result<()> {
