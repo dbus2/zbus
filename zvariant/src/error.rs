@@ -19,6 +19,8 @@ pub enum Error {
     UnknownFd,
     /// Missing framing offset at the end of a GVariant-encoded container,
     MissingFramingOffset,
+    /// The type (signature as first argument) being (de)serialized is not supported by the format.
+    IncompatibleFormat(crate::Signature<'static>, crate::EncodingFormat),
 }
 
 impl PartialEq for Error {
@@ -57,6 +59,11 @@ impl fmt::Display for Error {
             Error::MissingFramingOffset => write!(
                 f,
                 "Missing framing offset at the end of GVariant-encoded container"
+            ),
+            Error::IncompatibleFormat(sig, format) => write!(
+                f,
+                "Type `{}` is not compatible with `{}` format",
+                sig, format,
             ),
         }
     }
