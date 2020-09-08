@@ -17,6 +17,15 @@ impl Default for EncodingFormat {
     }
 }
 
+impl std::fmt::Display for EncodingFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            EncodingFormat::DBus => write!(f, "D-Bus"),
+            EncodingFormat::GVariant => write!(f, "GVariant"),
+        }
+    }
+}
+
 /// The encoding context to use with the [serialization and deserialization] API.
 ///
 /// This type is generic over the [ByteOrder] trait. Moreover, the encoding is dependent on the
