@@ -148,6 +148,9 @@ pub use crate::str::*;
 mod structure;
 pub use crate::structure::*;
 
+mod maybe;
+pub use crate::maybe::*;
+
 mod value;
 pub use value::*;
 
@@ -1229,6 +1232,23 @@ mod tests {
         let variant = Variant::from_bytes::<Option<i16>>(&bytes);
         assert_eq!(variant.get::<Option<i16>>().unwrap(), mn);
 
+        // As Value
+        let v: Value = mn.into();
+        let encoded = to_bytes(ctxt, &v).unwrap();
+        assert_eq!(encoded.len(), 5);
+        let decoded: Value = from_slice(&encoded, ctxt).unwrap();
+        if let Value::Maybe(maybe) = decoded {
+            assert_eq!(maybe.get().unwrap(), mn);
+        } else {
+            panic!();
+        }
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(encoded);
+        let variant = Variant::from_bytes::<Variant>(&bytes);
+        let decoded = variant.get_child_value(0).get::<Option<i16>>().unwrap();
+        assert_eq!(decoded, mn);
+
         // Now a None of the same type
         let mn: Option<i16> = None;
         let encoded = to_bytes(ctxt, &mn).unwrap();
@@ -1255,6 +1275,23 @@ mod tests {
             &variant.get::<Option<String>>().unwrap().unwrap(),
             ms.unwrap()
         );
+
+        // As Value
+        let v: Value = ms.into();
+        let encoded = to_bytes(ctxt, &v).unwrap();
+        assert_eq!(encoded.len(), 16);
+        let decoded: Value = from_slice(&encoded, ctxt).unwrap();
+        if let Value::Maybe(maybe) = decoded {
+            assert_eq!(maybe.get::<String>().unwrap().as_deref(), ms);
+        } else {
+            panic!();
+        }
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(encoded);
+        let variant = Variant::from_bytes::<Variant>(&bytes);
+        let decoded = variant.get_child_value(0).get::<Option<String>>().unwrap();
+        assert_eq!(decoded.as_deref(), ms);
 
         // Now a None of the same type
         let ms: Option<&str> = None;
@@ -1284,6 +1321,22 @@ mod tests {
         let decoded = variant.get::<Vec<Option<String>>>().unwrap();
         assert_eq!(decoded, ams);
 
+        // As Value
+        let v: Value = ams.clone().into();
+        let encoded = to_bytes(ctxt, &v).unwrap();
+        assert_eq!(encoded.len(), 30);
+        let decoded: Value = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(v, decoded);
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(encoded);
+        let variant = Variant::from_bytes::<Variant>(&bytes);
+        let decoded = variant
+            .get_child_value(0)
+            .get::<Vec<Option<String>>>()
+            .unwrap();
+        assert_eq!(decoded, ams);
+
         // In a struct
         let structure: (Option<String>, u64, Option<String>) =
             (Some(String::from("hello world")), 42u64, None);
@@ -1296,6 +1349,22 @@ mod tests {
         let bytes = Bytes::from_owned(encoded);
         let variant = Variant::from_bytes::<(Option<String>, u64, Option<String>)>(&bytes);
         let decoded = variant
+            .get::<(Option<String>, u64, Option<String>)>()
+            .unwrap();
+        assert_eq!(decoded, structure);
+
+        // As Value
+        let v: Value = structure.clone().into();
+        let encoded = to_bytes(ctxt, &v).unwrap();
+        assert_eq!(encoded.len(), 33);
+        let decoded: Value = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(v, decoded);
+
+        // Check encoding against GLib
+        let bytes = Bytes::from_owned(encoded);
+        let variant = Variant::from_bytes::<Variant>(&bytes);
+        let decoded = variant
+            .get_child_value(0)
             .get::<(Option<String>, u64, Option<String>)>()
             .unwrap();
         assert_eq!(decoded, structure);

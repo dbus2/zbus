@@ -1,5 +1,5 @@
 use crate::Value;
-use crate::{Array, Dict};
+use crate::{Array, Dict, Maybe};
 use crate::{Fd, ObjectPath, Signature, Structure};
 
 //
@@ -39,6 +39,7 @@ into_value!(Signature<'a>, Signature);
 into_value!(ObjectPath<'a>, ObjectPath);
 into_value!(Array<'a>, Array);
 into_value!(Dict<'a, 'a>, Dict);
+into_value!(Maybe<'a>, Maybe);
 
 impl<'s> From<String> for Value<'s> {
     fn from(v: String) -> Self {
@@ -85,5 +86,14 @@ where
 impl<'v> From<&'v String> for Value<'v> {
     fn from(v: &'v String) -> Value<'v> {
         Value::Str(v.into())
+    }
+}
+
+impl<'v, V> From<Option<V>> for Value<'v>
+where
+    Option<V>: Into<Maybe<'v>>,
+{
+    fn from(v: Option<V>) -> Value<'v> {
+        Value::Maybe(v.into())
     }
 }

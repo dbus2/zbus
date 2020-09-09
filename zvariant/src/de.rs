@@ -293,6 +293,7 @@ where
             VARIANT_SIGNATURE_CHAR => self.deserialize_seq(visitor),
             ARRAY_SIGNATURE_CHAR => self.deserialize_seq(visitor),
             STRUCT_SIG_START_CHAR => self.deserialize_seq(visitor),
+            MAYBE_SIGNATURE_CHAR => self.deserialize_option(visitor),
             c => Err(de::Error::invalid_value(
                 de::Unexpected::Char(c),
                 &"a valid signature character",
