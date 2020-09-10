@@ -167,8 +167,8 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
         }
     } else {
         quote! {
-            _ => {
-                continue;
+            unknown => {
+                let _ = access.next_value::<#zv::Value>();
             }
         }
     };

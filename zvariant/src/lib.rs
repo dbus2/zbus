@@ -685,6 +685,13 @@ mod tests {
         );
 
         #[derive(SerializeDict, DeserializeDict, TypeDict, PartialEq, Debug)]
+        struct TestSkipUnknown {
+            process_id: Option<u32>,
+            group_id: Option<u32>,
+        };
+        let _: TestSkipUnknown = from_slice(&encoded, ctxt).unwrap();
+
+        #[derive(SerializeDict, DeserializeDict, TypeDict, PartialEq, Debug)]
         #[zvariant(deny_unknown_fields)]
         struct TestUnknown {
             process_id: Option<u32>,
