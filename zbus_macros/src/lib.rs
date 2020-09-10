@@ -97,8 +97,6 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_interface;
-/// use std::rc::Rc;
-/// use std::cell::RefCell;
 ///
 /// struct Example {
 ///     some_data: String,
