@@ -142,9 +142,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
         entries.push(quote! {
             #dict_name => {
                 // FIXME: add an option about strict parsing (instead of silently skipping the field)
-                if let Ok(val) = access.next_value::<#zv::DeserializeValue<_>>() {
-                    #name = Some(val.0);
-                }
+                #name = access.next_value::<#zv::DeserializeValue<_>>().map(|v| v.0).ok();
             }
         });
 
