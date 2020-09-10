@@ -4,8 +4,8 @@
 
 //! This crate provides API for serialization/deserialization of data to/from [D-Bus] wire format.
 //! This binary wire format is simple and very efficient and hence useful outside of D-Bus context
-//! as well. A slightly modified form of this format, [GVariant] is also very common and will be
-//! supported by a future version of this crate.
+//! as well. A modified form of this format, [GVariant] is very commonly used for efficient storage
+//! of arbitrary data and is also supported by this crate.
 //!
 //! Since version 2.0, the API is [serde]-based and hence you'll find it very intuitive if you're
 //! already familiar with serde. If you're not familiar with serde, you may want to first read its
@@ -37,6 +37,9 @@
 //! let encoded = to_bytes(ctxt, &t).unwrap();
 //! let decoded: (&str, i32, bool) = from_slice(&encoded, ctxt).unwrap();
 //! assert_eq!(decoded, t);
+//!
+//! // Let's use the more efficient GVariant format.
+//! let ctxt = Context::<LE>::new_gvariant(0);
 //!
 //! // Vec
 //! let v = vec!["hello", "world!"];
