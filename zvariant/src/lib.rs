@@ -1402,4 +1402,22 @@ mod tests {
         let result: Result<(&str, &str)> = from_slice(&encoded, ctxt);
         assert!(result.is_err());
     }
+
+    #[cfg(feature = "ostree-tests")]
+    #[test]
+    fn ostree_de() {
+        #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+        struct Summary<'a>(Vec<Repo<'a>>, #[serde(borrow)] HashMap<&'a str, Value<'a>>);
+
+        #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+        struct Repo<'a>(&'a str, #[serde(borrow)] Metadata<'a>);
+
+        #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+        struct Metadata<'a>(u64, Vec<u8>, #[serde(borrow)] HashMap<&'a str, Value<'a>>);
+
+        let encoded = std::fs::read("../test-data/flatpak-summary.dump").unwrap();
+        let ctxt = Context::<LE>::new_gvariant(0);
+        let _: Summary = from_slice(&encoded, ctxt).unwrap();
+        // If we're able to deserialize all the data succesfully, don't bother checking the summary data.
+    }
 }
