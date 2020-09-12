@@ -38,7 +38,7 @@ cache:
     - target/
 
 pages:
-  image: "rustlang/rust:stable"
+  image: "hrektts/mdbook"
   stage: pages
   before_script:
     - export PATH="$PATH:$CARGO_HOME/bin"
