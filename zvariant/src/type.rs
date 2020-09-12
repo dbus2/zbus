@@ -110,8 +110,15 @@ where
     }
 }
 
-// TODO: implement when we support GVariant support
-// impl<T> Type for Option<T>
+impl<T> Type for Option<T>
+where
+    T: Type,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        Signature::from_string_unchecked(format!("m{}", T::signature()))
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 

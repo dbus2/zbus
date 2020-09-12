@@ -49,7 +49,7 @@ impl<'a> Structure<'a> {
         for field in &self.0 {
             signature.push_str(&field.value_signature());
         }
-        signature.push_str(")");
+        signature.push(')');
 
         Signature::from_string_unchecked(signature)
     }

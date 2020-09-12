@@ -131,7 +131,9 @@ s
 
 This crate provides API for encoding/decoding of data to/from D-Bus wire format. This crate is already in good shape
 and can and should be used by other projects. This binary wire format is simple and very efficient and hence useful
-outside of D-Bus context as well.
+outside of D-Bus context as well. A modified form of this format,
+[GVariant](https://developer.gnome.org/glib/stable/glib-GVariant.html) is very commonly used for efficient storage of
+arbitrary data and is also supported by this crate.
 
 **Status:** Stable.
 
@@ -168,6 +170,9 @@ let t = ("hello", 42i32, true);
 let encoded = to_bytes(ctxt, &t).unwrap();
 let decoded: (&str, i32, bool) = from_slice(&encoded, ctxt).unwrap();
 assert_eq!(decoded, t);
+
+// Let's use the more efficient GVariant format.
+let ctxt = Context::<LE>::new_gvariant(0);
 
 // Vec
 let v = vec!["hello", "world!"];

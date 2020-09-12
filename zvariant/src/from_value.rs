@@ -1,5 +1,5 @@
 use crate::Value;
-use crate::{Array, Dict, Error, Fd, ObjectPath, Signature, Str, Structure};
+use crate::{Array, Dict, Error, Fd, Maybe, ObjectPath, Signature, Str, Structure};
 use std::convert::TryFrom;
 
 macro_rules! value_try_from {
@@ -75,6 +75,7 @@ value_try_from_all!(ObjectPath, ObjectPath<'a>);
 value_try_from_all!(Structure, Structure<'a>);
 value_try_from_all!(Dict, Dict<'a, 'a>);
 value_try_from_all!(Array, Array<'a>);
+value_try_from_all!(Maybe, Maybe<'a>);
 
 value_try_from!(Str, String);
 value_try_from_ref!(Str, str);
@@ -95,6 +96,11 @@ where
     }
 }
 
+// This would be great but somehow it conflicts with some blanket generic implementations from
+// core:
+//
+// impl<'a, T> TryFrom<Value<'a>> for Option<T>
+//
 // TODO: this could be useful
 // impl<'a, 'b, T> TryFrom<&'a Value<'b>> for Vec<T>
 // impl<'a, K, V, H> TryFrom<Value<'a> for HashMap<K, V, H>

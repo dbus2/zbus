@@ -17,6 +17,10 @@ pub enum Error {
     PaddingNot0(u8),
     /// The deserialized file descriptor is not in the given FD index.
     UnknownFd,
+    /// Missing framing offset at the end of a GVariant-encoded container,
+    MissingFramingOffset,
+    /// The type (signature as first argument) being (de)serialized is not supported by the format.
+    IncompatibleFormat(crate::Signature<'static>, crate::EncodingFormat),
 }
 
 impl PartialEq for Error {
@@ -52,6 +56,15 @@ impl fmt::Display for Error {
             Error::Utf8(e) => write!(f, "{}", e),
             Error::PaddingNot0(b) => write!(f, "Unexpected non-0 padding byte `{}`", b),
             Error::UnknownFd => write!(f, "File descriptor not in the given FD index"),
+            Error::MissingFramingOffset => write!(
+                f,
+                "Missing framing offset at the end of GVariant-encoded container"
+            ),
+            Error::IncompatibleFormat(sig, format) => write!(
+                f,
+                "Type `{}` is not compatible with `{}` format",
+                sig, format,
+            ),
         }
     }
 }

@@ -99,6 +99,7 @@ impl<'a> Basic for Signature<'a> {
     fn alignment(format: EncodingFormat) -> usize {
         match format {
             EncodingFormat::DBus => 1,
+            EncodingFormat::GVariant => 1,
         }
     }
 }

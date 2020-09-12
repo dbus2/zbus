@@ -4,7 +4,7 @@ use crate::{Basic, EncodingFormat, Error, Fd, ObjectPath, Signature};
 pub const ARRAY_SIGNATURE_CHAR: char = 'a';
 /// The prefix of ARRAY type signature, as a string. Provided for manual signature creation.
 pub const ARRAY_SIGNATURE_STR: &str = "a";
-pub(crate) const ARRAY_ALIGNMENT: usize = 4;
+pub(crate) const ARRAY_ALIGNMENT_DBUS: usize = 4;
 /// The opening character of STRUCT type signature. Provided for manual signature creation.
 pub const STRUCT_SIG_START_CHAR: char = '(';
 /// The closing character of STRUCT type signature. Provided for manual signature creation.
@@ -13,7 +13,7 @@ pub const STRUCT_SIG_END_CHAR: char = ')';
 pub const STRUCT_SIG_START_STR: &str = "(";
 /// The closing character of STRUCT type signature, as a string. Provided for manual signature creation.
 pub const STRUCT_SIG_END_STR: &str = ")";
-pub(crate) const STRUCT_ALIGNMENT: usize = 8;
+pub(crate) const STRUCT_ALIGNMENT_DBUS: usize = 8;
 /// The opening character of DICT_ENTRY type signature. Provided for manual signature creation.
 pub const DICT_ENTRY_SIG_START_CHAR: char = '{';
 /// The closing character of DICT_ENTRY type signature. Provided for manual signature creation.
@@ -22,12 +22,19 @@ pub const DICT_ENTRY_SIG_END_CHAR: char = '}';
 pub const DICT_ENTRY_SIG_START_STR: &str = "{";
 /// The closing character of DICT_ENTRY type signature, as a string. Provided for manual signature creation.
 pub const DICT_ENTRY_SIG_END_STR: &str = "}";
-pub(crate) const DICT_ENTRY_ALIGNMENT: usize = 8;
+pub(crate) const DICT_ENTRY_ALIGNMENT_DBUS: usize = 8;
 /// The VARIANT type signature. Provided for manual signature creation.
 pub const VARIANT_SIGNATURE_CHAR: char = 'v';
 /// The VARIANT type signature, as a string. Provided for manual signature creation.
 pub const VARIANT_SIGNATURE_STR: &str = "v";
-pub(crate) const VARIANT_ALIGNMENT: usize = 1;
+pub(crate) const VARIANT_ALIGNMENT_DBUS: usize = 1;
+pub(crate) const VARIANT_ALIGNMENT_GVARIANT: usize = 8;
+/// The prefix of MAYBE (GVariant-specific) type signature, as a character. Provided for manual
+/// signature creation.
+pub const MAYBE_SIGNATURE_CHAR: char = 'm';
+/// The prefix of MAYBE (GVariant-specific) type signature, as a string. Provided for manual
+/// signature creation.
+pub const MAYBE_SIGNATURE_STR: &str = "m";
 
 pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
     let len_rounded_up = value.wrapping_add(align).wrapping_sub(1) & !align.wrapping_sub(1);
@@ -59,8 +66,14 @@ pub(crate) fn f64_to_f32(value: f64) -> f32 {
     value as f32
 }
 
-pub(crate) fn alignment_for_signature_char(signature_char: char, format: EncodingFormat) -> usize {
-    match signature_char {
+// `signature` must be **one** complete and correct signature. Expect panics otherwise!
+pub(crate) fn alignment_for_signature(signature: &Signature, format: EncodingFormat) -> usize {
+    match signature
+        .as_bytes()
+        .first()
+        .map(|b| *b as char)
+        .expect("alignment_for_signature expects **one** complete & correct signature")
+    {
         u8::SIGNATURE_CHAR => u8::alignment(format),
         bool::SIGNATURE_CHAR => bool::alignment(format),
         i16::SIGNATURE_CHAR => i16::alignment(format),
@@ -73,12 +86,16 @@ pub(crate) fn alignment_for_signature_char(signature_char: char, format: Encodin
         <&str>::SIGNATURE_CHAR => <&str>::alignment(format),
         ObjectPath::SIGNATURE_CHAR => ObjectPath::alignment(format),
         Signature::SIGNATURE_CHAR => Signature::alignment(format),
-        VARIANT_SIGNATURE_CHAR => VARIANT_ALIGNMENT,
-        ARRAY_SIGNATURE_CHAR => ARRAY_ALIGNMENT,
-        STRUCT_SIG_START_CHAR => STRUCT_ALIGNMENT,
-        DICT_ENTRY_SIG_START_CHAR => DICT_ENTRY_ALIGNMENT,
+        VARIANT_SIGNATURE_CHAR => match format {
+            EncodingFormat::DBus => VARIANT_ALIGNMENT_DBUS,
+            EncodingFormat::GVariant => VARIANT_ALIGNMENT_GVARIANT,
+        },
+        ARRAY_SIGNATURE_CHAR => alignment_for_array_signature(signature, format),
+        STRUCT_SIG_START_CHAR => alignment_for_struct_signature(signature, format),
+        DICT_ENTRY_SIG_START_CHAR => alignment_for_dict_entry_signature(signature, format),
+        MAYBE_SIGNATURE_CHAR => alignment_for_maybe_signature(signature, format),
         _ => {
-            println!("WARNING: Unsupported signature: {}", signature_char);
+            println!("WARNING: Unsupported signature: {}", signature);
 
             0
         }
@@ -109,10 +126,34 @@ pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
         ARRAY_SIGNATURE_CHAR => slice_array_signature(signature),
         STRUCT_SIG_START_CHAR => slice_structure_signature(signature),
         DICT_ENTRY_SIG_START_CHAR => slice_dict_entry_signature(signature),
+        MAYBE_SIGNATURE_CHAR => slice_maybe_signature(signature),
         c => Err(serde::de::Error::invalid_value(
             serde::de::Unexpected::Char(c),
             &"a valid signature character",
         )),
+    }
+}
+
+pub(crate) fn is_fixed_sized_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
+    match signature
+        .as_bytes()
+        .first()
+        .map(|b| *b as char)
+        .ok_or_else(|| serde::de::Error::invalid_length(0, &">= 1 character"))?
+    {
+        u8::SIGNATURE_CHAR
+        | bool::SIGNATURE_CHAR
+        | i16::SIGNATURE_CHAR
+        | u16::SIGNATURE_CHAR
+        | i32::SIGNATURE_CHAR
+        | u32::SIGNATURE_CHAR
+        | i64::SIGNATURE_CHAR
+        | u64::SIGNATURE_CHAR
+        | f64::SIGNATURE_CHAR
+        | Fd::SIGNATURE_CHAR => Ok(true),
+        STRUCT_SIG_START_CHAR => is_fixed_sized_struct_signature(signature),
+        DICT_ENTRY_SIG_START_CHAR => is_fixed_sized_dict_entry_signature(signature),
+        _ => Ok(false),
     }
 }
 
@@ -140,7 +181,10 @@ macro_rules! check_child_value_signature {
     }};
 }
 
-fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
+fn slice_single_child_type_container_signature<'a>(
+    signature: &'a Signature<'a>,
+    expected_sig_prefix: char,
+) -> Result<Signature<'a>, Error> {
     if signature.len() < 2 {
         return Err(serde::de::Error::invalid_length(
             signature.len(),
@@ -154,10 +198,10 @@ fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'
         .first()
         .map(|b| *b as char)
         .expect("empty signature");
-    if c != ARRAY_SIGNATURE_CHAR {
+    if c != expected_sig_prefix {
         return Err(serde::de::Error::invalid_value(
             serde::de::Unexpected::Char(c),
-            &crate::ARRAY_SIGNATURE_STR,
+            &expected_sig_prefix.to_string().as_str(),
         ));
     }
 
@@ -165,6 +209,14 @@ fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'
     let slice_len = slice_signature(&Signature::from_str_unchecked(&signature[1..]))?.len();
 
     Ok(Signature::from_str_unchecked(&signature[0..=slice_len]))
+}
+
+fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
+    slice_single_child_type_container_signature(signature, ARRAY_SIGNATURE_CHAR)
+}
+
+fn slice_maybe_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
+    slice_single_child_type_container_signature(signature, MAYBE_SIGNATURE_CHAR)
 }
 
 fn slice_structure_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
@@ -241,4 +293,111 @@ fn slice_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<Signat
 
     // signature of value + `{` + 1 char of the key signature + `}`
     Ok(Signature::from_str_unchecked(&signature[0..slice_len + 3]))
+}
+
+fn alignment_for_single_child_type_signature(
+    signature: &Signature,
+    format: EncodingFormat,
+    dbus_align: usize,
+) -> usize {
+    match format {
+        EncodingFormat::DBus => dbus_align,
+        EncodingFormat::GVariant => {
+            let child_signature = Signature::from_str_unchecked(&signature[1..]);
+
+            alignment_for_signature(&child_signature, format)
+        }
+    }
+}
+
+fn alignment_for_array_signature(signature: &Signature, format: EncodingFormat) -> usize {
+    alignment_for_single_child_type_signature(signature, format, ARRAY_ALIGNMENT_DBUS)
+}
+
+fn alignment_for_maybe_signature(signature: &Signature, format: EncodingFormat) -> usize {
+    alignment_for_single_child_type_signature(signature, format, 1)
+}
+
+fn alignment_for_struct_signature(signature: &Signature, format: EncodingFormat) -> usize {
+    match format {
+        EncodingFormat::DBus => STRUCT_ALIGNMENT_DBUS,
+        EncodingFormat::GVariant => {
+            let inner_signature = &signature[1..signature.len() - 1];
+            let mut parsed = 0;
+            let mut alignment = 0;
+
+            while parsed < inner_signature.len() {
+                let rest_of_signature = Signature::from_str_unchecked(&inner_signature[parsed..]);
+                let child_signature =
+                    slice_signature(&rest_of_signature).expect("invalid signature");
+                parsed += child_signature.len();
+
+                let child_alignment = alignment_for_signature(&child_signature, format);
+                if child_alignment > alignment {
+                    alignment = child_alignment;
+
+                    if alignment == 8 {
+                        // 8 bytes is max alignment so we can short-circuit here
+                        break;
+                    }
+                }
+            }
+
+            alignment
+        }
+    }
+}
+
+fn alignment_for_dict_entry_signature(signature: &Signature, format: EncodingFormat) -> usize {
+    match format {
+        EncodingFormat::DBus => DICT_ENTRY_ALIGNMENT_DBUS,
+        EncodingFormat::GVariant => {
+            let key_signature = Signature::from_str_unchecked(&signature[1..2]);
+            let key_alignment = alignment_for_signature(&key_signature, format);
+            if key_alignment == 8 {
+                // 8 bytes is max alignment so we can short-circuit here
+                return 8;
+            }
+
+            let value_signature = Signature::from_str_unchecked(&signature[2..signature.len() - 1]);
+            let value_alignment = alignment_for_signature(&value_signature, format);
+            if value_alignment > key_alignment {
+                value_alignment
+            } else {
+                key_alignment
+            }
+        }
+    }
+}
+
+fn is_fixed_sized_struct_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
+    let inner_signature = &signature[1..signature.len() - 1];
+    let mut parsed = 0;
+    let mut fixed_sized = true;
+
+    while parsed < inner_signature.len() {
+        let rest_of_signature = Signature::from_str_unchecked(&inner_signature[parsed..]);
+        let child_signature = slice_signature(&rest_of_signature).expect("invalid signature");
+        parsed += child_signature.len();
+
+        if !is_fixed_sized_signature(&child_signature)? {
+            // STRUCT is fixed-sized only if all its children are
+            fixed_sized = false;
+
+            break;
+        }
+    }
+
+    Ok(fixed_sized)
+}
+
+fn is_fixed_sized_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
+    let key_signature = Signature::from_str_unchecked(&signature[1..2]);
+    if !is_fixed_sized_signature(&key_signature)? {
+        return Ok(false);
+    }
+
+    let value_signature = Signature::from_str_unchecked(&signature[2..signature.len() - 1]);
+
+    is_fixed_sized_signature(&value_signature)
 }
