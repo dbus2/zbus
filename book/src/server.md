@@ -40,8 +40,8 @@ org.zbus.MyGreeter                             412452 server            elmarco 
 
 ### ⚠ Hang on
 
-This example is not handling incoming messages yet. Any attempt to call the
-server will time out (including the shell completion!).
+This example is not handling incoming messages yet. Any attempt to call the server will time out
+(including the shell completion!).
 
 ## Handling low-level messages
 
@@ -83,9 +83,8 @@ $ busctl --user call org.zbus.MyGreeter /org/zbus/MyGreeter org.zbus.MyGreeter1 
 s "Hello zbus!"
 ```
 
-This is the crust of low-level message handling. It should give you all the
-flexibility you ever need, but it is also easy to get it wrong. Fortunately,
-zbus has a simpler solution to offer.
+This is the crust of low-level message handling. It should give you all the flexibility you ever
+need, but it is also easy to get it wrong. Fortunately, zbus has a simpler solution to offer.
 
 ## Using the `ObjectServer`
 
