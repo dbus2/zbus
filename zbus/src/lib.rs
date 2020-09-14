@@ -185,8 +185,7 @@ mod tests {
     use ntest::timeout;
     use serde_repr::{Deserialize_repr, Serialize_repr};
 
-    use zvariant::{Fd, OwnedValue, Type};
-    use zvariant_derive::Type;
+    use zvariant::{derive::Type, Fd, OwnedValue, Type};
 
     use crate::{Connection, Message, MessageFlags};
 

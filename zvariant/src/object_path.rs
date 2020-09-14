@@ -7,7 +7,7 @@ use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
 use std::borrow::Cow;
 
-use crate::{alias_type, Basic, EncodingFormat, Error, Result, Signature, Type};
+use crate::{Basic, EncodingFormat, Error, Result, Signature, Type};
 
 /// String that identifies objects at a given destination on the D-Bus bus.
 ///
@@ -254,7 +254,7 @@ fn ensure_correct_object_path_str(path: &[u8]) -> Result<()> {
 }
 
 /// Owned [`ObjectPath`](struct.ObjectPath.html)
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, zvariant_derive::Type)]
 pub struct OwnedObjectPath(ObjectPath<'static>);
 
 impl OwnedObjectPath {
@@ -295,5 +295,3 @@ impl<'de> Deserialize<'de> for OwnedObjectPath {
             .map(|v| OwnedObjectPath(v.to_owned()))
     }
 }
-
-alias_type!(OwnedObjectPath, ObjectPath);

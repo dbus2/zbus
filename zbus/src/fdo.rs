@@ -7,8 +7,7 @@ use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
-use zvariant::{OwnedValue, Value};
-use zvariant_derive::Type;
+use zvariant::{derive::Type, OwnedValue, Value};
 
 use crate::{dbus_proxy, DBusError};
 
