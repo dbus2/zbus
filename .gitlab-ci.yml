@@ -39,7 +39,7 @@ cache:
 
 pages:
   image: "hrektts/mdbook"
-  stage: deploy
+  stage: pages
   before_script:
     - export PATH="$PATH:$CARGO_HOME/bin"
     - mdbook --version || cargo install --debug mdbook
