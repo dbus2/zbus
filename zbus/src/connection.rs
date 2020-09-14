@@ -1,11 +1,12 @@
 use std::cell::{Cell, RefCell};
 use std::convert::TryInto;
+use std::env;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::rc::Rc;
-use std::{env, io};
 
+use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType, UnixAddr};
 use nix::unistd::Uid;
 use once_cell::unsync::OnceCell;
 
@@ -510,11 +511,21 @@ impl Connection {
 fn connect(addr: &Address) -> Result<UnixStream> {
     match addr {
         Address::Path(p) => Ok(UnixStream::connect(p)?),
-        Address::Abstract(_) => Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "abstract sockets are not currently supported",
-        )
-        .into()),
+        Address::Abstract(p) => {
+            // FIXME: Use std API once std supports abstract sockets:
+            //
+            // https://github.com/rust-lang/rust/issues/42048
+            let addr = SockAddr::Unix(UnixAddr::new_abstract(p.as_bytes())?);
+            let raw = socket::socket(
+                AddressFamily::Unix,
+                SockType::Stream,
+                SockFlag::empty(),
+                None,
+            )?;
+            socket::connect(raw, &addr)?;
+
+            Ok(unsafe { UnixStream::from_raw_fd(raw) })
+        }
     }
 }
 
