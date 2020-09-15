@@ -94,6 +94,14 @@ impl From<io::Error> for Error {
     }
 }
 
+impl From<nix::Error> for Error {
+    fn from(val: nix::Error) -> Self {
+        val.as_errno()
+            .map(|errno| io::Error::from_raw_os_error(errno as i32).into())
+            .unwrap_or_else(|| io::Error::new(io::ErrorKind::Other, val).into())
+    }
+}
+
 impl From<MessageError> for Error {
     fn from(val: MessageError) -> Self {
         Error::Message(val)
