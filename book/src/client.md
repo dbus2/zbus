@@ -338,7 +338,7 @@ pub struct ServerInformation {
     /// The product name of the server.
     pub name: String,
 
-    /// The vendor name. For example, "KDE," "GNOME," "freedesktop.org," or "Microsoft".
+    /// The vendor name. For example "KDE," "GNOME," "freedesktop.org" or "Microsoft".
     pub vendor: String,
 
     /// The server's version number.

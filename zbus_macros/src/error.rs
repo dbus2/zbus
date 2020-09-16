@@ -1,4 +1,4 @@
-use proc_macro::TokenStream;
+use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Meta::{List, NameValue};
 use syn::NestedMeta::Meta;
@@ -132,7 +132,8 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
     }
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    let expanded = quote! {
+
+    quote! {
         impl #impl_generics #name #ty_generics #where_clause {
             #vis fn name(&self) -> &str {
                 match self {
@@ -184,8 +185,5 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
                 }
             }
         }
-
-    };
-
-    expanded.into()
+    }
 }

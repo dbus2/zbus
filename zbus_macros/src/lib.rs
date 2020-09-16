@@ -69,7 +69,7 @@ mod utils;
 pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
     let input = parse_macro_input!(item as ItemTrait);
-    proxy::expand(args, input)
+    proxy::expand(args, input).into()
 }
 
 /// Attribute macro for implementing a D-Bus interface.
@@ -134,6 +134,8 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
     let input = syn::parse_macro_input!(item as ItemImpl);
     iface::expand(args, input)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
 
 /// Derive macro for defining a D-Bus error.
@@ -175,5 +177,5 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_derive(DBusError, attributes(dbus_error))]
 pub fn derive_dbus_error(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    error::expand_derive(input)
+    error::expand_derive(input).into()
 }

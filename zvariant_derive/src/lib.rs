@@ -93,8 +93,7 @@ mod utils;
 #[proc_macro_derive(Type)]
 pub fn type_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
-
-    r#type::expand_derive(ast)
+    r#type::expand_derive(ast).into()
 }
 
 /// Derive macro to add [`Type`] implementation to structs serialized as `a{sv}` type.
@@ -117,8 +116,7 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(TypeDict)]
 pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
-
-    dict::expand_type_derive(ast)
+    dict::expand_type_derive(ast).into()
 }
 
 /// Adds [`Serialize`] implementation to structs to be serialized as `a{sv}` type.
@@ -152,8 +150,7 @@ pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(SerializeDict, attributes(zvariant))]
 pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
-
-    dict::expand_serialize_derive(input)
+    dict::expand_serialize_derive(input).into()
 }
 
 /// Adds [`Deserialize`] implementation to structs to be deserialized from `a{sv}` type.
@@ -187,6 +184,5 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(DeserializeDict, attributes(zvariant))]
 pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
-
-    dict::expand_deserialize_derive(input)
+    dict::expand_deserialize_derive(input).into()
 }

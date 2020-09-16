@@ -40,7 +40,6 @@ fn test_derive_error() {
 
 #[test]
 fn test_interface() {
-    use serde;
     use zbus::Interface;
 
     struct Test<'a, T> {
@@ -95,7 +94,7 @@ fn test_interface() {
         fn signal(&self, arg: u8, other: &str) -> zbus::Result<()>;
     }
 
-    const EXPECTED_XML: &'static str = r#"<interface name="org.freedesktop.zbus.Test">
+    const EXPECTED_XML: &str = r#"<interface name="org.freedesktop.zbus.Test">
   <!--
    Testing `no_arg` documentation is reflected in XML.
    -->
