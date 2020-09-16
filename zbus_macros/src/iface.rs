@@ -1,4 +1,4 @@
-use proc_macro::TokenStream;
+use proc_macro2::TokenStream;
 use quote::quote;
 use std::collections::HashMap;
 use syn::{
@@ -14,7 +14,7 @@ struct Property<'a> {
     read: bool,
     write: bool,
     ty: Option<&'a Type>,
-    doc_comments: proc_macro2::TokenStream,
+    doc_comments: TokenStream,
 }
 
 impl<'a> Property<'a> {
@@ -237,7 +237,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
     let self_ty = &input.self_ty;
     let generics = &input.generics;
     let where_clause = &generics.where_clause;
-    let iface_impl = quote! {
+
+    quote! {
         #input
 
         impl #generics ::#zbus::Interface for #self_ty
@@ -322,15 +323,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                 writeln!(writer, r#"{:indent$}</interface>"#, "", indent = level).unwrap();
             }
         }
-    };
-
-    iface_impl.into()
+    }
 }
 
-fn get_args_from_inputs(
-    inputs: &[&PatType],
-    zbus: &Ident,
-) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+fn get_args_from_inputs(inputs: &[&PatType], zbus: &Ident) -> (TokenStream, TokenStream) {
     if inputs.is_empty() {
         (quote!(), quote!())
     } else {
@@ -350,11 +346,7 @@ fn get_args_from_inputs(
     }
 }
 
-fn introspect_add_signal(
-    introspect: &mut proc_macro2::TokenStream,
-    name: &str,
-    args: &proc_macro2::TokenStream,
-) {
+fn introspect_add_signal(introspect: &mut TokenStream, name: &str, args: &TokenStream) {
     let intro = quote!(
         writeln!(writer, "{:indent$}<signal name=\"{}\">", "", #name, indent = level).unwrap();
         {
@@ -367,11 +359,7 @@ fn introspect_add_signal(
     introspect.extend(intro);
 }
 
-fn introspect_add_method(
-    introspect: &mut proc_macro2::TokenStream,
-    name: &str,
-    args: &proc_macro2::TokenStream,
-) {
+fn introspect_add_method(introspect: &mut TokenStream, name: &str, args: &TokenStream) {
     let intro = quote!(
         writeln!(writer, "{:indent$}<method name=\"{}\">", "", #name, indent = level).unwrap();
         {
@@ -384,11 +372,7 @@ fn introspect_add_method(
     introspect.extend(intro);
 }
 
-fn introspect_add_input_args(
-    args: &mut proc_macro2::TokenStream,
-    inputs: &[&PatType],
-    is_signal: bool,
-) {
+fn introspect_add_input_args(args: &mut TokenStream, inputs: &[&PatType], is_signal: bool) {
     for PatType { pat, ty, .. } in inputs {
         let arg_name = quote!(#pat).to_string();
         let dir = if is_signal { "" } else { " direction=\"in\"" };
@@ -400,7 +384,7 @@ fn introspect_add_input_args(
     }
 }
 
-fn introspect_add_output_arg(args: &mut proc_macro2::TokenStream, ty: &Type) {
+fn introspect_add_output_arg(args: &mut TokenStream, ty: &Type) {
     let arg = quote!(
         writeln!(writer, "{:indent$}<arg type=\"{}\" direction=\"out\"/>", "",
                  <#ty>::signature(), indent = level).unwrap();
@@ -424,7 +408,7 @@ fn get_result_type(p: &TypePath) -> &Type {
     panic!("unhandled Result return {:?}", p);
 }
 
-fn introspect_add_output_args(args: &mut proc_macro2::TokenStream, output: &ReturnType) -> bool {
+fn introspect_add_output_args(args: &mut TokenStream, output: &ReturnType) -> bool {
     let mut is_result_output = false;
 
     if let ReturnType::Type(_, ty) = output {
@@ -478,10 +462,7 @@ fn get_property_type(output: &ReturnType) -> &Type {
     }
 }
 
-fn introspect_add_properties(
-    introspect: &mut proc_macro2::TokenStream,
-    properties: HashMap<String, Property>,
-) {
+fn introspect_add_properties(introspect: &mut TokenStream, properties: HashMap<String, Property>) {
     for (name, prop) in properties {
         let access = if prop.read && prop.write {
             "readwrite"
@@ -509,7 +490,7 @@ fn introspect_add_properties(
     }
 }
 
-pub fn to_xml_docs(lines: Vec<String>) -> proc_macro2::TokenStream {
+pub fn to_xml_docs(lines: Vec<String>) -> TokenStream {
     let mut docs = quote!();
 
     let mut lines: Vec<&str> = lines

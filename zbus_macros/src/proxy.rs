@@ -1,5 +1,4 @@
-use proc_macro::TokenStream;
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{self, AttributeArgs, Ident, ItemTrait, NestedMeta, TraitItemMethod};
 
@@ -48,7 +47,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     let name = iface_name.unwrap_or(format!("org.freedesktop.{}", ident));
     let default_path = default_path.unwrap_or(format!("/org/freedesktop/{}", ident));
     let default_service = default_service.unwrap_or_else(|| name.clone());
-    let mut methods = proc_macro2::TokenStream::new();
+    let mut methods = TokenStream::new();
 
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
@@ -91,7 +90,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
         });
     };
 
-    let proxy_impl = quote! {
+    quote! {
         #(#doc)*
         pub struct #proxy_name<'c>(::#zbus::Proxy<'c>);
 
@@ -154,12 +153,10 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 &self.0
             }
         }
-    };
-
-    proxy_impl.into()
+    }
 }
 
-fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> proc_macro2::TokenStream {
+fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> TokenStream {
     let doc = get_doc_attrs(&m.attrs);
     let args = m
         .sig
@@ -177,7 +174,7 @@ fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> proc_macro2:
     }
 }
 
-fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> proc_macro2::TokenStream {
+fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> TokenStream {
     let doc = get_doc_attrs(&m.attrs);
     let sig = &m.sig;
     if sig.inputs.len() > 1 {
