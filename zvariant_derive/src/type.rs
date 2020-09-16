@@ -1,4 +1,4 @@
-use proc_macro::TokenStream;
+use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{self, Attribute, Data, DataEnum, DeriveInput, Fields, Generics, Ident};
 
@@ -18,19 +18,18 @@ pub fn expand_derive(ast: DeriveInput) -> TokenStream {
 fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let signature = signature_for_struct(fields);
-    let expended = quote! {
+
+    quote! {
         impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
             #[inline]
             fn signature() -> zvariant::Signature<'static> {
                 #signature
             }
         }
-    };
-
-    TokenStream::from(expended)
+    }
 }
 
-fn signature_for_struct(fields: Fields) -> proc_macro2::TokenStream {
+fn signature_for_struct(fields: Fields) -> TokenStream {
     let field_types = fields.iter().map(|field| field.ty.to_token_stream());
     let named = match fields {
         Fields::Named(_) => true,
@@ -58,16 +57,15 @@ fn signature_for_struct(fields: Fields) -> proc_macro2::TokenStream {
 
 fn impl_unit_struct(name: Ident, generics: Generics) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    let expended = quote! {
+
+    quote! {
         impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
             #[inline]
             fn signature() -> zvariant::Signature<'static> {
                 zvariant::Signature::from_str_unchecked("")
             }
         }
-    };
-
-    TokenStream::from(expended)
+    }
 }
 
 fn impl_enum(
@@ -76,8 +74,7 @@ fn impl_enum(
     attrs: Vec<Attribute>,
     data: DataEnum,
 ) -> TokenStream {
-    let repr: proc_macro2::TokenStream = match attrs.iter().find(|attr| attr.path.is_ident("repr"))
-    {
+    let repr: TokenStream = match attrs.iter().find(|attr| attr.path.is_ident("repr")) {
         Some(repr_attr) => repr_attr
             .parse_args()
             .expect("Failed to parse `#[repr(...)]` attribute"),
@@ -93,14 +90,13 @@ fn impl_enum(
     }
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    let expended = quote! {
+
+    quote! {
         impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
             #[inline]
             fn signature() -> zvariant::Signature<'static> {
                 <#repr as zvariant::Type>::signature()
             }
         }
-    };
-
-    TokenStream::from(expended)
+    }
 }

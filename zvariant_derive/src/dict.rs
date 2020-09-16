@@ -1,5 +1,4 @@
-use proc_macro::TokenStream;
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::Meta::Path;
@@ -18,7 +17,7 @@ pub fn expand_type_derive(input: DeriveInput) -> TokenStream {
     let generics = input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let expanded = quote! {
+    quote! {
         impl #impl_generics ::#zv::Type for #name #ty_generics
         #where_clause
         {
@@ -26,9 +25,7 @@ pub fn expand_type_derive(input: DeriveInput) -> TokenStream {
                 ::#zv::Signature::from_str_unchecked("a{sv}")
             }
         }
-    };
-
-    expanded.into()
+    }
 }
 
 pub fn expand_serialize_derive(input: DeriveInput) -> TokenStream {
@@ -76,7 +73,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> TokenStream {
     let generics = input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let expanded = quote! {
+    quote! {
         impl #impl_generics ::#zv::export::serde::ser::Serialize for #name #ty_generics
         #where_clause
         {
@@ -92,10 +89,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> TokenStream {
                 map.end()
             }
         }
-
-    };
-
-    expanded.into()
+    }
 }
 
 pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
@@ -187,7 +181,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
 
     let (impl_generics, _, where_clause) = generics.split_for_impl();
 
-    let expanded = quote! {
+    quote! {
         impl #impl_generics ::#zv::export::serde::de::Deserialize<'de> for #name #ty_generics
         #where_clause
         {
@@ -236,7 +230,5 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
                 deserializer.deserialize_map(#visitor(std::marker::PhantomData))
             }
         }
-    };
-
-    expanded.into()
+    }
 }
