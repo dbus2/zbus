@@ -1,4 +1,7 @@
 use crate::{Error, Result};
+use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType, UnixAddr};
+use std::os::unix::io::FromRawFd;
+use std::os::unix::net::UnixStream;
 use std::str::FromStr;
 
 /// A bus address
@@ -8,6 +11,29 @@ pub(crate) enum Address {
     Path(String),
     /// An abstract path (Linux-only)
     Abstract(String),
+}
+
+impl Address {
+    pub(crate) fn connect(&self) -> Result<UnixStream> {
+        match self {
+            Address::Path(p) => Ok(UnixStream::connect(p)?),
+            Address::Abstract(p) => {
+                // FIXME: Use std API once std supports abstract sockets:
+                //
+                // https://github.com/rust-lang/rust/issues/42048
+                let addr = SockAddr::Unix(UnixAddr::new_abstract(p.as_bytes())?);
+                let raw = socket::socket(
+                    AddressFamily::Unix,
+                    SockType::Stream,
+                    SockFlag::empty(),
+                    None,
+                )?;
+                socket::connect(raw, &addr)?;
+
+                Ok(unsafe { UnixStream::from_raw_fd(raw) })
+            }
+        }
+    }
 }
 
 impl FromStr for Address {
