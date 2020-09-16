@@ -336,9 +336,9 @@ fn get_args_from_inputs(inputs: &[&PatType], zbus: &Ident) -> (TokenStream, Toke
         let args = quote!(#(#args),*);
         let args_from_msg = quote!(
             let (#args,): (#(#tys),*,) =
-                match m.body().map_err(::#zbus::fdo::Error::from) {
+                match m.body() {
                     Ok(r) => r,
-                    Err(e) => return Some(e.reply(c, m)),
+                    Err(e) => return Some(::#zbus::fdo::Error::from(e).reply(c, m)),
                 };
         );
 
