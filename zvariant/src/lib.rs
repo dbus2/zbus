@@ -79,8 +79,8 @@
 //! # no-std
 //!
 //! While `std` is currently a hard requirement, optional `no-std` support is planned in the future.
-//! On the other hand, `noalloc` support is not planned as it will be an extremely difficult to
-//! accomplish, if at all possible.
+//! On the other hand, `noalloc` support is not planned as it will be extremely difficult to
+//! accomplish. However, community contribution can change that. 😊
 //!
 //! # Optional features
 //!

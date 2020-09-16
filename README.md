@@ -129,11 +129,10 @@ s
 
 [![](https://docs.rs/zvariant/badge.svg)](https://docs.rs/zvariant/) [![](https://img.shields.io/crates/v/zvariant)](https://crates.io/crates/zvariant)
 
-This crate provides API for encoding/decoding of data to/from D-Bus wire format. This crate is already in good shape
-and can and should be used by other projects. This binary wire format is simple and very efficient and hence useful
-outside of D-Bus context as well. A modified form of this format,
-[GVariant](https://developer.gnome.org/glib/stable/glib-GVariant.html) is very commonly used for efficient storage of
-arbitrary data and is also supported by this crate.
+This crate provides API for encoding/decoding of data to/from D-Bus wire format. This binary wire
+format is simple and very efficient and hence useful outside of D-Bus context as well. A modified
+form of this format, [GVariant](https://developer.gnome.org/glib/stable/glib-GVariant.html) is very
+commonly used for efficient storage of arbitrary data and is also supported by this crate.
 
 **Status:** Stable.
 

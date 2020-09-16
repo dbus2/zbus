@@ -2,15 +2,15 @@ use std::cell::{Cell, RefCell};
 use std::convert::TryInto;
 use std::env;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::rc::Rc;
+use std::str::FromStr;
 
-use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType, UnixAddr};
 use nix::unistd::Uid;
 use once_cell::unsync::OnceCell;
 
-use crate::address::{self, Address};
+use crate::address::Address;
 use crate::utils::{read_exact, write_all};
 use crate::{fdo, Error, Guid, Message, MessageError, MessageType, Result, MIN_MESSAGE_SIZE};
 
@@ -161,10 +161,7 @@ impl Connection {
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
-        Self::new_unix_client(
-            connect(&address::parse_dbus_address(address)?)?,
-            bus_connection,
-        )
+        Self::new_unix_client(Address::from_str(address)?.connect()?, bus_connection)
     }
 
     /// Create a server `Connection` for the given `UnixStream` and the server `guid`.
@@ -508,33 +505,12 @@ impl Connection {
     }
 }
 
-fn connect(addr: &Address) -> Result<UnixStream> {
-    match addr {
-        Address::Path(p) => Ok(UnixStream::connect(p)?),
-        Address::Abstract(p) => {
-            // FIXME: Use std API once std supports abstract sockets:
-            //
-            // https://github.com/rust-lang/rust/issues/42048
-            let addr = SockAddr::Unix(UnixAddr::new_abstract(p.as_bytes())?);
-            let raw = socket::socket(
-                AddressFamily::Unix,
-                SockType::Stream,
-                SockFlag::empty(),
-                None,
-            )?;
-            socket::connect(raw, &addr)?;
-
-            Ok(unsafe { UnixStream::from_raw_fd(raw) })
-        }
-    }
-}
-
 /// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
 /// variable. If we don't recognize the value (or it's not set) we fall back to
 /// /run/user/UID/bus
 fn session_socket() -> Result<UnixStream> {
     match env::var("DBUS_SESSION_BUS_ADDRESS") {
-        Ok(val) => connect(&address::parse_dbus_address(&val)?),
+        Ok(val) => Address::from_str(&val)?.connect(),
         _ => {
             let uid = Uid::current();
             let path = format!("/run/user/{}/bus", uid);
@@ -548,7 +524,7 @@ fn session_socket() -> Result<UnixStream> {
 /// /var/run/dbus/system_bus_socket
 fn system_socket() -> Result<UnixStream> {
     match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
-        Ok(val) => connect(&address::parse_dbus_address(&val)?),
+        Ok(val) => Address::from_str(&val)?.connect(),
         _ => Ok(UnixStream::connect("/var/run/dbus/system_bus_socket")?),
     }
 }
