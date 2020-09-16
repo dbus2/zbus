@@ -260,7 +260,7 @@ impl Node {
         B: serde::ser::Serialize + zvariant::Type,
     {
         if !LOCAL_CONNECTION.is_set() {
-            return Err(Error::NoTLSConnection);
+            panic!("emit_signal: Connection TLS not set");
         }
 
         LOCAL_CONNECTION.with(|conn| conn.emit_signal(dest, &self.path, iface, signal_name, body))
@@ -453,7 +453,13 @@ impl<'a> ObjectServer<'a> {
     /// call this method directly, rather with the derived signal implementation from
     /// [`dbus_interface`].
     ///
+    /// # Panics
+    ///
+    /// This method will panic if called from outside of a node context. Use [`with`] to bring a
+    /// node into the current context.
+    ///
     /// [`dbus_interface`]: attr.dbus_interface.html
+    /// [`with`]: st truct.ObjectServer.html#method.with
     pub fn local_node_emit_signal<B>(
         destination: Option<&str>,
         iface: &str,
@@ -464,7 +470,7 @@ impl<'a> ObjectServer<'a> {
         B: serde::ser::Serialize + zvariant::Type,
     {
         if !LOCAL_NODE.is_set() {
-            return Err(Error::NoTLSNode);
+            panic!("emit_signal: Node TLS not set");
         }
 
         LOCAL_NODE.with(|n| n.emit_signal(destination, iface, signal_name, body))
