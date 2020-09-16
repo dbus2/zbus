@@ -133,7 +133,9 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
     let input = syn::parse_macro_input!(item as ItemImpl);
-    iface::expand(args, input).into()
+    iface::expand(args, input)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
 
 /// Derive macro for defining a D-Bus error.

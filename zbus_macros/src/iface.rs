@@ -28,7 +28,7 @@ impl<'a> Property<'a> {
     }
 }
 
-pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
+pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
     let zbus = get_zbus_crate_ident();
 
     let mut properties = HashMap::new();
@@ -129,7 +129,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
 
         let mut intro_args = quote!();
         introspect_add_input_args(&mut intro_args, &inputs, is_signal);
-        let is_result_output = introspect_add_output_args(&mut intro_args, &output);
+        let is_result_output = introspect_add_output_args(&mut intro_args, &output)?;
 
         let (args_from_msg, args) = get_args_from_inputs(&inputs, &zbus);
 
@@ -194,7 +194,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                 );
                 set_dispatch.extend(q);
             } else {
-                p.ty = Some(get_property_type(output));
+                p.ty = Some(get_property_type(output)?);
                 p.read = true;
 
                 let q = quote!(
@@ -238,7 +238,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
     let generics = &input.generics;
     let where_clause = &generics.where_clause;
 
-    quote! {
+    Ok(quote! {
         #input
 
         impl #generics ::#zbus::Interface for #self_ty
@@ -323,7 +323,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> TokenStream {
                 writeln!(writer, r#"{:indent$}</interface>"#, "", indent = level).unwrap();
             }
         }
-    }
+    })
 }
 
 fn get_args_from_inputs(inputs: &[&PatType], zbus: &Ident) -> (TokenStream, TokenStream) {
@@ -392,7 +392,7 @@ fn introspect_add_output_arg(args: &mut TokenStream, ty: &Type) {
     args.extend(arg);
 }
 
-fn get_result_type(p: &TypePath) -> &Type {
+fn get_result_type(p: &TypePath) -> syn::Result<&Type> {
     if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &p
         .path
         .segments
@@ -401,14 +401,14 @@ fn get_result_type(p: &TypePath) -> &Type {
         .arguments
     {
         if let Some(syn::GenericArgument::Type(ty)) = args.first() {
-            return &ty;
+            return Ok(&ty);
         }
     }
 
-    panic!("unhandled Result return {:?}", p);
+    Err(syn::Error::new_spanned(p, "unhandled Result return"))
 }
 
-fn introspect_add_output_args(args: &mut TokenStream, output: &ReturnType) -> bool {
+fn introspect_add_output_args(args: &mut TokenStream, output: &ReturnType) -> syn::Result<bool> {
     let mut is_result_output = false;
 
     if let ReturnType::Type(_, ty) = output {
@@ -423,7 +423,7 @@ fn introspect_add_output_args(args: &mut TokenStream, output: &ReturnType) -> bo
                 .ident
                 == "Result";
             if is_result_output {
-                ty = get_result_type(p);
+                ty = get_result_type(p)?;
             }
         }
 
@@ -436,10 +436,10 @@ fn introspect_add_output_args(args: &mut TokenStream, output: &ReturnType) -> bo
         }
     }
 
-    is_result_output
+    Ok(is_result_output)
 }
 
-fn get_property_type(output: &ReturnType) -> &Type {
+fn get_property_type(output: &ReturnType) -> syn::Result<&Type> {
     if let ReturnType::Type(_, ty) = output {
         let ty = ty.as_ref();
 
@@ -456,9 +456,9 @@ fn get_property_type(output: &ReturnType) -> &Type {
             }
         }
 
-        ty
+        Ok(ty)
     } else {
-        panic!("Invalid property getter")
+        Err(syn::Error::new_spanned(output, "Invalid property getter"))
     }
 }
 
