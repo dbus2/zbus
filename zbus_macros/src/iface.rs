@@ -2,9 +2,9 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use std::collections::HashMap;
 use syn::{
-    self, parse_quote, AngleBracketedGenericArguments, AttributeArgs, FnArg, Ident, ImplItem,
-    ItemImpl, Lit::Str, Meta::NameValue, MetaNameValue, NestedMeta, PatType, PathArguments,
-    ReturnType, Signature, Type, TypePath,
+    self, parse_quote, punctuated::Punctuated, AngleBracketedGenericArguments, AttributeArgs,
+    FnArg, Ident, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue,
+    NestedMeta, PatType, PathArguments, ReturnType, Signature, Token, Type, TypePath,
 };
 
 use crate::utils::*;
@@ -82,7 +82,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             inputs,
             output,
             ..
-        } = &method.sig;
+        } = &mut method.sig;
 
         let attrs = parse_item_attributes(&method.attrs, "dbus_interface")
             .expect("bad dbus_interface attributes");
@@ -115,7 +115,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             panic!("The method is missing a self receiver");
         };
 
-        let inputs = inputs
+        let typed_inputs = inputs
             .iter()
             .skip(1)
             .filter_map(|i| {
@@ -128,10 +128,12 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             .collect::<Vec<_>>();
 
         let mut intro_args = quote!();
-        introspect_add_input_args(&mut intro_args, &inputs, is_signal);
+        introspect_add_input_args(&mut intro_args, &typed_inputs, is_signal);
         let is_result_output = introspect_add_output_args(&mut intro_args, &output)?;
 
-        let (args_from_msg, args) = get_args_from_inputs(&inputs, &zbus);
+        let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus)?;
+
+        clean_input_args(inputs);
 
         let reply = if is_result_output {
             quote!(match &reply {
@@ -326,23 +328,98 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
     })
 }
 
-fn get_args_from_inputs(inputs: &[&PatType], zbus: &Ident) -> (TokenStream, TokenStream) {
+fn get_args_from_inputs(
+    inputs: &[&PatType],
+    zbus: &Ident,
+) -> syn::Result<(TokenStream, TokenStream)> {
     if inputs.is_empty() {
-        (quote!(), quote!())
+        Ok((quote!(), quote!()))
     } else {
-        let args = inputs.iter().map(|t| &t.pat).collect::<Vec<_>>();
-        let tys = inputs.iter().map(|t| &t.ty).collect::<Vec<_>>();
+        let mut header_arg_decl = None;
+        let mut args = Vec::new();
+        let mut tys = Vec::new();
 
-        let args = quote!(#(#args),*);
-        let args_from_msg = quote!(
-            let (#args,): (#(#tys),*,) =
+        for input in inputs {
+            let mut is_header = false;
+
+            for attr in &input.attrs {
+                if !attr.path.is_ident("zbus") {
+                    continue;
+                }
+
+                let nested = match attr.parse_meta()? {
+                    Meta::List(MetaList { nested, .. }) => nested,
+                    meta => {
+                        return Err(syn::Error::new_spanned(
+                            meta,
+                            "Unsupported syntax\n
+                             Did you mean `#[zbus(...)]`?",
+                        ));
+                    }
+                };
+
+                for item in nested {
+                    match item {
+                        NestedMeta::Meta(Meta::Path(p)) if p.is_ident("header") => {
+                            is_header = true;
+                        }
+                        NestedMeta::Meta(_) => {
+                            return Err(syn::Error::new_spanned(
+                                item,
+                                "Unrecognized zbus attribute",
+                            ));
+                        }
+                        NestedMeta::Lit(l) => {
+                            return Err(syn::Error::new_spanned(l, "Unexpected literal"))
+                        }
+                    }
+                }
+            }
+
+            if is_header {
+                if header_arg_decl.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        input,
+                        "There can only be one header argument",
+                    ));
+                }
+
+                let header_arg = &input.pat;
+
+                header_arg_decl = Some(quote! {
+                    let #header_arg = match m.header() {
+                        Ok(r) => r,
+                        Err(e) => return Some(::#zbus::fdo::Error::from(e).reply(c, m)),
+                    };
+                });
+            } else {
+                args.push(&input.pat);
+                tys.push(&input.ty);
+            }
+        }
+
+        let args_from_msg = quote! {
+            #header_arg_decl
+
+            let (#(#args,)*): (#(#tys,)*) =
                 match m.body() {
                     Ok(r) => r,
                     Err(e) => return Some(::#zbus::fdo::Error::from(e).reply(c, m)),
                 };
-        );
+        };
 
-        (args_from_msg, args)
+        let all_args = inputs.iter().map(|t| &t.pat);
+        let all_args = quote! { #(#all_args,)* };
+
+        Ok((args_from_msg, all_args))
+    }
+}
+
+fn clean_input_args(inputs: &mut Punctuated<FnArg, Token![,]>) {
+    for input in inputs {
+        if let FnArg::Typed(t) = input {
+            t.attrs.retain(|attr| !attr.path.is_ident("zbus"));
+        }
     }
 }
 
@@ -373,7 +450,35 @@ fn introspect_add_method(introspect: &mut TokenStream, name: &str, args: &TokenS
 }
 
 fn introspect_add_input_args(args: &mut TokenStream, inputs: &[&PatType], is_signal: bool) {
-    for PatType { pat, ty, .. } in inputs {
+    for PatType { pat, ty, attrs, .. } in inputs {
+        let is_header_arg = attrs.iter().any(|attr| {
+            if !attr.path.is_ident("zbus") {
+                return false;
+            }
+
+            let meta = match attr.parse_meta() {
+                Ok(meta) => meta,
+                Err(_) => return false,
+            };
+
+            let nested = match meta {
+                Meta::List(MetaList { nested, .. }) => nested,
+                _ => return false,
+            };
+
+            let res = nested.iter().any(|nested_meta| {
+                matches!(
+                    nested_meta,
+                    NestedMeta::Meta(Meta::Path(path)) if path.is_ident("header")
+                )
+            });
+
+            res
+        });
+        if is_header_arg {
+            continue;
+        }
+
         let arg_name = quote!(#pat).to_string();
         let dir = if is_signal { "" } else { " direction=\"in\"" };
         let arg = quote!(
