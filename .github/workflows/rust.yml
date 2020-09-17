@@ -16,7 +16,8 @@ jobs:
     - name: Setup
       run: |
         sudo mkdir -p /run/user/$UID |
-        sed s/UID/$UID/ gitlab/dbus-session.conf > /tmp/dbus-session.conf
+        sed -e s/UID/$UID/ -e s/PATH/path/ gitlab/dbus-session.conf > /tmp/dbus-session.conf
+        sed -e s/UID/$UID/ -e s/PATH/abstract/ gitlab/dbus-session.conf > /tmp/dbus-session-abstract.conf
         sudo apt-get --allow-unauthenticated update -yq
         sudo apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y  --allow-unauthenticated dbus
     - uses: actions-rs/toolchain@v1
@@ -26,7 +27,7 @@ jobs:
           override: true
     - name: Build and Test
       run: |
-         dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- --skip fdpass_systemd
+         dbus-run-session --config-file  /tmp/dbus-session-abstract.conf -- cargo test --verbose -- --skip fdpass_systemd
          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
     - name: Check formatting
       run: cargo fmt -- --check
