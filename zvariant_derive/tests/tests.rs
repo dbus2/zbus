@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 
 use zvariant::Type;
-use zvariant_derive::{DeserializeDict, SerializeDict, Type, TypeDict};
+use zvariant_derive::{
+    DeserializeDict, DeserializeTaggedEnum, SerializeDict, SerializeTaggedEnum, Type, TypeDict,
+    TypeTaggedEnum,
+};
 
 #[test]
 fn derive_unit_struct() {
@@ -34,6 +37,19 @@ fn derive_enum() {
     }
 
     assert_eq!(RequestNameFlags::signature(), "u")
+}
+
+#[test]
+fn derive_tagged_enum() {
+    #[derive(DeserializeTaggedEnum, SerializeTaggedEnum, TypeTaggedEnum)]
+    enum Enum {
+        None,
+        First(String),
+        Second(i32, i32),
+        Third { has_foo: bool, has_bar: bool },
+    }
+
+    assert_eq!(Enum::signature(), "(sv)")
 }
 
 #[test]

@@ -10,6 +10,7 @@ use proc_macro::TokenStream;
 use syn::{self, DeriveInput};
 
 mod dict;
+mod tagged_enum;
 mod r#type;
 mod utils;
 
@@ -185,4 +186,87 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
     dict::expand_deserialize_derive(input).into()
+}
+
+/// Derive macro to add [`Type`] implementation to enum serialized as `(sv)` type.
+///
+/// # Examples
+///
+/// ```
+/// use zvariant::{Signature, Type};
+/// use zvariant_derive::TypeTaggedEnum;
+///
+/// #[derive(TypeTaggedEnum)]
+/// enum Enum {
+///     First(String),
+///     Second(String),
+/// }
+///
+/// assert_eq!(Enum::signature(), Signature::from_str_unchecked("(sv)"));
+/// ```
+///
+/// [`Type`]: ../zvariant/trait.Type.html
+#[proc_macro_derive(TypeTaggedEnum)]
+pub fn type_tagged_enum_macro_derive(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    tagged_enum::expand_type_derive(ast).into()
+}
+
+/// Adds [`Serialize`] implementation to enum to be serialized as `(sv)` type.
+///
+/// This macro serializes the derived enum as a D-Bus structure with 2 fields: the type of the
+/// variant as a string, and the associated data as generic value.
+///
+/// # Examples
+///
+/// For enum it works just like serde's [`Serialize`] macros:
+///
+/// ```
+/// use zvariant::{EncodingContext, to_bytes};
+/// use zvariant_derive::{SerializeTaggedEnum, TypeTaggedEnum};
+///
+/// #[derive(SerializeTaggedEnum, TypeTaggedEnum)]
+/// enum Enum {
+///     First(String),
+///     Second(i32),
+/// }
+/// ```
+///
+/// The serialized D-Bus version of `Second(81)` will be `("Second", Value::I32(81))`.
+///
+/// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
+#[proc_macro_derive(SerializeTaggedEnum, attributes(zvariant))]
+pub fn serialize_tagged_enum_macro_derive(input: TokenStream) -> TokenStream {
+    let input: DeriveInput = syn::parse(input).unwrap();
+    tagged_enum::expand_serialize_derive(input).into()
+}
+
+/// Adds [`Deserialize`] implementation to enum to be deserialized from `(sv)` type.
+///
+/// This macro derives a deserializer for an enum represented as a D-Bus structure with 2 fields:
+/// the type of the variant as a string, and the associated data as a generic value.
+///
+/// # Examples
+///
+/// For enum it works just like serde's [`Deserialize`] macros:
+///
+/// ```
+/// use zvariant::{EncodingContext, to_bytes};
+/// use zvariant_derive::{DeserializeTaggedEnum, TypeTaggedEnum};
+///
+/// #[derive(DeserializeTaggedEnum, TypeTaggedEnum)]
+/// enum Enum {
+///     First(String),
+///     Second(i32),
+/// }
+/// ```
+///
+/// The deserialized D-Bus struct `("Second", Value::I32(81))`
+/// will be the enum value `Second(81)`.
+///
+/// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
+#[proc_macro_derive(DeserializeTaggedEnum, attributes(zvariant))]
+pub fn deserialize_tagged_enum_macro_derive(input: TokenStream) -> TokenStream {
+    let input: DeriveInput = syn::parse(input).unwrap();
+    tagged_enum::expand_deserialize_derive(input).into()
 }
