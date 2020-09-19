@@ -511,9 +511,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let signature_pos = self.sig_parser.pos();
-        let rest_of_signature =
-            Signature::from_str_unchecked(&self.sig_parser.signature()[signature_pos..]);
+        let rest_of_signature = self.sig_parser.signature();
         let signature = slice_signature(&rest_of_signature)?;
         let child_signature = Signature::from_str_unchecked(&signature[1..]);
         let child_sig_len = child_signature.len();
@@ -638,9 +636,7 @@ where
                 }
             }
             STRUCT_SIG_START_CHAR => {
-                let signature_pos = self.sig_parser.pos();
-                let rest_of_signature =
-                    Signature::from_str_unchecked(&self.sig_parser.signature()[signature_pos..]);
+                let rest_of_signature = self.sig_parser.signature();
                 let signature = slice_signature(&rest_of_signature)?;
                 let alignment = alignment_for_signature(&signature, self.ctxt.format());
                 self.parse_padding(alignment)?;
@@ -774,9 +770,7 @@ where
             EncodingFormat::GVariant => de.bytes.len() - de.pos,
         };
 
-        let element_signature_pos = de.sig_parser.pos();
-        let rest_of_signature =
-            Signature::from_str_unchecked(&de.sig_parser.signature()[element_signature_pos..]);
+        let rest_of_signature = de.sig_parser.signature();
         let element_signature = slice_signature(&rest_of_signature)?;
         let element_alignment = alignment_for_signature(&element_signature, de.ctxt.format());
         let element_signature_len = element_signature.len();
@@ -1032,10 +1026,7 @@ where
             Some(offset_size) => {
                 assert_eq!(ctxt.format(), EncodingFormat::GVariant);
 
-                let element_signature_pos = self.de.sig_parser.pos();
-                let rest_of_signature = Signature::from_str_unchecked(
-                    &self.de.sig_parser.signature()[element_signature_pos..],
-                );
+                let rest_of_signature = self.de.sig_parser.signature();
                 let element_signature = slice_signature(&rest_of_signature)?;
                 let fixed_sized_element =
                     crate::utils::is_fixed_sized_signature(&element_signature)?;

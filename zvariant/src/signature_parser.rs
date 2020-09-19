@@ -12,12 +12,8 @@ impl<'s> SignatureParser<'s> {
         Self { signature, pos: 0 }
     }
 
-    pub fn signature(&self) -> &Signature {
-        &self.signature
-    }
-
-    pub fn pos(&self) -> usize {
-        self.pos
+    pub fn signature(&self) -> Signature {
+        Signature::from_str_unchecked(&self.signature[self.pos..])
     }
 
     pub fn next_char(&self) -> char {

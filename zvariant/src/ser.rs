@@ -376,9 +376,7 @@ where
     where
         T: ?Sized + Serialize,
     {
-        let signature_pos = self.sig_parser.pos();
-        let rest_of_signature =
-            Signature::from_str_unchecked(&self.sig_parser.signature()[signature_pos..]);
+        let rest_of_signature = self.sig_parser.signature();
         let signature = slice_signature(&rest_of_signature)?;
         let child_signature = Signature::from_str_unchecked(&signature[1..]);
         let child_sig_len = child_signature.len();
@@ -642,9 +640,7 @@ where
             self.write_u32::<B>(0_u32).map_err(Error::Io)?;
         }
 
-        let element_signature_pos = self.sig_parser.pos();
-        let rest_of_signature =
-            Signature::from_str_unchecked(&self.sig_parser.signature()[element_signature_pos..]);
+        let rest_of_signature = self.sig_parser.signature();
         let element_signature = slice_signature(&rest_of_signature)?;
         let element_signature_len = element_signature.len();
         let element_alignment = alignment_for_signature(&element_signature, self.ctxt.format());
@@ -728,9 +724,7 @@ where
             self.add_padding(alignment)?;
             end_parens = false;
         } else {
-            let signature_pos = self.sig_parser.pos();
-            let rest_of_signature =
-                Signature::from_str_unchecked(&self.sig_parser.signature()[signature_pos..]);
+            let rest_of_signature = self.sig_parser.signature();
             let signature = slice_signature(&rest_of_signature)?;
             let alignment = alignment_for_signature(&signature, self.ctxt.format());
             self.add_padding(alignment)?;
@@ -938,10 +932,7 @@ where
                 let fixed_sized_element = if self.ser.ctxt.format() == EncodingFormat::GVariant {
                     // FIXME: SignatureParser should provide a method to get rest of the signaure
                     //        or even the next signature slice.
-                    let element_signature_pos = self.ser.sig_parser.pos();
-                    let rest_of_signature = Signature::from_str_unchecked(
-                        &self.ser.sig_parser.signature()[element_signature_pos..],
-                    );
+                    let rest_of_signature = self.ser.sig_parser.signature();
                     let element_signature = slice_signature(&rest_of_signature)?;
 
                     crate::utils::is_fixed_sized_signature(&element_signature)?
