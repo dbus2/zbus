@@ -1,18 +1,19 @@
 use std::cell::{Cell, RefCell};
-use std::convert::TryInto;
 use std::env;
-use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::rc::Rc;
 use std::str::FromStr;
 
+use nix::poll::PollFlags;
 use nix::unistd::Uid;
 use once_cell::unsync::OnceCell;
 
 use crate::address::Address;
-use crate::utils::{read_exact, write_all};
-use crate::{fdo, Error, Guid, Message, MessageError, MessageType, Result, MIN_MESSAGE_SIZE};
+use crate::handshake::{ClientHandshake, ServerHandshake};
+use crate::raw::RawConnection;
+use crate::utils::wait_on;
+use crate::{fdo, Error, Guid, Message, MessageType, Result};
 
 type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
 
@@ -25,7 +26,7 @@ struct ConnectionInner {
     cap_unix_fd: bool,
     unique_name: OnceCell<String>,
 
-    stream: UnixStream,
+    raw_cx: RefCell<RawConnection<UnixStream>>,
     // Serial number for next outgoing message
     serial: Cell<u32>,
 
@@ -83,14 +84,8 @@ pub struct Connection(Rc<ConnectionInner>);
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.0.stream.as_raw_fd()
+        self.0.raw_cx.borrow().socket().as_raw_fd()
     }
-}
-
-enum ServerState {
-    WaitingForAuth,
-    // WaitingForData,
-    WaitingForBegin,
 }
 
 impl Connection {
@@ -101,35 +96,15 @@ impl Connection {
     ///
     /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
     /// can be sent and received.
-    pub fn new_unix_client(mut stream: UnixStream, bus_connection: bool) -> Result<Self> {
-        let uid = Uid::current();
-
+    pub fn new_unix_client(stream: UnixStream, bus_connection: bool) -> Result<Self> {
         // SASL Handshake
-        let uid_str = uid
-            .to_string()
-            .chars()
-            .map(|c| format!("{:x}", c as u32))
-            .collect::<String>();
-        stream.write_all(format!("\0AUTH EXTERNAL {}\r\n", uid_str).as_bytes())?;
-        let server_guid = match read_command(&stream)?.as_slice() {
-            [ok, guid] if ok == "OK" => guid.as_str().try_into()?,
-            _ => return Err(Error::Handshake("Unexpected server AUTH reply".to_string())),
-        };
-
-        stream.write_all(b"NEGOTIATE_UNIX_FD\r\n")?;
-        let cap_unix_fd = match read_command(&stream)?.as_slice() {
-            [agree] if agree == "AGREE_UNIX_FD" => true,
-            [error] if error == "ERROR" => false,
-            _ => {
-                return Err(Error::Handshake(
-                    "Unexpected server UNIX_FD reply".to_string(),
-                ))
-            }
-        };
-
-        stream.write_all(b"BEGIN\r\n")?;
-
-        let connection = Connection::new_authenticated(stream, server_guid, cap_unix_fd);
+        let handshake = ClientHandshake::new(stream);
+        let initialized = handshake.blocking_finish()?;
+        let connection = Connection::new_authenticated(
+            initialized.cx,
+            initialized.server_guid,
+            initialized.cap_unix_fd,
+        );
 
         if bus_connection {
             // Now that the server has approved us, we must send the bus Hello, as per specs
@@ -171,80 +146,20 @@ impl Connection {
     ///
     /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
     /// can be sent and received.
-    pub fn new_unix_server(mut stream: UnixStream, guid: &Guid) -> Result<Self> {
+    pub fn new_unix_server(stream: UnixStream, guid: &Guid) -> Result<Self> {
         use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
 
         let creds = getsockopt(stream.as_raw_fd(), PeerCredentials)
             .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
 
-        // TODO: read byte with other credentials?
-        let mut nul = [0; 1];
-        stream.read_exact(&mut nul)?;
-        if nul[0] != 0 {
-            return Err(Error::Handshake(
-                "First client byte is not NUL!".to_string(),
-            ));
-        }
+        let handshake = ServerHandshake::new(stream, guid.clone(), creds.uid());
+        let initialized = handshake.blocking_finish()?;
 
-        let mut state = ServerState::WaitingForAuth;
-        let mut cap_unix_fd = false;
-        loop {
-            match read_command(&stream) {
-                Ok(cmd) => match state {
-                    ServerState::WaitingForAuth => match cmd.as_slice() {
-                        [auth, ..] if auth == "AUTH" => {
-                            if cmd.len() != 3 || cmd[1] != "EXTERNAL" {
-                                stream.write_all(b"REJECTED EXTERNAL\r\n")?;
-                            } else {
-                                let uid = &cmd[2];
-                                let uid = id_from_str(uid)
-                                    .map_err(|e| Error::Handshake(format!("Invalid UID: {}", e)))?;
-                                if uid != creds.uid() {
-                                    stream.write_all(b"REJECTED EXTERNAL\r\n")?;
-                                } else {
-                                    stream.write_all(format!("OK {}\r\n", guid).as_bytes())?;
-                                    state = ServerState::WaitingForBegin;
-                                }
-                            }
-                        }
-                        [begin] if begin == "BEGIN" => {
-                            return Err(Error::Handshake(
-                                "Received BEGIN while not authenticated".to_string(),
-                            ));
-                        }
-                        [error, ..] if error == "ERROR" => {
-                            stream.write_all(b"REJECTED EXTERNAL\r\n")?;
-                        }
-                        _ => {
-                            stream.write_all(b"ERROR Unsupported command\r\n")?;
-                        }
-                    },
-                    ServerState::WaitingForBegin => match cmd.as_slice() {
-                        [begin] if begin == "BEGIN" => {
-                            break;
-                        }
-                        [neg] if neg == "NEGOTIATE_UNIX_FD" => {
-                            cap_unix_fd = true;
-                            stream.write_all(b"AGREE_UNIX_FD\r\n")?;
-                        }
-                        [cancel] if cancel == "CANCEL" => {
-                            stream.write_all(b"REJECTED EXTERNAL\r\n")?;
-                            state = ServerState::WaitingForAuth;
-                        }
-                        [error, ..] if error == "ERROR" => {
-                            stream.write_all(b"REJECTED EXTERNAL\r\n")?;
-                            state = ServerState::WaitingForAuth;
-                        }
-                        _ => {
-                            stream.write_all(b"ERROR Unsupported command\r\n")?;
-                        }
-                    },
-                },
-                Err(err) => return Err(Error::Handshake(format!("Read command failed: {}", err))),
-            }
-        }
-
-        Ok(Self::new_authenticated(stream, guid.clone(), cap_unix_fd))
+        Ok(Self::new_authenticated(
+            initialized.cx,
+            initialized.server_guid,
+            initialized.cap_unix_fd,
+        ))
     }
 
     /// Max number of messages to queue.
@@ -288,8 +203,9 @@ impl Connection {
     /// Fetch the next message from the connection.
     ///
     /// Read from the connection until a message is received or an error is reached. Return the
-    /// message on success. If there are pending messages in the queue, the first one from the
-    /// queue is returned instead.
+    /// message on success. If the connection is in non-blocking mode, this will return a
+    /// `WouldBlock` error instead of blocking. If there are pending messages in the queue, the
+    /// first one from the queue is returned instead of attempting to read the connection.
     ///
     /// If a default message handler has been registered on this connection through
     /// [`set_default_message_handler`], it will first get to decide the fate of the received
@@ -302,20 +218,8 @@ impl Connection {
             return Ok(msg);
         }
 
-        let mut buf = [0; MIN_MESSAGE_SIZE];
-
         loop {
-            let mut fds = read_exact(&self.0.stream, &mut buf[..])?;
-
-            let mut incoming = Message::from_bytes(&buf)?;
-            let bytes_left = incoming.bytes_to_completion()?;
-            if bytes_left == 0 {
-                return Err(Error::Message(MessageError::InsufficientData));
-            }
-            let mut buf = vec![0; bytes_left as usize];
-            fds.append(&mut read_exact(&self.0.stream, &mut buf[..])?);
-            incoming.add_bytes(&buf[..])?;
-            incoming.set_owned_fds(fds);
+            let incoming = self.0.raw_cx.borrow_mut().try_receive_message()?;
 
             if let Some(ref mut handler) = &mut *self.0.default_msg_handler.borrow_mut() {
                 // Let's see if the default handler wants the message first
@@ -335,6 +239,12 @@ impl Connection {
     /// The connection sets a unique serial number on the message before sending it off.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
+    ///
+    /// **Note:** if this connection is in non-blocking mode, the message may not actually
+    /// have been sent when this method returns, and you need to call the [`flush`] method
+    /// so that pending messages are written to the socket.
+    ///
+    /// [`flush`]: struct.Connection.html#method.flush
     pub fn send_message(&self, mut msg: Message) -> Result<u32> {
         if !msg.fds().is_empty() && !self.0.cap_unix_fd {
             return Err(Error::Unsupported);
@@ -347,8 +257,31 @@ impl Connection {
             Ok(())
         })?;
 
-        write_all(&self.0.stream, msg.as_bytes(), &msg.fds())?;
+        let mut cx = self.0.raw_cx.borrow_mut();
+        cx.enqueue_message(msg);
+        // Swallow a potential WouldBLock error, but propagate the others
+        if let Err(e) = cx.try_flush() {
+            if e.kind() != std::io::ErrorKind::WouldBlock {
+                return Err(e.into());
+            }
+        }
+
         Ok(serial)
+    }
+
+    /// Flush pending outgoing messages to the server
+    ///
+    /// This method is only useful if the connection is in non-blocking mode. It will
+    /// write as many pending outgoing messages as possible to the socket.
+    ///
+    /// It will return `Ok(())` if all messages could be sent, and error otherwise. A
+    /// `WouldBlock` error means that the internal buffer of the connection transport is
+    /// full, and you need to wait for write-readiness before calling this method again.
+    ///
+    /// If the connection is in blocking mode, this will return `Ok(())` and do nothing.
+    pub fn flush(&self) -> Result<()> {
+        self.0.raw_cx.borrow_mut().try_flush()?;
+        Ok(())
     }
 
     /// Send a method call.
@@ -360,8 +293,12 @@ impl Connection {
     /// On succesful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
     /// error replies are returned as [`MethodError`].
     ///
+    /// *Note:* This method will block until the response is received even if the connection is
+    /// in non-blocking mode. If you don't want to block like this, use [`send_message`].
+    ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     /// [`MethodError`]: enum.Error.html#variant.MethodError
+    /// [`sent_message`]: struct.Connection.html#method.send_message
     pub fn call_method<B>(
         &self,
         destination: Option<&str>,
@@ -383,10 +320,28 @@ impl Connection {
         )?;
 
         let serial = self.send_message(m)?;
+        // loop & sleep until the message is completely sent
+        loop {
+            match self.flush() {
+                Ok(()) => break,
+                Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    wait_on(self.as_raw_fd(), PollFlags::POLLOUT)?;
+                }
+                Err(e) => return Err(e),
+            }
+        }
         let mut tmp_queue = vec![];
 
         loop {
-            let m = self.receive_message()?;
+            let m = loop {
+                match self.receive_message() {
+                    Ok(m) => break m,
+                    Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        wait_on(self.as_raw_fd(), PollFlags::POLLIN)?;
+                    }
+                    Err(e) => return Err(e),
+                }
+            };
             let h = m.header()?;
 
             if h.reply_serial()? != Some(serial) {
@@ -485,9 +440,13 @@ impl Connection {
         self.0.default_msg_handler.borrow_mut().take();
     }
 
-    fn new_authenticated(stream: UnixStream, server_guid: Guid, cap_unix_fd: bool) -> Self {
+    fn new_authenticated(
+        raw_cx: RawConnection<UnixStream>,
+        server_guid: Guid,
+        cap_unix_fd: bool,
+    ) -> Self {
         Self(Rc::new(ConnectionInner {
-            stream,
+            raw_cx: RefCell::new(raw_cx),
             server_guid,
             cap_unix_fd,
             serial: Cell::new(1),
@@ -529,19 +488,7 @@ fn system_socket() -> Result<UnixStream> {
     }
 }
 
-fn read_command<R: Read>(inner: R) -> Result<Vec<String>> {
-    // Note: the stateful auth DBus protocol should guarantee that the server will not pipeline
-    // answers, and thus bufreader shouldn't lose any data, hopefully.
-    let mut buf_reader = BufReader::new(inner);
-    let mut buf = String::new();
-
-    buf_reader.read_line(&mut buf)?;
-    let components = buf.split_whitespace();
-
-    Ok(components.map(String::from).collect())
-}
-
-fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
+pub(crate) fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
     let mut id = String::new();
     for s in s.as_bytes().chunks(2) {
         let c = char::from(u8::from_str_radix(std::str::from_utf8(s)?, 16)?);

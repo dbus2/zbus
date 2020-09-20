@@ -14,7 +14,10 @@ use crate::OwnedFd;
 ///
 /// This wrapper abstracts away the serialization & buffering considerations of the
 /// protocol, and allows interaction base on messages, rather than bytes.
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 pub struct RawConnection<S> {
+    #[derivative(Debug = "ignore")]
     socket: S,
     raw_in_buffer: Vec<u8>,
     raw_in_fds: Vec<OwnedFd>,
