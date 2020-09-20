@@ -9,7 +9,7 @@ use nix::sys::uio::IoVec;
 
 use crate::owned_fd::OwnedFd;
 
-const FDS_MAX: usize = 1024; // this is hardcoded in sdbus - nothing in the spec
+pub(crate) const FDS_MAX: usize = 1024; // this is hardcoded in sdbus - nothing in the spec
 
 pub(crate) fn padding_for_8_bytes(value: usize) -> usize {
     padding_for_n_bytes(value, 8)
