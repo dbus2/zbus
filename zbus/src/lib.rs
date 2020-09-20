@@ -169,6 +169,8 @@ pub mod fdo;
 
 pub mod raw;
 
+pub mod handshake;
+
 pub mod xml;
 
 pub use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
