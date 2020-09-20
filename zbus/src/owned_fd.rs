@@ -1,8 +1,15 @@
 use std::mem::forget;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
+/// An owned representation of a file descriptor
+///
+/// When it is dropped, the underlying frile descriptor will be dropped.
+/// You can take ownership of the file descriptor (and avoid it being closed)
+/// by using the
+/// [`IntoRawFd`](https://doc.rust-lang.org/stable/std/os/unix/io/trait.IntoRawFd.html)
+/// implementation.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct OwnedFd {
+pub struct OwnedFd {
     inner: RawFd,
 }
 

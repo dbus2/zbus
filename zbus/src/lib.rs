@@ -158,6 +158,8 @@ mod proxy;
 pub use proxy::*;
 
 mod owned_fd;
+pub use owned_fd::*;
+
 mod utils;
 
 mod object_server;
