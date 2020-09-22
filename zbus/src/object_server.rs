@@ -589,13 +589,15 @@ mod tests {
     use std::thread;
 
     use crate::fdo;
-    use crate::{dbus_interface, dbus_proxy, Connection, ObjectServer};
+    use crate::{dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer};
 
     #[dbus_proxy]
     trait MyIface {
         fn ping(&self) -> zbus::Result<u32>;
 
         fn quit(&self, val: bool) -> zbus::Result<()>;
+
+        fn test_header(&self) -> zbus::Result<()>;
 
         fn test_error(&self) -> zbus::Result<()>;
 
@@ -632,6 +634,11 @@ mod tests {
             *self.quit.borrow_mut() = val;
         }
 
+        fn test_header(&self, #[zbus(header)] header: MessageHeader<'_>) {
+            assert_eq!(header.message_type().unwrap(), MessageType::MethodCall);
+            assert_eq!(header.member().unwrap(), Some("TestHeader"));
+        }
+
         fn test_error(&self) -> zbus::fdo::Result<()> {
             Err(zbus::fdo::Error::Failed("error raised".to_string()))
         }
@@ -664,6 +671,7 @@ mod tests {
 
         proxy.ping()?;
         assert_eq!(proxy.count()?, 1);
+        proxy.test_header()?;
         proxy.introspect()?;
         let val = proxy.ping()?;
         proxy.quit(true)?;
