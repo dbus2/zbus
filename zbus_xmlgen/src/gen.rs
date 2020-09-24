@@ -91,7 +91,7 @@ fn inputs_output_from_args(args: &[&Arg]) -> (String, String) {
             Some("in") => {
                 let ty = to_rust_type(a.ty(), true);
                 let arg = if let Some(name) = a.name() {
-                    name.into()
+                    to_identifier(name)
                 } else {
                     gen_name()
                 };
@@ -205,6 +205,22 @@ fn to_rust_type(ty: &str, input: bool) -> String {
 
     let mut it = ty.as_bytes().iter().peekable();
     iter_to_rust_type(&mut it, input, input)
+}
+
+static KWORDS: &[&str] = &[
+    "Self", "abstract", "as", "async", "await", "become", "box", "break", "const", "continue",
+    "crate", "do", "dyn", "else", "enum", "extern", "false", "final", "fn", "for", "if", "impl",
+    "in", "let", "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub", "ref",
+    "return", "self", "static", "struct", "super", "trait", "true", "try", "type", "typeof",
+    "union", "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
+];
+
+fn to_identifier(id: &str) -> String {
+    if KWORDS.contains(&id) {
+        format!("r#{}", id)
+    } else {
+        id.to_string()
+    }
 }
 
 #[cfg(test)]
