@@ -1,17 +1,16 @@
 use std::env;
 use std::error::Error;
 use std::fs::File;
+use std::io::Write;
+use std::process::{Command, Stdio};
 use std::result::Result;
 
-use ::rustfmt::format_input;
 use zbus::xml::Node;
 
 mod gen;
 use gen::GenTrait;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let fmtconfig = ::rustfmt::config::Config::default();
-
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         println!("usage: zbus-xmlgen <interface.xml>");
@@ -23,11 +22,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let node = Node::from_reader(f)?;
     for iface in node.interfaces() {
         let gen = format!("{}", GenTrait(&iface));
-        let mut out: Vec<u8> = Vec::new();
-        let (summary, filemap, _) =
-            format_input(::rustfmt::Input::Text(gen), &fmtconfig, Some(&mut out)).unwrap();
-        assert!(summary.has_no_errors());
-        println!("{}", filemap[0].1)
+        let mut process = match Command::new("rustfmt").stdin(Stdio::piped()).spawn() {
+            Err(why) => panic!("couldn't spawn rustfmt: {}", why),
+            Ok(process) => process,
+        };
+        process.stdin.as_mut().unwrap().write_all(gen.as_bytes())?;
+        process.wait()?;
     }
 
     Ok(())
