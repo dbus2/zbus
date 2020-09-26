@@ -70,12 +70,15 @@
 //! use std::convert::TryInto;
 //! use zbus::{dbus_interface, fdo};
 //!
-//! struct Greeter;
+//! struct Greeter {
+//!     count: u64
+//! };
 //!
 //! #[dbus_interface(name = "org.zbus.MyGreeter1")]
 //! impl Greeter {
-//!     fn say_hello(&self, name: &str) -> String {
-//!         format!("Hello {}!", name)
+//!     fn say_hello(&mut self, name: &str) -> String {
+//!         self.count += 1;
+//!         format!("Hello {}! I have been called: {}", name, self.count)
 //!     }
 //! }
 //!
@@ -87,7 +90,8 @@
 //!     )?;
 //!
 //!     let mut object_server = zbus::ObjectServer::new(&connection);
-//!     object_server.at(&"/org/zbus/MyGreeter".try_into()?, Greeter)?;
+//!     let mut greeter = Greeter { count: 0 };
+//!     object_server.at(&"/org/zbus/MyGreeter".try_into()?, greeter)?;
 //!     loop {
 //!         if let Err(err) = object_server.try_handle_next() {
 //!             eprintln!("{}", err);
