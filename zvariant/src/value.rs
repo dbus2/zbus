@@ -7,6 +7,7 @@ use serde::de::{
 };
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer};
 
+use crate::signature_parser::SignatureParser;
 use crate::utils::*;
 use crate::{
     Array, Basic, Dict, Fd, Maybe, ObjectPath, OwnedValue, Signature, Str, Structure, Type,
@@ -456,7 +457,8 @@ where
         let mut structure = Structure::new();
         while i < signature_end {
             let fields_signature = Signature::from_str_unchecked(&self.signature[i..signature_end]);
-            let field_signature = slice_signature(&fields_signature).map_err(Error::custom)?;
+            let parser = SignatureParser::new(fields_signature);
+            let field_signature = parser.next_signature().map_err(Error::custom)?;
             i += field_signature.len();
             // FIXME: Any way to avoid this allocation?
             let field_signature = signature_string!(&field_signature);

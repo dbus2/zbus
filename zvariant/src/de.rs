@@ -511,11 +511,11 @@ where
     where
         V: Visitor<'de>,
     {
-        let rest_of_signature = self.sig_parser.signature();
-        let signature = slice_signature(&rest_of_signature)?;
-        let child_signature = Signature::from_str_unchecked(&signature[1..]);
-        let child_sig_len = child_signature.len();
+        let signature = self.sig_parser.next_signature()?;
         let alignment = alignment_for_signature(&signature, self.ctxt.format());
+        let child_sig_parser = self.sig_parser.slice(1..);
+        let child_signature = child_sig_parser.next_signature()?;
+        let child_sig_len = child_signature.len();
         let fixed_sized_child = crate::utils::is_fixed_sized_signature(&child_signature)?;
 
         match self.ctxt.format() {
@@ -636,8 +636,7 @@ where
                 }
             }
             STRUCT_SIG_START_CHAR => {
-                let rest_of_signature = self.sig_parser.signature();
-                let signature = slice_signature(&rest_of_signature)?;
+                let signature = self.sig_parser.next_signature()?;
                 let alignment = alignment_for_signature(&signature, self.ctxt.format());
                 self.parse_padding(alignment)?;
 
@@ -770,8 +769,7 @@ where
             EncodingFormat::GVariant => de.bytes.len() - de.pos,
         };
 
-        let rest_of_signature = de.sig_parser.signature();
-        let element_signature = slice_signature(&rest_of_signature)?;
+        let element_signature = de.sig_parser.next_signature()?;
         let element_alignment = alignment_for_signature(&element_signature, de.ctxt.format());
         let element_signature_len = element_signature.len();
         let fixed_sized_child = crate::utils::is_fixed_sized_signature(&element_signature)?;
@@ -1026,13 +1024,13 @@ where
             Some(offset_size) => {
                 assert_eq!(ctxt.format(), EncodingFormat::GVariant);
 
-                let rest_of_signature = self.de.sig_parser.signature();
-                let element_signature = slice_signature(&rest_of_signature)?;
+                let element_signature = self.de.sig_parser.next_signature()?;
                 let fixed_sized_element =
                     crate::utils::is_fixed_sized_signature(&element_signature)?;
                 if !fixed_sized_element {
                     let next_sig_pos = element_signature.len();
-                    if rest_of_signature.chars().nth(next_sig_pos) == Some(STRUCT_SIG_END_CHAR) {
+                    let parser = self.de.sig_parser.slice(next_sig_pos..);
+                    if !parser.done() && parser.next_char() == STRUCT_SIG_END_CHAR {
                         // This is the last item then and in GVariant format, we don't have offset for it
                         // even if it's non-fixed-sized.
                         self.end

@@ -6,6 +6,7 @@ use serde::ser::{Serialize, Serializer};
 use std::ops::{Bound, RangeBounds};
 use std::sync::Arc;
 
+use crate::signature_parser::SignatureParser;
 use crate::{Basic, EncodingFormat, Error, Result, Type};
 
 // A data type similar to Cow and [`bytes::Bytes`] but unlike the former won't allow us to only keep
@@ -349,47 +350,10 @@ fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
         return Ok(());
     }
 
-    let (mut parsed, end) = match signature[0] as char {
-        crate::ARRAY_SIGNATURE_CHAR => {
-            if signature.len() == 1 {
-                return Err(serde::de::Error::invalid_length(1, &"> 1 character"));
-            }
-
-            (1, signature.len())
-        }
-        crate::STRUCT_SIG_START_CHAR => {
-            // We can't get None here cause we already established there is at least 1 char
-            let c = *signature.last().expect("empty signature") as char;
-            if c != crate::STRUCT_SIG_END_CHAR {
-                return Err(serde::de::Error::invalid_value(
-                    serde::de::Unexpected::Char(c),
-                    &crate::STRUCT_SIG_END_STR,
-                ));
-            }
-
-            (1, signature.len() - 1)
-        }
-        crate::DICT_ENTRY_SIG_START_CHAR => {
-            // We can't get None here cause we already established there is at least 1 char
-            let c = *signature.last().expect("empty signature") as char;
-            if c != crate::DICT_ENTRY_SIG_END_CHAR {
-                return Err(serde::de::Error::invalid_value(
-                    serde::de::Unexpected::Char(c),
-                    &crate::DICT_ENTRY_SIG_END_STR,
-                ));
-            }
-
-            (1, signature.len() - 1)
-        }
-        _ => (0, signature.len()),
-    };
-
-    while parsed < end {
-        let rest_of_signature = &signature[parsed..end];
-        let signature = Signature::from_bytes_unchecked(rest_of_signature);
-        let slice = crate::utils::slice_signature(&signature)?;
-
-        parsed += slice.len();
+    let signature = Signature::from_bytes_unchecked(signature);
+    let mut parser = SignatureParser::new(signature);
+    while !parser.done() {
+        let _ = parser.parse_next_signature()?;
     }
 
     Ok(())
