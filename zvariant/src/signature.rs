@@ -1,4 +1,5 @@
 use core::convert::TryFrom;
+use core::fmt::{self, Debug, Display, Formatter};
 use core::str;
 use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
@@ -36,7 +37,7 @@ use crate::{Basic, EncodingFormat, Error, Result, Type};
 /// ```
 ///
 /// [identifies]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct Signature<'a>(Cow<'a, [u8]>);
 
 impl<'a> Signature<'a> {
@@ -88,6 +89,16 @@ impl<'a> Signature<'a> {
     /// Creates an owned clone of `self`.
     pub fn into_owned(self) -> Signature<'static> {
         Signature(Cow::Owned(self.0.into_owned()))
+    }
+}
+
+impl<'a> Debug for Signature<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("Signature: [\n")?;
+        for byte in &*self.0 {
+            f.write_fmt(format_args!("\t{} ({}),\n", *byte as char, byte))?;
+        }
+        f.write_str("]")
     }
 }
 
@@ -165,9 +176,9 @@ impl<'a> PartialEq<&str> for Signature<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for Signature<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.as_str().fmt(f)
+impl<'a> Display for Signature<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        std::fmt::Display::fmt(&self.as_str(), f)
     }
 }
 
