@@ -4,7 +4,7 @@ version = "2.2.0"
 authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
 edition = "2018"
 
-description = "API for D-Bus wire format encoding & decoding"
+description = "D-Bus & GVariant encoding & decoding"
 repository = "https://gitlab.freedesktop.org/zeenix/zbus/"
 documentation = "http://docs.rs/zvariant/"
 keywords = ["D-Bus", "DBus", "IPC", "GVariant"]
