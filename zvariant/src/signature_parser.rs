@@ -44,8 +44,4 @@ impl<'s> SignatureParser<'s> {
 
         Ok(())
     }
-
-    pub fn rewind_chars(&mut self, num_chars: usize) {
-        self.pos -= num_chars;
-    }
 }
