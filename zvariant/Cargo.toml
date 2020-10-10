@@ -1,6 +1,6 @@
 [package]
 name = "zvariant"
-version = "2.2.0"
+version = "2.3.0"
 authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
 edition = "2018"
 
