@@ -3,9 +3,42 @@ use core::fmt::{self, Debug, Display, Formatter};
 use core::str;
 use serde::de::{Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
-use std::borrow::Cow;
+use std::ops::{Bound, RangeBounds};
+use std::sync::Arc;
 
 use crate::{Basic, EncodingFormat, Error, Result, Type};
+
+// A data type similar to Cow and [`bytes::Bytes`] but unlike the former won't allow us to only keep
+// the owned bytes in Arc and latter doesn't have a notion of borrowed data and would require API
+// breakage.
+//
+// [`bytes::Bytes`]: https://docs.rs/bytes/0.5.6/bytes/struct.Bytes.html
+#[derive(PartialEq, Eq, Hash, Clone)]
+enum Bytes<'b> {
+    Borrowed(&'b [u8]),
+    Owned(Arc<[u8]>),
+}
+
+impl<'b> Bytes<'b> {
+    fn borrowed<'s: 'b>(bytes: &'s [u8]) -> Self {
+        Self::Borrowed(bytes)
+    }
+
+    fn owned(bytes: Vec<u8>) -> Self {
+        Self::Owned(bytes.into())
+    }
+}
+
+impl<'b> std::ops::Deref for Bytes<'b> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        match self {
+            Bytes::Borrowed(borrowed) => borrowed,
+            Bytes::Owned(owned) => &owned,
+        }
+    }
+}
 
 /// String that [identifies] the type of an encoded value.
 ///
@@ -36,20 +69,28 @@ use crate::{Basic, EncodingFormat, Error, Result, Type};
 /// Signature::try_from("a{yz}").unwrap_err();
 /// ```
 ///
+/// This is implemented so that multiple instances can share the same underlying signature string.
+/// Use [`slice`] method to create new signature that represents a portion of a signature
+///
 /// [identifies]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
-#[derive(PartialEq, Eq, Hash, Clone)]
-pub struct Signature<'a>(Cow<'a, [u8]>);
+/// [`slice`]: #method.slice
+#[derive(Eq, Hash, Clone)]
+pub struct Signature<'a> {
+    bytes: Bytes<'a>,
+    pos: usize,
+    end: usize,
+}
 
 impl<'a> Signature<'a> {
     /// The signature as a string.
     pub fn as_str(&self) -> &str {
         // SAFETY: non-UTF8 characters in Signature should NEVER happen
-        unsafe { str::from_utf8_unchecked(&self.0) }
+        unsafe { str::from_utf8_unchecked(self.as_bytes()) }
     }
 
     /// The signature bytes.
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0
+        &self.bytes[self.pos..self.end]
     }
 
     /// Create a new Signature from given bytes.
@@ -57,7 +98,11 @@ impl<'a> Signature<'a> {
     /// Since the passed bytes are not checked for correctness, it's provided for ease of
     /// `Type` implementations.
     pub fn from_bytes_unchecked<'s: 'a>(bytes: &'s [u8]) -> Self {
-        Self(Cow::from(bytes))
+        Self {
+            bytes: Bytes::borrowed(bytes),
+            pos: 0,
+            end: bytes.len(),
+        }
     }
 
     /// Same as `from_bytes_unchecked`, except it takes a string reference.
@@ -67,35 +112,93 @@ impl<'a> Signature<'a> {
 
     /// Same as `from_str_unchecked`, except it takes an owned `String`.
     pub fn from_string_unchecked(signature: String) -> Self {
-        Self(Cow::from(signature.as_bytes().to_owned()))
+        let bytes = signature.into_bytes();
+        let end = bytes.len();
+
+        Self {
+            bytes: Bytes::owned(bytes),
+            pos: 0,
+            end,
+        }
     }
 
     /// the signature's length.
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.end - self.pos
     }
 
     /// if the signature is empty.
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.as_bytes().is_empty()
     }
 
     /// Creates an owned clone of `self`.
     pub fn to_owned(&self) -> Signature<'static> {
-        let s = self.0.clone().into_owned();
-        Signature(Cow::Owned(s))
+        let bytes = self.as_bytes().to_vec();
+        let end = bytes.len();
+
+        Signature {
+            bytes: Bytes::owned(bytes),
+            pos: 0,
+            end,
+        }
     }
 
     /// Creates an owned clone of `self`.
     pub fn into_owned(self) -> Signature<'static> {
-        Signature(Cow::Owned(self.0.into_owned()))
+        self.to_owned()
+    }
+
+    /// Returns a slice of `self` for the provided range.
+    ///
+    /// # Panics
+    ///
+    /// Requires that begin <= end and end <= self.len(), otherwise slicing will panic.
+    pub fn slice(&self, range: impl RangeBounds<usize>) -> Self {
+        let len = self.len();
+
+        let pos = match range.start_bound() {
+            Bound::Included(&n) => n,
+            Bound::Excluded(&n) => n + 1,
+            Bound::Unbounded => 0,
+        };
+
+        let end = match range.end_bound() {
+            Bound::Included(&n) => n + 1,
+            Bound::Excluded(&n) => n,
+            Bound::Unbounded => len,
+        };
+
+        assert!(
+            pos <= end,
+            "range start must not be greater than end: {:?} <= {:?}",
+            pos,
+            end,
+        );
+        assert!(
+            end <= len,
+            "range end out of bounds: {:?} <= {:?}",
+            end,
+            len,
+        );
+
+        if end == pos {
+            return Self::from_str_unchecked("");
+        }
+
+        let mut clone = self.clone();
+        clone.pos += pos;
+        clone.end = self.pos + end;
+
+        clone
     }
 }
 
 impl<'a> Debug for Signature<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // FIXME: Should we display all the bytes along with self.pos and self.end, instead?
         f.write_str("Signature: [\n")?;
-        for byte in &*self.0 {
+        for byte in self.as_bytes() {
             f.write_fmt(format_args!("\t{} ({}),\n", *byte as char, byte))?;
         }
         f.write_str("]")
@@ -167,6 +270,12 @@ impl<'a> std::ops::Deref for Signature<'a> {
 
     fn deref(&self) -> &Self::Target {
         self.as_str()
+    }
+}
+
+impl<'a, 'b> PartialEq<Signature<'a>> for Signature<'b> {
+    fn eq(&self, other: &Signature) -> bool {
+        self.as_bytes() == other.as_bytes()
     }
 }
 
@@ -326,5 +435,27 @@ impl<'de> Deserialize<'de> for OwnedSignature {
         deserializer
             .deserialize_string(visitor)
             .map(|v| OwnedSignature(v.to_owned()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Signature;
+
+    #[test]
+    fn signature_slicing() {
+        let sig = Signature::from_str_unchecked("(asta{sv})");
+        assert_eq!(sig, "(asta{sv})");
+
+        let slice = sig.slice(1..);
+        assert_eq!(slice.len(), sig.len() - 1);
+        assert_eq!(slice, &sig[1..]);
+        assert_eq!(slice.as_bytes()[1], b's');
+        assert_eq!(slice.as_bytes()[2], b't');
+
+        let slice = slice.slice(2..3);
+        assert_eq!(slice.len(), 1);
+        assert_eq!(slice, "t");
+        assert_eq!(slice.slice(1..), "");
     }
 }
