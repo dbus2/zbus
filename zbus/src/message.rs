@@ -120,9 +120,7 @@ where
         if signature != "" {
             if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
                 // Remove leading and trailing STRUCT delimiters
-                signature = Signature::from_string_unchecked(String::from(
-                    &signature[1..signature.len() - 1],
-                ));
+                signature = signature.slice(1..signature.len() - 1);
             }
             fields.add(MessageField::Signature(signature));
         }
