@@ -282,7 +282,7 @@ impl<'a, 'b> PartialEq<Signature<'a>> for Signature<'b> {
 
 impl<'a> PartialEq<&str> for Signature<'a> {
     fn eq(&self, other: &&str) -> bool {
-        self.as_str() == *other
+        self.as_bytes() == other.as_bytes()
     }
 }
 
