@@ -433,14 +433,14 @@ where
     where
         V: SeqAccess<'de>,
     {
-        // TODO: Why do we need String here?
-        let signature = signature_string!(&self.signature[1..]);
+        let signature = self.signature.slice(1..);
         let mut array = Array::new(signature.clone());
 
         while let Some(elem) = visitor.next_element_seed(ValueSeed::<Value> {
             signature: signature.clone(),
             phantom: PhantomData,
         })? {
+            elem.value_signature();
             array.append(elem).map_err(Error::custom)?;
         }
 
@@ -456,12 +456,11 @@ where
         let signature_end = self.signature.len() - 1;
         let mut structure = Structure::new();
         while i < signature_end {
-            let fields_signature = Signature::from_str_unchecked(&self.signature[i..signature_end]);
-            let parser = SignatureParser::new(fields_signature);
-            let field_signature = parser.next_signature().map_err(Error::custom)?;
+            let fields_signature = self.signature.slice(i..signature_end);
+            let parser = SignatureParser::new(fields_signature.clone());
+            let len = parser.next_signature().map_err(Error::custom)?.len();
+            let field_signature = fields_signature.slice(0..len);
             i += field_signature.len();
-            // FIXME: Any way to avoid this allocation?
-            let field_signature = signature_string!(&field_signature);
 
             if let Some(field) = visitor.next_element_seed(ValueSeed::<Value> {
                 signature: field_signature,
@@ -599,10 +598,9 @@ where
     where
         V: MapAccess<'de>,
     {
-        // TODO: Why do we need String here?
-        let key_signature = signature_string!(&self.signature[2..3]);
+        let key_signature = self.signature.slice(2..3);
         let signature_end = self.signature.len() - 1;
-        let value_signature = signature_string!(&self.signature[3..signature_end]);
+        let value_signature = self.signature.slice(3..signature_end);
         let mut dict = Dict::new(key_signature.clone(), value_signature.clone());
 
         while let Some((key, value)) = visitor.next_entry_seed(
@@ -627,8 +625,7 @@ where
         D: Deserializer<'de>,
     {
         let visitor = ValueSeed::<T> {
-            // TODO: Why do we need String here?
-            signature: signature_string!(&self.signature[1..]),
+            signature: self.signature.slice(1..),
             phantom: PhantomData,
         };
 
@@ -641,7 +638,7 @@ where
     where
         E: Error,
     {
-        let value_signature = signature_string!(&self.signature[1..]);
+        let value_signature = self.signature.slice(1..);
         let value = Maybe::nothing(value_signature);
 
         Ok(Value::Maybe(value))
