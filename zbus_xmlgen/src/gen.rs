@@ -47,7 +47,7 @@ impl<'i> Display for GenTrait<'i> {
                 writeln!(f, "    #[dbus_proxy(property)]")?;
                 writeln!(
                     f,
-                    "    fn {name}(&self) -> zbus::Result<{output}>;",
+                    "    fn {name}(&self) -> zbus::fdo::Result<{output}>;",
                     name = to_snakecase(p.name()),
                     output = output,
                 )?;
@@ -58,7 +58,7 @@ impl<'i> Display for GenTrait<'i> {
                 writeln!(f, "    #[DBusProxy(property)]")?;
                 writeln!(
                     f,
-                    "    fn set_{name}(&self, value: {input}) -> zbus::Result<()>;",
+                    "    fn set_{name}(&self, value: {input}) -> zbus::fdo::Result<()>;",
                     name = to_snakecase(p.name()),
                     input = input,
                 )?;
