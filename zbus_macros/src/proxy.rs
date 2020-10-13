@@ -158,12 +158,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
 
 fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> TokenStream {
     let doc = get_doc_attrs(&m.attrs);
-    let args = m
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|arg| arg_ident(arg))
-        .collect::<Vec<_>>();
+    let args = m.sig.inputs.iter().filter_map(|arg| arg_ident(arg));
     let sig = &m.sig;
     quote! {
         #(#doc)*
