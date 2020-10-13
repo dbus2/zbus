@@ -1,0 +1,38 @@
+error[E0277]: the trait bound `Foo: zbus::export::zvariant::Type` is not satisfied
+  --> $DIR/no_zvariant_type_impl.rs:8:1
+   |
+8  | / #[dbus_proxy(
+9  | |     interface = "org.freedesktop.zbus.Test",
+10 | |     default_service = "org.freedesktop.zbus",
+11 | |     default_path = "/org/freedesktop/zbus/test"
+12 | | )]
+   | |__^ the trait `zbus::export::zvariant::Type` is not implemented for `Foo`
+   |
+   = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `Foo: zbus::export::zvariant::Type` is not satisfied
+  --> $DIR/no_zvariant_type_impl.rs:8:1
+   |
+8  | / #[dbus_proxy(
+9  | |     interface = "org.freedesktop.zbus.Test",
+10 | |     default_service = "org.freedesktop.zbus",
+11 | |     default_path = "/org/freedesktop/zbus/test"
+12 | | )]
+   | |__^ the trait `zbus::export::zvariant::Type` is not implemented for `Foo`
+   |
+   = note: required because of the requirements on the impl of `zbus::export::zvariant::Type` for `(Foo,)`
+   = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `Foo: std::convert::From<zbus::export::zvariant::OwnedValue>` is not satisfied
+  --> $DIR/no_zvariant_type_impl.rs:8:1
+   |
+8  | / #[dbus_proxy(
+9  | |     interface = "org.freedesktop.zbus.Test",
+10 | |     default_service = "org.freedesktop.zbus",
+11 | |     default_path = "/org/freedesktop/zbus/test"
+12 | | )]
+   | |__^ the trait `std::convert::From<zbus::export::zvariant::OwnedValue>` is not implemented for `Foo`
+   |
+   = note: required because of the requirements on the impl of `std::convert::Into<Foo>` for `zbus::export::zvariant::OwnedValue`
+   = note: required because of the requirements on the impl of `std::convert::TryFrom<zbus::export::zvariant::OwnedValue>` for `Foo`
+   = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)
