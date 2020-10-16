@@ -588,6 +588,7 @@ mod tests {
     use std::rc::Rc;
     use std::thread;
 
+    use ntest::timeout;
     use serde::{Deserialize, Serialize};
     use zvariant::derive::Type;
 
@@ -699,31 +700,39 @@ mod tests {
     }
 
     #[test]
-    fn basic_iface() -> std::result::Result<(), Box<dyn Error>> {
-        let conn = Connection::new_session()?;
+    #[timeout(2000)]
+    fn basic_iface() {
+        let conn = Connection::new_session().unwrap();
         let mut object_server = ObjectServer::new(&conn);
         let quit = Rc::new(RefCell::new(false));
 
-        fdo::DBusProxy::new(&conn)?.request_name(
-            "org.freedesktop.MyService",
-            fdo::RequestNameFlags::ReplaceExisting.into(),
-        )?;
+        fdo::DBusProxy::new(&conn)
+            .unwrap()
+            .request_name(
+                "org.freedesktop.MyService",
+                fdo::RequestNameFlags::ReplaceExisting.into(),
+            )
+            .unwrap();
 
         let iface = MyIfaceImpl::new(quit.clone());
-        object_server.at(&"/org/freedesktop/MyService".try_into()?, iface)?;
+        object_server
+            .at(&"/org/freedesktop/MyService".try_into().unwrap(), iface)
+            .unwrap();
 
         let child = thread::spawn(|| my_iface_test().expect("child failed"));
 
         loop {
-            let m = conn.receive_message()?;
+            let m = conn.receive_message().unwrap();
             if let Err(e) = object_server.dispatch_message(&m) {
                 eprintln!("{}", e);
             }
 
-            object_server.with(
-                &"/org/freedesktop/MyService".try_into()?,
-                |iface: &MyIfaceImpl| iface.alert_count(51),
-            )?;
+            object_server
+                .with(
+                    &"/org/freedesktop/MyService".try_into().unwrap(),
+                    |iface: &MyIfaceImpl| iface.alert_count(51),
+                )
+                .unwrap();
 
             if *quit.borrow() {
                 break;
@@ -732,6 +741,5 @@ mod tests {
 
         let val = child.join().expect("failed to join");
         assert_eq!(val, 2);
-        Ok(())
     }
 }
