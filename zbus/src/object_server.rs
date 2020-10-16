@@ -588,8 +588,17 @@ mod tests {
     use std::rc::Rc;
     use std::thread;
 
+    use serde::{Deserialize, Serialize};
+    use zvariant::derive::Type;
+
     use crate::fdo;
     use crate::{dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer};
+
+    #[derive(Deserialize, Serialize, Type)]
+    pub struct ArgStructTest {
+        foo: i32,
+        bar: String,
+    }
 
     #[dbus_proxy]
     trait MyIface {
@@ -600,6 +609,8 @@ mod tests {
         fn test_header(&self) -> zbus::Result<()>;
 
         fn test_error(&self) -> zbus::Result<()>;
+
+        fn test_single_struct_arg(&self, arg: ArgStructTest) -> zbus::Result<()>;
 
         #[dbus_proxy(property)]
         fn count(&self) -> fdo::Result<u32>;
@@ -643,6 +654,11 @@ mod tests {
             Err(zbus::fdo::Error::Failed("error raised".to_string()))
         }
 
+        fn test_single_struct_arg(&self, arg: ArgStructTest) {
+            assert_eq!(arg.foo, 1);
+            assert_eq!(arg.bar, "TestString");
+        }
+
         #[dbus_interface(property)]
         fn set_count(&mut self, val: u32) -> zbus::fdo::Result<()> {
             if val == 42 {
@@ -672,6 +688,10 @@ mod tests {
         proxy.ping()?;
         assert_eq!(proxy.count()?, 1);
         proxy.test_header()?;
+        proxy.test_single_struct_arg(ArgStructTest {
+            foo: 1,
+            bar: "TestString".into(),
+        })?;
         proxy.introspect()?;
         let val = proxy.ping()?;
         proxy.quit(true)?;
