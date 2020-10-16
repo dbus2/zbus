@@ -193,7 +193,7 @@ impl<'a> Value<'a> {
             Value::Value(_) => Signature::from_str_unchecked("v"),
 
             // Container types
-            Value::Array(value) => value.signature(),
+            Value::Array(value) => value.full_signature().clone(),
             Value::Dict(value) => value.signature(),
             Value::Structure(value) => value.signature(),
             Value::Maybe(value) => value.signature(),
@@ -433,11 +433,11 @@ where
     where
         V: SeqAccess<'de>,
     {
-        let signature = self.signature.slice(1..);
-        let mut array = Array::new(signature.clone());
+        let element_signature = self.signature.slice(1..);
+        let mut array = Array::new_full_signature(self.signature.clone());
 
         while let Some(elem) = visitor.next_element_seed(ValueSeed::<Value> {
-            signature: signature.clone(),
+            signature: element_signature.clone(),
             phantom: PhantomData,
         })? {
             elem.value_signature();
