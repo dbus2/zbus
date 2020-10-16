@@ -18,15 +18,20 @@ pub struct Dict<'k, 'v> {
     entries: Vec<DictEntry<'k, 'v>>,
     key_signature: Signature<'k>,
     value_signature: Signature<'v>,
+    // should use a separate lifetime or everything should use the same but API break.
+    signature: Signature<'k>,
 }
 
 impl<'k, 'v> Dict<'k, 'v> {
     /// Create a new empty `Dict`, given the signature of the keys and values.
     pub fn new(key_signature: Signature<'k>, value_signature: Signature<'v>) -> Self {
+        let signature = create_signature(&key_signature, &value_signature);
+
         Self {
             entries: vec![],
             key_signature,
             value_signature,
+            signature,
         }
     }
 
@@ -93,20 +98,42 @@ impl<'k, 'v> Dict<'k, 'v> {
     }
 
     /// Get the signature of this `Dict`.
+    ///
+    /// NB: This method potentially allocates and copies. Use [`full_signature`] if you'd like to
+    /// avoid that.
+    ///
+    /// [`full_signature`]: #method.full_signature
     pub fn signature(&self) -> Signature<'static> {
-        Signature::from_string_unchecked(format!(
-            "a{{{}{}}}",
-            self.key_signature, self.value_signature,
-        ))
+        self.signature.to_owned()
+    }
+
+    /// Get the signature of this `Dict`.
+    pub fn full_signature(&self) -> &Signature {
+        &self.signature
     }
 
     pub(crate) fn to_owned(&self) -> Dict<'static, 'static> {
         Dict {
             key_signature: self.key_signature.to_owned(),
             value_signature: self.value_signature.to_owned(),
+            signature: self.signature.to_owned(),
             entries: self.entries.iter().map(|v| v.to_owned()).collect(),
         }
     }
+
+    /// Create a new empty `Dict`, given the complete signature.
+    pub(crate) fn new_full_signature<'s: 'k + 'v>(signature: Signature<'s>) -> Self {
+        let key_signature = signature.slice(2..3);
+        let value_signature = signature.slice(3..signature.len() - 1);
+
+        Self {
+            entries: vec![],
+            key_signature,
+            value_signature,
+            signature,
+        }
+    }
+
     // TODO: Provide more API like https://docs.rs/toml/0.5.5/toml/map/struct.Map.html
 }
 
@@ -162,11 +189,15 @@ where
                 value: Value::new(value),
             })
             .collect();
+        let key_signature = K::signature();
+        let value_signature = V::signature();
+        let signature = create_signature(&key_signature, &value_signature);
 
         Self {
             entries,
-            key_signature: K::signature(),
-            value_signature: V::signature(),
+            key_signature,
+            value_signature,
+            signature,
         }
     }
 }
@@ -201,4 +232,8 @@ impl<'k, 'v> Serialize for DictEntry<'k, 'v> {
 
         entry.end()
     }
+}
+
+fn create_signature(key_signature: &Signature, value_signature: &Signature) -> Signature<'static> {
+    Signature::from_string_unchecked(format!("a{{{}{}}}", key_signature, value_signature,))
 }

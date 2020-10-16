@@ -194,7 +194,7 @@ impl<'a> Value<'a> {
 
             // Container types
             Value::Array(value) => value.full_signature().clone(),
-            Value::Dict(value) => value.signature(),
+            Value::Dict(value) => value.full_signature().clone(),
             Value::Structure(value) => value.signature(),
             Value::Maybe(value) => value.signature(),
 
@@ -601,7 +601,7 @@ where
         let key_signature = self.signature.slice(2..3);
         let signature_end = self.signature.len() - 1;
         let value_signature = self.signature.slice(3..signature_end);
-        let mut dict = Dict::new(key_signature.clone(), value_signature.clone());
+        let mut dict = Dict::new_full_signature(self.signature.clone());
 
         while let Some((key, value)) = visitor.next_entry_seed(
             ValueSeed::<Value> {
