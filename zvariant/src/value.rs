@@ -196,7 +196,7 @@ impl<'a> Value<'a> {
             Value::Array(value) => value.full_signature().clone(),
             Value::Dict(value) => value.full_signature().clone(),
             Value::Structure(value) => value.signature(),
-            Value::Maybe(value) => value.signature(),
+            Value::Maybe(value) => value.full_signature().clone(),
 
             Value::Fd(_) => Fd::signature(),
         }
@@ -631,15 +631,14 @@ where
 
         deserializer
             .deserialize_any(visitor)
-            .map(|v| Value::Maybe(Maybe::just(v)))
+            .map(|v| Value::Maybe(Maybe::just_full_signature(v, self.signature)))
     }
 
     fn visit_none<E>(self) -> Result<Self::Value, E>
     where
         E: Error,
     {
-        let value_signature = self.signature.slice(1..);
-        let value = Maybe::nothing(value_signature);
+        let value = Maybe::nothing_full_signature(self.signature);
 
         Ok(Value::Maybe(value))
     }

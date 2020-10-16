@@ -13,7 +13,7 @@ use crate::{Signature, Type, Value};
 pub struct Maybe<'a> {
     value: Box<Option<Value<'a>>>,
     value_signature: Signature<'a>,
-    signature: Signature<'static>,
+    signature: Signature<'a>,
 }
 
 impl<'a> Maybe<'a> {
@@ -33,11 +33,30 @@ impl<'a> Maybe<'a> {
         }
     }
 
+    pub(crate) fn just_full_signature<'v: 'a, 's: 'a>(
+        value: Value<'v>,
+        signature: Signature<'s>,
+    ) -> Self {
+        Self {
+            value_signature: signature.slice(1..),
+            signature,
+            value: Box::new(Some(value)),
+        }
+    }
+
     /// Create a new Nothing (None) `Maybe`, given the signature of the type.
     pub fn nothing<'s: 'a>(value_signature: Signature<'s>) -> Self {
         let signature = create_signature(&value_signature);
         Self {
             value_signature,
+            signature,
+            value: Box::new(None),
+        }
+    }
+
+    pub(crate) fn nothing_full_signature<'s: 'a>(signature: Signature<'s>) -> Self {
+        Self {
+            value_signature: signature.slice(1..),
             signature,
             value: Box::new(None),
         }
@@ -54,8 +73,18 @@ impl<'a> Maybe<'a> {
     }
 
     /// Get the signature of `Maybe`.
+    ///
+    /// NB: This method potentially allocates and copies. Use [`full_signature`] if you'd like to
+    /// avoid that.
+    ///
+    /// [`full_signature`]: #method.full_signature
     pub fn signature(&self) -> Signature<'static> {
-        self.signature.clone()
+        self.signature.to_owned()
+    }
+
+    /// Get the signature of `Maybe`.
+    pub fn full_signature(&self) -> &Signature {
+        &self.signature
     }
 
     /// Get the signature of the potential value in the `Maybe`.
