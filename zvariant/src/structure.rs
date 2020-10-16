@@ -77,6 +77,10 @@ impl<'a> Structure<'a> {
     /// Create a new `Structure`.
     ///
     /// Same as `Structure::default()`.
+    #[deprecated(
+        since = "2.3.0",
+        note = "Please use `StructureBuilder` to create a `Structure` instead."
+    )]
     pub fn new() -> Self {
         Self::default()
     }
@@ -85,16 +89,25 @@ impl<'a> Structure<'a> {
     ///
     /// This method returns `Self` so that you can use the builder pattern to create a complex
     /// structure.
+    #[deprecated(
+        since = "2.3.0",
+        note = "Please use `StructureBuilder` to create a `Structure` instead."
+    )]
     pub fn add_field<T>(self, field: T) -> Self
     where
         T: Type + Into<Value<'a>>,
     {
+        #[allow(deprecated)]
         self.append_field(Value::new(field))
     }
 
     /// Append `field` to `self`.
     ///
     /// Identical to `add_field`, except the field must be in the form of a `Value`.
+    #[deprecated(
+        since = "2.3.0",
+        note = "Please use `StructureBuilder` to create a `Structure` instead."
+    )]
     pub fn append_field<'e: 'a>(mut self, field: Value<'e>) -> Self {
         self.fields.push(field);
         self.signature = create_signature_from_fields(&self.fields);
