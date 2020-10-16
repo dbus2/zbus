@@ -10,7 +10,8 @@ use serde::ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct,
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
 use crate::{
-    Array, Basic, Dict, Fd, Maybe, ObjectPath, OwnedValue, Signature, Str, Structure, Type,
+    Array, Basic, Dict, Fd, Maybe, ObjectPath, OwnedValue, Signature, Str, Structure,
+    StructureBuilder, Type,
 };
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
@@ -195,7 +196,7 @@ impl<'a> Value<'a> {
             // Container types
             Value::Array(value) => value.full_signature().clone(),
             Value::Dict(value) => value.full_signature().clone(),
-            Value::Structure(value) => value.signature(),
+            Value::Structure(value) => value.full_signature().clone(),
             Value::Maybe(value) => value.full_signature().clone(),
 
             Value::Fd(_) => Fd::signature(),
@@ -454,7 +455,7 @@ where
     {
         let mut i = 1;
         let signature_end = self.signature.len() - 1;
-        let mut structure = Structure::new();
+        let mut builder = StructureBuilder::new();
         while i < signature_end {
             let fields_signature = self.signature.slice(i..signature_end);
             let parser = SignatureParser::new(fields_signature.clone());
@@ -466,9 +467,10 @@ where
                 signature: field_signature,
                 phantom: PhantomData,
             })? {
-                structure = structure.append_field(field);
+                builder = builder.append_field(field);
             }
         }
+        let structure = builder.build_with_signature(self.signature);
 
         Ok(Value::Structure(structure))
     }
