@@ -588,8 +588,18 @@ mod tests {
     use std::rc::Rc;
     use std::thread;
 
+    use ntest::timeout;
+    use serde::{Deserialize, Serialize};
+    use zvariant::derive::Type;
+
     use crate::fdo;
     use crate::{dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer};
+
+    #[derive(Deserialize, Serialize, Type)]
+    pub struct ArgStructTest {
+        foo: i32,
+        bar: String,
+    }
 
     #[dbus_proxy]
     trait MyIface {
@@ -600,6 +610,8 @@ mod tests {
         fn test_header(&self) -> zbus::Result<()>;
 
         fn test_error(&self) -> zbus::Result<()>;
+
+        fn test_single_struct_arg(&self, arg: ArgStructTest) -> zbus::Result<()>;
 
         #[dbus_proxy(property)]
         fn count(&self) -> fdo::Result<u32>;
@@ -643,6 +655,11 @@ mod tests {
             Err(zbus::fdo::Error::Failed("error raised".to_string()))
         }
 
+        fn test_single_struct_arg(&self, arg: ArgStructTest) {
+            assert_eq!(arg.foo, 1);
+            assert_eq!(arg.bar, "TestString");
+        }
+
         #[dbus_interface(property)]
         fn set_count(&mut self, val: u32) -> zbus::fdo::Result<()> {
             if val == 42 {
@@ -672,6 +689,10 @@ mod tests {
         proxy.ping()?;
         assert_eq!(proxy.count()?, 1);
         proxy.test_header()?;
+        proxy.test_single_struct_arg(ArgStructTest {
+            foo: 1,
+            bar: "TestString".into(),
+        })?;
         proxy.introspect()?;
         let val = proxy.ping()?;
         proxy.quit(true)?;
@@ -679,31 +700,39 @@ mod tests {
     }
 
     #[test]
-    fn basic_iface() -> std::result::Result<(), Box<dyn Error>> {
-        let conn = Connection::new_session()?;
+    #[timeout(2000)]
+    fn basic_iface() {
+        let conn = Connection::new_session().unwrap();
         let mut object_server = ObjectServer::new(&conn);
         let quit = Rc::new(RefCell::new(false));
 
-        fdo::DBusProxy::new(&conn)?.request_name(
-            "org.freedesktop.MyService",
-            fdo::RequestNameFlags::ReplaceExisting.into(),
-        )?;
+        fdo::DBusProxy::new(&conn)
+            .unwrap()
+            .request_name(
+                "org.freedesktop.MyService",
+                fdo::RequestNameFlags::ReplaceExisting.into(),
+            )
+            .unwrap();
 
         let iface = MyIfaceImpl::new(quit.clone());
-        object_server.at(&"/org/freedesktop/MyService".try_into()?, iface)?;
+        object_server
+            .at(&"/org/freedesktop/MyService".try_into().unwrap(), iface)
+            .unwrap();
 
         let child = thread::spawn(|| my_iface_test().expect("child failed"));
 
         loop {
-            let m = conn.receive_message()?;
+            let m = conn.receive_message().unwrap();
             if let Err(e) = object_server.dispatch_message(&m) {
                 eprintln!("{}", e);
             }
 
-            object_server.with(
-                &"/org/freedesktop/MyService".try_into()?,
-                |iface: &MyIfaceImpl| iface.alert_count(51),
-            )?;
+            object_server
+                .with(
+                    &"/org/freedesktop/MyService".try_into().unwrap(),
+                    |iface: &MyIfaceImpl| iface.alert_count(51),
+                )
+                .unwrap();
 
             if *quit.borrow() {
                 break;
@@ -712,6 +741,5 @@ mod tests {
 
         let val = child.join().expect("failed to join");
         assert_eq!(val, 2);
-        Ok(())
     }
 }
