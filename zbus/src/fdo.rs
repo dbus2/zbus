@@ -7,7 +7,7 @@ use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
-use zvariant::{derive::Type, OwnedValue, Value};
+use zvariant::{derive::Type, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{dbus_proxy, DBusError};
 
@@ -32,7 +32,7 @@ trait Properties {
     fn get_all(&self, interface_name: &str) -> Result<HashMap<String, OwnedValue>>;
 }
 
-type ManagedObjects = HashMap<String, HashMap<String, HashMap<String, OwnedValue>>>;
+type ManagedObjects = HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>;
 
 /// Proxy for the `org.freedesktop.DBus.ObjectManager` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.ObjectManager")]
