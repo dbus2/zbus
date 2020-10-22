@@ -741,11 +741,8 @@ where
                 end_parens = true;
             } else {
                 let expected = format!(
-                    "`{}`, `{}`, `{}` or `{}`",
-                    <&str>::SIGNATURE_STR,
-                    Signature::SIGNATURE_STR,
-                    ObjectPath::SIGNATURE_STR,
-                    VARIANT_SIGNATURE_CHAR,
+                    "`{}` or `{}`",
+                    STRUCT_SIG_START_STR, DICT_ENTRY_SIG_START_STR,
                 );
                 return Err(serde::de::Error::invalid_type(
                     serde::de::Unexpected::Char(c),
