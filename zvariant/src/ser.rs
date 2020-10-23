@@ -741,11 +741,8 @@ where
                 end_parens = true;
             } else {
                 let expected = format!(
-                    "`{}`, `{}`, `{}` or `{}`",
-                    <&str>::SIGNATURE_STR,
-                    Signature::SIGNATURE_STR,
-                    ObjectPath::SIGNATURE_STR,
-                    VARIANT_SIGNATURE_CHAR,
+                    "`{}` or `{}`",
+                    STRUCT_SIG_START_STR, DICT_ENTRY_SIG_START_STR,
                 );
                 return Err(serde::de::Error::invalid_type(
                     serde::de::Unexpected::Char(c),
@@ -806,6 +803,8 @@ where
     W: Write + Seek,
 {
     pub(self) fn end_seq(self) -> Result<()> {
+        self.ser.sig_parser.skip_chars(self.element_signature_len)?;
+
         match self.ser.ctxt.format() {
             EncodingFormat::DBus => self.end_dbus_seq(),
             EncodingFormat::GVariant => self.end_gvariant_seq(),
@@ -813,11 +812,6 @@ where
     }
 
     fn end_dbus_seq(self) -> Result<()> {
-        if self.start == self.ser.bytes_written {
-            // Empty sequence so we need to parse the element signature.
-            self.ser.sig_parser.skip_chars(self.element_signature_len)?;
-        }
-
         // Set size of array in bytes
         let array_len = self.ser.bytes_written - self.start;
         let len = usize_to_u32(array_len);
@@ -866,11 +860,14 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.start != self.ser.bytes_written {
-            // The signature needs to be rewinded before encoding each element.
-            self.ser.sig_parser.rewind_chars(self.element_signature_len);
-        }
-        let v = value.serialize(&mut *self.ser);
+        // We want to keep parsing the same signature repeatedly for each element so we use a
+        // disposable clone.
+        let sig_parser = self.ser.sig_parser.clone();
+        self.ser.sig_parser = sig_parser.clone();
+
+        value.serialize(&mut *self.ser)?;
+        self.ser.sig_parser = sig_parser;
+
         if let Some(ref mut offsets) = self.offsets {
             assert_eq!(self.ser.ctxt.format(), EncodingFormat::GVariant);
             let offset = self.ser.bytes_written - self.start;
@@ -878,7 +875,7 @@ where
             offsets.push(offset);
         }
 
-        v
+        Ok(())
     }
 
     fn end(self) -> Result<()> {
@@ -1071,58 +1068,67 @@ where
     where
         T: ?Sized + Serialize,
     {
+        self.ser.add_padding(self.element_alignment)?;
+
         if self.key_start.is_some() {
             self.key_start.replace(self.ser.bytes_written);
         }
 
-        if self.start == self.ser.bytes_written {
-            // First key
-            self.ser.sig_parser.skip_char()?;
-        } else {
-            // The signature needs to be rewinded before encoding each element.
-            self.ser
-                .sig_parser
-                .rewind_chars(self.element_signature_len - 2);
-        }
-        self.ser.add_padding(self.element_alignment)?;
+        // We want to keep parsing the same signature repeatedly for each key so we use a
+        // disposable clone.
+        let sig_parser = self.ser.sig_parser.clone();
+        self.ser.sig_parser = sig_parser.clone();
 
-        key.serialize(&mut *self.ser)
+        // skip `{`
+        self.ser.sig_parser.skip_char()?;
+
+        key.serialize(&mut *self.ser)?;
+        self.ser.sig_parser = sig_parser;
+
+        Ok(())
     }
 
     fn serialize_value<T>(&mut self, value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        match self.ser.ctxt.format() {
-            EncodingFormat::DBus => value.serialize(&mut *self.ser),
+        let key_offset = match self.ser.ctxt.format() {
+            EncodingFormat::DBus => None,
             EncodingFormat::GVariant => {
                 // For non-fixed-sized keys, we must add the key offset after the value
-                let key_offset = self.key_start.map(|start| self.ser.bytes_written - start);
-
-                let v = value.serialize(&mut *self.ser);
-
-                if let Some(key_offset) = key_offset {
-                    let offset_size = FramingOffsetSize::for_encoded_container(key_offset);
-                    offset_size.write_offset(self.ser, key_offset)?;
-                }
-
-                // And now the offset of the array element end (which is encoded later)
-                if let Some(ref mut offsets) = self.offsets {
-                    let offset = self.ser.bytes_written - self.start;
-
-                    offsets.push(offset);
-                }
-
-                v
+                self.key_start.map(|start| self.ser.bytes_written - start)
             }
+        };
+
+        // We want to keep parsing the same signature repeatedly for each key so we use a
+        // disposable clone.
+        let sig_parser = self.ser.sig_parser.clone();
+        self.ser.sig_parser = sig_parser.clone();
+
+        // skip `{` and key char
+        self.ser.sig_parser.skip_chars(2)?;
+
+        value.serialize(&mut *self.ser)?;
+        // Restore the original parser
+        self.ser.sig_parser = sig_parser;
+
+        if let Some(key_offset) = key_offset {
+            let entry_size = self.ser.bytes_written - self.key_start.unwrap_or(0);
+            let offset_size = FramingOffsetSize::for_encoded_container(entry_size);
+            offset_size.write_offset(&mut *self.ser, key_offset)?;
         }
+
+        // And now the offset of the array element end (which is encoded later)
+        if let Some(ref mut offsets) = self.offsets {
+            let offset = self.ser.bytes_written - self.start;
+
+            offsets.push(offset);
+        }
+
+        Ok(())
     }
 
     fn end(self) -> Result<()> {
-        if self.start != self.ser.bytes_written {
-            // Non-empty map, take }
-            self.ser.sig_parser.skip_char()?;
-        }
         self.end_seq()
     }
 }

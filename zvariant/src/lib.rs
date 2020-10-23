@@ -1414,6 +1414,24 @@ mod tests {
         assert!(result.is_err());
     }
 
+    #[test]
+    fn issue_99() {
+        #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+        struct ZVStruct<'s>(#[serde(borrow)] HashMap<&'s str, Value<'s>>);
+
+        let mut dict = HashMap::new();
+        dict.insert("hi", Value::from("hello"));
+        dict.insert("bye", Value::from("then"));
+
+        let element = ZVStruct(dict);
+
+        let ctxt = Context::<LE>::new_gvariant(0);
+        let signature = ZVStruct::signature();
+
+        let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
+        let _: ZVStruct = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+    }
+
     #[cfg(feature = "ostree-tests")]
     #[test]
     fn ostree_de() {
