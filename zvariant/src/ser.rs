@@ -1113,7 +1113,8 @@ where
         self.ser.sig_parser = sig_parser;
 
         if let Some(key_offset) = key_offset {
-            let offset_size = FramingOffsetSize::for_encoded_container(key_offset);
+            let entry_size = self.ser.bytes_written - self.key_start.unwrap_or(0);
+            let offset_size = FramingOffsetSize::for_encoded_container(entry_size);
             offset_size.write_offset(&mut *self.ser, key_offset)?;
         }
 
