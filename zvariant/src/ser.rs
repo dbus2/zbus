@@ -1068,11 +1068,11 @@ where
     where
         T: ?Sized + Serialize,
     {
+        self.ser.add_padding(self.element_alignment)?;
+
         if self.key_start.is_some() {
             self.key_start.replace(self.ser.bytes_written);
         }
-
-        self.ser.add_padding(self.element_alignment)?;
 
         // We want to keep parsing the same signature repeatedly for each key so we use a
         // disposable clone.
