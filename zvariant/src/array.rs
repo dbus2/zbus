@@ -14,13 +14,22 @@ use crate::{Signature, Type, Value};
 pub struct Array<'a> {
     element_signature: Signature<'a>,
     elements: Vec<Value<'a>>,
-    signature: Signature<'static>,
+    signature: Signature<'a>,
 }
 
 impl<'a> Array<'a> {
     /// Create a new empty `Array`, given the signature of the elements.
     pub fn new(element_signature: Signature) -> Array {
         let signature = create_signature(&element_signature);
+        Array {
+            element_signature,
+            elements: vec![],
+            signature,
+        }
+    }
+
+    pub(crate) fn new_full_signature(signature: Signature) -> Array {
+        let element_signature = signature.slice(1..);
         Array {
             element_signature,
             elements: vec![],
@@ -56,8 +65,18 @@ impl<'a> Array<'a> {
     }
 
     /// Get the signature of this `Array`.
+    ///
+    /// NB: This method potentially allocates and copies. Use [`full_signature`] if you'd like to
+    /// avoid that.
+    ///
+    /// [`full_signature`]: #method.full_signature
     pub fn signature(&self) -> Signature<'static> {
-        self.signature.clone()
+        self.signature.to_owned()
+    }
+
+    /// Get the signature of this `Array`.
+    pub fn full_signature(&self) -> &Signature {
+        &self.signature
     }
 
     /// Get the signature of the elements in the `Array`.

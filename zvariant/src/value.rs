@@ -7,9 +7,11 @@ use serde::de::{
 };
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer};
 
+use crate::signature_parser::SignatureParser;
 use crate::utils::*;
 use crate::{
-    Array, Basic, Dict, Fd, Maybe, ObjectPath, OwnedValue, Signature, Str, Structure, Type,
+    Array, Basic, Dict, Fd, Maybe, ObjectPath, OwnedValue, Signature, Str, Structure,
+    StructureBuilder, Type,
 };
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
@@ -192,10 +194,10 @@ impl<'a> Value<'a> {
             Value::Value(_) => Signature::from_str_unchecked("v"),
 
             // Container types
-            Value::Array(value) => value.signature(),
-            Value::Dict(value) => value.signature(),
-            Value::Structure(value) => value.signature(),
-            Value::Maybe(value) => value.signature(),
+            Value::Array(value) => value.full_signature().clone(),
+            Value::Dict(value) => value.full_signature().clone(),
+            Value::Structure(value) => value.full_signature().clone(),
+            Value::Maybe(value) => value.full_signature().clone(),
 
             Value::Fd(_) => Fd::signature(),
         }
@@ -432,14 +434,14 @@ where
     where
         V: SeqAccess<'de>,
     {
-        // TODO: Why do we need String here?
-        let signature = signature_string!(&self.signature[1..]);
-        let mut array = Array::new(signature.clone());
+        let element_signature = self.signature.slice(1..);
+        let mut array = Array::new_full_signature(self.signature.clone());
 
         while let Some(elem) = visitor.next_element_seed(ValueSeed::<Value> {
-            signature: signature.clone(),
+            signature: element_signature.clone(),
             phantom: PhantomData,
         })? {
+            elem.value_signature();
             array.append(elem).map_err(Error::custom)?;
         }
 
@@ -453,21 +455,22 @@ where
     {
         let mut i = 1;
         let signature_end = self.signature.len() - 1;
-        let mut structure = Structure::new();
+        let mut builder = StructureBuilder::new();
         while i < signature_end {
-            let fields_signature = Signature::from_str_unchecked(&self.signature[i..signature_end]);
-            let field_signature = slice_signature(&fields_signature).map_err(Error::custom)?;
+            let fields_signature = self.signature.slice(i..signature_end);
+            let parser = SignatureParser::new(fields_signature.clone());
+            let len = parser.next_signature().map_err(Error::custom)?.len();
+            let field_signature = fields_signature.slice(0..len);
             i += field_signature.len();
-            // FIXME: Any way to avoid this allocation?
-            let field_signature = signature_string!(&field_signature);
 
             if let Some(field) = visitor.next_element_seed(ValueSeed::<Value> {
                 signature: field_signature,
                 phantom: PhantomData,
             })? {
-                structure = structure.append_field(field);
+                builder = builder.append_field(field);
             }
         }
+        let structure = builder.build_with_signature(self.signature);
 
         Ok(Value::Structure(structure))
     }
@@ -597,11 +600,10 @@ where
     where
         V: MapAccess<'de>,
     {
-        // TODO: Why do we need String here?
-        let key_signature = signature_string!(&self.signature[2..3]);
+        let key_signature = self.signature.slice(2..3);
         let signature_end = self.signature.len() - 1;
-        let value_signature = signature_string!(&self.signature[3..signature_end]);
-        let mut dict = Dict::new(key_signature.clone(), value_signature.clone());
+        let value_signature = self.signature.slice(3..signature_end);
+        let mut dict = Dict::new_full_signature(self.signature.clone());
 
         while let Some((key, value)) = visitor.next_entry_seed(
             ValueSeed::<Value> {
@@ -625,22 +627,20 @@ where
         D: Deserializer<'de>,
     {
         let visitor = ValueSeed::<T> {
-            // TODO: Why do we need String here?
-            signature: signature_string!(&self.signature[1..]),
+            signature: self.signature.slice(1..),
             phantom: PhantomData,
         };
 
         deserializer
             .deserialize_any(visitor)
-            .map(|v| Value::Maybe(Maybe::just(v)))
+            .map(|v| Value::Maybe(Maybe::just_full_signature(v, self.signature)))
     }
 
     fn visit_none<E>(self) -> Result<Self::Value, E>
     where
         E: Error,
     {
-        let value_signature = signature_string!(&self.signature[1..]);
-        let value = Maybe::nothing(value_signature);
+        let value = Maybe::nothing_full_signature(self.signature);
 
         Ok(Value::Maybe(value))
     }

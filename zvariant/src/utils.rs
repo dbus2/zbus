@@ -1,3 +1,4 @@
+use crate::signature_parser::SignatureParser;
 use crate::{Basic, EncodingFormat, Error, Fd, ObjectPath, Signature};
 
 /// The prefix of ARRAY type signature, as a character. Provided for manual signature creation.
@@ -102,38 +103,6 @@ pub(crate) fn alignment_for_signature(signature: &Signature, format: EncodingFor
     }
 }
 
-pub(crate) fn slice_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
-    match signature
-        .as_bytes()
-        .first()
-        .map(|b| *b as char)
-        .ok_or_else(|| serde::de::Error::invalid_length(0, &">= 1 character"))?
-    {
-        u8::SIGNATURE_CHAR
-        | bool::SIGNATURE_CHAR
-        | i16::SIGNATURE_CHAR
-        | u16::SIGNATURE_CHAR
-        | i32::SIGNATURE_CHAR
-        | u32::SIGNATURE_CHAR
-        | i64::SIGNATURE_CHAR
-        | u64::SIGNATURE_CHAR
-        | f64::SIGNATURE_CHAR
-        | <&str>::SIGNATURE_CHAR
-        | ObjectPath::SIGNATURE_CHAR
-        | Signature::SIGNATURE_CHAR
-        | Fd::SIGNATURE_CHAR
-        | VARIANT_SIGNATURE_CHAR => Ok(Signature::from_str_unchecked(&signature[0..1])),
-        ARRAY_SIGNATURE_CHAR => slice_array_signature(signature),
-        STRUCT_SIG_START_CHAR => slice_structure_signature(signature),
-        DICT_ENTRY_SIG_START_CHAR => slice_dict_entry_signature(signature),
-        MAYBE_SIGNATURE_CHAR => slice_maybe_signature(signature),
-        c => Err(serde::de::Error::invalid_value(
-            serde::de::Unexpected::Char(c),
-            &"a valid signature character",
-        )),
-    }
-}
-
 pub(crate) fn is_fixed_sized_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
     match signature
         .as_bytes()
@@ -181,120 +150,6 @@ macro_rules! check_child_value_signature {
     }};
 }
 
-fn slice_single_child_type_container_signature<'a>(
-    signature: &'a Signature<'a>,
-    expected_sig_prefix: char,
-) -> Result<Signature<'a>, Error> {
-    if signature.len() < 2 {
-        return Err(serde::de::Error::invalid_length(
-            signature.len(),
-            &">= 2 characters",
-        ));
-    }
-
-    // We can't get None here cause we already established there is are least 2 chars above
-    let c = signature
-        .as_bytes()
-        .first()
-        .map(|b| *b as char)
-        .expect("empty signature");
-    if c != expected_sig_prefix {
-        return Err(serde::de::Error::invalid_value(
-            serde::de::Unexpected::Char(c),
-            &expected_sig_prefix.to_string().as_str(),
-        ));
-    }
-
-    // There should be a valid complete signature after 'a' but not more than 1
-    let slice_len = slice_signature(&Signature::from_str_unchecked(&signature[1..]))?.len();
-
-    Ok(Signature::from_str_unchecked(&signature[0..=slice_len]))
-}
-
-fn slice_array_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
-    slice_single_child_type_container_signature(signature, ARRAY_SIGNATURE_CHAR)
-}
-
-fn slice_maybe_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
-    slice_single_child_type_container_signature(signature, MAYBE_SIGNATURE_CHAR)
-}
-
-fn slice_structure_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
-    if signature.len() < 2 {
-        return Err(serde::de::Error::invalid_length(
-            signature.len(),
-            &">= 2 characters",
-        ));
-    }
-
-    // We can't get None here cause we already established there are at least 2 chars above
-    let c = signature
-        .as_bytes()
-        .first()
-        .map(|b| *b as char)
-        .expect("empty signature");
-    if c != STRUCT_SIG_START_CHAR {
-        return Err(serde::de::Error::invalid_value(
-            serde::de::Unexpected::Char(c),
-            &crate::STRUCT_SIG_START_STR,
-        ));
-    }
-
-    let mut open_braces = 1;
-    let mut i = 1;
-    while i < signature.len() {
-        if &signature[i..=i] == STRUCT_SIG_END_STR {
-            open_braces -= 1;
-
-            if open_braces == 0 {
-                break;
-            }
-        } else if &signature[i..=i] == STRUCT_SIG_START_STR {
-            open_braces += 1;
-        }
-
-        i += 1;
-    }
-    let end = &signature[i..=i];
-    if end != STRUCT_SIG_END_STR {
-        return Err(serde::de::Error::invalid_value(
-            serde::de::Unexpected::Str(end),
-            &crate::STRUCT_SIG_END_STR,
-        ));
-    }
-
-    Ok(Signature::from_str_unchecked(&signature[0..=i]))
-}
-
-fn slice_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<Signature<'a>, Error> {
-    if signature.len() < 4 {
-        return Err(serde::de::Error::invalid_length(
-            signature.len(),
-            &">= 4 characters",
-        ));
-    }
-
-    // We can't get None here cause we already established there are at least 4 chars above
-    let c = signature
-        .as_bytes()
-        .first()
-        .map(|b| *b as char)
-        .expect("empty signature");
-    if c != DICT_ENTRY_SIG_START_CHAR {
-        return Err(serde::de::Error::invalid_value(
-            serde::de::Unexpected::Char(c),
-            &crate::DICT_ENTRY_SIG_START_STR,
-        ));
-    }
-
-    // Key's signature will always be just 1 character so no need to slice for that.
-    // There should be one valid complete signature for value.
-    let slice_len = slice_signature(&Signature::from_str_unchecked(&signature[2..]))?.len();
-
-    // signature of value + `{` + 1 char of the key signature + `}`
-    Ok(Signature::from_str_unchecked(&signature[0..slice_len + 3]))
-}
-
 fn alignment_for_single_child_type_signature(
     signature: &Signature,
     format: EncodingFormat,
@@ -322,15 +177,14 @@ fn alignment_for_struct_signature(signature: &Signature, format: EncodingFormat)
     match format {
         EncodingFormat::DBus => STRUCT_ALIGNMENT_DBUS,
         EncodingFormat::GVariant => {
-            let inner_signature = &signature[1..signature.len() - 1];
-            let mut parsed = 0;
+            let inner_signature = Signature::from_str_unchecked(&signature[1..signature.len() - 1]);
+            let mut sig_parser = SignatureParser::new(inner_signature);
             let mut alignment = 0;
 
-            while parsed < inner_signature.len() {
-                let rest_of_signature = Signature::from_str_unchecked(&inner_signature[parsed..]);
-                let child_signature =
-                    slice_signature(&rest_of_signature).expect("invalid signature");
-                parsed += child_signature.len();
+            while !sig_parser.done() {
+                let child_signature = sig_parser
+                    .parse_next_signature()
+                    .expect("invalid signature");
 
                 let child_alignment = alignment_for_signature(&child_signature, format);
                 if child_alignment > alignment {
@@ -371,14 +225,14 @@ fn alignment_for_dict_entry_signature(signature: &Signature, format: EncodingFor
 }
 
 fn is_fixed_sized_struct_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
-    let inner_signature = &signature[1..signature.len() - 1];
-    let mut parsed = 0;
+    let inner_signature = Signature::from_str_unchecked(&signature[1..signature.len() - 1]);
+    let mut sig_parser = SignatureParser::new(inner_signature);
     let mut fixed_sized = true;
 
-    while parsed < inner_signature.len() {
-        let rest_of_signature = Signature::from_str_unchecked(&inner_signature[parsed..]);
-        let child_signature = slice_signature(&rest_of_signature).expect("invalid signature");
-        parsed += child_signature.len();
+    while !sig_parser.done() {
+        let child_signature = sig_parser
+            .parse_next_signature()
+            .expect("invalid signature");
 
         if !is_fixed_sized_signature(&child_signature)? {
             // STRUCT is fixed-sized only if all its children are

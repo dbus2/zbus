@@ -1,6 +1,6 @@
 [package]
 name = "zvariant"
-version = "2.2.0"
+version = "2.3.0"
 authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
 edition = "2018"
 
@@ -27,3 +27,11 @@ serde_json = "1.0"
 serde_repr = "0.1"
 glib = { git = "https://github.com/gtk-rs/glib", rev = "c9ee583cea0" }
 rand = "0.7.3"
+criterion = "0.3"
+
+[lib]
+bench = false
+
+[[bench]]
+name = "benchmarks"
+harness = false
