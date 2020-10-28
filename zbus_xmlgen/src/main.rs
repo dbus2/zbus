@@ -20,15 +20,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let f = File::open(&args[1])?;
 
     let node = Node::from_reader(f)?;
+    let mut process = match Command::new("rustfmt").stdin(Stdio::piped()).spawn() {
+        Err(why) => panic!("couldn't spawn rustfmt: {}", why),
+        Ok(process) => process,
+    };
     for iface in node.interfaces() {
         let gen = format!("{}", GenTrait(&iface));
-        let mut process = match Command::new("rustfmt").stdin(Stdio::piped()).spawn() {
-            Err(why) => panic!("couldn't spawn rustfmt: {}", why),
-            Ok(process) => process,
-        };
         process.stdin.as_mut().unwrap().write_all(gen.as_bytes())?;
-        process.wait()?;
     }
-
+    process.wait()?;
     Ok(())
 }
