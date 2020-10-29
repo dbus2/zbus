@@ -1043,13 +1043,6 @@ where
     type Ok = ();
     type Error = Error;
 
-    // TODO: The Serde data model allows map keys to be any serializable type. We can only support keys of
-    // basic types so the implementation below will produce invalid encoding if the key serializes
-    // is something other than a basic type.
-    //
-    // We need to validate that map keys are of basic type. We do this by using a different Serializer
-    // to serialize the key (instead of `&mut **self`) and having that other serializer only implement
-    // `serialize_*` for basic types and return an error on any other data type.
     fn serialize_key<T>(&mut self, key: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
