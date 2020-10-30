@@ -10,7 +10,7 @@ use nix::unistd::Uid;
 use once_cell::unsync::OnceCell;
 
 use crate::address::Address;
-use crate::handshake::{ClientHandshake, ServerHandshake};
+use crate::handshake::{Authenticated, ClientHandshake, ServerHandshake};
 use crate::raw::RawConnection;
 use crate::utils::wait_on;
 use crate::{fdo, Error, Guid, Message, MessageType, Result};
@@ -51,6 +51,9 @@ struct ConnectionInner {
 /// it is recommended to wrap the low-level D-Bus messages into Rust functions with the
 /// [`dbus_proxy`] and [`dbus_interface`] macros instead of doing it directly on a `Connection`.
 ///
+/// For lower-level handling of the connection (such as nonblocking socket handling), see the
+/// documentation of the [`new_authenticated`] constructor.
+///
 /// Typically, a connection is made to the session bus with [`new_session`], or to the system bus
 /// with [`new_system`]. Then the connection is shared with the [`Proxy`] and [`ObjectServer`]
 /// instances.
@@ -71,6 +74,7 @@ struct ConnectionInner {
 /// [signals]: struct.Connection.html#method.emit_signal
 /// [`new_system`]: struct.Connection.html#method.new_system
 /// [`new_session`]: struct.Connection.html#method.new_session
+/// [`new_authenticated`]: struct.Connection.html#method.new_authenticated
 /// [`Proxy`]: struct.Proxy.html
 /// [`ObjectServer`]: struct.ObjectServer.html
 /// [`dbus_proxy`]: attr.dbus_proxy.html
@@ -99,12 +103,7 @@ impl Connection {
     pub fn new_unix_client(stream: UnixStream, bus_connection: bool) -> Result<Self> {
         // SASL Handshake
         let handshake = ClientHandshake::new(stream);
-        let initialized = handshake.blocking_finish()?;
-        let connection = Connection::new_authenticated(
-            initialized.cx,
-            initialized.server_guid,
-            initialized.cap_unix_fd,
-        );
+        let connection = Connection::new_authenticated(handshake.blocking_finish()?);
 
         if bus_connection {
             // Now that the server has approved us, we must send the bus Hello, as per specs
@@ -153,13 +152,7 @@ impl Connection {
             .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
 
         let handshake = ServerHandshake::new(stream, guid.clone(), creds.uid());
-        let initialized = handshake.blocking_finish()?;
-
-        Ok(Self::new_authenticated(
-            initialized.cx,
-            initialized.server_guid,
-            initialized.cap_unix_fd,
-        ))
+        Ok(Connection::new_authenticated(handshake.blocking_finish()?))
     }
 
     /// Max number of messages to queue.
@@ -440,21 +433,44 @@ impl Connection {
         self.0.default_msg_handler.borrow_mut().take();
     }
 
-    fn new_authenticated(
-        raw_cx: RawConnection<UnixStream>,
-        server_guid: Guid,
-        cap_unix_fd: bool,
-    ) -> Self {
+    /// Create a `Connection` from an already authenticated unix socket
+    ///
+    /// This method can be used in conjunction with [`ClientHandshake`] or [`ServerHandshake`] to handle
+    /// the initial handshake of the D-Bus connection asynchronously. The [`Authenticated`] argument required
+    /// by this method is the result provided by these handshake utilities.
+    ///
+    /// If the aim is to initialize a client *bus* connection, you need to send the [client hello] and assign the
+    /// resulting unique name using [`set_unique_name`] before doing anything else.
+    ///
+    /// [`ClientHandshake`]: ./handshake/struct.ClientHandshake.html
+    /// [`ServerHandshake`]: ./handshake/struct.ServerHandshake.html
+    /// [`Authenticated`]: ./handshake/struct.Authenticated.html
+    /// [client hello]: ./fdo/struct.DBusProxy.html#method.hello
+    /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
+    pub fn new_authenticated(auth: Authenticated<UnixStream>) -> Self {
         Self(Rc::new(ConnectionInner {
-            raw_cx: RefCell::new(raw_cx),
-            server_guid,
-            cap_unix_fd,
+            raw_cx: RefCell::new(auth.cx),
+            server_guid: auth.server_guid,
+            cap_unix_fd: auth.cap_unix_fd,
             serial: Cell::new(1),
             unique_name: OnceCell::new(),
             incoming_queue: RefCell::new(vec![]),
             max_queued: Cell::new(DEFAULT_MAX_QUEUED),
             default_msg_handler: RefCell::new(None),
         }))
+    }
+
+    /// Sets the unique name for this connection
+    ///
+    /// This method should only be used when initializing a client *bus* connection with
+    /// [`new_authenticated`]. Setting the unique name to anything other than the return value of the bus
+    /// hello is a protocol violation.
+    ///
+    /// Returns and error if the name has already been set.
+    ///
+    /// [`new_authenticated`]: struct.Connection.html#method.new_authenticated
+    pub fn set_unique_name(&self, name: String) -> std::result::Result<(), String> {
+        self.0.unique_name.set(name)
     }
 
     fn next_serial(&self) -> u32 {
@@ -467,7 +483,7 @@ impl Connection {
 /// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
 /// variable. If we don't recognize the value (or it's not set) we fall back to
 /// /run/user/UID/bus
-fn session_socket() -> Result<UnixStream> {
+pub(crate) fn session_socket() -> Result<UnixStream> {
     match env::var("DBUS_SESSION_BUS_ADDRESS") {
         Ok(val) => Address::from_str(&val)?.connect(),
         _ => {
@@ -481,7 +497,7 @@ fn session_socket() -> Result<UnixStream> {
 /// Get a system socket respecting the DBUS_SYSTEM_BUS_ADDRESS environment
 /// variable. If we don't recognize the value (or it's not set) we fall back to
 /// /var/run/dbus/system_bus_socket
-fn system_socket() -> Result<UnixStream> {
+pub(crate) fn system_socket() -> Result<UnixStream> {
     match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
         Ok(val) => Address::from_str(&val)?.connect(),
         _ => Ok(UnixStream::connect("/var/run/dbus/system_bus_socket")?),

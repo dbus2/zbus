@@ -2,6 +2,7 @@ use std::convert::TryInto;
 use std::io::BufRead;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
+use std::str::FromStr;
 
 use nix::poll::PollFlags;
 use nix::unistd::Uid;
@@ -16,6 +17,7 @@ use crate::{Error, Result};
  * Client-side handshake logic
  */
 
+#[derive(Debug)]
 enum ClientHandshakeStep {
     Init,
     SendingOauth,
@@ -27,6 +29,22 @@ enum ClientHandshakeStep {
 }
 
 /// A representation of an in-progress handshake, client-side
+///
+/// This struct is an async-compatible representation of the initial handshake that must be performed before
+/// a D-Bus connection can be used. To use it, you should call the [`advance_handshake`] method whenever the
+/// underlying socket becomes ready (tracking the readiness itself is not managed by this abstraction) until
+/// it returns `Ok(())`, at which point you can invoke the [`try_finish`] method to get an [`Authenticated`],
+/// which can be given to [`Connection::new_authenticated`].
+///
+/// If handling the handshake asynchronously is not necessary, the [`blocking_finish`] method is provided
+/// which blocks until the handshake is completed or an error occurs.
+///
+/// [`advance_handshake`]: struct.ClientHandshake.html#method.advance_handshake
+/// [`try_finish`]: struct.ClientHandshake.html#method.try_finish
+/// [`Authenticated`]: struct.AUthenticated.html
+/// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
+/// [`blocking_finish`]: struct.ClientHandshake.html#method.blocking_finish
+#[derive(Debug)]
 pub struct ClientHandshake<S> {
     socket: S,
     buffer: Vec<u8>,
@@ -35,13 +53,21 @@ pub struct ClientHandshake<S> {
     cap_unix_fd: bool,
 }
 
-/// The result of a finalized handshake, client-side
-pub struct InitializedClient<S> {
+/// The result of a finalized handshake
+///
+/// The result of a finalized [`ClientHandshake`] or [`ServerHandshake`]. It can be passed to
+/// [`Connection::new_authenticated`] to initialize a connection.
+///
+/// [`ClientHandshake`]: struct.ClientHandshake.html
+/// [`ServerHandshake`]: struct.ServerHandshake.html
+/// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
+#[derive(Debug)]
+pub struct Authenticated<S> {
     /// The initialized connection
     pub cx: RawConnection<S>,
     /// The server Guid
     pub server_guid: Guid,
-    /// Whether the server has accepted file descriptor passing
+    /// Whether file descriptor passing has been accepted by both sides
     pub cap_unix_fd: bool,
 }
 
@@ -78,10 +104,12 @@ impl<S: Socket> ClientHandshake<S> {
     ///
     /// In non-blocking mode, you need to invoke this method repeatedly
     /// until it returns `Ok(())`. Once it does, the handshake is finished
-    /// and you can invoke the `finalize()` method.
+    /// and you can invoke the [`try_finish`] method.
     ///
     /// Note that only the intial handshake is done. If you need to send a
     /// Bus Hello, this remains to be done.
+    ///
+    /// [`try_finish`](struct.ClientHandshake.html#method.try_finish)
     pub fn advance_handshake(&mut self) -> Result<()> {
         loop {
             match self.step {
@@ -148,9 +176,9 @@ impl<S: Socket> ClientHandshake<S> {
     ///
     /// This method should only be called once `advance_handshake()` has
     /// returned `Ok(())`. Otherwise it'll error and return you the object.
-    pub fn try_finish(self) -> std::result::Result<InitializedClient<S>, Self> {
+    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ClientHandshakeStep::Done = self.step {
-            Ok(InitializedClient {
+            Ok(Authenticated {
                 cx: RawConnection::wrap(self.socket),
                 server_guid: self.server_guid.unwrap(),
                 cap_unix_fd: self.cap_unix_fd,
@@ -159,14 +187,50 @@ impl<S: Socket> ClientHandshake<S> {
             Err(self)
         }
     }
+
+    /// Access the socket backing this handshake
+    ///
+    /// Would typically be used to register it for readiness.
+    pub fn socket(&self) -> &S {
+        &self.socket
+    }
 }
 
 impl ClientHandshake<UnixStream> {
+    /// Initialize a handshake to the session/user message bus.
+    ///
+    /// The socket backing this connection is created in non-blocking mode.
+    pub fn new_session_nonblock() -> Result<Self> {
+        let socket = crate::connection::session_socket()?;
+        socket.set_nonblocking(true)?;
+        Ok(Self::new(socket))
+    }
+
+    /// Initialize a handshake to the system-wide message bus.
+    ///
+    /// The socket backing this connection is created in non-blocking mode.
+    pub fn new_system_nonblock() -> Result<Self> {
+        let socket = crate::connection::system_socket()?;
+        socket.set_nonblocking(true)?;
+        Ok(Self::new(socket))
+    }
+
+    /// Create a handshake for the given [D-Bus address].
+    ///
+    /// The socket backing this connection is created in non-blocking mode.
+    ///
+    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
+    pub fn new_for_address_nonblock(address: &str) -> Result<Self> {
+        let socket = crate::address::Address::from_str(address)?.connect()?;
+        socket.set_nonblocking(true)?;
+        Ok(Self::new(socket))
+    }
+
     /// Block and automatically drive the handshake for this client
     ///
     /// This method will block until the handshake is finalized, even if the
     /// socket is in non-blocking mode.
-    pub fn blocking_finish(mut self) -> Result<InitializedClient<UnixStream>> {
+    pub fn blocking_finish(mut self) -> Result<Authenticated<UnixStream>> {
         loop {
             match self.advance_handshake() {
                 Ok(()) => return Ok(self.try_finish().unwrap_or_else(|_| unreachable!())),
@@ -194,6 +258,7 @@ impl ClientHandshake<UnixStream> {
  * Server-side handshake logic
  */
 
+#[derive(Debug)]
 enum ServerHandshakeStep {
     WaitingForNull,
     WaitingForAuth,
@@ -205,6 +270,24 @@ enum ServerHandshakeStep {
 }
 
 /// A representation of an in-progress handshake, server-side
+///
+/// This would typically be used to implement a D-Bus broker, or in the context of a P2P connection.
+///
+/// This struct is an async-compatible representation of the initial handshake that must be performed before
+/// a D-Bus connection can be used. To use it, you should call the [`advance_handshake`] method whenever the
+/// underlying socket becomes ready (tracking the readiness itself is not managed by this abstraction) until
+/// it returns `Ok(())`, at which point you can invoke the [`try_finish`] method to get an [`Authenticated`],
+/// which can be given to [`Connection::new_authenticated`].
+///
+/// If handling the handshake asynchronously is not necessary, the [`blocking_finish`] method is provided
+/// which blocks until the handshake is completed or an error occurs.
+///
+/// [`advance_handshake`]: struct.ServerHandshake.html#method.advance_handshake
+/// [`try_finish`]: struct.ServerHandshake.html#method.try_finish
+/// [`Authenticated`]: struct.Authenticated.html
+/// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
+/// [`blocking_finish`]: struct.ServerHandshake.html#method.blocking_finish
+#[derive(Debug)]
 pub struct ServerHandshake<S> {
     socket: S,
     buffer: Vec<u8>,
@@ -212,16 +295,6 @@ pub struct ServerHandshake<S> {
     server_guid: Guid,
     cap_unix_fd: bool,
     client_uid: u32,
-}
-
-/// The result of a finalized handshake, server-side
-pub struct InitializedServer<S> {
-    /// The initialized connection
-    pub cx: RawConnection<S>,
-    /// The server Guid
-    pub server_guid: Guid,
-    /// Whether the client has requested file descriptor passing
-    pub cap_unix_fd: bool,
 }
 
 impl<S: Socket> ServerHandshake<S> {
@@ -357,9 +430,9 @@ impl<S: Socket> ServerHandshake<S> {
     ///
     /// This method should only be called once `advance_handshake()` has
     /// returned `Ok(())`. Otherwise it'll error and return you the object.
-    pub fn try_finish(self) -> std::result::Result<InitializedServer<S>, Self> {
+    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ServerHandshakeStep::Done = self.step {
-            Ok(InitializedServer {
+            Ok(Authenticated {
                 cx: RawConnection::wrap(self.socket),
                 server_guid: self.server_guid,
                 cap_unix_fd: self.cap_unix_fd,
@@ -368,6 +441,13 @@ impl<S: Socket> ServerHandshake<S> {
             Err(self)
         }
     }
+
+    /// Access the socket backing this handshake
+    ///
+    /// Would typically be used to register it for readiness.
+    pub fn socket(&self) -> &S {
+        &self.socket
+    }
 }
 
 impl ServerHandshake<UnixStream> {
@@ -375,7 +455,7 @@ impl ServerHandshake<UnixStream> {
     ///
     /// This method will block until the handshake is finalized, even if the
     /// socket is in non-blocking mode.
-    pub fn blocking_finish(mut self) -> Result<InitializedServer<UnixStream>> {
+    pub fn blocking_finish(mut self) -> Result<Authenticated<UnixStream>> {
         loop {
             match self.advance_handshake() {
                 Ok(()) => return Ok(self.try_finish().unwrap_or_else(|_| unreachable!())),
@@ -396,5 +476,49 @@ impl ServerHandshake<UnixStream> {
                 Err(e) => return Err(e),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::net::UnixStream;
+
+    use super::*;
+
+    use crate::Guid;
+
+    #[test]
+    fn async_handshake() {
+        // a pair of non-blocking connection UnixStream
+        let (p0, p1) = UnixStream::pair().unwrap();
+        p0.set_nonblocking(true).unwrap();
+        p1.set_nonblocking(true).unwrap();
+
+        // initialize both handshakes
+        let mut client = ClientHandshake::new(p0);
+        let mut server = ServerHandshake::new(p1, Guid::generate(), Uid::current().into());
+
+        // proceed to the handshakes
+        let mut client_done = false;
+        let mut server_done = false;
+        while !(client_done && server_done) {
+            match client.advance_handshake() {
+                Ok(()) => client_done = true,
+                Err(Error::Io(e)) => assert!(e.kind() == std::io::ErrorKind::WouldBlock),
+                Err(e) => panic!("Unexpected error: {:?}", e),
+            }
+
+            match server.advance_handshake() {
+                Ok(()) => server_done = true,
+                Err(Error::Io(e)) => assert!(e.kind() == std::io::ErrorKind::WouldBlock),
+                Err(e) => panic!("Unexpected error: {:?}", e),
+            }
+        }
+
+        let client = client.try_finish().unwrap();
+        let server = server.try_finish().unwrap();
+
+        assert_eq!(client.server_guid, server.server_guid);
+        assert_eq!(client.cap_unix_fd, server.cap_unix_fd);
     }
 }
