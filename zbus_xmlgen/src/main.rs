@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Ok(process) => process,
     };
     for iface in node.interfaces() {
-        let gen = format!("{}", GenTrait(&iface));
+        let gen = GenTrait(&iface).to_string();
         process.stdin.as_mut().unwrap().write_all(gen.as_bytes())?;
     }
     process.wait()?;
