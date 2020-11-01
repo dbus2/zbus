@@ -9,7 +9,7 @@ service (please refer to this
 [reference](https://people.gnome.org/~mccann/docs/notification-spec/notification-spec-latest.html)
 document for further details on this API).
 
-Let's start by playing with the service from the shell, and notify the desktop with [`busctl`]:
+Let's start by playing with the service from the shell, and notify the desktop with [`busctl`][^busctl]:
 
 ```bash
 busctl --user call \
@@ -367,3 +367,5 @@ There you have it, a Rust-friendly binding for your D-Bus service!
 [`busctl`]: https://www.freedesktop.org/software/systemd/man/busctl.html
 [developer-friendly tool]: https://gitlab.freedesktop.org/zeenix/zbus/-/tree/master/zbus_xmlgen
 [`gdbus-codegen`]: https://developer.gnome.org/gio/stable/gdbus-codegen.html
+
+[^busctl]: `busctl` is part of [`systemd`](https://www.freedesktop.org/wiki/Software/systemd/).
