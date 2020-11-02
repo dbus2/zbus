@@ -437,8 +437,8 @@ impl Connection {
     /// the initial handshake of the D-Bus connection asynchronously. The [`Authenticated`] argument required
     /// by this method is the result provided by these handshake utilities.
     ///
-    /// If the aim is to initialize a client *bus* connection, you need to send the [client hello] and assign the
-    /// resulting unique name using [`set_unique_name`] before doing anything else.
+    /// If the aim is to initialize a client *bus* connection, you need to send the [client hello] and assign
+    /// the resulting unique name using [`set_unique_name`] before doing anything else.
     ///
     /// [`ClientHandshake`]: ./handshake/struct.ClientHandshake.html
     /// [`ServerHandshake`]: ./handshake/struct.ServerHandshake.html
