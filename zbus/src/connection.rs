@@ -7,7 +7,7 @@ use nix::poll::PollFlags;
 use once_cell::unsync::OnceCell;
 
 use crate::handshake::{Authenticated, ClientHandshake, ServerHandshake};
-use crate::raw::RawConnection;
+use crate::raw::Connection as RawConnection;
 use crate::utils::wait_on;
 use crate::{fdo, Error, Guid, Message, MessageType, Result};
 

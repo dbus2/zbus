@@ -1,5 +1,5 @@
 mod connection;
 mod socket;
 
-pub use connection::RawConnection;
+pub use connection::Connection;
 pub use socket::Socket;

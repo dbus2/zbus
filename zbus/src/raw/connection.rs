@@ -16,7 +16,7 @@ use crate::OwnedFd;
 /// protocol, and allows interaction base on messages, rather than bytes.
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
-pub struct RawConnection<S> {
+pub struct Connection<S> {
     #[derivative(Debug = "ignore")]
     socket: S,
     raw_in_buffer: Vec<u8>,
@@ -26,9 +26,9 @@ pub struct RawConnection<S> {
     msg_out_buffer: VecDeque<Message>,
 }
 
-impl<S: Socket> RawConnection<S> {
-    pub(crate) fn wrap(socket: S) -> RawConnection<S> {
-        RawConnection {
+impl<S: Socket> Connection<S> {
+    pub(crate) fn wrap(socket: S) -> Connection<S> {
+        Connection {
             socket,
             raw_in_buffer: vec![],
             raw_in_fds: vec![],
@@ -161,7 +161,7 @@ impl<S: Socket> RawConnection<S> {
 
 #[cfg(test)]
 mod tests {
-    use super::RawConnection;
+    use super::Connection;
     use crate::message::Message;
     use std::os::unix::net::UnixStream;
 
@@ -169,8 +169,8 @@ mod tests {
     fn raw_send_receive() {
         let (p0, p1) = UnixStream::pair().unwrap();
 
-        let mut conn0 = RawConnection::wrap(p0);
-        let mut conn1 = RawConnection::wrap(p1);
+        let mut conn0 = Connection::wrap(p0);
+        let mut conn1 = Connection::wrap(p1);
 
         let msg = Message::method(None, None, "/", Some("org.zbus.p2p"), "Test", &()).unwrap();
 

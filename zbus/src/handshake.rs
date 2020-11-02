@@ -10,7 +10,7 @@ use nix::unistd::Uid;
 
 use crate::address::Address;
 use crate::guid::Guid;
-use crate::raw::{RawConnection, Socket};
+use crate::raw::{Connection, Socket};
 use crate::utils::wait_on;
 use crate::{Error, Result};
 
@@ -64,7 +64,7 @@ pub struct ClientHandshake<S> {
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
 pub struct Authenticated<S> {
-    pub(crate) cx: RawConnection<S>,
+    pub(crate) cx: Connection<S>,
     /// The server Guid
     pub(crate) server_guid: Guid,
     /// Whether file descriptor passing has been accepted by both sides
@@ -179,7 +179,7 @@ impl<S: Socket> ClientHandshake<S> {
     pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ClientHandshakeStep::Done = self.step {
             Ok(Authenticated {
-                cx: RawConnection::wrap(self.socket),
+                cx: Connection::wrap(self.socket),
                 server_guid: self.server_guid.unwrap(),
                 cap_unix_fd: self.cap_unix_fd,
             })
@@ -456,7 +456,7 @@ impl<S: Socket> ServerHandshake<S> {
     pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ServerHandshakeStep::Done = self.step {
             Ok(Authenticated {
-                cx: RawConnection::wrap(self.socket),
+                cx: Connection::wrap(self.socket),
                 server_guid: self.server_guid,
                 cap_unix_fd: self.cap_unix_fd,
             })
