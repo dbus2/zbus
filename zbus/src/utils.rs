@@ -1,15 +1,8 @@
-use std::io::{Error, ErrorKind};
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
-use std::os::unix::net::UnixStream;
-
-use nix::cmsg_space;
 use nix::errno::Errno;
-use nix::sys::socket::{recvmsg, sendmsg, ControlMessage, ControlMessageOwned, MsgFlags};
-use nix::sys::uio::IoVec;
+use nix::poll::{poll, PollFd, PollFlags};
+use std::os::unix::io::RawFd;
 
-use crate::owned_fd::OwnedFd;
-
-const FDS_MAX: usize = 1024; // this is hardcoded in sdbus - nothing in the spec
+pub(crate) const FDS_MAX: usize = 1024; // this is hardcoded in sdbus - nothing in the spec
 
 pub(crate) fn padding_for_8_bytes(value: usize) -> usize {
     padding_for_n_bytes(value, 8)
@@ -21,76 +14,26 @@ pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
     len_rounded_up.wrapping_sub(value)
 }
 
-/// Similar to std Write.write_all(), but handle ancillary Fds with sendmsg().
-pub(crate) fn write_all(socket: &UnixStream, mut buf: &[u8], fds: &[RawFd]) -> std::io::Result<()> {
-    let mut cmsg = vec![ControlMessage::ScmRights(fds)];
-
-    while !buf.is_empty() {
-        let iov = [IoVec::from_slice(buf)];
-
-        match sendmsg(socket.as_raw_fd(), &iov, &cmsg, MsgFlags::empty(), None) {
-            Ok(0) => {
-                return Err(Error::new(
-                    ErrorKind::WriteZero,
-                    "failed to write all buffer",
+pub(crate) fn wait_on(fd: RawFd, flags: PollFlags) -> std::io::Result<()> {
+    let pollfd = PollFd::new(fd, flags);
+    loop {
+        match poll(&mut [pollfd], -1) {
+            Ok(_) => break,
+            Err(nix::Error::Sys(e)) => {
+                if e == Errno::EAGAIN || e == Errno::EINTR {
+                    // we got interupted, try polling again
+                    continue;
+                } else {
+                    return Err(std::io::Error::from(e));
+                }
+            }
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "unhandled nix error",
                 ))
             }
-            Ok(n) => {
-                buf = &buf[n..];
-                cmsg = vec![];
-            }
-            Err(nix::Error::Sys(Errno::EINPROGRESS)) => {}
-            Err(nix::Error::Sys(e)) => return Err(e.into()),
-            _ => return Err(Error::new(ErrorKind::Other, "unhandled nix error")),
         }
     }
-
     Ok(())
-}
-
-/// Similar to std Read.read_exact, but handle recvmsg() with ancillary Fds.
-pub(crate) fn read_exact(socket: &UnixStream, mut buf: &mut [u8]) -> std::io::Result<Vec<OwnedFd>> {
-    let mut fds = vec![];
-
-    while !buf.is_empty() {
-        let iov = [IoVec::from_mut_slice(buf)];
-        let mut cmsgspace = cmsg_space!([RawFd; FDS_MAX]);
-
-        match recvmsg(
-            socket.as_raw_fd(),
-            &iov,
-            Some(&mut cmsgspace),
-            MsgFlags::empty(),
-        ) {
-            Ok(msg) => {
-                for cmsg in msg.cmsgs() {
-                    if let ControlMessageOwned::ScmRights(fd) = cmsg {
-                        for fd in fd.iter() {
-                            // assuming the received FD is valid
-                            unsafe {
-                                fds.push(OwnedFd::from_raw_fd(*fd as RawFd));
-                            }
-                        }
-                    } else {
-                        return Err(Error::new(ErrorKind::InvalidData, "unexpected CMSG kind"));
-                    }
-                }
-
-                let tmp = buf;
-                buf = &mut tmp[msg.bytes..];
-            }
-            Err(nix::Error::Sys(Errno::EINPROGRESS)) => {}
-            Err(nix::Error::Sys(e)) => return Err(e.into()),
-            _ => return Err(Error::new(ErrorKind::Other, "unhandled nix error")),
-        }
-    }
-
-    if !buf.is_empty() {
-        Err(Error::new(
-            ErrorKind::UnexpectedEof,
-            "failed to fill whole buffer",
-        ))
-    } else {
-        Ok(fds)
-    }
 }

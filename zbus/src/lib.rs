@@ -158,12 +158,18 @@ mod proxy;
 pub use proxy::*;
 
 mod owned_fd;
+pub use owned_fd::*;
+
 mod utils;
 
 mod object_server;
 pub use object_server::*;
 
 pub mod fdo;
+
+pub mod raw;
+
+pub mod handshake;
 
 pub mod xml;
 
