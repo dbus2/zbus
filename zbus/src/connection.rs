@@ -1,15 +1,11 @@
 use std::cell::{Cell, RefCell};
-use std::env;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::rc::Rc;
-use std::str::FromStr;
 
 use nix::poll::PollFlags;
-use nix::unistd::Uid;
 use once_cell::unsync::OnceCell;
 
-use crate::address::Address;
 use crate::handshake::{Authenticated, ClientHandshake, ServerHandshake};
 use crate::raw::RawConnection;
 use crate::utils::wait_on;
@@ -102,40 +98,40 @@ impl Connection {
     /// can be sent and received.
     pub fn new_unix_client(stream: UnixStream, bus_connection: bool) -> Result<Self> {
         // SASL Handshake
-        let handshake = ClientHandshake::new(stream);
-        let connection = Connection::new_authenticated(handshake.blocking_finish()?);
+        let auth = ClientHandshake::new(stream).blocking_finish()?;
 
         if bus_connection {
-            // Now that the server has approved us, we must send the bus Hello, as per specs
-            let name = fdo::DBusProxy::new(&connection)?
-                .hello()
-                .map_err(|e| Error::Handshake(format!("Hello failed: {}", e)))?;
-            connection
-                .0
-                .unique_name
-                .set(name)
-                // programmer (probably our) error if this fails.
-                .expect("Attempted to set unique_name twice");
+            Connection::new_authenticated_unix_bus(auth)
+        } else {
+            Ok(Connection::new_authenticated(auth))
         }
-
-        Ok(connection)
     }
 
     /// Create a `Connection` to the session/user message bus.
     pub fn new_session() -> Result<Self> {
-        Self::new_unix_client(session_socket()?, true)
+        ClientHandshake::new_session()?
+            .blocking_finish()
+            .and_then(Self::new_authenticated_unix_bus)
     }
 
     /// Create a `Connection` to the system-wide message bus.
     pub fn new_system() -> Result<Self> {
-        Self::new_unix_client(system_socket()?, true)
+        ClientHandshake::new_system()?
+            .blocking_finish()
+            .and_then(Self::new_authenticated_unix_bus)
     }
 
     /// Create a `Connection` for the given [D-Bus address].
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
-        Self::new_unix_client(Address::from_str(address)?.connect()?, bus_connection)
+        let auth = ClientHandshake::new_for_address(address)?.blocking_finish()?;
+
+        if bus_connection {
+            Connection::new_authenticated_unix_bus(auth)
+        } else {
+            Ok(Connection::new_authenticated(auth))
+        }
     }
 
     /// Create a server `Connection` for the given `UnixStream` and the server `guid`.
@@ -152,7 +148,9 @@ impl Connection {
             .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
 
         let handshake = ServerHandshake::new(stream, guid.clone(), creds.uid());
-        Ok(Connection::new_authenticated(handshake.blocking_finish()?))
+        handshake
+            .blocking_finish()
+            .map(Connection::new_authenticated)
     }
 
     /// Max number of messages to queue.
@@ -473,44 +471,28 @@ impl Connection {
         self.0.unique_name.set(name)
     }
 
+    fn new_authenticated_unix_bus(auth: Authenticated<UnixStream>) -> Result<Self> {
+        let connection = Connection::new_authenticated(auth);
+
+        // Now that the server has approved us, we must send the bus Hello, as per specs
+        let name = fdo::DBusProxy::new(&connection)?
+            .hello()
+            .map_err(|e| Error::Handshake(format!("Hello failed: {}", e)))?;
+        connection
+            .0
+            .unique_name
+            .set(name)
+            // programmer (probably our) error if this fails.
+            .expect("Attempted to set unique_name twice");
+
+        Ok(connection)
+    }
+
     fn next_serial(&self) -> u32 {
         let next = self.0.serial.get() + 1;
 
         self.0.serial.replace(next)
     }
-}
-
-/// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
-/// variable. If we don't recognize the value (or it's not set) we fall back to
-/// /run/user/UID/bus
-pub(crate) fn session_socket() -> Result<UnixStream> {
-    match env::var("DBUS_SESSION_BUS_ADDRESS") {
-        Ok(val) => Address::from_str(&val)?.connect(),
-        _ => {
-            let uid = Uid::current();
-            let path = format!("/run/user/{}/bus", uid);
-            Ok(UnixStream::connect(path)?)
-        }
-    }
-}
-
-/// Get a system socket respecting the DBUS_SYSTEM_BUS_ADDRESS environment
-/// variable. If we don't recognize the value (or it's not set) we fall back to
-/// /var/run/dbus/system_bus_socket
-pub(crate) fn system_socket() -> Result<UnixStream> {
-    match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
-        Ok(val) => Address::from_str(&val)?.connect(),
-        _ => Ok(UnixStream::connect("/var/run/dbus/system_bus_socket")?),
-    }
-}
-
-pub(crate) fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
-    let mut id = String::new();
-    for s in s.as_bytes().chunks(2) {
-        let c = char::from(u8::from_str_radix(std::str::from_utf8(s)?, 16)?);
-        id.push(c);
-    }
-    Ok(id.parse::<u32>()?)
 }
 
 #[cfg(test)]

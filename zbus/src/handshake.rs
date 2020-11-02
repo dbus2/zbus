@@ -1,4 +1,5 @@
 use std::convert::TryInto;
+use std::env;
 use std::io::BufRead;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
@@ -7,7 +8,7 @@ use std::str::FromStr;
 use nix::poll::PollFlags;
 use nix::unistd::Uid;
 
-use crate::connection::id_from_str;
+use crate::address::Address;
 use crate::guid::Guid;
 use crate::raw::{RawConnection, Socket};
 use crate::utils::wait_on;
@@ -200,14 +201,14 @@ impl ClientHandshake<UnixStream> {
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_session() -> Result<Self> {
-        crate::connection::session_socket().map(Self::new)
+        session_socket().map(Self::new)
     }
 
     /// Initialize a handshake to the session/user message bus.
     ///
     /// The socket backing this connection is created in non-blocking mode.
     pub fn new_session_nonblock() -> Result<Self> {
-        let socket = crate::connection::session_socket()?;
+        let socket = session_socket()?;
         socket.set_nonblocking(true)?;
         Ok(Self::new(socket))
     }
@@ -216,14 +217,14 @@ impl ClientHandshake<UnixStream> {
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_system() -> Result<Self> {
-        crate::connection::system_socket().map(Self::new)
+        system_socket().map(Self::new)
     }
 
     /// Initialize a handshake to the system-wide message bus.
     ///
     /// The socket backing this connection is created in non-blocking mode.
     pub fn new_system_nonblock() -> Result<Self> {
-        let socket = crate::connection::system_socket()?;
+        let socket = system_socket()?;
         socket.set_nonblocking(true)?;
         Ok(Self::new(socket))
     }
@@ -234,7 +235,7 @@ impl ClientHandshake<UnixStream> {
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str) -> Result<Self> {
-        crate::address::Address::from_str(address)?.connect().map(Self::new)
+        Address::from_str(address)?.connect().map(Self::new)
     }
 
     /// Create a handshake for the given [D-Bus address].
@@ -499,6 +500,39 @@ impl ServerHandshake<UnixStream> {
             }
         }
     }
+}
+
+/// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
+/// variable. If we don't recognize the value (or it's not set) we fall back to
+/// /run/user/UID/bus
+fn session_socket() -> Result<UnixStream> {
+    match env::var("DBUS_SESSION_BUS_ADDRESS") {
+        Ok(val) => Address::from_str(&val)?.connect(),
+        _ => {
+            let uid = Uid::current();
+            let path = format!("/run/user/{}/bus", uid);
+            Ok(UnixStream::connect(path)?)
+        }
+    }
+}
+
+/// Get a system socket respecting the DBUS_SYSTEM_BUS_ADDRESS environment
+/// variable. If we don't recognize the value (or it's not set) we fall back to
+/// /var/run/dbus/system_bus_socket
+fn system_socket() -> Result<UnixStream> {
+    match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
+        Ok(val) => Address::from_str(&val)?.connect(),
+        _ => Ok(UnixStream::connect("/var/run/dbus/system_bus_socket")?),
+    }
+}
+
+fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
+    let mut id = String::new();
+    for s in s.as_bytes().chunks(2) {
+        let c = char::from(u8::from_str_radix(std::str::from_utf8(s)?, 16)?);
+        id.push(c);
+    }
+    Ok(id.parse::<u32>()?)
 }
 
 #[cfg(test)]
