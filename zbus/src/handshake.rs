@@ -63,12 +63,11 @@ pub struct ClientHandshake<S> {
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
 pub struct Authenticated<S> {
-    /// The initialized connection
-    pub cx: RawConnection<S>,
+    pub(crate) cx: RawConnection<S>,
     /// The server Guid
-    pub server_guid: Guid,
+    pub(crate) server_guid: Guid,
     /// Whether file descriptor passing has been accepted by both sides
-    pub cap_unix_fd: bool,
+    pub(crate) cap_unix_fd: bool,
 }
 
 impl<S: Socket> ClientHandshake<S> {
