@@ -198,6 +198,13 @@ impl<S: Socket> ClientHandshake<S> {
 impl ClientHandshake<UnixStream> {
     /// Initialize a handshake to the session/user message bus.
     ///
+    /// The socket backing this connection is created in blocking mode.
+    pub fn new_session() -> Result<Self> {
+        crate::connection::session_socket().map(Self::new)
+    }
+
+    /// Initialize a handshake to the session/user message bus.
+    ///
     /// The socket backing this connection is created in non-blocking mode.
     pub fn new_session_nonblock() -> Result<Self> {
         let socket = crate::connection::session_socket()?;
@@ -207,11 +214,27 @@ impl ClientHandshake<UnixStream> {
 
     /// Initialize a handshake to the system-wide message bus.
     ///
+    /// The socket backing this connection is created in blocking mode.
+    pub fn new_system() -> Result<Self> {
+        crate::connection::system_socket().map(Self::new)
+    }
+
+    /// Initialize a handshake to the system-wide message bus.
+    ///
     /// The socket backing this connection is created in non-blocking mode.
     pub fn new_system_nonblock() -> Result<Self> {
         let socket = crate::connection::system_socket()?;
         socket.set_nonblocking(true)?;
         Ok(Self::new(socket))
+    }
+
+    /// Create a handshake for the given [D-Bus address].
+    ///
+    /// The socket backing this connection is created in blocking mode.
+    ///
+    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
+    pub fn new_for_address(address: &str) -> Result<Self> {
+        crate::address::Address::from_str(address)?.connect().map(Self::new)
     }
 
     /// Create a handshake for the given [D-Bus address].
