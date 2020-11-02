@@ -48,7 +48,7 @@ struct ConnectionInner {
 /// [`dbus_proxy`] and [`dbus_interface`] macros instead of doing it directly on a `Connection`.
 ///
 /// For lower-level handling of the connection (such as nonblocking socket handling), see the
-/// documentation of the [`new_authenticated`] constructor.
+/// documentation of the [`new_authenticated_unix`] constructor.
 ///
 /// Typically, a connection is made to the session bus with [`new_session`], or to the system bus
 /// with [`new_system`]. Then the connection is shared with the [`Proxy`] and [`ObjectServer`]
@@ -70,7 +70,7 @@ struct ConnectionInner {
 /// [signals]: struct.Connection.html#method.emit_signal
 /// [`new_system`]: struct.Connection.html#method.new_system
 /// [`new_session`]: struct.Connection.html#method.new_session
-/// [`new_authenticated`]: struct.Connection.html#method.new_authenticated
+/// [`new_authenticated_unix`]: struct.Connection.html#method.new_authenticated_unix
 /// [`Proxy`]: struct.Proxy.html
 /// [`ObjectServer`]: struct.ObjectServer.html
 /// [`dbus_proxy`]: attr.dbus_proxy.html
@@ -103,7 +103,7 @@ impl Connection {
         if bus_connection {
             Connection::new_authenticated_unix_bus(auth)
         } else {
-            Ok(Connection::new_authenticated(auth))
+            Ok(Connection::new_authenticated_unix(auth))
         }
     }
 
@@ -130,7 +130,7 @@ impl Connection {
         if bus_connection {
             Connection::new_authenticated_unix_bus(auth)
         } else {
-            Ok(Connection::new_authenticated(auth))
+            Ok(Connection::new_authenticated_unix(auth))
         }
     }
 
@@ -150,7 +150,7 @@ impl Connection {
         let handshake = ServerHandshake::new(stream, guid.clone(), creds.uid());
         handshake
             .blocking_finish()
-            .map(Connection::new_authenticated)
+            .map(Connection::new_authenticated_unix)
     }
 
     /// Max number of messages to queue.
@@ -445,7 +445,7 @@ impl Connection {
     /// [`Authenticated`]: ./handshake/struct.Authenticated.html
     /// [client hello]: ./fdo/struct.DBusProxy.html#method.hello
     /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
-    pub fn new_authenticated(auth: Authenticated<UnixStream>) -> Self {
+    pub fn new_authenticated_unix(auth: Authenticated<UnixStream>) -> Self {
         Self(Rc::new(ConnectionInner {
             raw_cx: RefCell::new(auth.cx),
             server_guid: auth.server_guid,
@@ -461,18 +461,18 @@ impl Connection {
     /// Sets the unique name for this connection
     ///
     /// This method should only be used when initializing a client *bus* connection with
-    /// [`new_authenticated`]. Setting the unique name to anything other than the return value of the bus
+    /// [`new_authenticated_unix`]. Setting the unique name to anything other than the return value of the bus
     /// hello is a protocol violation.
     ///
     /// Returns and error if the name has already been set.
     ///
-    /// [`new_authenticated`]: struct.Connection.html#method.new_authenticated
+    /// [`new_authenticated_unix`]: struct.Connection.html#method.new_authenticated_unix
     pub fn set_unique_name(&self, name: String) -> std::result::Result<(), String> {
         self.0.unique_name.set(name)
     }
 
     fn new_authenticated_unix_bus(auth: Authenticated<UnixStream>) -> Result<Self> {
-        let connection = Connection::new_authenticated(auth);
+        let connection = Connection::new_authenticated_unix(auth);
 
         // Now that the server has approved us, we must send the bus Hello, as per specs
         let name = fdo::DBusProxy::new(&connection)?
