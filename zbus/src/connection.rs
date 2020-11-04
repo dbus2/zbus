@@ -22,7 +22,7 @@ struct ConnectionInner {
     cap_unix_fd: bool,
     unique_name: OnceCell<String>,
 
-    raw_cx: RefCell<RawConnection<UnixStream>>,
+    raw_conn: RefCell<RawConnection<UnixStream>>,
     // Serial number for next outgoing message
     serial: Cell<u32>,
 
@@ -84,7 +84,7 @@ pub struct Connection(Rc<ConnectionInner>);
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.0.raw_cx.borrow().socket().as_raw_fd()
+        self.0.raw_conn.borrow().socket().as_raw_fd()
     }
 }
 
@@ -210,7 +210,7 @@ impl Connection {
         }
 
         loop {
-            let incoming = self.0.raw_cx.borrow_mut().try_receive_message()?;
+            let incoming = self.0.raw_conn.borrow_mut().try_receive_message()?;
 
             if let Some(ref mut handler) = &mut *self.0.default_msg_handler.borrow_mut() {
                 // Let's see if the default handler wants the message first
@@ -248,10 +248,10 @@ impl Connection {
             Ok(())
         })?;
 
-        let mut cx = self.0.raw_cx.borrow_mut();
-        cx.enqueue_message(msg);
+        let mut conn = self.0.raw_conn.borrow_mut();
+        conn.enqueue_message(msg);
         // Swallow a potential WouldBLock error, but propagate the others
-        if let Err(e) = cx.try_flush() {
+        if let Err(e) = conn.try_flush() {
             if e.kind() != std::io::ErrorKind::WouldBlock {
                 return Err(e.into());
             }
@@ -271,7 +271,7 @@ impl Connection {
     ///
     /// If the connection is in blocking mode, this will return `Ok(())` and do nothing.
     pub fn flush(&self) -> Result<()> {
-        self.0.raw_cx.borrow_mut().try_flush()?;
+        self.0.raw_conn.borrow_mut().try_flush()?;
         Ok(())
     }
 
@@ -447,7 +447,7 @@ impl Connection {
     /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
     pub fn new_authenticated_unix(auth: Authenticated<UnixStream>) -> Self {
         Self(Rc::new(ConnectionInner {
-            raw_cx: RefCell::new(auth.cx),
+            raw_conn: RefCell::new(auth.conn),
             server_guid: auth.server_guid,
             cap_unix_fd: auth.cap_unix_fd,
             serial: Cell::new(1),
