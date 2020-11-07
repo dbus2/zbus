@@ -468,7 +468,8 @@ impl Message {
             Err(e) => return Err(e),
         };
 
-        let b_sig = if b_sig.len() >= 2 && b_sig.starts_with(zvariant::STRUCT_SIG_START_CHAR) {
+        let c = zvariant::STRUCT_SIG_START_CHAR;
+        let b_sig = if b_sig.len() >= 2 && b_sig.starts_with(c) && !sig.starts_with(c) {
             &b_sig[1..b_sig.len() - 1]
         } else {
             &b_sig
