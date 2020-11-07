@@ -401,7 +401,7 @@ fn get_args_from_inputs(
         let args_from_msg = quote! {
             #header_arg_decl
 
-            let (#(#args,)*): (#(#tys,)*) =
+            let (#(#args),*): (#(#tys),*) =
                 match m.body() {
                     Ok(r) => r,
                     Err(e) => return Some(::#zbus::fdo::Error::from(e).reply(c, m)),
