@@ -50,6 +50,7 @@ pub fn pascal_case(s: &str) -> String {
 pub enum ItemAttribute {
     Property,
     Signal,
+    StructReturn,
     Name(String),
 }
 
@@ -60,6 +61,10 @@ impl ItemAttribute {
 
     pub fn is_signal(&self) -> bool {
         self == &Self::Signal
+    }
+
+    pub fn is_struct_return(&self) -> bool {
+        self == &Self::StructReturn
     }
 }
 
@@ -106,6 +111,7 @@ fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
         "name" => Ok(ItemAttribute::Name(v)),
         "property" => Ok(ItemAttribute::Property),
         "signal" => Ok(ItemAttribute::Signal),
+        "struct_return" => Ok(ItemAttribute::StructReturn),
         s => panic!("Unknown item meta {}", s),
     }
 }

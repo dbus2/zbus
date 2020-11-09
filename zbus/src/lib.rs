@@ -429,4 +429,77 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    #[timeout(1000)]
+    fn issue104() {
+        // Tests the fix for https://gitlab.freedesktop.org/zeenix/zbus/-/issues/104
+        //
+        // The issue is caused by `dbus_proxy` macro adding `()` around the return value of methods
+        // with multiple out arguments, ending up with double paranthesis around the signature of
+        // the return type and zbus only removing the outer `()` only and then it not matching the
+        // signature we receive on the reply message.
+        use std::{cell::RefCell, convert::TryFrom, rc::Rc};
+        use zvariant::{ObjectPath, OwnedObjectPath, Value};
+        let conn = Connection::new_session().unwrap();
+        let service_name = conn.unique_name().unwrap().to_string();
+        let mut object_server = super::ObjectServer::new(&conn);
+
+        struct Secret(Rc<RefCell<bool>>);
+        #[super::dbus_interface(name = "org.freedesktop.Secret.Service")]
+        impl Secret {
+            fn open_session(
+                &self,
+                _algorithm: &str,
+                input: Value,
+            ) -> zbus::fdo::Result<(OwnedValue, OwnedObjectPath)> {
+                *self.0.borrow_mut() = true;
+                Ok((
+                    OwnedValue::from(input),
+                    ObjectPath::try_from("/org/freedesktop/secrets/Blah")
+                        .unwrap()
+                        .into(),
+                ))
+            }
+        }
+
+        let quit = Rc::new(RefCell::new(false));
+        let secret = Secret(quit.clone());
+        object_server
+            .at(&"/org/freedesktop/secrets".try_into().unwrap(), secret)
+            .unwrap();
+
+        let child = std::thread::spawn(move || {
+            let conn = Connection::new_session().unwrap();
+            #[super::dbus_proxy(interface = "org.freedesktop.Secret.Service")]
+            trait Secret {
+                fn open_session(
+                    &self,
+                    algorithm: &str,
+                    input: &zvariant::Value,
+                ) -> zbus::Result<(zvariant::OwnedValue, zvariant::OwnedObjectPath)>;
+            }
+
+            let proxy =
+                SecretProxy::new_for(&conn, &service_name, "/org/freedesktop/secrets").unwrap();
+
+            proxy.open_session("plain", &Value::from("")).unwrap();
+
+            2u32
+        });
+
+        loop {
+            let m = conn.receive_message().unwrap();
+            if let Err(e) = object_server.dispatch_message(&m) {
+                eprintln!("{}", e);
+            }
+
+            if *quit.borrow() {
+                break;
+            }
+        }
+
+        let val = child.join().expect("failed to join");
+        assert_eq!(val, 2);
+    }
 }

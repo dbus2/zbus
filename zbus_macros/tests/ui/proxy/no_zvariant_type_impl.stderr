@@ -8,7 +8,6 @@ error[E0277]: the trait bound `Foo: zbus::export::zvariant::Type` is not satisfi
 12 | | )]
    | |__^ the trait `zbus::export::zvariant::Type` is not implemented for `Foo`
    |
-   = note: required because of the requirements on the impl of `zbus::export::zvariant::Type` for `(Foo,)`
    = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Foo: std::convert::From<zbus::export::zvariant::OwnedValue>` is not satisfied

@@ -163,7 +163,7 @@ fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> TokenStream 
     quote! {
         #(#doc)*
         pub #sig {
-            let (reply,) = self.0.call(#method_name, &(#(#args,)*))?;
+            let reply = self.0.call(#method_name, &(#(#args),*))?;
             Ok(reply)
         }
     }
