@@ -9,7 +9,7 @@ service (please refer to this
 [reference](https://people.gnome.org/~mccann/docs/notification-spec/notification-spec-latest.html)
 document for further details on this API).
 
-Let's start by playing with the service from the shell, and notify the desktop with [`busctl`]:
+Let's start by playing with the service from the shell, and notify the desktop with [`busctl`][^busctl]:
 
 ```bash
 busctl --user call \
@@ -214,7 +214,8 @@ available for low-level languages, such as [`gdbus-codegen`]. Unlike those tools
 as a starting point to generate the code, once. In many cases, you will want to tweak the generated
 code.
 
-Let's first fetch the XML interface of the notification service:
+First we'll fetch the XML interface of the notification service, using the
+`--xml-interface`[^busctl-xml-interface] option of the `busctl`[^busctl] command.
 
 ```bash
 busctl --user --xml-interface introspect \
@@ -367,3 +368,9 @@ There you have it, a Rust-friendly binding for your D-Bus service!
 [`busctl`]: https://www.freedesktop.org/software/systemd/man/busctl.html
 [developer-friendly tool]: https://gitlab.freedesktop.org/zeenix/zbus/-/tree/master/zbus_xmlgen
 [`gdbus-codegen`]: https://developer.gnome.org/gio/stable/gdbus-codegen.html
+
+[^busctl]: `busctl` is part of [`systemd`](https://www.freedesktop.org/wiki/Software/systemd/).
+
+[^busctl-xml-interface]: The `--xml-interface` switch was added to `busctl` in version 243. You can
+also obtain the XML interface data by other means, e.g.  from the source code, binary package, or
+documentation of the program which provides the DBus object that you wish to communicate with.
