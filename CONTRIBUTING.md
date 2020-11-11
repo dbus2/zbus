@@ -3,8 +3,10 @@
 We welcomes contribution from everyone in the form of suggestions, bug reports, merge requests, and
 feedback. This document gives some guidance if you are thinking of helping us.
 
-Please reach out here in a Gitlab (or Github) issue or in the #zbus IRC channel on
-[`irc.freenode.net`](freenode.net) if we can do anything to help you contribute.
+Please reach out here in a Gitlab (or Github) issue, or in the
+[#zbus:matrix.org](https://matrix.to/#/#zbus:matrix.org) Matrix room (alternatively you can use the
+`#zbus` IRC channel on [`irc.freenode.net`](https://freenode.net), which is bridged to the Matrix
+room) if we can do anything to help you contribute.
 
 ## Submitting bug reports and feature requests
 
