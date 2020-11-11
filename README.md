@@ -283,9 +283,11 @@ let result = proxy.check_authorization(
 
 # Getting Help
 
-If you need help in using these crates, are looking for ways to contribute or just want to hang out
-with the cool kids, please come chat with us on our IRC channel, #zbus on irc.freenode.net. If
-something doesn't seem right, please [file an issue](https://gitlab.freedesktop.org/zeenix/zbus/-/issues/new).
+If you need help in using these crates, are looking for ways to contribute, or just want to hang out
+with the cool kids, please come chat with us in the
+[`#zbus:matrix.org`](https://matrix.to/#/#zbus:matrix.org) Matrix room, (which is also bridged to
+the `#zbus` IRC channel on irc.freenode.net). If something doesn't seem right, please [file an
+issue](https://gitlab.freedesktop.org/zeenix/zbus/-/issues/new).
 
 # Portability
 
