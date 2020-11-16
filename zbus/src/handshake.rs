@@ -417,6 +417,28 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
             } else {
                 cmd.into()
             };
+            // The dbus daemon on these platforms currently requires sending the zero byte
+            // as a separate message with SCM_CREDS
+            #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+            if self.step == Init {
+                use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
+
+                let zero = &[self.send_buffer.drain(..1).next().unwrap()];
+                let iov = [nix::sys::uio::IoVec::from_slice(zero)];
+
+                if sendmsg(
+                    self.socket.as_raw_fd(),
+                    &iov,
+                    &[ControlMessage::ScmCreds],
+                    MsgFlags::empty(),
+                    None,
+                ) != Ok(1)
+                {
+                    return Err(Error::Handshake(
+                        "Could not send zero byte with credentials".to_string(),
+                    ));
+                }
+            }
             self.step = next_step;
         }
     }
