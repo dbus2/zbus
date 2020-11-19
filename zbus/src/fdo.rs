@@ -167,6 +167,7 @@ trait DBus {
     fn get_connection_selinux_security_context(&self, bus_name: &str) -> Result<Vec<u8>>;
 
     /// Returns the Unix process ID of the process connected to the server.
+    #[dbus_proxy(name = "GetConnectionUnixProcessID")]
     fn get_connection_unix_process_id(&self, bus_name: &str) -> Result<u32>;
 
     /// Returns the Unix user ID of the process connected to the server.
