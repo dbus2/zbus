@@ -310,6 +310,10 @@ pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
 }
 
 /// Our serialization implementation.
+///
+/// Using this serializer involves an redirection to the actual serializer. It's best to use the
+/// serialization functions, e.g [`to_bytes`] or specific serializers, [`dbus::Serializer`] or
+/// [`gvariant::Serializer`].
 pub enum Serializer<'ser, 'sig, B, W> {
     DBus(DBusSerializer<'ser, 'sig, B, W>),
     GVariant(GVSerializer<'ser, 'sig, B, W>),
