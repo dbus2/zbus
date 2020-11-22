@@ -502,4 +502,11 @@ mod tests {
         let val = child.join().expect("failed to join");
         assert_eq!(val, 2);
     }
+
+    #[test]
+    fn connection_is_send_and_sync() {
+        accept_send_and_sync::<Connection>();
+    }
+
+    fn accept_send_and_sync<C: Send + Sync>() {}
 }
