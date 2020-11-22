@@ -117,7 +117,7 @@ where
         let mut fields = MessageFields::new();
 
         let mut signature = B::signature();
-        if signature != "" {
+        if !signature.is_empty() {
             if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
                 // Remove leading and trailing STRUCT delimiters
                 signature = signature.slice(1..signature.len() - 1);
