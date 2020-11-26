@@ -1,5 +1,7 @@
+#[cfg(feature = "gvariant")]
+use crate::Maybe;
 use crate::Value;
-use crate::{Array, Dict, Error, Fd, Maybe, ObjectPath, Signature, Str, Structure};
+use crate::{Array, Dict, Error, Fd, ObjectPath, Signature, Str, Structure};
 use std::convert::TryFrom;
 
 macro_rules! value_try_from {
@@ -75,6 +77,7 @@ value_try_from_all!(ObjectPath, ObjectPath<'a>);
 value_try_from_all!(Structure, Structure<'a>);
 value_try_from_all!(Dict, Dict<'a, 'a>);
 value_try_from_all!(Array, Array<'a>);
+#[cfg(feature = "gvariant")]
 value_try_from_all!(Maybe, Maybe<'a>);
 
 value_try_from!(Str, String);

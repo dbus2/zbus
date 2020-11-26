@@ -9,9 +9,11 @@ use serde::ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct,
 
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
+#[cfg(feature = "gvariant")]
+use crate::Maybe;
 use crate::{
-    Array, Basic, Dict, Fd, Maybe, ObjectPath, OwnedValue, Signature, Str, Structure,
-    StructureBuilder, Type,
+    Array, Basic, Dict, Fd, ObjectPath, OwnedValue, Signature, Str, Structure, StructureBuilder,
+    Type,
 };
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
@@ -85,6 +87,7 @@ pub enum Value<'a> {
     Array(Array<'a>),
     Dict(Dict<'a, 'a>),
     Structure(Structure<'a>),
+    #[cfg(feature = "gvariant")]
     Maybe(Maybe<'a>),
 
     Fd(Fd),
@@ -111,6 +114,7 @@ macro_rules! serialize_value {
             Value::Array(value) => $serializer.$method($($first_arg,)* value),
             Value::Dict(value) => $serializer.$method($($first_arg,)* value),
             Value::Structure(value) => $serializer.$method($($first_arg,)* value),
+            #[cfg(feature = "gvariant")]
             Value::Maybe(value) => $serializer.$method($($first_arg,)* value),
 
             Value::Fd(value) => $serializer.$method($($first_arg,)* value),
@@ -171,6 +175,7 @@ impl<'a> Value<'a> {
             Value::Array(v) => Value::Array(v.to_owned()),
             Value::Dict(v) => Value::Dict(v.to_owned()),
             Value::Structure(v) => Value::Structure(v.to_owned()),
+            #[cfg(feature = "gvariant")]
             Value::Maybe(v) => Value::Maybe(v.to_owned()),
             Value::Fd(v) => Value::Fd(*v),
         }
@@ -197,6 +202,7 @@ impl<'a> Value<'a> {
             Value::Array(value) => value.full_signature().clone(),
             Value::Dict(value) => value.full_signature().clone(),
             Value::Structure(value) => value.full_signature().clone(),
+            #[cfg(feature = "gvariant")]
             Value::Maybe(value) => value.full_signature().clone(),
 
             Value::Fd(_) => Fd::signature(),
@@ -235,6 +241,7 @@ impl<'a> Value<'a> {
         serialize_value!(self serializer.serialize_element)
     }
 
+    #[cfg(feature = "gvariant")]
     pub(crate) fn serialize_value_as_some<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -622,6 +629,7 @@ where
     }
 
     #[inline]
+    #[cfg(feature = "gvariant")]
     fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
@@ -636,6 +644,15 @@ where
             .map(|v| Value::Maybe(Maybe::just_full_signature(v, self.signature)))
     }
 
+    #[cfg(not(feature = "gvariant"))]
+    fn visit_some<D>(self, _deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        panic!("`Maybe` type is only supported for GVariant format but it's disabled");
+    }
+
+    #[cfg(feature = "gvariant")]
     fn visit_none<E>(self) -> Result<Self::Value, E>
     where
         E: Error,
@@ -643,6 +660,14 @@ where
         let value = Maybe::nothing_full_signature(self.signature);
 
         Ok(Value::Maybe(value))
+    }
+
+    #[cfg(not(feature = "gvariant"))]
+    fn visit_none<E>(self) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        panic!("`Maybe` type is only supported for GVariant format but it's disabled");
     }
 }
 

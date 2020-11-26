@@ -53,6 +53,7 @@ macro_rules! alignment_method {
         fn alignment(format: EncodingFormat) -> usize {
             match format {
                 EncodingFormat::DBus => $dbus_alignment,
+                #[cfg(feature = "gvariant")]
                 EncodingFormat::GVariant => $gvariant_alignment,
             }
         }

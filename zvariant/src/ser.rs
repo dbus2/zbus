@@ -5,6 +5,7 @@ use std::os::unix::io::RawFd;
 use std::{marker::PhantomData, str};
 
 use crate::dbus::{self, Serializer as DBusSerializer};
+#[cfg(feature = "gvariant")]
 use crate::gvariant::{self, Serializer as GVSerializer};
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
@@ -231,6 +232,7 @@ where
             value.serialize(&mut ser)?;
             Ok((ser.0.bytes_written, fds))
         }
+        #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
             let mut ser = GVSerializer::<B, W>::new(signature, writer, &mut fds, ctxt);
             value.serialize(&mut ser)?;
@@ -316,6 +318,7 @@ pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
 /// [`gvariant::Serializer`].
 pub enum Serializer<'ser, 'sig, B, W> {
     DBus(DBusSerializer<'ser, 'sig, B, W>),
+    #[cfg(feature = "gvariant")]
     GVariant(GVSerializer<'ser, 'sig, B, W>),
 }
 
@@ -332,6 +335,7 @@ where
         ctxt: EncodingContext<B>,
     ) -> Self {
         match ctxt.format() {
+            #[cfg(feature = "gvariant")]
             EncodingFormat::GVariant => {
                 Self::GVariant(GVSerializer::new(signature, writer, fds, ctxt))
             }
@@ -343,6 +347,7 @@ where
     #[inline]
     pub fn into_inner(self) -> &'ser mut W {
         match self {
+            #[cfg(feature = "gvariant")]
             Self::GVariant(ser) => ser.0.writer,
             Self::DBus(ser) => ser.0.writer,
         }
@@ -432,6 +437,7 @@ macro_rules! serialize_method {
             $($generic: ?Sized + Serialize),*
         {
             match self {
+                #[cfg(feature = "gvariant")]
                 Serializer::GVariant(ser) => {
                     ser.$method($($arg),*)$(.map($map::GVariant))*
                 }
@@ -525,6 +531,7 @@ macro_rules! serialize_impl {
                     T: ?Sized + Serialize,
                 {
                     match self {
+                        #[cfg(feature = "gvariant")]
                         $impl::GVariant(ser) => ser.$method($($arg),*),
                         $impl::DBus(ser) => ser.$method($($arg),*),
                     }
@@ -533,6 +540,7 @@ macro_rules! serialize_impl {
 
             fn end(self) -> Result<()> {
                 match self {
+                    #[cfg(feature = "gvariant")]
                     $impl::GVariant(ser) => ser.end(),
                     $impl::DBus(ser) => ser.end(),
                 }
@@ -544,6 +552,7 @@ macro_rules! serialize_impl {
 #[doc(hidden)]
 pub enum SeqSerializer<'ser, 'sig, 'b, B, W> {
     DBus(dbus::SeqSerializer<'ser, 'sig, 'b, B, W>),
+    #[cfg(feature = "gvariant")]
     GVariant(gvariant::SeqSerializer<'ser, 'sig, 'b, B, W>),
 }
 
@@ -552,6 +561,7 @@ serialize_impl!(SerializeSeq, SeqSerializer, serialize_element(value: &T));
 #[doc(hidden)]
 pub enum StructSerializer<'ser, 'sig, 'b, B, W> {
     DBus(dbus::StructSerializer<'ser, 'sig, 'b, B, W>),
+    #[cfg(feature = "gvariant")]
     GVariant(gvariant::StructSerializer<'ser, 'sig, 'b, B, W>),
 }
 

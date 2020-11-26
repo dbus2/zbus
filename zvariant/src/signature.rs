@@ -214,6 +214,7 @@ impl<'a> Basic for Signature<'a> {
     fn alignment(format: EncodingFormat) -> usize {
         match format {
             EncodingFormat::DBus => 1,
+            #[cfg(feature = "gvariant")]
             EncodingFormat::GVariant => 1,
         }
     }

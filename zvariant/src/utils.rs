@@ -1,5 +1,6 @@
-use crate::signature_parser::SignatureParser;
-use crate::{Basic, EncodingFormat, Error, Fd, ObjectPath, Signature};
+#[cfg(feature = "gvariant")]
+use crate::{signature_parser::SignatureParser, Error};
+use crate::{Basic, EncodingFormat, Fd, ObjectPath, Signature};
 
 /// The prefix of ARRAY type signature, as a character. Provided for manual signature creation.
 pub const ARRAY_SIGNATURE_CHAR: char = 'a';
@@ -29,12 +30,15 @@ pub const VARIANT_SIGNATURE_CHAR: char = 'v';
 /// The VARIANT type signature, as a string. Provided for manual signature creation.
 pub const VARIANT_SIGNATURE_STR: &str = "v";
 pub(crate) const VARIANT_ALIGNMENT_DBUS: usize = 1;
+#[cfg(feature = "gvariant")]
 pub(crate) const VARIANT_ALIGNMENT_GVARIANT: usize = 8;
 /// The prefix of MAYBE (GVariant-specific) type signature, as a character. Provided for manual
 /// signature creation.
+#[cfg(feature = "gvariant")]
 pub const MAYBE_SIGNATURE_CHAR: char = 'm';
 /// The prefix of MAYBE (GVariant-specific) type signature, as a string. Provided for manual
 /// signature creation.
+#[cfg(feature = "gvariant")]
 pub const MAYBE_SIGNATURE_STR: &str = "m";
 
 pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
@@ -89,11 +93,13 @@ pub(crate) fn alignment_for_signature(signature: &Signature, format: EncodingFor
         Signature::SIGNATURE_CHAR => Signature::alignment(format),
         VARIANT_SIGNATURE_CHAR => match format {
             EncodingFormat::DBus => VARIANT_ALIGNMENT_DBUS,
+            #[cfg(feature = "gvariant")]
             EncodingFormat::GVariant => VARIANT_ALIGNMENT_GVARIANT,
         },
         ARRAY_SIGNATURE_CHAR => alignment_for_array_signature(signature, format),
         STRUCT_SIG_START_CHAR => alignment_for_struct_signature(signature, format),
         DICT_ENTRY_SIG_START_CHAR => alignment_for_dict_entry_signature(signature, format),
+        #[cfg(feature = "gvariant")]
         MAYBE_SIGNATURE_CHAR => alignment_for_maybe_signature(signature, format),
         _ => {
             println!("WARNING: Unsupported signature: {}", signature);
@@ -103,6 +109,7 @@ pub(crate) fn alignment_for_signature(signature: &Signature, format: EncodingFor
     }
 }
 
+#[cfg(feature = "gvariant")]
 pub(crate) fn is_fixed_sized_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
     match signature
         .as_bytes()
@@ -151,12 +158,13 @@ macro_rules! check_child_value_signature {
 }
 
 fn alignment_for_single_child_type_signature(
-    signature: &Signature,
+    #[allow(unused)] signature: &Signature,
     format: EncodingFormat,
     dbus_align: usize,
 ) -> usize {
     match format {
         EncodingFormat::DBus => dbus_align,
+        #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
             let child_signature = Signature::from_str_unchecked(&signature[1..]);
 
@@ -169,13 +177,18 @@ fn alignment_for_array_signature(signature: &Signature, format: EncodingFormat) 
     alignment_for_single_child_type_signature(signature, format, ARRAY_ALIGNMENT_DBUS)
 }
 
+#[cfg(feature = "gvariant")]
 fn alignment_for_maybe_signature(signature: &Signature, format: EncodingFormat) -> usize {
     alignment_for_single_child_type_signature(signature, format, 1)
 }
 
-fn alignment_for_struct_signature(signature: &Signature, format: EncodingFormat) -> usize {
+fn alignment_for_struct_signature(
+    #[allow(unused)] signature: &Signature,
+    format: EncodingFormat,
+) -> usize {
     match format {
         EncodingFormat::DBus => STRUCT_ALIGNMENT_DBUS,
+        #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
             let inner_signature = Signature::from_str_unchecked(&signature[1..signature.len() - 1]);
             let mut sig_parser = SignatureParser::new(inner_signature);
@@ -202,9 +215,13 @@ fn alignment_for_struct_signature(signature: &Signature, format: EncodingFormat)
     }
 }
 
-fn alignment_for_dict_entry_signature(signature: &Signature, format: EncodingFormat) -> usize {
+fn alignment_for_dict_entry_signature(
+    #[allow(unused)] signature: &Signature,
+    format: EncodingFormat,
+) -> usize {
     match format {
         EncodingFormat::DBus => DICT_ENTRY_ALIGNMENT_DBUS,
+        #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
             let key_signature = Signature::from_str_unchecked(&signature[1..2]);
             let key_alignment = alignment_for_signature(&key_signature, format);
@@ -224,6 +241,7 @@ fn alignment_for_dict_entry_signature(signature: &Signature, format: EncodingFor
     }
 }
 
+#[cfg(feature = "gvariant")]
 fn is_fixed_sized_struct_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
     let inner_signature = Signature::from_str_unchecked(&signature[1..signature.len() - 1]);
     let mut sig_parser = SignatureParser::new(inner_signature);
@@ -245,6 +263,7 @@ fn is_fixed_sized_struct_signature<'a>(signature: &'a Signature<'a>) -> Result<b
     Ok(fixed_sized)
 }
 
+#[cfg(feature = "gvariant")]
 fn is_fixed_sized_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
     let key_signature = Signature::from_str_unchecked(&signature[1..2]);
     if !is_fixed_sized_signature(&key_signature)? {

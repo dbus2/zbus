@@ -2,9 +2,11 @@ use std::ops::{Bound, RangeBounds};
 
 use crate::{Basic, Fd, ObjectPath, Result, Signature};
 
+#[cfg(feature = "gvariant")]
+use crate::utils::MAYBE_SIGNATURE_CHAR;
 use crate::utils::{
-    ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_START_CHAR, MAYBE_SIGNATURE_CHAR, STRUCT_SIG_END_STR,
-    STRUCT_SIG_START_CHAR, STRUCT_SIG_START_STR, VARIANT_SIGNATURE_CHAR,
+    ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_STR, STRUCT_SIG_START_CHAR,
+    STRUCT_SIG_START_STR, VARIANT_SIGNATURE_CHAR,
 };
 
 #[derive(Debug, Clone)]
@@ -148,6 +150,7 @@ impl<'s> SignatureParser<'s> {
             ARRAY_SIGNATURE_CHAR => self.next_array_signature(),
             STRUCT_SIG_START_CHAR => self.next_structure_signature(),
             DICT_ENTRY_SIG_START_CHAR => self.next_dict_entry_signature(),
+            #[cfg(feature = "gvariant")]
             MAYBE_SIGNATURE_CHAR => self.next_maybe_signature(),
             c => Err(serde::de::Error::invalid_value(
                 serde::de::Unexpected::Char(c),
@@ -193,6 +196,7 @@ impl<'s> SignatureParser<'s> {
         self.next_single_child_type_container_signature(ARRAY_SIGNATURE_CHAR)
     }
 
+    #[cfg(feature = "gvariant")]
     fn next_maybe_signature(&self) -> Result<Signature> {
         self.next_single_child_type_container_signature(MAYBE_SIGNATURE_CHAR)
     }

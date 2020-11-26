@@ -99,6 +99,7 @@ where
     }
 }
 
+#[cfg(feature = "gvariant")]
 impl<T> Type for Option<T>
 where
     T: Type,
