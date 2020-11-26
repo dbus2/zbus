@@ -81,13 +81,13 @@ pub fn find_attribute_meta(attrs: &[Attribute], attr_name: &str) -> Result<Optio
 }
 
 // parse a single meta like: ident = "value"
-fn parse_attribute(meta: &NestedMeta) -> Result<(String, String)> {
+fn parse_attribute(meta: &NestedMeta) -> (String, String) {
     let meta = match &meta {
         NestedMeta::Meta(m) => m,
         _ => panic!("wrong meta type"),
     };
     let meta = match meta {
-        Meta::Path(p) => return Ok((p.get_ident().unwrap().to_string(), "".to_string())),
+        Meta::Path(p) => return (p.get_ident().unwrap().to_string(), "".to_string()),
         Meta::NameValue(n) => n,
         _ => panic!("wrong meta type"),
     };
@@ -101,11 +101,11 @@ fn parse_attribute(meta: &NestedMeta) -> Result<(String, String)> {
         Some(ident) => ident,
     };
 
-    Ok((ident.to_string(), value))
+    (ident.to_string(), value)
 }
 
 fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
-    let (ident, v) = parse_attribute(meta)?;
+    let (ident, v) = parse_attribute(meta);
 
     match ident.as_ref() {
         "name" => Ok(ItemAttribute::Name(v)),
@@ -134,7 +134,7 @@ pub fn parse_item_attributes(attrs: &[Attribute], attr_name: &str) -> Result<Vec
 }
 
 fn error_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
-    let (ident, v) = parse_attribute(meta)?;
+    let (ident, v) = parse_attribute(meta);
 
     match ident.as_ref() {
         "name" => Ok(ItemAttribute::Name(v)),
