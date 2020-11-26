@@ -103,6 +103,7 @@ impl<'a> Basic for ObjectPath<'a> {
     fn alignment(format: EncodingFormat) -> usize {
         match format {
             EncodingFormat::DBus => <&str>::alignment(format),
+            #[cfg(feature = "gvariant")]
             EncodingFormat::GVariant => 1,
         }
     }

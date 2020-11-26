@@ -13,7 +13,10 @@ categories = ["data-structures", "encoding", "parsing"]
 readme = "../README.md"
 
 [features]
-ostree-tests = []
+default = ["gvariant"]
+# Also allow disabling D-Bus support
+gvariant = []
+ostree-tests = ["gvariant"]
 
 [dependencies]
 byteorder = "1.3.1"

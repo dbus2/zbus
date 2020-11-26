@@ -8,6 +8,7 @@ pub enum EncodingFormat {
     /// format.
     DBus,
     /// [GVariant](https://developer.gnome.org/glib/stable/glib-GVariant.html) format.
+    #[cfg(feature = "gvariant")]
     GVariant,
 }
 
@@ -21,6 +22,7 @@ impl std::fmt::Display for EncodingFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             EncodingFormat::DBus => write!(f, "D-Bus"),
+            #[cfg(feature = "gvariant")]
             EncodingFormat::GVariant => write!(f, "GVariant"),
         }
     }
@@ -86,6 +88,7 @@ where
     /// Convenient wrapper for [`new`] to create a context for GVariant format.
     ///
     /// [`new`]: #method.new
+    #[cfg(feature = "gvariant")]
     pub fn new_gvariant(position: usize) -> Self {
         Self::new(EncodingFormat::GVariant, position)
     }

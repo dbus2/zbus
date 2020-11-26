@@ -1,5 +1,7 @@
+#[cfg(feature = "gvariant")]
+use crate::Maybe;
 use crate::Value;
-use crate::{Array, Dict, Maybe};
+use crate::{Array, Dict};
 use crate::{Fd, ObjectPath, Signature, Structure};
 
 //
@@ -39,6 +41,7 @@ into_value!(Signature<'a>, Signature);
 into_value!(ObjectPath<'a>, ObjectPath);
 into_value!(Array<'a>, Array);
 into_value!(Dict<'a, 'a>, Dict);
+#[cfg(feature = "gvariant")]
 into_value!(Maybe<'a>, Maybe);
 
 impl<'s> From<String> for Value<'s> {
@@ -89,6 +92,7 @@ impl<'v> From<&'v String> for Value<'v> {
     }
 }
 
+#[cfg(feature = "gvariant")]
 impl<'v, V> From<Option<V>> for Value<'v>
 where
     Option<V>: Into<Maybe<'v>>,

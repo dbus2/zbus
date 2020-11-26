@@ -5,6 +5,7 @@ use std::os::unix::io::RawFd;
 use std::{marker::PhantomData, str};
 
 use crate::dbus::Deserializer as DBusDeserializer;
+#[cfg(feature = "gvariant")]
 use crate::gvariant::Deserializer as GVDeserializer;
 use crate::signature_parser::SignatureParser;
 use crate::utils::*;
@@ -155,6 +156,7 @@ where
     T: Deserialize<'d>,
 {
     let mut de = match ctxt.format() {
+        #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
             Deserializer::GVariant(GVDeserializer::new(bytes, fds, signature, ctxt))
         }
@@ -186,6 +188,7 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B> {
 /// [`dbus::Deserializer`] or [`gvariant::Deserializer`].
 pub enum Deserializer<'ser, 'sig, 'f, B> {
     DBus(DBusDeserializer<'ser, 'sig, 'f, B>),
+    #[cfg(feature = "gvariant")]
     GVariant(GVDeserializer<'ser, 'sig, 'f, B>),
 }
 
@@ -201,6 +204,7 @@ where
         ctxt: EncodingContext<B>,
     ) -> Self {
         match ctxt.format() {
+            #[cfg(feature = "gvariant")]
             EncodingFormat::GVariant => {
                 Self::GVariant(GVDeserializer::new(bytes, fds, signature, ctxt))
             }
@@ -289,6 +293,7 @@ macro_rules! deserialize_method {
             V: Visitor<'de>,
         {
             match self {
+                #[cfg(feature = "gvariant")]
                 Deserializer::GVariant(de) => {
                     de.$method($($arg,)* visitor)
                 }
@@ -376,6 +381,7 @@ where
         VARIANT_SIGNATURE_CHAR => de.deserialize_seq(visitor),
         ARRAY_SIGNATURE_CHAR => de.deserialize_seq(visitor),
         STRUCT_SIG_START_CHAR => de.deserialize_seq(visitor),
+        #[cfg(feature = "gvariant")]
         MAYBE_SIGNATURE_CHAR => de.deserialize_option(visitor),
         c => Err(de::Error::invalid_value(
             de::Unexpected::Char(c),
