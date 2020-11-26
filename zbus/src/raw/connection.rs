@@ -13,7 +13,7 @@ use crate::OwnedFd;
 /// mode.
 ///
 /// This wrapper abstracts away the serialization & buffering considerations of the
-/// protocol, and allows interaction base on messages, rather than bytes.
+/// protocol, and allows interaction based on messages, rather than bytes.
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 pub struct Connection<S> {
