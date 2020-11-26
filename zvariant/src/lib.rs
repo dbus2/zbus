@@ -142,6 +142,9 @@ pub use ser::*;
 mod de;
 pub use de::*;
 
+pub mod dbus;
+pub mod gvariant;
+
 mod signature;
 pub use crate::signature::*;
 
