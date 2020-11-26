@@ -182,9 +182,9 @@ where
         Ok(self)
     }
 
-    fn set_field(mut self, field: MessageField<'a>) -> Result<Self, MessageError> {
+    fn set_field(mut self, field: MessageField<'a>) -> Self {
         self.fields.add(field);
-        Ok(self)
+        self
     }
 
     fn reply(
@@ -201,9 +201,9 @@ where
         error_name: &'a str,
         body: &'a B,
     ) -> Result<Self, MessageError> {
-        Self::new(MessageType::Error, sender, body)?
+        Ok(Self::new(MessageType::Error, sender, body)?
             .set_reply_to(reply_to)?
-            .set_field(MessageField::ErrorName(error_name.into()))
+            .set_field(MessageField::ErrorName(error_name.into())))
     }
 
     fn method(
@@ -214,9 +214,9 @@ where
     ) -> Result<Self, MessageError> {
         let path = path.try_into()?;
 
-        Self::new(MessageType::MethodCall, sender, body)?
-            .set_field(MessageField::Path(path))?
-            .set_field(MessageField::Member(method_name.into()))
+        Ok(Self::new(MessageType::MethodCall, sender, body)?
+            .set_field(MessageField::Path(path))
+            .set_field(MessageField::Member(method_name.into())))
     }
 
     fn signal(
@@ -228,10 +228,10 @@ where
     ) -> Result<Self, MessageError> {
         let path = path.try_into()?;
 
-        Self::new(MessageType::Signal, sender, body)?
-            .set_field(MessageField::Path(path))?
-            .set_field(MessageField::Interface(iface.into()))?
-            .set_field(MessageField::Member(signal_name.into()))
+        Ok(Self::new(MessageType::Signal, sender, body)?
+            .set_field(MessageField::Path(path))
+            .set_field(MessageField::Interface(iface.into()))
+            .set_field(MessageField::Member(signal_name.into())))
     }
 }
 
@@ -280,10 +280,10 @@ impl Message {
     {
         let mut b = MessageBuilder::method(sender, path, method_name, body)?;
         if let Some(destination) = destination {
-            b = b.set_field(MessageField::Destination(destination.into()))?;
+            b = b.set_field(MessageField::Destination(destination.into()));
         }
         if let Some(iface) = iface {
-            b = b.set_field(MessageField::Interface(iface.into()))?;
+            b = b.set_field(MessageField::Interface(iface.into()));
         }
         b.build()
     }
@@ -304,7 +304,7 @@ impl Message {
     {
         let mut b = MessageBuilder::signal(sender, path, iface, signal_name, body)?;
         if let Some(destination) = destination {
-            b = b.set_field(MessageField::Destination(destination.into()))?;
+            b = b.set_field(MessageField::Destination(destination.into()));
         }
         b.build()
     }
