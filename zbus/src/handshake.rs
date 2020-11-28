@@ -524,7 +524,7 @@ mod tests {
     use crate::Guid;
 
     #[test]
-    fn async_handshake() {
+    fn handshake() {
         // a pair of non-blocking connection UnixStream
         let (p0, p1) = UnixStream::pair().unwrap();
         p0.set_nonblocking(true).unwrap();
