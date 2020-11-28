@@ -184,8 +184,8 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B> {
 /// Our deserialization implementation.
 ///
 /// Using this deserializer involves an redirection to the actual deserializer. It's best
-/// to use the serialization functions, e.g [`to_bytes`] or specific serializers,
-/// [`dbus::Deserializer`] or [`gvariant::Deserializer`].
+/// to use the serialization functions, e.g [`crate::to_bytes`] or specific serializers,
+/// [`crate::dbus::Deserializer`] or [`crate::gvariant::Deserializer`].
 pub enum Deserializer<'ser, 'sig, 'f, B> {
     DBus(DBusDeserializer<'ser, 'sig, 'f, B>),
     #[cfg(feature = "gvariant")]

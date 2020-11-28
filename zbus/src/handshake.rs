@@ -104,12 +104,10 @@ impl<S: Socket> ClientHandshake<S> {
     ///
     /// In non-blocking mode, you need to invoke this method repeatedly
     /// until it returns `Ok(())`. Once it does, the handshake is finished
-    /// and you can invoke the [`try_finish`] method.
+    /// and you can invoke the [`ClientHandshake::try_finish`] method.
     ///
     /// Note that only the intial handshake is done. If you need to send a
     /// Bus Hello, this remains to be done.
-    ///
-    /// [`try_finish`](struct.ClientHandshake.html#method.try_finish)
     pub fn advance_handshake(&mut self) -> Result<()> {
         loop {
             match self.step {

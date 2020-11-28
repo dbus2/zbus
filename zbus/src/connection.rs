@@ -285,7 +285,7 @@ impl Connection {
     /// error replies are returned as [`MethodError`].
     ///
     /// *Note:* This method will block until the response is received even if the connection is
-    /// in non-blocking mode. If you don't want to block like this, use [`send_message`].
+    /// in non-blocking mode. If you don't want to block like this, use [`Connection::send_message`].
     ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     /// [`MethodError`]: enum.Error.html#variant.MethodError
