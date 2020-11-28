@@ -436,6 +436,10 @@ impl Connection {
     /// was given), `receive_message` will return it to its caller.
     ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
+    #[deprecated(
+        since = "1.4.0",
+        note = "You shouldn't need this anymore since Connection queues messages"
+    )]
     pub fn set_default_message_handler(&mut self, handler: MessageHandlerFn) {
         self.0
             .default_msg_handler
@@ -447,6 +451,10 @@ impl Connection {
     /// Reset the default message handler.
     ///
     /// Remove the previously set message handler from `set_default_message_handler`.
+    #[deprecated(
+        since = "1.4.0",
+        note = "You shouldn't need this anymore since Connection queues messages"
+    )]
     pub fn reset_default_message_handler(&mut self) {
         self.0
             .default_msg_handler

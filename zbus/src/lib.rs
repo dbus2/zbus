@@ -282,6 +282,7 @@ mod tests {
             })
             .unwrap();
 
+        #[allow(deprecated)]
         connection.set_default_message_handler(Box::new(|msg| {
             // Debug implementation will test it a bit
             println!("Received while waiting for a reply: {}", msg);
