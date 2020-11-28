@@ -1,19 +1,19 @@
-use std::cell::{Cell, RefCell};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex, RwLock};
 
 use nix::poll::PollFlags;
-use once_cell::unsync::OnceCell;
+use once_cell::sync::OnceCell;
 
 use crate::handshake::{Authenticated, ClientHandshake, ServerHandshake};
 use crate::raw::Connection as RawConnection;
 use crate::utils::wait_on;
 use crate::{fdo, Error, Guid, Message, MessageType, Result};
 
-type MessageHandlerFn = Box<dyn FnMut(Message) -> Option<Message>>;
+type MessageHandlerFn = Box<(dyn FnMut(Message) -> Option<Message> + Send)>;
 
 const DEFAULT_MAX_QUEUED: usize = 32;
+const LOCK_FAIL_MSG: &str = "Failed to lock a mutex or read-write lock";
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
@@ -22,18 +22,18 @@ struct ConnectionInner {
     cap_unix_fd: bool,
     unique_name: OnceCell<String>,
 
-    raw_conn: RefCell<RawConnection<UnixStream>>,
+    raw_conn: RwLock<RawConnection<UnixStream>>,
     // Serial number for next outgoing message
-    serial: Cell<u32>,
+    serial: Mutex<u32>,
 
     // Queue of incoming messages
-    incoming_queue: RefCell<Vec<Message>>,
+    incoming_queue: Mutex<Vec<Message>>,
 
     // Max number of messages to queue
-    max_queued: Cell<usize>,
+    max_queued: RwLock<usize>,
 
     #[derivative(Debug = "ignore")]
-    default_msg_handler: RefCell<Option<MessageHandlerFn>>,
+    default_msg_handler: Mutex<Option<MessageHandlerFn>>,
 }
 
 /// A D-Bus connection.
@@ -80,11 +80,16 @@ struct ConnectionInner {
 /// [`receive_message`]: struct.Connection.html#method.receive_message
 /// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
 #[derive(Debug, Clone)]
-pub struct Connection(Rc<ConnectionInner>);
+pub struct Connection(Arc<ConnectionInner>);
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.0.raw_conn.borrow().socket().as_raw_fd()
+        self.0
+            .raw_conn
+            .read()
+            .expect(LOCK_FAIL_MSG)
+            .socket()
+            .as_raw_fd()
     }
 }
 
@@ -155,7 +160,7 @@ impl Connection {
 
     /// Max number of messages to queue.
     pub fn max_queued(&self) -> usize {
-        self.0.max_queued.get()
+        *self.0.max_queued.read().expect(LOCK_FAIL_MSG)
     }
 
     /// Set the max number of messages to queue.
@@ -176,7 +181,7 @@ impl Connection {
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn set_max_queued(self, max: usize) -> Self {
-        self.0.max_queued.replace(max);
+        *self.0.max_queued.write().expect(LOCK_FAIL_MSG) = max;
 
         self
     }
@@ -204,15 +209,22 @@ impl Connection {
     ///
     /// [`set_default_message_handler`]: struct.Connection.html#method.set_default_message_handler
     pub fn receive_message(&self) -> Result<Message> {
-        let mut queue = self.0.incoming_queue.borrow_mut();
+        let mut queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
         if let Some(msg) = queue.pop() {
             return Ok(msg);
         }
 
         loop {
-            let incoming = self.0.raw_conn.borrow_mut().try_receive_message()?;
+            let incoming = self
+                .0
+                .raw_conn
+                .write()
+                .expect(LOCK_FAIL_MSG)
+                .try_receive_message()?;
 
-            if let Some(ref mut handler) = &mut *self.0.default_msg_handler.borrow_mut() {
+            if let Some(ref mut handler) =
+                &mut *self.0.default_msg_handler.lock().expect(LOCK_FAIL_MSG)
+            {
                 // Let's see if the default handler wants the message first
                 match handler(incoming) {
                     // Message was returned to us so we can return that
@@ -248,7 +260,7 @@ impl Connection {
             Ok(())
         })?;
 
-        let mut conn = self.0.raw_conn.borrow_mut();
+        let mut conn = self.0.raw_conn.write().expect(LOCK_FAIL_MSG);
         conn.enqueue_message(msg);
         // Swallow a potential WouldBLock error, but propagate the others
         if let Err(e) = conn.try_flush() {
@@ -271,7 +283,7 @@ impl Connection {
     ///
     /// If the connection is in blocking mode, this will return `Ok(())` and do nothing.
     pub fn flush(&self) -> Result<()> {
-        self.0.raw_conn.borrow_mut().try_flush()?;
+        self.0.raw_conn.write().expect(LOCK_FAIL_MSG).try_flush()?;
         Ok(())
     }
 
@@ -336,8 +348,8 @@ impl Connection {
             let h = m.header()?;
 
             if h.reply_serial()? != Some(serial) {
-                let queue = self.0.incoming_queue.borrow();
-                if queue.len() + tmp_queue.len() < self.0.max_queued.get() {
+                let queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
+                if queue.len() + tmp_queue.len() < *self.0.max_queued.read().expect(LOCK_FAIL_MSG) {
                     // We first push to a temporary queue as otherwise it'll create an infinite loop
                     // since subsequent `receive_message` call will pick up the message from the main
                     // queue.
@@ -346,7 +358,11 @@ impl Connection {
 
                 continue;
             } else {
-                self.0.incoming_queue.borrow_mut().append(&mut tmp_queue);
+                self.0
+                    .incoming_queue
+                    .lock()
+                    .expect(LOCK_FAIL_MSG)
+                    .append(&mut tmp_queue);
             }
 
             match h.message_type()? {
@@ -420,15 +436,31 @@ impl Connection {
     /// was given), `receive_message` will return it to its caller.
     ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
+    #[deprecated(
+        since = "1.4.0",
+        note = "You shouldn't need this anymore since Connection queues messages"
+    )]
     pub fn set_default_message_handler(&mut self, handler: MessageHandlerFn) {
-        self.0.default_msg_handler.borrow_mut().replace(handler);
+        self.0
+            .default_msg_handler
+            .lock()
+            .expect(LOCK_FAIL_MSG)
+            .replace(handler);
     }
 
     /// Reset the default message handler.
     ///
     /// Remove the previously set message handler from `set_default_message_handler`.
+    #[deprecated(
+        since = "1.4.0",
+        note = "You shouldn't need this anymore since Connection queues messages"
+    )]
     pub fn reset_default_message_handler(&mut self) {
-        self.0.default_msg_handler.borrow_mut().take();
+        self.0
+            .default_msg_handler
+            .lock()
+            .expect(LOCK_FAIL_MSG)
+            .take();
     }
 
     /// Create a `Connection` from an already authenticated unix socket
@@ -446,15 +478,15 @@ impl Connection {
     /// [client hello]: ./fdo/struct.DBusProxy.html#method.hello
     /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
     pub fn new_authenticated_unix(auth: Authenticated<UnixStream>) -> Self {
-        Self(Rc::new(ConnectionInner {
-            raw_conn: RefCell::new(auth.conn),
+        Self(Arc::new(ConnectionInner {
+            raw_conn: RwLock::new(auth.conn),
             server_guid: auth.server_guid,
             cap_unix_fd: auth.cap_unix_fd,
-            serial: Cell::new(1),
+            serial: Mutex::new(1),
             unique_name: OnceCell::new(),
-            incoming_queue: RefCell::new(vec![]),
-            max_queued: Cell::new(DEFAULT_MAX_QUEUED),
-            default_msg_handler: RefCell::new(None),
+            incoming_queue: Mutex::new(vec![]),
+            max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
+            default_msg_handler: Mutex::new(None),
         }))
     }
 
@@ -489,9 +521,11 @@ impl Connection {
     }
 
     fn next_serial(&self) -> u32 {
-        let next = self.0.serial.get() + 1;
+        let mut serial = self.0.serial.lock().expect(LOCK_FAIL_MSG);
+        let current = *serial;
+        *serial = current + 1;
 
-        self.0.serial.replace(next)
+        current
     }
 }
 

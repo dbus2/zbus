@@ -282,6 +282,7 @@ mod tests {
             })
             .unwrap();
 
+        #[allow(deprecated)]
         connection.set_default_message_handler(Box::new(|msg| {
             // Debug implementation will test it a bit
             println!("Received while waiting for a reply: {}", msg);
@@ -502,4 +503,11 @@ mod tests {
         let val = child.join().expect("failed to join");
         assert_eq!(val, 2);
     }
+
+    #[test]
+    fn connection_is_send_and_sync() {
+        accept_send_and_sync::<Connection>();
+    }
+
+    fn accept_send_and_sync<C: Send + Sync>() {}
 }
