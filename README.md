@@ -157,6 +157,8 @@ use zvariant::EncodingContext as Context;
 
 // All serialization and deserialization API, needs a context.
 let ctxt = Context::<LE>::new_dbus(0);
+// You can also use the more efficient GVariant format:
+// let ctxt = Context::<LE>::new_gvariant(0);
 
 // i16
 let encoded = to_bytes(ctxt, &42i16).unwrap();
@@ -173,9 +175,6 @@ let t = ("hello", 42i32, true);
 let encoded = to_bytes(ctxt, &t).unwrap();
 let decoded: (&str, i32, bool) = from_slice(&encoded, ctxt).unwrap();
 assert_eq!(decoded, t);
-
-// Let's use the more efficient GVariant format.
-let ctxt = Context::<LE>::new_gvariant(0);
 
 // Vec
 let v = vec!["hello", "world!"];
