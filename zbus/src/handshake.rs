@@ -1,6 +1,5 @@
 use std::{
     convert::TryInto,
-    env,
     io::BufRead,
     os::unix::{io::AsRawFd, net::UnixStream},
     str::FromStr,
@@ -499,28 +498,12 @@ impl ServerHandshake<UnixStream> {
     }
 }
 
-/// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
-/// variable. If we don't recognize the value (or it's not set) we fall back to
-/// /run/user/UID/bus
 fn session_socket(nonblocking: bool) -> Result<UnixStream> {
-    match env::var("DBUS_SESSION_BUS_ADDRESS") {
-        Ok(val) => Address::from_str(&val)?.connect(nonblocking),
-        _ => {
-            let uid = Uid::current();
-            let path = format!("/run/user/{}/bus", uid);
-            Ok(UnixStream::connect(path)?)
-        }
-    }
+    Address::session()?.connect(nonblocking)
 }
 
-/// Get a system socket respecting the DBUS_SYSTEM_BUS_ADDRESS environment
-/// variable. If we don't recognize the value (or it's not set) we fall back to
-/// /var/run/dbus/system_bus_socket
 fn system_socket(nonblocking: bool) -> Result<UnixStream> {
-    match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
-        Ok(val) => Address::from_str(&val)?.connect(nonblocking),
-        _ => Ok(UnixStream::connect("/var/run/dbus/system_bus_socket")?),
-    }
+    Address::system()?.connect(nonblocking)
 }
 
 fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
