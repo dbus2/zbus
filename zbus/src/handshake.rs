@@ -201,15 +201,14 @@ impl ClientHandshake<UnixStream> {
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_session() -> Result<Self> {
-        session_socket().map(Self::new)
+        session_socket(false).map(Self::new)
     }
 
     /// Initialize a handshake to the session/user message bus.
     ///
     /// The socket backing this connection is created in non-blocking mode.
     pub fn new_session_nonblock() -> Result<Self> {
-        let socket = session_socket()?;
-        socket.set_nonblocking(true)?;
+        let socket = session_socket(true)?;
         Ok(Self::new(socket))
     }
 
@@ -217,15 +216,14 @@ impl ClientHandshake<UnixStream> {
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_system() -> Result<Self> {
-        system_socket().map(Self::new)
+        system_socket(false).map(Self::new)
     }
 
     /// Initialize a handshake to the system-wide message bus.
     ///
     /// The socket backing this connection is created in non-blocking mode.
     pub fn new_system_nonblock() -> Result<Self> {
-        let socket = system_socket()?;
-        socket.set_nonblocking(true)?;
+        let socket = system_socket(true)?;
         Ok(Self::new(socket))
     }
 
@@ -235,7 +233,7 @@ impl ClientHandshake<UnixStream> {
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str) -> Result<Self> {
-        Address::from_str(address)?.connect().map(Self::new)
+        Address::from_str(address)?.connect(false).map(Self::new)
     }
 
     /// Create a handshake for the given [D-Bus address].
@@ -244,8 +242,7 @@ impl ClientHandshake<UnixStream> {
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address_nonblock(address: &str) -> Result<Self> {
-        let socket = crate::address::Address::from_str(address)?.connect()?;
-        socket.set_nonblocking(true)?;
+        let socket = crate::address::Address::from_str(address)?.connect(true)?;
         Ok(Self::new(socket))
     }
 
@@ -505,9 +502,9 @@ impl ServerHandshake<UnixStream> {
 /// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
 /// variable. If we don't recognize the value (or it's not set) we fall back to
 /// /run/user/UID/bus
-fn session_socket() -> Result<UnixStream> {
+fn session_socket(nonblocking: bool) -> Result<UnixStream> {
     match env::var("DBUS_SESSION_BUS_ADDRESS") {
-        Ok(val) => Address::from_str(&val)?.connect(),
+        Ok(val) => Address::from_str(&val)?.connect(nonblocking),
         _ => {
             let uid = Uid::current();
             let path = format!("/run/user/{}/bus", uid);
@@ -519,9 +516,9 @@ fn session_socket() -> Result<UnixStream> {
 /// Get a system socket respecting the DBUS_SYSTEM_BUS_ADDRESS environment
 /// variable. If we don't recognize the value (or it's not set) we fall back to
 /// /var/run/dbus/system_bus_socket
-fn system_socket() -> Result<UnixStream> {
+fn system_socket(nonblocking: bool) -> Result<UnixStream> {
     match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
-        Ok(val) => Address::from_str(&val)?.connect(),
+        Ok(val) => Address::from_str(&val)?.connect(nonblocking),
         _ => Ok(UnixStream::connect("/var/run/dbus/system_bus_socket")?),
     }
 }
