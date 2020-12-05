@@ -30,6 +30,12 @@ enum ClientHandshakeStep {
     Done,
 }
 
+pub enum IoOperation {
+    None,
+    Read,
+    Write,
+}
+
 /// A representation of an in-progress handshake, client-side
 ///
 /// This struct is an async-compatible representation of the initial handshake that must be performed before
@@ -73,6 +79,13 @@ pub struct Authenticated<S> {
 }
 
 pub trait Handshake<S> {
+    /// The next I/O operation needed for advancing the handshake.
+    ///
+    /// If [`Handshake::advance_handshake`] returns a `std::io::ErrorKind::WouldBlock` error, you
+    /// can use this to figure out which operation to poll for, before calling `advance_handshake`
+    /// again.
+    fn next_io_operation(&self) -> IoOperation;
+
     /// Attempt to advance the handshake
     ///
     /// In non-blocking mode, you need to invoke this method repeatedly
@@ -143,6 +156,18 @@ impl<S: Socket> ClientHandshake<S> {
 }
 
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
+    fn next_io_operation(&self) -> IoOperation {
+        match self.step {
+            ClientHandshakeStep::Init | ClientHandshakeStep::Done => IoOperation::None,
+            ClientHandshakeStep::WaitNegociateFd | ClientHandshakeStep::WaitOauth => {
+                IoOperation::Read
+            }
+            ClientHandshakeStep::SendingOauth
+            | ClientHandshakeStep::SendingNegociateFd
+            | ClientHandshakeStep::SendingBegin => IoOperation::Write,
+        }
+    }
+
     fn advance_handshake(&mut self) -> Result<()> {
         loop {
             match self.step {
@@ -389,6 +414,18 @@ impl<S: Socket> ServerHandshake<S> {
 }
 
 impl<S: Socket> Handshake<S> for ServerHandshake<S> {
+    fn next_io_operation(&self) -> IoOperation {
+        match self.step {
+            ServerHandshakeStep::Done => IoOperation::None,
+            ServerHandshakeStep::WaitingForNull
+            | ServerHandshakeStep::WaitingForAuth
+            | ServerHandshakeStep::WaitingForBegin => IoOperation::Read,
+            ServerHandshakeStep::SendingAuthOK
+            | ServerHandshakeStep::SendingAuthError
+            | ServerHandshakeStep::SendingBeginMessage => IoOperation::Write,
+        }
+    }
+
     fn advance_handshake(&mut self) -> Result<()> {
         loop {
             match self.step {
