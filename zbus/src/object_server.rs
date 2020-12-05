@@ -180,6 +180,23 @@ impl Node {
         self.interfaces.get(iface).cloned()
     }
 
+    fn remove_interface(&mut self, iface: &str) -> bool {
+        self.interfaces.remove(iface).is_some()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.interfaces
+            .keys()
+            .find(|k| {
+                *k != &Peer::name() && *k != &Introspectable::name() && *k != &Properties::name()
+            })
+            .is_none()
+    }
+
+    fn remove_node(&mut self, node: &str) -> bool {
+        self.children.remove(node).is_some()
+    }
+
     fn at<I>(&mut self, name: &'static str, iface: I) -> bool
     where
         I: Interface,
@@ -406,6 +423,36 @@ impl<'a> ObjectServer<'a> {
         Ok(self.get_node_mut(path, true).unwrap().at(I::name(), iface))
     }
 
+    /// Unregister a D-Bus [`Interface`] at a given path.
+    ///
+    /// If there are no more interfaces left at that path, destroys the object as well.
+    /// Returns whether the object was destroyed.
+    ///
+    /// [`Interface`]: trait.Interface.html
+    pub fn remove<I>(&mut self, path: &ObjectPath) -> Result<bool>
+    where
+        I: Interface,
+    {
+        let node = self
+            .get_node_mut(path, false)
+            .ok_or(Error::InterfaceNotFound)?;
+        if !node.remove_interface(I::name()) {
+            return Err(Error::InterfaceNotFound);
+        }
+        if node.is_empty() {
+            let mut path_parts = path.rsplit('/').filter(|i| !i.is_empty());
+            let last_part = path_parts.next().unwrap();
+            let ppath = ObjectPath::from_string_unchecked(
+                path_parts.fold(String::new(), |a, p| format!("/{}{}", p, a)),
+            );
+            self.get_node_mut(&ppath, false)
+                .unwrap()
+                .remove_node(last_part);
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     /// Run `func` with the given path & interface.
     ///
     /// Run the function `func` with the interface at path. If the interface was not found, return
@@ -581,7 +628,7 @@ impl<'a> ObjectServer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use std::cell::Cell;
     use std::convert::TryInto;
     use std::error::Error;
     use std::rc::Rc;
@@ -604,13 +651,17 @@ mod tests {
     trait MyIface {
         fn ping(&self) -> zbus::Result<u32>;
 
-        fn quit(&self, val: bool) -> zbus::Result<()>;
+        fn quit(&self) -> zbus::Result<()>;
 
         fn test_header(&self) -> zbus::Result<()>;
 
         fn test_error(&self) -> zbus::Result<()>;
 
         fn test_single_struct_arg(&self, arg: ArgStructTest) -> zbus::Result<()>;
+
+        fn create_obj(&self, key: &str) -> zbus::Result<()>;
+
+        fn destroy_obj(&self, key: &str) -> zbus::Result<()>;
 
         #[dbus_proxy(property)]
         fn count(&self) -> fdo::Result<u32>;
@@ -619,15 +670,22 @@ mod tests {
         fn set_count(&self, count: u32) -> fdo::Result<()>;
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
+    enum NextAction {
+        Nothing,
+        Quit,
+        CreateObj(String),
+        DestroyObj(String),
+    }
+
     struct MyIfaceImpl {
-        quit: Rc<RefCell<bool>>,
+        action: Rc<Cell<NextAction>>,
         count: u32,
     }
 
     impl MyIfaceImpl {
-        fn new(quit: Rc<RefCell<bool>>) -> Self {
-            Self { quit, count: 0 }
+        fn new(action: Rc<Cell<NextAction>>) -> Self {
+            Self { action, count: 0 }
         }
     }
 
@@ -641,8 +699,8 @@ mod tests {
             self.count
         }
 
-        fn quit(&mut self, val: bool) {
-            *self.quit.borrow_mut() = val;
+        fn quit(&mut self) {
+            self.action.set(NextAction::Quit);
         }
 
         fn test_header(&self, #[zbus(header)] header: MessageHeader<'_>) {
@@ -657,6 +715,14 @@ mod tests {
         fn test_single_struct_arg(&self, arg: ArgStructTest) {
             assert_eq!(arg.foo, 1);
             assert_eq!(arg.bar, "TestString");
+        }
+
+        fn create_obj(&self, key: String) {
+            self.action.set(NextAction::CreateObj(key));
+        }
+
+        fn destroy_obj(&self, key: String) {
+            self.action.set(NextAction::DestroyObj(key));
         }
 
         #[dbus_interface(property)]
@@ -694,7 +760,16 @@ mod tests {
         })?;
         proxy.introspect()?;
         let val = proxy.ping()?;
-        proxy.quit(true)?;
+
+        proxy.create_obj("MyObj")?;
+        let my_obj_proxy =
+            MyIfaceProxy::new_for(&conn, "org.freedesktop.MyService", "/zbus/test/MyObj")?;
+        my_obj_proxy.ping()?;
+        proxy.destroy_obj("MyObj")?;
+        assert!(my_obj_proxy.introspect().is_err());
+        assert!(my_obj_proxy.ping().is_err());
+
+        proxy.quit()?;
         Ok(val)
     }
 
@@ -703,7 +778,7 @@ mod tests {
     fn basic_iface() {
         let conn = Connection::new_session().unwrap();
         let mut object_server = ObjectServer::new(&conn);
-        let quit = Rc::new(RefCell::new(false));
+        let action = Rc::new(Cell::new(NextAction::Nothing));
 
         fdo::DBusProxy::new(&conn)
             .unwrap()
@@ -713,7 +788,7 @@ mod tests {
             )
             .unwrap();
 
-        let iface = MyIfaceImpl::new(quit.clone());
+        let iface = MyIfaceImpl::new(action.clone());
         object_server
             .at(&"/org/freedesktop/MyService".try_into().unwrap(), iface)
             .unwrap();
@@ -733,8 +808,21 @@ mod tests {
                 )
                 .unwrap();
 
-            if *quit.borrow() {
-                break;
+            match action.replace(NextAction::Nothing) {
+                NextAction::Nothing => (),
+                NextAction::Quit => break,
+                NextAction::CreateObj(key) => {
+                    let path = format!("/zbus/test/{}", key);
+                    object_server
+                        .at(&path.try_into().unwrap(), MyIfaceImpl::new(action.clone()))
+                        .unwrap();
+                }
+                NextAction::DestroyObj(key) => {
+                    let path = format!("/zbus/test/{}", key);
+                    object_server
+                        .remove::<MyIfaceImpl>(&path.try_into().unwrap())
+                        .unwrap();
+                }
             }
         }
 
