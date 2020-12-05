@@ -1,4 +1,5 @@
 use crate::{Error, Result};
+use async_io::Async;
 use nb_connect::unix;
 use nix::unistd::Uid;
 use polling::{Event, Poller};
@@ -25,6 +26,12 @@ impl Address {
 
                 Ok(stream)
             }
+        }
+    }
+
+    pub(crate) async fn connect_async(&self) -> Result<Async<UnixStream>> {
+        match self {
+            Address::Unix(p) => Async::<UnixStream>::connect(p).await.map_err(Error::Io),
         }
     }
 
