@@ -1,3 +1,4 @@
+use async_io::Async;
 use std::{
     io,
     os::unix::{
@@ -98,5 +99,17 @@ impl Socket for UnixStream {
             Err(nix::Error::Sys(e)) => Err(e.into()),
             _ => Err(io::Error::new(io::ErrorKind::Other, "unhandled nix error")),
         }
+    }
+}
+
+impl Socket for Async<UnixStream> {
+    const SUPPORTS_FD_PASSING: bool = true;
+
+    fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
+        self.get_mut().recvmsg(buffer)
+    }
+
+    fn sendmsg(&mut self, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
+        self.get_mut().sendmsg(buffer, fds)
     }
 }
