@@ -72,6 +72,31 @@ pub struct Authenticated<S> {
     pub(crate) cap_unix_fd: bool,
 }
 
+pub trait Handshake<S> {
+    /// Attempt to advance the handshake
+    ///
+    /// In non-blocking mode, you need to invoke this method repeatedly
+    /// until it returns `Ok(())`. Once it does, the handshake is finished
+    /// and you can invoke the [`Handshake::try_finish`] method.
+    ///
+    /// Note that only the intial handshake is done. If you need to send a
+    /// Bus Hello, this remains to be done.
+    fn advance_handshake(&mut self) -> Result<()>;
+
+    /// Attempt to finalize this handshake into an initialized client.
+    ///
+    /// This method should only be called once `advance_handshake()` has
+    /// returned `Ok(())`. Otherwise it'll error and return you the object.
+    fn try_finish(self) -> std::result::Result<Authenticated<S>, Self>
+    where
+        Self: Sized;
+
+    /// Access the socket backing this handshake
+    ///
+    /// Would typically be used to register it for readiness.
+    fn socket(&self) -> &S;
+}
+
 impl<S: Socket> ClientHandshake<S> {
     /// Start a handsake on this client socket
     pub fn new(socket: S) -> ClientHandshake<S> {
@@ -101,15 +126,24 @@ impl<S: Socket> ClientHandshake<S> {
         Ok(())
     }
 
-    /// Attempt to advance the handshake
-    ///
-    /// In non-blocking mode, you need to invoke this method repeatedly
-    /// until it returns `Ok(())`. Once it does, the handshake is finished
-    /// and you can invoke the [`ClientHandshake::try_finish`] method.
-    ///
-    /// Note that only the intial handshake is done. If you need to send a
-    /// Bus Hello, this remains to be done.
+    /// Same as [`Handshake::advance_handshake`]. Only exists for backwards compatibility.
     pub fn advance_handshake(&mut self) -> Result<()> {
+        Handshake::advance_handshake(self)
+    }
+
+    /// Same as [`Handshake::try_finish`]. Only exists for backwards compatibility.
+    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
+        Handshake::try_finish(self)
+    }
+
+    /// Same as [`Handshake::socket`]. Only exists for backwards compatibility.
+    pub fn socket(&self) -> &S {
+        Handshake::socket(self)
+    }
+}
+
+impl<S: Socket> Handshake<S> for ClientHandshake<S> {
+    fn advance_handshake(&mut self) -> Result<()> {
         loop {
             match self.step {
                 ClientHandshakeStep::Init => {
@@ -171,11 +205,7 @@ impl<S: Socket> ClientHandshake<S> {
         }
     }
 
-    /// Attempt to finalize this handshake into an initialized client.
-    ///
-    /// This method should only be called once `advance_handshake()` has
-    /// returned `Ok(())`. Otherwise it'll error and return you the object.
-    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
+    fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ClientHandshakeStep::Done = self.step {
             Ok(Authenticated {
                 conn: Connection::wrap(self.socket),
@@ -187,10 +217,7 @@ impl<S: Socket> ClientHandshake<S> {
         }
     }
 
-    /// Access the socket backing this handshake
-    ///
-    /// Would typically be used to register it for readiness.
-    pub fn socket(&self) -> &S {
+    fn socket(&self) -> &S {
         &self.socket
     }
 }
@@ -345,15 +372,24 @@ impl<S: Socket> ServerHandshake<S> {
         Ok(())
     }
 
-    /// Attempt to advance the handshake
-    ///
-    /// In non-blocking mode, you need to invoke this method repeatedly
-    /// until it returns `Ok(())`. Once it does, the handshake is finished
-    /// and you can invoke the `finalize()` method.
-    ///
-    /// Note that only the intial handshake is done. If you need to send a
-    /// Bus Hello, this remains to be done.
+    /// Same as [`Handshake::advance_handshake`]. Only exists for backwards compatibility.
     pub fn advance_handshake(&mut self) -> Result<()> {
+        Handshake::advance_handshake(self)
+    }
+
+    /// Same as [`Handshake::try_finish`]. Only exists for backwards compatibility.
+    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
+        Handshake::try_finish(self)
+    }
+
+    /// Same as [`Handshake::socket`]. Only exists for backwards compatibility.
+    pub fn socket(&self) -> &S {
+        Handshake::socket(self)
+    }
+}
+
+impl<S: Socket> Handshake<S> for ServerHandshake<S> {
+    fn advance_handshake(&mut self) -> Result<()> {
         loop {
             match self.step {
                 ServerHandshakeStep::WaitingForNull => {
@@ -445,11 +481,7 @@ impl<S: Socket> ServerHandshake<S> {
         }
     }
 
-    /// Attempt to finalize this handshake into an initialized server.
-    ///
-    /// This method should only be called once `advance_handshake()` has
-    /// returned `Ok(())`. Otherwise it'll error and return you the object.
-    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
+    fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ServerHandshakeStep::Done = self.step {
             Ok(Authenticated {
                 conn: Connection::wrap(self.socket),
@@ -461,10 +493,7 @@ impl<S: Socket> ServerHandshake<S> {
         }
     }
 
-    /// Access the socket backing this handshake
-    ///
-    /// Would typically be used to register it for readiness.
-    pub fn socket(&self) -> &S {
+    fn socket(&self) -> &S {
         &self.socket
     }
 }
