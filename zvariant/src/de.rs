@@ -1,17 +1,16 @@
-use serde::de::{self, DeserializeSeed, VariantAccess, Visitor};
-use serde::Deserialize;
+use serde::{
+    de::{self, DeserializeSeed, VariantAccess, Visitor},
+    Deserialize,
+};
 
-use std::os::unix::io::RawFd;
-use std::{marker::PhantomData, str};
+use std::{marker::PhantomData, os::unix::io::RawFd, str};
 
-use crate::dbus::Deserializer as DBusDeserializer;
 #[cfg(feature = "gvariant")]
 use crate::gvariant::Deserializer as GVDeserializer;
-use crate::signature_parser::SignatureParser;
-use crate::utils::*;
-use crate::{Basic, EncodingContext, EncodingFormat};
-use crate::{Error, Result};
-use crate::{Fd, ObjectPath, Signature, Type};
+use crate::{
+    dbus::Deserializer as DBusDeserializer, signature_parser::SignatureParser, utils::*, Basic,
+    EncodingContext, EncodingFormat, Error, Fd, ObjectPath, Result, Signature, Type,
+};
 
 /// Deserialize `T` from a given slice of bytes, containing file descriptor indices.
 ///

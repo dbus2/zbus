@@ -1,15 +1,16 @@
 use serde::{ser, ser::SerializeSeq, Serialize};
-use std::io::{Seek, Write};
-use std::os::unix::io::RawFd;
-use std::{marker::PhantomData, str};
+use std::{
+    io::{Seek, Write},
+    marker::PhantomData,
+    os::unix::io::RawFd,
+    str,
+};
 
-use crate::framing_offset_size::FramingOffsetSize;
-use crate::framing_offsets::FramingOffsets;
-use crate::signature_parser::SignatureParser;
-use crate::utils::*;
-use crate::Signature;
-use crate::{EncodingContext, EncodingFormat};
-use crate::{Error, Result};
+use crate::{
+    framing_offset_size::FramingOffsetSize, framing_offsets::FramingOffsets,
+    signature_parser::SignatureParser, utils::*, EncodingContext, EncodingFormat, Error, Result,
+    Signature,
+};
 
 /// Our serialization implementation.
 pub struct Serializer<'ser, 'sig, B, W>(pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>);

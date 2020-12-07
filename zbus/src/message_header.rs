@@ -322,9 +322,7 @@ impl<'m> MessageHeader<'m> {
 mod tests {
     use crate::{MessageField, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType};
 
-    use std::convert::TryFrom;
-    use std::error::Error;
-    use std::result::Result;
+    use std::{convert::TryFrom, error::Error, result::Result};
     use zvariant::{ObjectPath, Signature};
 
     #[test]

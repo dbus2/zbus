@@ -1,10 +1,11 @@
-use std::any::{Any, TypeId};
-use std::cell::RefCell;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-use std::fmt::Write;
-use std::marker::PhantomData;
-use std::rc::Rc;
+use std::{
+    any::{Any, TypeId},
+    cell::RefCell,
+    collections::{hash_map::Entry, HashMap},
+    fmt::Write,
+    marker::PhantomData,
+    rc::Rc,
+};
 
 use scoped_tls::scoped_thread_local;
 use zvariant::{ObjectPath, OwnedValue, Value};
@@ -628,18 +629,15 @@ impl<'a> ObjectServer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
-    use std::convert::TryInto;
-    use std::error::Error;
-    use std::rc::Rc;
-    use std::thread;
+    use std::{cell::Cell, convert::TryInto, error::Error, rc::Rc, thread};
 
     use ntest::timeout;
     use serde::{Deserialize, Serialize};
     use zvariant::derive::Type;
 
-    use crate::fdo;
-    use crate::{dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer};
+    use crate::{
+        dbus_interface, dbus_proxy, fdo, Connection, MessageHeader, MessageType, ObjectServer,
+    };
 
     #[derive(Deserialize, Serialize, Type)]
     pub struct ArgStructTest {

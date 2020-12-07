@@ -1,8 +1,7 @@
 use serde::ser::{Serialize, Serializer};
 use std::convert::TryFrom;
 
-use crate::Error;
-use crate::{Signature, Type, Value};
+use crate::{Error, Signature, Type, Value};
 
 /// A helper type to wrap Option<T> (GVariant's Maybe type) in [`Value`].
 ///

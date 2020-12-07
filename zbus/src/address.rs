@@ -1,8 +1,9 @@
 use crate::{Error, Result};
 use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType, UnixAddr};
-use std::os::unix::io::FromRawFd;
-use std::os::unix::net::UnixStream;
-use std::str::FromStr;
+use std::{
+    os::unix::{io::FromRawFd, net::UnixStream},
+    str::FromStr,
+};
 
 /// A bus address
 #[derive(Debug, PartialEq)]

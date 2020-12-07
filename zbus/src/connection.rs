@@ -1,14 +1,21 @@
-use std::os::unix::io::{AsRawFd, RawFd};
-use std::os::unix::net::UnixStream;
-use std::sync::{Arc, Mutex, RwLock};
+use std::{
+    os::unix::{
+        io::{AsRawFd, RawFd},
+        net::UnixStream,
+    },
+    sync::{Arc, Mutex, RwLock},
+};
 
 use nix::poll::PollFlags;
 use once_cell::sync::OnceCell;
 
-use crate::handshake::{Authenticated, ClientHandshake, ServerHandshake};
-use crate::raw::Connection as RawConnection;
-use crate::utils::wait_on;
-use crate::{fdo, Error, Guid, Message, MessageType, Result};
+use crate::{
+    fdo,
+    handshake::{Authenticated, ClientHandshake, ServerHandshake},
+    raw::Connection as RawConnection,
+    utils::wait_on,
+    Error, Guid, Message, MessageType, Result,
+};
 
 type MessageHandlerFn = Box<(dyn FnMut(Message) -> Option<Message> + Send)>;
 
@@ -531,8 +538,7 @@ impl Connection {
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::net::UnixStream;
-    use std::thread;
+    use std::{os::unix::net::UnixStream, thread};
 
     use crate::{Connection, Guid};
 

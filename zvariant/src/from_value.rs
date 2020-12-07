@@ -1,7 +1,6 @@
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
-use crate::Value;
-use crate::{Array, Dict, Error, Fd, ObjectPath, Signature, Str, Structure};
+use crate::{Array, Dict, Error, Fd, ObjectPath, Signature, Str, Structure, Value};
 use std::convert::TryFrom;
 
 macro_rules! value_try_from {

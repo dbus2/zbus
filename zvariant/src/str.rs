@@ -2,8 +2,7 @@
 #![allow(deprecated)]
 
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
-use std::str;
+use std::{borrow::Cow, str};
 
 use crate::{Basic, EncodingFormat, Signature, Type};
 

@@ -1,18 +1,20 @@
-use std::convert::TryInto;
-use std::env;
-use std::io::BufRead;
-use std::os::unix::io::AsRawFd;
-use std::os::unix::net::UnixStream;
-use std::str::FromStr;
+use std::{
+    convert::TryInto,
+    env,
+    io::BufRead,
+    os::unix::{io::AsRawFd, net::UnixStream},
+    str::FromStr,
+};
 
-use nix::poll::PollFlags;
-use nix::unistd::Uid;
+use nix::{poll::PollFlags, unistd::Uid};
 
-use crate::address::Address;
-use crate::guid::Guid;
-use crate::raw::{Connection, Socket};
-use crate::utils::wait_on;
-use crate::{Error, Result};
+use crate::{
+    address::Address,
+    guid::Guid,
+    raw::{Connection, Socket},
+    utils::wait_on,
+    Error, Result,
+};
 
 /*
  * Client-side handshake logic

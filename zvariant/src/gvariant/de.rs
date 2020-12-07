@@ -2,17 +2,13 @@ use core::convert::TryFrom;
 
 use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, Visitor};
 
-use std::ffi::CStr;
-use std::os::unix::io::RawFd;
-use std::{marker::PhantomData, str};
+use std::{ffi::CStr, marker::PhantomData, os::unix::io::RawFd, str};
 
-use crate::de::ValueParseStage;
-use crate::framing_offset_size::FramingOffsetSize;
-use crate::framing_offsets::FramingOffsets;
-use crate::signature_parser::SignatureParser;
-use crate::utils::*;
-use crate::{EncodingContext, EncodingFormat, Signature};
-use crate::{Error, Result};
+use crate::{
+    de::ValueParseStage, framing_offset_size::FramingOffsetSize, framing_offsets::FramingOffsets,
+    signature_parser::SignatureParser, utils::*, EncodingContext, EncodingFormat, Error, Result,
+    Signature,
+};
 
 /// Our GVariant deserialization implementation.
 #[derive(Debug)]

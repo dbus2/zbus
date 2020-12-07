@@ -1,11 +1,8 @@
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::hash::BuildHasher;
+use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 
-use crate::{Basic, Error, Signature};
-use crate::{Type, Value};
+use crate::{Basic, Error, Signature, Type, Value};
 
 /// A helper type to wrap dictionaries in a [`Value`].
 ///

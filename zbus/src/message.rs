@@ -1,17 +1,17 @@
-use std::convert::{TryFrom, TryInto};
-use std::error;
-use std::fmt;
-use std::io::{Cursor, Error as IOError};
-use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
+use std::{
+    convert::{TryFrom, TryInto},
+    error, fmt,
+    io::{Cursor, Error as IOError},
+    os::unix::io::{AsRawFd, IntoRawFd, RawFd},
+};
 
-use zvariant::{EncodingContext, Error as VariantError};
-use zvariant::{Signature, Type};
+use zvariant::{EncodingContext, Error as VariantError, Signature, Type};
 
-use crate::owned_fd::OwnedFd;
-use crate::utils::padding_for_8_bytes;
-use crate::{EndianSig, MessageHeader, MessagePrimaryHeader, MessageType};
-use crate::{MessageField, MessageFieldCode, MessageFields};
-use crate::{MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE};
+use crate::{
+    owned_fd::OwnedFd, utils::padding_for_8_bytes, EndianSig, MessageField, MessageFieldCode,
+    MessageFields, MessageHeader, MessagePrimaryHeader, MessageType, MIN_MESSAGE_SIZE,
+    NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE,
+};
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
 macro_rules! dbus_context {

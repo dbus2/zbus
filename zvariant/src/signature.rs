@@ -1,13 +1,18 @@
-use core::convert::TryFrom;
-use core::fmt::{self, Debug, Display, Formatter};
-use core::str;
-use serde::de::{Deserialize, Deserializer, Visitor};
-use serde::ser::{Serialize, Serializer};
-use std::ops::{Bound, RangeBounds};
-use std::sync::Arc;
+use core::{
+    convert::TryFrom,
+    fmt::{self, Debug, Display, Formatter},
+    str,
+};
+use serde::{
+    de::{Deserialize, Deserializer, Visitor},
+    ser::{Serialize, Serializer},
+};
+use std::{
+    ops::{Bound, RangeBounds},
+    sync::Arc,
+};
 
-use crate::signature_parser::SignatureParser;
-use crate::{Basic, EncodingFormat, Error, Result, Type};
+use crate::{signature_parser::SignatureParser, Basic, EncodingFormat, Error, Result, Type};
 
 // A data type similar to Cow and [`bytes::Bytes`] but unlike the former won't allow us to only keep
 // the owned bytes in Arc and latter doesn't have a notion of borrowed data and would require API

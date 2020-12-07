@@ -1,17 +1,20 @@
 use byteorder::WriteBytesExt;
 use serde::{ser, Serialize};
-use std::io::{Seek, Write};
-use std::os::unix::io::RawFd;
-use std::{marker::PhantomData, str};
+use std::{
+    io::{Seek, Write},
+    marker::PhantomData,
+    os::unix::io::RawFd,
+    str,
+};
 
-use crate::dbus::{self, Serializer as DBusSerializer};
 #[cfg(feature = "gvariant")]
 use crate::gvariant::{self, Serializer as GVSerializer};
-use crate::signature_parser::SignatureParser;
-use crate::utils::*;
-use crate::Type;
-use crate::{Basic, EncodingContext, EncodingFormat, Signature};
-use crate::{Error, Result};
+use crate::{
+    dbus::{self, Serializer as DBusSerializer},
+    signature_parser::SignatureParser,
+    utils::*,
+    Basic, EncodingContext, EncodingFormat, Error, Result, Signature, Type,
+};
 
 struct NullWriteSeek;
 

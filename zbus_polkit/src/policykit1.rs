@@ -1,7 +1,4 @@
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::io::BufRead;
-use std::result::Result;
+use std::{collections::HashMap, convert::TryFrom, io::BufRead, result::Result};
 
 use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};

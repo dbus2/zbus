@@ -1,7 +1,9 @@
-use std::convert::TryFrom;
-use std::fmt;
-use std::iter::repeat_with;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    convert::TryFrom,
+    fmt,
+    iter::repeat_with,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 /// A D-Bus server GUID.
 ///

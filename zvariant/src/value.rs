@@ -1,19 +1,19 @@
 use core::str;
-use std::convert::TryFrom;
-use std::marker::PhantomData;
+use std::{convert::TryFrom, marker::PhantomData};
 
-use serde::de::{
-    Deserialize, DeserializeSeed, Deserializer, Error, MapAccess, SeqAccess, Unexpected, Visitor,
+use serde::{
+    de::{
+        Deserialize, DeserializeSeed, Deserializer, Error, MapAccess, SeqAccess, Unexpected,
+        Visitor,
+    },
+    ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer},
 };
-use serde::ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer};
 
-use crate::signature_parser::SignatureParser;
-use crate::utils::*;
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
 use crate::{
-    Array, Basic, Dict, Fd, ObjectPath, OwnedValue, Signature, Str, Structure, StructureBuilder,
-    Type,
+    signature_parser::SignatureParser, utils::*, Array, Basic, Dict, Fd, ObjectPath, OwnedValue,
+    Signature, Str, Structure, StructureBuilder, Type,
 };
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
