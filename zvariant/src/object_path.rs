@@ -1,10 +1,11 @@
 // FIXME: Drop this when the deprecated `Basic::ALIGNMENT` is dropped in the next API break.
 #![allow(deprecated)]
 
-use core::convert::TryFrom;
-use core::str;
-use serde::de::{Deserialize, Deserializer, Visitor};
-use serde::ser::{Serialize, Serializer};
+use core::{convert::TryFrom, str};
+use serde::{
+    de::{Deserialize, Deserializer, Visitor},
+    ser::{Serialize, Serializer},
+};
 use std::borrow::Cow;
 
 use crate::{Basic, EncodingFormat, Error, Result, Signature, Type};

@@ -451,8 +451,7 @@ impl From<zbus::MessageError> for Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::fdo;
-    use crate::{Error, Message};
+    use crate::{fdo, Error, Message};
     use std::convert::TryInto;
 
     #[test]

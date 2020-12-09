@@ -1,5 +1,7 @@
-use nix::errno::Errno;
-use nix::poll::{poll, PollFd, PollFlags};
+use nix::{
+    errno::Errno,
+    poll::{poll, PollFd, PollFlags},
+};
 use std::os::unix::io::RawFd;
 
 pub(crate) const FDS_MAX: usize = 1024; // this is hardcoded in sdbus - nothing in the spec

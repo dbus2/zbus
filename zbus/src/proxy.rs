@@ -1,5 +1,7 @@
-use std::borrow::Cow;
-use std::convert::{TryFrom, TryInto};
+use std::{
+    borrow::Cow,
+    convert::{TryFrom, TryInto},
+};
 use zvariant::{OwnedValue, Value};
 
 use crate::{Connection, Error, Message, Result};

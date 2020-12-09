@@ -1,8 +1,11 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::Meta::{List, NameValue};
-use syn::NestedMeta::Meta;
-use syn::{Attribute, Data, DeriveInput, Fields, Lit, NestedMeta};
+use syn::{
+    Attribute, Data, DeriveInput, Fields, Lit,
+    Meta::{List, NameValue},
+    NestedMeta,
+    NestedMeta::Meta,
+};
 
 use crate::utils::*;
 

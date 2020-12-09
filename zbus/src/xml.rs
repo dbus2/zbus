@@ -18,8 +18,10 @@
 
 use serde::{Deserialize, Serialize};
 use serde_xml_rs::{from_reader, to_writer, Error};
-use std::io::{Read, Write};
-use std::result::Result;
+use std::{
+    io::{Read, Write},
+    result::Result,
+};
 
 // note: serde-xml-rs doesnt handle nicely interleaved elements, so we have to use enums:
 // https://github.com/RReverser/serde-xml-rs/issues/55

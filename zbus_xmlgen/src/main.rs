@@ -1,10 +1,12 @@
-use std::env;
-use std::error::Error;
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
-use std::process::{Command, Stdio};
-use std::result::Result;
+use std::{
+    env,
+    error::Error,
+    fs::File,
+    io::Write,
+    path::Path,
+    process::{Command, Stdio},
+    result::Result,
+};
 
 use zbus::xml::{Interface, Node};
 

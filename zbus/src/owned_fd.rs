@@ -1,5 +1,7 @@
-use std::mem::forget;
-use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
+use std::{
+    mem::forget,
+    os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd},
+};
 
 /// An owned representation of a file descriptor
 ///

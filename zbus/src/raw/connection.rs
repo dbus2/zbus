@@ -1,10 +1,6 @@
-use std::collections::VecDeque;
-use std::io;
+use std::{collections::VecDeque, io};
 
-use crate::message::Message;
-use crate::message_header::MIN_MESSAGE_SIZE;
-use crate::raw::Socket;
-use crate::OwnedFd;
+use crate::{message::Message, message_header::MIN_MESSAGE_SIZE, raw::Socket, OwnedFd};
 
 /// A low-level representation of a D-Bus connection
 ///

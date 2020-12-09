@@ -186,10 +186,12 @@ pub mod export {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::convert::TryInto;
-    use std::fs::File;
-    use std::os::unix::io::{AsRawFd, FromRawFd};
+    use std::{
+        collections::HashMap,
+        convert::TryInto,
+        fs::File,
+        os::unix::io::{AsRawFd, FromRawFd},
+    };
 
     use enumflags2::BitFlags;
     use ntest::timeout;

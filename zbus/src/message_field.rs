@@ -1,7 +1,9 @@
 use std::convert::TryFrom;
 
-use serde::de::{Deserialize, Deserializer, Error};
-use serde::ser::{Serialize, Serializer};
+use serde::{
+    de::{Deserialize, Deserializer, Error},
+    ser::{Serialize, Serializer},
+};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use zvariant::{derive::Type, ObjectPath, Signature, Str, Type, Value};

@@ -1,9 +1,8 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::punctuated::Punctuated;
-use syn::Meta::Path;
-use syn::NestedMeta::Meta;
-use syn::{Data, DeriveInput, Type, TypePath};
+use syn::{
+    punctuated::Punctuated, Data, DeriveInput, Meta::Path, NestedMeta::Meta, Type, TypePath,
+};
 
 use crate::utils::*;
 

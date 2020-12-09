@@ -1,5 +1,4 @@
-use crate::utils::*;
-use crate::Signature;
+use crate::{utils::*, Signature};
 
 /// Trait implemented by all serializable types.
 ///
@@ -193,8 +192,10 @@ array_impls! {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-use std::collections::{BTreeMap, HashMap};
-use std::hash::{BuildHasher, Hash};
+use std::{
+    collections::{BTreeMap, HashMap},
+    hash::{BuildHasher, Hash},
+};
 
 macro_rules! map_impl {
     ($ty:ident < K $(: $kbound1:ident $(+ $kbound2:ident)*)*, V $(, $typaram:ident : $bound:ident)* >) => {

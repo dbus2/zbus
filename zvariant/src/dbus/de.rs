@@ -2,15 +2,12 @@ use core::convert::TryFrom;
 
 use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, Visitor};
 
-use std::os::unix::io::RawFd;
-use std::{marker::PhantomData, str};
+use std::{marker::PhantomData, os::unix::io::RawFd, str};
 
-use crate::de::ValueParseStage;
-use crate::signature_parser::SignatureParser;
-use crate::utils::*;
-use crate::{Basic, EncodingContext, EncodingFormat};
-use crate::{Error, Result};
-use crate::{Fd, ObjectPath, Signature};
+use crate::{
+    de::ValueParseStage, signature_parser::SignatureParser, utils::*, Basic, EncodingContext,
+    EncodingFormat, Error, Fd, ObjectPath, Result, Signature,
+};
 
 /// Our D-Bus deserialization implementation.
 #[derive(Debug)]

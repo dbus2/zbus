@@ -1,13 +1,20 @@
-use std::io;
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
-use std::os::unix::net::UnixStream;
+use std::{
+    io,
+    os::unix::{
+        io::{AsRawFd, FromRawFd, RawFd},
+        net::UnixStream,
+    },
+};
 
-use nix::cmsg_space;
-use nix::sys::socket::{recvmsg, sendmsg, ControlMessage, ControlMessageOwned, MsgFlags};
-use nix::sys::uio::IoVec;
+use nix::{
+    cmsg_space,
+    sys::{
+        socket::{recvmsg, sendmsg, ControlMessage, ControlMessageOwned, MsgFlags},
+        uio::IoVec,
+    },
+};
 
-use crate::utils::FDS_MAX;
-use crate::OwnedFd;
+use crate::{utils::FDS_MAX, OwnedFd};
 
 /// Trait representing some transport layer over which the DBus protocol can be used
 ///

@@ -1,7 +1,6 @@
 use proc_macro2::Span;
 use proc_macro_crate::crate_name;
-use syn::Meta::List;
-use syn::{Attribute, Ident, Lit, Meta, MetaList, NestedMeta, Result};
+use syn::{Attribute, Ident, Lit, Meta, Meta::List, MetaList, NestedMeta, Result};
 
 pub fn get_zvariant_crate_ident() -> Ident {
     Ident::new(

@@ -206,8 +206,10 @@ pub mod export {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::convert::{TryFrom, TryInto};
+    use std::{
+        collections::HashMap,
+        convert::{TryFrom, TryInto},
+    };
 
     #[cfg(feature = "arrayvec")]
     use arrayvec::{ArrayString, ArrayVec};
@@ -221,12 +223,15 @@ mod tests {
 
     use zvariant_derive::{DeserializeDict, SerializeDict, Type, TypeDict};
 
-    use crate::{from_slice, from_slice_fds, from_slice_for_signature};
-    use crate::{to_bytes, to_bytes_fds, to_bytes_for_signature};
+    use crate::{
+        from_slice, from_slice_fds, from_slice_for_signature, to_bytes, to_bytes_fds,
+        to_bytes_for_signature,
+    };
 
-    use crate::{Array, Dict, EncodingContext as Context, EncodingFormat};
-    use crate::{Basic, DeserializeValue, Error, Result, SerializeValue, Type, Value};
-    use crate::{Fd, ObjectPath, Signature, Str, Structure};
+    use crate::{
+        Array, Basic, DeserializeValue, Dict, EncodingContext as Context, EncodingFormat, Error,
+        Fd, ObjectPath, Result, SerializeValue, Signature, Str, Structure, Type, Value,
+    };
 
     // Test through both generic and specific API (wrt byte order)
     macro_rules! basic_type_test {
@@ -845,8 +850,7 @@ mod tests {
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
-            use rand::distributions::Alphanumeric;
-            use rand::{thread_rng, Rng};
+            use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
             let ctxt = Context::<LE>::new_gvariant(0);
             let gv_encoded = to_bytes(ctxt, &v).unwrap();

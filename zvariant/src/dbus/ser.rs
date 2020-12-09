@@ -1,14 +1,16 @@
 use byteorder::WriteBytesExt;
 use serde::{ser, ser::SerializeSeq, Serialize};
-use std::io::{Seek, Write};
-use std::os::unix::io::RawFd;
-use std::{marker::PhantomData, str};
+use std::{
+    io::{Seek, Write},
+    marker::PhantomData,
+    os::unix::io::RawFd,
+    str,
+};
 
-use crate::signature_parser::SignatureParser;
-use crate::utils::*;
-use crate::{Basic, EncodingContext, EncodingFormat};
-use crate::{Error, Result};
-use crate::{ObjectPath, Signature};
+use crate::{
+    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error,
+    ObjectPath, Result, Signature,
+};
 
 /// Our D-Bus serialization implementation.
 pub struct Serializer<'ser, 'sig, B, W>(pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>);

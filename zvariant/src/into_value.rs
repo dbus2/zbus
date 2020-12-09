@@ -1,8 +1,6 @@
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
-use crate::Value;
-use crate::{Array, Dict};
-use crate::{Fd, ObjectPath, Signature, Structure};
+use crate::{Array, Dict, Fd, ObjectPath, Signature, Structure, Value};
 
 //
 // Conversions from encodable types to `Value`

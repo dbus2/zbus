@@ -1,5 +1,4 @@
-use crate::framing_offset_size::FramingOffsetSize;
-use crate::Result;
+use crate::{framing_offset_size::FramingOffsetSize, Result};
 use std::collections::VecDeque;
 
 // Used internally for GVariant encoding and decoding.

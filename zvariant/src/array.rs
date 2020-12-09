@@ -1,8 +1,7 @@
 use serde::ser::{Serialize, SerializeSeq, Serializer};
 use std::convert::TryFrom;
 
-use crate::{Error, Result};
-use crate::{Signature, Type, Value};
+use crate::{Error, Result, Signature, Type, Value};
 
 /// A helper type to wrap arrays in a [`Value`].
 ///

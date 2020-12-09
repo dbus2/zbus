@@ -1,6 +1,5 @@
 use snakecase::ascii::to_snakecase;
-use std::fmt::Display;
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 
 use zbus::xml::{Arg, Interface};
 use zvariant::{
@@ -225,8 +224,7 @@ fn to_identifier(id: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::error::Error;
-    use std::result::Result;
+    use std::{error::Error, result::Result};
 
     use super::GenTrait;
     use zbus::xml::Node;

@@ -4,8 +4,9 @@ use std::collections::HashMap;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use zvariant::{from_slice_for_signature, to_bytes_for_signature};
-use zvariant::{EncodingContext as Context, Type, Value};
+use zvariant::{
+    from_slice_for_signature, to_bytes_for_signature, EncodingContext as Context, Type, Value,
+};
 use zvariant_derive::Type;
 
 fn big_array_ser_and_de(c: &mut Criterion) {

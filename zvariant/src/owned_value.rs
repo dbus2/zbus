@@ -125,9 +125,7 @@ impl<'de> Deserialize<'de> for OwnedValue {
 #[cfg(test)]
 mod tests {
     use byteorder::LE;
-    use std::convert::TryFrom;
-    use std::error::Error;
-    use std::result::Result;
+    use std::{convert::TryFrom, error::Error, result::Result};
 
     use crate::{from_slice, to_bytes, EncodingContext, OwnedValue, Value};
 
