@@ -63,9 +63,8 @@ struct ConnectionInner {
 ///
 /// `Connection` implements [`Clone`] and cloning it is a very cheap operation, as the underlying
 /// data is not cloned. This makes it very convenient to share the connection between different
-/// parts of your code. Please note however, that sharing or sending of a connection instance
-/// across threads is not supported. If you've a valid use cas for that, please [file an issue]
-/// about it and we'll consider adding this feature.
+/// parts of your code. `Connection` also implements [`std::marker::Sync`] and[`std::marker::Send`]
+/// so you can send and share a connection instance across threads as well.
 ///
 /// Since there are times when important messages arrive between a method call message is sent and
 /// its reply is received, `Connection` keeps an internal queue of incoming messages so that these
