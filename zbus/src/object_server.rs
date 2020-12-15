@@ -629,7 +629,7 @@ impl<'a> ObjectServer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, convert::TryInto, error::Error, rc::Rc, thread};
+    use std::{cell::Cell, collections::HashMap, convert::TryInto, error::Error, rc::Rc, thread};
 
     use ntest::timeout;
     use serde::{Deserialize, Serialize};
@@ -656,6 +656,8 @@ mod tests {
         fn test_error(&self) -> zbus::Result<()>;
 
         fn test_single_struct_arg(&self, arg: ArgStructTest) -> zbus::Result<()>;
+
+        fn test_hashmap_return(&self) -> zbus::Result<HashMap<String, String>>;
 
         fn create_obj(&self, key: &str) -> zbus::Result<()>;
 
@@ -715,6 +717,14 @@ mod tests {
             assert_eq!(arg.bar, "TestString");
         }
 
+        fn test_hashmap_return(&self) -> zbus::fdo::Result<HashMap<String, String>> {
+            let mut map = HashMap::new();
+            map.insert("hi".into(), "hello".into());
+            map.insert("bye".into(), "now".into());
+
+            Ok(map)
+        }
+
         fn create_obj(&self, key: String) {
             self.action.set(NextAction::CreateObj(key));
         }
@@ -756,6 +766,9 @@ mod tests {
             foo: 1,
             bar: "TestString".into(),
         })?;
+        let map = proxy.test_hashmap_return()?;
+        assert_eq!(map["hi"], "hello");
+        assert_eq!(map["bye"], "now");
         proxy.introspect()?;
         let val = proxy.ping()?;
 
