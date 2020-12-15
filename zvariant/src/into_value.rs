@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
-use crate::{Array, Dict, Fd, ObjectPath, Signature, Structure, Value};
+use crate::{Array, Dict, Fd, ObjectPath, Signature, Structure, Type, Value};
 
 //
 // Conversions from encodable types to `Value`
@@ -81,6 +83,18 @@ where
 {
     fn from(v: &'v Vec<V>) -> Value<'v> {
         Value::Array(v.into())
+    }
+}
+
+impl<'a, 'k, 'v, K, V> From<HashMap<K, V>> for Value<'a>
+where
+    'k: 'a,
+    'v: 'a,
+    K: Type + Into<Value<'k>> + std::hash::Hash + std::cmp::Eq,
+    V: Type + Into<Value<'k>>,
+{
+    fn from(value: HashMap<K, V>) -> Self {
+        Self::Dict(value.into())
     }
 }
 
