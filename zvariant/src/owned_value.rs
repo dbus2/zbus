@@ -1,5 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize};
-use std::convert::TryFrom;
+use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 use crate::{Array, Dict, Fd, ObjectPath, Signature, Structure, Type, Value};
 
@@ -79,6 +79,23 @@ where
 
     fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
         if let Value::Array(v) = value.0 {
+            Self::try_from(v)
+        } else {
+            Err(crate::Error::IncorrectType)
+        }
+    }
+}
+
+impl<'k, 'v, K, V, H> TryFrom<OwnedValue> for HashMap<K, V, H>
+where
+    K: crate::Basic + TryFrom<Value<'k>, Error = crate::Error> + std::hash::Hash + std::cmp::Eq,
+    V: TryFrom<Value<'v>, Error = crate::Error> + 'v,
+    H: BuildHasher + Default,
+{
+    type Error = crate::Error;
+
+    fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
+        if let Value::Dict(v) = value.0 {
             Self::try_from(v)
         } else {
             Err(crate::Error::IncorrectType)
