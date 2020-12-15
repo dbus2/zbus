@@ -668,6 +668,9 @@ mod tests {
 
         #[dbus_proxy(property)]
         fn set_count(&self, count: u32) -> fdo::Result<()>;
+
+        #[dbus_proxy(property)]
+        fn hash_map(&self) -> fdo::Result<HashMap<String, String>>;
     }
 
     #[derive(Debug, Clone)]
@@ -747,8 +750,18 @@ mod tests {
             self.count
         }
 
+        #[dbus_interface(property)]
+        fn hash_map(&self) -> HashMap<String, String> {
+            self.test_hashmap_return().unwrap()
+        }
+
         #[dbus_interface(signal)]
         fn alert_count(&self, val: u32) -> zbus::Result<()>;
+    }
+
+    fn check_hash_map(map: HashMap<String, String>) {
+        assert_eq!(map["hi"], "hello");
+        assert_eq!(map["bye"], "now");
     }
 
     fn my_iface_test() -> std::result::Result<u32, Box<dyn Error>> {
@@ -766,9 +779,8 @@ mod tests {
             foo: 1,
             bar: "TestString".into(),
         })?;
-        let map = proxy.test_hashmap_return()?;
-        assert_eq!(map["hi"], "hello");
-        assert_eq!(map["bye"], "now");
+        check_hash_map(proxy.test_hashmap_return()?);
+        check_hash_map(proxy.hash_map()?);
         proxy.introspect()?;
         let val = proxy.ping()?;
 
