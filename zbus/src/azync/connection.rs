@@ -24,8 +24,7 @@ use crate::{
 /// ### Generic over Socket
 ///
 /// This type is generic over [`zbus::raw::Socket`] so that support for new socket types can be
-/// added with the same type easily later on. Currently only [`UnixStream`] is supported but
-/// [`std::net::TcpStream`] is planned.
+/// added with the same type easily later on.
 ///
 /// ### No Clone implementation
 ///
