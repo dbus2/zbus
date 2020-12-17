@@ -48,6 +48,14 @@ pub trait Socket {
     /// If the underlying transport does not support transmitting file descriptors, this
     /// will return `Err(ErrorKind::InvalidInput)`.
     fn sendmsg(&mut self, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize>;
+
+    /// Close the socket.
+    ///
+    /// After this call, all reading and writing operations will fail.
+    ///
+    /// NB: All currently implementations don't block so this method will never return
+    /// `Err(Errorkind::Wouldblock)`.
+    fn close(&self) -> io::Result<()>;
 }
 
 impl Socket for UnixStream {
@@ -100,6 +108,10 @@ impl Socket for UnixStream {
             _ => Err(io::Error::new(io::ErrorKind::Other, "unhandled nix error")),
         }
     }
+
+    fn close(&self) -> io::Result<()> {
+        self.shutdown(std::net::Shutdown::Both)
+    }
 }
 
 impl Socket for Async<UnixStream> {
@@ -111,5 +123,9 @@ impl Socket for Async<UnixStream> {
 
     fn sendmsg(&mut self, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
         self.get_mut().sendmsg(buffer, fds)
+    }
+
+    fn close(&self) -> io::Result<()> {
+        self.get_ref().shutdown(std::net::Shutdown::Both)
     }
 }
