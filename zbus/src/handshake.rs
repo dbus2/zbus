@@ -1,6 +1,5 @@
 use std::{
     convert::TryInto,
-    env,
     io::BufRead,
     os::unix::{io::AsRawFd, net::UnixStream},
     str::FromStr,
@@ -29,6 +28,12 @@ enum ClientHandshakeStep {
     WaitNegociateFd,
     SendingBegin,
     Done,
+}
+
+pub enum IoOperation {
+    None,
+    Read,
+    Write,
 }
 
 /// A representation of an in-progress handshake, client-side
@@ -73,6 +78,38 @@ pub struct Authenticated<S> {
     pub(crate) cap_unix_fd: bool,
 }
 
+pub trait Handshake<S> {
+    /// The next I/O operation needed for advancing the handshake.
+    ///
+    /// If [`Handshake::advance_handshake`] returns a `std::io::ErrorKind::WouldBlock` error, you
+    /// can use this to figure out which operation to poll for, before calling `advance_handshake`
+    /// again.
+    fn next_io_operation(&self) -> IoOperation;
+
+    /// Attempt to advance the handshake
+    ///
+    /// In non-blocking mode, you need to invoke this method repeatedly
+    /// until it returns `Ok(())`. Once it does, the handshake is finished
+    /// and you can invoke the [`Handshake::try_finish`] method.
+    ///
+    /// Note that only the intial handshake is done. If you need to send a
+    /// Bus Hello, this remains to be done.
+    fn advance_handshake(&mut self) -> Result<()>;
+
+    /// Attempt to finalize this handshake into an initialized client.
+    ///
+    /// This method should only be called once `advance_handshake()` has
+    /// returned `Ok(())`. Otherwise it'll error and return you the object.
+    fn try_finish(self) -> std::result::Result<Authenticated<S>, Self>
+    where
+        Self: Sized;
+
+    /// Access the socket backing this handshake
+    ///
+    /// Would typically be used to register it for readiness.
+    fn socket(&self) -> &S;
+}
+
 impl<S: Socket> ClientHandshake<S> {
     /// Start a handsake on this client socket
     pub fn new(socket: S) -> ClientHandshake<S> {
@@ -102,15 +139,36 @@ impl<S: Socket> ClientHandshake<S> {
         Ok(())
     }
 
-    /// Attempt to advance the handshake
-    ///
-    /// In non-blocking mode, you need to invoke this method repeatedly
-    /// until it returns `Ok(())`. Once it does, the handshake is finished
-    /// and you can invoke the [`ClientHandshake::try_finish`] method.
-    ///
-    /// Note that only the intial handshake is done. If you need to send a
-    /// Bus Hello, this remains to be done.
+    /// Same as [`Handshake::advance_handshake`]. Only exists for backwards compatibility.
     pub fn advance_handshake(&mut self) -> Result<()> {
+        Handshake::advance_handshake(self)
+    }
+
+    /// Same as [`Handshake::try_finish`]. Only exists for backwards compatibility.
+    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
+        Handshake::try_finish(self)
+    }
+
+    /// Same as [`Handshake::socket`]. Only exists for backwards compatibility.
+    pub fn socket(&self) -> &S {
+        Handshake::socket(self)
+    }
+}
+
+impl<S: Socket> Handshake<S> for ClientHandshake<S> {
+    fn next_io_operation(&self) -> IoOperation {
+        match self.step {
+            ClientHandshakeStep::Init | ClientHandshakeStep::Done => IoOperation::None,
+            ClientHandshakeStep::WaitNegociateFd | ClientHandshakeStep::WaitOauth => {
+                IoOperation::Read
+            }
+            ClientHandshakeStep::SendingOauth
+            | ClientHandshakeStep::SendingNegociateFd
+            | ClientHandshakeStep::SendingBegin => IoOperation::Write,
+        }
+    }
+
+    fn advance_handshake(&mut self) -> Result<()> {
         loop {
             match self.step {
                 ClientHandshakeStep::Init => {
@@ -172,11 +230,7 @@ impl<S: Socket> ClientHandshake<S> {
         }
     }
 
-    /// Attempt to finalize this handshake into an initialized client.
-    ///
-    /// This method should only be called once `advance_handshake()` has
-    /// returned `Ok(())`. Otherwise it'll error and return you the object.
-    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
+    fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ClientHandshakeStep::Done = self.step {
             Ok(Authenticated {
                 conn: Connection::wrap(self.socket),
@@ -188,10 +242,7 @@ impl<S: Socket> ClientHandshake<S> {
         }
     }
 
-    /// Access the socket backing this handshake
-    ///
-    /// Would typically be used to register it for readiness.
-    pub fn socket(&self) -> &S {
+    fn socket(&self) -> &S {
         &self.socket
     }
 }
@@ -201,15 +252,14 @@ impl ClientHandshake<UnixStream> {
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_session() -> Result<Self> {
-        session_socket().map(Self::new)
+        session_socket(false).map(Self::new)
     }
 
     /// Initialize a handshake to the session/user message bus.
     ///
     /// The socket backing this connection is created in non-blocking mode.
     pub fn new_session_nonblock() -> Result<Self> {
-        let socket = session_socket()?;
-        socket.set_nonblocking(true)?;
+        let socket = session_socket(true)?;
         Ok(Self::new(socket))
     }
 
@@ -217,15 +267,14 @@ impl ClientHandshake<UnixStream> {
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_system() -> Result<Self> {
-        system_socket().map(Self::new)
+        system_socket(false).map(Self::new)
     }
 
     /// Initialize a handshake to the system-wide message bus.
     ///
     /// The socket backing this connection is created in non-blocking mode.
     pub fn new_system_nonblock() -> Result<Self> {
-        let socket = system_socket()?;
-        socket.set_nonblocking(true)?;
+        let socket = system_socket(true)?;
         Ok(Self::new(socket))
     }
 
@@ -235,7 +284,7 @@ impl ClientHandshake<UnixStream> {
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str) -> Result<Self> {
-        Address::from_str(address)?.connect().map(Self::new)
+        Address::from_str(address)?.connect(false).map(Self::new)
     }
 
     /// Create a handshake for the given [D-Bus address].
@@ -244,8 +293,7 @@ impl ClientHandshake<UnixStream> {
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address_nonblock(address: &str) -> Result<Self> {
-        let socket = crate::address::Address::from_str(address)?.connect()?;
-        socket.set_nonblocking(true)?;
+        let socket = crate::address::Address::from_str(address)?.connect(true)?;
         Ok(Self::new(socket))
     }
 
@@ -349,15 +397,36 @@ impl<S: Socket> ServerHandshake<S> {
         Ok(())
     }
 
-    /// Attempt to advance the handshake
-    ///
-    /// In non-blocking mode, you need to invoke this method repeatedly
-    /// until it returns `Ok(())`. Once it does, the handshake is finished
-    /// and you can invoke the `finalize()` method.
-    ///
-    /// Note that only the intial handshake is done. If you need to send a
-    /// Bus Hello, this remains to be done.
+    /// Same as [`Handshake::advance_handshake`]. Only exists for backwards compatibility.
     pub fn advance_handshake(&mut self) -> Result<()> {
+        Handshake::advance_handshake(self)
+    }
+
+    /// Same as [`Handshake::try_finish`]. Only exists for backwards compatibility.
+    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
+        Handshake::try_finish(self)
+    }
+
+    /// Same as [`Handshake::socket`]. Only exists for backwards compatibility.
+    pub fn socket(&self) -> &S {
+        Handshake::socket(self)
+    }
+}
+
+impl<S: Socket> Handshake<S> for ServerHandshake<S> {
+    fn next_io_operation(&self) -> IoOperation {
+        match self.step {
+            ServerHandshakeStep::Done => IoOperation::None,
+            ServerHandshakeStep::WaitingForNull
+            | ServerHandshakeStep::WaitingForAuth
+            | ServerHandshakeStep::WaitingForBegin => IoOperation::Read,
+            ServerHandshakeStep::SendingAuthOK
+            | ServerHandshakeStep::SendingAuthError
+            | ServerHandshakeStep::SendingBeginMessage => IoOperation::Write,
+        }
+    }
+
+    fn advance_handshake(&mut self) -> Result<()> {
         loop {
             match self.step {
                 ServerHandshakeStep::WaitingForNull => {
@@ -449,11 +518,7 @@ impl<S: Socket> ServerHandshake<S> {
         }
     }
 
-    /// Attempt to finalize this handshake into an initialized server.
-    ///
-    /// This method should only be called once `advance_handshake()` has
-    /// returned `Ok(())`. Otherwise it'll error and return you the object.
-    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
+    fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ServerHandshakeStep::Done = self.step {
             Ok(Authenticated {
                 conn: Connection::wrap(self.socket),
@@ -465,10 +530,7 @@ impl<S: Socket> ServerHandshake<S> {
         }
     }
 
-    /// Access the socket backing this handshake
-    ///
-    /// Would typically be used to register it for readiness.
-    pub fn socket(&self) -> &S {
+    fn socket(&self) -> &S {
         &self.socket
     }
 }
@@ -502,28 +564,12 @@ impl ServerHandshake<UnixStream> {
     }
 }
 
-/// Get a session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
-/// variable. If we don't recognize the value (or it's not set) we fall back to
-/// /run/user/UID/bus
-fn session_socket() -> Result<UnixStream> {
-    match env::var("DBUS_SESSION_BUS_ADDRESS") {
-        Ok(val) => Address::from_str(&val)?.connect(),
-        _ => {
-            let uid = Uid::current();
-            let path = format!("/run/user/{}/bus", uid);
-            Ok(UnixStream::connect(path)?)
-        }
-    }
+fn session_socket(nonblocking: bool) -> Result<UnixStream> {
+    Address::session()?.connect(nonblocking)
 }
 
-/// Get a system socket respecting the DBUS_SYSTEM_BUS_ADDRESS environment
-/// variable. If we don't recognize the value (or it's not set) we fall back to
-/// /var/run/dbus/system_bus_socket
-fn system_socket() -> Result<UnixStream> {
-    match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
-        Ok(val) => Address::from_str(&val)?.connect(),
-        _ => Ok(UnixStream::connect("/var/run/dbus/system_bus_socket")?),
-    }
+fn system_socket(nonblocking: bool) -> Result<UnixStream> {
+    Address::system()?.connect(nonblocking)
 }
 
 fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
@@ -544,7 +590,7 @@ mod tests {
     use crate::Guid;
 
     #[test]
-    fn async_handshake() {
+    fn handshake() {
         // a pair of non-blocking connection UnixStream
         let (p0, p1) = UnixStream::pair().unwrap();
         p0.set_nonblocking(true).unwrap();

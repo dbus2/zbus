@@ -112,7 +112,14 @@
 //! $
 //! ```
 //!
+//! #### Asynchronous API
+//!
+//! Currently, only [low-level asynchronous API] is provided. You can do everything you can through
+//! it that you can do through the high-level asynchronous API (when it exists), it's [not at all as
+//! hard to use](azync::Connection#monitoring-all-messages) as it may sound.
+//!
 //! [book]: https://zeenix.pages.freedesktop.org/zbus/
+//! [low-level asynchronous API]: azync::Connection
 //!
 //! [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus
 //!   clients in javascript (running from any browser) do exist though. And zbus may also be
@@ -169,6 +176,7 @@ pub mod fdo;
 
 pub mod raw;
 
+pub mod azync;
 pub mod handshake;
 
 pub mod xml;
@@ -199,7 +207,7 @@ mod tests {
 
     use zvariant::{derive::Type, Fd, OwnedValue, Type};
 
-    use crate::{Connection, Message, MessageFlags};
+    use crate::{azync::Connection as AsyncConnection, Connection, Message, MessageFlags, Result};
 
     #[test]
     fn msg() {
@@ -249,6 +257,32 @@ mod tests {
     }
 
     #[test]
+    fn basic_connection_async() {
+        futures::executor::block_on(test_basic_connection()).unwrap();
+    }
+
+    async fn test_basic_connection() -> Result<()> {
+        let connection = AsyncConnection::new_session().await?;
+
+        match connection
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "Hello",
+                &(),
+            )
+            .await
+        {
+            Err(crate::Error::MethodError(_, _, _)) => (),
+            Err(e) => panic!("{}", e),
+            _ => panic!(),
+        };
+
+        Ok(())
+    }
+
+    #[test]
     fn fdpass_systemd() {
         let connection = crate::Connection::new_system().unwrap();
 
@@ -274,6 +308,24 @@ mod tests {
         f.metadata().unwrap();
     }
 
+    // Let's try getting us a fancy name on the bus
+    #[repr(u32)]
+    #[derive(Type, BitFlags, Debug, PartialEq, Copy, Clone)]
+    enum RequestNameFlags {
+        AllowReplacement = 0x01,
+        ReplaceExisting = 0x02,
+        DoNotQueue = 0x04,
+    }
+
+    #[repr(u32)]
+    #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
+    enum RequestNameReply {
+        PrimaryOwner = 0x01,
+        InQueue = 0x02,
+        Exists = 0x03,
+        AlreadyOwner = 0x04,
+    }
+
     #[test]
     fn freedesktop_api() {
         let mut connection = crate::Connection::new_session()
@@ -292,24 +344,6 @@ mod tests {
             Some(msg)
         }));
 
-        // Let's try getting us a fancy name on the bus
-        #[repr(u32)]
-        #[derive(Type, BitFlags, Debug, PartialEq, Copy, Clone)]
-        enum RequestNameFlags {
-            AllowReplacement = 0x01,
-            ReplaceExisting = 0x02,
-            DoNotQueue = 0x04,
-        }
-
-        #[repr(u32)]
-        #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
-        enum RequestNameReply {
-            PrimaryOwner = 0x01,
-            InQueue = 0x02,
-            Exists = 0x03,
-            AlreadyOwner = 0x04,
-        }
-
         let reply = connection
             .call_method(
                 Some("org.freedesktop.DBus"),
@@ -317,7 +351,7 @@ mod tests {
                 Some("org.freedesktop.DBus"),
                 "RequestName",
                 &(
-                    "org.freedesktop.zbus",
+                    "org.freedesktop.zbus.sync",
                     BitFlags::from(RequestNameFlags::ReplaceExisting),
                 ),
             )
@@ -350,7 +384,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "NameHasOwner",
-                &"org.freedesktop.zbus",
+                &"org.freedesktop.zbus.sync",
             )
             .unwrap();
 
@@ -366,7 +400,7 @@ mod tests {
                 "/org/freedesktop/DBus",
                 Some("org.freedesktop.DBus"),
                 "GetNameOwner",
-                &"org.freedesktop.zbus",
+                &"org.freedesktop.zbus.sync",
             )
             .unwrap();
 
@@ -397,6 +431,117 @@ mod tests {
 
         let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
         println!("DBus bus UID: {}", uid);
+    }
+
+    #[test]
+    fn freedesktop_api_async() {
+        futures::executor::block_on(test_freedesktop_api()).unwrap();
+    }
+
+    async fn test_freedesktop_api() -> Result<()> {
+        let connection = AsyncConnection::new_session()
+            .await
+            .map_err(|e| {
+                println!("error: {}", e);
+
+                e
+            })
+            .unwrap();
+
+        let reply = connection
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "RequestName",
+                &(
+                    "org.freedesktop.zbus.async",
+                    BitFlags::from(RequestNameFlags::ReplaceExisting),
+                ),
+            )
+            .await
+            .unwrap();
+
+        assert!(reply.body_signature().map(|s| s == "u").unwrap());
+        let reply: RequestNameReply = reply.body().unwrap();
+        assert_eq!(reply, RequestNameReply::PrimaryOwner);
+
+        let reply = connection
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "GetId",
+                &(),
+            )
+            .await
+            .unwrap();
+
+        assert!(reply
+            .body_signature()
+            .map(|s| s == <&str>::signature())
+            .unwrap());
+        let id: &str = reply.body().unwrap();
+        println!("Unique ID of the bus: {}", id);
+
+        let reply = connection
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "NameHasOwner",
+                &"org.freedesktop.zbus.async",
+            )
+            .await
+            .unwrap();
+
+        assert!(reply
+            .body_signature()
+            .map(|s| s == bool::signature())
+            .unwrap());
+        assert!(reply.body::<bool>().unwrap());
+
+        let reply = connection
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "GetNameOwner",
+                &"org.freedesktop.zbus.async",
+            )
+            .await
+            .unwrap();
+
+        assert!(reply
+            .body_signature()
+            .map(|s| s == <&str>::signature())
+            .unwrap());
+        assert_eq!(
+            Some(reply.body::<&str>().unwrap()),
+            connection.unique_name()
+        );
+
+        let reply = connection
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "GetConnectionCredentials",
+                &"org.freedesktop.DBus",
+            )
+            .await
+            .unwrap();
+
+        assert!(reply.body_signature().map(|s| s == "a{sv}").unwrap());
+        let hashmap: HashMap<&str, OwnedValue> = reply.body().unwrap();
+
+        let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
+        println!("DBus bus PID: {}", pid);
+
+        let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
+        println!("DBus bus UID: {}", uid);
+
+        Ok(())
     }
 
     #[test]

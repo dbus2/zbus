@@ -1,38 +1,62 @@
 use crate::{Error, Result};
-use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType, UnixAddr};
-use std::{
-    os::unix::{io::FromRawFd, net::UnixStream},
-    str::FromStr,
-};
+use async_io::Async;
+use nb_connect::unix;
+use nix::unistd::Uid;
+use polling::{Event, Poller};
+use std::{env, ffi::OsString, os::unix::net::UnixStream, str::FromStr};
 
 /// A bus address
 #[derive(Debug, PartialEq)]
 pub(crate) enum Address {
     /// A path on the filesystem
-    Path(String),
-    /// An abstract path (Linux-only)
-    Abstract(String),
+    Unix(OsString),
 }
 
 impl Address {
-    pub(crate) fn connect(&self) -> Result<UnixStream> {
+    pub(crate) fn connect(&self, nonblocking: bool) -> Result<UnixStream> {
         match self {
-            Address::Path(p) => Ok(UnixStream::connect(p)?),
-            Address::Abstract(p) => {
-                // FIXME: Use std API once std supports abstract sockets:
-                //
-                // https://github.com/rust-lang/rust/issues/42048
-                let addr = SockAddr::Unix(UnixAddr::new_abstract(p.as_bytes())?);
-                let raw = socket::socket(
-                    AddressFamily::Unix,
-                    SockType::Stream,
-                    SockFlag::empty(),
-                    None,
-                )?;
-                socket::connect(raw, &addr)?;
+            Address::Unix(p) => {
+                let stream = unix(p)?;
 
-                Ok(unsafe { UnixStream::from_raw_fd(raw) })
+                let poller = Poller::new()?;
+                poller.add(&stream, Event::writable(0))?;
+                poller.wait(&mut Vec::new(), None)?;
+
+                stream.set_nonblocking(nonblocking)?;
+
+                Ok(stream)
             }
+        }
+    }
+
+    pub(crate) async fn connect_async(&self) -> Result<Async<UnixStream>> {
+        match self {
+            Address::Unix(p) => Async::<UnixStream>::connect(p).await.map_err(Error::Io),
+        }
+    }
+
+    /// Get the address for session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
+    /// variable. If we don't recognize the value (or it's not set) we fall back to
+    /// /run/user/UID/bus
+    pub(crate) fn session() -> Result<Self> {
+        match env::var("DBUS_SESSION_BUS_ADDRESS") {
+            Ok(val) => Self::from_str(&val),
+            _ => {
+                let uid = Uid::current();
+                let path = format!("unix:path=/run/user/{}/bus", uid);
+
+                Self::from_str(&path)
+            }
+        }
+    }
+
+    /// Get the address for system bus respecting the DBUS_SYSTEM_BUS_ADDRESS environment
+    /// variable. If we don't recognize the value (or it's not set) we fall back to
+    /// /var/run/dbus/system_bus_socket
+    pub(crate) fn system() -> Result<Self> {
+        match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
+            Ok(val) => Self::from_str(&val),
+            _ => Self::from_str("unix:path=/var/run/dbus/system_bus_socket"),
         }
     }
 }
@@ -59,13 +83,21 @@ impl FromStr for Address {
         if pathparts.len() != 2 {
             return Err(Error::Address("address is missing '='".into()));
         }
-        match pathparts[0] {
-            "path" => Ok(Address::Path(pathparts[1].to_owned())),
-            "abstract" => Ok(Address::Abstract(pathparts[1].to_owned())),
-            _ => Err(Error::Address(
-                "unix address is missing path or abstract".to_owned(),
-            )),
-        }
+        let path = match pathparts[0] {
+            "path" => OsString::from(pathparts[1]),
+            "abstract" => {
+                let mut s = OsString::from("\0");
+                s.push(pathparts[1]);
+
+                s
+            }
+            _ => {
+                return Err(Error::Address(
+                    "unix address is missing path or abstract".to_owned(),
+                ))
+            }
+        };
+        Ok(Address::Unix(path))
     }
 }
 
@@ -86,11 +118,11 @@ mod tests {
             _ => panic!(),
         }
         assert_eq!(
-            Address::Path("/tmp/dbus-foo".into()),
+            Address::Unix("/tmp/dbus-foo".into()),
             Address::from_str("unix:path=/tmp/dbus-foo").unwrap()
         );
         assert_eq!(
-            Address::Path("/tmp/dbus-foo".into()),
+            Address::Unix("/tmp/dbus-foo".into()),
             Address::from_str("unix:path=/tmp/dbus-foo,guid=123").unwrap()
         );
     }
