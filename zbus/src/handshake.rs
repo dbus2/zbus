@@ -293,7 +293,7 @@ impl ClientHandshake<UnixStream> {
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address_nonblock(address: &str) -> Result<Self> {
-        let socket = crate::address::Address::from_str(address)?.connect(true)?;
+        let socket = Address::from_str(address)?.connect(true)?;
         Ok(Self::new(socket))
     }
 
