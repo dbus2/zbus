@@ -12,7 +12,7 @@ use std::{
 };
 
 use crate::{
-    address::Address,
+    address::{self, Address},
     guid::Guid,
     handshake::{self, Handshake as SyncHandshake, IoOperation},
     raw::Socket,
@@ -77,21 +77,15 @@ where
 
 impl Authenticated<Async<UnixStream>> {
     pub async fn session() -> Result<Self> {
-        let socket = Address::session()?.connect_async().await?;
-
-        Self::client(socket).await
+        match Address::session()?.connect_async().await? {
+            address::AsyncStream::Unix(a) => Self::client(a).await,
+        }
     }
 
     pub async fn system() -> Result<Self> {
-        let socket = Address::system()?.connect_async().await?;
-
-        Self::client(socket).await
-    }
-
-    pub async fn for_address(address: &str) -> Result<Self> {
-        let socket = Address::from_str(address)?.connect_async().await?;
-
-        Self::client(socket).await
+        match Address::system()?.connect_async().await? {
+            address::AsyncStream::Unix(a) => Self::client(a).await,
+        }
     }
 }
 
@@ -146,6 +140,22 @@ where
                 }
                 Err(e) => return Poll::Ready(Err(e)),
             }
+        }
+    }
+}
+
+/// Type representing all concrete [`Authenticated`] types, provided by zbus.
+pub enum AuthenticatedType {
+    Unix(Authenticated<Async<UnixStream>>),
+}
+
+impl AuthenticatedType {
+    /// Create a `AuthenticatedType` for the given [D-Bus address].
+    ///
+    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
+    pub async fn for_address(address: &str) -> Result<Self> {
+        match Address::from_str(address)?.connect_async().await? {
+            address::AsyncStream::Unix(a) => Authenticated::client(a).await.map(Self::Unix),
         }
     }
 }

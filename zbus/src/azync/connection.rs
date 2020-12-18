@@ -13,7 +13,9 @@ use futures::{
 };
 
 use crate::{
-    azync::Authenticated, raw::Socket, ConnectionCommon, Error, Guid, Message, MessageType, Result,
+    azync::{Authenticated, AuthenticatedType},
+    raw::Socket,
+    ConnectionCommon, Error, Guid, Message, MessageType, Result,
 };
 
 /// The asynchronous sibling of [`zbus::Connection`].
@@ -414,19 +416,6 @@ impl Connection<UnixStream> {
     pub async fn new_system() -> Result<Self> {
         Self::new_authenticated_bus(Authenticated::system().await?).await
     }
-
-    /// Create a `Connection` for the given [D-Bus address].
-    ///
-    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub async fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
-        let auth = Authenticated::for_address(address).await?;
-
-        if bus_connection {
-            Connection::new_authenticated_bus(auth).await
-        } else {
-            Ok(Connection::new_authenticated(auth))
-        }
-    }
 }
 
 impl<S> Sink<Message> for Connection<S>
@@ -554,6 +543,30 @@ where
                 }
                 Err(Error::Io(e)) if e.kind() == ErrorKind::BrokenPipe => return Poll::Ready(None),
                 Err(e) => return Poll::Ready(Some(Err(e))),
+            }
+        }
+    }
+}
+
+/// Type representing all concrete [`Connection`] types, provided by zbus.
+pub enum ConnectionType {
+    Unix(Connection<UnixStream>),
+}
+
+impl ConnectionType {
+    /// Create a `ConnectionType` for the given [D-Bus address].
+    ///
+    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
+    pub async fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
+        match AuthenticatedType::for_address(address).await? {
+            AuthenticatedType::Unix(auth) => {
+                let conn = if bus_connection {
+                    Connection::new_authenticated_bus(auth).await?
+                } else {
+                    Connection::new_authenticated(auth)
+                };
+
+                Ok(ConnectionType::Unix(conn))
             }
         }
     }
