@@ -8,7 +8,7 @@ use std::{
 use nix::{poll::PollFlags, unistd::Uid};
 
 use crate::{
-    address::Address,
+    address::{self, Address},
     guid::Guid,
     raw::{Connection, Socket},
     utils::wait_on,
@@ -284,7 +284,9 @@ impl ClientHandshake<UnixStream> {
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str) -> Result<Self> {
-        Address::from_str(address)?.connect(false).map(Self::new)
+        match Address::from_str(address)?.connect(false)? {
+            address::Stream::Unix(s) => Ok(Self::new(s)),
+        }
     }
 
     /// Create a handshake for the given [D-Bus address].
@@ -293,8 +295,9 @@ impl ClientHandshake<UnixStream> {
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address_nonblock(address: &str) -> Result<Self> {
-        let socket = crate::address::Address::from_str(address)?.connect(true)?;
-        Ok(Self::new(socket))
+        match Address::from_str(address)?.connect(true)? {
+            address::Stream::Unix(s) => Ok(Self::new(s)),
+        }
     }
 
     /// Block and automatically drive the handshake for this client
@@ -565,11 +568,15 @@ impl ServerHandshake<UnixStream> {
 }
 
 fn session_socket(nonblocking: bool) -> Result<UnixStream> {
-    Address::session()?.connect(nonblocking)
+    match Address::session()?.connect(nonblocking)? {
+        address::Stream::Unix(s) => Ok(s),
+    }
 }
 
 fn system_socket(nonblocking: bool) -> Result<UnixStream> {
-    Address::system()?.connect(nonblocking)
+    match Address::system()?.connect(nonblocking)? {
+        address::Stream::Unix(s) => Ok(s),
+    }
 }
 
 fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {

@@ -207,7 +207,7 @@ mod tests {
 
     use zvariant::{derive::Type, Fd, OwnedValue, Type};
 
-    use crate::{azync::Connection as AsyncConnection, Connection, Message, MessageFlags, Result};
+    use crate::{azync::ConnectionType, Connection, Message, MessageFlags, Result};
 
     #[test]
     fn msg() {
@@ -262,7 +262,9 @@ mod tests {
     }
 
     async fn test_basic_connection() -> Result<()> {
-        let connection = AsyncConnection::new_session().await?;
+        let connection = match ConnectionType::new_session().await? {
+            ConnectionType::Unix(c) => c,
+        };
 
         match connection
             .call_method(
@@ -439,14 +441,9 @@ mod tests {
     }
 
     async fn test_freedesktop_api() -> Result<()> {
-        let connection = AsyncConnection::new_session()
-            .await
-            .map_err(|e| {
-                println!("error: {}", e);
-
-                e
-            })
-            .unwrap();
+        let connection = match ConnectionType::new_session().await? {
+            ConnectionType::Unix(c) => c,
+        };
 
         let reply = connection
             .call_method(

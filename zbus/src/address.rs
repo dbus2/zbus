@@ -12,8 +12,18 @@ pub(crate) enum Address {
     Unix(OsString),
 }
 
+#[derive(Debug)]
+pub(crate) enum Stream {
+    Unix(UnixStream),
+}
+
+#[derive(Debug)]
+pub(crate) enum AsyncStream {
+    Unix(Async<UnixStream>),
+}
+
 impl Address {
-    pub(crate) fn connect(&self, nonblocking: bool) -> Result<UnixStream> {
+    pub(crate) fn connect(&self, nonblocking: bool) -> Result<Stream> {
         match self {
             Address::Unix(p) => {
                 let stream = unix(p)?;
@@ -24,14 +34,17 @@ impl Address {
 
                 stream.set_nonblocking(nonblocking)?;
 
-                Ok(stream)
+                Ok(Stream::Unix(stream))
             }
         }
     }
 
-    pub(crate) async fn connect_async(&self) -> Result<Async<UnixStream>> {
+    pub(crate) async fn connect_async(&self) -> Result<AsyncStream> {
         match self {
-            Address::Unix(p) => Async::<UnixStream>::connect(p).await.map_err(Error::Io),
+            Address::Unix(p) => Async::<UnixStream>::connect(p)
+                .await
+                .map(AsyncStream::Unix)
+                .map_err(Error::Io),
         }
     }
 
