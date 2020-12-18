@@ -58,6 +58,7 @@ where
     S: Debug + Unpin,
     Async<S>: Socket,
 {
+    /// Create a client-side `Authenticated` for the given `stream`.
     pub async fn client(socket: Async<S>) -> Result<Self> {
         Handshake {
             handshake: Some(handshake::ClientHandshake::new(socket)),
@@ -66,6 +67,7 @@ where
         .await
     }
 
+    /// Create a server-side `Authenticated` for the given `stream`.
     pub async fn server(socket: Async<S>, guid: Guid, client_uid: u32) -> Result<Self> {
         Handshake {
             handshake: Some(handshake::ServerHandshake::new(socket, guid, client_uid)),
@@ -76,12 +78,22 @@ where
 }
 
 impl Authenticated<Async<UnixStream>> {
+    /// Create a `Authenticated` for the session/user message bus.
+    ///
+    /// Although, session bus hardly ever runs on anything other than UNIX domain sockets, if you
+    /// want your code to be able to handle those rare cases, use [`AuthenticatedType::session`]
+    /// instead.
     pub async fn session() -> Result<Self> {
         match Address::session()?.connect_async().await? {
             address::AsyncStream::Unix(a) => Self::client(a).await,
         }
     }
 
+    /// Create a `Authenticated` for the system-wide message bus.
+    ///
+    /// Although, system bus hardly ever runs on anything other than UNIX domain sockets, if you
+    /// want your code to be able to handle those rare cases, use [`AuthenticatedType::system`]
+    /// instead.
     pub async fn system() -> Result<Self> {
         match Address::system()?.connect_async().await? {
             address::AsyncStream::Unix(a) => Self::client(a).await,
