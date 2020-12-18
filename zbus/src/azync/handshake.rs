@@ -58,7 +58,7 @@ where
     S: Debug + Unpin,
     Async<S>: Socket,
 {
-    /// Create a client-side `Authenticated` for the given `stream`.
+    /// Create a client-side `Authenticated` for the given `socket`.
     pub async fn client(socket: Async<S>) -> Result<Self> {
         Handshake {
             handshake: Some(handshake::ClientHandshake::new(socket)),
@@ -67,7 +67,7 @@ where
         .await
     }
 
-    /// Create a server-side `Authenticated` for the given `stream`.
+    /// Create a server-side `Authenticated` for the given `socket`.
     pub async fn server(socket: Async<S>, guid: Guid, client_uid: u32) -> Result<Self> {
         Handshake {
             handshake: Some(handshake::ServerHandshake::new(socket, guid, client_uid)),
