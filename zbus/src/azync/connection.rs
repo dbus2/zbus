@@ -408,11 +408,19 @@ where
 
 impl Connection<UnixStream> {
     /// Create a `Connection` to the session/user message bus.
+    ///
+    /// Although, session bus hardly ever runs on anything other than UNIX domain sockets, if you
+    /// want your code to be able to handle those rare cases, use [`ConnectionType::new_session`]
+    /// instead.
     pub async fn new_session() -> Result<Self> {
         Self::new_authenticated_bus(Authenticated::session().await?).await
     }
 
     /// Create a `Connection` to the system-wide message bus.
+    ///
+    /// Although, system bus hardly ever runs on anything other than UNIX domain sockets, if you
+    /// want your code to be able to handle those rare cases, use [`ConnectionType::new_system`]
+    /// instead.
     pub async fn new_system() -> Result<Self> {
         Self::new_authenticated_bus(Authenticated::system().await?).await
     }
@@ -549,6 +557,9 @@ where
 }
 
 /// Type representing all concrete [`Connection`] types, provided by zbus.
+///
+/// For maximum portability, use constructor method provided by this type instead of ones provided
+/// by [`Connection`].
 pub enum ConnectionType {
     Unix(Connection<UnixStream>),
 }
@@ -565,6 +576,28 @@ impl ConnectionType {
                 } else {
                     Connection::new_authenticated(auth)
                 };
+
+                Ok(ConnectionType::Unix(conn))
+            }
+        }
+    }
+
+    /// Create a `ConnectionType` to the session/user message bus.
+    pub async fn new_session() -> Result<Self> {
+        match AuthenticatedType::session().await? {
+            AuthenticatedType::Unix(auth) => {
+                let conn = Connection::new_authenticated_bus(auth).await?;
+
+                Ok(ConnectionType::Unix(conn))
+            }
+        }
+    }
+
+    /// Create a `ConnectionType` to the system-wide message bus.
+    pub async fn new_system() -> Result<Self> {
+        match AuthenticatedType::session().await? {
+            AuthenticatedType::Unix(auth) => {
+                let conn = Connection::new_authenticated_bus(auth).await?;
 
                 Ok(ConnectionType::Unix(conn))
             }

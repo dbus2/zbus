@@ -145,6 +145,9 @@ where
 }
 
 /// Type representing all concrete [`Authenticated`] types, provided by zbus.
+///
+/// For maximum portability, use constructor methods provided by this type instead of ones provided
+/// by [`Authenticated`].
 pub enum AuthenticatedType {
     Unix(Authenticated<Async<UnixStream>>),
 }
@@ -155,6 +158,20 @@ impl AuthenticatedType {
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub async fn for_address(address: &str) -> Result<Self> {
         match Address::from_str(address)?.connect_async().await? {
+            address::AsyncStream::Unix(a) => Authenticated::client(a).await.map(Self::Unix),
+        }
+    }
+
+    /// Create a `AuthenticatedType` for the session/user message bus.
+    pub async fn session() -> Result<Self> {
+        match Address::session()?.connect_async().await? {
+            address::AsyncStream::Unix(a) => Authenticated::client(a).await.map(Self::Unix),
+        }
+    }
+
+    /// Create a `AuthenticatedType` for the system-wide message bus.
+    pub async fn system() -> Result<Self> {
+        match Address::system()?.connect_async().await? {
             address::AsyncStream::Unix(a) => Authenticated::client(a).await.map(Self::Unix),
         }
     }
