@@ -134,7 +134,7 @@ where
     S: AsRawFd + std::fmt::Debug + Unpin + Socket,
     Async<S>: Socket,
 {
-    /// Create and open a D-Bus connection from a `UnixStream`.
+    /// Create and open a D-Bus connection from the given `stream`.
     ///
     /// The connection may either be set up for a *bus* connection, or not (for peer-to-peer
     /// communications).
@@ -152,7 +152,7 @@ where
         }
     }
 
-    /// Create a server `Connection` for the given `UnixStream` and the server `guid`.
+    /// Create a server `Connection` for the given `stream` and the server `guid`.
     ///
     /// The connection will wait for incoming client authentication handshake & negotiation messages,
     /// for peer-to-peer communications.
