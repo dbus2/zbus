@@ -19,7 +19,7 @@ use crate::{
 
 type MessageHandlerFn = Box<(dyn FnMut(Message) -> Option<Message> + Send)>;
 
-const DEFAULT_MAX_QUEUED: usize = 32;
+pub(crate) const DEFAULT_MAX_QUEUED: usize = 32;
 const LOCK_FAIL_MSG: &str = "Failed to lock a mutex or read-write lock";
 
 #[derive(derivative::Derivative)]
