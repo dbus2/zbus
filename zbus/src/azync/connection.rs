@@ -50,8 +50,7 @@ use crate::{
 ///
 /// Unlike [`zbus::Connection`], there is no direct async equivalent of
 /// [`zbus::Connection::receive_message`] method provided. This is because the `futures` crate
-/// already provides already provides a nice rich API that makes use of the  [`Stream`]
-/// implementation.
+/// already provides a nice rich API that makes use of the  [`Stream`] implementation.
 ///
 /// ### Examples
 ///
