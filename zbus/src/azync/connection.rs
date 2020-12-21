@@ -39,7 +39,9 @@ use crate::{
 /// Also notice that unlike [`zbus::Connection`], most methods take a `&mut self`, rather than a
 /// `&self`. If they'd take `&self`, `Connection` will need to manage mutability internally, which
 /// is not a very good match with the general async/await machinery and runtimes in Rust and could
-/// easily lead into some hard-to-debug deadlocks.
+/// easily lead into some hard-to-debug deadlocks. You can use [`std::cell::Cell`],
+/// [`std::sync::Mutex`] or other related API combined with [`std::rc::Rc`] or [`std::sync::Arc`]
+/// for sharing a mutable `Connection` instance between different parts of your code (or threads).
 ///
 /// ### Sending Messages
 ///
