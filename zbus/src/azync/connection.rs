@@ -595,7 +595,7 @@ impl ConnectionType {
 
     /// Create a `ConnectionType` to the system-wide message bus.
     pub async fn new_system() -> Result<Self> {
-        match AuthenticatedType::session().await? {
+        match AuthenticatedType::system().await? {
             AuthenticatedType::Unix(auth) => {
                 let conn = Connection::new_authenticated_bus(auth).await?;
 
