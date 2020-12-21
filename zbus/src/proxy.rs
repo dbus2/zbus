@@ -125,7 +125,7 @@ impl<'a> Proxy<'a> {
     /// Call a method and return the reply.
     ///
     /// Typically, you would want to use [`call`] method instead. Use this method if you need to
-    /// deserialize the reply message manually (this way, you can avoid avoid the memory
+    /// deserialize the reply message manually (this way, you can avoid the memory
     /// allocation/copying, by deserializing the reply to an unowned type).
     ///
     /// [`call`]: struct.Proxy.html#method.call
