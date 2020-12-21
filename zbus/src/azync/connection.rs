@@ -649,6 +649,9 @@ mod tests {
                 .call_method(None, "/", Some("org.zbus.p2p"), "Test", &())
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
+            // Check we didn't miss the signal that was sent during the call.
+            let m = client_conn.try_next().await?.unwrap();
+            assert_eq!(m.to_string(), "Signal ASignalForYou");
             reply.body::<String>().map_err(|e| e.into())
         };
 
