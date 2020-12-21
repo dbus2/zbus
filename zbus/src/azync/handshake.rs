@@ -23,22 +23,12 @@ use crate::{
 ///
 /// The underlying socket is in nonblocking mode. Enabling blocking mode on it, will lead to
 /// undefined behaviour.
-pub struct Authenticated<S>(handshake::Authenticated<S>);
+pub(crate) struct Authenticated<S>(handshake::Authenticated<S>);
 
 impl<S> Authenticated<S>
 where
     S: Socket,
 {
-    /// Get a reference to the underlying [`handshake::Authenticated`].
-    pub fn get_ref(&self) -> &handshake::Authenticated<S> {
-        &self.0
-    }
-
-    /// Get a mutable reference to the underlying [`handshake::Authenticated`].
-    pub fn get_mut(&mut self) -> &mut handshake::Authenticated<S> {
-        &mut self.0
-    }
-
     /// Unwraps the inner [`handshake::Authenticated`].
     pub fn into_inner(self) -> handshake::Authenticated<S> {
         self.0
@@ -160,7 +150,7 @@ where
 ///
 /// For maximum portability, use constructor methods provided by this type instead of ones provided
 /// by [`Authenticated`].
-pub enum AuthenticatedType {
+pub(crate) enum AuthenticatedType {
     Unix(Authenticated<Async<UnixStream>>),
 }
 

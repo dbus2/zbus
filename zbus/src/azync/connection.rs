@@ -191,28 +191,6 @@ where
         Ok(Self::new_authenticated(auth))
     }
 
-    /// Create a `Connection` from an already authenticated unix socket.
-    ///
-    /// This method can be used in conjunction with [`crate::azync::Authenticated`] to handle
-    /// the initial handshake of the D-Bus connection asynchronously.
-    ///
-    /// If the aim is to initialize a client *bus* connection, you need to send the client hello and assign
-    /// the resulting unique name using [`set_unique_name`] before doing anything else.
-    ///
-    /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
-    pub fn new_authenticated(auth: Authenticated<Async<S>>) -> Self {
-        let auth = auth.into_inner();
-        Self {
-            raw_conn: auth.conn,
-            server_guid: auth.server_guid,
-            cap_unix_fd: auth.cap_unix_fd,
-            serial: 1,
-            unique_name: OnceCell::new(),
-            incoming_queue: vec![],
-            max_queued: DEFAULT_MAX_QUEUED,
-        }
-    }
-
     /// Send `msg` to the peer.
     ///
     /// Unlike [`Sink`] implementation, this method sets a unique (to this connection) serial
@@ -408,6 +386,28 @@ where
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
         self.server_guid.as_str()
+    }
+
+    /// Create a `Connection` from an already authenticated unix socket.
+    ///
+    /// This method can be used in conjunction with [`crate::azync::Authenticated`] to handle
+    /// the initial handshake of the D-Bus connection asynchronously.
+    ///
+    /// If the aim is to initialize a client *bus* connection, you need to send the client hello and assign
+    /// the resulting unique name using [`set_unique_name`] before doing anything else.
+    ///
+    /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
+    fn new_authenticated(auth: Authenticated<Async<S>>) -> Self {
+        let auth = auth.into_inner();
+        Self {
+            raw_conn: auth.conn,
+            server_guid: auth.server_guid,
+            cap_unix_fd: auth.cap_unix_fd,
+            serial: 1,
+            unique_name: OnceCell::new(),
+            incoming_queue: vec![],
+            max_queued: DEFAULT_MAX_QUEUED,
+        }
     }
 
     async fn new_authenticated_bus(auth: Authenticated<Async<S>>) -> Result<Self> {
