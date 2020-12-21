@@ -65,30 +65,26 @@ use crate::{
 ///
 /// ```
 ///# use zvariant::Type;
+///#
+///# futures::executor::block_on(async {
+/// use zbus::azync::Connection;
 ///
-/// futures::executor::block_on(async {
-///     let mut connection = zbus::azync::Connection::new_session()
-///         .await
-///         .unwrap();
+/// let mut connection = Connection::new_session().await?;
 ///
-///     let reply = connection
-///         .call_method(
-///             Some("org.freedesktop.DBus"),
-///                  "/org/freedesktop/DBus",
-///                  Some("org.freedesktop.DBus"),
-///                  "GetId",
-///                  &(),
-///         )
-///         .await
-///         .unwrap();
+/// let reply = connection
+///     .call_method(
+///         Some("org.freedesktop.DBus"),
+///         "/org/freedesktop/DBus",
+///         Some("org.freedesktop.DBus"),
+///         "GetId",
+///         &(),
+///     )
+///     .await?;
 ///
-///     assert!(reply
-///         .body_signature()
-///         .map(|s| s == <&str>::signature())
-///         .unwrap());
-///     let id: &str = reply.body().unwrap();
-///     println!("Unique ID of the bus: {}", id);
-/// });
+/// let id: &str = reply.body()?;
+/// println!("Unique ID of the bus: {}", id);
+///# Ok::<(), zbus::Error>(())
+///# });
 /// ```
 ///
 /// #### Monitoring all messages
@@ -96,27 +92,28 @@ use crate::{
 /// Let's eavesdrop on the session bus 😈 using the [Monitor] interface:
 ///
 /// ```rust,no_run
-/// futures::executor::block_on(async {
-///     use futures::TryStreamExt;
+///# futures::executor::block_on(async {
+/// use futures::TryStreamExt;
+/// use zbus::azync::Connection;
 ///
-///     let mut connection = zbus::azync::Connection::new_session().await?;
+/// let mut connection = Connection::new_session().await?;
 ///
-///     connection
-///         .call_method(
-///             Some("org.freedesktop.DBus"),
-///                  "/org/freedesktop/DBus",
-///                  Some("org.freedesktop.DBus.Monitoring"),
-///                  "BecomeMonitor",
-///                  &(&[] as &[&str], 0u32),
-///             )
-///             .await?;
+/// connection
+///     .call_method(
+///         Some("org.freedesktop.DBus"),
+///         "/org/freedesktop/DBus",
+///         Some("org.freedesktop.DBus.Monitoring"),
+///         "BecomeMonitor",
+///         &(&[] as &[&str], 0u32),
+///     )
+///     .await?;
 ///
-///     while let Some(msg) = connection.try_next().await? {
-///         println!("Got message: {}", msg);
-///     }
+/// while let Some(msg) = connection.try_next().await? {
+///     println!("Got message: {}", msg);
+/// }
 ///
-///     Ok::<(), zbus::Error>(())
-/// });
+///# Ok::<(), zbus::Error>(())
+///# });
 /// ```
 ///
 /// This should print something like:
