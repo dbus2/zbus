@@ -65,30 +65,26 @@ use crate::{
 ///
 /// ```
 ///# use zvariant::Type;
+///#
+///# futures::executor::block_on(async {
+/// use zbus::azync::Connection;
 ///
-/// futures::executor::block_on(async {
-///     let mut connection = zbus::azync::Connection::new_session()
-///         .await
-///         .unwrap();
+/// let mut connection = Connection::new_session().await?;
 ///
-///     let reply = connection
-///         .call_method(
-///             Some("org.freedesktop.DBus"),
-///                  "/org/freedesktop/DBus",
-///                  Some("org.freedesktop.DBus"),
-///                  "GetId",
-///                  &(),
-///         )
-///         .await
-///         .unwrap();
+/// let reply = connection
+///     .call_method(
+///         Some("org.freedesktop.DBus"),
+///         "/org/freedesktop/DBus",
+///         Some("org.freedesktop.DBus"),
+///         "GetId",
+///         &(),
+///     )
+///     .await?;
 ///
-///     assert!(reply
-///         .body_signature()
-///         .map(|s| s == <&str>::signature())
-///         .unwrap());
-///     let id: &str = reply.body().unwrap();
-///     println!("Unique ID of the bus: {}", id);
-/// });
+/// let id: &str = reply.body()?;
+/// println!("Unique ID of the bus: {}", id);
+///# Ok::<(), zbus::Error>(())
+///# });
 /// ```
 ///
 /// #### Monitoring all messages
@@ -96,27 +92,28 @@ use crate::{
 /// Let's eavesdrop on the session bus 😈 using the [Monitor] interface:
 ///
 /// ```rust,no_run
-/// futures::executor::block_on(async {
-///     use futures::TryStreamExt;
+///# futures::executor::block_on(async {
+/// use futures::TryStreamExt;
+/// use zbus::azync::Connection;
 ///
-///     let mut connection = zbus::azync::Connection::new_session().await?;
+/// let mut connection = Connection::new_session().await?;
 ///
-///     connection
-///         .call_method(
-///             Some("org.freedesktop.DBus"),
-///                  "/org/freedesktop/DBus",
-///                  Some("org.freedesktop.DBus.Monitoring"),
-///                  "BecomeMonitor",
-///                  &(&[] as &[&str], 0u32),
-///             )
-///             .await?;
+/// connection
+///     .call_method(
+///         Some("org.freedesktop.DBus"),
+///         "/org/freedesktop/DBus",
+///         Some("org.freedesktop.DBus.Monitoring"),
+///         "BecomeMonitor",
+///         &(&[] as &[&str], 0u32),
+///     )
+///     .await?;
 ///
-///     while let Some(msg) = connection.try_next().await? {
-///         println!("Got message: {}", msg);
-///     }
+/// while let Some(msg) = connection.try_next().await? {
+///     println!("Got message: {}", msg);
+/// }
 ///
-///     Ok::<(), zbus::Error>(())
-/// });
+///# Ok::<(), zbus::Error>(())
+///# });
 /// ```
 ///
 /// This should print something like:
@@ -189,28 +186,6 @@ where
         let auth = Authenticated::server(Async::new(stream)?, guid.clone(), creds.uid()).await?;
 
         Ok(Self::new_authenticated(auth))
-    }
-
-    /// Create a `Connection` from an already authenticated unix socket.
-    ///
-    /// This method can be used in conjunction with [`crate::azync::Authenticated`] to handle
-    /// the initial handshake of the D-Bus connection asynchronously.
-    ///
-    /// If the aim is to initialize a client *bus* connection, you need to send the client hello and assign
-    /// the resulting unique name using [`set_unique_name`] before doing anything else.
-    ///
-    /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
-    pub fn new_authenticated(auth: Authenticated<Async<S>>) -> Self {
-        let auth = auth.into_inner();
-        Self {
-            raw_conn: auth.conn,
-            server_guid: auth.server_guid,
-            cap_unix_fd: auth.cap_unix_fd,
-            serial: 1,
-            unique_name: OnceCell::new(),
-            incoming_queue: vec![],
-            max_queued: DEFAULT_MAX_QUEUED,
-        }
     }
 
     /// Send `msg` to the peer.
@@ -410,6 +385,28 @@ where
         self.server_guid.as_str()
     }
 
+    /// Create a `Connection` from an already authenticated unix socket.
+    ///
+    /// This method can be used in conjunction with [`crate::azync::Authenticated`] to handle
+    /// the initial handshake of the D-Bus connection asynchronously.
+    ///
+    /// If the aim is to initialize a client *bus* connection, you need to send the client hello and assign
+    /// the resulting unique name using [`set_unique_name`] before doing anything else.
+    ///
+    /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
+    fn new_authenticated(auth: Authenticated<Async<S>>) -> Self {
+        let auth = auth.into_inner();
+        Self {
+            raw_conn: auth.conn,
+            server_guid: auth.server_guid,
+            cap_unix_fd: auth.cap_unix_fd,
+            serial: 1,
+            unique_name: OnceCell::new(),
+            incoming_queue: vec![],
+            max_queued: DEFAULT_MAX_QUEUED,
+        }
+    }
+
     async fn new_authenticated_bus(auth: Authenticated<Async<S>>) -> Result<Self> {
         let mut connection = Connection::new_authenticated(auth);
 
@@ -595,7 +592,7 @@ impl ConnectionType {
 
     /// Create a `ConnectionType` to the system-wide message bus.
     pub async fn new_system() -> Result<Self> {
-        match AuthenticatedType::session().await? {
+        match AuthenticatedType::system().await? {
             AuthenticatedType::Unix(auth) => {
                 let conn = Connection::new_authenticated_bus(auth).await?;
 
