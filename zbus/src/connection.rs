@@ -3,7 +3,7 @@ use std::{
         io::{AsRawFd, RawFd},
         net::UnixStream,
     },
-    sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use nix::poll::PollFlags;
@@ -19,12 +19,12 @@ use crate::{
 
 type MessageHandlerFn = Box<(dyn FnMut(Message) -> Option<Message> + Send)>;
 
-const DEFAULT_MAX_QUEUED: usize = 32;
+pub(crate) const DEFAULT_MAX_QUEUED: usize = 32;
 const LOCK_FAIL_MSG: &str = "Failed to lock a mutex or read-write lock";
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
-pub(crate) struct ConnectionCommon<S> {
+struct ConnectionInner<S> {
     server_guid: Guid,
     cap_unix_fd: bool,
     unique_name: OnceCell<String>,
@@ -41,65 +41,6 @@ pub(crate) struct ConnectionCommon<S> {
 
     #[derivative(Debug = "ignore")]
     default_msg_handler: Mutex<Option<MessageHandlerFn>>,
-}
-
-impl<S> ConnectionCommon<S> {
-    pub(crate) fn new_authenticated(auth: Authenticated<S>) -> Self {
-        Self {
-            raw_conn: RwLock::new(auth.conn),
-            server_guid: auth.server_guid,
-            cap_unix_fd: auth.cap_unix_fd,
-            serial: Mutex::new(1),
-            unique_name: OnceCell::new(),
-            incoming_queue: Mutex::new(vec![]),
-            max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
-            default_msg_handler: Mutex::new(None),
-        }
-    }
-
-    pub(crate) fn set_unique_name(&self, name: String) -> std::result::Result<(), String> {
-        self.unique_name.set(name)
-    }
-
-    pub(crate) fn next_serial(&self) -> u32 {
-        let mut serial = self.serial.lock().expect(LOCK_FAIL_MSG);
-        let current = *serial;
-        *serial = current + 1;
-
-        current
-    }
-
-    pub(crate) fn cap_unix_fd(&self) -> bool {
-        self.cap_unix_fd
-    }
-
-    pub(crate) fn server_guid(&self) -> &str {
-        self.server_guid.as_str()
-    }
-
-    pub(crate) fn raw_conn_write(&self) -> RwLockWriteGuard<RawConnection<S>> {
-        self.raw_conn.write().expect(LOCK_FAIL_MSG)
-    }
-
-    pub(crate) fn raw_conn_read(&self) -> RwLockReadGuard<RawConnection<S>> {
-        self.raw_conn.read().expect(LOCK_FAIL_MSG)
-    }
-
-    pub(crate) fn in_queue_lock(&self) -> MutexGuard<Vec<Message>> {
-        self.incoming_queue.lock().expect(LOCK_FAIL_MSG)
-    }
-
-    pub(crate) fn unique_name(&self) -> Option<&str> {
-        self.unique_name.get().map(|s| s.as_str())
-    }
-
-    pub(crate) fn max_queued(&self) -> usize {
-        *self.max_queued.read().expect(LOCK_FAIL_MSG)
-    }
-
-    pub(crate) fn set_max_queued(&self, max: usize) {
-        *self.max_queued.write().expect(LOCK_FAIL_MSG) = max;
-    }
 }
 
 /// A D-Bus connection.
@@ -145,11 +86,16 @@ impl<S> ConnectionCommon<S> {
 /// [`receive_message`]: struct.Connection.html#method.receive_message
 /// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
 #[derive(Debug, Clone)]
-pub struct Connection(Arc<ConnectionCommon<UnixStream>>);
+pub struct Connection(Arc<ConnectionInner<UnixStream>>);
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.0.raw_conn_read().socket().as_raw_fd()
+        self.0
+            .raw_conn
+            .read()
+            .expect(LOCK_FAIL_MSG)
+            .socket()
+            .as_raw_fd()
     }
 }
 
@@ -220,7 +166,7 @@ impl Connection {
 
     /// Max number of messages to queue.
     pub fn max_queued(&self) -> usize {
-        self.0.max_queued()
+        *self.0.max_queued.read().expect(LOCK_FAIL_MSG)
     }
 
     /// Set the max number of messages to queue.
@@ -241,19 +187,19 @@ impl Connection {
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn set_max_queued(self, max: usize) -> Self {
-        self.0.set_max_queued(max);
+        *self.0.max_queued.write().expect(LOCK_FAIL_MSG) = max;
 
         self
     }
 
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
-        self.0.server_guid()
+        self.0.server_guid.as_str()
     }
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
     pub fn unique_name(&self) -> Option<&str> {
-        self.0.unique_name()
+        self.0.unique_name.get().map(|s| s.as_str())
     }
 
     /// Fetch the next message from the connection.
@@ -269,13 +215,18 @@ impl Connection {
     ///
     /// [`set_default_message_handler`]: struct.Connection.html#method.set_default_message_handler
     pub fn receive_message(&self) -> Result<Message> {
-        let mut queue = self.0.in_queue_lock();
+        let mut queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
         if let Some(msg) = queue.pop() {
             return Ok(msg);
         }
 
         loop {
-            let incoming = self.0.raw_conn_write().try_receive_message()?;
+            let incoming = self
+                .0
+                .raw_conn
+                .write()
+                .expect(LOCK_FAIL_MSG)
+                .try_receive_message()?;
 
             if let Some(ref mut handler) =
                 &mut *self.0.default_msg_handler.lock().expect(LOCK_FAIL_MSG)
@@ -304,7 +255,7 @@ impl Connection {
     ///
     /// [`flush`]: struct.Connection.html#method.flush
     pub fn send_message(&self, mut msg: Message) -> Result<u32> {
-        if !msg.fds().is_empty() && !self.0.cap_unix_fd() {
+        if !msg.fds().is_empty() && !self.0.cap_unix_fd {
             return Err(Error::Unsupported);
         }
 
@@ -315,7 +266,7 @@ impl Connection {
             Ok(())
         })?;
 
-        let mut conn = self.0.raw_conn_write();
+        let mut conn = self.0.raw_conn.write().expect(LOCK_FAIL_MSG);
         conn.enqueue_message(msg);
         // Swallow a potential WouldBLock error, but propagate the others
         if let Err(e) = conn.try_flush() {
@@ -338,7 +289,7 @@ impl Connection {
     ///
     /// If the connection is in blocking mode, this will return `Ok(())` and do nothing.
     pub fn flush(&self) -> Result<()> {
-        self.0.raw_conn_write().try_flush()?;
+        self.0.raw_conn.write().expect(LOCK_FAIL_MSG).try_flush()?;
         Ok(())
     }
 
@@ -403,7 +354,7 @@ impl Connection {
             let h = m.header()?;
 
             if h.reply_serial()? != Some(serial) {
-                let queue = self.0.in_queue_lock();
+                let queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
                 if queue.len() + tmp_queue.len() < *self.0.max_queued.read().expect(LOCK_FAIL_MSG) {
                     // We first push to a temporary queue as otherwise it'll create an infinite loop
                     // since subsequent `receive_message` call will pick up the message from the main
@@ -413,7 +364,11 @@ impl Connection {
 
                 continue;
             } else {
-                self.0.in_queue_lock().append(&mut tmp_queue);
+                self.0
+                    .incoming_queue
+                    .lock()
+                    .expect(LOCK_FAIL_MSG)
+                    .append(&mut tmp_queue);
             }
 
             match h.message_type()? {
@@ -529,7 +484,16 @@ impl Connection {
     /// [client hello]: ./fdo/struct.DBusProxy.html#method.hello
     /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
     pub fn new_authenticated_unix(auth: Authenticated<UnixStream>) -> Self {
-        Self(Arc::new(ConnectionCommon::new_authenticated(auth)))
+        Self(Arc::new(ConnectionInner {
+            raw_conn: RwLock::new(auth.conn),
+            server_guid: auth.server_guid,
+            cap_unix_fd: auth.cap_unix_fd,
+            serial: Mutex::new(1),
+            unique_name: OnceCell::new(),
+            incoming_queue: Mutex::new(vec![]),
+            max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
+            default_msg_handler: Mutex::new(None),
+        }))
     }
 
     /// Sets the unique name for this connection
@@ -542,7 +506,7 @@ impl Connection {
     ///
     /// [`new_authenticated_unix`]: struct.Connection.html#method.new_authenticated_unix
     pub fn set_unique_name(&self, name: String) -> std::result::Result<(), String> {
-        self.0.set_unique_name(name)
+        self.0.unique_name.set(name)
     }
 
     fn new_authenticated_unix_bus(auth: Authenticated<UnixStream>) -> Result<Self> {
@@ -563,7 +527,11 @@ impl Connection {
     }
 
     fn next_serial(&self) -> u32 {
-        self.0.next_serial()
+        let mut serial = self.0.serial.lock().expect(LOCK_FAIL_MSG);
+        let current = *serial;
+        *serial = current + 1;
+
+        current
     }
 }
 

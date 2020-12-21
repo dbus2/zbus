@@ -262,7 +262,7 @@ mod tests {
     }
 
     async fn test_basic_connection() -> Result<()> {
-        let connection = match ConnectionType::new_session().await? {
+        let mut connection = match ConnectionType::new_session().await? {
             ConnectionType::Unix(c) => c,
         };
 
@@ -441,7 +441,7 @@ mod tests {
     }
 
     async fn test_freedesktop_api() -> Result<()> {
-        let connection = match ConnectionType::new_session().await? {
+        let mut connection = match ConnectionType::new_session().await? {
             ConnectionType::Unix(c) => c,
         };
 
