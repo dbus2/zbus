@@ -56,11 +56,10 @@ fully-qualified domain names, in order to avoid potential conflicts.
 
 Please read the [D-Bus API Design Guidelines] carefully for other similar considerations.
 
-## 💡 Not yet async!
+## Asynchronous API
 
-We are working on improving zbus in various aspects. One of them is making zbus asynchronous, so
-read/write operations will not be potentially blocking your thread. Note that usually D-Bus messages
-are fairly small, and shouldn't block. Nevertheless, this is high in our priority list.
+At the moment, we only provide [low-level asynchronous API] but high-level asynchronous API will
+hopefully be added soon. It's very high on our priority.
 
 Onwards to implementation details & examples!
 
@@ -70,3 +69,4 @@ Onwards to implementation details & examples!
 [Basic types chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
 [unique name]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface
 [introspection interface]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-introspectable
+[low-level asynchronous API]: https://docs.rs/zbus/latest/zbus/azync/connection/struct.Connection.html
