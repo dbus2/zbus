@@ -66,6 +66,12 @@ struct ConnectionInner<S> {
 /// parts of your code. `Connection` also implements [`std::marker::Sync`] and[`std::marker::Send`]
 /// so you can send and share a connection instance across threads as well.
 ///
+/// NB: If you want to send and receive messages from multiple threads at the same time, it's
+/// usually better to create unique connections for each thread. Otherwise you can end up with
+/// deadlocks. For example, if one thread tries to send a message on a connection, while another is
+/// waiting to receive a message on the bus, the former will block until the latter receives a
+/// message.
+///
 /// Since there are times when important messages arrive between a method call message is sent and
 /// its reply is received, `Connection` keeps an internal queue of incoming messages so that these
 /// messages are not lost and subsequent calls to [`receive_message`] will retreive messages from
