@@ -27,6 +27,7 @@ const LOCK_FAIL_MSG: &str = "Failed to lock a mutex or read-write lock";
 struct ConnectionInner<S> {
     server_guid: Guid,
     cap_unix_fd: bool,
+    bus_conn: bool,
     unique_name: OnceCell<String>,
 
     raw_conn: RwLock<RawConnection<S>>,
@@ -490,16 +491,7 @@ impl Connection {
     /// [client hello]: ./fdo/struct.DBusProxy.html#method.hello
     /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
     pub fn new_authenticated_unix(auth: Authenticated<UnixStream>) -> Self {
-        Self(Arc::new(ConnectionInner {
-            raw_conn: RwLock::new(auth.conn),
-            server_guid: auth.server_guid,
-            cap_unix_fd: auth.cap_unix_fd,
-            serial: Mutex::new(1),
-            unique_name: OnceCell::new(),
-            incoming_queue: Mutex::new(vec![]),
-            max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
-            default_msg_handler: Mutex::new(None),
-        }))
+        Self::new_authenticated_unix_(auth, false)
     }
 
     /// Sets the unique name for this connection
@@ -515,8 +507,15 @@ impl Connection {
         self.0.unique_name.set(name)
     }
 
+    /// Checks if `self` is a connection to a message bus.
+    ///
+    /// This will return `false` for p2p connections.
+    pub fn is_bus(&self) -> bool {
+        self.0.bus_conn
+    }
+
     fn new_authenticated_unix_bus(auth: Authenticated<UnixStream>) -> Result<Self> {
-        let connection = Connection::new_authenticated_unix(auth);
+        let connection = Connection::new_authenticated_unix_(auth, true);
 
         // Now that the server has approved us, we must send the bus Hello, as per specs
         let name = fdo::DBusProxy::new(&connection)?
@@ -530,6 +529,20 @@ impl Connection {
             .expect("Attempted to set unique_name twice");
 
         Ok(connection)
+    }
+
+    fn new_authenticated_unix_(auth: Authenticated<UnixStream>, bus_conn: bool) -> Self {
+        Self(Arc::new(ConnectionInner {
+            raw_conn: RwLock::new(auth.conn),
+            server_guid: auth.server_guid,
+            cap_unix_fd: auth.cap_unix_fd,
+            bus_conn,
+            serial: Mutex::new(1),
+            unique_name: OnceCell::new(),
+            incoming_queue: Mutex::new(vec![]),
+            max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
+            default_msg_handler: Mutex::new(None),
+        }))
     }
 
     fn next_serial(&self) -> u32 {
