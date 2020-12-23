@@ -250,6 +250,41 @@ impl Connection {
         }
     }
 
+    /// Receive a specific message.
+    ///
+    /// This is the same as [`Self::receive_message`], except that it takes a predicate function that
+    /// decides if the message received should be returned by this method or not. Message received
+    /// during this call that are not returned by it, are pushed to the queue to be picked by the
+    /// susubsequent call to `receive_message`] or this method.
+    pub fn receive_specific<P>(&self, predicate: P) -> Result<Message>
+    where
+        P: Fn(&Message) -> Result<bool>,
+    {
+        let mut tmp_queue = vec![];
+
+        loop {
+            let msg = self.receive_message()?;
+
+            if predicate(&msg)? {
+                self.0
+                    .incoming_queue
+                    .lock()
+                    .expect(LOCK_FAIL_MSG)
+                    .append(&mut tmp_queue);
+
+                return Ok(msg);
+            } else {
+                let queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
+                if queue.len() + tmp_queue.len() < *self.0.max_queued.read().expect(LOCK_FAIL_MSG) {
+                    // We first push to a temporary queue as otherwise it'll create an infinite loop
+                    // since subsequent `receive_message` call will pick up the message from the main
+                    // queue.
+                    tmp_queue.push(msg);
+                }
+            }
+        }
+    }
+
     /// Send `msg` to the peer.
     ///
     /// The connection sets a unique serial number on the message before sending it off.
