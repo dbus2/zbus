@@ -159,10 +159,10 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
 fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> TokenStream {
     let doc = get_doc_attrs(&m.attrs);
     let args = m.sig.inputs.iter().filter_map(|arg| arg_ident(arg));
-    let sig = &m.sig;
+    let signature = &m.sig;
     quote! {
         #(#doc)*
-        pub #sig {
+        pub #signature {
             let reply = self.0.call(#method_name, &(#(#args),*))?;
             Ok(reply)
         }
@@ -171,19 +171,19 @@ fn gen_proxy_method_call(method_name: &str, m: &TraitItemMethod) -> TokenStream 
 
 fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> TokenStream {
     let doc = get_doc_attrs(&m.attrs);
-    let sig = &m.sig;
-    if sig.inputs.len() > 1 {
-        let value = arg_ident(sig.inputs.last().unwrap()).unwrap();
+    let signature = &m.sig;
+    if signature.inputs.len() > 1 {
+        let value = arg_ident(signature.inputs.last().unwrap()).unwrap();
         quote! {
             #(#doc)*
-            pub #sig {
+            pub #signature {
                 self.0.set_property(#property_name, #value)
             }
         }
     } else {
         quote! {
             #(#doc)*
-            pub #sig {
+            pub #signature {
                 self.0.get_property(#property_name)
             }
         }
