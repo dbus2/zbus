@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
-use quote::quote;
-use syn::{self, AttributeArgs, Ident, ItemTrait, NestedMeta, TraitItemMethod};
+use quote::{format_ident, quote};
+use syn::{self, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta, TraitItemMethod, Type};
 
 use crate::utils::*;
 
@@ -58,6 +58,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
 
             let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
             let is_property = attrs.iter().any(|x| x.is_property());
+            let is_signal = attrs.iter().any(|x| x.is_signal());
             let has_inputs = m.sig.inputs.len() > 1;
             let name = attrs
                 .iter()
@@ -75,6 +76,8 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 });
             let m = if is_property {
                 gen_proxy_property(&name, &m)
+            } else if is_signal {
+                gen_proxy_signal(&name, &method_name, &m)
             } else {
                 gen_proxy_method_call(&name, &m)
             };
@@ -186,6 +189,64 @@ fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> TokenStream {
             pub #signature {
                 self.0.get_property(#property_name)
             }
+        }
+    }
+}
+
+fn gen_proxy_signal(signal_name: &str, snake_case_name: &str, m: &TraitItemMethod) -> TokenStream {
+    let zbus = get_zbus_crate_ident();
+    let doc = get_doc_attrs(&m.attrs);
+    let connect_method = format_ident!("connect_{}", snake_case_name);
+    let disconnect_method = Ident::new(
+        &format!("disconnect_{}", snake_case_name),
+        Span::call_site(),
+    );
+    let input_types: Vec<Box<Type>> = m
+        .sig
+        .inputs
+        .iter()
+        .filter_map(|arg| match arg {
+            FnArg::Typed(p) => Some(p.ty.clone()),
+            _ => None,
+        })
+        .collect();
+    let args: Vec<Ident> = m
+        .sig
+        .inputs
+        .iter()
+        .filter_map(|arg| arg_ident(arg).cloned())
+        .collect();
+    let connect_gen_doc = format!(
+        "Connect the handler for the `{}` signal. This is a convenient wrapper around \
+        [`zbus::Proxy::connect_signal`](https://docs.rs/zbus/latest/zbus/struct.Proxy.html\
+        #method.connect_signal). ",
+        signal_name,
+    );
+    let disconnect_gen_doc = format!(
+        "Disconnected the handler (if any) for the `{}` signal. This is a convenient wrapper \
+        around [`zbus::Proxy::disconnect_signal`]\
+        (https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.disconnect_signal). ",
+        signal_name,
+    );
+
+    quote! {
+        #[doc = #connect_gen_doc]
+        #(#doc)*
+        pub fn #connect_method<H>(&self, mut handler: H) -> ::#zbus::fdo::Result<()>
+        where
+            H: FnMut(#(#input_types),*) -> ::zbus::Result<()> + Send + 'static,
+        {
+            self.0.connect_signal(#signal_name, move |m| {
+                let (#(#args),*) = m.body().expect("Incorrect signal signature");
+
+                handler(#(#args),*)
+            })
+        }
+
+        #[doc = #disconnect_gen_doc]
+        #(#doc)*
+        pub fn #disconnect_method(&self) -> ::#zbus::fdo::Result<bool> {
+            self.0.disconnect_signal(#signal_name)
         }
     }
 }

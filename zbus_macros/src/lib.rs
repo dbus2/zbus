@@ -26,7 +26,11 @@ mod utils;
 /// * `property` - expose the method as a property. If the method takes an argument, it must be a
 ///   setter, with a `set_` prefix. Otherwise, it's a getter.
 ///
-/// * `signal` - not yet implemented.
+/// * `signal` - declare a signal just like a D-Bus method. The macro will provide a method to
+///   register and deregister a handler for the signal, whose signature must match that of the
+///   signature declaration.
+///
+///   NB: Any doc comments provided shall be appended to the ones added by the macro.
 ///
 /// (the expanded `impl` also provides an `introspect()` method, for convenience)
 ///
@@ -51,12 +55,25 @@ mod utils;
 ///
 ///     #[dbus_proxy(property)]
 ///     fn set_a_property(&self, a_property: &str) -> fdo::Result<()>;
+///
+///     #[dbus_proxy(signal)]
+///     fn some_signal(&self, arg1: &str, arg2: u32) -> fdo::Result<()>;
 /// };
 ///
 /// let connection = Connection::new_session()?;
 /// let proxy = SomeIfaceProxy::new(&connection)?;
 /// let _ = proxy.do_this("foo", 32, &Value::new(true));
 /// let _ = proxy.set_a_property("val");
+///
+/// proxy.connect_some_signal(|s, u| {
+///     println!("arg1: {}, arg2: {}", s, u);
+///
+///     Ok(())
+/// })?;
+///
+/// // You'll want to make at least a call to `handle_next_signal` before disconnecting the signal.
+/// assert!(proxy.disconnect_some_signal()?);
+/// assert!(!proxy.disconnect_some_signal()?);
 ///
 ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
