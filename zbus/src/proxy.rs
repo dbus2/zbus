@@ -97,6 +97,26 @@ impl<'a> Proxy<'a> {
         })
     }
 
+    /// Get a reference to the associated connection.
+    pub fn connection(&self) -> &Connection {
+        &self.conn
+    }
+
+    /// Get a reference to the destination service name.
+    pub fn destination(&self) -> &str {
+        &self.destination
+    }
+
+    /// Get a reference to the object path.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// Get a reference to the interface.
+    pub fn interface(&self) -> &str {
+        &self.interface
+    }
+
     /// Introspect the associated object, and return the XML description.
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
