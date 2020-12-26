@@ -445,6 +445,9 @@ impl From<zbus::MessageError> for Error {
                 Self::InconsistentMessage("invalid message field".to_string())
             }
             zbus::MessageError::Variant(e) => Self::InconsistentMessage(e.to_string()),
+            zbus::MessageError::MissingField => {
+                Self::InconsistentMessage("Required message field missing".to_string())
+            }
         }
     }
 }

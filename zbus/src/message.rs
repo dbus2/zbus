@@ -41,6 +41,8 @@ pub enum MessageError {
     InvalidField,
     /// Data serializing/deserializing error.
     Variant(VariantError),
+    /// A required field is missing in the headers.
+    MissingField,
 }
 
 impl PartialEq for MessageError {
@@ -80,6 +82,7 @@ impl fmt::Display for MessageError {
             MessageError::NoBodySignature => write!(f, "missing body signature"),
             MessageError::UnmatchedBodySignature => write!(f, "unmatched body signature"),
             MessageError::Variant(e) => write!(f, "{}", e),
+            MessageError::MissingField => write!(f, "A required field is missing"),
         }
     }
 }
