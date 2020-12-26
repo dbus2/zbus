@@ -70,7 +70,7 @@ impl error::Error for MessageError {
 }
 
 impl fmt::Display for MessageError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             MessageError::InsufficientData => write!(f, "insufficient data"),
             MessageError::Io(e) => e.fmt(f),
@@ -394,7 +394,7 @@ impl Message {
     /// syntax), D-Bus does not. Since this method gives you the signature expected on the wire by
     /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
     /// multiple arguments.
-    pub fn body_signature(&self) -> Result<Signature, MessageError> {
+    pub fn body_signature<'b, 's: 'b>(&'s self) -> Result<Signature<'b>, MessageError> {
         match self
             .header()?
             .into_fields()
@@ -425,12 +425,12 @@ impl Message {
     }
 
     /// Deserialize the header.
-    pub fn header(&self) -> Result<MessageHeader, MessageError> {
+    pub fn header<'h, 'm: 'h>(&'m self) -> Result<MessageHeader<'h>, MessageError> {
         zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
     }
 
     /// Deserialize the fields.
-    pub fn fields(&self) -> Result<MessageFields, MessageError> {
+    pub fn fields<'f, 'm: 'f>(&'m self) -> Result<MessageFields<'f>, MessageError> {
         let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
         zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt)
             .map_err(MessageError::from)
