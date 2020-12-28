@@ -164,6 +164,9 @@ pub use connection::*;
 mod proxy;
 pub use proxy::*;
 
+mod signal_receiver;
+pub use signal_receiver::*;
+
 mod owned_fd;
 pub use owned_fd::*;
 

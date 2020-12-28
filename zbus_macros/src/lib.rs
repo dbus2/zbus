@@ -82,6 +82,8 @@ mod utils;
 ///
 /// [`zbus_polkit`]: https://docs.rs/zbus_polkit/1.0.0/zbus_polkit/policykit1/index.html
 /// [`Proxy`]: https://docs.rs/zbus/1.0.0/zbus/struct.Proxy.html
+/// [`zbus::SignalReceiver::receive_for`]:
+/// https://docs.rs/zbus/1.5.0/zbus/struct.SignalReceiver.html#method.receive_for
 #[proc_macro_attribute]
 pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
