@@ -156,6 +156,12 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 &self.0
             }
         }
+
+        impl<'c> std::ops::DerefMut for #proxy_name<'c> {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
     }
 }
 
