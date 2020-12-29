@@ -162,6 +162,18 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 &mut self.0
             }
         }
+
+        impl<'c> std::convert::AsRef<::#zbus::Proxy<'c>> for #proxy_name<'c> {
+            fn as_ref(&self) -> &::#zbus::Proxy<'c> {
+                &*self
+            }
+        }
+
+        impl<'c> std::convert::AsMut<::#zbus::Proxy<'c>> for #proxy_name<'c> {
+            fn as_mut(&mut self) -> &mut ::#zbus::Proxy<'c> {
+                &mut *self
+            }
+        }
     }
 }
 
