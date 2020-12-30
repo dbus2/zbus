@@ -231,10 +231,10 @@ trait Client {
     fn start(&self) -> zbus::Result<()>;
     fn stop(&self) -> zbus::Result<()>;
 
-#[dbus_proxy(property)]
+    #[dbus_proxy(property)]
     fn set_desktop_id(&mut self, id: &str) -> fdo::Result<()>;
 
-#[dbus_proxy(signal)]
+    #[dbus_proxy(signal)]
     fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> fdo::Result<()>;
 }
 
@@ -243,9 +243,9 @@ trait Client {
     interface = "org.freedesktop.GeoClue2.Location"
 )]
 trait Location {
-#[dbus_proxy(property)]
+    #[dbus_proxy(property)]
     fn latitude(&self) -> fdo::Result<f64>;
-#[dbus_proxy(property)]
+    #[dbus_proxy(property)]
     fn longitude(&self) -> fdo::Result<f64>;
 }
 
