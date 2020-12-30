@@ -82,12 +82,12 @@ impl<'a> Maybe<'a> {
     }
 
     /// Get the signature of `Maybe`.
-    pub fn full_signature(&self) -> &Signature {
+    pub fn full_signature(&self) -> &Signature<'_> {
         &self.signature
     }
 
     /// Get the signature of the potential value in the `Maybe`.
-    pub fn value_signature(&self) -> &Signature {
+    pub fn value_signature(&self) -> &Signature<'_> {
         &self.value_signature
     }
 
@@ -140,6 +140,6 @@ impl<'a> Serialize for Maybe<'a> {
     }
 }
 
-fn create_signature(value_signature: &Signature) -> Signature<'static> {
+fn create_signature(value_signature: &Signature<'_>) -> Signature<'static> {
     Signature::from_string_unchecked(format!("m{}", value_signature))
 }

@@ -126,7 +126,7 @@ impl<'a> Structure<'a> {
     }
 
     /// Get the signature of this `Structure`.
-    pub fn full_signature(&self) -> &Signature {
+    pub fn full_signature(&self) -> &Signature<'_> {
         &self.signature
     }
 

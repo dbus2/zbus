@@ -27,7 +27,7 @@ impl<'s> SignatureParser<'s> {
         }
     }
 
-    pub fn signature(&self) -> Signature {
+    pub fn signature(&self) -> Signature<'_> {
         self.signature.slice(self.pos..self.end)
     }
 
@@ -108,7 +108,7 @@ impl<'s> SignatureParser<'s> {
     }
 
     /// Get the next signature and increment the position.
-    pub fn parse_next_signature(&mut self) -> Result<Signature> {
+    pub fn parse_next_signature(&mut self) -> Result<Signature<'_>> {
         let len = &self.next_signature()?.len();
         let pos = self.pos;
         self.pos += len;
@@ -125,7 +125,7 @@ impl<'s> SignatureParser<'s> {
     }
 
     /// Get the next signature but don't increment the position.
-    pub fn next_signature(&self) -> Result<Signature> {
+    pub fn next_signature(&self) -> Result<Signature<'_>> {
         match self
             .signature()
             .as_bytes()
@@ -162,7 +162,7 @@ impl<'s> SignatureParser<'s> {
     fn next_single_child_type_container_signature(
         &self,
         expected_sig_prefix: char,
-    ) -> Result<Signature> {
+    ) -> Result<Signature<'_>> {
         let signature = self.signature();
 
         if signature.len() < 2 {
@@ -192,16 +192,16 @@ impl<'s> SignatureParser<'s> {
         Ok(self.signature_slice(0, child_len + 1))
     }
 
-    fn next_array_signature(&self) -> Result<Signature> {
+    fn next_array_signature(&self) -> Result<Signature<'_>> {
         self.next_single_child_type_container_signature(ARRAY_SIGNATURE_CHAR)
     }
 
     #[cfg(feature = "gvariant")]
-    fn next_maybe_signature(&self) -> Result<Signature> {
+    fn next_maybe_signature(&self) -> Result<Signature<'_>> {
         self.next_single_child_type_container_signature(MAYBE_SIGNATURE_CHAR)
     }
 
-    fn next_structure_signature(&self) -> Result<Signature> {
+    fn next_structure_signature(&self) -> Result<Signature<'_>> {
         let signature = self.signature();
 
         if signature.len() < 2 {
@@ -250,7 +250,7 @@ impl<'s> SignatureParser<'s> {
         Ok(self.signature_slice(0, i + 1))
     }
 
-    fn next_dict_entry_signature(&self) -> Result<Signature> {
+    fn next_dict_entry_signature(&self) -> Result<Signature<'_>> {
         let signature = self.signature();
 
         if signature.len() < 4 {
@@ -282,7 +282,7 @@ impl<'s> SignatureParser<'s> {
         Ok(self.signature_slice(0, value_len + 3))
     }
 
-    fn signature_slice(&self, idx: usize, end: usize) -> Signature {
+    fn signature_slice(&self, idx: usize, end: usize) -> Signature<'_> {
         self.signature.slice(self.pos + idx..self.pos + end)
     }
 }

@@ -182,7 +182,7 @@ impl<'a> Value<'a> {
     }
 
     /// Get the signature of the enclosed value.
-    pub fn value_signature(&self) -> Signature {
+    pub fn value_signature(&self) -> Signature<'_> {
         match self {
             Value::U8(_) => u8::signature(),
             Value::Bool(_) => bool::signature(),
@@ -388,7 +388,7 @@ struct ValueVisitor;
 impl<'de> Visitor<'de> for ValueVisitor {
     type Value = Value<'de>;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("a Value")
     }
 
@@ -397,10 +397,10 @@ impl<'de> Visitor<'de> for ValueVisitor {
     where
         V: SeqAccess<'de>,
     {
-        let signature = visitor.next_element::<Signature>()?.ok_or_else(|| {
+        let signature = visitor.next_element::<Signature<'_>>()?.ok_or_else(|| {
             Error::invalid_value(Unexpected::Other("nothing"), &"a Value signature")
         })?;
-        let seed = ValueSeed::<Value> {
+        let seed = ValueSeed::<Value<'_>> {
             signature,
             phantom: PhantomData,
         };
@@ -414,12 +414,14 @@ impl<'de> Visitor<'de> for ValueVisitor {
     where
         V: MapAccess<'de>,
     {
-        let (_, signature) = visitor.next_entry::<&str, Signature>()?.ok_or_else(|| {
-            Error::invalid_value(Unexpected::Other("nothing"), &"a Value signature")
-        })?;
+        let (_, signature) = visitor
+            .next_entry::<&str, Signature<'_>>()?
+            .ok_or_else(|| {
+                Error::invalid_value(Unexpected::Other("nothing"), &"a Value signature")
+            })?;
         let _ = visitor.next_key::<&str>()?;
 
-        let seed = ValueSeed::<Value> {
+        let seed = ValueSeed::<Value<'_>> {
             signature,
             phantom: PhantomData,
         };
@@ -444,7 +446,7 @@ where
         let element_signature = self.signature.slice(1..);
         let mut array = Array::new_full_signature(self.signature.clone());
 
-        while let Some(elem) = visitor.next_element_seed(ValueSeed::<Value> {
+        while let Some(elem) = visitor.next_element_seed(ValueSeed::<Value<'_>> {
             signature: element_signature.clone(),
             phantom: PhantomData,
         })? {
@@ -470,7 +472,7 @@ where
             let field_signature = fields_signature.slice(0..len);
             i += field_signature.len();
 
-            if let Some(field) = visitor.next_element_seed(ValueSeed::<Value> {
+            if let Some(field) = visitor.next_element_seed(ValueSeed::<Value<'_>> {
                 signature: field_signature,
                 phantom: PhantomData,
             })? {
@@ -539,7 +541,7 @@ where
 {
     type Value = Value<'de>;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("a Value value")
     }
 
@@ -613,11 +615,11 @@ where
         let mut dict = Dict::new_full_signature(self.signature.clone());
 
         while let Some((key, value)) = visitor.next_entry_seed(
-            ValueSeed::<Value> {
+            ValueSeed::<Value<'_>> {
                 signature: key_signature.clone(),
                 phantom: PhantomData,
             },
-            ValueSeed::<Value> {
+            ValueSeed::<Value<'_>> {
                 signature: value_signature.clone(),
                 phantom: PhantomData,
             },

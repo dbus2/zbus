@@ -152,7 +152,7 @@ fn parse_signal_args(args: &[&Arg]) -> String {
 fn to_rust_type(ty: &str, input: bool) -> String {
     // can't haz recursive closure, yet
     fn iter_to_rust_type(
-        it: &mut std::iter::Peekable<std::slice::Iter<u8>>,
+        it: &mut std::iter::Peekable<std::slice::Iter<'_, u8>>,
         input: bool,
         as_ref: bool,
     ) -> String {

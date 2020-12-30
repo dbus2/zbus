@@ -18,7 +18,7 @@ pub struct Array<'a> {
 
 impl<'a> Array<'a> {
     /// Create a new empty `Array`, given the signature of the elements.
-    pub fn new(element_signature: Signature) -> Array {
+    pub fn new(element_signature: Signature<'_>) -> Array<'_> {
         let signature = create_signature(&element_signature);
         Array {
             element_signature,
@@ -27,7 +27,7 @@ impl<'a> Array<'a> {
         }
     }
 
-    pub(crate) fn new_full_signature(signature: Signature) -> Array {
+    pub(crate) fn new_full_signature(signature: Signature<'_>) -> Array<'_> {
         let element_signature = signature.slice(1..);
         Array {
             element_signature,
@@ -74,12 +74,12 @@ impl<'a> Array<'a> {
     }
 
     /// Get the signature of this `Array`.
-    pub fn full_signature(&self) -> &Signature {
+    pub fn full_signature(&self) -> &Signature<'_> {
         &self.signature
     }
 
     /// Get the signature of the elements in the `Array`.
-    pub fn element_signature(&self) -> &Signature {
+    pub fn element_signature(&self) -> &Signature<'_> {
         &self.element_signature
     }
 
@@ -179,6 +179,6 @@ impl<'a> Serialize for Array<'a> {
     }
 }
 
-fn create_signature(element_signature: &Signature) -> Signature<'static> {
+fn create_signature(element_signature: &Signature<'_>) -> Signature<'static> {
     Signature::from_string_unchecked(format!("a{}", element_signature))
 }

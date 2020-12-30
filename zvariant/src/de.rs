@@ -126,7 +126,7 @@ where
 pub fn from_slice_for_signature<'d, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
     ctxt: EncodingContext<B>,
-    signature: &Signature,
+    signature: &Signature<'_>,
 ) -> Result<T>
 where
     B: byteorder::ByteOrder,
@@ -148,7 +148,7 @@ pub fn from_slice_fds_for_signature<'d, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
     fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
-    signature: &Signature,
+    signature: &Signature<'_>,
 ) -> Result<T>
 where
     B: byteorder::ByteOrder,

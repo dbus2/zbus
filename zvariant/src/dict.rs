@@ -105,7 +105,7 @@ impl<'k, 'v> Dict<'k, 'v> {
     }
 
     /// Get the signature of this `Dict`.
-    pub fn full_signature(&self) -> &Signature {
+    pub fn full_signature(&self) -> &Signature<'_> {
         &self.signature
     }
 
@@ -231,6 +231,9 @@ impl<'k, 'v> Serialize for DictEntry<'k, 'v> {
     }
 }
 
-fn create_signature(key_signature: &Signature, value_signature: &Signature) -> Signature<'static> {
+fn create_signature(
+    key_signature: &Signature<'_>,
+    value_signature: &Signature<'_>,
+) -> Signature<'static> {
     Signature::from_string_unchecked(format!("a{{{}{}}}", key_signature, value_signature,))
 }

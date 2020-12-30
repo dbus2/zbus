@@ -49,7 +49,7 @@ struct DeserializeValueVisitor<T>(PhantomData<T>);
 impl<'de, T: Type + Deserialize<'de>> Visitor<'de> for DeserializeValueVisitor<T> {
     type Value = T;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("zvariant::Value")
     }
 
@@ -57,7 +57,7 @@ impl<'de, T: Type + Deserialize<'de>> Visitor<'de> for DeserializeValueVisitor<T
     where
         V: SeqAccess<'de>,
     {
-        let sig: Signature = seq
+        let sig: Signature<'_> = seq
             .next_element()?
             .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
         if sig != T::signature() {

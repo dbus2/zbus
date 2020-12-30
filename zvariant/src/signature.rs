@@ -281,7 +281,7 @@ impl<'a> std::ops::Deref for Signature<'a> {
 }
 
 impl<'a, 'b> PartialEq<Signature<'a>> for Signature<'b> {
-    fn eq(&self, other: &Signature) -> bool {
+    fn eq(&self, other: &Signature<'_>) -> bool {
         self.as_bytes() == other.as_bytes()
     }
 }
@@ -323,7 +323,7 @@ struct SignatureVisitor;
 impl<'de> Visitor<'de> for SignatureVisitor {
     type Value = Signature<'de>;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("a Signature")
     }
 
