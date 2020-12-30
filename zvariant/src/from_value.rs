@@ -40,7 +40,7 @@ macro_rules! value_try_from_ref_clone {
         impl<'a> TryFrom<&'a Value<'a>> for $to {
             type Error = Error;
 
-            fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
+            fn try_from(value: &'a Value<'_>) -> Result<Self, Self::Error> {
                 if let Value::$kind(value) = value {
                     Ok(value.clone().into())
                 } else {

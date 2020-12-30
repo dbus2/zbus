@@ -34,7 +34,7 @@ pub trait Interface: Any {
     fn get_all(&self) -> HashMap<String, OwnedValue>;
 
     /// Set a property value. Returns `None` if the property doesn't exist.
-    fn set(&mut self, property_name: &str, value: &Value) -> Option<fdo::Result<()>>;
+    fn set(&mut self, property_name: &str, value: &Value<'_>) -> Option<fdo::Result<()>>;
 
     /// Call a `&self` method. Returns `None` if the method doesn't exist.
     fn call(&self, connection: &Connection, msg: &Message, name: &str) -> Option<Result<u32>>;
@@ -150,7 +150,7 @@ impl Properties {
     fn properties_changed(
         &self,
         interface_name: &str,
-        changed_properties: &HashMap<&str, &Value>,
+        changed_properties: &HashMap<&str, &Value<'_>>,
         invalidated_properties: &[&str],
     ) -> Result<()>;
 }
@@ -369,7 +369,7 @@ impl<'a> ObjectServer<'a> {
     }
 
     // Get the Node at path.
-    fn get_node(&self, path: &ObjectPath) -> Option<&Node> {
+    fn get_node(&self, path: &ObjectPath<'_>) -> Option<&Node> {
         let mut node = &self.root;
         let mut node_path = String::new();
 
@@ -388,7 +388,7 @@ impl<'a> ObjectServer<'a> {
     }
 
     // Get the Node at path. Optionally create one if it doesn't exist.
-    fn get_node_mut(&mut self, path: &ObjectPath, create: bool) -> Option<&mut Node> {
+    fn get_node_mut(&mut self, path: &ObjectPath<'_>, create: bool) -> Option<&mut Node> {
         let mut node = &mut self.root;
         let mut node_path = String::new();
 
@@ -417,7 +417,7 @@ impl<'a> ObjectServer<'a> {
     /// If the interface already exists at this path, returns false.
     ///
     /// [`Interface`]: trait.Interface.html
-    pub fn at<I>(&mut self, path: &ObjectPath, iface: I) -> Result<bool>
+    pub fn at<I>(&mut self, path: &ObjectPath<'_>, iface: I) -> Result<bool>
     where
         I: Interface,
     {
@@ -430,7 +430,7 @@ impl<'a> ObjectServer<'a> {
     /// Returns whether the object was destroyed.
     ///
     /// [`Interface`]: trait.Interface.html
-    pub fn remove<I>(&mut self, path: &ObjectPath) -> Result<bool>
+    pub fn remove<I>(&mut self, path: &ObjectPath<'_>) -> Result<bool>
     where
         I: Interface,
     {
@@ -484,7 +484,7 @@ impl<'a> ObjectServer<'a> {
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn with<F, I>(&self, path: &ObjectPath, func: F) -> Result<()>
+    pub fn with<F, I>(&self, path: &ObjectPath<'_>, func: F) -> Result<()>
     where
         F: Fn(&I) -> Result<()>,
         I: Interface,
@@ -525,7 +525,7 @@ impl<'a> ObjectServer<'a> {
 
     fn dispatch_method_call_try(
         &mut self,
-        msg_header: &MessageHeader,
+        msg_header: &MessageHeader<'_>,
         msg: &Message,
     ) -> fdo::Result<Result<u32>> {
         let conn = self.conn.clone();
@@ -567,7 +567,11 @@ impl<'a> ObjectServer<'a> {
         })
     }
 
-    fn dispatch_method_call(&mut self, msg_header: &MessageHeader, msg: &Message) -> Result<u32> {
+    fn dispatch_method_call(
+        &mut self,
+        msg_header: &MessageHeader<'_>,
+        msg: &Message,
+    ) -> Result<u32> {
         match self.dispatch_method_call_try(msg_header, msg) {
             Err(e) => e.reply(&self.conn, msg),
             Ok(r) => r,

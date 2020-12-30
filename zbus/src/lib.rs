@@ -1,3 +1,4 @@
+#![deny(rust_2018_idioms)]
 #![doc(
     html_logo_url = "https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
 )]
@@ -599,7 +600,7 @@ mod tests {
             fn open_session(
                 &self,
                 _algorithm: &str,
-                input: Value,
+                input: Value<'_>,
             ) -> zbus::fdo::Result<(OwnedValue, OwnedObjectPath)> {
                 *self.0.borrow_mut() = true;
                 Ok((
@@ -624,7 +625,7 @@ mod tests {
                 fn open_session(
                     &self,
                     algorithm: &str,
-                    input: &zvariant::Value,
+                    input: &zvariant::Value<'_>,
                 ) -> zbus::Result<(zvariant::OwnedValue, zvariant::OwnedObjectPath)>;
             }
 

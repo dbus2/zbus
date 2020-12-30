@@ -19,7 +19,7 @@ impl Default for EncodingFormat {
 }
 
 impl std::fmt::Display for EncodingFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             EncodingFormat::DBus => write!(f, "D-Bus"),
             #[cfg(feature = "gvariant")]

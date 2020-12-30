@@ -123,7 +123,7 @@ impl<'f> Serialize for MessageField<'f> {
     where
         S: Serializer,
     {
-        let tuple: (MessageFieldCode, Value) = match self {
+        let tuple: (MessageFieldCode, Value<'_>) = match self {
             MessageField::Path(value) => (MessageFieldCode::Path, value.clone().into()),
             MessageField::Interface(value) => (MessageFieldCode::Interface, value.as_str().into()),
             MessageField::Member(value) => (MessageFieldCode::Member, value.as_str().into()),
@@ -148,7 +148,7 @@ impl<'de: 'f, 'f> Deserialize<'de> for MessageField<'f> {
     where
         D: Deserializer<'de>,
     {
-        let (code, value) = <(MessageFieldCode, Value)>::deserialize(deserializer)?;
+        let (code, value) = <(MessageFieldCode, Value<'_>)>::deserialize(deserializer)?;
         Ok(match code {
             MessageFieldCode::Path => {
                 MessageField::Path(ObjectPath::try_from(value).map_err(D::Error::custom)?)

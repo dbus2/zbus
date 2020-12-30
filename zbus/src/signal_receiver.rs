@@ -64,7 +64,7 @@ impl<'r, 'p> SignalReceiver<'r, 'p> {
     }
 
     /// Get a iterator for all the proxies in this receiver.
-    pub fn proxies(&self) -> impl Iterator<Item = &&Proxy> {
+    pub fn proxies(&self) -> impl Iterator<Item = &&Proxy<'_>> {
         self.proxies.values()
     }
 

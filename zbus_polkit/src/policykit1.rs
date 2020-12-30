@@ -188,7 +188,7 @@ impl Subject {
     /// # Arguments
     ///
     /// * `message_header` - The header of the message which caused an authentication to be necessary.
-    pub fn new_for_message_header(message_header: &zbus::MessageHeader) -> Result<Self, Error> {
+    pub fn new_for_message_header(message_header: &zbus::MessageHeader<'_>) -> Result<Self, Error> {
         let mut subject_details = HashMap::new();
         match message_header.sender() {
             Ok(Some(sender)) => {
@@ -278,7 +278,11 @@ trait Authority {
     /// use by a privileged helper process internal to polkit. This method will fail unless a
     /// sufficiently privileged +caller invokes it. Deprecated in favor of
     /// `AuthenticationAgentResponse2()`.
-    fn authentication_agent_response(&self, cookie: &str, identity: &Identity) -> zbus::Result<()>;
+    fn authentication_agent_response(
+        &self,
+        cookie: &str,
+        identity: &Identity<'_>,
+    ) -> zbus::Result<()>;
 
     /// Method for authentication agents to invoke on successful authentication, intended only for
     /// use by a privileged helper process internal to polkit. This method will fail unless a
@@ -288,7 +292,7 @@ trait Authority {
         &self,
         uid: u32,
         cookie: &str,
-        identity: &Identity,
+        identity: &Identity<'_>,
     ) -> zbus::Result<()>;
 
     /// Cancels an authorization check.
@@ -387,7 +391,7 @@ trait Authority {
         subject: &Subject,
         locale: &str,
         object_path: &str,
-        options: std::collections::HashMap<&str, zvariant::Value>,
+        options: std::collections::HashMap<&str, zvariant::Value<'_>>,
     ) -> zbus::Result<()>;
 
     /// Revokes all temporary authorizations that applies to `id`.

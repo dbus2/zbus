@@ -191,7 +191,7 @@ where
 pub fn to_writer_for_signature<B, W, T: ?Sized>(
     writer: &mut W,
     ctxt: EncodingContext<B>,
-    signature: &Signature,
+    signature: &Signature<'_>,
     value: &T,
 ) -> Result<usize>
 where
@@ -220,7 +220,7 @@ where
 pub fn to_writer_fds_for_signature<B, W, T: ?Sized>(
     writer: &mut W,
     ctxt: EncodingContext<B>,
-    signature: &Signature,
+    signature: &Signature<'_>,
     value: &T,
 ) -> Result<(usize, Vec<RawFd>)>
 where
@@ -260,7 +260,7 @@ where
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html#examples
 pub fn to_bytes_for_signature<B, T: ?Sized>(
     ctxt: EncodingContext<B>,
-    signature: &Signature,
+    signature: &Signature<'_>,
     value: &T,
 ) -> Result<Vec<u8>>
 where
@@ -288,7 +288,7 @@ where
 /// [`Type`]: trait.Type.html
 pub fn to_bytes_fds_for_signature<B, T: ?Sized>(
     ctxt: EncodingContext<B>,
-    signature: &Signature,
+    signature: &Signature<'_>,
     value: &T,
 ) -> Result<(Vec<u8>, Vec<RawFd>)>
 where

@@ -572,7 +572,10 @@ fn get_property_type(output: &ReturnType) -> syn::Result<&Type> {
     }
 }
 
-fn introspect_add_properties(introspect: &mut TokenStream, properties: HashMap<String, Property>) {
+fn introspect_add_properties(
+    introspect: &mut TokenStream,
+    properties: HashMap<String, Property<'_>>,
+) {
     for (name, prop) in properties {
         let access = if prop.read && prop.write {
             "readwrite"

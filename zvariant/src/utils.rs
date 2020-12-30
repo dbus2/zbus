@@ -72,7 +72,7 @@ pub(crate) fn f64_to_f32(value: f64) -> f32 {
 }
 
 // `signature` must be **one** complete and correct signature. Expect panics otherwise!
-pub(crate) fn alignment_for_signature(signature: &Signature, format: EncodingFormat) -> usize {
+pub(crate) fn alignment_for_signature(signature: &Signature<'_>, format: EncodingFormat) -> usize {
     match signature
         .as_bytes()
         .first()
@@ -158,7 +158,7 @@ macro_rules! check_child_value_signature {
 }
 
 fn alignment_for_single_child_type_signature(
-    #[allow(unused)] signature: &Signature,
+    #[allow(unused)] signature: &Signature<'_>,
     format: EncodingFormat,
     dbus_align: usize,
 ) -> usize {
@@ -173,17 +173,17 @@ fn alignment_for_single_child_type_signature(
     }
 }
 
-fn alignment_for_array_signature(signature: &Signature, format: EncodingFormat) -> usize {
+fn alignment_for_array_signature(signature: &Signature<'_>, format: EncodingFormat) -> usize {
     alignment_for_single_child_type_signature(signature, format, ARRAY_ALIGNMENT_DBUS)
 }
 
 #[cfg(feature = "gvariant")]
-fn alignment_for_maybe_signature(signature: &Signature, format: EncodingFormat) -> usize {
+fn alignment_for_maybe_signature(signature: &Signature<'_>, format: EncodingFormat) -> usize {
     alignment_for_single_child_type_signature(signature, format, 1)
 }
 
 fn alignment_for_struct_signature(
-    #[allow(unused)] signature: &Signature,
+    #[allow(unused)] signature: &Signature<'_>,
     format: EncodingFormat,
 ) -> usize {
     match format {
@@ -216,7 +216,7 @@ fn alignment_for_struct_signature(
 }
 
 fn alignment_for_dict_entry_signature(
-    #[allow(unused)] signature: &Signature,
+    #[allow(unused)] signature: &Signature<'_>,
     format: EncodingFormat,
 ) -> usize {
     match format {

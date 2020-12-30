@@ -1,10 +1,9 @@
+#![deny(rust_2018_idioms)]
 #![doc(
     html_logo_url = "https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
 )]
 
 //! This crate provides derive macros helpers for zvariant.
-
-extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use syn::{self, DeriveInput};
