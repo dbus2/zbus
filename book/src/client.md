@@ -204,6 +204,86 @@ Environment variables:
   ...
 ```
 
+### Signals
+
+Signals are like methods, except they don't expect a reply. They are typically emitted by services
+to notify interested peers of any changes to the state of the service. zbus provides you with an API
+to register signal handler functions, and to receive and call them.
+
+Let's look at this API in action, with an example where we get our location from
+[Geoclue](https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md):
+
+```rust,no_run
+use zbus::{Connection, dbus_proxy, fdo};
+use zvariant::{ObjectPath, OwnedObjectPath};
+
+#[dbus_proxy(
+    default_service = "org.freedesktop.GeoClue2",
+    interface = "org.freedesktop.GeoClue2.Manager",
+    default_path = "/org/freedesktop/GeoClue2/Manager"
+)]
+trait Manager {
+    fn get_client(&self) -> zbus::Result<OwnedObjectPath>;
+}
+
+#[dbus_proxy(interface = "org.freedesktop.GeoClue2.Client")]
+trait Client {
+    fn start(&self) -> zbus::Result<()>;
+    fn stop(&self) -> zbus::Result<()>;
+
+#[dbus_proxy(property)]
+    fn set_desktop_id(&mut self, id: &str) -> fdo::Result<()>;
+
+#[dbus_proxy(signal)]
+    fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> fdo::Result<()>;
+}
+
+#[dbus_proxy(
+    default_service = "org.freedesktop.GeoClue2",
+    interface = "org.freedesktop.GeoClue2.Location"
+)]
+trait Location {
+#[dbus_proxy(property)]
+    fn latitude(&self) -> fdo::Result<f64>;
+#[dbus_proxy(property)]
+    fn longitude(&self) -> fdo::Result<f64>;
+}
+
+let conn = Connection::new_system().unwrap();
+let manager = ManagerProxy::new(&conn).unwrap();
+let client_path = manager.get_client().unwrap();
+let mut client =
+    ClientProxy::new_for(&conn, "org.freedesktop.GeoClue2", &client_path).unwrap();
+// Gotta do this, sorry!
+client.set_desktop_id("org.freedesktop.zbus").unwrap();
+
+client.connect_location_updated(move |_old, new| {
+    let location = LocationProxy::new_for(
+        &conn,
+        "org.freedesktop.GeoClue2",
+        &new,
+    )?;
+    println!(
+        "Latitude: {}\nLongitude: {}",
+        location.latitude().unwrap(),
+        location.longitude().unwrap(),
+    );
+
+    Ok(())
+}).unwrap();
+
+client.start().unwrap();
+
+// Wait till there is a signal that was handled.
+while client.next_signal().unwrap().is_some() {}
+```
+
+While the Geoclue's D-Bus API is a bit involved, we still ended-up with a not-so-complicated (~60
+LOC) code for getting our location. As you may've notice, we use a blocking call to wait for a
+signal on one proxy. This works fine but in the real world, you would typically have many proxies
+and you'd want to wait for signals from them all at once. Not to worry, zbus provides a way to wait
+on [multiple proxies at once as well](https://docs.rs/zbus/1.5.0/zbus/struct.SignalReceiver.html).
+
 ## Generating the trait from an XML interface
 
 zbus git repository contains a [developer-friendly tool], that can generate Rust traits from a given
@@ -320,6 +400,14 @@ trait Notifications {
         arg_6: std::collections::HashMap<&str, zvariant::Value>,
         arg_7: i32,
     ) -> zbus::Result<u32>;
+
+    /// ActionInvoked signal
+    #[dbus_proxy(signal)]
+    fn action_invoked(&self, arg_0: u32, arg_1: &str) -> zbus::fdo::Result<()>;
+
+    /// NotificationClosed signal
+    #[dbus_proxy(signal)]
+    fn notification_closed(&self, arg_0: u32, arg_1: u32) -> zbus::fdo::Result<()>;
 }
 ```
 
@@ -360,8 +448,6 @@ trait Notifications {
 You can learn more from the zbus-ify [binding of
 PolicyKit](https://gitlab.freedesktop.org/zeenix/zbus/-/blob/master/zbus_polkit/src/policykit1.rs),
 for example, which was implemented starting from the *xmlgen* output.
-
-**TODO:** add support for signal handlers.
 
 There you have it, a Rust-friendly binding for your D-Bus service!
 

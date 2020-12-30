@@ -33,6 +33,21 @@ impl<'i> Display for GenTrait<'i> {
             )?;
         }
 
+        let mut signals = iface.signals().to_vec();
+        signals.sort_by(|a, b| a.name().partial_cmp(b.name()).unwrap());
+        for signal in &signals {
+            let args = parse_signal_args(&signal.args());
+            writeln!(f)?;
+            writeln!(f, "    /// {} signal", signal.name())?;
+            writeln!(f, "    #[dbus_proxy(signal)]")?;
+            writeln!(
+                f,
+                "    fn {name}({args}) -> zbus::fdo::Result<()>;",
+                name = to_snakecase(signal.name()),
+                args = args,
+            )?;
+        }
+
         let mut props = iface.properties().to_vec();
         props.sort_by(|a, b| a.name().partial_cmp(b.name()).unwrap());
         for p in props {
@@ -111,6 +126,27 @@ fn inputs_output_from_args(args: &[&Arg]) -> (String, String) {
     };
 
     (inputs.join(", "), format!(" -> zbus::Result<{}>", output))
+}
+
+fn parse_signal_args(args: &[&Arg]) -> String {
+    let mut inputs = vec!["&self".to_string()];
+    let mut n = 0;
+    let mut gen_name = || {
+        n += 1;
+        format!("arg_{}", n)
+    };
+
+    for a in args {
+        let ty = to_rust_type(a.ty(), true);
+        let arg = if let Some(name) = a.name() {
+            to_identifier(name)
+        } else {
+            gen_name()
+        };
+        inputs.push(format!("{}: {}", arg, ty));
+    }
+
+    inputs.join(", ")
 }
 
 fn to_rust_type(ty: &str, input: bool) -> String {

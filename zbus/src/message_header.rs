@@ -217,7 +217,7 @@ macro_rules! get_field {
 
 macro_rules! get_field_str {
     ($self:ident, $kind:ident) => {
-        get_field!($self, $kind, (|v: &'s zvariant::Str| v.as_str()))
+        get_field!($self, $kind, (|v: &'s zvariant::Str<'m>| v.as_str()))
     };
 }
 
@@ -273,7 +273,7 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// The object to send a call to, or the object a signal is emitted from.
-    pub fn path(&self) -> Result<Option<&ObjectPath>, MessageError> {
+    pub fn path<'s>(&'s self) -> Result<Option<&ObjectPath<'m>>, MessageError> {
         get_field!(self, Path)
     }
 
@@ -308,7 +308,7 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// The signature of the message body.
-    pub fn signature(&self) -> Result<Option<&Signature>, MessageError> {
+    pub fn signature(&self) -> Result<Option<&Signature<'m>>, MessageError> {
         get_field!(self, Signature)
     }
 

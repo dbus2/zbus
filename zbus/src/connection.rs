@@ -27,6 +27,7 @@ const LOCK_FAIL_MSG: &str = "Failed to lock a mutex or read-write lock";
 struct ConnectionInner<S> {
     server_guid: Guid,
     cap_unix_fd: bool,
+    bus_conn: bool,
     unique_name: OnceCell<String>,
 
     raw_conn: RwLock<RawConnection<S>>,
@@ -65,6 +66,12 @@ struct ConnectionInner<S> {
 /// data is not cloned. This makes it very convenient to share the connection between different
 /// parts of your code. `Connection` also implements [`std::marker::Sync`] and[`std::marker::Send`]
 /// so you can send and share a connection instance across threads as well.
+///
+/// NB: If you want to send and receive messages from multiple threads at the same time, it's
+/// usually better to create unique connections for each thread. Otherwise you can end up with
+/// deadlocks. For example, if one thread tries to send a message on a connection, while another is
+/// waiting to receive a message on the bus, the former will block until the latter receives a
+/// message.
 ///
 /// Since there are times when important messages arrive between a method call message is sent and
 /// its reply is received, `Connection` keeps an internal queue of incoming messages so that these
@@ -240,6 +247,41 @@ impl Connection {
             }
 
             return Ok(incoming);
+        }
+    }
+
+    /// Receive a specific message.
+    ///
+    /// This is the same as [`Self::receive_message`], except that it takes a predicate function that
+    /// decides if the message received should be returned by this method or not. Message received
+    /// during this call that are not returned by it, are pushed to the queue to be picked by the
+    /// susubsequent call to `receive_message`] or this method.
+    pub fn receive_specific<P>(&self, predicate: P) -> Result<Message>
+    where
+        P: Fn(&Message) -> Result<bool>,
+    {
+        let mut tmp_queue = vec![];
+
+        loop {
+            let msg = self.receive_message()?;
+
+            if predicate(&msg)? {
+                self.0
+                    .incoming_queue
+                    .lock()
+                    .expect(LOCK_FAIL_MSG)
+                    .append(&mut tmp_queue);
+
+                return Ok(msg);
+            } else {
+                let queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
+                if queue.len() + tmp_queue.len() < *self.0.max_queued.read().expect(LOCK_FAIL_MSG) {
+                    // We first push to a temporary queue as otherwise it'll create an infinite loop
+                    // since subsequent `receive_message` call will pick up the message from the main
+                    // queue.
+                    tmp_queue.push(msg);
+                }
+            }
         }
     }
 
@@ -484,16 +526,7 @@ impl Connection {
     /// [client hello]: ./fdo/struct.DBusProxy.html#method.hello
     /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
     pub fn new_authenticated_unix(auth: Authenticated<UnixStream>) -> Self {
-        Self(Arc::new(ConnectionInner {
-            raw_conn: RwLock::new(auth.conn),
-            server_guid: auth.server_guid,
-            cap_unix_fd: auth.cap_unix_fd,
-            serial: Mutex::new(1),
-            unique_name: OnceCell::new(),
-            incoming_queue: Mutex::new(vec![]),
-            max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
-            default_msg_handler: Mutex::new(None),
-        }))
+        Self::new_authenticated_unix_(auth, false)
     }
 
     /// Sets the unique name for this connection
@@ -509,8 +542,15 @@ impl Connection {
         self.0.unique_name.set(name)
     }
 
+    /// Checks if `self` is a connection to a message bus.
+    ///
+    /// This will return `false` for p2p connections.
+    pub fn is_bus(&self) -> bool {
+        self.0.bus_conn
+    }
+
     fn new_authenticated_unix_bus(auth: Authenticated<UnixStream>) -> Result<Self> {
-        let connection = Connection::new_authenticated_unix(auth);
+        let connection = Connection::new_authenticated_unix_(auth, true);
 
         // Now that the server has approved us, we must send the bus Hello, as per specs
         let name = fdo::DBusProxy::new(&connection)?
@@ -524,6 +564,20 @@ impl Connection {
             .expect("Attempted to set unique_name twice");
 
         Ok(connection)
+    }
+
+    fn new_authenticated_unix_(auth: Authenticated<UnixStream>, bus_conn: bool) -> Self {
+        Self(Arc::new(ConnectionInner {
+            raw_conn: RwLock::new(auth.conn),
+            server_guid: auth.server_guid,
+            cap_unix_fd: auth.cap_unix_fd,
+            bus_conn,
+            serial: Mutex::new(1),
+            unique_name: OnceCell::new(),
+            incoming_queue: Mutex::new(vec![]),
+            max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
+            default_msg_handler: Mutex::new(None),
+        }))
     }
 
     fn next_serial(&self) -> u32 {

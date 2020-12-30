@@ -220,16 +220,16 @@ trait DBus {
     /// This signal indicates that the owner of a name has
     /// changed. It's also the signal to use to detect the appearance
     /// of new names on the bus.
-    //#[dbus_proxy(signal)]
-    //fn name_owner_changed(&self, name: &str, old_owner: &str, new_owner: &str);
+    #[dbus_proxy(signal)]
+    fn name_owner_changed(&self, name: &str, old_owner: &str, new_owner: &str);
 
     /// This signal is sent to a specific application when it loses ownership of a name.
-    //#[dbus_proxy(signal)]
-    //fn name_lost(&self, name: &str);
+    #[dbus_proxy(signal)]
+    fn name_lost(&self, name: &str);
 
     /// This signal is sent to a specific application when it gains ownership of a name.
-    //#[dbus_proxy(signal)]
-    //fn name_acquired(&self, name: &str);
+    #[dbus_proxy(signal)]
+    fn name_acquired(&self, name: &str);
 
     /// This property lists abstract “features” provided by the message bus, and can be used by
     /// clients to detect the capabilities of the message bus with which they are communicating.
@@ -445,6 +445,9 @@ impl From<zbus::MessageError> for Error {
                 Self::InconsistentMessage("invalid message field".to_string())
             }
             zbus::MessageError::Variant(e) => Self::InconsistentMessage(e.to_string()),
+            zbus::MessageError::MissingField => {
+                Self::InconsistentMessage("Required message field missing".to_string())
+            }
         }
     }
 }
@@ -452,7 +455,10 @@ impl From<zbus::MessageError> for Error {
 #[cfg(test)]
 mod tests {
     use crate::{fdo, Error, Message};
-    use std::convert::TryInto;
+    use std::{
+        convert::TryInto,
+        sync::{Arc, Mutex},
+    };
 
     #[test]
     fn error_from_zerror() {
@@ -467,5 +473,52 @@ mod tests {
         let e: Error = m.into();
         let e: fdo::Error = e.try_into().unwrap();
         assert_eq!(e, fdo::Error::TimedOut("so long".to_string()));
+    }
+
+    #[test]
+    fn signal() {
+        // Register a well-known name with the session bus and ensure we get the appropriate
+        // signals called for that.
+        let conn = crate::Connection::new_session().unwrap();
+        let owner_change_signaled = Arc::new(Mutex::new(false));
+        let name_acquired_signaled = Arc::new(Mutex::new(false));
+
+        let proxy = fdo::DBusProxy::new(&conn).unwrap();
+
+        let well_known = "org.freedesktop.zbus.FdoSignalTest";
+        let unique_name = conn.unique_name().unwrap().to_string();
+        {
+            let well_known = well_known.clone();
+            let signaled = owner_change_signaled.clone();
+            proxy
+                .connect_name_owner_changed(move |name, _, new_owner| {
+                    assert_eq!(name, well_known);
+                    assert_eq!(new_owner, unique_name);
+                    *signaled.lock().unwrap() = true;
+
+                    Ok(())
+                })
+                .unwrap();
+        }
+        {
+            let signaled = name_acquired_signaled.clone();
+            proxy
+                .connect_name_acquired(move |name| {
+                    assert_eq!(name, well_known);
+                    *signaled.lock().unwrap() = true;
+
+                    Ok(())
+                })
+                .unwrap();
+        }
+
+        proxy
+            .request_name(&well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+            .unwrap();
+
+        proxy.next_signal().unwrap();
+        proxy.next_signal().unwrap();
+        assert!(*owner_change_signaled.lock().unwrap());
+        assert!(*name_acquired_signaled.lock().unwrap());
     }
 }
