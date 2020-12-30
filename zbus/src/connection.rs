@@ -381,43 +381,23 @@ impl Connection {
                 Err(e) => return Err(e),
             }
         }
-        let mut tmp_queue = vec![];
 
         loop {
-            let m = loop {
-                match self.receive_message() {
-                    Ok(m) => break m,
-                    Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        wait_on(self.as_raw_fd(), PollFlags::POLLIN)?;
-                    }
-                    Err(e) => return Err(e),
+            match self.receive_specific(|m| {
+                let h = m.header()?;
+
+                Ok(h.reply_serial()? == Some(serial))
+            }) {
+                Ok(m) => match m.header()?.message_type()? {
+                    MessageType::Error => return Err(m.into()),
+                    MessageType::MethodReturn => return Ok(m),
+                    _ => (),
+                },
+                Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    wait_on(self.as_raw_fd(), PollFlags::POLLIN)?;
                 }
+                Err(e) => return Err(e),
             };
-            let h = m.header()?;
-
-            if h.reply_serial()? != Some(serial) {
-                let queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
-                if queue.len() + tmp_queue.len() < *self.0.max_queued.read().expect(LOCK_FAIL_MSG) {
-                    // We first push to a temporary queue as otherwise it'll create an infinite loop
-                    // since subsequent `receive_message` call will pick up the message from the main
-                    // queue.
-                    tmp_queue.push(m);
-                }
-
-                continue;
-            } else {
-                self.0
-                    .incoming_queue
-                    .lock()
-                    .expect(LOCK_FAIL_MSG)
-                    .append(&mut tmp_queue);
-            }
-
-            match h.message_type()? {
-                MessageType::Error => return Err(m.into()),
-                MessageType::MethodReturn => return Ok(m),
-                _ => (),
-            }
         }
     }
 
