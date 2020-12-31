@@ -668,13 +668,13 @@ mod tests {
         fn destroy_obj(&self, key: &str) -> zbus::Result<()>;
 
         #[dbus_proxy(property)]
-        fn count(&self) -> fdo::Result<u32>;
+        fn count(&self) -> zbus::Result<u32>;
 
         #[dbus_proxy(property)]
-        fn set_count(&self, count: u32) -> fdo::Result<()>;
+        fn set_count(&self, count: u32) -> zbus::Result<()>;
 
         #[dbus_proxy(property)]
-        fn hash_map(&self) -> fdo::Result<HashMap<String, String>>;
+        fn hash_map(&self) -> zbus::Result<HashMap<String, String>>;
     }
 
     #[derive(Debug, Clone)]
@@ -724,7 +724,7 @@ mod tests {
             assert_eq!(arg.bar, "TestString");
         }
 
-        fn test_hashmap_return(&self) -> zbus::fdo::Result<HashMap<String, String>> {
+        fn test_hashmap_return(&self) -> zbus::Result<HashMap<String, String>> {
             let mut map = HashMap::new();
             map.insert("hi".into(), "hello".into());
             map.insert("bye".into(), "now".into());

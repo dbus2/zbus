@@ -140,12 +140,12 @@ Interfaces can have associated properties, which can be read or set with the
 rescue to help you. You can annotate a trait method to be a getter:
 
 ```rust
-# use zbus::{dbus_proxy, fdo};
+# use zbus::{dbus_proxy, Result};
 #
 #[dbus_proxy]
 trait MyInterface {
     #[dbus_proxy(property)]
-    fn state(&self) -> fdo::Result<String>;
+    fn state(&self) -> Result<String>;
 }
 ```
 
@@ -157,7 +157,7 @@ For a more real world example, let's try and read two properties from systemd's 
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{dbus_proxy, fdo};
+# use zbus::dbus_proxy;
 #
 #[dbus_proxy(
     interface = "org.freedesktop.systemd1.Manager",
@@ -166,9 +166,9 @@ For a more real world example, let's try and read two properties from systemd's 
 )]
 trait SystemdManager {
     #[dbus_proxy(property)]
-    fn architecture(&self) -> fdo::Result<String>;
+    fn architecture(&self) -> zbus::Result<String>;
     #[dbus_proxy(property)]
-    fn environment(&self) -> fdo::Result<Vec<String>>;
+    fn environment(&self) -> zbus::Result<Vec<String>>;
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -214,7 +214,7 @@ Let's look at this API in action, with an example where we get our location from
 [Geoclue](https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md):
 
 ```rust,no_run
-use zbus::{Connection, dbus_proxy, fdo};
+use zbus::{Connection, dbus_proxy};
 use zvariant::{ObjectPath, OwnedObjectPath};
 
 #[dbus_proxy(
@@ -232,10 +232,10 @@ trait Client {
     fn stop(&self) -> zbus::Result<()>;
 
     #[dbus_proxy(property)]
-    fn set_desktop_id(&mut self, id: &str) -> fdo::Result<()>;
+    fn set_desktop_id(&mut self, id: &str) -> zbus::Result<()>;
 
     #[dbus_proxy(signal)]
-    fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> fdo::Result<()>;
+    fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> zbus::Result<()>;
 }
 
 #[dbus_proxy(
@@ -244,9 +244,9 @@ trait Client {
 )]
 trait Location {
     #[dbus_proxy(property)]
-    fn latitude(&self) -> fdo::Result<f64>;
+    fn latitude(&self) -> zbus::Result<f64>;
     #[dbus_proxy(property)]
-    fn longitude(&self) -> fdo::Result<f64>;
+    fn longitude(&self) -> zbus::Result<f64>;
 }
 
 let conn = Connection::new_system().unwrap();
@@ -265,8 +265,8 @@ client.connect_location_updated(move |_old, new| {
     )?;
     println!(
         "Latitude: {}\nLongitude: {}",
-        location.latitude().unwrap(),
-        location.longitude().unwrap(),
+        location.latitude()?,
+        location.longitude()?,
     );
 
     Ok(())
@@ -403,11 +403,11 @@ trait Notifications {
 
     /// ActionInvoked signal
     #[dbus_proxy(signal)]
-    fn action_invoked(&self, arg_0: u32, arg_1: &str) -> zbus::fdo::Result<()>;
+    fn action_invoked(&self, arg_0: u32, arg_1: &str) -> zbus::Result<()>;
 
     /// NotificationClosed signal
     #[dbus_proxy(signal)]
-    fn notification_closed(&self, arg_0: u32, arg_1: u32) -> zbus::fdo::Result<()>;
+    fn notification_closed(&self, arg_0: u32, arg_1: u32) -> zbus::Result<()>;
 }
 ```
 
