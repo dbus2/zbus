@@ -214,7 +214,7 @@ Let's look at this API in action, with an example where we get our location from
 [Geoclue](https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md):
 
 ```rust,no_run
-use zbus::{Connection, dbus_proxy};
+use zbus::{Connection, dbus_proxy, Result};
 use zvariant::{ObjectPath, OwnedObjectPath};
 
 #[dbus_proxy(
@@ -223,19 +223,19 @@ use zvariant::{ObjectPath, OwnedObjectPath};
     default_path = "/org/freedesktop/GeoClue2/Manager"
 )]
 trait Manager {
-    fn get_client(&self) -> zbus::Result<OwnedObjectPath>;
+    fn get_client(&self) -> Result<OwnedObjectPath>;
 }
 
 #[dbus_proxy(interface = "org.freedesktop.GeoClue2.Client")]
 trait Client {
-    fn start(&self) -> zbus::Result<()>;
-    fn stop(&self) -> zbus::Result<()>;
+    fn start(&self) -> Result<()>;
+    fn stop(&self) -> Result<()>;
 
     #[dbus_proxy(property)]
-    fn set_desktop_id(&mut self, id: &str) -> zbus::Result<()>;
+    fn set_desktop_id(&mut self, id: &str) -> Result<()>;
 
     #[dbus_proxy(signal)]
-    fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> zbus::Result<()>;
+    fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> Result<()>;
 }
 
 #[dbus_proxy(
@@ -244,9 +244,9 @@ trait Client {
 )]
 trait Location {
     #[dbus_proxy(property)]
-    fn latitude(&self) -> zbus::Result<f64>;
+    fn latitude(&self) -> Result<f64>;
     #[dbus_proxy(property)]
-    fn longitude(&self) -> zbus::Result<f64>;
+    fn longitude(&self) -> Result<f64>;
 }
 
 let conn = Connection::new_system().unwrap();
