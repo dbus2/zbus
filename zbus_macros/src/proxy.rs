@@ -198,14 +198,14 @@ fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> TokenStream {
         quote! {
             #(#doc)*
             pub #signature {
-                self.0.set_property(#property_name, #value)
+                Ok(self.0.set_property(#property_name, #value)?)
             }
         }
     } else {
         quote! {
             #(#doc)*
             pub #signature {
-                self.0.get_property(#property_name)
+                Ok(self.0.get_property(#property_name)?)
             }
         }
     }

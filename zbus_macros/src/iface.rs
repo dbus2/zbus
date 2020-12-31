@@ -141,7 +141,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             quote!(match reply {
                 Ok(r) => c.reply(m, &#ret),
-                Err(e) => e.reply(c, m),
+                Err(e) => ::#zbus::fdo::Error::from(e).reply(c, m),
             })
         } else if struct_ret {
             quote!(c.reply(m, &(reply,)))

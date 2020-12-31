@@ -156,7 +156,7 @@ mod tests {
             #[dbus_proxy(signal)]
             fn some_signal(&self, sig_arg: &str) -> Result<()>;
 
-            fn emit_it(&self, arg: &str) -> fdo::Result<()>;
+            fn emit_it(&self, arg: &str) -> Result<()>;
         }
         let conn = Connection::new_session()?;
         let mut receiver = SignalReceiver::new(conn.clone());
@@ -213,9 +213,9 @@ mod tests {
             #[dbus_interface(signal)]
             fn some_signal(&self, sig_arg: &str) -> Result<()>;
 
-            fn emit_it(&mut self, arg: &str) -> fdo::Result<()> {
+            fn emit_it(&mut self, arg: &str) -> Result<()> {
                 *self.times_called.borrow_mut() += 1;
-                self.some_signal(arg).map_err(fdo::Error::ZBus)
+                self.some_signal(arg)
             }
         }
 

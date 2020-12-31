@@ -1,7 +1,7 @@
 use std::{error, fmt, io};
 use zvariant::Error as VariantError;
 
-use crate::{Message, MessageError, MessageType};
+use crate::{fdo, Message, MessageError, MessageType};
 
 /// The error type for `zbus`.
 ///
@@ -36,6 +36,8 @@ pub enum Error {
     /// Thread-local node is not set.
     #[deprecated(since = "1.1.2", note = "No longer returned by any of our API")]
     NoTLSNode,
+    /// A [`fdo::Error`] tranformed into [`Error`].
+    FDO(Box<fdo::Error>),
 }
 
 impl PartialEq for Error {
@@ -64,6 +66,7 @@ impl error::Error for Error {
             Error::NoTLSConnection => None,
             #[allow(deprecated)]
             Error::NoTLSNode => None,
+            Error::FDO(e) => Some(e),
         }
     }
 }
@@ -90,6 +93,7 @@ impl fmt::Display for Error {
             Error::NoTLSConnection => write!(f, "No TLS connection"),
             #[allow(deprecated)]
             Error::NoTLSNode => write!(f, "No TLS node"),
+            Error::FDO(e) => write!(f, "{}", e),
         }
     }
 }
@@ -117,6 +121,15 @@ impl From<MessageError> for Error {
 impl From<VariantError> for Error {
     fn from(val: VariantError) -> Self {
         Error::Variant(val)
+    }
+}
+
+impl From<fdo::Error> for Error {
+    fn from(val: fdo::Error) -> Self {
+        match val {
+            fdo::Error::ZBus(e) => e,
+            e => Error::FDO(Box::new(e)),
+        }
     }
 }
 
