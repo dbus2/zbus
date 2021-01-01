@@ -284,6 +284,99 @@ signal on one proxy. This works fine but in the real world, you would typically 
 and you'd want to wait for signals from them all at once. Not to worry, zbus provides a way to wait
 on [multiple proxies at once as well](https://docs.rs/zbus/1.5.0/zbus/struct.SignalReceiver.html).
 
+Let's make use of `SignalReceiver` and `zbus::fdo` API to make sure the client is actually started
+by watching for `Active` property (that we must set to be able to get location from Geoclue)
+actually getting set:
+
+```rust,no_run
+# use zbus::{Connection, dbus_proxy, Result};
+# use zvariant::{ObjectPath, OwnedObjectPath};
+#
+# #[dbus_proxy(
+#     default_service = "org.freedesktop.GeoClue2",
+#     interface = "org.freedesktop.GeoClue2.Manager",
+#     default_path = "/org/freedesktop/GeoClue2/Manager"
+# )]
+# trait Manager {
+#     fn get_client(&self) -> Result<OwnedObjectPath>;
+# }
+#
+# #[dbus_proxy(interface = "org.freedesktop.GeoClue2.Client")]
+# trait Client {
+#     fn start(&self) -> Result<()>;
+#
+#     #[dbus_proxy(property)]
+#     fn set_desktop_id(&mut self, id: &str) -> Result<()>;
+#
+#     #[dbus_proxy(signal)]
+#     fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> Result<()>;
+# }
+#
+# #[dbus_proxy(
+#     default_service = "org.freedesktop.GeoClue2",
+#     interface = "org.freedesktop.GeoClue2.Location"
+# )]
+# trait Location {
+#     #[dbus_proxy(property)]
+#     fn latitude(&self) -> Result<f64>;
+#     #[dbus_proxy(property)]
+#     fn longitude(&self) -> Result<f64>;
+# }
+#
+# let conn = Connection::new_system().unwrap();
+# let manager = ManagerProxy::new(&conn).unwrap();
+# let client_path = manager.get_client().unwrap();
+# let mut client =
+#     ClientProxy::new_for(&conn, "org.freedesktop.GeoClue2", &client_path).unwrap();
+# // Gotta do this, sorry!
+# client.set_desktop_id("org.freedesktop.zbus").unwrap();
+#
+// Everything else remains the same before this point.
+
+let conn_clone = conn.clone();
+client.connect_location_updated(move |_old, new| {
+    let location = LocationProxy::new_for(
+        &conn_clone,
+        "org.freedesktop.GeoClue2",
+        &new,
+    )?;
+    println!(
+        "Latitude: {}\nLongitude: {}",
+        location.latitude()?,
+        location.longitude()?,
+    );
+
+    Ok(())
+}).unwrap();
+
+let props = zbus::fdo::PropertiesProxy::new_for(
+    &conn,
+    "org.freedesktop.GeoClue2",
+    &client_path,
+).unwrap();
+props.connect_properties_changed(|iface, changed, _| {
+    for (name, value) in changed.iter() {
+        println!("{}.{} changed to `{:?}`", iface, name, value);
+    }
+
+    Ok(())
+}).unwrap();
+
+let mut receiver = zbus::SignalReceiver::new(conn);
+receiver.receive_for(&client);
+receiver.receive_for(&props);
+
+client.start().unwrap();
+
+// 3 signals will be emitted, that we handle
+let mut num_handled = 0;
+while num_handled < 3 {
+    if receiver.next_signal().unwrap().is_none() {
+        num_handled += 1;
+    }
+}
+```
+
 ## Generating the trait from an XML interface
 
 zbus git repository contains a [developer-friendly tool], that can generate Rust traits from a given

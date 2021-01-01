@@ -30,6 +30,14 @@ trait Properties {
 
     /// Get all properties.
     fn get_all(&self, interface_name: &str) -> Result<HashMap<String, OwnedValue>>;
+
+    #[dbus_proxy(signal)]
+    fn properties_changed(
+        &self,
+        interface_name: &str,
+        changed_properties: HashMap<&str, Value<'_>>,
+        invalidated_properties: Vec<&str>,
+    ) -> Result<()>;
 }
 
 type ManagedObjects = HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>;
