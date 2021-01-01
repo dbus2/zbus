@@ -17,7 +17,7 @@
 //! [`org.freedesktop.DBus.Introspectable`]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-introspectable
 
 use serde::{Deserialize, Serialize};
-use serde_xml_rs::{from_reader, to_writer, Error};
+use serde_xml_rs::{from_reader, from_str, to_writer, Error};
 use std::{
     io::{Read, Write},
     result::Result,
@@ -272,9 +272,19 @@ impl Node {
     }
 }
 
+impl std::str::FromStr for Node {
+    type Err = Error;
+
+    /// Parse the introspection XML document from `s`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        from_str(s)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::error::Error;
+    use std::str::FromStr;
 
     use super::Node;
 
@@ -312,6 +322,10 @@ mod tests {
         let node = Node::from_reader(EXAMPLE.as_bytes())?;
         assert_eq!(node.interfaces().len(), 1);
         assert_eq!(node.nodes().len(), 3);
+
+        let node_str = Node::from_str(EXAMPLE)?;
+        assert_eq!(node_str.interfaces().len(), 1);
+        assert_eq!(node_str.nodes().len(), 3);
 
         // TODO: Fails at the moment, this seems fresh & related:
         // https://github.com/RReverser/serde-xml-rs/pull/129
