@@ -294,8 +294,20 @@ available for low-level languages, such as [`gdbus-codegen`]. Unlike those tools
 as a starting point to generate the code, once. In many cases, you will want to tweak the generated
 code.
 
-First we'll fetch the XML interface of the notification service, using the
-`--xml-interface`[^busctl-xml-interface] option of the `busctl`[^busctl] command.
+The tool can be used to generate rust code directly from a D-Bus service running on our system:
+
+```bash
+zbus-xmlgen --session \
+  org.freedesktop.Notifications \
+  /org/freedesktop/Notifications
+```
+
+Alternatively you can also get the XML interface from a different source and use it to generate the
+interface code. Some packages may also provide the XML directly as an installed file, allowing it to
+be queried using [`pkg-config`], for example.
+
+We can fetch the XML interface of the notification service, using the `--xml-interface` option of
+the `busctl`[^busctl] command. This option was introduced to `busctl` in systemd v243.
 
 ```bash
 busctl --user --xml-interface introspect \
@@ -454,9 +466,6 @@ There you have it, a Rust-friendly binding for your D-Bus service!
 [`busctl`]: https://www.freedesktop.org/software/systemd/man/busctl.html
 [developer-friendly tool]: https://gitlab.freedesktop.org/zeenix/zbus/-/tree/master/zbus_xmlgen
 [`gdbus-codegen`]: https://developer.gnome.org/gio/stable/gdbus-codegen.html
+[`pkg-config`]: https://www.freedesktop.org/wiki/Software/pkg-config/
 
 [^busctl]: `busctl` is part of [`systemd`](https://www.freedesktop.org/wiki/Software/systemd/).
-
-[^busctl-xml-interface]: The `--xml-interface` switch was added to `busctl` in version 243. You can
-also obtain the XML interface data by other means, e.g.  from the source code, binary package, or
-documentation of the program which provides the DBus object that you wish to communicate with.
