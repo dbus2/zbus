@@ -136,6 +136,32 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 )?))
             }
 
+            /// Creates a new proxy for the given `path`.
+            pub fn new_for_path(
+                conn: &::#zbus::Connection,
+                path: &'c str,
+            ) -> ::#zbus::Result<Self> {
+                Ok(Self(::#zbus::Proxy::new(
+                    conn,
+                    #default_service,
+                    path,
+                    #name,
+                )?))
+            }
+
+            /// Same as `new_for_path` but takes ownership of the passed arguments.
+            pub fn new_for_owned_path(
+                conn: ::#zbus::Connection,
+                path: String,
+            ) -> ::#zbus::Result<Self> {
+                Ok(Self(::#zbus::Proxy::new_owned(
+                    conn,
+                    #default_service.to_owned(),
+                    path,
+                    #name.to_owned(),
+                )?))
+            }
+
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
             pub fn into_inner(self) -> ::#zbus::Proxy<'c> {
                 self.0

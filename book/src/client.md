@@ -226,7 +226,10 @@ trait Manager {
     fn get_client(&self) -> Result<OwnedObjectPath>;
 }
 
-#[dbus_proxy(interface = "org.freedesktop.GeoClue2.Client")]
+#[dbus_proxy(
+    default_service = "org.freedesktop.GeoClue2",
+    interface = "org.freedesktop.GeoClue2.Client"
+)]
 trait Client {
     fn start(&self) -> Result<()>;
     fn stop(&self) -> Result<()>;
@@ -248,29 +251,25 @@ trait Location {
     #[dbus_proxy(property)]
     fn longitude(&self) -> Result<f64>;
 }
-
 let conn = Connection::new_system().unwrap();
 let manager = ManagerProxy::new(&conn).unwrap();
 let client_path = manager.get_client().unwrap();
-let mut client =
-    ClientProxy::new_for(&conn, "org.freedesktop.GeoClue2", &client_path).unwrap();
+let mut client = ClientProxy::new_for_path(&conn, &client_path).unwrap();
 // Gotta do this, sorry!
 client.set_desktop_id("org.freedesktop.zbus").unwrap();
 
-client.connect_location_updated(move |_old, new| {
-    let location = LocationProxy::new_for(
-        &conn,
-        "org.freedesktop.GeoClue2",
-        &new,
-    )?;
-    println!(
-        "Latitude: {}\nLongitude: {}",
-        location.latitude()?,
-        location.longitude()?,
-    );
+client
+    .connect_location_updated(move |_old, new| {
+        let location = LocationProxy::new_for_path(&conn, &new)?;
+        println!(
+            "Latitude: {}\nLongitude: {}",
+            location.latitude()?,
+            location.longitude()?,
+        );
 
-    Ok(())
-}).unwrap();
+        Ok(())
+    })
+    .unwrap();
 
 client.start().unwrap();
 
