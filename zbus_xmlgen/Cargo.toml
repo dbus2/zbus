@@ -1,7 +1,14 @@
 [package]
 name = "zbus_xmlgen"
 version = "1.0.0"
-authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
+authors = [
+    "Bilal Elmoussaoui <bil.elmoussaoui@gmail.com>",
+    "Federico Mena Quintero <federico@gnome.org>",
+    "Marc-André Lureau <marcandre.lureau@redhat.com>",
+    "Thomas Mühlbacher <tmuehlbacher@posteo.net>",
+    "Tim Small <tim@seoss.co.uk>",
+    "Zeeshan Ali <zeeshanak@gnome.org>",
+]
 edition = "2018"
 
 [[bin]]
