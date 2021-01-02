@@ -283,8 +283,7 @@ impl std::str::FromStr for Node {
 
 #[cfg(test)]
 mod tests {
-    use std::error::Error;
-    use std::str::FromStr;
+    use std::{error::Error, str::FromStr};
 
     use super::Node;
 
