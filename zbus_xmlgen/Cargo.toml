@@ -1,8 +1,12 @@
 [package]
-name = "zbus-xmlgen"
+name = "zbus_xmlgen"
 version = "1.0.0"
 authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
 edition = "2018"
+
+[[bin]]
+name = "zbus-xmlgen"
+path = "src/main.rs"
 
 [dependencies]
 zbus = { path = "../zbus", version = "1", features = ["xml"] }
