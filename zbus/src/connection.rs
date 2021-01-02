@@ -222,9 +222,11 @@ impl Connection {
     ///
     /// [`set_default_message_handler`]: struct.Connection.html#method.set_default_message_handler
     pub fn receive_message(&self) -> Result<Message> {
-        let mut queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
-        if let Some(msg) = queue.pop() {
-            return Ok(msg);
+        {
+            let mut queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
+            if let Some(msg) = queue.pop() {
+                return Ok(msg);
+            }
         }
 
         loop {
