@@ -31,7 +31,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             input_src = format!(
                 "Interface '{}' from service '{}' on {} bus",
-                path, service, bus
+                path,
+                service,
+                bus.trim_start_matches("--")
             );
 
             let ip = zbus::fdo::IntrospectableProxy::new_for(&connection, &service, &path)?;
