@@ -288,6 +288,32 @@ let result = proxy.check_authorization(
 );
 ```
 
+### zbus_xmlgen
+
+[![](https://docs.rs/zbus_xmlgen/badge.svg)](https://docs.rs/zbus_xmlgen/)
+[![](https://img.shields.io/crates/v/zbus_xmlgen)](https://crates.io/crates/zbus_xmlgen)
+
+A binary crate that provides a developer tool to generate Rust code from D-Bus XML interface
+descriptions. It can be used to generate the code directly from a running D-Bus system or session
+service, or using a preexisting XML file for input.
+
+**Status:** Stable.
+
+#### Dependencies
+
+  * zbus
+  * zvariant
+  * snakecase
+
+#### Usage
+
+```shell
+$ cargo install zbus_xmlgen
+$ zbus-xmlgen --system org.freedesktop.login1 /org/freedesktop/LogControl1
+$ zbus-xmlgen --session org.freedesktop.ScreenSaver /org/freedesktop/ScreenSaver
+$ zbus-xmlgen interface.xml
+```
+
 # Getting Help
 
 If you need help in using these crates, are looking for ways to contribute, or just want to hang out

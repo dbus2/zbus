@@ -378,8 +378,8 @@ while num_handled < 3 {
 
 ## Generating the trait from an XML interface
 
-zbus git repository contains a [developer-friendly tool], that can generate Rust traits from a given
-D-Bus introspection XML for you.
+The `zbus_xmlgen` crate provides a [developer-friendly tool], that can generate Rust traits from a
+given D-Bus introspection XML for you.
 
 **Note:** This tool should not be considered a drop-in Rust-specific replacement for similar tools
 available for low-level languages, such as [`gdbus-codegen`]. Unlike those tools, this is only meant
@@ -556,7 +556,7 @@ for example, which was implemented starting from the *xmlgen* output.
 There you have it, a Rust-friendly binding for your D-Bus service!
 
 [`busctl`]: https://www.freedesktop.org/software/systemd/man/busctl.html
-[developer-friendly tool]: https://gitlab.freedesktop.org/zeenix/zbus/-/tree/master/zbus_xmlgen
+[developer-friendly tool]: https://crates.io/crates/zbus_xmlgen
 [`gdbus-codegen`]: https://developer.gnome.org/gio/stable/gdbus-codegen.html
 [`pkg-config`]: https://www.freedesktop.org/wiki/Software/pkg-config/
 
