@@ -114,7 +114,10 @@ impl Socket for UnixStream {
     }
 }
 
-impl Socket for Async<UnixStream> {
+impl<S> Socket for Async<S>
+where
+    S: Socket,
+{
     const SUPPORTS_FD_PASSING: bool = true;
 
     fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
@@ -126,6 +129,6 @@ impl Socket for Async<UnixStream> {
     }
 
     fn close(&self) -> io::Result<()> {
-        self.get_ref().shutdown(std::net::Shutdown::Both)
+        self.get_ref().close()
     }
 }
