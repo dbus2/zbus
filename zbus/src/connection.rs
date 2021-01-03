@@ -222,33 +222,15 @@ impl Connection {
     ///
     /// [`set_default_message_handler`]: struct.Connection.html#method.set_default_message_handler
     pub fn receive_message(&self) -> Result<Message> {
-        {
+        loop {
             let mut queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
             if let Some(msg) = queue.pop() {
                 return Ok(msg);
             }
-        }
 
-        loop {
-            let incoming = self
-                .0
-                .raw_conn
-                .write()
-                .expect(LOCK_FAIL_MSG)
-                .try_receive_message()?;
-
-            if let Some(ref mut handler) =
-                &mut *self.0.default_msg_handler.lock().expect(LOCK_FAIL_MSG)
-            {
-                // Let's see if the default handler wants the message first
-                match handler(incoming) {
-                    // Message was returned to us so we can return that
-                    Some(m) => return Ok(m),
-                    None => continue,
-                }
+            if let Some(msg) = self.receive_message_raw()? {
+                return Ok(msg);
             }
-
-            return Ok(incoming);
         }
     }
 
@@ -262,27 +244,23 @@ impl Connection {
     where
         P: Fn(&Message) -> Result<bool>,
     {
-        let mut tmp_queue = vec![];
-
         loop {
-            let msg = self.receive_message()?;
+            let mut queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
+            for (i, msg) in queue.iter().enumerate() {
+                if predicate(msg)? {
+                    return Ok(queue.remove(i));
+                }
+            }
+
+            let msg = match self.receive_message_raw()? {
+                Some(msg) => msg,
+                None => continue,
+            };
 
             if predicate(&msg)? {
-                self.0
-                    .incoming_queue
-                    .lock()
-                    .expect(LOCK_FAIL_MSG)
-                    .append(&mut tmp_queue);
-
                 return Ok(msg);
-            } else {
-                let queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
-                if queue.len() + tmp_queue.len() < *self.0.max_queued.read().expect(LOCK_FAIL_MSG) {
-                    // We first push to a temporary queue as otherwise it'll create an infinite loop
-                    // since subsequent `receive_message` call will pick up the message from the main
-                    // queue.
-                    tmp_queue.push(msg);
-                }
+            } else if queue.len() < *self.0.max_queued.read().expect(LOCK_FAIL_MSG) {
+                queue.push(msg);
             }
         }
     }
@@ -568,6 +546,24 @@ impl Connection {
         *serial = current + 1;
 
         current
+    }
+
+    // Get the message directly from the socket (ignoring the queue).
+    fn receive_message_raw(&self) -> Result<Option<Message>> {
+        let incoming = self
+            .0
+            .raw_conn
+            .write()
+            .expect(LOCK_FAIL_MSG)
+            .try_receive_message()?;
+
+        if let Some(ref mut handler) = &mut *self.0.default_msg_handler.lock().expect(LOCK_FAIL_MSG)
+        {
+            // Let's see if the default handler wants the message first
+            Ok(handler(incoming))
+        } else {
+            Ok(Some(incoming))
+        }
     }
 }
 

@@ -500,7 +500,10 @@ mod tests {
             let signaled = owner_change_signaled.clone();
             proxy
                 .connect_name_owner_changed(move |name, _, new_owner| {
-                    assert_eq!(name, well_known);
+                    if name != well_known {
+                        // Meant for the other testcase then
+                        return Ok(());
+                    }
                     assert_eq!(new_owner, unique_name);
                     *signaled.lock().unwrap() = true;
 
@@ -510,10 +513,13 @@ mod tests {
         }
         {
             let signaled = name_acquired_signaled.clone();
+            // `NameAcquired` is emitted twice, first when the unique name is assigned on
+            // connection and secondly after we ask for a specific name.
             proxy
                 .connect_name_acquired(move |name| {
-                    assert_eq!(name, well_known);
-                    *signaled.lock().unwrap() = true;
+                    if name == well_known {
+                        *signaled.lock().unwrap() = true;
+                    }
 
                     Ok(())
                 })
@@ -524,9 +530,12 @@ mod tests {
             .request_name(&well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .unwrap();
 
-        proxy.next_signal().unwrap();
-        proxy.next_signal().unwrap();
-        assert!(*owner_change_signaled.lock().unwrap());
-        assert!(*name_acquired_signaled.lock().unwrap());
+        loop {
+            proxy.next_signal().unwrap();
+
+            if *owner_change_signaled.lock().unwrap() && *name_acquired_signaled.lock().unwrap() {
+                break;
+            }
+        }
     }
 }
