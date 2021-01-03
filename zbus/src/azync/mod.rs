@@ -2,7 +2,7 @@
 //!
 //! This module host all our asynchronous API.
 
-pub mod handshake;
+mod handshake;
 pub(crate) use handshake::*;
 pub mod connection;
 pub use connection::*;
