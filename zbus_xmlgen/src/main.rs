@@ -39,6 +39,18 @@ fn main() -> Result<(), Box<dyn Error>> {
             let ip = zbus::fdo::IntrospectableProxy::new_for(&connection, &service, &path)?;
             Node::from_str(&ip.introspect()?)?
         }
+        Some(address) if address == "--address" => {
+            let address = args().nth(2).expect("Missing param for address path");
+            let service = args().nth(3).expect("Missing param for service");
+            let path = args().nth(4).expect("Missing param for object path");
+
+            let connection = zbus::Connection::new_for_address(&address, true)?;
+
+            input_src = format!("Interface '{}' from service '{}'", path, service);
+
+            let ip = zbus::fdo::IntrospectableProxy::new_for(&connection, &service, &path)?;
+            Node::from_str(&ip.introspect()?)?
+        }
         Some(path) => {
             input_src = Path::new(&path)
                 .file_name()
@@ -53,6 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 r#"Usage:
   zbus-xmlgen <interface.xml>
   zbus-xmlgen --system|--session <service> <object_path>
+  zbus-xmlgen --address <address> <service> <object_path>
 "#
             );
             return Ok(());
