@@ -7,7 +7,7 @@ use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
-use zvariant::{derive::Type, OwnedObjectPath, OwnedValue, Value};
+use zvariant::{derive::Type, ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{dbus_proxy, DBusError};
 
@@ -43,6 +43,10 @@ trait Properties {
 type ManagedObjects = HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>;
 
 /// Proxy for the `org.freedesktop.DBus.ObjectManager` interface.
+///
+/// **NB:** Changes to properties on existing interfaces are not reported using this interface.
+/// Please use [`PropertiesProxy::connect_properties_changed`] to monitor changes to properties on
+/// objects.
 #[dbus_proxy(interface = "org.freedesktop.DBus.ObjectManager")]
 trait ObjectManager {
     /// The return value of this method is a dict whose keys are object paths. All returned object
@@ -54,6 +58,21 @@ trait ObjectManager {
     /// that combination of object path and interface. If an interface has no properties, the empty
     /// dict is returned.
     fn get_managed_objects(&self) -> Result<ManagedObjects>;
+
+    /// This signal is emitted when either a new object is added or when an existing object gains
+    /// one or more interfaces. The `interfaces_and_properties` argument contains a map with the
+    /// interfaces and properties (if any) that have been added to the given object path.
+    #[dbus_proxy(signal)]
+    fn interfaces_added(
+        &self,
+        object_path: ObjectPath<'_>,
+        interfaces_and_properties: HashMap<&str, HashMap<&str, Value<'_>>>,
+    ) -> Result<()>;
+
+    /// This signal is emitted whenever an object is removed or it loses one or more interfaces.
+    /// The `interfaces` parameters contains a list of the interfaces that were removed.
+    #[dbus_proxy(signal)]
+    fn interfaces_removed(&self, object_path: ObjectPath<'_>, interfaces: Vec<&str>) -> Result<()>;
 }
 
 /// Proxy for the `org.freedesktop.DBus.Peer` interface.
