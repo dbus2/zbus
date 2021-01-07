@@ -290,7 +290,6 @@ let result = proxy.check_authorization(
 
 ### zbus_xmlgen
 
-[![](https://docs.rs/zbus_xmlgen/badge.svg)](https://docs.rs/zbus_xmlgen/)
 [![](https://img.shields.io/crates/v/zbus_xmlgen)](https://crates.io/crates/zbus_xmlgen)
 
 A binary crate that provides a developer tool to generate Rust code from D-Bus XML interface
