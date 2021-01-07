@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn async_handshake() {
-        futures::executor::block_on(handshake()).unwrap();
+        futures_executor::block_on(handshake()).unwrap();
     }
 
     async fn handshake() -> Result<()> {
@@ -203,7 +203,7 @@ mod tests {
             Authenticated::server(Async::new(p1)?, Guid::generate(), Uid::current().into());
 
         // proceed to the handshakes
-        let (client_auth, server_auth) = futures::try_join!(client, server)?;
+        let (client_auth, server_auth) = futures_util::try_join!(client, server)?;
 
         assert_eq!(client_auth.server_guid, server_auth.server_guid);
         assert_eq!(client_auth.cap_unix_fd, server_auth.cap_unix_fd);

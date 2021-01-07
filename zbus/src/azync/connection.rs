@@ -7,10 +7,9 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::{
-    sink::{Sink, SinkExt},
-    stream::{Stream, TryStreamExt},
-};
+use futures_core::stream::Stream;
+use futures_sink::Sink;
+use futures_util::{sink::SinkExt, stream::TryStreamExt};
 
 use crate::{
     azync::{Authenticated, AuthenticatedType},
@@ -33,8 +32,8 @@ use crate::{
 /// Unlike [`zbus::Connection`], this type does not implement [`std::clone::Clone`]. The reason is
 /// that implementation will be very difficult (and still prone to deadlocks) if connection is
 /// owned by multiple tasks/threads. Create separate connection instances or use
-/// [`futures::stream::StreamExt::split`] to split reading and writing between two separate async
-/// tasks.
+/// [`futures_core::stream::StreamExt::split`] to split reading and writing between two separate
+/// async tasks.
 ///
 /// Also notice that unlike [`zbus::Connection`], most methods take a `&mut self`, rather than a
 /// `&self`. If they'd take `&self`, `Connection` will need to manage mutability internally, which
@@ -66,7 +65,7 @@ use crate::{
 /// ```
 ///# use zvariant::Type;
 ///#
-///# futures::executor::block_on(async {
+///# futures_executor::block_on(async {
 /// use zbus::azync::Connection;
 ///
 /// let mut connection = Connection::new_session().await?;
@@ -92,8 +91,8 @@ use crate::{
 /// Let's eavesdrop on the session bus 😈 using the [Monitor] interface:
 ///
 /// ```rust,no_run
-///# futures::executor::block_on(async {
-/// use futures::TryStreamExt;
+///# futures_executor::block_on(async {
+/// use futures_util::stream::TryStreamExt;
 /// use zbus::azync::Connection;
 ///
 /// let mut connection = Connection::new_session().await?;
@@ -366,7 +365,7 @@ where
     /// ```
     ///# use std::error::Error;
     ///# use zbus::azync::Connection;
-    /// use futures::executor::block_on;
+    /// use futures_executor::block_on;
     ///
     /// let conn = block_on(Connection::new_session())?.set_max_queued(30);
     /// assert_eq!(conn.max_queued(), 30);
@@ -610,7 +609,7 @@ mod tests {
 
     #[test]
     fn unix_p2p() {
-        futures::executor::block_on(test_unix_p2p()).unwrap();
+        futures_executor::block_on(test_unix_p2p()).unwrap();
     }
 
     async fn test_unix_p2p() -> Result<()> {
@@ -621,7 +620,7 @@ mod tests {
         let server = Connection::new_server(p0, &guid);
         let client = Connection::new_client(p1, false);
 
-        let (mut client_conn, mut server_conn) = futures::try_join!(client, server)?;
+        let (mut client_conn, mut server_conn) = futures_util::try_join!(client, server)?;
 
         let server_future = async {
             let mut method: Option<Message> = None;
@@ -652,7 +651,7 @@ mod tests {
             reply.body::<String>().map_err(|e| e.into())
         };
 
-        let (val, _) = futures::try_join!(client_future, server_future)?;
+        let (val, _) = futures_util::try_join!(client_future, server_future)?;
         assert_eq!(val, "yay");
 
         Ok(())
