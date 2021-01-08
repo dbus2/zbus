@@ -72,26 +72,9 @@ impl Address {
             _ => Self::from_str("unix:path=/var/run/dbus/system_bus_socket"),
         }
     }
-}
 
-impl FromStr for Address {
-    type Err = Error;
-
-    /// Parse a D-BUS address and return its path if we recognize it
-    fn from_str(address: &str) -> Result<Self> {
-        // Options are given separated by commas
-        let first = address.split(',').next().unwrap();
-        let parts = first.split(':').collect::<Vec<&str>>();
-        if parts.len() != 2 {
-            return Err(Error::Address("address has no colon".into()));
-        }
-        if parts[0] != "unix" {
-            return Err(Error::Address(format!(
-                "unsupported transport '{}'",
-                parts[0]
-            )));
-        }
-
+    // Helper for FromStr
+    fn from_unix_parts(parts: Vec<&str>) -> Result<Self> {
         let pathparts = parts[1].split('=').collect::<Vec<&str>>();
         if pathparts.len() != 2 {
             return Err(Error::Address("address is missing '='".into()));
@@ -111,6 +94,28 @@ impl FromStr for Address {
             }
         };
         Ok(Address::Unix(path))
+    }
+}
+
+impl FromStr for Address {
+    type Err = Error;
+
+    /// Parse a D-BUS address and return its path if we recognize it
+    fn from_str(address: &str) -> Result<Self> {
+        // Options are given separated by commas
+        let first = address.split(',').next().unwrap();
+        let parts = first.split(':').collect::<Vec<&str>>();
+        if parts.len() != 2 {
+            return Err(Error::Address("address has no colon".into()));
+        }
+
+        match parts[0] {
+            "unix" => Self::from_unix_parts(parts),
+            _ => Err(Error::Address(format!(
+                "unsupported transport '{}'",
+                parts[0]
+            ))),
+        }
     }
 }
 
