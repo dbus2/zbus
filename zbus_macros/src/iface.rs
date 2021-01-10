@@ -105,8 +105,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         let doc_comments = to_xml_docs(docs);
         let is_property = attrs.iter().any(|x| x.is_property());
         let is_signal = attrs.iter().any(|x| x.is_signal());
-        let struct_ret = attrs.iter().any(|x| x.is_struct_return());
-        assert_eq!(is_property && is_signal && struct_ret, false);
+        assert_eq!(is_property && is_signal, false);
 
         let has_inputs = inputs.len() > 1;
 
@@ -137,14 +136,12 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         clean_input_args(inputs);
 
         let reply = if is_result_output {
-            let ret = if struct_ret { quote!((r,)) } else { quote!(r) };
+            let ret = quote!(r);
 
             quote!(match reply {
                 Ok(r) => c.reply(m, &#ret),
                 Err(e) => ::#zbus::fdo::Error::from(e).reply(c, m),
             })
-        } else if struct_ret {
-            quote!(c.reply(m, &(reply,)))
         } else {
             quote!(c.reply(m, &reply))
         };

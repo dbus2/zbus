@@ -62,10 +62,6 @@ impl ItemAttribute {
     pub fn is_signal(&self) -> bool {
         self == &Self::Signal
     }
-
-    pub fn is_struct_return(&self) -> bool {
-        self == &Self::StructReturn
-    }
 }
 
 // find the #[@attr_name] attribute in @attrs

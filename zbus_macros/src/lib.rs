@@ -112,12 +112,14 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   You can call a signal method from a an interface method, or from an [`ObjectServer::with`]
 ///   function.
 ///
-/// * `struct_return` - the method returns a structure. Although it is very rare for a D-Bus method
-///   to return a single structure, it does happen. Since it is not possible for zbus to
-///   differentiate this case from multiple out arguments put in a structure, you must either
-///   explicitly mark the case of single structure return with this attribute or wrap the structure
-///   in another structure or tuple. The latter can be achieve by using `(,)` syntax, for example
-///   instead of `MyStruct`, write `(MyStruct,)`.
+/// * `struct_return` - This attribute is depcrecated and a noop. If you want to return a single
+///   structure from a method, simply declare it to return a named structure or a tuple with a
+///   tuple as the only field.
+///
+///   Since it is not possible for zbus to differentiate between the case of a single structure
+///   being returned from the case of multiple out arguments returned as a named structure, nor
+///   to introspect the named structure type, the latter is not supported. you must use tuples for
+///   returning multiple values from a method.
 ///
 /// # Example
 ///
