@@ -661,6 +661,10 @@ mod tests {
 
         fn test_single_struct_arg(&self, arg: ArgStructTest) -> zbus::Result<()>;
 
+        fn test_single_struct_ret(&self) -> zbus::Result<ArgStructTest>;
+
+        fn test_multi_ret(&self) -> zbus::Result<(i32, String)>;
+
         fn test_hashmap_return(&self) -> zbus::Result<HashMap<String, String>>;
 
         fn create_obj(&self, key: &str) -> zbus::Result<()>;
@@ -724,6 +728,20 @@ mod tests {
             assert_eq!(arg.bar, "TestString");
         }
 
+        // This attribute is a noop but add to ensure user specifying it doesn't break anything.
+        #[dbus_interface(struct_return)]
+        fn test_single_struct_ret(&self) -> zbus::Result<ArgStructTest> {
+            Ok(ArgStructTest {
+                foo: 42,
+                bar: String::from("Meaning of life"),
+            })
+        }
+
+        #[dbus_interface(out_args("foo", "bar"))]
+        fn test_multi_ret(&self) -> zbus::Result<(i32, String)> {
+            Ok((42, String::from("Meaning of life")))
+        }
+
         fn test_hashmap_return(&self) -> zbus::Result<HashMap<String, String>> {
             let mut map = HashMap::new();
             map.insert("hi".into(), "hello".into());
@@ -785,7 +803,40 @@ mod tests {
         })?;
         check_hash_map(proxy.test_hashmap_return()?);
         check_hash_map(proxy.hash_map()?);
-        proxy.introspect()?;
+        #[cfg(feature = "xml")]
+        {
+            let xml = proxy.introspect()?;
+            let node = crate::xml::Node::from_reader(xml.as_bytes())?;
+            let ifaces = node.interfaces();
+            let iface = ifaces
+                .iter()
+                .find(|i| i.name() == "org.freedesktop.MyIface")
+                .unwrap();
+            let methods = iface.methods();
+            for method in methods {
+                if method.name() != "TestSingleStructRet" && method.name() != "TestMultiRet" {
+                    continue;
+                }
+                let args = method.args();
+                let mut out_args = args.iter().filter(|a| a.direction().unwrap() == "out");
+
+                if method.name() == "TestSingleStructRet" {
+                    assert_eq!(args.len(), 1);
+                    assert_eq!(out_args.next().unwrap().ty(), "(is)");
+                    assert!(out_args.next().is_none());
+                } else {
+                    assert_eq!(args.len(), 2);
+                    let foo = out_args.find(|a| a.name() == Some("foo")).unwrap();
+                    assert_eq!(foo.ty(), "i");
+                    let bar = out_args.find(|a| a.name() == Some("bar")).unwrap();
+                    assert_eq!(bar.ty(), "s");
+                }
+            }
+        }
+        // build-time check to see if macro is doing the right thing.
+        let _ = proxy.test_single_struct_ret()?.foo;
+        let _ = proxy.test_multi_ret()?.1;
+
         let val = proxy.ping()?;
 
         proxy.create_obj("MyObj")?;
