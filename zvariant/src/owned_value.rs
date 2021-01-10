@@ -1,7 +1,9 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
-use crate::{Array, Dict, Fd, ObjectPath, Signature, Structure, Type, Value};
+use crate::{
+    Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Structure, Type, Value,
+};
 
 /// Owned [`Value`](enum.Value.html)
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -48,7 +50,9 @@ ov_try_from!(u64);
 ov_try_from!(f64);
 ov_try_from!(String);
 ov_try_from!(Signature<'a>);
+ov_try_from!(OwnedSignature);
 ov_try_from!(ObjectPath<'a>);
+ov_try_from!(OwnedObjectPath);
 ov_try_from!(Array<'a>);
 ov_try_from!(Dict<'a, 'a>);
 ov_try_from!(Structure<'a>);
