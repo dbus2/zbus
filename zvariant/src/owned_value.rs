@@ -90,6 +90,18 @@ where
     }
 }
 
+impl TryFrom<OwnedValue> for Vec<OwnedValue> {
+    type Error = crate::Error;
+
+    fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
+        if let Value::Array(v) = value.0 {
+            Self::try_from(v)
+        } else {
+            Err(crate::Error::IncorrectType)
+        }
+    }
+}
+
 impl<'k, 'v, K, V, H> TryFrom<OwnedValue> for HashMap<K, V, H>
 where
     K: crate::Basic + TryFrom<Value<'k>, Error = crate::Error> + std::hash::Hash + std::cmp::Eq,
