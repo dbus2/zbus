@@ -1,7 +1,9 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
-use crate::{Array, Dict, Fd, ObjectPath, Signature, Structure, Type, Value};
+use crate::{
+    Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Structure, Type, Value,
+};
 
 /// Owned [`Value`](enum.Value.html)
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -48,7 +50,9 @@ ov_try_from!(u64);
 ov_try_from!(f64);
 ov_try_from!(String);
 ov_try_from!(Signature<'a>);
+ov_try_from!(OwnedSignature);
 ov_try_from!(ObjectPath<'a>);
+ov_try_from!(OwnedObjectPath);
 ov_try_from!(Array<'a>);
 ov_try_from!(Dict<'a, 'a>);
 ov_try_from!(Structure<'a>);
@@ -73,8 +77,20 @@ ov_try_from_ref!(Fd);
 
 impl<'a, T> TryFrom<OwnedValue> for Vec<T>
 where
-    T: TryFrom<Value<'a>, Error = crate::Error> + 'a,
+    T: TryFrom<Value<'a>, Error = crate::Error>,
 {
+    type Error = crate::Error;
+
+    fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
+        if let Value::Array(v) = value.0 {
+            Self::try_from(v)
+        } else {
+            Err(crate::Error::IncorrectType)
+        }
+    }
+}
+
+impl TryFrom<OwnedValue> for Vec<OwnedValue> {
     type Error = crate::Error;
 
     fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
@@ -89,7 +105,7 @@ where
 impl<'k, 'v, K, V, H> TryFrom<OwnedValue> for HashMap<K, V, H>
 where
     K: crate::Basic + TryFrom<Value<'k>, Error = crate::Error> + std::hash::Hash + std::cmp::Eq,
-    V: TryFrom<Value<'v>, Error = crate::Error> + 'v,
+    V: TryFrom<Value<'v>, Error = crate::Error>,
     H: BuildHasher + Default,
 {
     type Error = crate::Error;

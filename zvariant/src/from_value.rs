@@ -1,6 +1,9 @@
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
-use crate::{Array, Dict, Error, Fd, ObjectPath, Signature, Str, Structure, Value};
+use crate::{
+    Array, Dict, Error, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure,
+    Value,
+};
 use std::convert::TryFrom;
 
 macro_rules! value_try_from {
@@ -85,7 +88,7 @@ value_try_from_ref_clone!(Str, String);
 
 impl<'a, T> TryFrom<Value<'a>> for Vec<T>
 where
-    T: TryFrom<Value<'a>, Error = Error> + 'a,
+    T: TryFrom<Value<'a>, Error = Error>,
 {
     type Error = Error;
 
@@ -95,6 +98,22 @@ where
         } else {
             Err(Error::IncorrectType)
         }
+    }
+}
+
+impl TryFrom<Value<'_>> for OwnedObjectPath {
+    type Error = Error;
+
+    fn try_from(value: Value<'_>) -> Result<Self, Self::Error> {
+        ObjectPath::try_from(value).map(OwnedObjectPath::from)
+    }
+}
+
+impl TryFrom<Value<'_>> for OwnedSignature {
+    type Error = Error;
+
+    fn try_from(value: Value<'_>) -> Result<Self, Self::Error> {
+        Signature::try_from(value).map(OwnedSignature::from)
     }
 }
 

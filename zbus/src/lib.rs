@@ -658,4 +658,24 @@ mod tests {
     }
 
     fn accept_send_and_sync<C: Send + Sync>() {}
+
+    // This one we just want to see if it builds, no need to run it. For details see:
+    //
+    // https://gitlab.freedesktop.org/zeenix/zbus/-/issues/121
+    #[test]
+    #[ignore]
+    fn issue_121() {
+        use crate::dbus_proxy;
+
+        #[dbus_proxy(interface = "org.freedesktop.IBus")]
+        trait IBus {
+            /// CurrentInputContext property
+            #[dbus_proxy(property)]
+            fn current_input_context(&self) -> zbus::Result<zvariant::OwnedObjectPath>;
+
+            /// Engines property
+            #[dbus_proxy(property)]
+            fn engines(&self) -> zbus::Result<Vec<zvariant::OwnedValue>>;
+        }
+    }
 }
