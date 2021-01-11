@@ -5,7 +5,7 @@ use std::{
 
 /// An owned representation of a file descriptor
 ///
-/// When it is dropped, the underlying frile descriptor will be dropped.
+/// When it is dropped, the underlying file descriptor will be dropped.
 /// You can take ownership of the file descriptor (and avoid it being closed)
 /// by using the
 /// [`IntoRawFd`](https://doc.rust-lang.org/stable/std/os/unix/io/trait.IntoRawFd.html)
