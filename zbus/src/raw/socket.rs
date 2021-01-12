@@ -134,7 +134,7 @@ impl<S> Socket for Async<S>
 where
     S: Socket + AsRawFd,
 {
-    const SUPPORTS_FD_PASSING: bool = true;
+    const SUPPORTS_FD_PASSING: bool = S::SUPPORTS_FD_PASSING;
 
     fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
         self.get_mut().recvmsg(buffer)
