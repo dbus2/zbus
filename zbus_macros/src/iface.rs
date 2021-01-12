@@ -105,8 +105,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         let doc_comments = to_xml_docs(docs);
         let is_property = attrs.iter().any(|x| x.is_property());
         let is_signal = attrs.iter().any(|x| x.is_signal());
-        let struct_ret = attrs.iter().any(|x| x.is_struct_return());
-        assert_eq!(is_property && is_signal && struct_ret, false);
+        let out_args = attrs.iter().find(|x| x.is_out_args()).map(|x| match x {
+            ItemAttribute::OutArgs(a) => a,
+            _ => unreachable!(),
+        });
+        assert_eq!(is_property && is_signal, false);
 
         let has_inputs = inputs.len() > 1;
 
@@ -130,21 +133,19 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
         let mut intro_args = quote!();
         introspect_add_input_args(&mut intro_args, &typed_inputs, is_signal);
-        let is_result_output = introspect_add_output_args(&mut intro_args, &output)?;
+        let is_result_output = introspect_add_output_args(&mut intro_args, &output, &out_args)?;
 
         let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus)?;
 
         clean_input_args(inputs);
 
         let reply = if is_result_output {
-            let ret = if struct_ret { quote!((r,)) } else { quote!(r) };
+            let ret = quote!(r);
 
             quote!(match reply {
                 Ok(r) => c.reply(m, &#ret),
                 Err(e) => ::#zbus::fdo::Error::from(e).reply(c, m),
             })
-        } else if struct_ret {
-            quote!(c.reply(m, &(reply,)))
         } else {
             quote!(c.reply(m, &reply))
         };
@@ -494,10 +495,15 @@ fn introspect_add_input_args(args: &mut TokenStream, inputs: &[&PatType], is_sig
     }
 }
 
-fn introspect_add_output_arg(args: &mut TokenStream, ty: &Type) {
+fn introspect_add_output_arg(args: &mut TokenStream, ty: &Type, arg_name: Option<&String>) {
+    let arg_name = match arg_name {
+        Some(name) => format!("name=\"{}\" ", name),
+        None => String::from(""),
+    };
+
     let arg = quote!(
-        writeln!(writer, "{:indent$}<arg type=\"{}\" direction=\"out\"/>", "",
-                 <#ty>::signature(), indent = level).unwrap();
+        writeln!(writer, "{:indent$}<arg {}type=\"{}\" direction=\"out\"/>", "",
+                 #arg_name, <#ty>::signature(), indent = level).unwrap();
     );
     args.extend(arg);
 }
@@ -518,7 +524,11 @@ fn get_result_type(p: &TypePath) -> syn::Result<&Type> {
     Err(syn::Error::new_spanned(p, "unhandled Result return"))
 }
 
-fn introspect_add_output_args(args: &mut TokenStream, output: &ReturnType) -> syn::Result<bool> {
+fn introspect_add_output_args(
+    args: &mut TokenStream,
+    output: &ReturnType,
+    arg_names: &Option<&Vec<String>>,
+) -> syn::Result<bool> {
     let mut is_result_output = false;
 
     if let ReturnType::Type(_, ty) = output {
@@ -538,11 +548,17 @@ fn introspect_add_output_args(args: &mut TokenStream, output: &ReturnType) -> sy
         }
 
         if let Type::Tuple(t) = ty {
-            for ty in &t.elems {
-                introspect_add_output_arg(args, ty);
+            if let Some(arg_names) = arg_names {
+                if t.elems.len() != arg_names.len() {
+                    panic!("Number of out arg names different from out args specified")
+                }
+            }
+            for i in 0..t.elems.len() {
+                let name = arg_names.map(|names| &names[i]);
+                introspect_add_output_arg(args, &t.elems[i], name);
             }
         } else {
-            introspect_add_output_arg(args, ty);
+            introspect_add_output_arg(args, ty, None);
         }
     }
 

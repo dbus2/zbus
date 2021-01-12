@@ -51,6 +51,7 @@ pub enum ItemAttribute {
     Property,
     Signal,
     StructReturn,
+    OutArgs(Vec<String>),
     Name(String),
 }
 
@@ -63,8 +64,8 @@ impl ItemAttribute {
         self == &Self::Signal
     }
 
-    pub fn is_struct_return(&self) -> bool {
-        self == &Self::StructReturn
+    pub fn is_out_args(&self) -> bool {
+        matches!(self, Self::OutArgs(_))
     }
 }
 
@@ -80,38 +81,61 @@ pub fn find_attribute_meta(attrs: &[Attribute], attr_name: &str) -> Result<Optio
     }
 }
 
-// parse a single meta like: ident = "value"
-fn parse_attribute(meta: &NestedMeta) -> (String, String) {
+// parse a single meta like: ident = "value". meta can have multiple values too.
+fn parse_attribute(meta: &NestedMeta) -> (String, Vec<String>) {
     let meta = match &meta {
         NestedMeta::Meta(m) => m,
         _ => panic!("wrong meta type"),
     };
-    let meta = match meta {
-        Meta::Path(p) => return (p.get_ident().unwrap().to_string(), "".to_string()),
-        Meta::NameValue(n) => n,
-        _ => panic!("wrong meta type"),
-    };
-    let value = match &meta.lit {
-        Lit::Str(s) => s.value(),
-        _ => panic!("wrong meta type"),
+
+    let (ident, values) = match meta {
+        Meta::Path(p) => (p.get_ident().unwrap(), vec!["".to_string()]),
+        Meta::NameValue(n) => {
+            let value = match &n.lit {
+                Lit::Str(s) => s.value(),
+                _ => panic!("wrong meta type"),
+            };
+
+            let ident = match n.path.get_ident() {
+                None => panic!("missing ident"),
+                Some(ident) => ident,
+            };
+
+            (ident, vec![value])
+        }
+        Meta::List(l) => {
+            let mut values = vec![];
+            for nested in l.nested.iter() {
+                match nested {
+                    NestedMeta::Lit(lit) => match lit {
+                        Lit::Str(s) => values.push(s.value()),
+                        _ => panic!("wrong meta type"),
+                    },
+                    NestedMeta::Meta(_) => panic!("wrong meta type"),
+                }
+            }
+
+            let ident = match l.path.get_ident() {
+                None => panic!("missing ident"),
+                Some(ident) => ident,
+            };
+
+            (ident, values)
+        }
     };
 
-    let ident = match meta.path.get_ident() {
-        None => panic!("missing ident"),
-        Some(ident) => ident,
-    };
-
-    (ident.to_string(), value)
+    (ident.to_string(), values)
 }
 
 fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
-    let (ident, v) = parse_attribute(meta);
+    let (ident, mut values) = parse_attribute(meta);
 
     match ident.as_ref() {
-        "name" => Ok(ItemAttribute::Name(v)),
+        "name" => Ok(ItemAttribute::Name(values.remove(0))),
         "property" => Ok(ItemAttribute::Property),
         "signal" => Ok(ItemAttribute::Signal),
         "struct_return" => Ok(ItemAttribute::StructReturn),
+        "out_args" => Ok(ItemAttribute::OutArgs(values)),
         s => panic!("Unknown item meta {}", s),
     }
 }
@@ -134,10 +158,10 @@ pub fn parse_item_attributes(attrs: &[Attribute], attr_name: &str) -> Result<Vec
 }
 
 fn error_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
-    let (ident, v) = parse_attribute(meta);
+    let (ident, mut values) = parse_attribute(meta);
 
     match ident.as_ref() {
-        "name" => Ok(ItemAttribute::Name(v)),
+        "name" => Ok(ItemAttribute::Name(values.remove(0))),
         s => panic!("Unknown item meta {}", s),
     }
 }
