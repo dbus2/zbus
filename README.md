@@ -1,4 +1,4 @@
-[![pipeline status](https://gitlab.freedesktop.org/zeenix/zbus/badges/master/pipeline.svg)](https://gitlab.freedesktop.org/zeenix/zbus/-/commits/master)
+[![pipeline status](https://gitlab.freedesktop.org/zeenix/zbus/badges/main/pipeline.svg)](https://gitlab.freedesktop.org/zeenix/zbus/-/commits/main)
 
 # zbus
 
