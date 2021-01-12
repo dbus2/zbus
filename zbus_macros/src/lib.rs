@@ -121,6 +121,9 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   to introspect the named structure type, the latter is not supported. you must use tuples for
 ///   returning multiple values from a method.
 ///
+/// * `out_args` - When returning multiple values from a method, naming the out arguments become
+///   important. You can use `out_args` for specifying names for your out arguments.
+///
 /// # Example
 ///
 /// ```
@@ -147,6 +150,11 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     // "Notify" signal (note: no implementation body).
 ///     #[dbus_interface(signal)]
 ///     fn notify(&self, message: &str) -> zbus::Result<()>;
+///
+///     #[dbus_interface(out_args("answer", "question"))]
+///     fn meaning_of_life(&self) -> zbus::Result<(i32, String)> {
+///         Ok((42, String::from("Meaning of life")))
+///     }
 /// }
 ///
 ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
