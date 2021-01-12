@@ -23,9 +23,6 @@ use crate::{utils::FDS_MAX, OwnedFd};
 /// You will want to implement this trait to integrate zbus with a async-runtime-aware
 /// implementation of the socket, for example.
 pub trait Socket {
-    /// Whether this transport supports file descriptor passing
-    const SUPPORTS_FD_PASSING: bool;
-
     /// Attempt to receive a message from the socket
     ///
     /// On success, returns the number of bytes read as well as a `Vec` containing
@@ -71,8 +68,6 @@ pub trait Socket {
 }
 
 impl Socket for UnixStream {
-    const SUPPORTS_FD_PASSING: bool = true;
-
     fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
         let iov = [IoVec::from_mut_slice(buffer)];
         let mut cmsgspace = cmsg_space!([RawFd; FDS_MAX]);
@@ -134,8 +129,6 @@ impl<S> Socket for Async<S>
 where
     S: Socket + AsRawFd,
 {
-    const SUPPORTS_FD_PASSING: bool = S::SUPPORTS_FD_PASSING;
-
     fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
         self.get_mut().recvmsg(buffer)
     }
