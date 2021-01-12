@@ -62,9 +62,31 @@ pub trait Socket: std::fmt::Debug + AsRawFd + Send + Sync {
     ///
     /// This is useful for having two independent handles to the socket, one for writing only and
     /// the other for reading only.
-    fn try_clone(&self) -> io::Result<Self>
-    where
-        Self: Sized;
+    fn try_clone(&self) -> io::Result<Box<dyn Socket>>;
+}
+
+impl Socket for Box<dyn Socket> {
+    fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
+        (**self).recvmsg(buffer)
+    }
+
+    fn sendmsg(&mut self, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
+        (**self).sendmsg(buffer, fds)
+    }
+
+    fn close(&self) -> io::Result<()> {
+        (**self).close()
+    }
+
+    fn try_clone(&self) -> io::Result<Self> {
+        (**self).try_clone()
+    }
+}
+
+impl AsRawFd for Box<dyn Socket> {
+    fn as_raw_fd(&self) -> RawFd {
+        (**self).as_raw_fd()
+    }
 }
 
 impl Socket for UnixStream {
@@ -120,8 +142,8 @@ impl Socket for UnixStream {
         self.shutdown(std::net::Shutdown::Both)
     }
 
-    fn try_clone(&self) -> io::Result<Self> {
-        self.try_clone()
+    fn try_clone(&self) -> io::Result<Box<dyn Socket>> {
+        Ok(Box::new(self.try_clone()?))
     }
 }
 
@@ -141,7 +163,7 @@ where
         self.get_ref().close()
     }
 
-    fn try_clone(&self) -> io::Result<Self> {
-        Async::new(self.get_ref().try_clone()?)
+    fn try_clone(&self) -> io::Result<Box<dyn Socket>> {
+        Ok(Box::new(Async::new(self.get_ref().try_clone()?)?))
     }
 }
