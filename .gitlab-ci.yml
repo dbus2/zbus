@@ -56,6 +56,6 @@ pages:
 
   only:
     refs:
-      - master
+      - main
     changes:
       - book/**/*

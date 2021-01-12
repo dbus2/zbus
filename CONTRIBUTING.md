@@ -36,12 +36,12 @@ Here is how to manually merge PRs from Github:
 # If you haven't yet added the remote
 git remote add gh git@github.com:zeenix/zbus.git
 git remote update
-git checkout master # If you aren't on master already
+git checkout main # If you aren't on main already
 git fetch gh pull/PULL_ID/head:BRANCH_NAME # You choose the BRANCH_NAME
 git merge --no-ff BRANCH_NAME -m "Merge Github PR PULL_ID"
-git push origin master
+git push origin main
 # Only needed until https://gitlab.freedesktop.org/freedesktop/freedesktop/-/issues/286 is resolved
-git push gh master
+git push gh main
 ```
 
 ## Running the test suite
