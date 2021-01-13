@@ -181,7 +181,7 @@ pub mod fdo;
 pub mod raw;
 
 pub mod azync;
-pub mod handshake;
+mod handshake;
 
 pub mod xml;
 

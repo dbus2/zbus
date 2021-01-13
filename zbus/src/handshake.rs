@@ -138,21 +138,6 @@ impl<S: Socket> ClientHandshake<S> {
         }
         Ok(())
     }
-
-    /// Same as [`Handshake::advance_handshake`]. Only exists for backwards compatibility.
-    pub fn advance_handshake(&mut self) -> Result<()> {
-        Handshake::advance_handshake(self)
-    }
-
-    /// Same as [`Handshake::try_finish`]. Only exists for backwards compatibility.
-    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
-        Handshake::try_finish(self)
-    }
-
-    /// Same as [`Handshake::socket`]. Only exists for backwards compatibility.
-    pub fn socket(&self) -> &S {
-        Handshake::socket(self)
-    }
 }
 
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
@@ -255,27 +240,11 @@ impl ClientHandshake<UnixStream> {
         session_socket(false).map(Self::new)
     }
 
-    /// Initialize a handshake to the session/user message bus.
-    ///
-    /// The socket backing this connection is created in non-blocking mode.
-    pub fn new_session_nonblock() -> Result<Self> {
-        let socket = session_socket(true)?;
-        Ok(Self::new(socket))
-    }
-
     /// Initialize a handshake to the system-wide message bus.
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_system() -> Result<Self> {
         system_socket(false).map(Self::new)
-    }
-
-    /// Initialize a handshake to the system-wide message bus.
-    ///
-    /// The socket backing this connection is created in non-blocking mode.
-    pub fn new_system_nonblock() -> Result<Self> {
-        let socket = system_socket(true)?;
-        Ok(Self::new(socket))
     }
 
     /// Create a handshake for the given [D-Bus address].
@@ -285,17 +254,6 @@ impl ClientHandshake<UnixStream> {
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str) -> Result<Self> {
         match Address::from_str(address)?.connect(false)? {
-            address::Stream::Unix(s) => Ok(Self::new(s)),
-        }
-    }
-
-    /// Create a handshake for the given [D-Bus address].
-    ///
-    /// The socket backing this connection is created in non-blocking mode.
-    ///
-    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub fn new_for_address_nonblock(address: &str) -> Result<Self> {
-        match Address::from_str(address)?.connect(true)? {
             address::Stream::Unix(s) => Ok(Self::new(s)),
         }
     }
@@ -398,21 +356,6 @@ impl<S: Socket> ServerHandshake<S> {
             self.buffer.extend(&buf[..read]);
         }
         Ok(())
-    }
-
-    /// Same as [`Handshake::advance_handshake`]. Only exists for backwards compatibility.
-    pub fn advance_handshake(&mut self) -> Result<()> {
-        Handshake::advance_handshake(self)
-    }
-
-    /// Same as [`Handshake::try_finish`]. Only exists for backwards compatibility.
-    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
-        Handshake::try_finish(self)
-    }
-
-    /// Same as [`Handshake::socket`]. Only exists for backwards compatibility.
-    pub fn socket(&self) -> &S {
-        Handshake::socket(self)
     }
 }
 
