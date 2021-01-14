@@ -11,7 +11,7 @@ use once_cell::sync::OnceCell;
 
 use crate::{
     fdo,
-    handshake::{Authenticated, ClientHandshake, Handshake, ServerHandshake},
+    handshake::{ClientHandshake, Handshake, ServerHandshake},
     raw::Connection as RawConnection,
     utils::wait_on,
     Error, Guid, Message, MessageType, Result,
@@ -100,41 +100,24 @@ impl Connection {
     /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
     /// can be sent and received.
     pub fn new_unix_client(stream: UnixStream, bus_connection: bool) -> Result<Self> {
-        // SASL Handshake
-        let auth = ClientHandshake::new(stream).blocking_finish()?;
-
-        if bus_connection {
-            Connection::new_authenticated_bus(auth)
-        } else {
-            Ok(Connection::new_authenticated(auth, false))
-        }
+        Self::new(ClientHandshake::new(stream), bus_connection)
     }
 
     /// Create a `Connection` to the session/user message bus.
     pub fn new_session() -> Result<Self> {
-        ClientHandshake::new_session()?
-            .blocking_finish()
-            .and_then(Self::new_authenticated_bus)
+        Self::new(ClientHandshake::new_session()?, true)
     }
 
     /// Create a `Connection` to the system-wide message bus.
     pub fn new_system() -> Result<Self> {
-        ClientHandshake::new_system()?
-            .blocking_finish()
-            .and_then(Self::new_authenticated_bus)
+        Self::new(ClientHandshake::new_system()?, true)
     }
 
     /// Create a `Connection` for the given [D-Bus address].
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
-        let auth = ClientHandshake::new_for_address(address)?.blocking_finish()?;
-
-        if bus_connection {
-            Connection::new_authenticated_bus(auth)
-        } else {
-            Ok(Connection::new_authenticated(auth, false))
-        }
+        Self::new(ClientHandshake::new_for_address(address)?, bus_connection)
     }
 
     /// Create a server `Connection` for the given `UnixStream` and the server `guid`.
@@ -150,10 +133,10 @@ impl Connection {
         let creds = getsockopt(stream.as_raw_fd(), PeerCredentials)
             .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
 
-        let handshake = ServerHandshake::new(stream, guid.clone(), creds.uid());
-        handshake
-            .blocking_finish()
-            .map(|a| Connection::new_authenticated(a, false))
+        Self::new(
+            ServerHandshake::new(stream, guid.clone(), creds.uid()),
+            false,
+        )
     }
 
     /// Max number of messages to queue.
@@ -435,31 +418,28 @@ impl Connection {
         self.0.bus_conn
     }
 
-    fn new_authenticated_bus(auth: Authenticated<UnixStream>) -> Result<Self> {
-        let connection = Connection::new_authenticated(auth, true);
-
-        // Now that the server has approved us, we must send the bus Hello, as per specs
-        let name = fdo::DBusProxy::new(&connection)?
+    fn hello_bus(self) -> Result<Self> {
+        let name = fdo::DBusProxy::new(&self)?
             .hello()
             .map_err(|e| Error::Handshake(format!("Hello failed: {}", e)))?;
-        connection
-            .0
+        self.0
             .unique_name
             .set(name)
             // programmer (probably our) error if this fails.
             .expect("Attempted to set unique_name twice");
 
-        Ok(connection)
+        Ok(self)
     }
 
-    fn new_authenticated(auth: Authenticated<UnixStream>, bus_conn: bool) -> Self {
+    fn new<H: Handshake<UnixStream>>(handshake: H, bus_conn: bool) -> Result<Self> {
+        let auth = handshake.blocking_finish()?;
         let out_socket = auth
             .conn
             .socket()
             .try_clone()
             .expect("Failed to clone socket");
 
-        Self(Arc::new(ConnectionInner {
+        let conn = Self(Arc::new(ConnectionInner {
             raw_in_conn: Mutex::new(auth.conn),
             raw_out_conn: Mutex::new(RawConnection::wrap(out_socket)),
             server_guid: auth.server_guid,
@@ -469,7 +449,13 @@ impl Connection {
             unique_name: OnceCell::new(),
             incoming_queue: Mutex::new(vec![]),
             max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
-        }))
+        }));
+
+        if !bus_conn {
+            return Ok(conn);
+        }
+        // Now that the server has approved us, we must send the bus Hello, as per specs
+        conn.hello_bus()
     }
 
     fn next_serial(&self) -> u32 {
