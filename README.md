@@ -132,9 +132,9 @@ s
 ### Asynchronous API
 
 Currently, only
-[low-level asynchronous API](https://docs.rs/zbus/latest/zbus/asyn/connection/struct.Connection.html)
+[low-level asynchronous API](https://docs.rs/zbus/latest/zbus/azync/connection/struct.Connection.html)
 is provided. You can do everything you can through it that you can do through the high-level
-asynchronous API (when it exists), it's [not at all as hard to use](https://docs.rs/zbus/latest/zbus/asyn/connection/struct.Connection.html#monitoring-all-messages)
+asynchronous API (when it exists), it's [not at all as hard to use](https://docs.rs/zbus/latest/zbus/azync/connection/struct.Connection.html#monitoring-all-messages)
 as it may sound.
 
 ## zvariant
