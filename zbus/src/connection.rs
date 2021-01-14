@@ -95,7 +95,10 @@ impl Connection {
     /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
     /// can be sent and received.
     pub fn new_unix_client(stream: UnixStream, bus_connection: bool) -> Result<Self> {
-        Self::new(ClientHandshake::new(stream), bus_connection)
+        Self::new(
+            ClientHandshake::new(Box::new(stream) as Box<dyn Socket>),
+            bus_connection,
+        )
     }
 
     /// Create a `Connection` to the session/user message bus.
@@ -129,7 +132,11 @@ impl Connection {
             .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
 
         Self::new(
-            ServerHandshake::new(stream, guid.clone(), creds.uid()),
+            ServerHandshake::new(
+                Box::new(stream) as Box<dyn Socket>,
+                guid.clone(),
+                creds.uid(),
+            ),
             false,
         )
     }
@@ -426,7 +433,7 @@ impl Connection {
         Ok(self)
     }
 
-    fn new<H: Handshake<UnixStream>>(handshake: H, bus_conn: bool) -> Result<Self> {
+    fn new<H: Handshake<Box<dyn Socket>>>(handshake: H, bus_conn: bool) -> Result<Self> {
         let auth = handshake.blocking_finish()?;
         let out_socket = auth
             .conn
@@ -435,8 +442,8 @@ impl Connection {
             .expect("Failed to clone socket");
 
         let conn = Self(Arc::new(ConnectionInner {
-            raw_in_conn: Mutex::new(auth.conn.into_boxed()),
-            raw_out_conn: Mutex::new(RawConnection::wrap(Box::new(out_socket))),
+            raw_in_conn: Mutex::new(auth.conn),
+            raw_out_conn: Mutex::new(RawConnection::wrap(out_socket)),
             server_guid: auth.server_guid,
             cap_unix_fd: auth.cap_unix_fd,
             bus_conn,

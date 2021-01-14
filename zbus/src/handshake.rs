@@ -1,4 +1,4 @@
-use std::{convert::TryInto, io::BufRead, os::unix::net::UnixStream, str::FromStr};
+use std::{convert::TryInto, io::BufRead, str::FromStr};
 
 use nix::{poll::PollFlags, unistd::Uid};
 
@@ -256,13 +256,13 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     }
 }
 
-impl ClientHandshake<UnixStream> {
+impl ClientHandshake<Box<dyn Socket>> {
     /// Initialize a handshake to the session/user message bus.
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_session() -> Result<Self> {
         match Address::session()?.connect(false)? {
-            address::Stream::Unix(s) => Ok(Self::new(s)),
+            address::Stream::Unix(s) => Ok(Self::new(Box::new(s))),
         }
     }
 
@@ -271,7 +271,7 @@ impl ClientHandshake<UnixStream> {
     /// The socket backing this connection is created in blocking mode.
     pub fn new_system() -> Result<Self> {
         match Address::system()?.connect(false)? {
-            address::Stream::Unix(s) => Ok(Self::new(s)),
+            address::Stream::Unix(s) => Ok(Self::new(Box::new(s))),
         }
     }
 
@@ -282,7 +282,7 @@ impl ClientHandshake<UnixStream> {
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str) -> Result<Self> {
         match Address::from_str(address)?.connect(false)? {
-            address::Stream::Unix(s) => Ok(Self::new(s)),
+            address::Stream::Unix(s) => Ok(Self::new(Box::new(s))),
         }
     }
 }
