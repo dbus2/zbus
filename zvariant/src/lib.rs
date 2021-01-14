@@ -87,7 +87,7 @@
 //! | Feature | Description |
 //! | ---     | ----------- |
 //! | arrayvec | Implement `Type` for [`arrayvec::ArrayVec`] and [`arrayvec::ArrayString`] |
-//! | enumflags2 | Implement `Type` for [`enumflags2::BitFlags<F>`] |
+//! | enumflags2 | Implement `Type` for [`struct@enumflags2::BitFlags<F>`] |
 //!
 //! # Portability
 //!
