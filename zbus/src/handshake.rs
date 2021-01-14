@@ -261,14 +261,18 @@ impl ClientHandshake<UnixStream> {
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_session() -> Result<Self> {
-        session_socket(false).map(Self::new)
+        match Address::session()?.connect(false)? {
+            address::Stream::Unix(s) => Ok(Self::new(s)),
+        }
     }
 
     /// Initialize a handshake to the system-wide message bus.
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_system() -> Result<Self> {
-        system_socket(false).map(Self::new)
+        match Address::system()?.connect(false)? {
+            address::Stream::Unix(s) => Ok(Self::new(s)),
+        }
     }
 
     /// Create a handshake for the given [D-Bus address].
@@ -498,18 +502,6 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
 
     fn socket(&self) -> &S {
         &self.socket
-    }
-}
-
-fn session_socket(nonblocking: bool) -> Result<UnixStream> {
-    match Address::session()?.connect(nonblocking)? {
-        address::Stream::Unix(s) => Ok(s),
-    }
-}
-
-fn system_socket(nonblocking: bool) -> Result<UnixStream> {
-    match Address::system()?.connect(nonblocking)? {
-        address::Stream::Unix(s) => Ok(s),
     }
 }
 
