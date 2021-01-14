@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{raw::Socket, Error, Result};
 use async_io::Async;
 use nb_connect::unix;
 use nix::unistd::Uid;
@@ -15,6 +15,14 @@ pub(crate) enum Address {
 #[derive(Debug)]
 pub(crate) enum Stream {
     Unix(UnixStream),
+}
+
+impl Stream {
+    pub(crate) fn into_boxed(self) -> Box<dyn Socket> {
+        match self {
+            Stream::Unix(s) => Box::new(s),
+        }
+    }
 }
 
 #[derive(Debug)]

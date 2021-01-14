@@ -3,7 +3,7 @@ use std::{convert::TryInto, io::BufRead, str::FromStr};
 use nix::{poll::PollFlags, unistd::Uid};
 
 use crate::{
-    address::{self, Address},
+    address::Address,
     guid::Guid,
     raw::{Connection, Socket},
     utils::wait_on,
@@ -261,18 +261,14 @@ impl ClientHandshake<Box<dyn Socket>> {
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_session() -> Result<Self> {
-        match Address::session()?.connect(false)? {
-            address::Stream::Unix(s) => Ok(Self::new(Box::new(s))),
-        }
+        Ok(Self::new(Address::session()?.connect(false)?.into_boxed()))
     }
 
     /// Initialize a handshake to the system-wide message bus.
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_system() -> Result<Self> {
-        match Address::system()?.connect(false)? {
-            address::Stream::Unix(s) => Ok(Self::new(Box::new(s))),
-        }
+        Ok(Self::new(Address::system()?.connect(false)?.into_boxed()))
     }
 
     /// Create a handshake for the given [D-Bus address].
@@ -281,9 +277,9 @@ impl ClientHandshake<Box<dyn Socket>> {
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str) -> Result<Self> {
-        match Address::from_str(address)?.connect(false)? {
-            address::Stream::Unix(s) => Ok(Self::new(Box::new(s))),
-        }
+        Ok(Self::new(
+            Address::from_str(address)?.connect(false)?.into_boxed(),
+        ))
     }
 }
 
