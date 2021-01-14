@@ -22,7 +22,7 @@ use crate::{utils::FDS_MAX, OwnedFd};
 /// The crate provides an implementation of it for std's `UnixStream` on unix platforms.
 /// You will want to implement this trait to integrate zbus with a async-runtime-aware
 /// implementation of the socket, for example.
-pub trait Socket {
+pub trait Socket: std::fmt::Debug + AsRawFd + Send + Sync {
     /// Attempt to receive a message from the socket
     ///
     /// On success, returns the number of bytes read as well as a `Vec` containing
