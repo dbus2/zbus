@@ -104,9 +104,9 @@ impl Connection {
         let auth = ClientHandshake::new(stream).blocking_finish()?;
 
         if bus_connection {
-            Connection::new_authenticated_unix_bus(auth)
+            Connection::new_authenticated_bus(auth)
         } else {
-            Ok(Connection::new_authenticated_unix(auth, false))
+            Ok(Connection::new_authenticated(auth, false))
         }
     }
 
@@ -114,14 +114,14 @@ impl Connection {
     pub fn new_session() -> Result<Self> {
         ClientHandshake::new_session()?
             .blocking_finish()
-            .and_then(Self::new_authenticated_unix_bus)
+            .and_then(Self::new_authenticated_bus)
     }
 
     /// Create a `Connection` to the system-wide message bus.
     pub fn new_system() -> Result<Self> {
         ClientHandshake::new_system()?
             .blocking_finish()
-            .and_then(Self::new_authenticated_unix_bus)
+            .and_then(Self::new_authenticated_bus)
     }
 
     /// Create a `Connection` for the given [D-Bus address].
@@ -131,9 +131,9 @@ impl Connection {
         let auth = ClientHandshake::new_for_address(address)?.blocking_finish()?;
 
         if bus_connection {
-            Connection::new_authenticated_unix_bus(auth)
+            Connection::new_authenticated_bus(auth)
         } else {
-            Ok(Connection::new_authenticated_unix(auth, false))
+            Ok(Connection::new_authenticated(auth, false))
         }
     }
 
@@ -153,7 +153,7 @@ impl Connection {
         let handshake = ServerHandshake::new(stream, guid.clone(), creds.uid());
         handshake
             .blocking_finish()
-            .map(|a| Connection::new_authenticated_unix(a, false))
+            .map(|a| Connection::new_authenticated(a, false))
     }
 
     /// Max number of messages to queue.
@@ -435,8 +435,8 @@ impl Connection {
         self.0.bus_conn
     }
 
-    fn new_authenticated_unix_bus(auth: Authenticated<UnixStream>) -> Result<Self> {
-        let connection = Connection::new_authenticated_unix(auth, true);
+    fn new_authenticated_bus(auth: Authenticated<UnixStream>) -> Result<Self> {
+        let connection = Connection::new_authenticated(auth, true);
 
         // Now that the server has approved us, we must send the bus Hello, as per specs
         let name = fdo::DBusProxy::new(&connection)?
@@ -452,7 +452,7 @@ impl Connection {
         Ok(connection)
     }
 
-    fn new_authenticated_unix(auth: Authenticated<UnixStream>, bus_conn: bool) -> Self {
+    fn new_authenticated(auth: Authenticated<UnixStream>, bus_conn: bool) -> Self {
         let out_socket = auth
             .conn
             .socket()
