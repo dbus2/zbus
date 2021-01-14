@@ -11,7 +11,7 @@ use once_cell::sync::OnceCell;
 
 use crate::{
     fdo,
-    handshake::{Authenticated, ClientHandshake, ServerHandshake},
+    handshake::{Authenticated, ClientHandshake, Handshake, ServerHandshake},
     raw::Connection as RawConnection,
     utils::wait_on,
     Error, Guid, Message, MessageType, Result,
