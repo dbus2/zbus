@@ -12,7 +12,7 @@ use once_cell::sync::OnceCell;
 use crate::{
     fdo,
     handshake::{ClientHandshake, Handshake, ServerHandshake},
-    raw::Connection as RawConnection,
+    raw::{Connection as RawConnection, Socket},
     utils::wait_on,
     Error, Guid, Message, MessageType, Result,
 };
@@ -78,16 +78,11 @@ struct ConnectionInner<S> {
 /// [`receive_message`]: struct.Connection.html#method.receive_message
 /// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
 #[derive(Debug, Clone)]
-pub struct Connection(Arc<ConnectionInner<UnixStream>>);
+pub struct Connection(Arc<ConnectionInner<Box<dyn Socket>>>);
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.0
-            .raw_in_conn
-            .lock()
-            .expect(LOCK_FAIL_MSG)
-            .socket()
-            .as_raw_fd()
+        (**self.0.raw_in_conn.lock().expect(LOCK_FAIL_MSG).socket()).as_raw_fd()
     }
 }
 
@@ -440,8 +435,8 @@ impl Connection {
             .expect("Failed to clone socket");
 
         let conn = Self(Arc::new(ConnectionInner {
-            raw_in_conn: Mutex::new(auth.conn),
-            raw_out_conn: Mutex::new(RawConnection::wrap(out_socket)),
+            raw_in_conn: Mutex::new(auth.conn.into_boxed()),
+            raw_out_conn: Mutex::new(RawConnection::wrap(Box::new(out_socket))),
             server_guid: auth.server_guid,
             cap_unix_fd: auth.cap_unix_fd,
             bus_conn,

@@ -162,6 +162,19 @@ impl<S: Socket> Connection<S> {
     }
 }
 
+impl<S: 'static + Socket> Connection<S> {
+    pub(crate) fn into_boxed(self) -> Connection<Box<dyn Socket>> {
+        Connection {
+            socket: Box::new(self.socket),
+            raw_in_buffer: self.raw_in_buffer,
+            raw_in_fds: self.raw_in_fds,
+            msg_in_buffer: self.msg_in_buffer,
+            raw_out_buffer: self.raw_out_buffer,
+            msg_out_buffer: self.msg_out_buffer,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Connection;
