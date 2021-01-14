@@ -1,6 +1,7 @@
 stages:
   - lint
   - test
+  - extras
   - pages
 
 variables:
@@ -18,10 +19,7 @@ check:
     - cargo install cargo-audit
     - cargo audit
 
-test:
-  image: "rustdocker/rustfmt_clippy:stable"
-  stage: test
-  script:
+.cargo_test_var: &cargo_test
     - rustc --version
     - cargo --version
     - mkdir -p /run/user/$UID
@@ -31,6 +29,40 @@ test:
     - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y  --allow-unauthenticated dbus libglib2.0-dev pkg-config
     - dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo test --verbose -- --skip fdpass_systemd
     - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
+
+test:
+  image: "rustdocker/rustfmt_clippy:stable"
+  stage: test
+  script:
+    - *cargo_test
+
+coverage:
+  image: "rustdocker/rust:nightly"
+  stage: extras
+  variables:
+    RUSTFLAGS: "-Zinstrument-coverage"
+    LLVM_PROFILE_FILE: "zbus-%p-%m.profraw"
+  before_script:
+    - export PATH="$PATH:$CARGO_HOME/bin"
+  script:
+    - apt-get update && apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y  --allow-unauthenticated lcov python3-pip
+    - cargo install grcov
+    - rustup component add llvm-tools-preview
+    - pip3 install lcov_cobertura
+    - *cargo_test
+    # generate html report
+    - grcov . --binary-path ./target/debug/ -s . -t html --branch --ignore-not-existing --ignore "*cargo*" -o ./coverage/
+    # generate cobertura report for gitlab integration
+    - grcov . --binary-path ./target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "*cargo*" -o coverage.lcov
+    - python3 /usr/local/lib/python3.5/dist-packages/lcov_cobertura.py coverage.lcov
+    # output coverage summary for gitlab parsing
+    - lcov -l coverage.lcov
+    - lcov --summary coverage.lcov
+  artifacts:
+    paths:
+      - 'coverage'
+    reports:
+      cobertura: coverage.xml
 
 cache:
   paths:
