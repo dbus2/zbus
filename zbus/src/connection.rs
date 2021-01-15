@@ -30,7 +30,8 @@ struct ConnectionInner<S> {
     bus_conn: bool,
     unique_name: OnceCell<String>,
 
-    raw_conn: RwLock<RawConnection<S>>,
+    raw_in_conn: Mutex<RawConnection<S>>,
+    raw_out_conn: Mutex<RawConnection<S>>,
     // Serial number for next outgoing message
     serial: Mutex<u32>,
 
@@ -67,12 +68,6 @@ struct ConnectionInner<S> {
 /// parts of your code. `Connection` also implements [`std::marker::Sync`] and[`std::marker::Send`]
 /// so you can send and share a connection instance across threads as well.
 ///
-/// NB: If you want to send and receive messages from multiple threads at the same time, it's
-/// usually better to create unique connections for each thread. Otherwise you can end up with
-/// deadlocks. For example, if one thread tries to send a message on a connection, while another is
-/// waiting to receive a message on the bus, the former will block until the latter receives a
-/// message.
-///
 /// Since there are times when important messages arrive between a method call message is sent and
 /// its reply is received, `Connection` keeps an internal queue of incoming messages so that these
 /// messages are not lost and subsequent calls to [`receive_message`] will retreive messages from
@@ -98,8 +93,8 @@ pub struct Connection(Arc<ConnectionInner<UnixStream>>);
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
         self.0
-            .raw_conn
-            .read()
+            .raw_in_conn
+            .lock()
             .expect(LOCK_FAIL_MSG)
             .socket()
             .as_raw_fd()
@@ -296,7 +291,7 @@ impl Connection {
             Ok(())
         })?;
 
-        let mut conn = self.0.raw_conn.write().expect(LOCK_FAIL_MSG);
+        let mut conn = self.0.raw_out_conn.lock().expect(LOCK_FAIL_MSG);
         conn.enqueue_message(msg);
         // Swallow a potential WouldBLock error, but propagate the others
         if let Err(e) = conn.try_flush() {
@@ -319,7 +314,11 @@ impl Connection {
     ///
     /// If the connection is in blocking mode, this will return `Ok(())` and do nothing.
     pub fn flush(&self) -> Result<()> {
-        self.0.raw_conn.write().expect(LOCK_FAIL_MSG).try_flush()?;
+        self.0
+            .raw_out_conn
+            .lock()
+            .expect(LOCK_FAIL_MSG)
+            .try_flush()?;
         Ok(())
     }
 
@@ -535,8 +534,15 @@ impl Connection {
     }
 
     fn new_authenticated_unix_(auth: Authenticated<UnixStream>, bus_conn: bool) -> Self {
+        let out_socket = auth
+            .conn
+            .socket()
+            .try_clone()
+            .expect("Failed to clone socket");
+
         Self(Arc::new(ConnectionInner {
-            raw_conn: RwLock::new(auth.conn),
+            raw_in_conn: Mutex::new(auth.conn),
+            raw_out_conn: Mutex::new(RawConnection::wrap(out_socket)),
             server_guid: auth.server_guid,
             cap_unix_fd: auth.cap_unix_fd,
             bus_conn,
@@ -560,8 +566,8 @@ impl Connection {
     fn receive_message_raw(&self) -> Result<Option<Message>> {
         let incoming = self
             .0
-            .raw_conn
-            .write()
+            .raw_in_conn
+            .lock()
             .expect(LOCK_FAIL_MSG)
             .try_receive_message()?;
 
