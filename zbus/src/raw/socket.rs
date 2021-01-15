@@ -56,6 +56,18 @@ pub trait Socket {
     /// NB: All currently implementations don't block so this method will never return
     /// `Err(Errorkind::Wouldblock)`.
     fn close(&self) -> io::Result<()>;
+
+    /// Creates a new independently owned handle to the underlying socket.
+    ///
+    /// The returned socket is a reference to the same stream that this object references. Both
+    /// handles will read and write the same stream of data, and options set on one stream will be
+    /// propagated to the other stream.
+    ///
+    /// This is useful for having two independent handles to the socket, one for writing only and
+    /// the other for reading only.
+    fn try_clone(&self) -> io::Result<Self>
+    where
+        Self: Sized;
 }
 
 impl Socket for UnixStream {
@@ -112,11 +124,15 @@ impl Socket for UnixStream {
     fn close(&self) -> io::Result<()> {
         self.shutdown(std::net::Shutdown::Both)
     }
+
+    fn try_clone(&self) -> io::Result<Self> {
+        self.try_clone()
+    }
 }
 
 impl<S> Socket for Async<S>
 where
-    S: Socket,
+    S: Socket + AsRawFd,
 {
     const SUPPORTS_FD_PASSING: bool = true;
 
@@ -130,5 +146,9 @@ where
 
     fn close(&self) -> io::Result<()> {
         self.get_ref().close()
+    }
+
+    fn try_clone(&self) -> io::Result<Self> {
+        Async::new(self.get_ref().try_clone()?)
     }
 }
