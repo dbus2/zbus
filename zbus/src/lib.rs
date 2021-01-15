@@ -203,6 +203,7 @@ mod tests {
         convert::TryInto,
         fs::File,
         os::unix::io::{AsRawFd, FromRawFd},
+        sync::{Arc, Condvar, Mutex},
     };
 
     use enumflags2::BitFlags;
@@ -677,5 +678,54 @@ mod tests {
             #[dbus_proxy(property)]
             fn engines(&self) -> zbus::Result<Vec<zvariant::OwnedValue>>;
         }
+    }
+
+    #[test]
+    fn issue_122() {
+        let conn = Connection::new_session().unwrap();
+        let conn_clone = conn.clone();
+
+        let pair = Arc::new((Mutex::new(false), Condvar::new()));
+        let pair2 = Arc::clone(&pair);
+
+        let child = std::thread::spawn(move || {
+            {
+                let (lock, cvar) = &*pair2;
+                let mut started = lock.lock().unwrap();
+                *started = true;
+                cvar.notify_one();
+            }
+
+            while let Ok(msg) = conn_clone.receive_message() {
+                let hdr = msg.header().unwrap();
+
+                if hdr.member().unwrap() == Some("ZBusIssue122") {
+                    break;
+                }
+            }
+        });
+
+        // Wait for the receiving thread to start up.
+        let (lock, cvar) = &*pair;
+        let mut started = lock.lock().unwrap();
+        while !*started {
+            started = cvar.wait(started).unwrap();
+        }
+        // Still give it some miliseconds to ensure it's already blocking on receive_message call
+        // when we send a message.
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        let msg = Message::method(
+            None,
+            conn.unique_name(),
+            "/does/not/matter",
+            None,
+            "ZBusIssue122",
+            &(),
+        )
+        .unwrap();
+        conn.send_message(msg).unwrap();
+
+        child.join().unwrap();
     }
 }
