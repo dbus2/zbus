@@ -32,7 +32,7 @@ use crate::{
 /// Unlike [`zbus::Connection`], this type does not implement [`std::clone::Clone`]. The reason is
 /// that implementation will be very difficult (and still prone to deadlocks) if connection is
 /// owned by multiple tasks/threads. Create separate connection instances or use
-/// [`futures_core::stream::StreamExt::split`] to split reading and writing between two separate
+/// [`futures_util::stream::StreamExt::split`] to split reading and writing between two separate
 /// async tasks.
 ///
 /// Also notice that unlike [`zbus::Connection`], most methods take a `&mut self`, rather than a
@@ -128,6 +128,7 @@ use crate::{
 /// ```
 ///
 /// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
+/// [`futures_util::stream::StreamExt::split`]: https://docs.rs/futures-util/0.3.11/futures_util/stream/trait.StreamExt.html#method.split
 #[derive(Debug)]
 pub struct Connection<S> {
     server_guid: Guid,
