@@ -87,7 +87,7 @@
 //! | Feature | Description |
 //! | ---     | ----------- |
 //! | arrayvec | Implement `Type` for [`arrayvec::ArrayVec`] and [`arrayvec::ArrayString`] |
-//! | enumflags2 | Implement `Type` for [`enumflags2::BitFlags<F>`] |
+//! | enumflags2 | Implement `Type` for [`struct@enumflags2::BitFlags<F>`] |
 //!
 //! # Portability
 //!
@@ -1085,7 +1085,7 @@ mod tests {
             process_id: Option<u32>,
             group_id: Option<u32>,
             user: String,
-        };
+        }
         let test = Test {
             process_id: Some(42),
             group_id: None,
@@ -1109,7 +1109,7 @@ mod tests {
             group_id: Option<u32>,
             user: String,
             quota: u8,
-        };
+        }
         let decoded: Result<TestMissing> = from_slice(&encoded, ctxt);
         assert_eq!(
             decoded.unwrap_err(),
@@ -1120,7 +1120,7 @@ mod tests {
         struct TestSkipUnknown {
             process_id: Option<u32>,
             group_id: Option<u32>,
-        };
+        }
         let _: TestSkipUnknown = from_slice(&encoded, ctxt).unwrap();
 
         #[derive(SerializeDict, DeserializeDict, TypeDict, PartialEq, Debug)]
@@ -1128,7 +1128,7 @@ mod tests {
         struct TestUnknown {
             process_id: Option<u32>,
             group_id: Option<u32>,
-        };
+        }
         let decoded: Result<TestUnknown> = from_slice(&encoded, ctxt);
         assert_eq!(
             decoded.unwrap_err(),

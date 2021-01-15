@@ -279,7 +279,7 @@ trait DBus {
     fn interfaces(&self) -> Result<Vec<String>>;
 }
 
-/// Errors from https://gitlab.freedesktop.org/dbus/dbus/-/blob/master/dbus/dbus-protocol.h
+/// Errors from <https://gitlab.freedesktop.org/dbus/dbus/-/blob/master/dbus/dbus-protocol.h>
 #[derive(Debug, DBusError, PartialEq)]
 #[dbus_error(prefix = "org.freedesktop.DBus.Error")]
 pub enum Error {

@@ -222,10 +222,11 @@ impl Connection {
     ///
     /// # Warning
     ///
-    /// If you use this method in combination with [`receive_specific`] or [`Proxy`] API on the
-    /// same connection from multiple threads, you can end up with situation where this method
-    /// takes away the message the other API is awaiting for and end up in a deadlock situation. It
-    /// is therefore highly recommended not to use such a combination.
+    /// If you use this method in combination with [`Self::receive_specific`] or
+    /// [`Proxy`](crate::Proxy) API on the same connection from multiple threads, you can end up
+    /// with situation where this method takes away the message the other API is awaiting for and
+    /// end up in a deadlock situation. It is therefore highly recommended not to use such a
+    /// combination.
     ///
     /// [`set_default_message_handler`]: struct.Connection.html#method.set_default_message_handler
     pub fn receive_message(&self) -> Result<Message> {
