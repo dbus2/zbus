@@ -335,21 +335,13 @@ mod tests {
 
     #[test]
     fn freedesktop_api() {
-        let mut connection = crate::Connection::new_session()
+        let connection = crate::Connection::new_session()
             .map_err(|e| {
                 println!("error: {}", e);
 
                 e
             })
             .unwrap();
-
-        #[allow(deprecated)]
-        connection.set_default_message_handler(Box::new(|msg| {
-            // Debug implementation will test it a bit
-            println!("Received while waiting for a reply: {}", msg);
-
-            Some(msg)
-        }));
 
         let reply = connection
             .call_method(

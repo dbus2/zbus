@@ -3,7 +3,6 @@ use std::{
     cell::RefCell,
     collections::{hash_map::Entry, HashMap},
     fmt::Write,
-    marker::PhantomData,
     rc::Rc,
 };
 
@@ -352,19 +351,17 @@ impl Node {
 ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
 #[derive(Debug)]
-pub struct ObjectServer<'a> {
+pub struct ObjectServer {
     conn: Connection,
     root: Node,
-    phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> ObjectServer<'a> {
+impl ObjectServer {
     /// Creates a new D-Bus `ObjectServer` for a given connection.
     pub fn new(connection: &Connection) -> Self {
         Self {
             conn: connection.clone(),
             root: Node::new("/"),
-            phantom: PhantomData,
         }
     }
 

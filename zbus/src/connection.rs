@@ -17,13 +17,10 @@ use crate::{
     Error, Guid, Message, MessageType, Result,
 };
 
-type MessageHandlerFn = Box<(dyn FnMut(Message) -> Option<Message> + Send)>;
-
 pub(crate) const DEFAULT_MAX_QUEUED: usize = 32;
 const LOCK_FAIL_MSG: &str = "Failed to lock a mutex or read-write lock";
 
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 struct ConnectionInner<S> {
     server_guid: Guid,
     cap_unix_fd: bool,
@@ -40,9 +37,6 @@ struct ConnectionInner<S> {
 
     // Max number of messages to queue
     max_queued: RwLock<usize>,
-
-    #[derivative(Debug = "ignore")]
-    default_msg_handler: Mutex<Option<MessageHandlerFn>>,
 }
 
 /// A D-Bus connection.
@@ -211,10 +205,6 @@ impl Connection {
     /// `WouldBlock` error instead of blocking. If there are pending messages in the queue, the
     /// first one from the queue is returned instead of attempting to read the connection.
     ///
-    /// If a default message handler has been registered on this connection through
-    /// [`set_default_message_handler`], it will first get to decide the fate of the received
-    /// message.
-    ///
     /// # Warning
     ///
     /// If you use this method in combination with [`Self::receive_specific`] or
@@ -222,8 +212,6 @@ impl Connection {
     /// with situation where this method takes away the message the other API is awaiting for and
     /// end up in a deadlock situation. It is therefore highly recommended not to use such a
     /// combination.
-    ///
-    /// [`set_default_message_handler`]: struct.Connection.html#method.set_default_message_handler
     pub fn receive_message(&self) -> Result<Message> {
         loop {
             let mut queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
@@ -325,8 +313,8 @@ impl Connection {
     /// Send a method call.
     ///
     /// Create a method-call message, send it over the connection, then wait for the reply. Incoming
-    /// messages are received through [`receive_message`] (and by the default message handler)
-    /// until the matching method reply (error or return) is received.
+    /// messages are received through [`receive_message`] until the matching method reply (error or
+    /// return) is received.
     ///
     /// On succesful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
     /// error replies are returned as [`MethodError`].
@@ -444,40 +432,6 @@ impl Connection {
         self.send_message(m)
     }
 
-    /// Set a default handler for incoming messages on this connection.
-    ///
-    /// This is the handler that will be called on all messages received during [`receive_message`]
-    /// call. If the handler callback returns a message (which could be a different message than it
-    /// was given), `receive_message` will return it to its caller.
-    ///
-    /// [`receive_message`]: struct.Connection.html#method.receive_message
-    #[deprecated(
-        since = "1.4.0",
-        note = "You shouldn't need this anymore since Connection queues messages"
-    )]
-    pub fn set_default_message_handler(&mut self, handler: MessageHandlerFn) {
-        self.0
-            .default_msg_handler
-            .lock()
-            .expect(LOCK_FAIL_MSG)
-            .replace(handler);
-    }
-
-    /// Reset the default message handler.
-    ///
-    /// Remove the previously set message handler from `set_default_message_handler`.
-    #[deprecated(
-        since = "1.4.0",
-        note = "You shouldn't need this anymore since Connection queues messages"
-    )]
-    pub fn reset_default_message_handler(&mut self) {
-        self.0
-            .default_msg_handler
-            .lock()
-            .expect(LOCK_FAIL_MSG)
-            .take();
-    }
-
     /// Create a `Connection` from an already authenticated unix socket
     ///
     /// This method can be used in conjunction with [`ClientHandshake`] or [`ServerHandshake`] to handle
@@ -550,7 +504,6 @@ impl Connection {
             unique_name: OnceCell::new(),
             incoming_queue: Mutex::new(vec![]),
             max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
-            default_msg_handler: Mutex::new(None),
         }))
     }
 
@@ -570,14 +523,7 @@ impl Connection {
             .lock()
             .expect(LOCK_FAIL_MSG)
             .try_receive_message()?;
-
-        if let Some(ref mut handler) = &mut *self.0.default_msg_handler.lock().expect(LOCK_FAIL_MSG)
-        {
-            // Let's see if the default handler wants the message first
-            Ok(handler(incoming))
-        } else {
-            Ok(Some(incoming))
-        }
+        Ok(Some(incoming))
     }
 }
 
