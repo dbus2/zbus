@@ -34,6 +34,8 @@ impl Address {
     pub(crate) fn connect(&self) -> Result<Stream> {
         match self {
             Address::Unix(p) => {
+                // Note: we use nb_connect because std::UnixStream::connect() doesn't support
+                // abstract addresses.
                 let stream = unix(p)?;
 
                 let poller = Poller::new()?;
