@@ -30,6 +30,15 @@ pub(crate) enum AsyncStream {
     Unix(Async<UnixStream>),
 }
 
+impl AsyncStream {
+    pub(crate) fn into_boxed(self) -> Result<Async<Box<dyn Socket>>> {
+        match self {
+            // FIXME: easier/more direct way to do this?
+            AsyncStream::Unix(s) => Ok(Async::new(Box::new(s.into_inner()?) as Box<dyn Socket>)?),
+        }
+    }
+}
+
 impl Address {
     pub(crate) fn connect(&self) -> Result<Stream> {
         match self {

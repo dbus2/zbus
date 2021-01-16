@@ -5,14 +5,13 @@ use std::{
     future::Future,
     marker::PhantomData,
     ops::Deref,
-    os::unix::net::UnixStream,
     pin::Pin,
     str::FromStr,
     task::{Context, Poll},
 };
 
 use crate::{
-    address::{self, Address},
+    address::Address,
     guid::Guid,
     handshake::{self, Handshake as SyncHandshake, IoOperation},
     raw::Socket,
@@ -67,28 +66,28 @@ where
     }
 }
 
-impl Authenticated<Async<UnixStream>> {
+impl Authenticated<Async<Box<dyn Socket>>> {
     /// Create a `Authenticated` for the session/user message bus.
     pub async fn session() -> Result<Self> {
-        match Address::session()?.connect_async().await? {
-            address::AsyncStream::Unix(a) => Self::client(a).await,
-        }
+        Self::client(Address::session()?.connect_async().await?.into_boxed()?).await
     }
 
     /// Create a `Authenticated` for the system-wide message bus.
     pub async fn system() -> Result<Self> {
-        match Address::system()?.connect_async().await? {
-            address::AsyncStream::Unix(a) => Self::client(a).await,
-        }
+        Self::client(Address::system()?.connect_async().await?.into_boxed()?).await
     }
 
     /// Create a `Authenticated` for the given [D-Bus address].
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub async fn for_address(address: &str) -> Result<Self> {
-        match Address::from_str(address)?.connect_async().await? {
-            address::AsyncStream::Unix(a) => Self::client(a).await,
-        }
+        Self::client(
+            Address::from_str(address)?
+                .connect_async()
+                .await?
+                .into_boxed()?,
+        )
+        .await
     }
 }
 
