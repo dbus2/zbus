@@ -30,12 +30,6 @@ pub enum Error {
     InvalidGUID,
     /// Unsupported function, or support currently lacking.
     Unsupported,
-    /// Thread-local connection is not set.
-    #[deprecated(since = "1.1.2", note = "No longer returned by any of our API")]
-    NoTLSConnection,
-    /// Thread-local node is not set.
-    #[deprecated(since = "1.1.2", note = "No longer returned by any of our API")]
-    NoTLSNode,
     /// A [`fdo::Error`] tranformed into [`Error`].
     FDO(Box<fdo::Error>),
 }
@@ -62,10 +56,6 @@ impl error::Error for Error {
             Error::MethodError(_, _, _) => None,
             Error::InvalidGUID => None,
             Error::Unsupported => None,
-            #[allow(deprecated)]
-            Error::NoTLSConnection => None,
-            #[allow(deprecated)]
-            Error::NoTLSNode => None,
             Error::FDO(e) => Some(e),
         }
     }
@@ -89,10 +79,6 @@ impl fmt::Display for Error {
             ),
             Error::InvalidGUID => write!(f, "Invalid GUID"),
             Error::Unsupported => write!(f, "Connection support is lacking"),
-            #[allow(deprecated)]
-            Error::NoTLSConnection => write!(f, "No TLS connection"),
-            #[allow(deprecated)]
-            Error::NoTLSNode => write!(f, "No TLS node"),
             Error::FDO(e) => write!(f, "{}", e),
         }
     }
