@@ -22,10 +22,7 @@ use crate::{utils::FDS_MAX, OwnedFd};
 /// The crate provides an implementation of it for std's `UnixStream` on unix platforms.
 /// You will want to implement this trait to integrate zbus with a async-runtime-aware
 /// implementation of the socket, for example.
-pub trait Socket {
-    /// Whether this transport supports file descriptor passing
-    const SUPPORTS_FD_PASSING: bool;
-
+pub trait Socket: std::fmt::Debug + AsRawFd + Send + Sync {
     /// Attempt to receive a message from the socket
     ///
     /// On success, returns the number of bytes read as well as a `Vec` containing
@@ -65,14 +62,34 @@ pub trait Socket {
     ///
     /// This is useful for having two independent handles to the socket, one for writing only and
     /// the other for reading only.
-    fn try_clone(&self) -> io::Result<Self>
-    where
-        Self: Sized;
+    fn try_clone(&self) -> io::Result<Box<dyn Socket>>;
+}
+
+impl Socket for Box<dyn Socket> {
+    fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
+        (**self).recvmsg(buffer)
+    }
+
+    fn sendmsg(&mut self, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
+        (**self).sendmsg(buffer, fds)
+    }
+
+    fn close(&self) -> io::Result<()> {
+        (**self).close()
+    }
+
+    fn try_clone(&self) -> io::Result<Self> {
+        (**self).try_clone()
+    }
+}
+
+impl AsRawFd for Box<dyn Socket> {
+    fn as_raw_fd(&self) -> RawFd {
+        (**self).as_raw_fd()
+    }
 }
 
 impl Socket for UnixStream {
-    const SUPPORTS_FD_PASSING: bool = true;
-
     fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
         let iov = [IoVec::from_mut_slice(buffer)];
         let mut cmsgspace = cmsg_space!([RawFd; FDS_MAX]);
@@ -125,8 +142,8 @@ impl Socket for UnixStream {
         self.shutdown(std::net::Shutdown::Both)
     }
 
-    fn try_clone(&self) -> io::Result<Self> {
-        self.try_clone()
+    fn try_clone(&self) -> io::Result<Box<dyn Socket>> {
+        Ok(Box::new(self.try_clone()?))
     }
 }
 
@@ -134,8 +151,6 @@ impl<S> Socket for Async<S>
 where
     S: Socket + AsRawFd,
 {
-    const SUPPORTS_FD_PASSING: bool = true;
-
     fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
         self.get_mut().recvmsg(buffer)
     }
@@ -148,7 +163,7 @@ where
         self.get_ref().close()
     }
 
-    fn try_clone(&self) -> io::Result<Self> {
-        Async::new(self.get_ref().try_clone()?)
+    fn try_clone(&self) -> io::Result<Box<dyn Socket>> {
+        Ok(Box::new(Async::new(self.get_ref().try_clone()?)?))
     }
 }

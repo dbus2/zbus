@@ -22,11 +22,6 @@ use crate::{
 /// Most of the API is very similar to [`zbus::Connection`], except it's asynchronous. However,
 /// there are a few differences:
 ///
-/// ### Generic over Socket
-///
-/// This type is generic over [`zbus::raw::Socket`] so that support for new socket types can be
-/// added with the same type easily later on.
-///
 /// ### Cloning and Mutability
 ///
 /// Unlike [`zbus::Connection`], this type does not implement [`std::clone::Clone`]. The reason is

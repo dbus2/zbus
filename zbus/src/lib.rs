@@ -178,10 +178,10 @@ pub use object_server::*;
 
 pub mod fdo;
 
-pub mod raw;
+mod raw;
 
 pub mod azync;
-pub mod handshake;
+mod handshake;
 
 pub mod xml;
 

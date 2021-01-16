@@ -1,14 +1,9 @@
-use std::{
-    convert::TryInto,
-    io::BufRead,
-    os::unix::{io::AsRawFd, net::UnixStream},
-    str::FromStr,
-};
+use std::{convert::TryInto, io::BufRead, str::FromStr};
 
 use nix::{poll::PollFlags, unistd::Uid};
 
 use crate::{
-    address::{self, Address},
+    address::Address,
     guid::Guid,
     raw::{Connection, Socket},
     utils::wait_on,
@@ -79,6 +74,12 @@ pub struct Authenticated<S> {
 }
 
 pub trait Handshake<S> {
+    /// Block and automatically drive the handshake for this server
+    ///
+    /// This method will block until the handshake is finalized, even if the
+    /// socket is in non-blocking mode.
+    fn blocking_finish(self) -> Result<Authenticated<S>>;
+
     /// The next I/O operation needed for advancing the handshake.
     ///
     /// If [`Handshake::advance_handshake`] returns a `std::io::ErrorKind::WouldBlock` error, you
@@ -138,24 +139,32 @@ impl<S: Socket> ClientHandshake<S> {
         }
         Ok(())
     }
-
-    /// Same as [`Handshake::advance_handshake`]. Only exists for backwards compatibility.
-    pub fn advance_handshake(&mut self) -> Result<()> {
-        Handshake::advance_handshake(self)
-    }
-
-    /// Same as [`Handshake::try_finish`]. Only exists for backwards compatibility.
-    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
-        Handshake::try_finish(self)
-    }
-
-    /// Same as [`Handshake::socket`]. Only exists for backwards compatibility.
-    pub fn socket(&self) -> &S {
-        Handshake::socket(self)
-    }
 }
 
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
+    fn blocking_finish(mut self) -> Result<Authenticated<S>> {
+        loop {
+            match self.advance_handshake() {
+                Ok(()) => return Ok(self.try_finish().unwrap_or_else(|_| unreachable!())),
+                Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    // we raised a WouldBlock error, this means this is a non-blocking socket
+                    // we use poll to wait until the action we need is available
+                    let flags = match self.step {
+                        ClientHandshakeStep::SendingOauth
+                        | ClientHandshakeStep::SendingNegociateFd
+                        | ClientHandshakeStep::SendingBegin => PollFlags::POLLOUT,
+                        ClientHandshakeStep::WaitOauth | ClientHandshakeStep::WaitNegociateFd => {
+                            PollFlags::POLLIN
+                        }
+                        ClientHandshakeStep::Init | ClientHandshakeStep::Done => unreachable!(),
+                    };
+                    wait_on(self.socket.as_raw_fd(), flags)?;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
     fn next_io_operation(&self) -> IoOperation {
         match self.step {
             ClientHandshakeStep::Init | ClientHandshakeStep::Done => IoOperation::None,
@@ -247,35 +256,19 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     }
 }
 
-impl ClientHandshake<UnixStream> {
+impl ClientHandshake<Box<dyn Socket>> {
     /// Initialize a handshake to the session/user message bus.
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_session() -> Result<Self> {
-        session_socket(false).map(Self::new)
-    }
-
-    /// Initialize a handshake to the session/user message bus.
-    ///
-    /// The socket backing this connection is created in non-blocking mode.
-    pub fn new_session_nonblock() -> Result<Self> {
-        let socket = session_socket(true)?;
-        Ok(Self::new(socket))
+        Ok(Self::new(Address::session()?.connect()?.into_boxed()))
     }
 
     /// Initialize a handshake to the system-wide message bus.
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_system() -> Result<Self> {
-        system_socket(false).map(Self::new)
-    }
-
-    /// Initialize a handshake to the system-wide message bus.
-    ///
-    /// The socket backing this connection is created in non-blocking mode.
-    pub fn new_system_nonblock() -> Result<Self> {
-        let socket = system_socket(true)?;
-        Ok(Self::new(socket))
+        Ok(Self::new(Address::system()?.connect()?.into_boxed()))
     }
 
     /// Create a handshake for the given [D-Bus address].
@@ -284,47 +277,9 @@ impl ClientHandshake<UnixStream> {
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str) -> Result<Self> {
-        match Address::from_str(address)?.connect(false)? {
-            address::Stream::Unix(s) => Ok(Self::new(s)),
-        }
-    }
-
-    /// Create a handshake for the given [D-Bus address].
-    ///
-    /// The socket backing this connection is created in non-blocking mode.
-    ///
-    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub fn new_for_address_nonblock(address: &str) -> Result<Self> {
-        match Address::from_str(address)?.connect(true)? {
-            address::Stream::Unix(s) => Ok(Self::new(s)),
-        }
-    }
-
-    /// Block and automatically drive the handshake for this client
-    ///
-    /// This method will block until the handshake is finalized, even if the
-    /// socket is in non-blocking mode.
-    pub fn blocking_finish(mut self) -> Result<Authenticated<UnixStream>> {
-        loop {
-            match self.advance_handshake() {
-                Ok(()) => return Ok(self.try_finish().unwrap_or_else(|_| unreachable!())),
-                Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    // we raised a WouldBlock error, this means this is a non-blocking socket
-                    // we use poll to wait until the action we need is available
-                    let flags = match self.step {
-                        ClientHandshakeStep::SendingOauth
-                        | ClientHandshakeStep::SendingNegociateFd
-                        | ClientHandshakeStep::SendingBegin => PollFlags::POLLOUT,
-                        ClientHandshakeStep::WaitOauth | ClientHandshakeStep::WaitNegociateFd => {
-                            PollFlags::POLLIN
-                        }
-                        ClientHandshakeStep::Init | ClientHandshakeStep::Done => unreachable!(),
-                    };
-                    wait_on(self.socket.as_raw_fd(), flags)?;
-                }
-                Err(e) => return Err(e),
-            }
-        }
+        Ok(Self::new(
+            Address::from_str(address)?.connect()?.into_boxed(),
+        ))
     }
 }
 
@@ -399,24 +354,32 @@ impl<S: Socket> ServerHandshake<S> {
         }
         Ok(())
     }
-
-    /// Same as [`Handshake::advance_handshake`]. Only exists for backwards compatibility.
-    pub fn advance_handshake(&mut self) -> Result<()> {
-        Handshake::advance_handshake(self)
-    }
-
-    /// Same as [`Handshake::try_finish`]. Only exists for backwards compatibility.
-    pub fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
-        Handshake::try_finish(self)
-    }
-
-    /// Same as [`Handshake::socket`]. Only exists for backwards compatibility.
-    pub fn socket(&self) -> &S {
-        Handshake::socket(self)
-    }
 }
 
 impl<S: Socket> Handshake<S> for ServerHandshake<S> {
+    fn blocking_finish(mut self) -> Result<Authenticated<S>> {
+        loop {
+            match self.advance_handshake() {
+                Ok(()) => return Ok(self.try_finish().unwrap_or_else(|_| unreachable!())),
+                Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    // we raised a WouldBlock error, this means this is a non-blocking socket
+                    // we use poll to wait until the action we need is available
+                    let flags = match self.step {
+                        ServerHandshakeStep::SendingAuthError
+                        | ServerHandshakeStep::SendingAuthOK
+                        | ServerHandshakeStep::SendingBeginMessage => PollFlags::POLLOUT,
+                        ServerHandshakeStep::WaitingForNull
+                        | ServerHandshakeStep::WaitingForBegin
+                        | ServerHandshakeStep::WaitingForAuth => PollFlags::POLLIN,
+                        ServerHandshakeStep::Done => unreachable!(),
+                    };
+                    wait_on(self.socket.as_raw_fd(), flags)?;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
     fn next_io_operation(&self) -> IoOperation {
         match self.step {
             ServerHandshakeStep::Done => IoOperation::None,
@@ -535,47 +498,6 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
 
     fn socket(&self) -> &S {
         &self.socket
-    }
-}
-
-impl ServerHandshake<UnixStream> {
-    /// Block and automatically drive the handshake for this server
-    ///
-    /// This method will block until the handshake is finalized, even if the
-    /// socket is in non-blocking mode.
-    pub fn blocking_finish(mut self) -> Result<Authenticated<UnixStream>> {
-        loop {
-            match self.advance_handshake() {
-                Ok(()) => return Ok(self.try_finish().unwrap_or_else(|_| unreachable!())),
-                Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    // we raised a WouldBlock error, this means this is a non-blocking socket
-                    // we use poll to wait until the action we need is available
-                    let flags = match self.step {
-                        ServerHandshakeStep::SendingAuthError
-                        | ServerHandshakeStep::SendingAuthOK
-                        | ServerHandshakeStep::SendingBeginMessage => PollFlags::POLLOUT,
-                        ServerHandshakeStep::WaitingForNull
-                        | ServerHandshakeStep::WaitingForBegin
-                        | ServerHandshakeStep::WaitingForAuth => PollFlags::POLLIN,
-                        ServerHandshakeStep::Done => unreachable!(),
-                    };
-                    wait_on(self.socket.as_raw_fd(), flags)?;
-                }
-                Err(e) => return Err(e),
-            }
-        }
-    }
-}
-
-fn session_socket(nonblocking: bool) -> Result<UnixStream> {
-    match Address::session()?.connect(nonblocking)? {
-        address::Stream::Unix(s) => Ok(s),
-    }
-}
-
-fn system_socket(nonblocking: bool) -> Result<UnixStream> {
-    match Address::system()?.connect(nonblocking)? {
-        address::Stream::Unix(s) => Ok(s),
     }
 }
 

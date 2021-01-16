@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{raw::Socket, Error, Result};
 use async_io::Async;
 use nb_connect::unix;
 use nix::unistd::Uid;
@@ -17,22 +17,32 @@ pub(crate) enum Stream {
     Unix(UnixStream),
 }
 
+impl Stream {
+    pub(crate) fn into_boxed(self) -> Box<dyn Socket> {
+        match self {
+            Stream::Unix(s) => Box::new(s),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum AsyncStream {
     Unix(Async<UnixStream>),
 }
 
 impl Address {
-    pub(crate) fn connect(&self, nonblocking: bool) -> Result<Stream> {
+    pub(crate) fn connect(&self) -> Result<Stream> {
         match self {
             Address::Unix(p) => {
+                // Note: we use nb_connect because std::UnixStream::connect() doesn't support
+                // abstract addresses.
                 let stream = unix(p)?;
 
                 let poller = Poller::new()?;
                 poller.add(&stream, Event::writable(0))?;
                 poller.wait(&mut Vec::new(), None)?;
 
-                stream.set_nonblocking(nonblocking)?;
+                stream.set_nonblocking(false)?;
 
                 Ok(Stream::Unix(stream))
             }
