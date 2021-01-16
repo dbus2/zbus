@@ -69,10 +69,6 @@ where
 
 impl Authenticated<Async<UnixStream>> {
     /// Create a `Authenticated` for the session/user message bus.
-    ///
-    /// Although, session bus hardly ever runs on anything other than UNIX domain sockets, if you
-    /// want your code to be able to handle those rare cases, use [`AuthenticatedType::session`]
-    /// instead.
     pub async fn session() -> Result<Self> {
         match Address::session()?.connect_async().await? {
             address::AsyncStream::Unix(a) => Self::client(a).await,
@@ -80,12 +76,17 @@ impl Authenticated<Async<UnixStream>> {
     }
 
     /// Create a `Authenticated` for the system-wide message bus.
-    ///
-    /// Although, system bus hardly ever runs on anything other than UNIX domain sockets, if you
-    /// want your code to be able to handle those rare cases, use [`AuthenticatedType::system`]
-    /// instead.
     pub async fn system() -> Result<Self> {
         match Address::system()?.connect_async().await? {
+            address::AsyncStream::Unix(a) => Self::client(a).await,
+        }
+    }
+
+    /// Create a `Authenticated` for the given [D-Bus address].
+    ///
+    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
+    pub async fn for_address(address: &str) -> Result<Self> {
+        match Address::from_str(address)?.connect_async().await? {
             address::AsyncStream::Unix(a) => Self::client(a).await,
         }
     }
@@ -142,39 +143,6 @@ where
                 }
                 Err(e) => return Poll::Ready(Err(e)),
             }
-        }
-    }
-}
-
-/// Type representing all concrete [`Authenticated`] types, provided by zbus.
-///
-/// For maximum portability, use constructor methods provided by this type instead of ones provided
-/// by [`Authenticated`].
-pub(crate) enum AuthenticatedType {
-    Unix(Authenticated<Async<UnixStream>>),
-}
-
-impl AuthenticatedType {
-    /// Create a `AuthenticatedType` for the given [D-Bus address].
-    ///
-    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub async fn for_address(address: &str) -> Result<Self> {
-        match Address::from_str(address)?.connect_async().await? {
-            address::AsyncStream::Unix(a) => Authenticated::client(a).await.map(Self::Unix),
-        }
-    }
-
-    /// Create a `AuthenticatedType` for the session/user message bus.
-    pub async fn session() -> Result<Self> {
-        match Address::session()?.connect_async().await? {
-            address::AsyncStream::Unix(a) => Authenticated::client(a).await.map(Self::Unix),
-        }
-    }
-
-    /// Create a `AuthenticatedType` for the system-wide message bus.
-    pub async fn system() -> Result<Self> {
-        match Address::system()?.connect_async().await? {
-            address::AsyncStream::Unix(a) => Authenticated::client(a).await.map(Self::Unix),
         }
     }
 }

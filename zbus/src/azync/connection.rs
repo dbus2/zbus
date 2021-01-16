@@ -12,7 +12,7 @@ use futures_sink::Sink;
 use futures_util::{sink::SinkExt, stream::TryStreamExt};
 
 use crate::{
-    azync::{Authenticated, AuthenticatedType},
+    azync::Authenticated,
     raw::{Connection as RawConnection, Socket},
     Error, Guid, Message, MessageType, Result, DEFAULT_MAX_QUEUED,
 };
@@ -457,21 +457,26 @@ where
 
 impl Connection<UnixStream> {
     /// Create a `Connection` to the session/user message bus.
-    ///
-    /// Although, session bus hardly ever runs on anything other than UNIX domain sockets, if you
-    /// want your code to be able to handle those rare cases, use [`ConnectionType::new_session`]
-    /// instead.
     pub async fn new_session() -> Result<Self> {
         Self::new_authenticated_bus(Authenticated::session().await?).await
     }
 
     /// Create a `Connection` to the system-wide message bus.
-    ///
-    /// Although, system bus hardly ever runs on anything other than UNIX domain sockets, if you
-    /// want your code to be able to handle those rare cases, use [`ConnectionType::new_system`]
-    /// instead.
     pub async fn new_system() -> Result<Self> {
         Self::new_authenticated_bus(Authenticated::system().await?).await
+    }
+
+    /// Create a `Connection` for the given [D-Bus address].
+    ///
+    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
+    pub async fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
+        let auth = Authenticated::for_address(address).await?;
+
+        if bus_connection {
+            Ok(Connection::new_authenticated_bus(auth).await?)
+        } else {
+            Ok(Connection::new_authenticated(auth))
+        }
     }
 }
 
@@ -543,55 +548,6 @@ where
                 }
                 Err(Error::Io(e)) if e.kind() == ErrorKind::BrokenPipe => return Poll::Ready(None),
                 Err(e) => return Poll::Ready(Some(Err(e))),
-            }
-        }
-    }
-}
-
-/// Type representing all concrete [`Connection`] types, provided by zbus.
-///
-/// For maximum portability, use constructor method provided by this type instead of ones provided
-/// by [`Connection`].
-pub enum ConnectionType {
-    Unix(Connection<UnixStream>),
-}
-
-impl ConnectionType {
-    /// Create a `ConnectionType` for the given [D-Bus address].
-    ///
-    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub async fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
-        match AuthenticatedType::for_address(address).await? {
-            AuthenticatedType::Unix(auth) => {
-                let conn = if bus_connection {
-                    Connection::new_authenticated_bus(auth).await?
-                } else {
-                    Connection::new_authenticated(auth)
-                };
-
-                Ok(ConnectionType::Unix(conn))
-            }
-        }
-    }
-
-    /// Create a `ConnectionType` to the session/user message bus.
-    pub async fn new_session() -> Result<Self> {
-        match AuthenticatedType::session().await? {
-            AuthenticatedType::Unix(auth) => {
-                let conn = Connection::new_authenticated_bus(auth).await?;
-
-                Ok(ConnectionType::Unix(conn))
-            }
-        }
-    }
-
-    /// Create a `ConnectionType` to the system-wide message bus.
-    pub async fn new_system() -> Result<Self> {
-        match AuthenticatedType::system().await? {
-            AuthenticatedType::Unix(auth) => {
-                let conn = Connection::new_authenticated_bus(auth).await?;
-
-                Ok(ConnectionType::Unix(conn))
             }
         }
     }
