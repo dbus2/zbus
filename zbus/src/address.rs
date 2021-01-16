@@ -31,7 +31,7 @@ pub(crate) enum AsyncStream {
 }
 
 impl Address {
-    pub(crate) fn connect(&self, nonblocking: bool) -> Result<Stream> {
+    pub(crate) fn connect(&self) -> Result<Stream> {
         match self {
             Address::Unix(p) => {
                 let stream = unix(p)?;
@@ -40,7 +40,7 @@ impl Address {
                 poller.add(&stream, Event::writable(0))?;
                 poller.wait(&mut Vec::new(), None)?;
 
-                stream.set_nonblocking(nonblocking)?;
+                stream.set_nonblocking(false)?;
 
                 Ok(Stream::Unix(stream))
             }

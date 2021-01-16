@@ -261,14 +261,14 @@ impl ClientHandshake<Box<dyn Socket>> {
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_session() -> Result<Self> {
-        Ok(Self::new(Address::session()?.connect(false)?.into_boxed()))
+        Ok(Self::new(Address::session()?.connect()?.into_boxed()))
     }
 
     /// Initialize a handshake to the system-wide message bus.
     ///
     /// The socket backing this connection is created in blocking mode.
     pub fn new_system() -> Result<Self> {
-        Ok(Self::new(Address::system()?.connect(false)?.into_boxed()))
+        Ok(Self::new(Address::system()?.connect()?.into_boxed()))
     }
 
     /// Create a handshake for the given [D-Bus address].
@@ -278,7 +278,7 @@ impl ClientHandshake<Box<dyn Socket>> {
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str) -> Result<Self> {
         Ok(Self::new(
-            Address::from_str(address)?.connect(false)?.into_boxed(),
+            Address::from_str(address)?.connect()?.into_boxed(),
         ))
     }
 }
