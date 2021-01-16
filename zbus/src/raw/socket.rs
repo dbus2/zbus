@@ -15,6 +15,9 @@ use nix::{
     },
 };
 
+#[cfg(feature = "vsock")]
+use vsock::VsockStream;
+
 use crate::{utils::FDS_MAX, OwnedFd};
 
 /// Trait representing some transport layer over which the DBus protocol can be used
@@ -134,6 +137,17 @@ impl AsRawFd for Box<dyn Socket> {
 }
 
 impl Socket for UnixStream {
+    fn close(&self) -> io::Result<()> {
+        self.shutdown(std::net::Shutdown::Both)
+    }
+
+    fn try_clone(&self) -> io::Result<Box<dyn Socket>> {
+        Ok(Box::new(self.try_clone()?))
+    }
+}
+
+#[cfg(feature = "vsock")]
+impl Socket for VsockStream {
     fn close(&self) -> io::Result<()> {
         self.shutdown(std::net::Shutdown::Both)
     }

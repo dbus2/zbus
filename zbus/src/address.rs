@@ -1,18 +1,31 @@
-use crate::{raw::Socket, Error, Result};
 use async_io::Async;
+#[cfg(feature = "vsock")]
+use nix::sys::socket::SockAddr;
 use nix::unistd::Uid;
+#[cfg(feature = "vsock")]
+use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::{collections::HashMap, env, ffi::OsString, os::unix::net::UnixStream, str::FromStr};
+#[cfg(feature = "vsock")]
+use vsock::VsockStream;
+
+use crate::{raw::Socket, Error, Result};
 
 /// A bus address
 #[derive(Debug, PartialEq)]
 pub(crate) enum Address {
     /// A path on the filesystem
     Unix(OsString),
+    /// VSOCK address
+    #[cfg(feature = "vsock")]
+    Vsock(u32, u32),
 }
 
 #[derive(Debug)]
 pub(crate) enum Stream {
     Unix(Async<UnixStream>),
+    // FIXME: hack, Async::<VsockStream> isn't implemented yet..
+    #[cfg(feature = "vsock")]
+    Vsock(Async<UnixStream>),
 }
 
 impl Stream {
@@ -20,6 +33,8 @@ impl Stream {
         match self {
             // FIXME: easier/more direct way to do this?
             Stream::Unix(s) => Ok(Async::new(Box::new(s.into_inner()?) as Box<dyn Socket>)?),
+            #[cfg(feature = "vsock")]
+            Stream::Vsock(s) => Ok(Async::new(Box::new(s.into_inner()?) as Box<dyn Socket>)?),
         }
     }
 }
@@ -31,6 +46,13 @@ impl Address {
                 .await
                 .map(Stream::Unix)
                 .map_err(Error::Io),
+            #[cfg(feature = "vsock")]
+            Address::Vsock(cid, port) => {
+                let stream = VsockStream::connect(&SockAddr::new_vsock(*cid, *port))?;
+                let fd = stream.into_raw_fd();
+                let stream = unsafe { UnixStream::from_raw_fd(fd) };
+                Ok(Stream::Vsock(Async::new(stream)?))
+            }
         }
     }
 
@@ -80,6 +102,23 @@ impl Address {
 
         Ok(Address::Unix(path))
     }
+    #[cfg(feature = "vsock")]
+    fn from_vsock(opts: HashMap<&str, &str>) -> Result<Self> {
+        let cid = opts
+            .get("cid")
+            .ok_or_else(|| Error::Address("VSOCK address is missing cid=".into()))?;
+        let cid = cid
+            .parse::<u32>()
+            .map_err(|e| Error::Address(format!("Failed to parse VSOCK cid `{}`: {}", cid, e)))?;
+        let port = opts
+            .get("port")
+            .ok_or_else(|| Error::Address("VSOCK address is missing port=".into()))?;
+        let port = port
+            .parse::<u32>()
+            .map_err(|e| Error::Address(format!("Failed to parse VSOCK port `{}`: {}", port, e)))?;
+
+        Ok(Address::Vsock(cid, port))
+    }
 }
 
 impl FromStr for Address {
@@ -107,6 +146,8 @@ impl FromStr for Address {
 
         match transport {
             "unix" => Self::from_unix(options),
+            #[cfg(feature = "vsock")]
+            "vsock" => Self::from_vsock(options),
             _ => Err(Error::Address(format!(
                 "unsupported transport '{}'",
                 transport
@@ -160,6 +201,11 @@ mod tests {
         assert_eq!(
             Address::Unix("/tmp/dbus-foo".into()),
             Address::from_str("unix:path=/tmp/dbus-foo,guid=123").unwrap()
+        );
+        #[cfg(feature = "vsock")]
+        assert_eq!(
+            Address::Vsock(98, 2934),
+            Address::from_str("vsock:cid=98,port=2934,guid=123").unwrap()
         );
     }
 }
