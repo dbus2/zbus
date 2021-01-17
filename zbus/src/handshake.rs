@@ -150,6 +150,7 @@ impl<S: Socket> ClientHandshake<S> {
 
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     fn blocking_finish(mut self) -> Result<Authenticated<S>> {
+        use ClientHandshakeStep::*;
         loop {
             match self.advance_handshake() {
                 Ok(()) => return Ok(self.try_finish().unwrap_or_else(|_| unreachable!())),
@@ -157,13 +158,9 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     // we raised a WouldBlock error, this means this is a non-blocking socket
                     // we use poll to wait until the action we need is available
                     let flags = match self.step {
-                        ClientHandshakeStep::SendingOauth
-                        | ClientHandshakeStep::SendingNegociateFd
-                        | ClientHandshakeStep::SendingBegin => PollFlags::POLLOUT,
-                        ClientHandshakeStep::WaitOauth | ClientHandshakeStep::WaitNegociateFd => {
-                            PollFlags::POLLIN
-                        }
-                        ClientHandshakeStep::Init | ClientHandshakeStep::Done => unreachable!(),
+                        SendingOauth | SendingNegociateFd | SendingBegin => PollFlags::POLLOUT,
+                        WaitOauth | WaitNegociateFd => PollFlags::POLLIN,
+                        Init | Done => unreachable!(),
                     };
                     wait_on(self.socket.as_raw_fd(), flags)?;
                 }
@@ -173,21 +170,19 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     }
 
     fn next_io_operation(&self) -> IoOperation {
+        use ClientHandshakeStep::*;
         match self.step {
-            ClientHandshakeStep::Init | ClientHandshakeStep::Done => IoOperation::None,
-            ClientHandshakeStep::WaitNegociateFd | ClientHandshakeStep::WaitOauth => {
-                IoOperation::Read
-            }
-            ClientHandshakeStep::SendingOauth
-            | ClientHandshakeStep::SendingNegociateFd
-            | ClientHandshakeStep::SendingBegin => IoOperation::Write,
+            Init | Done => IoOperation::None,
+            WaitNegociateFd | WaitOauth => IoOperation::Read,
+            SendingOauth | SendingNegociateFd | SendingBegin => IoOperation::Write,
         }
     }
 
     fn advance_handshake(&mut self) -> Result<()> {
+        use ClientHandshakeStep::*;
         loop {
             match self.step {
-                ClientHandshakeStep::Init => {
+                Init => {
                     // send the SASL handshake
                     let uid_str = Uid::current()
                         .to_string()
@@ -197,11 +192,11 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     self.buffer = format!("\0AUTH EXTERNAL {}\r\n", uid_str).into();
                     self.step = ClientHandshakeStep::SendingOauth;
                 }
-                ClientHandshakeStep::SendingOauth => {
+                SendingOauth => {
                     self.flush_buffer()?;
                     self.step = ClientHandshakeStep::WaitOauth;
                 }
-                ClientHandshakeStep::WaitOauth => {
+                WaitOauth => {
                     self.read_command()?;
                     let mut reply = String::new();
                     (&self.buffer[..]).read_line(&mut reply)?;
@@ -219,11 +214,11 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     self.buffer = Vec::from(&b"NEGOTIATE_UNIX_FD\r\n"[..]);
                     self.step = ClientHandshakeStep::SendingNegociateFd;
                 }
-                ClientHandshakeStep::SendingNegociateFd => {
+                SendingNegociateFd => {
                     self.flush_buffer()?;
                     self.step = ClientHandshakeStep::WaitNegociateFd;
                 }
-                ClientHandshakeStep::WaitNegociateFd => {
+                WaitNegociateFd => {
                     self.read_command()?;
                     if self.buffer.starts_with(b"AGREE_UNIX_FD") {
                         self.cap_unix_fd = true;
@@ -237,11 +232,11 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     self.buffer = Vec::from(&b"BEGIN\r\n"[..]);
                     self.step = ClientHandshakeStep::SendingBegin;
                 }
-                ClientHandshakeStep::SendingBegin => {
+                SendingBegin => {
                     self.flush_buffer()?;
                     self.step = ClientHandshakeStep::Done;
                 }
-                ClientHandshakeStep::Done => return Ok(()),
+                Done => return Ok(()),
             }
         }
     }
