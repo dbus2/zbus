@@ -23,7 +23,8 @@ struct ConnectionInner<S> {
     cap_unix_fd: bool,
     unique_name: OnceCell<String>,
 
-    raw_conn: RawConnection<Async<S>>,
+    raw_in_conn: RawConnection<Async<S>>,
+    raw_out_conn: RawConnection<Async<S>>,
     // Serial number for next outgoing message
     serial: u32,
 
@@ -396,9 +397,11 @@ impl Connection {
         bus_connection: bool,
     ) -> Result<Self> {
         let auth = auth.into_inner();
+        let out_socket = auth.conn.socket().get_ref().try_clone()?;
 
         let connection = Self(ConnectionInner {
-            raw_conn: auth.conn,
+            raw_in_conn: auth.conn,
+            raw_out_conn: RawConnection::wrap(Async::new(out_socket)?),
             server_guid: auth.server_guid,
             cap_unix_fd: auth.cap_unix_fd,
             serial: 1,
@@ -425,11 +428,11 @@ impl Connection {
     // Used by Sink impl.
     fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         loop {
-            match self.0.raw_conn.try_flush() {
+            match self.0.raw_out_conn.try_flush() {
                 Ok(()) => return Poll::Ready(Ok(())),
                 Err(e) => {
                     if e.kind() == ErrorKind::WouldBlock {
-                        let poll = self.0.raw_conn.socket().poll_writable(cx);
+                        let poll = self.0.raw_out_conn.socket().poll_writable(cx);
 
                         match poll {
                             Poll::Pending => return Poll::Pending,
@@ -477,7 +480,7 @@ impl Sink<Message> for Connection {
             return Err(Error::Unsupported);
         }
 
-        conn.0.raw_conn.enqueue_message(msg);
+        conn.0.raw_out_conn.enqueue_message(msg);
 
         Ok(())
     }
@@ -494,7 +497,7 @@ impl Sink<Message> for Connection {
             Poll::Pending => return Poll::Pending,
         }
 
-        Poll::Ready((conn.0.raw_conn).close())
+        Poll::Ready((conn.0.raw_out_conn).close())
     }
 }
 
@@ -509,10 +512,10 @@ impl Stream for Connection {
         }
 
         loop {
-            match conn.0.raw_conn.try_receive_message() {
+            match conn.0.raw_in_conn.try_receive_message() {
                 Ok(m) => return Poll::Ready(Some(Ok(m))),
                 Err(Error::Io(e)) if e.kind() == ErrorKind::WouldBlock => {
-                    let poll = conn.0.raw_conn.socket().poll_readable(cx);
+                    let poll = conn.0.raw_in_conn.socket().poll_readable(cx);
 
                     match poll {
                         Poll::Pending => return Poll::Pending,
