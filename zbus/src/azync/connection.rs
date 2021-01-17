@@ -7,8 +7,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures_core::stream::Stream;
-use futures_sink::Sink;
+use futures_core::stream;
 use futures_util::{sink::SinkExt, stream::TryStreamExt};
 
 use crate::{
@@ -44,9 +43,7 @@ struct ConnectionInner<S> {
 ///
 /// Unlike [`zbus::Connection`], this type does not implement [`std::clone::Clone`]. The reason is
 /// that implementation will be very difficult (and still prone to deadlocks) if connection is
-/// owned by multiple tasks/threads. Create separate connection instances or use
-/// [`futures_util::stream::StreamExt::split`] to split reading and writing between two separate
-/// async tasks.
+/// owned by multiple tasks/threads.
 ///
 /// Also notice that unlike [`zbus::Connection`], most methods take a `&mut self`, rather than a
 /// `&self`. If they'd take `&self`, `Connection` will need to manage mutability internally, which
@@ -58,18 +55,20 @@ struct ConnectionInner<S> {
 /// ### Sending Messages
 ///
 /// For sending messages you can either use [`Connection::send_message`] method or make use of the
-/// [`Sink`] implementation. For latter, you might find [`SinkExt`] API very useful. Keep in mind
-/// that [`Connection`] will not manage the serial numbers (cookies) on the messages for you when
-/// they are sent through the [`Sink`] implementation. You can manually assign unique serial numbers
-/// to them using the [`Connection::assign_serial_num`] method before sending them off, if needed.
-/// Having said that, [`Sink`] is mainly useful for sending out signals, as they do not expect a
-/// reply, and serial numbers are not very useful for signals either for the same reason.
+/// [`futures_sink::Sink`] that is returned by [`Connection::sink`] method. For latter, you might
+/// find [`SinkExt`] API very useful. Keep in mind that [`Connection`] will not manage the serial
+/// numbers (cookies) on the messages for you when they are sent through the [`Sink`]. You can
+/// manually assign unique serial numbers to them using the [`Connection::assign_serial_num`] method
+/// before sending them off, if needed. Having said that, [`Sink`] is mainly useful for sending out
+/// signals, as they do not expect a reply, and serial numbers are not very useful for signals
+/// either for the same reason.
 ///
 /// ### Receiving Messages
 ///
 /// Unlike [`zbus::Connection`], there is no direct async equivalent of
 /// [`zbus::Connection::receive_message`] method provided. This is because the `futures` crate
-/// already provides a nice rich API that makes use of the  [`Stream`] implementation.
+/// already provides a nice rich API that makes use of the [`stream::Stream`] implementation that is
+/// returned by [`Connection::stream`] method.
 ///
 /// ### Examples
 ///
@@ -120,7 +119,7 @@ struct ConnectionInner<S> {
 ///     )
 ///     .await?;
 ///
-/// while let Some(msg) = connection.try_next().await? {
+/// while let Some(msg) = connection.stream().try_next().await? {
 ///     println!("Got message: {}", msg);
 /// }
 ///
@@ -141,7 +140,6 @@ struct ConnectionInner<S> {
 /// ```
 ///
 /// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
-/// [`futures_util::stream::StreamExt::split`]: https://docs.rs/futures-util/0.3.11/futures_util/stream/trait.StreamExt.html#method.split
 #[derive(Debug)]
 pub struct Connection(ConnectionInner<Box<dyn Socket>>);
 
@@ -184,16 +182,32 @@ impl Connection {
         Self::new(auth, false).await
     }
 
+    /// Get a stream to receive incoming messages.
+    pub fn stream<'s, 'c: 's>(&'c mut self) -> Stream<'s> {
+        Stream {
+            raw_conn: &mut self.0.raw_in_conn,
+            incoming_queue: &mut self.0.incoming_queue,
+        }
+    }
+
+    /// Get a sink to send out messages.
+    pub fn sink<'s, 'c: 's>(&'c mut self) -> Sink<'s> {
+        Sink {
+            raw_conn: &mut self.0.raw_out_conn,
+            cap_unix_fd: self.0.cap_unix_fd,
+        }
+    }
+
     /// Send `msg` to the peer.
     ///
-    /// Unlike [`Sink`] implementation, this method sets a unique (to this connection) serial
-    /// number on the message before sending it off, for you.
+    /// Unlike [`Sink`], this method sets a unique (to this connection) serial number on the message
+    /// before sending it off, for you.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
     pub async fn send_message(&mut self, mut msg: Message) -> Result<u32> {
         let serial = self.assign_serial_num(&mut msg)?;
 
-        self.send(msg).await?;
+        self.sink().send(msg).await?;
 
         Ok(serial)
     }
@@ -227,7 +241,7 @@ impl Connection {
 
         let mut tmp_queue = vec![];
 
-        while let Some(m) = self.try_next().await? {
+        while let Some(m) = self.stream().try_next().await? {
             let h = m.header()?;
 
             if h.reply_serial()? != Some(serial) {
@@ -425,29 +439,6 @@ impl Connection {
         serial
     }
 
-    // Used by Sink impl.
-    fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        loop {
-            match self.0.raw_out_conn.try_flush() {
-                Ok(()) => return Poll::Ready(Ok(())),
-                Err(e) => {
-                    if e.kind() == ErrorKind::WouldBlock {
-                        let poll = self.0.raw_out_conn.socket().poll_writable(cx);
-
-                        match poll {
-                            Poll::Pending => return Poll::Pending,
-                            // Guess socket became ready already so let's try it again.
-                            Poll::Ready(Ok(_)) => continue,
-                            Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
-                        }
-                    } else {
-                        return Poll::Ready(Err(Error::Io(e)));
-                    }
-                }
-            }
-        }
-    }
-
     /// Create a `Connection` to the session/user message bus.
     pub async fn new_session() -> Result<Self> {
         Self::new(Authenticated::session().await?, true).await
@@ -466,7 +457,39 @@ impl Connection {
     }
 }
 
-impl Sink<Message> for Connection {
+/// Our [`futures_sink::Sink`] implementation.
+///
+/// Use [`Connection::sink`] to create an instance of this type.
+pub struct Sink<'s> {
+    raw_conn: &'s mut RawConnection<Async<Box<dyn Socket>>>,
+    cap_unix_fd: bool,
+}
+
+impl<'s> Sink<'s> {
+    fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        loop {
+            match self.raw_conn.try_flush() {
+                Ok(()) => return Poll::Ready(Ok(())),
+                Err(e) => {
+                    if e.kind() == ErrorKind::WouldBlock {
+                        let poll = self.raw_conn.socket().poll_writable(cx);
+
+                        match poll {
+                            Poll::Pending => return Poll::Pending,
+                            // Guess socket became ready already so let's try it again.
+                            Poll::Ready(Ok(_)) => continue,
+                            Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
+                        }
+                    } else {
+                        return Poll::Ready(Err(Error::Io(e)));
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl<'s> futures_sink::Sink<Message> for Sink<'s> {
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
@@ -475,12 +498,12 @@ impl Sink<Message> for Connection {
     }
 
     fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
-        let conn = self.get_mut();
-        if !msg.fds().is_empty() && !conn.0.cap_unix_fd {
+        let sink = self.get_mut();
+        if !msg.fds().is_empty() && !sink.cap_unix_fd {
             return Err(Error::Unsupported);
         }
 
-        conn.0.raw_out_conn.enqueue_message(msg);
+        sink.raw_conn.enqueue_message(msg);
 
         Ok(())
     }
@@ -490,32 +513,40 @@ impl Sink<Message> for Connection {
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        let conn = self.get_mut();
-        match conn.flush(cx) {
+        let sink = self.get_mut();
+        match sink.flush(cx) {
             Poll::Ready(Ok(_)) => (),
             Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
             Poll::Pending => return Poll::Pending,
         }
 
-        Poll::Ready((conn.0.raw_out_conn).close())
+        Poll::Ready((sink.raw_conn).close())
     }
 }
 
-impl Stream for Connection {
+/// Our [`stream::Stream`] implementation.
+///
+/// Use [`Connection::stream`] to create an instance of this type.
+pub struct Stream<'s> {
+    raw_conn: &'s mut RawConnection<Async<Box<dyn Socket>>>,
+    incoming_queue: &'s mut Vec<Message>,
+}
+
+impl<'s> stream::Stream for Stream<'s> {
     type Item = Result<Message>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let conn = self.get_mut();
+        let stream = self.get_mut();
 
-        if let Some(msg) = conn.0.incoming_queue.pop() {
+        if let Some(msg) = stream.incoming_queue.pop() {
             return Poll::Ready(Some(Ok(msg)));
         }
 
         loop {
-            match conn.0.raw_in_conn.try_receive_message() {
+            match stream.raw_conn.try_receive_message() {
                 Ok(m) => return Poll::Ready(Some(Ok(m))),
                 Err(Error::Io(e)) if e.kind() == ErrorKind::WouldBlock => {
-                    let poll = conn.0.raw_in_conn.socket().poll_readable(cx);
+                    let poll = stream.raw_conn.socket().poll_readable(cx);
 
                     match poll {
                         Poll::Pending => return Poll::Pending,
@@ -554,7 +585,7 @@ mod tests {
 
         let server_future = async {
             let mut method: Option<Message> = None;
-            while let Some(m) = server_conn.try_next().await? {
+            while let Some(m) = server_conn.stream().try_next().await? {
                 if m.to_string() == "Method call Test" {
                     method.replace(m);
 
@@ -576,7 +607,7 @@ mod tests {
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
             // Check we didn't miss the signal that was sent during the call.
-            let m = client_conn.try_next().await?.unwrap();
+            let m = client_conn.stream().try_next().await?.unwrap();
             assert_eq!(m.to_string(), "Signal ASignalForYou");
             reply.body::<String>().map_err(|e| e.into())
         };
