@@ -13,7 +13,7 @@ use crate::{
  * Client-side handshake logic
  */
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum ClientHandshakeStep {
     Init,
     MechanismInit,
@@ -229,18 +229,27 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     let mut reply = String::new();
                     (&self.recv_buffer[..]).read_line(&mut reply)?;
                     let mut words = reply.split_whitespace();
-                    // We expect a 2 words answer "OK" and the server Guid
-                    let guid = match (words.next(), words.next(), words.next()) {
-                        (Some("OK"), Some(guid), None) => guid.try_into()?,
-                        _ => {
-                            return Err(Error::Handshake(
-                                "Unexpected server AUTH reply".to_string(),
-                            ))
+                    match (self.step, words.next()) {
+                        (WaitingForOK, Some("OK")) => {
+                            // We expect a 2 words answer "OK" and the server Guid
+                            match (words.next(), words.next()) {
+                                (Some(guid), None) => {
+                                    self.server_guid = Some(guid.try_into()?);
+                                    self.send_buffer = Vec::from(&b"NEGOTIATE_UNIX_FD\r\n"[..]);
+                                    self.step = WaitingForAgreeUnixFD;
+                                }
+                                _ => {
+                                    return Err(Error::Handshake("OK without server GUID!".into()))
+                                }
+                            }
                         }
-                    };
-                    self.server_guid = Some(guid);
-                    self.send_buffer = Vec::from(&b"NEGOTIATE_UNIX_FD\r\n"[..]);
-                    self.step = WaitingForAgreeUnixFD;
+                        _ => {
+                            return Err(Error::Handshake(format!(
+                                "Unexpected server AUTH OK reply: {}",
+                                reply
+                            )))
+                        }
+                    }
                 }
                 WaitingForAgreeUnixFD => {
                     self.read_command()?;
