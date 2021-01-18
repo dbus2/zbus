@@ -249,6 +249,10 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                 WaitingForData | WaitingForOK => {
                     let reply = self.read_command()?;
                     match (self.step, reply) {
+                        (_, Command::Rejected(_)) => {
+                            self.mechanisms.pop_front();
+                            self.step = MechanismInit;
+                        }
                         (WaitingForOK, Command::Ok(guid)) => {
                             self.server_guid = Some(guid);
                             self.send_buffer = Command::NegotiateUnixFD.into();
