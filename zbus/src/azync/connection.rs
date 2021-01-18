@@ -22,6 +22,7 @@ use crate::{
 struct ConnectionInner<S> {
     server_guid: Guid,
     cap_unix_fd: bool,
+    bus_conn: bool,
     unique_name: OnceCell<String>,
 
     raw_in_conn: Mutex<RawConnection<Async<S>>>,
@@ -358,6 +359,13 @@ impl Connection {
         self.send_message(m).await
     }
 
+    /// Checks if `self` is a connection to a message bus.
+    ///
+    /// This will return `false` for p2p connections.
+    pub fn is_bus(&self) -> bool {
+        self.0.bus_conn
+    }
+
     /// Assigns a serial number to `msg` that is unique to this connection.
     ///
     /// This method can fail if `msg` is corrupt.
@@ -454,6 +462,7 @@ impl Connection {
             raw_out_conn: Mutex::new(out_conn),
             server_guid: auth.server_guid,
             cap_unix_fd: auth.cap_unix_fd,
+            bus_conn: bus_connection,
             serial: Mutex::new(1),
             unique_name: OnceCell::new(),
             incoming_queue: Mutex::new(vec![]),
