@@ -16,6 +16,7 @@ use crate::{
 #[derive(Debug, PartialEq)]
 enum ClientHandshakeStep {
     Init,
+    MechanismInit,
     WaitOauth,
     WaitNegociateFd,
     Done,
@@ -197,7 +198,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
         if self.send_buffer.is_empty() {
             match self.step {
                 WaitOauth | WaitNegociateFd => IoOperation::Read,
-                Init | Done => IoOperation::None,
+                Init | MechanismInit | Done => IoOperation::None,
             }
         } else {
             IoOperation::Write
@@ -209,9 +210,13 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
         loop {
             self.flush_buffer()?;
             match self.step {
-                Init => {
-                    let init = format!("\0{}", self.mechanism_init()?);
-                    self.send_buffer = init.into();
+                Init | MechanismInit => {
+                    let init = self.mechanism_init()?;
+                    self.send_buffer = if self.step == Init {
+                        format!("\0{}", init).into()
+                    } else {
+                        init.into()
+                    };
                     self.step = WaitOauth;
                 }
                 WaitOauth => {
