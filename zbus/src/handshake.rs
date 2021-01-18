@@ -17,6 +17,7 @@ use crate::{
 enum ClientHandshakeStep {
     Init,
     MechanismInit,
+    WaitingForData,
     WaitingForOK,
     WaitingForAgreeUnixFD,
     Done,
@@ -153,13 +154,17 @@ impl<S: Socket> ClientHandshake<S> {
         Ok(())
     }
 
-    fn mechanism_init(&mut self) -> Result<String> {
+    fn mechanism_init(&mut self) -> Result<(ClientHandshakeStep, String)> {
+        use ClientHandshakeStep::*;
         let mech = self
             .mechanisms
             .front()
             .ok_or_else(|| Error::Handshake("Exhausted available AUTH mechanisms".into()))?;
         match mech {
-            Mechanism::External => Ok(format!("AUTH {} {}\r\n", mech, sasl_auth_id())),
+            Mechanism::External => Ok((
+                WaitingForOK,
+                format!("AUTH {} {}\r\n", mech, sasl_auth_id()),
+            )),
             _ => Err(Error::Handshake("Unimplemented AUTH mechanisms".into())),
         }
     }
@@ -197,7 +202,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
         use ClientHandshakeStep::*;
         if self.send_buffer.is_empty() {
             match self.step {
-                WaitingForOK | WaitingForAgreeUnixFD => IoOperation::Read,
+                WaitingForOK | WaitingForData | WaitingForAgreeUnixFD => IoOperation::Read,
                 Init | MechanismInit | Done => IoOperation::None,
             }
         } else {
@@ -211,15 +216,15 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
             self.flush_buffer()?;
             match self.step {
                 Init | MechanismInit => {
-                    let init = self.mechanism_init()?;
+                    let (next_step, init) = self.mechanism_init()?;
                     self.send_buffer = if self.step == Init {
                         format!("\0{}", init).into()
                     } else {
                         init.into()
                     };
-                    self.step = WaitingForOK;
+                    self.step = next_step;
                 }
-                WaitingForOK => {
+                WaitingForData | WaitingForOK => {
                     self.read_command()?;
                     let mut reply = String::new();
                     (&self.recv_buffer[..]).read_line(&mut reply)?;
