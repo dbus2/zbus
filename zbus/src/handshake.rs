@@ -1,4 +1,4 @@
-use std::{convert::TryInto, fmt, io::BufRead, str::FromStr};
+use std::{collections::VecDeque, convert::TryInto, fmt, io::BufRead, str::FromStr};
 
 use nix::{poll::PollFlags, unistd::Uid};
 
@@ -59,6 +59,8 @@ pub struct ClientHandshake<S> {
     step: ClientHandshakeStep,
     server_guid: Option<Guid>,
     cap_unix_fd: bool,
+    // the current AUTH mechanism is front, ordered by priority
+    mechanisms: VecDeque<Mechanism>,
 }
 
 /// The result of a finalized handshake
@@ -119,6 +121,8 @@ pub trait Handshake<S> {
 impl<S: Socket> ClientHandshake<S> {
     /// Start a handsake on this client socket
     pub fn new(socket: S) -> ClientHandshake<S> {
+        let mut mechanisms = VecDeque::new();
+        mechanisms.push_back(Mechanism::External);
         ClientHandshake {
             socket,
             recv_buffer: Vec::new(),
@@ -126,6 +130,7 @@ impl<S: Socket> ClientHandshake<S> {
             step: ClientHandshakeStep::Init,
             server_guid: None,
             cap_unix_fd: false,
+            mechanisms,
         }
     }
 
@@ -146,6 +151,25 @@ impl<S: Socket> ClientHandshake<S> {
         }
         Ok(())
     }
+
+    fn mechanism_init(&mut self) -> Result<String> {
+        let mech = self
+            .mechanisms
+            .front()
+            .ok_or_else(|| Error::Handshake("Exhausted available AUTH mechanisms".into()))?;
+        match mech {
+            Mechanism::External => Ok(format!("AUTH {} {}\r\n", mech, sasl_auth_id())),
+            _ => Err(Error::Handshake("Unimplemented AUTH mechanisms".into())),
+        }
+    }
+}
+
+fn sasl_auth_id() -> String {
+    Uid::current()
+        .to_string()
+        .chars()
+        .map(|c| format!("{:x}", c as u32))
+        .collect::<String>()
 }
 
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
@@ -186,14 +210,9 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
             self.flush_buffer()?;
             match self.step {
                 Init => {
-                    // send the SASL handshake
-                    let uid_str = Uid::current()
-                        .to_string()
-                        .chars()
-                        .map(|c| format!("{:x}", c as u32))
-                        .collect::<String>();
-                    self.send_buffer = format!("\0AUTH EXTERNAL {}\r\n", uid_str).into();
-                    self.step = ClientHandshakeStep::WaitOauth;
+                    let init = format!("\0{}", self.mechanism_init()?);
+                    self.send_buffer = init.into();
+                    self.step = WaitOauth;
                 }
                 WaitOauth => {
                     self.read_command()?;
