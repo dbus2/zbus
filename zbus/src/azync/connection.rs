@@ -3,7 +3,10 @@ use async_lock::{Mutex, MutexGuard, RwLock};
 use once_cell::sync::OnceCell;
 use std::{
     io::{self, ErrorKind},
-    os::unix::{io::AsRawFd, net::UnixStream},
+    os::unix::{
+        io::{AsRawFd, RawFd},
+        net::UnixStream,
+    },
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -425,6 +428,11 @@ impl Connection {
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
         self.0.server_guid.as_str()
+    }
+
+    /// Get the raw file descriptor of this connection.
+    pub async fn as_raw_fd(&self) -> RawFd {
+        (self.0.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
     async fn hello_bus(self) -> Result<Self> {
