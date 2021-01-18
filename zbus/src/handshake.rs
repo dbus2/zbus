@@ -17,8 +17,8 @@ use crate::{
 enum ClientHandshakeStep {
     Init,
     MechanismInit,
-    WaitOauth,
-    WaitNegociateFd,
+    WaitingForOK,
+    WaitingForAgreeUnixFD,
     Done,
 }
 
@@ -197,7 +197,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
         use ClientHandshakeStep::*;
         if self.send_buffer.is_empty() {
             match self.step {
-                WaitOauth | WaitNegociateFd => IoOperation::Read,
+                WaitingForOK | WaitingForAgreeUnixFD => IoOperation::Read,
                 Init | MechanismInit | Done => IoOperation::None,
             }
         } else {
@@ -217,9 +217,9 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     } else {
                         init.into()
                     };
-                    self.step = WaitOauth;
+                    self.step = WaitingForOK;
                 }
-                WaitOauth => {
+                WaitingForOK => {
                     self.read_command()?;
                     let mut reply = String::new();
                     (&self.recv_buffer[..]).read_line(&mut reply)?;
@@ -235,9 +235,9 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     };
                     self.server_guid = Some(guid);
                     self.send_buffer = Vec::from(&b"NEGOTIATE_UNIX_FD\r\n"[..]);
-                    self.step = ClientHandshakeStep::WaitNegociateFd;
+                    self.step = WaitingForAgreeUnixFD;
                 }
-                WaitNegociateFd => {
+                WaitingForAgreeUnixFD => {
                     self.read_command()?;
                     if self.recv_buffer.starts_with(b"AGREE_UNIX_FD") {
                         self.cap_unix_fd = true;
@@ -249,7 +249,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                         ));
                     }
                     self.send_buffer = Vec::from(&b"BEGIN\r\n"[..]);
-                    self.step = ClientHandshakeStep::Done;
+                    self.step = Done;
                 }
                 Done => return Ok(()),
             }
