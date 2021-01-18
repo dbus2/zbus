@@ -5,6 +5,7 @@ use std::{
     io::{self, ErrorKind},
     os::unix::{io::AsRawFd, net::UnixStream},
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -39,12 +40,6 @@ struct ConnectionInner<S> {
 ///
 /// Most of the API is very similar to [`zbus::Connection`], except it's asynchronous. However,
 /// there are a few differences:
-///
-/// ### Cloning
-///
-/// Unlike [`zbus::Connection`], this type does not implement [`std::clone::Clone`]. The reason is
-/// that implementation will be very difficult (and still prone to deadlocks) if connection is
-/// owned by multiple tasks/threads.
 ///
 /// ### Sending Messages
 ///
@@ -147,8 +142,8 @@ struct ConnectionInner<S> {
 /// ```
 ///
 /// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
-#[derive(Debug)]
-pub struct Connection(ConnectionInner<Box<dyn Socket>>);
+#[derive(Clone, Debug)]
+pub struct Connection(Arc<ConnectionInner<Box<dyn Socket>>>);
 
 impl Connection {
     /// Create and open a D-Bus connection from a `UnixStream`.
@@ -454,7 +449,7 @@ impl Connection {
         let out_socket = auth.conn.socket().get_ref().try_clone()?;
         let out_conn = RawConnection::wrap(Async::new(out_socket)?);
 
-        let connection = Self(ConnectionInner {
+        let connection = Self(Arc::new(ConnectionInner {
             raw_in_conn: Mutex::new(auth.conn),
             raw_out_conn: Mutex::new(out_conn),
             server_guid: auth.server_guid,
@@ -463,7 +458,7 @@ impl Connection {
             unique_name: OnceCell::new(),
             incoming_queue: Mutex::new(vec![]),
             max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
-        });
+        }));
 
         if !bus_connection {
             return Ok(connection);
