@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn basic_connection_async() {
-        futures_executor::block_on(test_basic_connection()).unwrap();
+        pollster::block_on(test_basic_connection()).unwrap();
     }
 
     async fn test_basic_connection() -> Result<()> {
@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn freedesktop_api_async() {
-        futures_executor::block_on(test_freedesktop_api()).unwrap();
+        pollster::block_on(test_freedesktop_api()).unwrap();
     }
 
     async fn test_freedesktop_api() -> Result<()> {

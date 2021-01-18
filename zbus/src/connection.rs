@@ -3,7 +3,7 @@ use std::os::unix::{
     net::UnixStream,
 };
 
-use futures_executor::block_on;
+use pollster::block_on;
 
 use crate::{azync, Guid, Message, Result};
 

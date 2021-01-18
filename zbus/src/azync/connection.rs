@@ -83,7 +83,7 @@ struct ConnectionInner<S> {
 /// ```
 ///# use zvariant::Type;
 ///#
-///# futures_executor::block_on(async {
+///# pollster::block_on(async {
 /// use zbus::azync::Connection;
 ///
 /// let mut connection = Connection::new_session().await?;
@@ -109,7 +109,7 @@ struct ConnectionInner<S> {
 /// Let's eavesdrop on the session bus 😈 using the [Monitor] interface:
 ///
 /// ```rust,no_run
-///# futures_executor::block_on(async {
+///# pollster::block_on(async {
 /// use futures_util::stream::TryStreamExt;
 /// use zbus::azync::Connection;
 ///
@@ -404,7 +404,7 @@ impl Connection {
     /// ```
     ///# use std::error::Error;
     ///# use zbus::azync::Connection;
-    ///# use futures_executor::block_on;
+    ///# use pollster::block_on;
     ///#
     ///# block_on(async {
     /// let conn = Connection::new_session()
@@ -632,7 +632,7 @@ mod tests {
 
     #[test]
     fn unix_p2p() {
-        futures_executor::block_on(test_unix_p2p()).unwrap();
+        pollster::block_on(test_unix_p2p()).unwrap();
     }
 
     async fn test_unix_p2p() -> Result<()> {
@@ -682,7 +682,7 @@ mod tests {
 
     #[test]
     fn serial_monotonically_increases() {
-        futures_executor::block_on(test_serial_monotonically_increases());
+        pollster::block_on(test_serial_monotonically_increases());
     }
 
     async fn test_serial_monotonically_increases() {
