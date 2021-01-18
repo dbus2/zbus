@@ -679,4 +679,18 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn serial_monotonically_increases() {
+        futures_executor::block_on(test_serial_monotonically_increases());
+    }
+
+    async fn test_serial_monotonically_increases() {
+        let c = Connection::new_session().await.unwrap();
+        let serial = c.next_serial().await + 1;
+
+        for next in serial..serial + 10 {
+            assert_eq!(next, c.next_serial().await);
+        }
+    }
 }
