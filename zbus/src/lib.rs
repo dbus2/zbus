@@ -267,7 +267,7 @@ mod tests {
     }
 
     async fn test_basic_connection() -> Result<()> {
-        let mut connection = azync::Connection::new_session().await?;
+        let connection = azync::Connection::new_session().await?;
 
         match connection
             .call_method(
@@ -436,7 +436,7 @@ mod tests {
     }
 
     async fn test_freedesktop_api() -> Result<()> {
-        let mut connection = azync::Connection::new_session().await?;
+        let connection = azync::Connection::new_session().await?;
 
         let reply = connection
             .call_method(
