@@ -13,14 +13,11 @@ use crate::{
  * Client-side handshake logic
  */
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum ClientHandshakeStep {
     Init,
-    SendingOauth,
     WaitOauth,
-    SendingNegociateFd,
     WaitNegociateFd,
-    SendingBegin,
     Done,
 }
 
@@ -57,7 +54,8 @@ enum Mechanism {
 #[derive(Debug)]
 pub struct ClientHandshake<S> {
     socket: S,
-    buffer: Vec<u8>,
+    recv_buffer: Vec<u8>,
+    send_buffer: Vec<u8>,
     step: ClientHandshakeStep,
     server_guid: Option<Guid>,
     cap_unix_fd: bool,
@@ -123,7 +121,8 @@ impl<S: Socket> ClientHandshake<S> {
     pub fn new(socket: S) -> ClientHandshake<S> {
         ClientHandshake {
             socket,
-            buffer: Vec::new(),
+            recv_buffer: Vec::new(),
+            send_buffer: Vec::new(),
             step: ClientHandshakeStep::Init,
             server_guid: None,
             cap_unix_fd: false,
@@ -131,18 +130,19 @@ impl<S: Socket> ClientHandshake<S> {
     }
 
     fn flush_buffer(&mut self) -> Result<()> {
-        while !self.buffer.is_empty() {
-            let written = self.socket.sendmsg(&self.buffer, &[])?;
-            self.buffer.drain(..written);
+        while !self.send_buffer.is_empty() {
+            let written = self.socket.sendmsg(&self.send_buffer, &[])?;
+            self.send_buffer.drain(..written);
         }
         Ok(())
     }
 
     fn read_command(&mut self) -> Result<()> {
-        while !self.buffer.ends_with(b"\r\n") {
+        self.recv_buffer.clear(); // maybe until \r\n instead?
+        while !self.recv_buffer.ends_with(b"\r\n") {
             let mut buf = [0; 40];
             let (read, _) = self.socket.recvmsg(&mut buf)?;
-            self.buffer.extend(&buf[..read]);
+            self.recv_buffer.extend(&buf[..read]);
         }
         Ok(())
     }
@@ -150,17 +150,16 @@ impl<S: Socket> ClientHandshake<S> {
 
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     fn blocking_finish(mut self) -> Result<Authenticated<S>> {
-        use ClientHandshakeStep::*;
         loop {
             match self.advance_handshake() {
                 Ok(()) => return Ok(self.try_finish().unwrap_or_else(|_| unreachable!())),
                 Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     // we raised a WouldBlock error, this means this is a non-blocking socket
                     // we use poll to wait until the action we need is available
-                    let flags = match self.step {
-                        SendingOauth | SendingNegociateFd | SendingBegin => PollFlags::POLLOUT,
-                        WaitOauth | WaitNegociateFd => PollFlags::POLLIN,
-                        Init | Done => unreachable!(),
+                    let flags = match self.next_io_operation() {
+                        IoOperation::Write => PollFlags::POLLOUT,
+                        IoOperation::Read => PollFlags::POLLIN,
+                        _ => unreachable!(),
                     };
                     wait_on(self.socket.as_raw_fd(), flags)?;
                 }
@@ -171,16 +170,20 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
 
     fn next_io_operation(&self) -> IoOperation {
         use ClientHandshakeStep::*;
-        match self.step {
-            Init | Done => IoOperation::None,
-            WaitNegociateFd | WaitOauth => IoOperation::Read,
-            SendingOauth | SendingNegociateFd | SendingBegin => IoOperation::Write,
+        if self.send_buffer.is_empty() {
+            match self.step {
+                WaitOauth | WaitNegociateFd => IoOperation::Read,
+                Init | Done => IoOperation::None,
+            }
+        } else {
+            IoOperation::Write
         }
     }
 
     fn advance_handshake(&mut self) -> Result<()> {
         use ClientHandshakeStep::*;
         loop {
+            self.flush_buffer()?;
             match self.step {
                 Init => {
                     // send the SASL handshake
@@ -189,17 +192,13 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                         .chars()
                         .map(|c| format!("{:x}", c as u32))
                         .collect::<String>();
-                    self.buffer = format!("\0AUTH EXTERNAL {}\r\n", uid_str).into();
-                    self.step = ClientHandshakeStep::SendingOauth;
-                }
-                SendingOauth => {
-                    self.flush_buffer()?;
+                    self.send_buffer = format!("\0AUTH EXTERNAL {}\r\n", uid_str).into();
                     self.step = ClientHandshakeStep::WaitOauth;
                 }
                 WaitOauth => {
                     self.read_command()?;
                     let mut reply = String::new();
-                    (&self.buffer[..]).read_line(&mut reply)?;
+                    (&self.recv_buffer[..]).read_line(&mut reply)?;
                     let mut words = reply.split_whitespace();
                     // We expect a 2 words answer "OK" and the server Guid
                     let guid = match (words.next(), words.next(), words.next()) {
@@ -211,29 +210,21 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                         }
                     };
                     self.server_guid = Some(guid);
-                    self.buffer = Vec::from(&b"NEGOTIATE_UNIX_FD\r\n"[..]);
-                    self.step = ClientHandshakeStep::SendingNegociateFd;
-                }
-                SendingNegociateFd => {
-                    self.flush_buffer()?;
+                    self.send_buffer = Vec::from(&b"NEGOTIATE_UNIX_FD\r\n"[..]);
                     self.step = ClientHandshakeStep::WaitNegociateFd;
                 }
                 WaitNegociateFd => {
                     self.read_command()?;
-                    if self.buffer.starts_with(b"AGREE_UNIX_FD") {
+                    if self.recv_buffer.starts_with(b"AGREE_UNIX_FD") {
                         self.cap_unix_fd = true;
-                    } else if self.buffer.starts_with(b"ERROR") {
+                    } else if self.recv_buffer.starts_with(b"ERROR") {
                         self.cap_unix_fd = false;
                     } else {
                         return Err(Error::Handshake(
                             "Unexpected server UNIX_FD reply".to_string(),
                         ));
                     }
-                    self.buffer = Vec::from(&b"BEGIN\r\n"[..]);
-                    self.step = ClientHandshakeStep::SendingBegin;
-                }
-                SendingBegin => {
-                    self.flush_buffer()?;
+                    self.send_buffer = Vec::from(&b"BEGIN\r\n"[..]);
                     self.step = ClientHandshakeStep::Done;
                 }
                 Done => return Ok(()),
