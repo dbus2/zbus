@@ -435,11 +435,7 @@ impl Connection {
 
     fn new<H: Handshake<Box<dyn Socket>>>(handshake: H, bus_conn: bool) -> Result<Self> {
         let auth = handshake.blocking_finish()?;
-        let out_socket = auth
-            .conn
-            .socket()
-            .try_clone()
-            .expect("Failed to clone socket");
+        let out_socket = auth.conn.socket().try_clone()?;
 
         let conn = Self(Arc::new(ConnectionInner {
             raw_in_conn: Mutex::new(auth.conn),
