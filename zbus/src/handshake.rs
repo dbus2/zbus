@@ -1,4 +1,11 @@
-use std::{collections::VecDeque, fmt, io::BufRead, str::FromStr};
+use std::{
+    collections::VecDeque,
+    fmt,
+    fs::File,
+    io::{BufRead, BufReader},
+    path::PathBuf,
+    str::FromStr,
+};
 
 use nix::{poll::PollFlags, unistd::Uid};
 
@@ -142,6 +149,7 @@ impl<S: Socket> ClientHandshake<S> {
     pub fn new(socket: S) -> ClientHandshake<S> {
         let mut mechanisms = VecDeque::new();
         mechanisms.push_back(Mechanism::External);
+        mechanisms.push_back(Mechanism::Cookie);
         ClientHandshake {
             socket,
             recv_buffer: Vec::new(),
@@ -176,20 +184,67 @@ impl<S: Socket> ClientHandshake<S> {
         line.parse()
     }
 
+    fn mechanism(&self) -> Result<&Mechanism> {
+        self.mechanisms
+            .front()
+            .ok_or_else(|| Error::Handshake("Exhausted available AUTH mechanisms".into()))
+    }
+
     fn mechanism_init(&mut self) -> Result<(ClientHandshakeStep, Command)> {
         use ClientHandshakeStep::*;
-        let mech = self
-            .mechanisms
-            .front()
-            .ok_or_else(|| Error::Handshake("Exhausted available AUTH mechanisms".into()))?;
+        let mech = self.mechanism()?;
         match mech {
             Mechanism::External => Ok((
                 WaitingForOK,
                 Command::Auth(Some(*mech), Some(sasl_auth_id())),
             )),
+            Mechanism::Cookie => Ok((
+                WaitingForData,
+                Command::Auth(Some(*mech), Some(sasl_auth_id())),
+            )),
             _ => Err(Error::Handshake("Unimplemented AUTH mechanisms".into())),
         }
     }
+
+    fn mechanism_data(&mut self, data: Vec<u8>) -> Result<(ClientHandshakeStep, Command)> {
+        use ClientHandshakeStep::*;
+        let mech = self.mechanism()?;
+        match mech {
+            Mechanism::Cookie => {
+                let context = String::from_utf8_lossy(&data);
+                let mut split = context.split_ascii_whitespace();
+                let name = split
+                    .next()
+                    .ok_or_else(|| Error::Handshake("Missing cookie context name".into()))?;
+                let id = split
+                    .next()
+                    .ok_or_else(|| Error::Handshake("Missing cookie ID".into()))?;
+                let server_chall = split
+                    .next()
+                    .ok_or_else(|| Error::Handshake("Missing cookie challenge".into()))?;
+
+                let cookie = Cookie::lookup(name, id)?;
+                let client_chall = random_ascii(16);
+                let sec = format!("{}:{}:{}", server_chall, client_chall, cookie);
+                let sha1 = sha1::Sha1::from(sec).hexdigest();
+                let data = format!("{} {}", client_chall, sha1);
+                Ok((WaitingForOK, Command::Data(data.into())))
+            }
+            _ => Err(Error::Handshake("Unexpected mechanism DATA".into())),
+        }
+    }
+}
+
+fn random_ascii(len: usize) -> String {
+    use rand::{distributions::Alphanumeric, thread_rng, Rng};
+    use std::iter;
+
+    let mut rng = thread_rng();
+    iter::repeat(())
+        .map(|()| rng.sample(Alphanumeric))
+        .map(char::from)
+        .take(len)
+        .collect()
 }
 
 fn sasl_auth_id() -> String {
@@ -198,6 +253,88 @@ fn sasl_auth_id() -> String {
         .chars()
         .map(|c| format!("{:x}", c as u32))
         .collect::<String>()
+}
+
+#[derive(Debug)]
+struct Cookie {
+    id: String,
+    creation_time: String,
+    cookie: String,
+}
+
+impl Cookie {
+    fn keyring_path() -> Result<PathBuf> {
+        let home = std::env::var("HOME")
+            .map_err(|e| Error::Handshake(format!("Failed to read $HOME: {}", e)))?;
+        let mut path = PathBuf::new();
+        path.push(home);
+        path.push(".dbus-keyrings");
+        Ok(path)
+    }
+
+    fn read_keyring(name: &str) -> Result<Vec<Cookie>> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut path = Cookie::keyring_path()?;
+        let perms = std::fs::metadata(&path)?.permissions().mode();
+        if perms & 0o066 != 0 {
+            return Err(Error::Handshake(
+                "DBus keyring has invalid permissions".into(),
+            ));
+        }
+        path.push(name);
+        let file = File::open(&path)?;
+        let mut cookies = vec![];
+        for (n, line) in BufReader::new(file).lines().enumerate() {
+            let line = line?;
+            let mut split = line.split_whitespace();
+            let id = split
+                .next()
+                .ok_or_else(|| {
+                    Error::Handshake(format!(
+                        "DBus cookie `{}` missing ID at line {}",
+                        path.to_str().unwrap(),
+                        n
+                    ))
+                })?
+                .to_string();
+            let creation_time = split
+                .next()
+                .ok_or_else(|| {
+                    Error::Handshake(format!(
+                        "DBus cookie `{}` missing creation time at line {}",
+                        path.to_str().unwrap(),
+                        n
+                    ))
+                })?
+                .to_string();
+            let cookie = split
+                .next()
+                .ok_or_else(|| {
+                    Error::Handshake(format!(
+                        "DBus cookie `{}` missing cookie data at line {}",
+                        path.to_str().unwrap(),
+                        n
+                    ))
+                })?
+                .to_string();
+            cookies.push(Cookie {
+                id,
+                creation_time,
+                cookie,
+            })
+        }
+        Ok(cookies)
+    }
+
+    fn lookup(name: &str, id: &str) -> Result<String> {
+        let keyring = Self::read_keyring(name)?;
+        let c = keyring
+            .iter()
+            .find(|c| c.id == id)
+            .ok_or_else(|| Error::Handshake(format!("DBus cookie ID {} not found", id)))?;
+        Ok(c.cookie.to_string())
+    }
 }
 
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
@@ -249,6 +386,11 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                 WaitingForData | WaitingForOK => {
                     let reply = self.read_command()?;
                     match (self.step, reply) {
+                        (_, Command::Data(data)) => {
+                            let (next_step, resp) = self.mechanism_data(data)?;
+                            self.send_buffer = resp.into();
+                            self.step = next_step;
+                        }
                         (_, Command::Rejected(_)) => {
                             self.mechanisms.pop_front();
                             self.step = MechanismInit;
