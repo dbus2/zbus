@@ -135,9 +135,8 @@ impl Connection {
     /// Fetch the next message from the connection.
     ///
     /// Read from the connection until a message is received or an error is reached. Return the
-    /// message on success. If the connection is in non-blocking mode, this will return a
-    /// `WouldBlock` error instead of blocking. If there are pending messages in the queue, the
-    /// first one from the queue is returned instead of attempting to read the connection.
+    /// message on success. If there are pending messages in the queue, the first one from the queue
+    /// is returned instead of attempting to read the connection.
     ///
     /// # Warning
     ///
