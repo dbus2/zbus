@@ -587,11 +587,6 @@ impl ObjectServer {
     ///   the caller through the associated server connection.
     ///
     /// Returns an error if the message is malformed, true if it's handled, false otherwise.
-    ///
-    /// # Note
-    ///
-    /// This API is subject to change, or becoming internal-only once zbus provides a general
-    /// mechanism to dispatch messages.
     pub fn dispatch_message(&mut self, msg: &Message) -> Result<bool> {
         let msg_header = msg.header()?;
 
@@ -612,11 +607,6 @@ impl ObjectServer {
     /// interface, it returns `Ok(None)`. If not, it returns the received message.
     ///
     /// Returns an error if the message is malformed or an error occured.
-    ///
-    /// # Note
-    ///
-    /// This API is subject to change, or becoming internal-only once zbus provides a general
-    /// mechanism to dispatch messages.
     pub fn try_handle_next(&mut self) -> Result<Option<Message>> {
         let msg = self.conn.receive_message()?;
 
