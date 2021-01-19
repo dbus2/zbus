@@ -212,7 +212,7 @@ mod tests {
 
     use zvariant::{derive::Type, Fd, OwnedValue, Type};
 
-    use crate::{azync::ConnectionType, Connection, Message, MessageFlags, Result};
+    use crate::{azync, Connection, Message, MessageFlags, Result};
 
     #[test]
     fn msg() {
@@ -263,13 +263,11 @@ mod tests {
 
     #[test]
     fn basic_connection_async() {
-        futures_executor::block_on(test_basic_connection()).unwrap();
+        pollster::block_on(test_basic_connection()).unwrap();
     }
 
     async fn test_basic_connection() -> Result<()> {
-        let mut connection = match ConnectionType::new_session().await? {
-            ConnectionType::Unix(c) => c,
-        };
+        let connection = azync::Connection::new_session().await?;
 
         match connection
             .call_method(
@@ -434,13 +432,11 @@ mod tests {
 
     #[test]
     fn freedesktop_api_async() {
-        futures_executor::block_on(test_freedesktop_api()).unwrap();
+        pollster::block_on(test_freedesktop_api()).unwrap();
     }
 
     async fn test_freedesktop_api() -> Result<()> {
-        let mut connection = match ConnectionType::new_session().await? {
-            ConnectionType::Unix(c) => c,
-        };
+        let connection = azync::Connection::new_session().await?;
 
         let reply = connection
             .call_method(

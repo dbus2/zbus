@@ -1,8 +1,6 @@
 use crate::{raw::Socket, Error, Result};
 use async_io::Async;
-use nb_connect::unix;
 use nix::unistd::Uid;
-use polling::{Event, Poller};
 use std::{collections::HashMap, env, ffi::OsString, os::unix::net::UnixStream, str::FromStr};
 
 /// A bus address
@@ -14,46 +12,24 @@ pub(crate) enum Address {
 
 #[derive(Debug)]
 pub(crate) enum Stream {
-    Unix(UnixStream),
-}
-
-impl Stream {
-    pub(crate) fn into_boxed(self) -> Box<dyn Socket> {
-        match self {
-            Stream::Unix(s) => Box::new(s),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub(crate) enum AsyncStream {
     Unix(Async<UnixStream>),
 }
 
-impl Address {
-    pub(crate) fn connect(&self) -> Result<Stream> {
+impl Stream {
+    pub(crate) fn into_boxed(self) -> Result<Async<Box<dyn Socket>>> {
         match self {
-            Address::Unix(p) => {
-                // Note: we use nb_connect because std::UnixStream::connect() doesn't support
-                // abstract addresses.
-                let stream = unix(p)?;
-
-                let poller = Poller::new()?;
-                poller.add(&stream, Event::writable(0))?;
-                poller.wait(&mut Vec::new(), None)?;
-
-                stream.set_nonblocking(false)?;
-
-                Ok(Stream::Unix(stream))
-            }
+            // FIXME: easier/more direct way to do this?
+            Stream::Unix(s) => Ok(Async::new(Box::new(s.into_inner()?) as Box<dyn Socket>)?),
         }
     }
+}
 
-    pub(crate) async fn connect_async(&self) -> Result<AsyncStream> {
+impl Address {
+    pub(crate) async fn connect(&self) -> Result<Stream> {
         match self {
             Address::Unix(p) => Async::<UnixStream>::connect(p)
                 .await
-                .map(AsyncStream::Unix)
+                .map(Stream::Unix)
                 .map_err(Error::Io),
         }
     }

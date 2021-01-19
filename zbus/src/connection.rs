@@ -1,43 +1,13 @@
-use std::{
-    os::unix::{
-        io::{AsRawFd, RawFd},
-        net::UnixStream,
-    },
-    sync::{Arc, Mutex, RwLock},
+use std::os::unix::{
+    io::{AsRawFd, RawFd},
+    net::UnixStream,
 };
 
-use nix::poll::PollFlags;
-use once_cell::sync::OnceCell;
+use pollster::block_on;
 
-use crate::{
-    fdo,
-    handshake::{ClientHandshake, Handshake, ServerHandshake},
-    raw::{Connection as RawConnection, Socket},
-    utils::wait_on,
-    Error, Guid, Message, MessageType, Result,
-};
+use crate::{azync, Guid, Message, Result};
 
 pub(crate) const DEFAULT_MAX_QUEUED: usize = 32;
-const LOCK_FAIL_MSG: &str = "Failed to lock a mutex or read-write lock";
-
-#[derive(Debug)]
-struct ConnectionInner<S> {
-    server_guid: Guid,
-    cap_unix_fd: bool,
-    bus_conn: bool,
-    unique_name: OnceCell<String>,
-
-    raw_in_conn: Mutex<RawConnection<S>>,
-    raw_out_conn: Mutex<RawConnection<S>>,
-    // Serial number for next outgoing message
-    serial: Mutex<u32>,
-
-    // Queue of incoming messages
-    incoming_queue: Mutex<Vec<Message>>,
-
-    // Max number of messages to queue
-    max_queued: RwLock<usize>,
-}
 
 /// A D-Bus connection.
 ///
@@ -78,11 +48,11 @@ struct ConnectionInner<S> {
 /// [`receive_message`]: struct.Connection.html#method.receive_message
 /// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
 #[derive(Debug, Clone)]
-pub struct Connection(Arc<ConnectionInner<Box<dyn Socket>>>);
+pub struct Connection(azync::Connection);
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        (**self.0.raw_in_conn.lock().expect(LOCK_FAIL_MSG).socket()).as_raw_fd()
+        block_on(self.0.as_raw_fd())
     }
 }
 
@@ -95,27 +65,24 @@ impl Connection {
     /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
     /// can be sent and received.
     pub fn new_unix_client(stream: UnixStream, bus_connection: bool) -> Result<Self> {
-        Self::new(
-            ClientHandshake::new(Box::new(stream) as Box<dyn Socket>),
-            bus_connection,
-        )
+        block_on(azync::Connection::new_unix_client(stream, bus_connection)).map(Self)
     }
 
     /// Create a `Connection` to the session/user message bus.
     pub fn new_session() -> Result<Self> {
-        Self::new(ClientHandshake::new_session()?, true)
+        block_on(azync::Connection::new_session()).map(Self)
     }
 
     /// Create a `Connection` to the system-wide message bus.
     pub fn new_system() -> Result<Self> {
-        Self::new(ClientHandshake::new_system()?, true)
+        block_on(azync::Connection::new_system()).map(Self)
     }
 
     /// Create a `Connection` for the given [D-Bus address].
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
-        Self::new(ClientHandshake::new_for_address(address)?, bus_connection)
+        block_on(azync::Connection::new_for_address(address, bus_connection)).map(Self)
     }
 
     /// Create a server `Connection` for the given `UnixStream` and the server `guid`.
@@ -126,24 +93,12 @@ impl Connection {
     /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
     /// can be sent and received.
     pub fn new_unix_server(stream: UnixStream, guid: &Guid) -> Result<Self> {
-        use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
-
-        let creds = getsockopt(stream.as_raw_fd(), PeerCredentials)
-            .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
-
-        Self::new(
-            ServerHandshake::new(
-                Box::new(stream) as Box<dyn Socket>,
-                guid.clone(),
-                creds.uid(),
-            ),
-            false,
-        )
+        block_on(azync::Connection::new_unix_server(stream, guid)).map(Self)
     }
 
     /// Max number of messages to queue.
     pub fn max_queued(&self) -> usize {
-        *self.0.max_queued.read().expect(LOCK_FAIL_MSG)
+        block_on(self.0.max_queued())
     }
 
     /// Set the max number of messages to queue.
@@ -164,27 +119,24 @@ impl Connection {
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn set_max_queued(self, max: usize) -> Self {
-        *self.0.max_queued.write().expect(LOCK_FAIL_MSG) = max;
-
-        self
+        Self(block_on(self.0.set_max_queued(max)))
     }
 
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
-        self.0.server_guid.as_str()
+        self.0.server_guid()
     }
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
     pub fn unique_name(&self) -> Option<&str> {
-        self.0.unique_name.get().map(|s| s.as_str())
+        self.0.unique_name()
     }
 
     /// Fetch the next message from the connection.
     ///
     /// Read from the connection until a message is received or an error is reached. Return the
-    /// message on success. If the connection is in non-blocking mode, this will return a
-    /// `WouldBlock` error instead of blocking. If there are pending messages in the queue, the
-    /// first one from the queue is returned instead of attempting to read the connection.
+    /// message on success. If there are pending messages in the queue, the first one from the queue
+    /// is returned instead of attempting to read the connection.
     ///
     /// # Warning
     ///
@@ -194,16 +146,7 @@ impl Connection {
     /// end up in a deadlock situation. It is therefore highly recommended not to use such a
     /// combination.
     pub fn receive_message(&self) -> Result<Message> {
-        loop {
-            let mut queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
-            if let Some(msg) = queue.pop() {
-                return Ok(msg);
-            }
-
-            if let Some(msg) = self.receive_message_raw()? {
-                return Ok(msg);
-            }
-        }
+        block_on(self.0.receive_specific(|_| Ok(true)))
     }
 
     /// Receive a specific message.
@@ -216,25 +159,7 @@ impl Connection {
     where
         P: Fn(&Message) -> Result<bool>,
     {
-        loop {
-            let mut queue = self.0.incoming_queue.lock().expect(LOCK_FAIL_MSG);
-            for (i, msg) in queue.iter().enumerate() {
-                if predicate(msg)? {
-                    return Ok(queue.remove(i));
-                }
-            }
-
-            let msg = match self.receive_message_raw()? {
-                Some(msg) => msg,
-                None => continue,
-            };
-
-            if predicate(&msg)? {
-                return Ok(msg);
-            } else if queue.len() < *self.0.max_queued.read().expect(LOCK_FAIL_MSG) {
-                queue.push(msg);
-            }
-        }
+        block_on(self.0.receive_specific(predicate))
     }
 
     /// Send `msg` to the peer.
@@ -248,47 +173,8 @@ impl Connection {
     /// so that pending messages are written to the socket.
     ///
     /// [`flush`]: struct.Connection.html#method.flush
-    pub fn send_message(&self, mut msg: Message) -> Result<u32> {
-        if !msg.fds().is_empty() && !self.0.cap_unix_fd {
-            return Err(Error::Unsupported);
-        }
-
-        let serial = self.next_serial();
-        msg.modify_primary_header(|primary| {
-            primary.set_serial_num(serial);
-
-            Ok(())
-        })?;
-
-        let mut conn = self.0.raw_out_conn.lock().expect(LOCK_FAIL_MSG);
-        conn.enqueue_message(msg);
-        // Swallow a potential WouldBLock error, but propagate the others
-        if let Err(e) = conn.try_flush() {
-            if e.kind() != std::io::ErrorKind::WouldBlock {
-                return Err(e.into());
-            }
-        }
-
-        Ok(serial)
-    }
-
-    /// Flush pending outgoing messages to the server
-    ///
-    /// This method is only useful if the connection is in non-blocking mode. It will
-    /// write as many pending outgoing messages as possible to the socket.
-    ///
-    /// It will return `Ok(())` if all messages could be sent, and error otherwise. A
-    /// `WouldBlock` error means that the internal buffer of the connection transport is
-    /// full, and you need to wait for write-readiness before calling this method again.
-    ///
-    /// If the connection is in blocking mode, this will return `Ok(())` and do nothing.
-    pub fn flush(&self) -> Result<()> {
-        self.0
-            .raw_out_conn
-            .lock()
-            .expect(LOCK_FAIL_MSG)
-            .try_flush()?;
-        Ok(())
+    pub fn send_message(&self, msg: Message) -> Result<u32> {
+        block_on(self.0.send_message(msg))
     }
 
     /// Send a method call.
@@ -317,44 +203,10 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        let m = Message::method(
-            self.unique_name(),
-            destination,
-            path,
-            iface,
-            method_name,
-            body,
-        )?;
-
-        let serial = self.send_message(m)?;
-        // loop & sleep until the message is completely sent
-        loop {
-            match self.flush() {
-                Ok(()) => break,
-                Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    wait_on(self.as_raw_fd(), PollFlags::POLLOUT)?;
-                }
-                Err(e) => return Err(e),
-            }
-        }
-
-        loop {
-            match self.receive_specific(|m| {
-                let h = m.header()?;
-
-                Ok(h.reply_serial()? == Some(serial))
-            }) {
-                Ok(m) => match m.header()?.message_type()? {
-                    MessageType::Error => return Err(m.into()),
-                    MessageType::MethodReturn => return Ok(m),
-                    _ => (),
-                },
-                Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    wait_on(self.as_raw_fd(), PollFlags::POLLIN)?;
-                }
-                Err(e) => return Err(e),
-            };
-        }
+        block_on(
+            self.0
+                .call_method(destination, path, iface, method_name, body),
+        )
     }
 
     /// Emit a signal.
@@ -371,18 +223,10 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        let m = Message::signal(
-            self.unique_name(),
-            destination,
-            path,
-            iface,
-            signal_name,
-            body,
-        )?;
-
-        self.send_message(m)?;
-
-        Ok(())
+        block_on(
+            self.0
+                .emit_signal(destination, path, iface, signal_name, body),
+        )
     }
 
     /// Reply to a message.
@@ -395,8 +239,7 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        let m = Message::method_reply(self.unique_name(), call, body)?;
-        self.send_message(m)
+        block_on(self.0.reply(call, body))
     }
 
     /// Reply an error to a message.
@@ -409,74 +252,14 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        let m = Message::method_error(self.unique_name(), call, error_name, body)?;
-        self.send_message(m)
+        block_on(self.0.reply_error(call, error_name, body))
     }
 
     /// Checks if `self` is a connection to a message bus.
     ///
     /// This will return `false` for p2p connections.
     pub fn is_bus(&self) -> bool {
-        self.0.bus_conn
-    }
-
-    fn hello_bus(self) -> Result<Self> {
-        let name = fdo::DBusProxy::new(&self)?
-            .hello()
-            .map_err(|e| Error::Handshake(format!("Hello failed: {}", e)))?;
-        self.0
-            .unique_name
-            .set(name)
-            // programmer (probably our) error if this fails.
-            .expect("Attempted to set unique_name twice");
-
-        Ok(self)
-    }
-
-    fn new<H: Handshake<Box<dyn Socket>>>(handshake: H, bus_conn: bool) -> Result<Self> {
-        let auth = handshake.blocking_finish()?;
-        let out_socket = auth
-            .conn
-            .socket()
-            .try_clone()
-            .expect("Failed to clone socket");
-
-        let conn = Self(Arc::new(ConnectionInner {
-            raw_in_conn: Mutex::new(auth.conn),
-            raw_out_conn: Mutex::new(RawConnection::wrap(out_socket)),
-            server_guid: auth.server_guid,
-            cap_unix_fd: auth.cap_unix_fd,
-            bus_conn,
-            serial: Mutex::new(1),
-            unique_name: OnceCell::new(),
-            incoming_queue: Mutex::new(vec![]),
-            max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
-        }));
-
-        if !bus_conn {
-            return Ok(conn);
-        }
-        // Now that the server has approved us, we must send the bus Hello, as per specs
-        conn.hello_bus()
-    }
-
-    fn next_serial(&self) -> u32 {
-        let mut serial = self.0.serial.lock().expect(LOCK_FAIL_MSG);
-        let current = *serial;
-        *serial = current + 1;
-
-        current
-    }
-
-    // Get the message directly from the socket (ignoring the queue).
-    fn receive_message_raw(&self) -> Result<Option<Message>> {
-        let incoming = self
-            .0
-            .raw_in_conn
-            .lock()
-            .expect(LOCK_FAIL_MSG)
-            .try_receive_message()?;
-        Ok(Some(incoming))
+        self.0.is_bus()
     }
 }
 
@@ -509,15 +292,5 @@ mod tests {
 
         let val = server_thread.join().expect("failed to join server thread");
         assert_eq!(val, "yay");
-    }
-
-    #[test]
-    fn serial_monotonically_increases() {
-        let c = Connection::new_session().unwrap();
-        let serial = c.next_serial() + 1;
-
-        for next in serial..serial + 10 {
-            assert_eq!(next, c.next_serial());
-        }
     }
 }

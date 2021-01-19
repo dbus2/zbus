@@ -1,57 +1,80 @@
 use async_io::Async;
+use async_lock::{Mutex, MutexGuard, RwLock};
 use once_cell::sync::OnceCell;
 use std::{
     io::{self, ErrorKind},
-    os::unix::{io::AsRawFd, net::UnixStream},
+    os::unix::{
+        io::{AsRawFd, RawFd},
+        net::UnixStream,
+    },
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 
-use futures_core::stream::Stream;
-use futures_sink::Sink;
+use futures_core::stream;
 use futures_util::{sink::SinkExt, stream::TryStreamExt};
 
 use crate::{
-    azync::{Authenticated, AuthenticatedType},
+    azync::Authenticated,
     raw::{Connection as RawConnection, Socket},
     Error, Guid, Message, MessageType, Result, DEFAULT_MAX_QUEUED,
 };
+
+#[derive(Debug)]
+struct ConnectionInner<S> {
+    server_guid: Guid,
+    cap_unix_fd: bool,
+    bus_conn: bool,
+    unique_name: OnceCell<String>,
+
+    raw_in_conn: Mutex<RawConnection<Async<S>>>,
+    raw_out_conn: Mutex<RawConnection<Async<S>>>,
+    // Serial number for next outgoing message
+    serial: Mutex<u32>,
+
+    // Queue of incoming messages
+    incoming_queue: Mutex<Vec<Message>>,
+
+    // Max number of messages to queue
+    max_queued: RwLock<usize>,
+}
 
 /// The asynchronous sibling of [`zbus::Connection`].
 ///
 /// Most of the API is very similar to [`zbus::Connection`], except it's asynchronous. However,
 /// there are a few differences:
 ///
-/// ### Cloning and Mutability
-///
-/// Unlike [`zbus::Connection`], this type does not implement [`std::clone::Clone`]. The reason is
-/// that implementation will be very difficult (and still prone to deadlocks) if connection is
-/// owned by multiple tasks/threads. Create separate connection instances or use
-/// [`futures_util::stream::StreamExt::split`] to split reading and writing between two separate
-/// async tasks.
-///
-/// Also notice that unlike [`zbus::Connection`], most methods take a `&mut self`, rather than a
-/// `&self`. If they'd take `&self`, `Connection` will need to manage mutability internally, which
-/// is not a very good match with the general async/await machinery and runtimes in Rust and could
-/// easily lead into some hard-to-debug deadlocks. You can use [`std::cell::Cell`],
-/// [`std::sync::Mutex`] or other related API combined with [`std::rc::Rc`] or [`std::sync::Arc`]
-/// for sharing a mutable `Connection` instance between different parts of your code (or threads).
-///
 /// ### Sending Messages
 ///
 /// For sending messages you can either use [`Connection::send_message`] method or make use of the
-/// [`Sink`] implementation. For latter, you might find [`SinkExt`] API very useful. Keep in mind
-/// that [`Connection`] will not manage the serial numbers (cookies) on the messages for you when
-/// they are sent through the [`Sink`] implementation. You can manually assign unique serial numbers
-/// to them using the [`Connection::assign_serial_num`] method before sending them off, if needed.
-/// Having said that, [`Sink`] is mainly useful for sending out signals, as they do not expect a
-/// reply, and serial numbers are not very useful for signals either for the same reason.
+/// [`futures_sink::Sink`] implementation that is returned by [`Connection::sink`] method. For
+/// latter, you might find [`SinkExt`] API very useful. Keep in mind that [`Connection`] will not
+/// manage the serial numbers (cookies) on the messages for you when they are sent through the
+/// [`Sink`]. You can manually assign unique serial numbers to them using the
+/// [`Connection::assign_serial_num`] method before sending them off, if needed. Having said that,
+/// [`Sink`] is mainly useful for sending out signals, as they do not expect a reply, and serial
+/// numbers are not very useful for signals either for the same reason.
 ///
 /// ### Receiving Messages
 ///
 /// Unlike [`zbus::Connection`], there is no direct async equivalent of
 /// [`zbus::Connection::receive_message`] method provided. This is because the `futures` crate
-/// already provides a nice rich API that makes use of the  [`Stream`] implementation.
+/// already provides a nice rich API that makes use of the [`stream::Stream`] implementation that is
+/// returned by [`Connection::stream`] method.
+///
+/// However, there is [`Connection::receive_specific`] method, which takes a predicate function,
+/// using which you get to decided which message you're interested in. It first checks if there
+/// was already a message received by a previous call to [`Connection::receive_specific`]
+/// or during a [`Connection::call_method`] call that fits the predicate and returns that immediate.
+/// Otherwise, it awaits on the connection for the message of interest to be received. All other
+/// messages received, while waiting, are appended to the end of the incoming message queue to be
+/// picked up by a following or already awaiting `receive_specific` call or [`stream::Stream`]
+/// API.
+///
+/// In summary, if you're going to call D-Bus methods on the connection in one task, while receiving
+/// messages in another, it's best to use `receive_specific` method. Otherwise, you'd want to make
+/// use of the `stream` method.
 ///
 /// ### Examples
 ///
@@ -60,7 +83,7 @@ use crate::{
 /// ```
 ///# use zvariant::Type;
 ///#
-///# futures_executor::block_on(async {
+///# pollster::block_on(async {
 /// use zbus::azync::Connection;
 ///
 /// let mut connection = Connection::new_session().await?;
@@ -86,7 +109,7 @@ use crate::{
 /// Let's eavesdrop on the session bus 😈 using the [Monitor] interface:
 ///
 /// ```rust,no_run
-///# futures_executor::block_on(async {
+///# pollster::block_on(async {
 /// use futures_util::stream::TryStreamExt;
 /// use zbus::azync::Connection;
 ///
@@ -102,7 +125,7 @@ use crate::{
 ///     )
 ///     .await?;
 ///
-/// while let Some(msg) = connection.try_next().await? {
+/// while let Some(msg) = connection.stream().await.try_next().await? {
 ///     println!("Got message: {}", msg);
 /// }
 ///
@@ -123,76 +146,118 @@ use crate::{
 /// ```
 ///
 /// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
-/// [`futures_util::stream::StreamExt::split`]: https://docs.rs/futures-util/0.3.11/futures_util/stream/trait.StreamExt.html#method.split
-#[derive(Debug)]
-pub struct Connection<S> {
-    server_guid: Guid,
-    cap_unix_fd: bool,
-    unique_name: OnceCell<String>,
+#[derive(Clone, Debug)]
+pub struct Connection(Arc<ConnectionInner<Box<dyn Socket>>>);
 
-    raw_conn: RawConnection<Async<S>>,
-    // Serial number for next outgoing message
-    serial: u32,
-
-    // Queue of incoming messages
-    incoming_queue: Vec<Message>,
-
-    // Max number of messages to queue
-    max_queued: usize,
-}
-
-impl<S> Connection<S>
-where
-    S: AsRawFd + std::fmt::Debug + Unpin + Socket,
-    Async<S>: Socket,
-{
-    /// Create and open a D-Bus connection from the given `stream`.
+impl Connection {
+    /// Create and open a D-Bus connection from a `UnixStream`.
     ///
     /// The connection may either be set up for a *bus* connection, or not (for peer-to-peer
     /// communications).
     ///
     /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
     /// can be sent and received.
-    pub async fn new_client(stream: S, bus_connection: bool) -> Result<Self> {
+    pub async fn new_unix_client(stream: UnixStream, bus_connection: bool) -> Result<Self> {
         // SASL Handshake
-        let auth = Authenticated::client(Async::new(stream)?).await?;
+        let auth = Authenticated::client(Async::new(Box::new(stream) as Box<dyn Socket>)?).await?;
 
-        if bus_connection {
-            Connection::new_authenticated_bus(auth).await
-        } else {
-            Ok(Connection::new_authenticated(auth))
-        }
+        Self::new(auth, bus_connection).await
     }
 
-    /// Create a server `Connection` for the given `stream` and the server `guid`.
+    /// Create a server `Connection` for the given `UnixStream` and the server `guid`.
     ///
     /// The connection will wait for incoming client authentication handshake & negotiation messages,
     /// for peer-to-peer communications.
     ///
     /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
     /// can be sent and received.
-    pub async fn new_server(stream: S, guid: &Guid) -> Result<Self> {
+    pub async fn new_unix_server(stream: UnixStream, guid: &Guid) -> Result<Self> {
         use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
 
         // FIXME: Could and should this be async?
         let creds = getsockopt(stream.as_raw_fd(), PeerCredentials)
             .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
 
-        let auth = Authenticated::server(Async::new(stream)?, guid.clone(), creds.uid()).await?;
+        let auth = Authenticated::server(
+            Async::new(Box::new(stream) as Box<dyn Socket>)?,
+            guid.clone(),
+            creds.uid(),
+        )
+        .await?;
 
-        Ok(Self::new_authenticated(auth))
+        Self::new(auth, false).await
+    }
+
+    /// Get a stream to receive incoming messages.
+    pub async fn stream(&self) -> Stream<'_> {
+        let raw_conn = self.0.raw_in_conn.lock().await;
+        let incoming_queue = Some(self.0.incoming_queue.lock().await);
+
+        Stream {
+            raw_conn,
+            incoming_queue,
+        }
+    }
+
+    /// Get a sink to send out messages.
+    pub async fn sink(&self) -> Sink<'_> {
+        Sink {
+            raw_conn: self.0.raw_out_conn.lock().await,
+            cap_unix_fd: self.0.cap_unix_fd,
+        }
+    }
+
+    /// Receive a specific message.
+    ///
+    /// This is the same as receiving messages from [`Stream`], except that this takes a predicate
+    /// function that decides if the message received should be returned by this method or not. All
+    /// messages received during this call that are not returned by it, are pushed to the queue to
+    /// be picked by the susubsequent or awaiting call to this method or by the `Stream`.
+    pub async fn receive_specific<P>(&self, predicate: P) -> Result<Message>
+    where
+        P: Fn(&Message) -> Result<bool>,
+    {
+        loop {
+            let mut queue = self.0.incoming_queue.lock().await;
+            for (i, msg) in queue.iter().enumerate() {
+                if predicate(msg)? {
+                    return Ok(queue.remove(i));
+                }
+            }
+
+            let mut stream = Stream {
+                raw_conn: self.0.raw_in_conn.lock().await,
+                incoming_queue: None,
+            };
+            let msg = match stream.try_next().await? {
+                Some(msg) => msg,
+                None => {
+                    // If Stream gives us None, that means the socket was closed
+                    return Err(Error::Io(io::Error::new(
+                        ErrorKind::BrokenPipe,
+                        "socket closed",
+                    )));
+                }
+            };
+
+            if predicate(&msg)? {
+                return Ok(msg);
+            } else if queue.len() < *self.0.max_queued.read().await {
+                queue.push(msg);
+            }
+        }
     }
 
     /// Send `msg` to the peer.
     ///
-    /// Unlike [`Sink`] implementation, this method sets a unique (to this connection) serial
-    /// number on the message before sending it off, for you.
+    /// Unlike [`Sink`], this method sets a unique (to this connection) serial number on the message
+    /// before sending it off, for you.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
-    pub async fn send_message(&mut self, mut msg: Message) -> Result<u32> {
-        let serial = self.assign_serial_num(&mut msg)?;
+    pub async fn send_message(&self, mut msg: Message) -> Result<u32> {
+        let serial = self.assign_serial_num(&mut msg).await?;
 
-        self.send(msg).await?;
+        self.sink().await.send(msg).await?;
 
         Ok(serial)
     }
@@ -204,7 +269,7 @@ where
     /// On succesful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
     /// error replies are returned as [`Error::MethodError`].
     pub async fn call_method<B>(
-        &mut self,
+        &self,
         destination: Option<&str>,
         path: &str,
         iface: Option<&str>,
@@ -224,43 +289,30 @@ where
         )?;
         let serial = self.send_message(m).await?;
 
-        let mut tmp_queue = vec![];
+        loop {
+            match self
+                .receive_specific(|m| {
+                    let h = m.header()?;
 
-        while let Some(m) = self.try_next().await? {
-            let h = m.header()?;
-
-            if h.reply_serial()? != Some(serial) {
-                if self.incoming_queue.len() + tmp_queue.len() < self.max_queued() {
-                    // We first push to a temporary queue as otherwise it'll create an infinite loop
-                    // since subsequent `receive_message` call will pick up the message from the main
-                    // queue.
-                    tmp_queue.push(m);
-                }
-
-                continue;
-            } else {
-                self.incoming_queue.append(&mut tmp_queue);
-            }
-
-            match h.message_type()? {
-                MessageType::Error => return Err(m.into()),
-                MessageType::MethodReturn => return Ok(m),
-                _ => (),
-            }
+                    Ok(h.reply_serial()? == Some(serial))
+                })
+                .await
+            {
+                Ok(m) => match m.header()?.message_type()? {
+                    MessageType::Error => return Err(m.into()),
+                    MessageType::MethodReturn => return Ok(m),
+                    _ => continue,
+                },
+                Err(e) => return Err(e),
+            };
         }
-
-        // If Stream gives us None, that means the socket was closed
-        Err(Error::Io(io::Error::new(
-            ErrorKind::BrokenPipe,
-            "socket closed",
-        )))
     }
 
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
     pub async fn emit_signal<B>(
-        &mut self,
+        &self,
         destination: Option<&str>,
         path: &str,
         iface: &str,
@@ -288,7 +340,7 @@ where
     /// given `body`.
     ///
     /// Returns the message serial number.
-    pub async fn reply<B>(&mut self, call: &Message, body: &B) -> Result<u32>
+    pub async fn reply<B>(&self, call: &Message, body: &B) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
@@ -302,12 +354,7 @@ where
     /// with the given `error_name` and `body`.
     ///
     /// Returns the message serial number.
-    pub async fn reply_error<B>(
-        &mut self,
-        call: &Message,
-        error_name: &str,
-        body: &B,
-    ) -> Result<u32>
+    pub async fn reply_error<B>(&self, call: &Message, error_name: &str, body: &B) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
@@ -315,22 +362,18 @@ where
         self.send_message(m).await
     }
 
-    /// Sets the unique name for this connection.
+    /// Checks if `self` is a connection to a message bus.
     ///
-    /// This method should only be used when initializing a client *bus* connection with
-    /// [`Connection::new_authenticated`]. Setting the unique name to anything other than the return
-    /// value of the bus hello is a protocol violation.
-    ///
-    /// Returns and error if the name has already been set.
-    pub fn set_unique_name(self, name: String) -> std::result::Result<Self, String> {
-        self.unique_name.set(name).map(|_| self)
+    /// This will return `false` for p2p connections.
+    pub fn is_bus(&self) -> bool {
+        self.0.bus_conn
     }
 
     /// Assigns a serial number to `msg` that is unique to this connection.
     ///
     /// This method can fail if `msg` is corrupt.
-    pub fn assign_serial_num(&mut self, msg: &mut Message) -> Result<u32> {
-        let serial = self.next_serial();
+    pub async fn assign_serial_num(&self, msg: &mut Message) -> Result<u32> {
+        let serial = self.next_serial().await;
         msg.modify_primary_header(|primary| {
             primary.set_serial_num(serial);
 
@@ -342,12 +385,12 @@ where
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
     pub fn unique_name(&self) -> Option<&str> {
-        self.unique_name.get().map(|s| s.as_str())
+        self.0.unique_name.get().map(|s| s.as_str())
     }
 
     /// Max number of messages to queue.
-    pub fn max_queued(&self) -> usize {
-        self.max_queued
+    pub async fn max_queued(&self) -> usize {
+        *self.0.max_queued.read().await
     }
 
     /// Set the max number of messages to queue.
@@ -361,53 +404,40 @@ where
     /// ```
     ///# use std::error::Error;
     ///# use zbus::azync::Connection;
-    /// use futures_executor::block_on;
+    ///# use pollster::block_on;
+    ///#
+    ///# block_on(async {
+    /// let conn = Connection::new_session()
+    ///     .await?
+    ///     .set_max_queued(30)
+    ///     .await;
+    /// assert_eq!(conn.max_queued().await, 30);
     ///
-    /// let conn = block_on(Connection::new_session())?.set_max_queued(30);
-    /// assert_eq!(conn.max_queued(), 30);
-    ///
+    ///#     Ok::<(), zbus::Error>(())
+    ///# });
+    ///#
     /// // Do something usefull with `conn`..
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn set_max_queued(mut self, max: usize) -> Self {
-        self.max_queued = max;
+    pub async fn set_max_queued(self, max: usize) -> Self {
+        *self.0.max_queued.write().await = max;
 
         self
     }
 
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
-        self.server_guid.as_str()
+        self.0.server_guid.as_str()
     }
 
-    /// Create a `Connection` from an already authenticated unix socket.
-    ///
-    /// This method can be used in conjunction with [`crate::azync::Authenticated`] to handle
-    /// the initial handshake of the D-Bus connection asynchronously.
-    ///
-    /// If the aim is to initialize a client *bus* connection, you need to send the client hello and assign
-    /// the resulting unique name using [`set_unique_name`] before doing anything else.
-    ///
-    /// [`set_unique_name`]: struct.Connection.html#method.set_unique_name
-    fn new_authenticated(auth: Authenticated<Async<S>>) -> Self {
-        let auth = auth.into_inner();
-        Self {
-            raw_conn: auth.conn,
-            server_guid: auth.server_guid,
-            cap_unix_fd: auth.cap_unix_fd,
-            serial: 1,
-            unique_name: OnceCell::new(),
-            incoming_queue: vec![],
-            max_queued: DEFAULT_MAX_QUEUED,
-        }
+    /// Get the raw file descriptor of this connection.
+    pub async fn as_raw_fd(&self) -> RawFd {
+        (self.0.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
-    async fn new_authenticated_bus(auth: Authenticated<Async<S>>) -> Result<Self> {
-        let mut connection = Connection::new_authenticated(auth);
-
-        // Now that the server has approved us, we must send the bus Hello, as per specs
+    async fn hello_bus(self) -> Result<Self> {
         // TODO: Use fdo module once it's async.
-        let name: String = connection
+        let name: String = self
             .call_method(
                 Some("org.freedesktop.DBus"),
                 "/org/freedesktop/DBus",
@@ -418,20 +448,78 @@ where
             .await?
             .body()?;
 
-        Ok(connection
-            .set_unique_name(name)
+        self.0
+            .unique_name
+            .set(name)
             // programmer (probably our) error if this fails.
-            .expect("Attempted to set unique_name twice"))
+            .expect("Attempted to set unique_name twice");
+
+        Ok(self)
     }
 
-    fn next_serial(&mut self) -> u32 {
-        let serial = self.serial;
-        self.serial = serial + 1;
+    async fn new(
+        auth: Authenticated<Async<Box<dyn Socket>>>,
+        bus_connection: bool,
+    ) -> Result<Self> {
+        let auth = auth.into_inner();
+        let out_socket = auth.conn.socket().get_ref().try_clone()?;
+        let out_conn = RawConnection::wrap(Async::new(out_socket)?);
 
-        serial
+        let connection = Self(Arc::new(ConnectionInner {
+            raw_in_conn: Mutex::new(auth.conn),
+            raw_out_conn: Mutex::new(out_conn),
+            server_guid: auth.server_guid,
+            cap_unix_fd: auth.cap_unix_fd,
+            bus_conn: bus_connection,
+            serial: Mutex::new(1),
+            unique_name: OnceCell::new(),
+            incoming_queue: Mutex::new(vec![]),
+            max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
+        }));
+
+        if !bus_connection {
+            return Ok(connection);
+        }
+
+        // Now that the server has approved us, we must send the bus Hello, as per specs
+        connection.hello_bus().await
     }
 
-    // Used by Sink impl.
+    async fn next_serial(&self) -> u32 {
+        let mut serial = self.0.serial.lock().await;
+        let current = *serial;
+        *serial = current + 1;
+
+        current
+    }
+
+    /// Create a `Connection` to the session/user message bus.
+    pub async fn new_session() -> Result<Self> {
+        Self::new(Authenticated::session().await?, true).await
+    }
+
+    /// Create a `Connection` to the system-wide message bus.
+    pub async fn new_system() -> Result<Self> {
+        Self::new(Authenticated::system().await?, true).await
+    }
+
+    /// Create a `Connection` for the given [D-Bus address].
+    ///
+    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
+    pub async fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
+        Self::new(Authenticated::for_address(address).await?, bus_connection).await
+    }
+}
+
+/// Our [`futures_sink::Sink`] implementation.
+///
+/// Use [`Connection::sink`] to create an instance of this type.
+pub struct Sink<'s> {
+    raw_conn: MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
+    cap_unix_fd: bool,
+}
+
+impl Sink<'_> {
     fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         loop {
             match self.raw_conn.try_flush() {
@@ -455,31 +543,7 @@ where
     }
 }
 
-impl Connection<UnixStream> {
-    /// Create a `Connection` to the session/user message bus.
-    ///
-    /// Although, session bus hardly ever runs on anything other than UNIX domain sockets, if you
-    /// want your code to be able to handle those rare cases, use [`ConnectionType::new_session`]
-    /// instead.
-    pub async fn new_session() -> Result<Self> {
-        Self::new_authenticated_bus(Authenticated::session().await?).await
-    }
-
-    /// Create a `Connection` to the system-wide message bus.
-    ///
-    /// Although, system bus hardly ever runs on anything other than UNIX domain sockets, if you
-    /// want your code to be able to handle those rare cases, use [`ConnectionType::new_system`]
-    /// instead.
-    pub async fn new_system() -> Result<Self> {
-        Self::new_authenticated_bus(Authenticated::system().await?).await
-    }
-}
-
-impl<S> Sink<Message> for Connection<S>
-where
-    S: AsRawFd + std::fmt::Debug + Unpin + Socket,
-    Async<S>: Socket,
-{
+impl futures_sink::Sink<Message> for Sink<'_> {
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
@@ -488,12 +552,11 @@ where
     }
 
     fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
-        let conn = self.get_mut();
-        if !msg.fds().is_empty() && !conn.cap_unix_fd {
+        if !msg.fds().is_empty() && !self.cap_unix_fd {
             return Err(Error::Unsupported);
         }
 
-        conn.raw_conn.enqueue_message(msg);
+        self.get_mut().raw_conn.enqueue_message(msg);
 
         Ok(())
     }
@@ -503,36 +566,49 @@ where
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        let conn = self.get_mut();
-        match conn.flush(cx) {
+        let sink = self.get_mut();
+        match sink.flush(cx) {
             Poll::Ready(Ok(_)) => (),
             Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
             Poll::Pending => return Poll::Pending,
         }
 
-        Poll::Ready((conn.raw_conn).close())
+        Poll::Ready((sink.raw_conn).close())
     }
 }
 
-impl<S> Stream for Connection<S>
-where
-    S: Socket,
-    Async<S>: Socket,
-{
+/// Our [`stream::Stream`] implementation.
+///
+/// Use [`Connection::stream`] to create an instance of this type.
+///
+/// # Warning
+///
+/// If you use this in combination with [`Connection::receive_specific`] on the same connection
+/// from multiple tasks, you can end up with situation where the stream takes away the message
+/// the `receive_specific` is waiting for and end up in a deadlock situation. It is therefore highly
+/// recommended not to use such a combination.
+pub struct Stream<'s> {
+    raw_conn: MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
+    incoming_queue: Option<MutexGuard<'s, Vec<Message>>>,
+}
+
+impl<'s> stream::Stream for Stream<'s> {
     type Item = Result<Message>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let conn = self.get_mut();
+        let stream = self.get_mut();
 
-        if let Some(msg) = conn.incoming_queue.pop() {
-            return Poll::Ready(Some(Ok(msg)));
+        if let Some(queue) = &mut stream.incoming_queue {
+            if let Some(msg) = queue.pop() {
+                return Poll::Ready(Some(Ok(msg)));
+            }
         }
 
         loop {
-            match conn.raw_conn.try_receive_message() {
+            match stream.raw_conn.try_receive_message() {
                 Ok(m) => return Poll::Ready(Some(Ok(m))),
                 Err(Error::Io(e)) if e.kind() == ErrorKind::WouldBlock => {
-                    let poll = conn.raw_conn.socket().poll_readable(cx);
+                    let poll = stream.raw_conn.socket().poll_readable(cx);
 
                     match poll {
                         Poll::Pending => return Poll::Pending,
@@ -548,55 +624,6 @@ where
     }
 }
 
-/// Type representing all concrete [`Connection`] types, provided by zbus.
-///
-/// For maximum portability, use constructor method provided by this type instead of ones provided
-/// by [`Connection`].
-pub enum ConnectionType {
-    Unix(Connection<UnixStream>),
-}
-
-impl ConnectionType {
-    /// Create a `ConnectionType` for the given [D-Bus address].
-    ///
-    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub async fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
-        match AuthenticatedType::for_address(address).await? {
-            AuthenticatedType::Unix(auth) => {
-                let conn = if bus_connection {
-                    Connection::new_authenticated_bus(auth).await?
-                } else {
-                    Connection::new_authenticated(auth)
-                };
-
-                Ok(ConnectionType::Unix(conn))
-            }
-        }
-    }
-
-    /// Create a `ConnectionType` to the session/user message bus.
-    pub async fn new_session() -> Result<Self> {
-        match AuthenticatedType::session().await? {
-            AuthenticatedType::Unix(auth) => {
-                let conn = Connection::new_authenticated_bus(auth).await?;
-
-                Ok(ConnectionType::Unix(conn))
-            }
-        }
-    }
-
-    /// Create a `ConnectionType` to the system-wide message bus.
-    pub async fn new_system() -> Result<Self> {
-        match AuthenticatedType::system().await? {
-            AuthenticatedType::Unix(auth) => {
-                let conn = Connection::new_authenticated_bus(auth).await?;
-
-                Ok(ConnectionType::Unix(conn))
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::os::unix::net::UnixStream;
@@ -605,7 +632,7 @@ mod tests {
 
     #[test]
     fn unix_p2p() {
-        futures_executor::block_on(test_unix_p2p()).unwrap();
+        pollster::block_on(test_unix_p2p()).unwrap();
     }
 
     async fn test_unix_p2p() -> Result<()> {
@@ -613,14 +640,14 @@ mod tests {
 
         let (p0, p1) = UnixStream::pair().unwrap();
 
-        let server = Connection::new_server(p0, &guid);
-        let client = Connection::new_client(p1, false);
+        let server = Connection::new_unix_server(p0, &guid);
+        let client = Connection::new_unix_client(p1, false);
 
-        let (mut client_conn, mut server_conn) = futures_util::try_join!(client, server)?;
+        let (client_conn, server_conn) = futures_util::try_join!(client, server)?;
 
         let server_future = async {
             let mut method: Option<Message> = None;
-            while let Some(m) = server_conn.try_next().await? {
+            while let Some(m) = server_conn.stream().await.try_next().await? {
                 if m.to_string() == "Method call Test" {
                     method.replace(m);
 
@@ -642,7 +669,7 @@ mod tests {
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
             // Check we didn't miss the signal that was sent during the call.
-            let m = client_conn.try_next().await?.unwrap();
+            let m = client_conn.stream().await.try_next().await?.unwrap();
             assert_eq!(m.to_string(), "Signal ASignalForYou");
             reply.body::<String>().map_err(|e| e.into())
         };
@@ -651,5 +678,19 @@ mod tests {
         assert_eq!(val, "yay");
 
         Ok(())
+    }
+
+    #[test]
+    fn serial_monotonically_increases() {
+        pollster::block_on(test_serial_monotonically_increases());
+    }
+
+    async fn test_serial_monotonically_increases() {
+        let c = Connection::new_session().await.unwrap();
+        let serial = c.next_serial().await + 1;
+
+        for next in serial..serial + 10 {
+            assert_eq!(next, c.next_serial().await);
+        }
     }
 }
