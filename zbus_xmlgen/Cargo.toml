@@ -24,6 +24,8 @@ name = "zbus-xmlgen"
 path = "src/main.rs"
 
 [dependencies]
-zbus = { path = "../zbus", version = "1", features = ["xml"] }
+#zbus = { path = "../zbus", version = "2", features = ["xml"] }
+# Uncomment above and remove the next line when it's 2.0.0
+zbus = { path = "../zbus", version = "2.0.0-beta", features = ["xml"] }
 zvariant = { path = "../zvariant", version = "2" }
 snakecase = "0.1.0"
