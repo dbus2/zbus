@@ -1,7 +1,8 @@
 use std::{
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     fmt,
     iter::repeat_with,
+    str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -57,6 +58,14 @@ impl TryFrom<&str> for Guid {
         } else {
             Ok(Guid(value.to_string()))
         }
+    }
+}
+
+impl FromStr for Guid {
+    type Err = crate::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.try_into()
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, convert::TryInto, fmt, io::BufRead, str::FromStr};
+use std::{collections::VecDeque, fmt, io::BufRead, str::FromStr};
 
 use nix::{poll::PollFlags, unistd::Uid};
 
@@ -35,6 +35,23 @@ enum Mechanism {
     External,
     Cookie,
     Anonymous,
+}
+
+// The plain-text SASL profile authentication protocol described here:
+// <https://dbus.freedesktop.org/doc/dbus-specification.html#auth-protocol>
+//
+// These are all the known commands, which can be parsed from or serialized to text.
+#[derive(Debug)]
+enum Command {
+    Auth(Option<Mechanism>, Option<String>),
+    Cancel,
+    Begin,
+    Data(Vec<u8>),
+    Error(String),
+    NegotiateUnixFD,
+    Rejected(Vec<Mechanism>),
+    Ok(Guid),
+    AgreeUnixFD,
 }
 
 /// A representation of an in-progress handshake, client-side
@@ -144,7 +161,7 @@ impl<S: Socket> ClientHandshake<S> {
         Ok(())
     }
 
-    fn read_command(&mut self) -> Result<Vec<String>> {
+    fn read_command(&mut self) -> Result<Command> {
         self.recv_buffer.clear(); // maybe until \r\n instead?
         while !self.recv_buffer.ends_with(b"\r\n") {
             let mut buf = [0; 40];
@@ -156,11 +173,10 @@ impl<S: Socket> ClientHandshake<S> {
         }
 
         let line = String::from_utf8_lossy(&self.recv_buffer);
-        let split = line.split_ascii_whitespace();
-        Ok(split.map(|w| w.into()).collect())
+        line.parse()
     }
 
-    fn mechanism_init(&mut self) -> Result<(ClientHandshakeStep, String)> {
+    fn mechanism_init(&mut self) -> Result<(ClientHandshakeStep, Command)> {
         use ClientHandshakeStep::*;
         let mech = self
             .mechanisms
@@ -169,7 +185,7 @@ impl<S: Socket> ClientHandshake<S> {
         match mech {
             Mechanism::External => Ok((
                 WaitingForOK,
-                format!("AUTH {} {}\r\n", mech, sasl_auth_id()),
+                Command::Auth(Some(*mech), Some(sasl_auth_id())),
             )),
             _ => Err(Error::Handshake("Unimplemented AUTH mechanisms".into())),
         }
@@ -232,43 +248,33 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                 }
                 WaitingForData | WaitingForOK => {
                     let reply = self.read_command()?;
-                    let mut words = reply.iter().map(|w| &**w);
-                    match (self.step, words.next()) {
-                        (WaitingForOK, Some("OK")) => {
-                            // We expect a 2 words answer "OK" and the server Guid
-                            match (words.next(), words.next()) {
-                                (Some(guid), None) => {
-                                    self.server_guid = Some(guid.try_into()?);
-                                    self.send_buffer = Vec::from(&b"NEGOTIATE_UNIX_FD\r\n"[..]);
-                                    self.step = WaitingForAgreeUnixFD;
-                                }
-                                _ => {
-                                    return Err(Error::Handshake("OK without server GUID!".into()))
-                                }
-                            }
+                    match (self.step, reply) {
+                        (WaitingForOK, Command::Ok(guid)) => {
+                            self.server_guid = Some(guid);
+                            self.send_buffer = Command::NegotiateUnixFD.into();
+                            self.step = WaitingForAgreeUnixFD;
                         }
-                        _ => {
+                        (_, reply) => {
                             return Err(Error::Handshake(format!(
                                 "Unexpected server AUTH OK reply: {}",
-                                reply.join(" ")
+                                reply
                             )))
                         }
                     }
                 }
                 WaitingForAgreeUnixFD => {
                     let reply = self.read_command()?;
-                    let mut words = reply.iter().map(|w| &**w);
-                    match words.next() {
-                        Some("AGREE_UNIX_FD") => self.cap_unix_fd = true,
-                        Some("ERROR") => self.cap_unix_fd = false,
+                    match reply {
+                        Command::AgreeUnixFD => self.cap_unix_fd = true,
+                        Command::Error(_) => self.cap_unix_fd = false,
                         _ => {
                             return Err(Error::Handshake(format!(
                                 "Unexpected server UNIX_FD reply: {}",
-                                reply.join(" ")
+                                reply
                             )));
                         }
                     }
-                    self.send_buffer = "BEGIN\r\n".into();
+                    self.send_buffer = Command::Begin.into();
                     self.step = Done;
                 }
                 Done => return Ok(()),
@@ -541,6 +547,96 @@ impl FromStr for Mechanism {
             "ANONYMOUS" => Ok(Mechanism::Anonymous),
             _ => Err(Error::Handshake(format!("Unknown mechanism: {}", s))),
         }
+    }
+}
+
+impl From<Command> for Vec<u8> {
+    fn from(c: Command) -> Self {
+        c.to_string().into()
+    }
+}
+
+impl fmt::Display for Command {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let cmd = match self {
+            Command::Auth(mech, resp) => match (mech, resp) {
+                (Some(mech), Some(resp)) => format!("AUTH {} {}", mech, resp),
+                (Some(mech), None) => format!("AUTH {}", mech),
+                _ => "AUTH".into(),
+            },
+            Command::Cancel => "CANCEL".into(),
+            Command::Begin => "BEGIN".into(),
+            Command::Data(data) => {
+                format!("DATA {}", hex::encode(data))
+            }
+            Command::Error(expl) => {
+                format!("ERROR {}", expl)
+            }
+            Command::NegotiateUnixFD => "NEGOTIATE_UNIX_FD".into(),
+            Command::Rejected(mechs) => {
+                format!(
+                    "REJECTED {}",
+                    mechs
+                        .iter()
+                        .map(|m| m.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                )
+            }
+            Command::Ok(guid) => {
+                format!("OK {}", guid)
+            }
+            Command::AgreeUnixFD => "AGREE_UNIX_FD".into(),
+        };
+        write!(f, "{}\r\n", cmd)
+    }
+}
+
+impl From<hex::FromHexError> for Error {
+    fn from(e: hex::FromHexError) -> Self {
+        Error::Handshake(format!("Invalid hexcode: {}", e))
+    }
+}
+
+impl FromStr for Command {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let mut words = s.split_ascii_whitespace();
+        let cmd = match words.next() {
+            Some("AUTH") => {
+                let mech = if let Some(m) = words.next() {
+                    Some(m.parse()?)
+                } else {
+                    None
+                };
+                let resp = words.next().map(|s| s.into());
+                Command::Auth(mech, resp)
+            }
+            Some("CANCEL") => Command::Cancel,
+            Some("BEGIN") => Command::Begin,
+            Some("DATA") => {
+                let data = words
+                    .next()
+                    .ok_or_else(|| Error::Handshake("Missing DATA data".into()))?;
+                Command::Data(hex::decode(data)?)
+            }
+            Some("ERROR") => Command::Error(s.into()),
+            Some("NEGOTIATE_UNIX_FD") => Command::NegotiateUnixFD,
+            Some("REJECTED") => {
+                let mechs = words.map(|m| m.parse()).collect::<Result<_>>()?;
+                Command::Rejected(mechs)
+            }
+            Some("OK") => {
+                let guid = words
+                    .next()
+                    .ok_or_else(|| Error::Handshake("Missing OK server GUID!".into()))?;
+                Command::Ok(guid.parse()?)
+            }
+            Some("AGREE_UNIX_FD") => Command::AgreeUnixFD,
+            _ => return Err(Error::Handshake(format!("Unknown command: {}", s))),
+        };
+        Ok(cmd)
     }
 }
 
