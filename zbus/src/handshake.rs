@@ -1,4 +1,4 @@
-use std::{convert::TryInto, io::BufRead};
+use std::{convert::TryInto, fmt, io::BufRead, str::FromStr};
 
 use nix::{poll::PollFlags, unistd::Uid};
 
@@ -28,6 +28,14 @@ pub enum IoOperation {
     None,
     Read,
     Write,
+}
+
+// See <https://dbus.freedesktop.org/doc/dbus-specification.html#auth-mechanisms>
+#[derive(Clone, Copy, Debug)]
+enum Mechanism {
+    External,
+    Cookie,
+    Anonymous,
 }
 
 /// A representation of an in-progress handshake, client-side
@@ -480,6 +488,30 @@ fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> 
         id.push(c);
     }
     Ok(id.parse::<u32>()?)
+}
+
+impl fmt::Display for Mechanism {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mech = match self {
+            Mechanism::External => "EXTERNAL",
+            Mechanism::Cookie => "DBUS_COOKIE_SHA1",
+            Mechanism::Anonymous => "ANONYMOUS",
+        };
+        write!(f, "{}", mech)
+    }
+}
+
+impl FromStr for Mechanism {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "EXTERNAL" => Ok(Mechanism::External),
+            "DBUS_COOKIE_SHA1" => Ok(Mechanism::Cookie),
+            "ANONYMOUS" => Ok(Mechanism::Anonymous),
+            _ => Err(Error::Handshake(format!("Unknown mechanism: {}", s))),
+        }
+    }
 }
 
 #[cfg(test)]
