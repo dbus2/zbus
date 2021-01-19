@@ -144,14 +144,20 @@ impl<S: Socket> ClientHandshake<S> {
         Ok(())
     }
 
-    fn read_command(&mut self) -> Result<()> {
+    fn read_command(&mut self) -> Result<Vec<String>> {
         self.recv_buffer.clear(); // maybe until \r\n instead?
         while !self.recv_buffer.ends_with(b"\r\n") {
             let mut buf = [0; 40];
-            let (read, _) = self.socket.recvmsg(&mut buf)?;
+            let (read, fds) = self.socket.recvmsg(&mut buf)?;
+            if !fds.is_empty() {
+                return Err(Error::Handshake("Unexecpted FDs during handshake".into()));
+            }
             self.recv_buffer.extend(&buf[..read]);
         }
-        Ok(())
+
+        let line = String::from_utf8_lossy(&self.recv_buffer);
+        let split = line.split_ascii_whitespace();
+        Ok(split.map(|w| w.into()).collect())
     }
 
     fn mechanism_init(&mut self) -> Result<(ClientHandshakeStep, String)> {
@@ -225,10 +231,8 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     self.step = next_step;
                 }
                 WaitingForData | WaitingForOK => {
-                    self.read_command()?;
-                    let mut reply = String::new();
-                    (&self.recv_buffer[..]).read_line(&mut reply)?;
-                    let mut words = reply.split_whitespace();
+                    let reply = self.read_command()?;
+                    let mut words = reply.iter().map(|w| &**w);
                     match (self.step, words.next()) {
                         (WaitingForOK, Some("OK")) => {
                             // We expect a 2 words answer "OK" and the server Guid
@@ -246,23 +250,25 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                         _ => {
                             return Err(Error::Handshake(format!(
                                 "Unexpected server AUTH OK reply: {}",
-                                reply
+                                reply.join(" ")
                             )))
                         }
                     }
                 }
                 WaitingForAgreeUnixFD => {
-                    self.read_command()?;
-                    if self.recv_buffer.starts_with(b"AGREE_UNIX_FD") {
-                        self.cap_unix_fd = true;
-                    } else if self.recv_buffer.starts_with(b"ERROR") {
-                        self.cap_unix_fd = false;
-                    } else {
-                        return Err(Error::Handshake(
-                            "Unexpected server UNIX_FD reply".to_string(),
-                        ));
+                    let reply = self.read_command()?;
+                    let mut words = reply.iter().map(|w| &**w);
+                    match words.next() {
+                        Some("AGREE_UNIX_FD") => self.cap_unix_fd = true,
+                        Some("ERROR") => self.cap_unix_fd = false,
+                        _ => {
+                            return Err(Error::Handshake(format!(
+                                "Unexpected server UNIX_FD reply: {}",
+                                reply.join(" ")
+                            )));
+                        }
                     }
-                    self.send_buffer = Vec::from(&b"BEGIN\r\n"[..]);
+                    self.send_buffer = "BEGIN\r\n".into();
                     self.step = Done;
                 }
                 Done => return Ok(()),
