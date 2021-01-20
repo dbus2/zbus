@@ -6,7 +6,6 @@ edition = "2018"
 
 description = "PolicyKit binding"
 repository = "https://gitlab.freedesktop.org/zeenix/zbus/"
-documentation = "http://docs.rs/zbus_polkit"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"
 categories = ["os::unix-apis"]

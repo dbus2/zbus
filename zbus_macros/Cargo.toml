@@ -7,7 +7,6 @@ edition = "2018"
 
 description = "proc-macros for zbus"
 repository = "https://gitlab.freedesktop.org/zeenix/zbus/"
-documentation = "http://docs.rs/zbus_macros/"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"
 categories = ["data-structures", "encoding", "parsing"]

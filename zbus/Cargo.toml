@@ -6,7 +6,6 @@ edition = "2018"
 
 description = "API for D-Bus communication"
 repository = "https://gitlab.freedesktop.org/zeenix/zbus/"
-documentation = "http://docs.rs/zbus"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"
 categories = ["os::unix-apis"]
