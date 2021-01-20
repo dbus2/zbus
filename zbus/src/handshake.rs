@@ -373,32 +373,20 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
         use ClientHandshakeStep::*;
         loop {
             self.flush_buffer()?;
-            match self.step {
-                Init | MechanismInit => {
-                    let (next_step, init) = self.mechanism_init()?;
-                    self.send_buffer = if self.step == Init {
-                        format!("\0{}", init).into()
-                    } else {
-                        init.into()
-                    };
-                    self.step = next_step;
-                }
+            let (next_step, cmd) = match self.step {
+                Init | MechanismInit => self.mechanism_init()?,
                 WaitingForData | WaitingForOK => {
                     let reply = self.read_command()?;
                     match (self.step, reply) {
-                        (_, Command::Data(data)) => {
-                            let (next_step, resp) = self.mechanism_data(data)?;
-                            self.send_buffer = resp.into();
-                            self.step = next_step;
-                        }
+                        (_, Command::Data(data)) => self.mechanism_data(data)?,
                         (_, Command::Rejected(_)) => {
                             self.mechanisms.pop_front();
                             self.step = MechanismInit;
+                            continue;
                         }
                         (WaitingForOK, Command::Ok(guid)) => {
                             self.server_guid = Some(guid);
-                            self.send_buffer = Command::NegotiateUnixFD.into();
-                            self.step = WaitingForAgreeUnixFD;
+                            (WaitingForAgreeUnixFD, Command::NegotiateUnixFD)
                         }
                         (_, reply) => {
                             return Err(Error::Handshake(format!(
@@ -420,11 +408,16 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                             )));
                         }
                     }
-                    self.send_buffer = Command::Begin.into();
-                    self.step = Done;
+                    (Done, Command::Begin)
                 }
                 Done => return Ok(()),
-            }
+            };
+            self.send_buffer = if self.step == Init {
+                format!("\0{}", cmd).into()
+            } else {
+                cmd.into()
+            };
+            self.step = next_step;
         }
     }
 
