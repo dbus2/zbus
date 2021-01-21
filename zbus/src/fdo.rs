@@ -177,8 +177,26 @@ pub enum RequestNameReply {
     AlreadyOwner = 0x04,
 }
 
+/// The return code of the [`releaes_name`] method.
+///
+/// [`release_name`]: struct.DBusProxy.html#method.release_name
+#[repr(u32)]
+#[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
+pub enum ReleaseNameReply {
+    /// The caller has released their claim on the given name. Either the caller was the primary
+    /// owner of the name, and the name is now unused or taken by somebody waiting in the queue for
+    /// the name, or the caller was waiting in the queue for the name and has now been removed from
+    /// the queue.
+    Released = 0x01,
+    /// The given name does not exist on this bus.
+    NonExistent = 0x02,
+    /// The caller was not the primary owner of this name, and was also not waiting in the queue to
+    /// own this name.
+    NotOwner = 0x03,
+}
+
 /// Proxy for the `org.freedesktop.DBus` interface.
-#[dbus_proxy]
+#[dbus_proxy(interface = "org.freedesktop.DBus")]
 trait DBus {
     /// Adds a match rule to match messages going through the message bus
     fn add_match(&self, rule: &str) -> Result<()>;
@@ -222,7 +240,7 @@ trait DBus {
     fn name_has_owner(&self, name: &str) -> Result<bool>;
 
     /// Ask the message bus to release the method caller's claim to the given name.
-    fn release_name(&self, name: &str) -> Result<()>;
+    fn release_name(&self, name: &str) -> Result<ReleaseNameReply>;
 
     /// Reload server configuration.
     fn reload_config(&self) -> Result<()>;
@@ -556,5 +574,11 @@ mod tests {
                 break;
             }
         }
+
+        let result = proxy.release_name(&well_known).unwrap();
+        assert_eq!(result, fdo::ReleaseNameReply::Released);
+
+        let result = proxy.release_name(&well_known).unwrap();
+        assert_eq!(result, fdo::ReleaseNameReply::NonExistent);
     }
 }
