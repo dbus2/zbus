@@ -34,6 +34,7 @@ futures-sink = "0.3.8"
 pollster = "0.2.0"
 futures-util = { version = "0.3.8", default-features = false, features = ["sink", "std"] }
 async-lock = "2.3.0"
+hex = "0.4.2"
 
 [dev-dependencies]
 zbus_polkit = { path = "../zbus_polkit", version = "1" }
