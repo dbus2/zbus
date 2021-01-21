@@ -36,6 +36,9 @@ async-lock = "2.3.0"
 hex = "0.4.2"
 rand = "0.8.2"
 sha1 = { version = "0.6.0", features = ["std"] }
+# FIXME: use released version when the nix version is in sync,
+# and into_raw_fd vsock is fixed
+vsock = { optional = true, git = "https://github.com/elmarco/vsock-rs" }
 
 [dev-dependencies]
 zbus_polkit = { path = "../zbus_polkit", version = "1" }
