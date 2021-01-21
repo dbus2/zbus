@@ -30,7 +30,34 @@ pub trait Socket: std::fmt::Debug + AsRawFd + Send + Sync {
     ///
     /// This method may return an error of kind `WouldBlock` instead if blocking for
     /// non-blocking sockets.
-    fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)>;
+    fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
+        let iov = [IoVec::from_mut_slice(buffer)];
+        let mut cmsgspace = cmsg_space!([RawFd; FDS_MAX]);
+
+        match recvmsg(
+            self.as_raw_fd(),
+            &iov,
+            Some(&mut cmsgspace),
+            MsgFlags::empty(),
+        ) {
+            Ok(msg) => {
+                let mut fds = vec![];
+                for cmsg in msg.cmsgs() {
+                    if let ControlMessageOwned::ScmRights(fd) = cmsg {
+                        fds.extend(fd.iter().map(|&f| unsafe { OwnedFd::from_raw_fd(f) }));
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "unexpected CMSG kind",
+                        ));
+                    }
+                }
+                Ok((msg.bytes, fds))
+            }
+            Err(nix::Error::Sys(e)) => Err(e.into()),
+            _ => Err(io::Error::new(io::ErrorKind::Other, "unhandled nix error")),
+        }
+    }
 
     /// Attempt to send a message on the socket
     ///
@@ -44,7 +71,24 @@ pub trait Socket: std::fmt::Debug + AsRawFd + Send + Sync {
     ///
     /// If the underlying transport does not support transmitting file descriptors, this
     /// will return `Err(ErrorKind::InvalidInput)`.
-    fn sendmsg(&mut self, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize>;
+    fn sendmsg(&mut self, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
+        let cmsg = if !fds.is_empty() {
+            vec![ControlMessage::ScmRights(fds)]
+        } else {
+            vec![]
+        };
+        let iov = [IoVec::from_slice(buffer)];
+        match sendmsg(self.as_raw_fd(), &iov, &cmsg, MsgFlags::empty(), None) {
+            // can it really happen?
+            Ok(0) => Err(io::Error::new(
+                io::ErrorKind::WriteZero,
+                "failed to write to buffer",
+            )),
+            Ok(n) => Ok(n),
+            Err(nix::Error::Sys(e)) => Err(e.into()),
+            _ => Err(io::Error::new(io::ErrorKind::Other, "unhandled nix error")),
+        }
+    }
 
     /// Close the socket.
     ///
@@ -90,54 +134,6 @@ impl AsRawFd for Box<dyn Socket> {
 }
 
 impl Socket for UnixStream {
-    fn recvmsg(&mut self, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
-        let iov = [IoVec::from_mut_slice(buffer)];
-        let mut cmsgspace = cmsg_space!([RawFd; FDS_MAX]);
-
-        match recvmsg(
-            self.as_raw_fd(),
-            &iov,
-            Some(&mut cmsgspace),
-            MsgFlags::empty(),
-        ) {
-            Ok(msg) => {
-                let mut fds = vec![];
-                for cmsg in msg.cmsgs() {
-                    if let ControlMessageOwned::ScmRights(fd) = cmsg {
-                        fds.extend(fd.iter().map(|&f| unsafe { OwnedFd::from_raw_fd(f) }));
-                    } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            "unexpected CMSG kind",
-                        ));
-                    }
-                }
-                Ok((msg.bytes, fds))
-            }
-            Err(nix::Error::Sys(e)) => Err(e.into()),
-            _ => Err(io::Error::new(io::ErrorKind::Other, "unhandled nix error")),
-        }
-    }
-
-    fn sendmsg(&mut self, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
-        let cmsg = if !fds.is_empty() {
-            vec![ControlMessage::ScmRights(fds)]
-        } else {
-            vec![]
-        };
-        let iov = [IoVec::from_slice(buffer)];
-        match sendmsg(self.as_raw_fd(), &iov, &cmsg, MsgFlags::empty(), None) {
-            // can it really happen?
-            Ok(0) => Err(io::Error::new(
-                io::ErrorKind::WriteZero,
-                "failed to write to buffer",
-            )),
-            Ok(n) => Ok(n),
-            Err(nix::Error::Sys(e)) => Err(e.into()),
-            _ => Err(io::Error::new(io::ErrorKind::Other, "unhandled nix error")),
-        }
-    }
-
     fn close(&self) -> io::Result<()> {
         self.shutdown(std::net::Shutdown::Both)
     }
