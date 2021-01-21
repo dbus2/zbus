@@ -1,7 +1,8 @@
 use std::{
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     fmt,
     iter::repeat_with,
+    str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -21,10 +22,10 @@ impl Guid {
     ///
     /// [`Connection::new_unix_server`]: struct.Connection.html#method.new_unix_server
     pub fn generate() -> Self {
-        let r: Vec<u32> = repeat_with(|| fastrand::u32(..)).take(3).collect();
+        let r: Vec<u32> = repeat_with(rand::random::<u32>).take(3).collect();
         let r3 = match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(n) => n.as_secs() as u32,
-            Err(_) => fastrand::u32(..),
+            Err(_) => rand::random::<u32>(),
         };
 
         let s = format!("{:08x}{:08x}{:08x}{:08x}", r[0], r[1], r[2], r3);
@@ -57,6 +58,14 @@ impl TryFrom<&str> for Guid {
         } else {
             Ok(Guid(value.to_string()))
         }
+    }
+}
+
+impl FromStr for Guid {
+    type Err = crate::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.try_into()
     }
 }
 

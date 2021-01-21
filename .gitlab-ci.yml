@@ -27,8 +27,11 @@ check:
     - sed -e s/UID/$UID/ -e s/PATH/abstract/ gitlab/dbus-session.conf > /tmp/dbus-session-abstract.conf
     - apt-get --allow-unauthenticated update -yq
     - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y  --allow-unauthenticated dbus libglib2.0-dev pkg-config
-    - dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo test --verbose -- --skip fdpass_systemd
+    - dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo test --verbose -- basic_connection
     - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
+    # check cookie-sha1 auth against dbus-daemon
+    - sed -i s/EXTERNAL/DBUS_COOKIE_SHA1/g /tmp/dbus-session.conf
+    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- basic_connection
 
 test:
   image: "rustdocker/rustfmt_clippy:stable"
