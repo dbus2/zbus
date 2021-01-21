@@ -93,7 +93,7 @@ use zbus::{dbus_interface, fdo};
 
 struct Greeter {
     count: u64
-};
+}
 
 #[dbus_interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
