@@ -124,11 +124,17 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * `out_args` - When returning multiple values from a method, naming the out arguments become
 ///   important. You can use `out_args` for specifying names for your out arguments.
 ///
+/// The method arguments offers some the following `zbus` attributes:
+///
+/// * `header` - This marks the method argument to receive the message header associated with the
+/// D-Bus method call being handled.
+///
 /// # Example
 ///
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_interface;
+/// use zbus::MessageHeader;
 ///
 /// struct Example {
 ///     some_data: String,
@@ -137,8 +143,11 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[dbus_interface(name = "org.myservice.Example")]
 /// impl Example {
 ///     // "Quit" method. A method may throw errors.
-///     fn quit(&self) -> zbus::fdo::Result<()> {
-///         Err(zbus::fdo::Error::Failed("You are leaving me?".to_string()))
+///     fn quit(&self, #[zbus(header)] hdr: MessageHeader<'_>) -> zbus::fdo::Result<()> {
+///         let path = hdr.path()?.unwrap();
+///         let msg = format!("You are leaving me on the {} path?", path);
+///
+///         Err(zbus::fdo::Error::Failed(msg))
 ///     }
 ///
 ///     // "TheAnswer" property (note: the "name" attribute), with its associated getter.
