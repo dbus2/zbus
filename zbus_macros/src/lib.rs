@@ -119,11 +119,17 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   in another structure or tuple. The latter can be achieve by using `(,)` syntax, for example
 ///   instead of `MyStruct`, write `(MyStruct,)`.
 ///
+/// The method arguments offers some the following `zbus` attributes:
+///
+/// * `header` - This marks the method argument to receive the message header associated with the
+/// D-Bus method call being handled.
+///
 /// # Example
 ///
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_interface;
+/// use zbus::MessageHeader;
 ///
 /// struct Example {
 ///     some_data: String,
@@ -132,8 +138,11 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[dbus_interface(name = "org.myservice.Example")]
 /// impl Example {
 ///     // "Quit" method. A method may throw errors.
-///     fn quit(&self) -> zbus::fdo::Result<()> {
-///         Err(zbus::fdo::Error::Failed("You are leaving me?".to_string()))
+///     fn quit(&self, #[zbus(header)] hdr: MessageHeader<'_>) -> zbus::fdo::Result<()> {
+///         let path = hdr.path()?.unwrap();
+///         let msg = format!("You are leaving me on the {} path?", path);
+///
+///         Err(zbus::fdo::Error::Failed(msg))
 ///     }
 ///
 ///     // "TheAnswer" property (note: the "name" attribute), with its associated getter.
