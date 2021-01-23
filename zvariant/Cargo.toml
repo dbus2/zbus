@@ -1,6 +1,6 @@
 [package]
 name = "zvariant"
-version = "2.4.0"
+version = "2.5.0"
 authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
 edition = "2018"
 
@@ -22,7 +22,7 @@ byteorder = "1.3.1"
 serde = { version = "1.0", features = ["derive"] }
 arrayvec = { version = "0.5.1", features = ["serde"], optional = true }
 enumflags2 = { version = "0.6.4", features = ["serde"], optional = true }
-zvariant_derive = { version = "=2.4.0", path = "../zvariant_derive" }
+zvariant_derive = { version = "=2.5.0", path = "../zvariant_derive" }
 
 [dev-dependencies]
 serde_json = "1.0"
