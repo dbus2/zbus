@@ -97,7 +97,6 @@ Let see how to use it:
 
 ```rust,no_run
 # use std::error::Error;
-# use std::convert::TryInto;
 # use zbus::{dbus_interface, fdo};
 #
 struct Greeter;
@@ -117,7 +116,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 #     )?;
 
     let mut object_server = zbus::ObjectServer::new(&connection);
-    object_server.at(&"/org/zbus/MyGreeter".try_into()?, Greeter)?;
+    object_server.at("/org/zbus/MyGreeter", Greeter)?;
     loop {
         if let Err(err) = object_server.try_handle_next() {
             eprintln!("{}", err);

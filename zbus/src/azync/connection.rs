@@ -2,6 +2,7 @@ use async_io::Async;
 use async_lock::{Mutex, MutexGuard, RwLock};
 use once_cell::sync::OnceCell;
 use std::{
+    convert::TryInto,
     io::{self, ErrorKind},
     os::unix::{
         io::{AsRawFd, RawFd},
@@ -11,6 +12,7 @@ use std::{
     sync::Arc,
     task::{Context, Poll},
 };
+use zvariant::ObjectPath;
 
 use futures_core::stream;
 use futures_util::{sink::SinkExt, stream::TryStreamExt};
@@ -271,7 +273,7 @@ impl Connection {
     pub async fn call_method<B>(
         &self,
         destination: Option<&str>,
-        path: &str,
+        path: impl TryInto<ObjectPath<'_>, Error = zvariant::Error>,
         iface: Option<&str>,
         method_name: &str,
         body: &B,
@@ -314,7 +316,7 @@ impl Connection {
     pub async fn emit_signal<B>(
         &self,
         destination: Option<&str>,
-        path: &str,
+        path: impl TryInto<ObjectPath<'_>, Error = zvariant::Error>,
         iface: &str,
         signal_name: &str,
         body: &B,

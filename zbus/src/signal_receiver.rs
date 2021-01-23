@@ -145,7 +145,6 @@ mod tests {
     use crate::{dbus_interface, dbus_proxy, fdo};
     use std::{
         cell::RefCell,
-        convert::TryInto,
         rc::Rc,
         sync::{Arc, Mutex},
     };
@@ -233,19 +232,13 @@ mod tests {
             times_called: times_called.clone(),
         };
         object_server
-            .at(
-                &"/org/freedesktop/zbus/MultiSignal/1".try_into().unwrap(),
-                iface,
-            )
+            .at("/org/freedesktop/zbus/MultiSignal/1", iface)
             .unwrap();
         let iface = MultiSignal {
             times_called: times_called.clone(),
         };
         object_server
-            .at(
-                &"/org/freedesktop/zbus/MultiSignal/2".try_into().unwrap(),
-                iface,
-            )
+            .at("/org/freedesktop/zbus/MultiSignal/2", iface)
             .unwrap();
 
         let child = std::thread::spawn(|| multiple_signal_iface_test().unwrap());

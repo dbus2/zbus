@@ -5,7 +5,7 @@ use std::{
     os::unix::io::{AsRawFd, IntoRawFd, RawFd},
 };
 
-use zvariant::{EncodingContext, Error as VariantError, Signature, Type};
+use zvariant::{EncodingContext, Error as VariantError, ObjectPath, Signature, Type};
 
 use crate::{
     owned_fd::OwnedFd, utils::padding_for_8_bytes, EndianSig, MessageField, MessageFieldCode,
@@ -211,12 +211,10 @@ where
 
     fn method(
         sender: Option<&'a str>,
-        path: &'a str,
+        path: ObjectPath<'a>,
         method_name: &'a str,
         body: &'a B,
     ) -> Result<Self, MessageError> {
-        let path = path.try_into()?;
-
         Ok(Self::new(MessageType::MethodCall, sender, body)?
             .set_field(MessageField::Path(path))
             .set_field(MessageField::Member(method_name.into())))
@@ -224,13 +222,11 @@ where
 
     fn signal(
         sender: Option<&'a str>,
-        path: &'a str,
+        path: ObjectPath<'a>,
         iface: &'a str,
         signal_name: &'a str,
         body: &'a B,
     ) -> Result<Self, MessageError> {
-        let path = path.try_into()?;
-
         Ok(Self::new(MessageType::Signal, sender, body)?
             .set_field(MessageField::Path(path))
             .set_field(MessageField::Interface(iface.into()))
@@ -270,10 +266,10 @@ impl Message {
     /// Create a message of type [`MessageType::MethodCall`].
     ///
     /// [`MessageType::MethodCall`]: enum.MessageType.html#variant.MethodCall
-    pub fn method<B>(
+    pub fn method<'p, B>(
         sender: Option<&str>,
         destination: Option<&str>,
-        path: &str,
+        path: impl TryInto<ObjectPath<'p>, Error = VariantError>,
         iface: Option<&str>,
         method_name: &str,
         body: &B,
@@ -281,7 +277,7 @@ impl Message {
     where
         B: serde::ser::Serialize + Type,
     {
-        let mut b = MessageBuilder::method(sender, path, method_name, body)?;
+        let mut b = MessageBuilder::method(sender, path.try_into()?, method_name, body)?;
         if let Some(destination) = destination {
             b = b.set_field(MessageField::Destination(destination.into()));
         }
@@ -294,10 +290,10 @@ impl Message {
     /// Create a message of type [`MessageType::Signal`].
     ///
     /// [`MessageType::Signal`]: enum.MessageType.html#variant.Signal
-    pub fn signal<B>(
+    pub fn signal<'p, B>(
         sender: Option<&str>,
         destination: Option<&str>,
-        path: &str,
+        path: impl TryInto<ObjectPath<'p>, Error = VariantError>,
         iface: &str,
         signal_name: &str,
         body: &B,
@@ -305,7 +301,7 @@ impl Message {
     where
         B: serde::ser::Serialize + Type,
     {
-        let mut b = MessageBuilder::signal(sender, path, iface, signal_name, body)?;
+        let mut b = MessageBuilder::signal(sender, path.try_into()?, iface, signal_name, body)?;
         if let Some(destination) = destination {
             b = b.set_field(MessageField::Destination(destination.into()));
         }
