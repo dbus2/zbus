@@ -96,6 +96,12 @@ impl<'a> ObjectPath<'a> {
     }
 }
 
+impl std::default::Default for ObjectPath<'_> {
+    fn default() -> Self {
+        ObjectPath::from_str_unchecked("/")
+    }
+}
+
 impl<'a> Basic for ObjectPath<'a> {
     const SIGNATURE_CHAR: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
@@ -256,7 +262,7 @@ fn ensure_correct_object_path_str(path: &[u8]) -> Result<()> {
 }
 
 /// Owned [`ObjectPath`](struct.ObjectPath.html)
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, zvariant_derive::Type)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, serde::Serialize, zvariant_derive::Type)]
 pub struct OwnedObjectPath(ObjectPath<'static>);
 
 impl OwnedObjectPath {
