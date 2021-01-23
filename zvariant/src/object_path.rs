@@ -291,6 +291,22 @@ impl<'a> std::convert::From<ObjectPath<'a>> for OwnedObjectPath {
     }
 }
 
+impl TryFrom<&'_ str> for OwnedObjectPath {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Ok(Self::from(ObjectPath::try_from(value)?))
+    }
+}
+
+impl TryFrom<String> for OwnedObjectPath {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Ok(Self::from(ObjectPath::try_from(value)?))
+    }
+}
+
 impl<'de> Deserialize<'de> for OwnedObjectPath {
     fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
