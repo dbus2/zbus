@@ -68,7 +68,6 @@
 //!
 //! ```rust,no_run
 //! use std::error::Error;
-//! use std::convert::TryInto;
 //! use zbus::{dbus_interface, fdo};
 //!
 //! struct Greeter {
@@ -92,7 +91,7 @@
 //!
 //!     let mut object_server = zbus::ObjectServer::new(&connection);
 //!     let mut greeter = Greeter { count: 0 };
-//!     object_server.at(&"/org/zbus/MyGreeter".try_into()?, greeter)?;
+//!     object_server.at("/org/zbus/MyGreeter", greeter)?;
 //!     loop {
 //!         if let Err(err) = object_server.try_handle_next() {
 //!             eprintln!("{}", err);
@@ -604,7 +603,7 @@ mod tests {
         let quit = Rc::new(RefCell::new(false));
         let secret = Secret(quit.clone());
         object_server
-            .at(&"/org/freedesktop/secrets".try_into().unwrap(), secret)
+            .at("/org/freedesktop/secrets", secret)
             .unwrap();
 
         let child = std::thread::spawn(move || {

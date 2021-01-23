@@ -2,12 +2,13 @@ use std::{
     any::{Any, TypeId},
     cell::RefCell,
     collections::{hash_map::Entry, HashMap},
+    convert::TryInto,
     fmt::Write,
     rc::Rc,
 };
 
 use scoped_tls::scoped_thread_local;
-use zvariant::{ObjectPath, OwnedValue, Value};
+use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{dbus_interface, fdo, Connection, Error, Message, MessageHeader, MessageType, Result};
 
@@ -157,16 +158,16 @@ impl Properties {
 #[derive(Default, derivative::Derivative)]
 #[derivative(Debug)]
 struct Node {
-    path: String,
+    path: OwnedObjectPath,
     children: HashMap<String, Node>,
     #[derivative(Debug = "ignore")]
     interfaces: HashMap<&'static str, Rc<RefCell<dyn Interface>>>,
 }
 
 impl Node {
-    fn new(path: &str) -> Self {
+    fn new(path: OwnedObjectPath) -> Self {
         let mut node = Self {
-            path: path.to_string(),
+            path,
             ..Default::default()
         };
         node.at(Peer::name(), Peer);
@@ -280,7 +281,8 @@ impl Node {
             panic!("emit_signal: Connection TLS not set");
         }
 
-        LOCAL_CONNECTION.with(|conn| conn.emit_signal(dest, &self.path, iface, signal_name, body))
+        LOCAL_CONNECTION
+            .with(|conn| conn.emit_signal(dest, self.path.as_str(), iface, signal_name, body))
     }
 }
 
@@ -302,7 +304,6 @@ impl Node {
 ///
 /// ```no_run
 ///# use std::error::Error;
-///# use std::convert::TryInto;
 /// use zbus::{Connection, ObjectServer, dbus_interface};
 /// use std::rc::Rc;
 /// use std::cell::RefCell;
@@ -337,7 +338,7 @@ impl Node {
 /// let quit = Rc::new(RefCell::new(false));
 ///
 /// let interface = Example::new(quit.clone());
-/// object_server.at(&"/org/zbus/path".try_into()?, interface)?;
+/// object_server.at("/org/zbus/path", interface)?;
 ///
 /// loop {
 ///     if let Err(err) = object_server.try_handle_next() {
@@ -361,7 +362,7 @@ impl ObjectServer {
     pub fn new(connection: &Connection) -> Self {
         Self {
             conn: connection.clone(),
-            root: Node::new("/"),
+            root: Node::new("/".try_into().expect("zvariant bug")),
         }
     }
 
@@ -397,7 +398,8 @@ impl ObjectServer {
             match node.children.entry(i.into()) {
                 Entry::Vacant(e) => {
                     if create {
-                        node = e.insert(Node::new(&node_path));
+                        let path = node_path.as_str().try_into().expect("Invalid Object Path");
+                        node = e.insert(Node::new(path));
                     } else {
                         return None;
                     }
@@ -414,11 +416,13 @@ impl ObjectServer {
     /// If the interface already exists at this path, returns false.
     ///
     /// [`Interface`]: trait.Interface.html
-    pub fn at<I>(&mut self, path: &ObjectPath<'_>, iface: I) -> Result<bool>
+    pub fn at<'p, P, I>(&mut self, path: P, iface: I) -> Result<bool>
     where
         I: Interface,
+        P: TryInto<ObjectPath<'p>, Error = zvariant::Error>,
     {
-        Ok(self.get_node_mut(path, true).unwrap().at(I::name(), iface))
+        let path = path.try_into()?;
+        Ok(self.get_node_mut(&path, true).unwrap().at(I::name(), iface))
     }
 
     /// Unregister a D-Bus [`Interface`] at a given path.
@@ -427,12 +431,14 @@ impl ObjectServer {
     /// Returns whether the object was destroyed.
     ///
     /// [`Interface`]: trait.Interface.html
-    pub fn remove<I>(&mut self, path: &ObjectPath<'_>) -> Result<bool>
+    pub fn remove<'p, I, P>(&mut self, path: P) -> Result<bool>
     where
         I: Interface,
+        P: TryInto<ObjectPath<'p>, Error = zvariant::Error>,
     {
+        let path = path.try_into()?;
         let node = self
-            .get_node_mut(path, false)
+            .get_node_mut(&path, false)
             .ok_or(Error::InterfaceNotFound)?;
         if !node.remove_interface(I::name()) {
             return Err(Error::InterfaceNotFound);
@@ -472,7 +478,7 @@ impl ObjectServer {
     ///# let connection = Connection::new_session()?;
     ///# let mut object_server = ObjectServer::new(&connection);
     ///#
-    ///# let path = &"/org/zbus/path".try_into()?;
+    ///# let path = "/org/zbus/path";
     ///# object_server.at(path, MyIface)?;
     /// object_server.with(path, |iface: &MyIface| {
     ///   iface.emit_signal()
@@ -481,12 +487,14 @@ impl ObjectServer {
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn with<F, I>(&self, path: &ObjectPath<'_>, func: F) -> Result<()>
+    pub fn with<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
     where
         F: Fn(&I) -> Result<()>,
         I: Interface,
+        P: TryInto<ObjectPath<'p>, Error = zvariant::Error>,
     {
-        let node = self.get_node(path).ok_or(Error::InterfaceNotFound)?;
+        let path = path.try_into()?;
+        let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
         LOCAL_CONNECTION.set(&self.conn, || {
             LOCAL_NODE.set(node, || node.with_iface_func(func))
         })
@@ -620,7 +628,7 @@ impl ObjectServer {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, collections::HashMap, convert::TryInto, error::Error, rc::Rc, thread};
+    use std::{cell::Cell, collections::HashMap, error::Error, rc::Rc, thread};
 
     use ntest::timeout;
     use serde::{Deserialize, Serialize};
@@ -855,7 +863,7 @@ mod tests {
 
         let iface = MyIfaceImpl::new(action.clone());
         object_server
-            .at(&"/org/freedesktop/MyService".try_into().unwrap(), iface)
+            .at("/org/freedesktop/MyService", iface)
             .unwrap();
 
         let child = thread::spawn(|| my_iface_test().expect("child failed"));
@@ -867,10 +875,9 @@ mod tests {
             }
 
             object_server
-                .with(
-                    &"/org/freedesktop/MyService".try_into().unwrap(),
-                    |iface: &MyIfaceImpl| iface.alert_count(51),
-                )
+                .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl| {
+                    iface.alert_count(51)
+                })
                 .unwrap();
 
             match action.replace(NextAction::Nothing) {
@@ -879,14 +886,12 @@ mod tests {
                 NextAction::CreateObj(key) => {
                     let path = format!("/zbus/test/{}", key);
                     object_server
-                        .at(&path.try_into().unwrap(), MyIfaceImpl::new(action.clone()))
+                        .at(path, MyIfaceImpl::new(action.clone()))
                         .unwrap();
                 }
                 NextAction::DestroyObj(key) => {
                     let path = format!("/zbus/test/{}", key);
-                    object_server
-                        .remove::<MyIfaceImpl>(&path.try_into().unwrap())
-                        .unwrap();
+                    object_server.remove::<MyIfaceImpl, _>(path).unwrap();
                 }
             }
         }

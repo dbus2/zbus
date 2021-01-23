@@ -112,7 +112,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             pub fn new_for(
                 conn: &::#zbus::Connection,
                 destination: &'c str,
-                path: &'c str,
+                path: impl std::convert::TryInto<::#zbus::export::zvariant::ObjectPath<'c>, Error = ::#zbus::export::zvariant::Error>,
             ) -> ::#zbus::Result<Self> {
                 Ok(Self(::#zbus::Proxy::new(
                     conn,
@@ -126,7 +126,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             pub fn new_for_owned(
                 conn: ::#zbus::Connection,
                 destination: String,
-                path: String,
+                path: impl std::convert::TryInto<::#zbus::export::zvariant::ObjectPath<'static>, Error = ::#zbus::export::zvariant::Error>,
             ) -> ::#zbus::Result<Self> {
                 Ok(Self(::#zbus::Proxy::new_owned(
                     conn,
@@ -139,7 +139,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             /// Creates a new proxy for the given `path`.
             pub fn new_for_path(
                 conn: &::#zbus::Connection,
-                path: &'c str,
+                path: impl std::convert::TryInto<::#zbus::export::zvariant::ObjectPath<'c>, Error = ::#zbus::export::zvariant::Error>,
             ) -> ::#zbus::Result<Self> {
                 Ok(Self(::#zbus::Proxy::new(
                     conn,
@@ -152,7 +152,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             /// Same as `new_for_path` but takes ownership of the passed arguments.
             pub fn new_for_owned_path(
                 conn: ::#zbus::Connection,
-                path: String,
+                path: impl std::convert::TryInto<::#zbus::export::zvariant::ObjectPath<'static>, Error = ::#zbus::export::zvariant::Error>,
             ) -> ::#zbus::Result<Self> {
                 Ok(Self(::#zbus::Proxy::new_owned(
                     conn,

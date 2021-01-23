@@ -88,7 +88,6 @@ A simple service that politely greets whoever calls its `SayHello` method:
 
 ```rust,no_run
 use std::error::Error;
-use std::convert::TryInto;
 use zbus::{dbus_interface, fdo};
 
 struct Greeter {
@@ -112,7 +111,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut object_server = zbus::ObjectServer::new(&connection);
     let mut greeter = Greeter { count: 0 };
-    object_server.at(&"/org/zbus/MyGreeter".try_into()?, greeter)?;
+    object_server.at("/org/zbus/MyGreeter", greeter)?;
     loop {
         if let Err(err) = object_server.try_handle_next() {
             eprintln!("{}", err);

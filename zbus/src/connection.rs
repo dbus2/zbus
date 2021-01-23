@@ -1,7 +1,11 @@
-use std::os::unix::{
-    io::{AsRawFd, RawFd},
-    net::UnixStream,
+use std::{
+    convert::TryInto,
+    os::unix::{
+        io::{AsRawFd, RawFd},
+        net::UnixStream,
+    },
 };
+use zvariant::ObjectPath;
 
 use pollster::block_on;
 
@@ -192,10 +196,10 @@ impl Connection {
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     /// [`MethodError`]: enum.Error.html#variant.MethodError
     /// [`sent_message`]: struct.Connection.html#method.send_message
-    pub fn call_method<B>(
+    pub fn call_method<'p, B>(
         &self,
         destination: Option<&str>,
-        path: &str,
+        path: impl TryInto<ObjectPath<'p>, Error = zvariant::Error>,
         iface: Option<&str>,
         method_name: &str,
         body: &B,
@@ -212,10 +216,10 @@ impl Connection {
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub fn emit_signal<B>(
+    pub fn emit_signal<'p, B>(
         &self,
         destination: Option<&str>,
-        path: &str,
+        path: impl TryInto<ObjectPath<'p>, Error = zvariant::Error>,
         iface: &str,
         signal_name: &str,
         body: &B,

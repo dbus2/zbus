@@ -58,7 +58,7 @@ type SignalHandler = Box<dyn FnMut(&Message) -> Result<()> + Send>;
 pub struct Proxy<'a> {
     conn: Connection,
     destination: Cow<'a, str>,
-    path: Cow<'a, str>,
+    path: ObjectPath<'a>,
     interface: Cow<'a, str>,
     sig_handlers: Mutex<HashMap<&'static str, SignalHandler>>,
 }
@@ -68,13 +68,13 @@ impl<'a> Proxy<'a> {
     pub fn new(
         conn: &Connection,
         destination: &'a str,
-        path: &'a str,
+        path: impl TryInto<ObjectPath<'a>, Error = zvariant::Error>,
         interface: &'a str,
     ) -> Result<Self> {
         Ok(Self {
             conn: conn.clone(),
             destination: Cow::from(destination),
-            path: Cow::from(path),
+            path: path.try_into()?,
             interface: Cow::from(interface),
             sig_handlers: Mutex::new(HashMap::new()),
         })
@@ -85,13 +85,13 @@ impl<'a> Proxy<'a> {
     pub fn new_owned(
         conn: Connection,
         destination: String,
-        path: String,
+        path: impl TryInto<ObjectPath<'static>, Error = zvariant::Error>,
         interface: String,
     ) -> Result<Self> {
         Ok(Self {
             conn,
             destination: Cow::from(destination),
-            path: Cow::from(path),
+            path: path.try_into()?,
             interface: Cow::from(interface),
             sig_handlers: Mutex::new(HashMap::new()),
         })
@@ -121,7 +121,8 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub fn introspect(&self) -> fdo::Result<String> {
-        IntrospectableProxy::new_for(&self.conn, &self.destination, &self.path)?.introspect()
+        IntrospectableProxy::new_for(&self.conn, &self.destination, self.path.as_str())?
+            .introspect()
     }
 
     /// Get the property `property_name`.
@@ -131,7 +132,7 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        PropertiesProxy::new_for(&self.conn, &self.destination, &self.path)?
+        PropertiesProxy::new_for(&self.conn, &self.destination, self.path.as_str())?
             .get(&self.interface, property_name)?
             .try_into()
             .map_err(|_| Error::InvalidReply.into())
@@ -144,7 +145,7 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        PropertiesProxy::new_for(&self.conn, &self.destination, &self.path)?.set(
+        PropertiesProxy::new_for(&self.conn, &self.destination, self.path.as_str())?.set(
             &self.interface,
             property_name,
             &value.into(),
@@ -164,7 +165,7 @@ impl<'a> Proxy<'a> {
     {
         let reply = self.conn.call_method(
             Some(&self.destination),
-            &self.path,
+            self.path.as_str(),
             Some(&self.interface),
             method_name,
             body,
@@ -278,7 +279,7 @@ impl<'a> Proxy<'a> {
             };
 
             Ok(hdr.interface()? == Some(&self.interface)
-                && hdr.path()? == Some(&ObjectPath::try_from(self.path.as_ref())?)
+                && hdr.path()? == Some(&self.path)
                 && hdr.message_type()? == crate::MessageType::Signal
                 && handlers.contains_key(member))
         })?;
