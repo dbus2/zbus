@@ -326,8 +326,8 @@ impl<'a> Proxy<'a> {
     fn match_rule_for_signal(&self, signal_name: &'static str) -> String {
         // FIXME: Use the API to create this once we've it (issue#69).
         format!(
-            "type='signal',path_namespace='{}',interface='{}',member='{}'",
-            self.path, self.interface, signal_name,
+            "type='signal',sender='{}',path_namespace='{}',interface='{}',member='{}'",
+            self.destination, self.path, self.interface, signal_name,
         )
     }
 }
