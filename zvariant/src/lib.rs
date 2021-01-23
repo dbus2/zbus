@@ -457,6 +457,11 @@ mod tests {
         let v: String = v.try_into().unwrap();
         assert_eq!(v, "hello world");
 
+        // Check for interior null bytes which are not allowed
+        let ctxt = Context::<LE>::new_dbus(0);
+        assert!(from_slice::<_, &str>(b"\x0b\0\0\0hello\0world\0", ctxt).is_err());
+        assert!(to_bytes(ctxt, &"hello\0world").is_err());
+
         // Characters are treated as strings
         basic_type_test!(LE, DBus, 'c', 6, char, 4);
         #[cfg(feature = "gvariant")]
