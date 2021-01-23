@@ -69,7 +69,7 @@ impl<'i> Display for GenTrait<'i> {
 
             if write {
                 let input = to_rust_type(p.ty(), true);
-                writeln!(f, "    #[DBusProxy(property)]")?;
+                writeln!(f, "    #[dbus_proxy(property)]")?;
                 writeln!(
                     f,
                     "    fn set_{name}(&self, value: {input}) -> zbus::Result<()>;",
