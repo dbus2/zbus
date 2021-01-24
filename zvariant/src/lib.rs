@@ -1535,6 +1535,6 @@ mod tests {
         let encoded = std::fs::read("../test-data/flatpak-summary.dump").unwrap();
         let ctxt = Context::<LE>::new_gvariant(0);
         let _: Summary<'_> = from_slice(&encoded, ctxt).unwrap();
-        // If we're able to deserialize all the data succesfully, don't bother checking the summary data.
+        // If we're able to deserialize all the data successfully, don't bother checking the summary data.
     }
 }

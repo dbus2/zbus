@@ -177,7 +177,7 @@ pub enum RequestNameReply {
     AlreadyOwner = 0x04,
 }
 
-/// The return code of the [`releaes_name`] method.
+/// The return code of the [`release_name`] method.
 ///
 /// [`release_name`]: struct.DBusProxy.html#method.release_name
 #[repr(u32)]
