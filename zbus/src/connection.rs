@@ -187,7 +187,7 @@ impl Connection {
     /// messages are received through [`receive_message`] until the matching method reply (error or
     /// return) is received.
     ///
-    /// On succesful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
+    /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
     /// error replies are returned as [`MethodError`].
     ///
     /// *Note:* This method will block until the response is received even if the connection is
