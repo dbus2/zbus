@@ -466,6 +466,14 @@ mod tests {
         assert!(from_slice::<_, &str>(b"\x0b\0\0\0hello\0world\0", ctxt).is_err());
         assert!(to_bytes(ctxt, &"hello\0world").is_err());
 
+        // GVariant format doesn't allow null bytes either
+        #[cfg(feature = "gvariant")]
+        {
+            let ctxt = Context::<LE>::new_gvariant(0);
+            assert!(from_slice::<_, &str>(b"hello\0world\0", ctxt).is_err());
+            assert!(to_bytes(ctxt, &"hello\0world").is_err());
+        }
+
         // Characters are treated as strings
         basic_type_test!(LE, DBus, 'c', 6, char, 4);
         #[cfg(feature = "gvariant")]
