@@ -73,6 +73,10 @@
 //! deserialize from a D-Bus array, you'll need to use a [slice] (array can easily be converted to a
 //! slice), a [`Vec`] or an [`arrayvec::ArrayVec`].
 //!
+//! D-Bus string types, including [`Signature`] and [`ObjectPath`], require one additional
+//! restriction that strings in Rust do not. They must not contain any interior null bytes (`'\0'`).
+//! Encoding/Decoding strings that contain this character will return an error.
+//!
 //! The generic D-Bus type, `VARIANT` is represented by `Value`, an enum that holds exactly one
 //! value of any of the other types. Please refer to [`Value` module documentation] for examples.
 //!
