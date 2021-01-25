@@ -124,8 +124,17 @@ where
         V: Visitor<'de>,
     {
         let s = if self.0.sig_parser.next_char() == VARIANT_SIGNATURE_CHAR {
+            let slice = &self.0.bytes[self.0.pos..];
+
+            if slice.contains(&0) {
+                return Err(serde::de::Error::invalid_value(
+                    serde::de::Unexpected::Char('\0'),
+                    &"GVariant string type must not contain interior null bytes",
+                ));
+            }
+
             // GVariant decided to skip the trailing nul at the end of signature string
-            str::from_utf8(&self.0.bytes[self.0.pos..]).map_err(Error::Utf8)?
+            str::from_utf8(slice).map_err(Error::Utf8)?
         } else {
             let cstr = CStr::from_bytes_with_nul(&self.0.bytes[self.0.pos..]).map_err(|_| {
                 let c = self.0.bytes[self.0.bytes.len() - 1] as char;

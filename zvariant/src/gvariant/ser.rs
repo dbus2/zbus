@@ -145,6 +145,13 @@ where
     }
 
     fn serialize_str(self, v: &str) -> Result<()> {
+        if v.contains('\0') {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Char('\0'),
+                &"GVariant string type must not contain interior null bytes",
+            ));
+        }
+
         let c = self.0.sig_parser.next_char();
         if c == VARIANT_SIGNATURE_CHAR {
             self.0.value_sign = Some(signature_string!(v));

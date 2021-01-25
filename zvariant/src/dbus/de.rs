@@ -192,6 +192,12 @@ where
             }
         };
         let slice = self.0.next_slice(len)?;
+        if slice.contains(&0) {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Char('\0'),
+                &"D-Bus string type must not contain interior null bytes",
+            ));
+        }
         self.0.pos += 1; // skip trailing null byte
         let s = str::from_utf8(slice).map_err(Error::Utf8)?;
         self.0.sig_parser.skip_char()?;

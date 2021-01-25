@@ -73,6 +73,10 @@
 //! deserialize from a D-Bus array, you'll need to use a [slice] (array can easily be converted to a
 //! slice), a [`Vec`] or an [`arrayvec::ArrayVec`].
 //!
+//! D-Bus string types, including [`Signature`] and [`ObjectPath`], require one additional
+//! restriction that strings in Rust do not. They must not contain any interior null bytes (`'\0'`).
+//! Encoding/Decoding strings that contain this character will return an error.
+//!
 //! The generic D-Bus type, `VARIANT` is represented by `Value`, an enum that holds exactly one
 //! value of any of the other types. Please refer to [`Value` module documentation] for examples.
 //!
@@ -456,6 +460,19 @@ mod tests {
         assert_eq!(v, "hello world");
         let v: String = v.try_into().unwrap();
         assert_eq!(v, "hello world");
+
+        // Check for interior null bytes which are not allowed
+        let ctxt = Context::<LE>::new_dbus(0);
+        assert!(from_slice::<_, &str>(b"\x0b\0\0\0hello\0world\0", ctxt).is_err());
+        assert!(to_bytes(ctxt, &"hello\0world").is_err());
+
+        // GVariant format doesn't allow null bytes either
+        #[cfg(feature = "gvariant")]
+        {
+            let ctxt = Context::<LE>::new_gvariant(0);
+            assert!(from_slice::<_, &str>(b"hello\0world\0", ctxt).is_err());
+            assert!(to_bytes(ctxt, &"hello\0world").is_err());
+        }
 
         // Characters are treated as strings
         basic_type_test!(LE, DBus, 'c', 6, char, 4);
