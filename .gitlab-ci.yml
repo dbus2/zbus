@@ -1,22 +1,72 @@
+.templates_sha: &templates_sha 79c325922670137e8f0a4dc5f6f097e0eb57c1af
+
+include:
+  - project: 'freedesktop/ci-templates'
+    ref: *templates_sha
+    file: '/templates/debian.yml'
+
+variables:
+  FDO_UPSTREAM_REPO: zeenix/zbus
+
 stages:
+  - container
   - lint
   - test
   - extras
   - pages
 
-variables:
-  CARGO_HOME: $CI_PROJECT_DIR/cargo
-  APT_CACHE_DIR: $CI_PROJECT_DIR/apt
+.debian:
+  variables:
+    # Update this tag when you want to trigger a rebuild
+    FDO_DISTRIBUTION_TAG: '2021-01-27.3'
+    # Uncomment if you want to always rebuild the container, useful when hacking on it
+    #FDO_FORCE_REBUILD: 1
+    FDO_DISTRIBUTION_VERSION: 10
+    FDO_DISTRIBUTION_PACKAGES: >-
+      git
+      wget
+      ca-certificates
+      build-essential
+      libssl-dev
+      dbus
+      libglib2.0-dev
+      pkg-config
+      lcov
+      python3-pip
+      python3-setuptools
+    FDO_DISTRIBUTION_EXEC: >-
+      gitlab/install-rust.sh stable &&
+      pip3 install lcov_cobertura
+  before_script:
+    - source ./gitlab/env.sh
+    - mkdir .cargo && echo -e "[net]\ngit-fetch-with-cli = true" > .cargo/config
+    # If cargo exists assume we probably will want to update
+    # the lockfile
+    - |
+      if command -v cargo; then
+        cargo generate-lockfile --color=always
+        cargo update --color=always
+      fi
+
+container:
+  extends:
+    - .debian
+    - .fdo.container-build@debian
+  stage: container
+
+.debian_img:
+  extends:
+    - .debian
+    - .fdo.distribution-image@debian
 
 check:
-  image: "rustdocker/rustfmt_clippy:stable"
+  extends: .debian_img
   stage: "lint"
   script:
     - rustc --version
     - cargo --version
     - cargo fmt --all -- --check
     - cargo clippy -- -D warnings
-    - cargo install cargo-audit
     - cargo audit
 
 .cargo_test_var: &cargo_test
@@ -25,8 +75,6 @@ check:
     - mkdir -p /run/user/$UID
     - sed -e s/UID/$UID/ -e s/PATH/path/ gitlab/dbus-session.conf > /tmp/dbus-session.conf
     - sed -e s/UID/$UID/ -e s/PATH/abstract/ gitlab/dbus-session.conf > /tmp/dbus-session-abstract.conf
-    - apt-get --allow-unauthenticated update -yq
-    - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y  --allow-unauthenticated dbus libglib2.0-dev pkg-config
     - dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo test --verbose -- basic_connection
     - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
     # check cookie-sha1 auth against dbus-daemon
@@ -34,24 +82,20 @@ check:
     - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- basic_connection
 
 test:
-  image: "rustdocker/rustfmt_clippy:stable"
+  extends: .debian_img
   stage: test
   script:
+    - rustup override set stable
     - *cargo_test
 
 coverage:
-  image: "rustdocker/rust:nightly"
+  extends: .debian_img
   stage: extras
   variables:
     RUSTFLAGS: "-Zinstrument-coverage"
     LLVM_PROFILE_FILE: "zbus-%p-%m.profraw"
-  before_script:
-    - export PATH="$PATH:$CARGO_HOME/bin"
   script:
-    - apt-get update && apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y  --allow-unauthenticated lcov python3-pip
-    - cargo install grcov
-    - rustup component add llvm-tools-preview
-    - pip3 install lcov_cobertura
+    - rustup override set nightly
     - *cargo_test
     # generate html report
     - grcov . --binary-path ./target/debug/ -s . -t html --branch --ignore-not-existing --ignore "*cargo*" -o ./coverage/
@@ -67,12 +111,6 @@ coverage:
       - 'coverage'
     reports:
       cobertura: coverage.xml
-
-cache:
-  paths:
-    - apt/
-    - cargo/
-    - target/
 
 pages:
   image: "hrektts/mdbook"
