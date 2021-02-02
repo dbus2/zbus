@@ -27,7 +27,7 @@ impl<'i> Display for GenTrait<'i> {
             writeln!(
                 f,
                 "    fn {name}({inputs}){output};",
-                name = to_snakecase(m.name()),
+                name = to_identifier(&to_snakecase(m.name())),
                 inputs = inputs,
                 output = output
             )?;
@@ -43,7 +43,7 @@ impl<'i> Display for GenTrait<'i> {
             writeln!(
                 f,
                 "    fn {name}({args}) -> zbus::Result<()>;",
-                name = to_snakecase(signal.name()),
+                name = to_identifier(&to_snakecase(signal.name())),
                 args = args,
             )?;
         }
@@ -62,7 +62,7 @@ impl<'i> Display for GenTrait<'i> {
                 writeln!(
                     f,
                     "    fn {name}(&self) -> zbus::Result<{output}>;",
-                    name = to_snakecase(p.name()),
+                    name = to_identifier(&to_snakecase(p.name())),
                     output = output,
                 )?;
             }
@@ -73,7 +73,7 @@ impl<'i> Display for GenTrait<'i> {
                 writeln!(
                     f,
                     "    fn set_{name}(&self, value: {input}) -> zbus::Result<()>;",
-                    name = to_snakecase(p.name()),
+                    name = to_identifier(&to_snakecase(p.name())),
                     input = input,
                 )?;
             }
@@ -252,7 +252,7 @@ static KWORDS: &[&str] = &[
 
 fn to_identifier(id: &str) -> String {
     if KWORDS.contains(&id) {
-        format!("r#{}", id)
+        format!("{}_", id)
     } else {
         id.to_string()
     }
