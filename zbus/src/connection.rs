@@ -277,6 +277,12 @@ impl Connection {
     }
 }
 
+impl From<azync::Connection> for Connection {
+    fn from(conn: azync::Connection) -> Self {
+        Self(conn)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{os::unix::net::UnixStream, thread};

@@ -626,6 +626,12 @@ impl<'s> stream::Stream for Stream<'s> {
     }
 }
 
+impl From<crate::Connection> for Connection {
+    fn from(conn: crate::Connection) -> Self {
+        conn.into_inner()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::os::unix::net::UnixStream;
