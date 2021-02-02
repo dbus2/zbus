@@ -12,7 +12,7 @@ use crate::fdo::{self, IntrospectableProxy, PropertiesProxy};
 
 const LOCK_FAIL_MSG: &str = "Failed to lock a mutex or read-write lock";
 
-type SignalHandler = Box<dyn FnMut(&Message) -> Result<()> + Send>;
+type SignalHandler = Box<dyn FnMut(Message) -> Result<()> + Send>;
 
 /// A client-side interface proxy.
 ///
@@ -208,7 +208,7 @@ impl<'a> Proxy<'a> {
     /// connection.
     pub fn connect_signal<H>(&self, signal_name: &'static str, handler: H) -> fdo::Result<()>
     where
-        H: FnMut(&Message) -> Result<()> + Send + 'static,
+        H: FnMut(Message) -> Result<()> + Send + 'static,
     {
         if self
             .sig_handlers
@@ -284,11 +284,7 @@ impl<'a> Proxy<'a> {
                 && handlers.contains_key(member))
         })?;
 
-        if self.handle_signal(&msg)? {
-            Ok(None)
-        } else {
-            Ok(Some(msg))
-        }
+        self.handle_signal(msg)
     }
 
     /// Handle the provided signal message.
@@ -296,24 +292,24 @@ impl<'a> Proxy<'a> {
     /// Call any handlers registered through the [`Self::connect_signal`] method for the provided
     /// signal message.
     ///
-    /// If no errors are encountered, `Ok(true)` is returned if a handler was found and called for,
-    /// the signal; `Ok(false)` otherwise.
-    pub fn handle_signal(&self, msg: &Message) -> Result<bool> {
+    /// If no errors are encountered, `Ok(None)` is returned if a handler was found and called for,
+    /// the signal; `Ok(Some(msg))` otherwise.
+    pub fn handle_signal(&self, msg: Message) -> Result<Option<Message>> {
         let mut handlers = self.sig_handlers.lock().expect(LOCK_FAIL_MSG);
         if handlers.is_empty() {
-            return Ok(false);
+            return Ok(Some(msg));
         }
 
         let hdr = msg.header()?;
         if let Some(name) = hdr.member()? {
             if let Some(handler) = handlers.get_mut(name) {
-                handler(&msg)?;
+                handler(msg)?;
 
-                return Ok(true);
+                return Ok(None);
             }
         }
 
-        Ok(false)
+        Ok(Some(msg))
     }
 
     pub(crate) fn has_signal_handler(&self, signal_name: &str) -> bool {
