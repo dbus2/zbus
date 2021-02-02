@@ -108,7 +108,7 @@ impl<'a> Proxy<'a> {
     }
 
     /// Get a reference to the object path.
-    pub fn path(&self) -> &str {
+    pub fn path(&self) -> &ObjectPath<'_> {
         &self.path
     }
 

@@ -20,9 +20,7 @@ where
         let proxy = proxy.as_ref();
         ProxyKey {
             interface: Cow::from(proxy.interface().to_owned()),
-            path: ObjectPath::try_from(proxy.path())
-                .expect("invalid object path")
-                .to_owned(),
+            path: proxy.path().to_owned(),
         }
     }
 }
