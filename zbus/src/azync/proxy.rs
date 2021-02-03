@@ -14,7 +14,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{azync::Connection, Error, Message, Result};
 
-use crate::fdo::{self, IntrospectableProxy, PropertiesProxy};
+use crate::fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy};
 
 type SignalHandler = Box<dyn FnMut(Message) -> BoxFuture<'static, Result<()>> + Send>;
 
@@ -141,10 +141,13 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
-        // TODO: Use async version when we've it.
-        let conn = crate::Connection::from(self.core.conn.clone());
-        IntrospectableProxy::new_for(&conn, &self.core.destination, self.core.path.as_str())?
-            .introspect()
+        AsyncIntrospectableProxy::new_for(
+            &self.core.conn,
+            &self.core.destination,
+            self.core.path.as_str(),
+        )?
+        .introspect()
+        .await
     }
 
     /// Get the property `property_name`.
@@ -154,12 +157,15 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        // TODO: Use async version when we've it.
-        let conn = crate::Connection::from(self.core.conn.clone());
-        PropertiesProxy::new_for(&conn, &self.core.destination, self.core.path.as_str())?
-            .get(&self.core.interface, property_name)?
-            .try_into()
-            .map_err(|_| Error::InvalidReply.into())
+        AsyncPropertiesProxy::new_for(
+            &self.core.conn,
+            &self.core.destination,
+            self.core.path.as_str(),
+        )?
+        .get(&self.core.interface, property_name)
+        .await?
+        .try_into()
+        .map_err(|_| Error::InvalidReply.into())
     }
 
     /// Set the property `property_name`.
@@ -169,13 +175,13 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        // TODO: Use async version when we've it.
-        let conn = crate::Connection::from(self.core.conn.clone());
-        PropertiesProxy::new_for(&conn, &self.core.destination, self.core.path.as_str())?.set(
-            &self.core.interface,
-            property_name,
-            &value.into(),
-        )
+        AsyncPropertiesProxy::new_for(
+            &self.core.conn,
+            &self.core.destination,
+            self.core.path.as_str(),
+        )?
+        .set(&self.core.interface, property_name, &value.into())
+        .await
     }
 
     /// Call a method and return the reply.
@@ -232,10 +238,10 @@ impl<'a> Proxy<'a> {
     /// [`SignalStream::close`] method.
     pub async fn receive_signal(&self, signal_name: &'static str) -> Result<SignalStream<'a>> {
         let match_rule = if self.core.conn.is_bus() {
-            // TODO: Use async version when we've it.
-            let conn = crate::Connection::from(self.core.conn.clone());
             let rule = self.match_rule_for_signal(signal_name);
-            fdo::DBusProxy::new(&conn)?.add_match(&rule)?;
+            fdo::AsyncDBusProxy::new(&self.core.conn)?
+                .add_match(&rule)
+                .await?;
 
             Some(rule)
         } else {
@@ -294,10 +300,10 @@ impl<'a> Proxy<'a> {
             .is_none()
             && self.core.conn.is_bus()
         {
-            // TODO: Use async version when we've it.
-            let conn = crate::Connection::from(self.core.conn.clone());
             let rule = self.match_rule_for_signal(signal_name);
-            fdo::DBusProxy::new(&conn)?.add_match(&rule)?;
+            fdo::AsyncDBusProxy::new(&self.core.conn)?
+                .add_match(&rule)
+                .await?;
         }
 
         Ok(())
@@ -317,10 +323,10 @@ impl<'a> Proxy<'a> {
     /// connection.
     pub async fn disconnect_signal(&self, signal_name: &'static str) -> fdo::Result<bool> {
         if self.sig_handlers.lock().await.remove(signal_name).is_some() && self.core.conn.is_bus() {
-            // TODO: Use async version when we've it.
-            let conn = crate::Connection::from(self.core.conn.clone());
             let rule = self.match_rule_for_signal(signal_name);
-            fdo::DBusProxy::new(&conn)?.remove_match(&rule)?;
+            fdo::AsyncDBusProxy::new(&self.core.conn)?
+                .remove_match(&rule)
+                .await?;
 
             Ok(true)
         } else {
@@ -426,9 +432,9 @@ impl SignalStream<'_> {
 
     async fn close_(&mut self) -> Result<()> {
         if let Some(rule) = self.match_rule.take() {
-            // TODO: Use async version when we've it.
-            let conn = crate::Connection::from(self.conn.clone());
-            fdo::DBusProxy::new(&conn)?.remove_match(&rule)?;
+            fdo::AsyncDBusProxy::new(&self.conn)?
+                .remove_match(&rule)
+                .await?;
         }
 
         Ok(())

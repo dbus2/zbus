@@ -438,17 +438,7 @@ impl Connection {
     }
 
     async fn hello_bus(self) -> Result<Self> {
-        // TODO: Use fdo module once it's async.
-        let name: String = self
-            .call_method(
-                Some("org.freedesktop.DBus"),
-                "/org/freedesktop/DBus",
-                Some("org.freedesktop.DBus"),
-                "Hello",
-                &(),
-            )
-            .await?
-            .body()?;
+        let name = crate::fdo::AsyncDBusProxy::new(&self)?.hello().await?;
 
         self.0
             .unique_name
