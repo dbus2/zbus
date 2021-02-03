@@ -191,9 +191,9 @@ fn to_rust_type(ty: &str, input: bool) -> String {
             .into(),
             VARIANT_SIGNATURE_CHAR => (if input {
                 if as_ref {
-                    "&zvariant::Value"
+                    "&zvariant::Value<'_>"
                 } else {
-                    "zvariant::Value"
+                    "zvariant::Value<'_>"
                 }
             } else {
                 "zvariant::OwnedValue"

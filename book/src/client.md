@@ -108,7 +108,7 @@ trait Notifications {
               summary: &str,
               body: &str,
               actions: &[&str],
-              hints: HashMap<&str, &Value>,
+              hints: HashMap<&str, &Value<'_>>,
               expire_timeout: i32) -> zbus::Result<u32>;
 }
 
@@ -501,7 +501,7 @@ trait Notifications {
         arg_3: &str,
         arg_4: &str,
         arg_5: &[&str],
-        arg_6: std::collections::HashMap<&str, zvariant::Value>,
+        arg_6: std::collections::HashMap<&str, zvariant::Value<'_>>,
         arg_7: i32,
     ) -> zbus::Result<u32>;
 
