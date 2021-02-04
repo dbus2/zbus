@@ -452,6 +452,12 @@ impl std::ops::Drop for SignalStream<'_> {
     }
 }
 
+impl<'azync, 'sync: 'azync> From<crate::Proxy<'sync>> for Proxy<'azync> {
+    fn from(proxy: crate::Proxy<'sync>) -> Self {
+        proxy.into_inner()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
