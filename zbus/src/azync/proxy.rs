@@ -57,6 +57,11 @@ type SignalHandler = Box<dyn FnMut(Message) -> BoxFuture<'static, Result<()>> + 
 /// }
 /// ```
 ///
+/// # Note
+///
+/// It is recommended to use the [`dbus_proxy`] macro, which provides a more convenient and
+/// type-safe *façade* `Proxy` derived from a Rust trait.
+///
 /// ## Current limitations:
 ///
 /// At the moment, `Proxy` doesn't:
@@ -66,6 +71,7 @@ type SignalHandler = Box<dyn FnMut(Message) -> BoxFuture<'static, Result<()>> + 
 /// * prevent auto-launching
 ///
 /// [`futures` crate]: https://crates.io/crates/futures
+/// [`dbus_proxy`]: attr.dbus_proxy.html
 pub struct Proxy<'a> {
     core: ProxyCore<'a>,
     sig_handlers: Mutex<HashMap<&'static str, SignalHandler>>,
