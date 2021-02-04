@@ -265,6 +265,16 @@ impl Connection {
     pub fn is_bus(&self) -> bool {
         self.0.is_bus()
     }
+
+    /// Get a reference to the underlying async Connection.
+    pub fn inner(&self) -> &azync::Connection {
+        &self.0
+    }
+
+    /// Get the underlying async Connection, consuming `self`.
+    pub fn into_inner(self) -> azync::Connection {
+        self.0
+    }
 }
 
 #[cfg(test)]
