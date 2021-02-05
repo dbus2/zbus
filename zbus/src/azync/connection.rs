@@ -20,8 +20,10 @@ use futures_util::{sink::SinkExt, stream::TryStreamExt};
 use crate::{
     azync::Authenticated,
     raw::{Connection as RawConnection, Socket},
-    Error, Guid, Message, MessageType, Result, DEFAULT_MAX_QUEUED,
+    Error, Guid, Message, MessageType, Result,
 };
+
+const DEFAULT_MAX_QUEUED: usize = 32;
 
 #[derive(Debug)]
 struct ConnectionInner<S> {

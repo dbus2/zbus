@@ -11,8 +11,6 @@ use pollster::block_on;
 
 use crate::{azync, Guid, Message, Result};
 
-pub(crate) const DEFAULT_MAX_QUEUED: usize = 32;
-
 /// A D-Bus connection.
 ///
 /// A connection to a D-Bus bus, or a direct peer.
