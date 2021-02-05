@@ -467,7 +467,7 @@ impl Connection {
             bus_conn: bus_connection,
             serial: Mutex::new(1),
             unique_name: OnceCell::new(),
-            incoming_queue: Mutex::new(vec![]),
+            incoming_queue: Mutex::new(Vec::with_capacity(DEFAULT_MAX_QUEUED)),
             max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
         }));
 
