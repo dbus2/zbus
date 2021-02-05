@@ -1,7 +1,7 @@
 // FIXME: Drop this when the deprecated `Basic::ALIGNMENT` is dropped in the next API break.
 #![allow(deprecated)]
 
-use core::{convert::TryFrom, str};
+use core::{convert::TryFrom, fmt::Debug, str};
 use serde::{
     de::{Deserialize, Deserializer, Visitor},
     ser::{Serialize, Serializer},
@@ -35,7 +35,7 @@ use crate::{Basic, EncodingFormat, Error, Result, Signature, Type};
 /// ObjectPath::try_from("/end/with/slash/").unwrap_err();
 /// ObjectPath::try_from("/ha.d").unwrap_err();
 /// ```
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct ObjectPath<'a>(Cow<'a, [u8]>);
 
 impl<'a> ObjectPath<'a> {
@@ -165,9 +165,15 @@ impl<'a> PartialEq<&str> for ObjectPath<'a> {
     }
 }
 
+impl<'a> Debug for ObjectPath<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ObjectPath").field(&self.as_str()).finish()
+    }
+}
+
 impl<'a> std::fmt::Display for ObjectPath<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.as_str().fmt(f)
+        std::fmt::Display::fmt(&self.as_str(), f)
     }
 }
 
