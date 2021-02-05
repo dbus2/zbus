@@ -5,7 +5,7 @@ authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
 edition = "2018"
 
 description = "D-Bus & GVariant encoding & decoding"
-repository = "https://gitlab.freedesktop.org/zeenix/zbus/"
+repository = "https://gitlab.freedesktop.org/dbus/zbus/"
 keywords = ["D-Bus", "DBus", "IPC", "GVariant"]
 license = "MIT"
 categories = ["data-structures", "encoding", "parsing"]

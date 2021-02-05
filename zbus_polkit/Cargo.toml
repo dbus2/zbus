@@ -5,7 +5,7 @@ authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
 edition = "2018"
 
 description = "PolicyKit binding"
-repository = "https://gitlab.freedesktop.org/zeenix/zbus/"
+repository = "https://gitlab.freedesktop.org/dbus/zbus/"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"
 categories = ["os::unix-apis"]

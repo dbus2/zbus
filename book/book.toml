@@ -8,5 +8,5 @@ title = "zbus: D-Bus for Rust made easy"
 [output.html]
 default-theme = "Rust"
 curly-quotes = true
-git-repository-url = "https://gitlab.freedesktop.org/zeenix/zbus"
+git-repository-url = "https://gitlab.freedesktop.org/dbus/zbus"
 git-repository-icon = "fa-gitlab"

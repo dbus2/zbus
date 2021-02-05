@@ -1,4 +1,4 @@
-[![pipeline status](https://gitlab.freedesktop.org/zeenix/zbus/badges/main/pipeline.svg)](https://gitlab.freedesktop.org/zeenix/zbus/-/commits/main)
+[![pipeline status](https://gitlab.freedesktop.org/dbus/zbus/badges/main/pipeline.svg)](https://gitlab.freedesktop.org/dbus/zbus/-/commits/main)
 
 # zbus
 
@@ -31,7 +31,7 @@ zbus crate is currently Linux-specific[^otheros].
 
 ### Getting Started
 
-The best way to get started with zbus is the [book](https://zeenix.pages.freedesktop.org/zbus/),
+The best way to get started with zbus is the [book](https://dbus.pages.freedesktop.org/zbus/),
 where we start with basic D-Bus concepts and explain with code samples, how zbus makes D-Bus easy.
 
 ### Example code
@@ -319,7 +319,7 @@ If you need help in using these crates, are looking for ways to contribute, or j
 with the cool kids, please come chat with us in the
 [`#zbus:matrix.org`](https://matrix.to/#/#zbus:matrix.org) Matrix room, (which is also bridged to
 the `#zbus` IRC channel on irc.freenode.net). If something doesn't seem right, please [file an
-issue](https://gitlab.freedesktop.org/zeenix/zbus/-/issues/new).
+issue](https://gitlab.freedesktop.org/dbus/zbus/-/issues/new).
 
 # Portability
 

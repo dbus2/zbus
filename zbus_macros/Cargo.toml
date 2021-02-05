@@ -6,7 +6,7 @@ authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
 edition = "2018"
 
 description = "proc-macros for zbus"
-repository = "https://gitlab.freedesktop.org/zeenix/zbus/"
+repository = "https://gitlab.freedesktop.org/dbus/zbus/"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"
 categories = ["data-structures", "encoding", "parsing"]
