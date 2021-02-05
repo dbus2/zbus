@@ -23,7 +23,7 @@ use crate::{
     Error, Guid, Message, MessageType, Result,
 };
 
-const DEFAULT_MAX_QUEUED: usize = 32;
+const DEFAULT_MAX_QUEUED: usize = 64;
 
 #[derive(Debug)]
 struct ConnectionInner<S> {

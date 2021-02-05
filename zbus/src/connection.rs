@@ -35,7 +35,8 @@ use crate::{azync, Guid, Message, Result};
 /// its reply is received, `Connection` keeps an internal queue of incoming messages so that these
 /// messages are not lost and subsequent calls to [`receive_message`] will retreive messages from
 /// this queue first. The size of this queue is configurable through the [`set_max_queued`] method.
-/// The default size is 32. All messages that are received after the queue is full, are dropped.
+/// The default size is 64. When the queue is full, messages are dropped to create room, starting
+/// from the oldest one.
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
