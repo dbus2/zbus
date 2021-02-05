@@ -261,7 +261,7 @@ pub struct Message {
     fds: Fds,
 }
 
-// TODO: Handle non-native byte order: https://gitlab.freedesktop.org/zeenix/zbus/-/issues/19
+// TODO: Handle non-native byte order: https://gitlab.freedesktop.org/dbus/zbus/-/issues/19
 impl Message {
     /// Create a message of type [`MessageType::MethodCall`].
     ///
