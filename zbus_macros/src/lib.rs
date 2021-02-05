@@ -12,11 +12,13 @@ mod iface;
 mod proxy;
 mod utils;
 
-/// Attribute macro for defining a D-Bus proxy (using zbus [`Proxy`]).
+/// Attribute macro for defining D-Bus proxies (using [`zbus::Proxy`] and [`zbus::azync::Proxy`]).
 ///
-/// The macro must be applied on a `trait T`. A matching `impl T` will provide the proxy. The proxy
-/// instance can be created with the associated `new()` or `new_for()` methods. The former doesn't take
-/// any argument and uses the default service name and path. The later allows you to specify both.
+/// The macro must be applied on a `trait T`. Two matching `impl T` will provide a synchronous Proxy
+/// implementation, named `TraitNameProxy` and an asynchronous one, named `AsyncTraitNameProxy`. The
+/// proxy instances can be created with the associated `new()` or `new_for()` methods. The former
+/// doesn't take any argument and uses the default service name and path. The later allows you to
+/// specify both.
 ///
 /// Each trait method will be expanded to call to the associated D-Bus remote interface.
 ///
@@ -42,6 +44,8 @@ mod utils;
 /// use zbus_macros::dbus_proxy;
 /// use zbus::{Connection, Result, fdo};
 /// use zvariant::Value;
+/// use futures_util::future::FutureExt;
+/// use pollster::block_on;
 ///
 /// #[dbus_proxy(
 ///     interface = "org.test.SomeIface",
@@ -49,7 +53,7 @@ mod utils;
 ///     default_path = "/org/test/SomeObject"
 /// )]
 /// trait SomeIface {
-///     fn do_this(&self, with: &str, some: u32, arg: &Value) -> Result<bool>;
+///     fn do_this(&self, with: &str, some: u32, arg: &Value<'_>) -> Result<bool>;
 ///
 ///     #[dbus_proxy(property)]
 ///     fn a_property(&self) -> fdo::Result<String>;
@@ -76,13 +80,33 @@ mod utils;
 /// assert!(proxy.disconnect_some_signal()?);
 /// assert!(!proxy.disconnect_some_signal()?);
 ///
+/// // Now the same again, but asynchronous.
+/// let proxy = AsyncSomeIfaceProxy::new(&connection.into())?;
+/// block_on(async move {
+///     let _ = proxy.do_this("foo", 32, &Value::new(true)).await;
+///     let _ = proxy.set_a_property("val").await;
+///
+///     proxy.connect_some_signal(|s, u| {
+///         println!("arg1: {}, arg2: {}", s, u);
+///
+///         async { Ok(()) }.boxed()
+///     }).await?;
+///
+///     // You'll want to make at least a call to `handle_next_signal` before disconnecting the signal.
+///     assert!(proxy.disconnect_some_signal().await?);
+///     assert!(!proxy.disconnect_some_signal().await?);
+///
+///     Ok::<(), zbus::Error>(())
+/// })?;
+///
 ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
 ///
 /// [`zbus_polkit`] is a good example of how to bind a real D-Bus API.
 ///
 /// [`zbus_polkit`]: https://docs.rs/zbus_polkit/1.0.0/zbus_polkit/policykit1/index.html
-/// [`Proxy`]: https://docs.rs/zbus/1.0.0/zbus/struct.Proxy.html
+/// [`zbus::Proxy`]: https://docs.rs/zbus/2.0.0-beta.2/zbus/struct.Proxy.html
+/// [`zbus::azync::Proxy`]: https://docs.rs/zbus/2.0.0-beta.2/zbus/azync/struct.Proxy.html
 /// [`zbus::SignalReceiver::receive_for`]:
 /// https://docs.rs/zbus/1.5.0/zbus/struct.SignalReceiver.html#method.receive_for
 #[proc_macro_attribute]

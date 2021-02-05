@@ -1,18 +1,13 @@
+use pollster::block_on;
 use std::{
-    borrow::Cow,
-    collections::HashMap,
     convert::{TryFrom, TryInto},
-    sync::Mutex,
+    future::ready,
 };
 use zvariant::{ObjectPath, OwnedValue, Value};
 
-use crate::{Connection, Error, Message, Result};
+use crate::{azync, Connection, Message, Result};
 
-use crate::fdo::{self, IntrospectableProxy, PropertiesProxy};
-
-const LOCK_FAIL_MSG: &str = "Failed to lock a mutex or read-write lock";
-
-type SignalHandler = Box<dyn FnMut(&Message) -> Result<()> + Send>;
+use crate::fdo;
 
 /// A client-side interface proxy.
 ///
@@ -57,10 +52,7 @@ type SignalHandler = Box<dyn FnMut(&Message) -> Result<()> + Send>;
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 pub struct Proxy<'a> {
     conn: Connection,
-    destination: Cow<'a, str>,
-    path: ObjectPath<'a>,
-    interface: Cow<'a, str>,
-    sig_handlers: Mutex<HashMap<&'static str, SignalHandler>>,
+    azync: azync::Proxy<'a>,
 }
 
 impl<'a> Proxy<'a> {
@@ -71,12 +63,11 @@ impl<'a> Proxy<'a> {
         path: impl TryInto<ObjectPath<'a>, Error = zvariant::Error>,
         interface: &'a str,
     ) -> Result<Self> {
+        let proxy = azync::Proxy::new(conn.inner(), destination, path, interface)?;
+
         Ok(Self {
             conn: conn.clone(),
-            destination: Cow::from(destination),
-            path: path.try_into()?,
-            interface: Cow::from(interface),
-            sig_handlers: Mutex::new(HashMap::new()),
+            azync: proxy,
         })
     }
 
@@ -88,13 +79,10 @@ impl<'a> Proxy<'a> {
         path: impl TryInto<ObjectPath<'static>, Error = zvariant::Error>,
         interface: String,
     ) -> Result<Self> {
-        Ok(Self {
-            conn,
-            destination: Cow::from(destination),
-            path: path.try_into()?,
-            interface: Cow::from(interface),
-            sig_handlers: Mutex::new(HashMap::new()),
-        })
+        let proxy =
+            azync::Proxy::new_owned(conn.clone().into_inner(), destination, path, interface)?;
+
+        Ok(Self { conn, azync: proxy })
     }
 
     /// Get a reference to the associated connection.
@@ -104,25 +92,24 @@ impl<'a> Proxy<'a> {
 
     /// Get a reference to the destination service name.
     pub fn destination(&self) -> &str {
-        &self.destination
+        self.azync.destination()
     }
 
     /// Get a reference to the object path.
-    pub fn path(&self) -> &str {
-        &self.path
+    pub fn path(&self) -> &ObjectPath<'_> {
+        self.azync.path()
     }
 
     /// Get a reference to the interface.
     pub fn interface(&self) -> &str {
-        &self.interface
+        self.azync.interface()
     }
 
     /// Introspect the associated object, and return the XML description.
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub fn introspect(&self) -> fdo::Result<String> {
-        IntrospectableProxy::new_for(&self.conn, &self.destination, self.path.as_str())?
-            .introspect()
+        block_on(self.azync.introspect())
     }
 
     /// Get the property `property_name`.
@@ -132,10 +119,7 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        PropertiesProxy::new_for(&self.conn, &self.destination, self.path.as_str())?
-            .get(&self.interface, property_name)?
-            .try_into()
-            .map_err(|_| Error::InvalidReply.into())
+        block_on(self.azync.get_property(property_name))
     }
 
     /// Set the property `property_name`.
@@ -145,11 +129,7 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        PropertiesProxy::new_for(&self.conn, &self.destination, self.path.as_str())?.set(
-            &self.interface,
-            property_name,
-            &value.into(),
-        )
+        block_on(self.azync.set_property(property_name, value))
     }
 
     /// Call a method and return the reply.
@@ -163,21 +143,7 @@ impl<'a> Proxy<'a> {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        let reply = self.conn.call_method(
-            Some(&self.destination),
-            self.path.as_str(),
-            Some(&self.interface),
-            method_name,
-            body,
-        );
-        match reply {
-            Ok(mut reply) => {
-                reply.disown_fds();
-
-                Ok(reply)
-            }
-            Err(e) => Err(e),
-        }
+        block_on(self.azync.call_method(method_name, body))
     }
 
     /// Call a method and return the reply body.
@@ -190,7 +156,7 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::Type,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
-        Ok(self.call_method(method_name, body)?.body()?)
+        block_on(self.azync.call(method_name, body))
     }
 
     /// Register a handler for signal named `signal_name`.
@@ -206,23 +172,14 @@ impl<'a> Proxy<'a> {
     /// This method can fail if addition of the relevant match rule on the bus fails. You can
     /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
     /// connection.
-    pub fn connect_signal<H>(&self, signal_name: &'static str, handler: H) -> fdo::Result<()>
+    pub fn connect_signal<H>(&self, signal_name: &'static str, mut handler: H) -> fdo::Result<()>
     where
-        H: FnMut(&Message) -> Result<()> + Send + 'static,
+        H: FnMut(Message) -> Result<()> + Send + 'static,
     {
-        if self
-            .sig_handlers
-            .lock()
-            .expect(LOCK_FAIL_MSG)
-            .insert(signal_name, Box::new(handler))
-            .is_none()
-            && self.conn.is_bus()
-        {
-            let rule = self.match_rule_for_signal(signal_name);
-            fdo::DBusProxy::new(&self.conn)?.add_match(&rule)?;
-        }
-
-        Ok(())
+        block_on(
+            self.azync
+                .connect_signal(signal_name, move |msg| Box::pin(ready(handler(msg)))),
+        )
     }
 
     /// Deregister the handler for the signal named `signal_name`.
@@ -238,21 +195,7 @@ impl<'a> Proxy<'a> {
     /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
     /// connection.
     pub fn disconnect_signal(&self, signal_name: &'static str) -> fdo::Result<bool> {
-        if self
-            .sig_handlers
-            .lock()
-            .expect(LOCK_FAIL_MSG)
-            .remove(signal_name)
-            .is_some()
-            && self.conn.is_bus()
-        {
-            let rule = self.match_rule_for_signal(signal_name);
-            fdo::DBusProxy::new(&self.conn)?.remove_match(&rule)?;
-
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        block_on(self.azync.disconnect_signal(signal_name))
     }
 
     /// Receive and handle the next incoming signal on the associated connection.
@@ -264,31 +207,7 @@ impl<'a> Proxy<'a> {
     /// If the signal message was handled by a handler, `Ok(None)` is returned. Otherwise, the
     /// received message is returned.
     pub fn next_signal(&self) -> Result<Option<Message>> {
-        let msg = self.conn.receive_specific(|msg| {
-            let handlers = self.sig_handlers.lock().expect(LOCK_FAIL_MSG);
-            if handlers.is_empty() {
-                // No signal handers associated anymore so no need to continue.
-                return Ok(true);
-            }
-
-            let hdr = msg.header()?;
-
-            let member = match hdr.member()? {
-                Some(m) => m,
-                None => return Ok(false),
-            };
-
-            Ok(hdr.interface()? == Some(&self.interface)
-                && hdr.path()? == Some(&self.path)
-                && hdr.message_type()? == crate::MessageType::Signal
-                && handlers.contains_key(member))
-        })?;
-
-        if self.handle_signal(&msg)? {
-            Ok(None)
-        } else {
-            Ok(Some(msg))
-        }
+        block_on(self.azync.next_signal())
     }
 
     /// Handle the provided signal message.
@@ -296,39 +215,24 @@ impl<'a> Proxy<'a> {
     /// Call any handlers registered through the [`Self::connect_signal`] method for the provided
     /// signal message.
     ///
-    /// If no errors are encountered, `Ok(true)` is returned if a handler was found and called for,
-    /// the signal; `Ok(false)` otherwise.
-    pub fn handle_signal(&self, msg: &Message) -> Result<bool> {
-        let mut handlers = self.sig_handlers.lock().expect(LOCK_FAIL_MSG);
-        if handlers.is_empty() {
-            return Ok(false);
-        }
+    /// If no errors are encountered, `Ok(None)` is returned if a handler was found and called for,
+    /// the signal; `Ok(Some(msg))` otherwise.
+    pub fn handle_signal(&self, msg: Message) -> Result<Option<Message>> {
+        block_on(self.azync.handle_signal(msg))
+    }
 
-        let hdr = msg.header()?;
-        if let Some(name) = hdr.member()? {
-            if let Some(handler) = handlers.get_mut(name) {
-                handler(&msg)?;
+    /// Get a reference to the underlying async Proxy.
+    pub fn inner(&self) -> &azync::Proxy<'_> {
+        &self.azync
+    }
 
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
+    /// Get the underlying async Proxy, consuming `self`.
+    pub fn into_inner(self) -> azync::Proxy<'a> {
+        self.azync
     }
 
     pub(crate) fn has_signal_handler(&self, signal_name: &str) -> bool {
-        self.sig_handlers
-            .lock()
-            .expect(LOCK_FAIL_MSG)
-            .contains_key(signal_name)
-    }
-
-    fn match_rule_for_signal(&self, signal_name: &'static str) -> String {
-        // FIXME: Use the API to create this once we've it (issue#69).
-        format!(
-            "type='signal',sender='{}',path_namespace='{}',interface='{}',member='{}'",
-            self.destination, self.path, self.interface, signal_name,
-        )
+        block_on(self.azync.has_signal_handler(signal_name))
     }
 }
 
@@ -338,10 +242,19 @@ impl<'asref, 'p: 'asref> std::convert::AsRef<Proxy<'asref>> for Proxy<'p> {
     }
 }
 
+impl<'p, 'a: 'p> From<azync::Proxy<'a>> for Proxy<'p> {
+    fn from(proxy: azync::Proxy<'a>) -> Self {
+        Self {
+            conn: proxy.connection().clone().into(),
+            azync: proxy,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn signal() {

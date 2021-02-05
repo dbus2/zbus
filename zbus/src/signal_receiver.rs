@@ -20,9 +20,7 @@ where
         let proxy = proxy.as_ref();
         ProxyKey {
             interface: Cow::from(proxy.interface().to_owned()),
-            path: ObjectPath::try_from(proxy.path())
-                .expect("invalid object path")
-                .to_owned(),
+            path: proxy.path().to_owned(),
         }
     }
 }
@@ -115,26 +113,22 @@ impl<'r, 'p> SignalReceiver<'r, 'p> {
             Ok(false)
         })?;
 
-        if self.handle_signal(&msg)? {
-            Ok(None)
-        } else {
-            Ok(Some(msg))
-        }
+        self.handle_signal(msg)
     }
 
     /// Handle the provided signal message.
     ///
     /// Call any handler registered (through [`Proxy::connect_signal`]) with a proxy in this receiver.
     ///
-    /// If no errors are encountered, `Ok(true)` is returned if a handler was found and called for,
-    /// the signal; `Ok(false)` otherwise.
-    pub fn handle_signal(&self, msg: &crate::Message) -> Result<bool> {
+    /// If no errors are encountered, `Ok(None)` is returned if a handler was found and called for,
+    /// the signal; `Ok(Some(msg))` otherwise.
+    pub fn handle_signal(&self, msg: crate::Message) -> Result<Option<crate::Message>> {
         let hdr = msg.header()?;
         let key = ProxyKey::try_from(&hdr)?;
 
         match self.proxies.get(&key) {
-            Some(proxy) => proxy.handle_signal(&msg),
-            None => Ok(false),
+            Some(proxy) => proxy.handle_signal(msg),
+            None => Ok(Some(msg)),
         }
     }
 }

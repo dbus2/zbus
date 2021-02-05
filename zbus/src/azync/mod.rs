@@ -4,5 +4,7 @@
 
 mod handshake;
 pub(crate) use handshake::*;
-pub mod connection;
+mod connection;
 pub use connection::*;
+mod proxy;
+pub use proxy::*;

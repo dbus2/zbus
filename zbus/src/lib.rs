@@ -37,7 +37,7 @@
 //!         summary: &str,
 //!         body: &str,
 //!         actions: &[&str],
-//!         hints: HashMap<&str, &Value>,
+//!         hints: HashMap<&str, &Value<'_>>,
 //!         expire_timeout: i32,
 //!     ) -> zbus::Result<u32>;
 //! }
@@ -192,6 +192,7 @@ extern crate self as zbus;
 // Macro support module, not part of the public API.
 #[doc(hidden)]
 pub mod export {
+    pub use futures_core;
     pub use zvariant;
 }
 
@@ -207,11 +208,14 @@ mod tests {
 
     use enumflags2::BitFlags;
     use ntest::timeout;
-    use serde_repr::{Deserialize_repr, Serialize_repr};
 
-    use zvariant::{derive::Type, Fd, OwnedValue, Type};
+    use zvariant::{Fd, OwnedValue, Type};
 
-    use crate::{azync, Connection, Message, MessageFlags, Result};
+    use crate::{
+        azync,
+        fdo::{RequestNameFlags, RequestNameReply},
+        Connection, Message, MessageFlags, Result,
+    };
 
     #[test]
     fn msg() {
@@ -310,24 +314,6 @@ mod tests {
         assert!(fd.as_raw_fd() >= 0);
         let f = unsafe { File::from_raw_fd(fd.as_raw_fd()) };
         f.metadata().unwrap();
-    }
-
-    // Let's try getting us a fancy name on the bus
-    #[repr(u32)]
-    #[derive(Type, BitFlags, Debug, PartialEq, Copy, Clone)]
-    enum RequestNameFlags {
-        AllowReplacement = 0x01,
-        ReplaceExisting = 0x02,
-        DoNotQueue = 0x04,
-    }
-
-    #[repr(u32)]
-    #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
-    enum RequestNameReply {
-        PrimaryOwner = 0x01,
-        InQueue = 0x02,
-        Exists = 0x03,
-        AlreadyOwner = 0x04,
     }
 
     #[test]

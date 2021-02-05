@@ -11,8 +11,6 @@ use pollster::block_on;
 
 use crate::{azync, Guid, Message, Result};
 
-pub(crate) const DEFAULT_MAX_QUEUED: usize = 32;
-
 /// A D-Bus connection.
 ///
 /// A connection to a D-Bus bus, or a direct peer.
@@ -37,7 +35,8 @@ pub(crate) const DEFAULT_MAX_QUEUED: usize = 32;
 /// its reply is received, `Connection` keeps an internal queue of incoming messages so that these
 /// messages are not lost and subsequent calls to [`receive_message`] will retreive messages from
 /// this queue first. The size of this queue is configurable through the [`set_max_queued`] method.
-/// The default size is 32. All messages that are received after the queue is full, are dropped.
+/// The default size is 64. When the queue is full, messages are dropped to create room, starting
+/// from the oldest one.
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
@@ -264,6 +263,22 @@ impl Connection {
     /// This will return `false` for p2p connections.
     pub fn is_bus(&self) -> bool {
         self.0.is_bus()
+    }
+
+    /// Get a reference to the underlying async Connection.
+    pub fn inner(&self) -> &azync::Connection {
+        &self.0
+    }
+
+    /// Get the underlying async Connection, consuming `self`.
+    pub fn into_inner(self) -> azync::Connection {
+        self.0
+    }
+}
+
+impl From<azync::Connection> for Connection {
+    fn from(conn: azync::Connection) -> Self {
+        Self(conn)
     }
 }
 

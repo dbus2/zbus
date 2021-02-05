@@ -2,6 +2,7 @@ use async_io::Async;
 use async_lock::{Mutex, MutexGuard, RwLock};
 use once_cell::sync::OnceCell;
 use std::{
+    collections::VecDeque,
     convert::TryInto,
     io::{self, ErrorKind},
     os::unix::{
@@ -20,8 +21,10 @@ use futures_util::{sink::SinkExt, stream::TryStreamExt};
 use crate::{
     azync::Authenticated,
     raw::{Connection as RawConnection, Socket},
-    Error, Guid, Message, MessageType, Result, DEFAULT_MAX_QUEUED,
+    Error, Guid, Message, MessageType, Result,
 };
+
+const DEFAULT_MAX_QUEUED: usize = 64;
 
 #[derive(Debug)]
 struct ConnectionInner<S> {
@@ -36,7 +39,7 @@ struct ConnectionInner<S> {
     serial: Mutex<u32>,
 
     // Queue of incoming messages
-    incoming_queue: Mutex<Vec<Message>>,
+    incoming_queue: Mutex<VecDeque<Message>>,
 
     // Max number of messages to queue
     max_queued: RwLock<usize>,
@@ -223,7 +226,9 @@ impl Connection {
             let mut queue = self.0.incoming_queue.lock().await;
             for (i, msg) in queue.iter().enumerate() {
                 if predicate(msg)? {
-                    return Ok(queue.remove(i));
+                    // SAFETY: we got the index from the queue enumerator so this shouldn't ever
+                    // fail.
+                    return Ok(queue.remove(i).expect("removing queue item"));
                 }
             }
 
@@ -244,8 +249,13 @@ impl Connection {
 
             if predicate(&msg)? {
                 return Ok(msg);
-            } else if queue.len() < *self.0.max_queued.read().await {
-                queue.push(msg);
+            } else {
+                if queue.len() >= *self.0.max_queued.read().await {
+                    // Create room by dropping the oldest message.
+                    queue.pop_front();
+                }
+
+                queue.push_back(msg);
             }
         }
     }
@@ -438,17 +448,7 @@ impl Connection {
     }
 
     async fn hello_bus(self) -> Result<Self> {
-        // TODO: Use fdo module once it's async.
-        let name: String = self
-            .call_method(
-                Some("org.freedesktop.DBus"),
-                "/org/freedesktop/DBus",
-                Some("org.freedesktop.DBus"),
-                "Hello",
-                &(),
-            )
-            .await?
-            .body()?;
+        let name = crate::fdo::AsyncDBusProxy::new(&self)?.hello().await?;
 
         self.0
             .unique_name
@@ -475,7 +475,7 @@ impl Connection {
             bus_conn: bus_connection,
             serial: Mutex::new(1),
             unique_name: OnceCell::new(),
-            incoming_queue: Mutex::new(vec![]),
+            incoming_queue: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
             max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
         }));
 
@@ -591,7 +591,7 @@ impl futures_sink::Sink<Message> for Sink<'_> {
 /// recommended not to use such a combination.
 pub struct Stream<'s> {
     raw_conn: MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
-    incoming_queue: Option<MutexGuard<'s, Vec<Message>>>,
+    incoming_queue: Option<MutexGuard<'s, VecDeque<Message>>>,
 }
 
 impl<'s> stream::Stream for Stream<'s> {
@@ -601,7 +601,7 @@ impl<'s> stream::Stream for Stream<'s> {
         let stream = self.get_mut();
 
         if let Some(queue) = &mut stream.incoming_queue {
-            if let Some(msg) = queue.pop() {
+            if let Some(msg) = queue.pop_front() {
                 return Poll::Ready(Some(Ok(msg)));
             }
         }
@@ -623,6 +623,12 @@ impl<'s> stream::Stream for Stream<'s> {
                 Err(e) => return Poll::Ready(Some(Err(e))),
             }
         }
+    }
+}
+
+impl From<crate::Connection> for Connection {
+    fn from(conn: crate::Connection) -> Self {
+        conn.into_inner()
     }
 }
 
