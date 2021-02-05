@@ -6,7 +6,7 @@ include:
     file: '/templates/debian.yml'
 
 variables:
-  FDO_UPSTREAM_REPO: zeenix/zbus
+  FDO_UPSTREAM_REPO: dbus/zbus
 
 stages:
   - container
