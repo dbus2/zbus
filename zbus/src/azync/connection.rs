@@ -580,7 +580,7 @@ impl futures_sink::Sink<Message> for Sink<'_> {
     }
 }
 
-/// Our [`stream::Stream`] implementation.
+/// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
 /// Use [`Connection::stream`] to create an instance of this type.
 ///
