@@ -1,6 +1,6 @@
 //! The asynchronous API.
 //!
-//! This module host all our asynchronous API.
+//! This module hosts all our asynchronous API.
 
 mod handshake;
 pub(crate) use handshake::*;
