@@ -13,7 +13,7 @@ edition = "2018"
 
 description = "D-Bus XML interface code generator"
 repository = "https://gitlab.freedesktop.org/dbus/zbus/"
-documentation = "https://zeenix.pages.freedesktop.org/zbus/"
+documentation = "https://dbus.pages.freedesktop.org/zbus/"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"
 categories = ["os::unix-apis", "development-tools"]

@@ -118,7 +118,7 @@
 //! it that you can do through the high-level asynchronous API (when it exists), it's [not at all as
 //! hard to use](azync::Connection#monitoring-all-messages) as it may sound.
 //!
-//! [book]: https://zeenix.pages.freedesktop.org/zbus/
+//! [book]: https://dbus.pages.freedesktop.org/zbus/
 //! [low-level asynchronous API]: azync::Connection
 //!
 //! [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus
