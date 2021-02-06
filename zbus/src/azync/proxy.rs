@@ -418,7 +418,7 @@ impl<'a> Proxy<'a> {
     }
 }
 
-/// The signal stream.
+/// A [`stream::Stream`] implementation that yields signal [messages](`Message`).
 ///
 /// Use [`Proxy::receive_signal`] to create an instance of this type.
 pub struct SignalStream<'s> {
