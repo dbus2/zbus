@@ -328,11 +328,13 @@ impl<'a> Proxy<'a> {
     /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
     /// connection.
     pub async fn disconnect_signal(&self, signal_name: &'static str) -> fdo::Result<bool> {
-        if self.sig_handlers.lock().await.remove(signal_name).is_some() && self.core.conn.is_bus() {
-            let rule = self.match_rule_for_signal(signal_name);
-            fdo::AsyncDBusProxy::new(&self.core.conn)?
-                .remove_match(&rule)
-                .await?;
+        if self.sig_handlers.lock().await.remove(signal_name).is_some() {
+            if self.core.conn.is_bus() {
+                let rule = self.match_rule_for_signal(signal_name);
+                fdo::AsyncDBusProxy::new(&self.core.conn)?
+                    .remove_match(&rule)
+                    .await?;
+            }
 
             Ok(true)
         } else {
