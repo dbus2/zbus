@@ -56,10 +56,10 @@ struct ConnectionInner<S> {
 /// [`futures_sink::Sink`] implementation that is returned by [`Connection::sink`] method. For
 /// latter, you might find [`SinkExt`] API very useful. Keep in mind that [`Connection`] will not
 /// manage the serial numbers (cookies) on the messages for you when they are sent through the
-/// [`Sink`]. You can manually assign unique serial numbers to them using the
+/// [`MessageSink`]. You can manually assign unique serial numbers to them using the
 /// [`Connection::assign_serial_num`] method before sending them off, if needed. Having said that,
-/// [`Sink`] is mainly useful for sending out signals, as they do not expect a reply, and serial
-/// numbers are not very useful for signals either for the same reason.
+/// [`MessageSink`] is mainly useful for sending out signals, as they do not expect a reply, and
+/// serial numbers are not very useful for signals either for the same reason.
 ///
 /// ### Receiving Messages
 ///
@@ -194,19 +194,19 @@ impl Connection {
     }
 
     /// Get a stream to receive incoming messages.
-    pub async fn stream(&self) -> Stream<'_> {
+    pub async fn stream(&self) -> MessageStream<'_> {
         let raw_conn = self.0.raw_in_conn.lock().await;
         let incoming_queue = Some(self.0.incoming_queue.lock().await);
 
-        Stream {
+        MessageStream {
             raw_conn,
             incoming_queue,
         }
     }
 
     /// Get a sink to send out messages.
-    pub async fn sink(&self) -> Sink<'_> {
-        Sink {
+    pub async fn sink(&self) -> MessageSink<'_> {
+        MessageSink {
             raw_conn: self.0.raw_out_conn.lock().await,
             cap_unix_fd: self.0.cap_unix_fd,
         }
@@ -214,10 +214,11 @@ impl Connection {
 
     /// Receive a specific message.
     ///
-    /// This is the same as receiving messages from [`Stream`], except that this takes a predicate
-    /// function that decides if the message received should be returned by this method or not. All
-    /// messages received during this call that are not returned by it, are pushed to the queue to
-    /// be picked by the susubsequent or awaiting call to this method or by the `Stream`.
+    /// This is the same as receiving messages from [`MessageStream`], except that this takes a
+    /// predicate function that decides if the message received should be returned by this method or
+    /// not. All messages received during this call that are not returned by it, are pushed to the
+    /// queue to be picked by the susubsequent or awaiting call to this method or by the
+    /// `MessageStream`.
     pub async fn receive_specific<P>(&self, predicate: P) -> Result<Message>
     where
         P: Fn(&Message) -> Result<bool>,
@@ -232,14 +233,14 @@ impl Connection {
                 }
             }
 
-            let mut stream = Stream {
+            let mut stream = MessageStream {
                 raw_conn: self.0.raw_in_conn.lock().await,
                 incoming_queue: None,
             };
             let msg = match stream.try_next().await? {
                 Some(msg) => msg,
                 None => {
-                    // If Stream gives us None, that means the socket was closed
+                    // If MessageStream gives us None, that means the socket was closed
                     return Err(Error::Io(io::Error::new(
                         ErrorKind::BrokenPipe,
                         "socket closed",
@@ -262,8 +263,8 @@ impl Connection {
 
     /// Send `msg` to the peer.
     ///
-    /// Unlike [`Sink`], this method sets a unique (to this connection) serial number on the message
-    /// before sending it off, for you.
+    /// Unlike [`MessageSink`], this method sets a unique (to this connection) serial number on the
+    /// message before sending it off, for you.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
     pub async fn send_message(&self, mut msg: Message) -> Result<u32> {
@@ -513,15 +514,15 @@ impl Connection {
     }
 }
 
-/// Our [`futures_sink::Sink`] implementation.
+/// A [`futures_sink::Sink`] implementation that consumes [`Message`] instances.
 ///
 /// Use [`Connection::sink`] to create an instance of this type.
-pub struct Sink<'s> {
+pub struct MessageSink<'s> {
     raw_conn: MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
     cap_unix_fd: bool,
 }
 
-impl Sink<'_> {
+impl MessageSink<'_> {
     fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         loop {
             match self.raw_conn.try_flush() {
@@ -545,7 +546,7 @@ impl Sink<'_> {
     }
 }
 
-impl futures_sink::Sink<Message> for Sink<'_> {
+impl futures_sink::Sink<Message> for MessageSink<'_> {
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
@@ -579,7 +580,7 @@ impl futures_sink::Sink<Message> for Sink<'_> {
     }
 }
 
-/// Our [`stream::Stream`] implementation.
+/// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
 /// Use [`Connection::stream`] to create an instance of this type.
 ///
@@ -589,12 +590,12 @@ impl futures_sink::Sink<Message> for Sink<'_> {
 /// from multiple tasks, you can end up with situation where the stream takes away the message
 /// the `receive_specific` is waiting for and end up in a deadlock situation. It is therefore highly
 /// recommended not to use such a combination.
-pub struct Stream<'s> {
+pub struct MessageStream<'s> {
     raw_conn: MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
     incoming_queue: Option<MutexGuard<'s, VecDeque<Message>>>,
 }
 
-impl<'s> stream::Stream for Stream<'s> {
+impl<'s> stream::Stream for MessageStream<'s> {
     type Item = Result<Message>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
