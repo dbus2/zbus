@@ -194,11 +194,11 @@ impl Connection {
     }
 
     /// Get a stream to receive incoming messages.
-    pub async fn stream(&self) -> Stream<'_> {
+    pub async fn stream(&self) -> MessageStream<'_> {
         let raw_conn = self.0.raw_in_conn.lock().await;
         let incoming_queue = Some(self.0.incoming_queue.lock().await);
 
-        Stream {
+        MessageStream {
             raw_conn,
             incoming_queue,
         }
@@ -214,10 +214,11 @@ impl Connection {
 
     /// Receive a specific message.
     ///
-    /// This is the same as receiving messages from [`Stream`], except that this takes a predicate
-    /// function that decides if the message received should be returned by this method or not. All
-    /// messages received during this call that are not returned by it, are pushed to the queue to
-    /// be picked by the susubsequent or awaiting call to this method or by the `Stream`.
+    /// This is the same as receiving messages from [`MessageStream`], except that this takes a
+    /// predicate function that decides if the message received should be returned by this method or
+    /// not. All messages received during this call that are not returned by it, are pushed to the
+    /// queue to be picked by the susubsequent or awaiting call to this method or by the
+    /// `MessageStream`.
     pub async fn receive_specific<P>(&self, predicate: P) -> Result<Message>
     where
         P: Fn(&Message) -> Result<bool>,
@@ -232,14 +233,14 @@ impl Connection {
                 }
             }
 
-            let mut stream = Stream {
+            let mut stream = MessageStream {
                 raw_conn: self.0.raw_in_conn.lock().await,
                 incoming_queue: None,
             };
             let msg = match stream.try_next().await? {
                 Some(msg) => msg,
                 None => {
-                    // If Stream gives us None, that means the socket was closed
+                    // If MessageStream gives us None, that means the socket was closed
                     return Err(Error::Io(io::Error::new(
                         ErrorKind::BrokenPipe,
                         "socket closed",
@@ -589,12 +590,12 @@ impl futures_sink::Sink<Message> for Sink<'_> {
 /// from multiple tasks, you can end up with situation where the stream takes away the message
 /// the `receive_specific` is waiting for and end up in a deadlock situation. It is therefore highly
 /// recommended not to use such a combination.
-pub struct Stream<'s> {
+pub struct MessageStream<'s> {
     raw_conn: MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
     incoming_queue: Option<MutexGuard<'s, VecDeque<Message>>>,
 }
 
-impl<'s> stream::Stream for Stream<'s> {
+impl<'s> stream::Stream for MessageStream<'s> {
     type Item = Result<Message>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
