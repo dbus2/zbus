@@ -514,7 +514,7 @@ impl Connection {
     }
 }
 
-/// Our [`futures_sink::Sink`] implementation.
+/// A [`futures_sink::Sink`] implementation that consumes [`Message`] instances.
 ///
 /// Use [`Connection::sink`] to create an instance of this type.
 pub struct MessageSink<'s> {
