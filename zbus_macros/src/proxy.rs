@@ -1,8 +1,8 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
 use syn::{
-    self, spanned::Spanned, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta, ReturnType,
-    TraitItemMethod, Type,
+    self, parse_quote, spanned::Spanned, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta,
+    ReturnType, TraitItemMethod, Type,
 };
 
 use crate::utils::*;
@@ -368,12 +368,21 @@ fn gen_proxy_signal(
         signal_name, method, link,
     );
 
+    let mut generics = m.sig.generics.clone();
+    generics.params.push(parse_quote!(__H));
+    {
+        let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
+        where_clause
+            .predicates
+            .push(parse_quote!(__H: #handler + Send + 'static));
+    }
+
+    let (_, ty_generics, where_clause) = generics.split_for_impl();
     quote! {
         #[doc = #connect_gen_doc]
         #(#doc)*
-        pub #usage fn #connect_method<H>(&self, mut handler: H) -> ::#zbus::fdo::Result<()>
-        where
-            H: #handler + Send + 'static,
+        pub #usage fn #connect_method#ty_generics(&self, mut handler: __H) -> ::#zbus::fdo::Result<()>
+        #where_clause,
         {
             self.0.connect_signal(#signal_name, move |m| {
                 let (#(#args),*) = m.body().expect("Incorrect signal signature");
