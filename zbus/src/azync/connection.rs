@@ -194,6 +194,12 @@ impl Connection {
     }
 
     /// Get a stream to receive incoming messages.
+    ///
+    /// **Note:** At the moment, a stream requires locking all other incoming messages on the
+    /// connection. Therefore once you have created a stream for a connection, all receiving
+    /// operations will not yield any results until the stream is dropped. However, this is not as
+    /// big an issue since all operations in this API are asynchronous (i-e non-blocking). Moreover,
+    /// this limitation will hopefully be removed in the near future.
     pub async fn stream(&self) -> MessageStream<'_> {
         let raw_conn = self.0.raw_in_conn.lock().await;
         let incoming_queue = Some(self.0.incoming_queue.lock().await);
@@ -205,6 +211,12 @@ impl Connection {
     }
 
     /// Get a sink to send out messages.
+    ///
+    /// **Note:** At the moment, a sink requires locking all other outgoing messages on the
+    /// connection. Therefore once you have created a sink for a connection, all sending
+    /// operations will not yield any results until the sink is dropped. However, this is not as
+    /// big an issue since all operations in this API are asynchronous (i-e non-blocking). Moreover,
+    /// this limitation will hopefully be removed in the near future.
     pub async fn sink(&self) -> MessageSink<'_> {
         MessageSink {
             raw_conn: self.0.raw_out_conn.lock().await,
