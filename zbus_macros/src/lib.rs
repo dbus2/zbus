@@ -30,8 +30,8 @@ mod utils;
 ///   setter, with a `set_` prefix. Otherwise, it's a getter.
 ///
 /// * `signal` - declare a signal just like a D-Bus method. The macro will provide a method to
-///   register and deregister a handler for the signal, whose signature must match that of the
-///   signature declaration.
+///   register and deregister a handler for the signal with the names of `connect_<signal_name>`
+///   and `disconnect_<signal_name>`, whose signature must match that of the signature declaration.
 ///
 ///   NB: Any doc comments provided shall be appended to the ones added by the macro.
 ///
@@ -47,6 +47,7 @@ mod utils;
 /// use futures_util::future::FutureExt;
 /// use pollster::block_on;
 ///
+/// // Generate the `SomeIfaceProxy` struct from this trait
 /// #[dbus_proxy(
 ///     interface = "org.test.SomeIface",
 ///     default_service = "org.test.SomeService",
@@ -61,6 +62,8 @@ mod utils;
 ///     #[dbus_proxy(property)]
 ///     fn set_a_property(&self, a_property: &str) -> fdo::Result<()>;
 ///
+///     // macro also provides `connect_some_signal` and `disconnect_some_signal`
+///     // in the impl for `SomeIfaceProxy`
 ///     #[dbus_proxy(signal)]
 ///     fn some_signal(&self, arg1: &str, arg2: u32) -> fdo::Result<()>;
 /// };
