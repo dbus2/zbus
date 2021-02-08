@@ -2,8 +2,10 @@
 
 # zbus
 
-A Rust API for [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html) communication. The aim is to provide a safe and simple high- and low-level API akin to
-[GDBus](https://developer.gnome.org/gio/stable/gdbus-convenience.html), that doesn't depend on C libraries.
+A Rust API for [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html) communication. The
+aim is to provide a safe and simple high- and low-level API akin to
+[GDBus](https://developer.gnome.org/gio/stable/gdbus-convenience.html), that doesn't depend on C
+libraries.
 
 The project is divided into three main crates:
 
