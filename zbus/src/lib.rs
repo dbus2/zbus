@@ -114,12 +114,12 @@
 //!
 //! #### Asynchronous API
 //!
-//! Currently, only [low-level asynchronous API] is provided. You can do everything you can through
-//! it that you can do through the high-level asynchronous API (when it exists), it's [not at all as
-//! hard to use](azync::Connection#monitoring-all-messages) as it may sound.
+//! Runtime-agnostic async/await-compatible API for both [(not so) low-level] message handling and
+//! [high-level client-side proxy] is also provided. High-level server-side API coming soon.
 //!
 //! [book]: https://dbus.pages.freedesktop.org/zbus/
-//! [low-level asynchronous API]: azync::Connection
+//! [(not so) low-level]: azync::Connection
+//! [high-level client-side proxy]: https://dbus.pages.freedesktop.org/zbus/async.html#client
 //!
 //! [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus
 //!   clients in javascript (running from any browser) do exist though. And zbus may also be
