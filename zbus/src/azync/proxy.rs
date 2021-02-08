@@ -9,7 +9,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use pollster::block_on;
+use async_io::block_on;
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{azync::Connection, Error, Message, Result};
@@ -33,7 +33,7 @@ type SignalHandler = Box<dyn FnMut(Message) -> BoxFuture<'static, Result<()>> + 
 /// ```
 /// use std::result::Result;
 /// use std::error::Error;
-/// use pollster::block_on;
+/// use async_io::block_on;
 /// use zbus::azync::{Connection, Proxy};
 ///
 /// fn main() -> Result<(), Box<dyn Error>> {

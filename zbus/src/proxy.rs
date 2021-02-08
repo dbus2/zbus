@@ -1,4 +1,4 @@
-use pollster::block_on;
+use async_io::block_on;
 use std::{
     convert::{TryFrom, TryInto},
     future::ready,
