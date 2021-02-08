@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn basic_connection_async() {
-        pollster::block_on(test_basic_connection()).unwrap();
+        async_io::block_on(test_basic_connection()).unwrap();
     }
 
     async fn test_basic_connection() -> Result<()> {
@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn freedesktop_api_async() {
-        pollster::block_on(test_freedesktop_api()).unwrap();
+        async_io::block_on(test_freedesktop_api()).unwrap();
     }
 
     async fn test_freedesktop_api() -> Result<()> {

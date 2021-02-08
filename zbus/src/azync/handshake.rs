@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn async_handshake() {
-        pollster::block_on(handshake()).unwrap();
+        async_io::block_on(handshake()).unwrap();
     }
 
     async fn handshake() -> Result<()> {

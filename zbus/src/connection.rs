@@ -7,7 +7,7 @@ use std::{
 };
 use zvariant::ObjectPath;
 
-use pollster::block_on;
+use async_io::block_on;
 
 use crate::{azync, Guid, Message, Result};
 
