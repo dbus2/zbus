@@ -56,11 +56,6 @@ fully-qualified domain names, in order to avoid potential conflicts.
 
 Please read the [D-Bus API Design Guidelines] carefully for other similar considerations.
 
-## Asynchronous API
-
-At the moment, we only provide [low-level asynchronous API] but high-level asynchronous API will
-hopefully be added soon. It's very high on our priority.
-
 Onwards to implementation details & examples!
 
 [FreeDesktop Notifications Service]: https://people.gnome.org/~mccann/docs/notification-spec/notification-spec-latest.html
@@ -69,4 +64,3 @@ Onwards to implementation details & examples!
 [Basic types chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
 [unique name]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface
 [introspection interface]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-introspectable
-[low-level asynchronous API]: https://docs.rs/zbus/latest/zbus/azync/connection/struct.Connection.html

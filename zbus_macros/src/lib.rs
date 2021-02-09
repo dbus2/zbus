@@ -45,7 +45,7 @@ mod utils;
 /// use zbus::{Connection, Result, fdo};
 /// use zvariant::Value;
 /// use futures_util::future::FutureExt;
-/// use pollster::block_on;
+/// use async_io::block_on;
 ///
 /// #[dbus_proxy(
 ///     interface = "org.test.SomeIface",

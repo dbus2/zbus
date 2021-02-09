@@ -2,8 +2,10 @@
 
 # zbus
 
-A Rust API for [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html) communication. The aim is to provide a safe and simple high- and low-level API akin to
-[GDBus](https://developer.gnome.org/gio/stable/gdbus-convenience.html), that doesn't depend on C libraries.
+A Rust API for [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html) communication. The
+goal is to provide a safe and simple high- and low-level API akin to
+[GDBus](https://developer.gnome.org/gio/stable/gdbus-convenience.html), that doesn't depend on C
+libraries.
 
 The project is divided into three main crates:
 
@@ -130,11 +132,11 @@ s
 
 ### Asynchronous API
 
-Currently, only
-[low-level asynchronous API](https://docs.rs/zbus/latest/zbus/azync/connection/struct.Connection.html)
-is provided. You can do everything you can through it that you can do through the high-level
-asynchronous API (when it exists), it's [not at all as hard to use](https://docs.rs/zbus/latest/zbus/azync/connection/struct.Connection.html#monitoring-all-messages)
-as it may sound.
+Runtime-agnostic async/await-compatible API for both
+[(not so) low-level](https://docs.rs/zbus/latest/zbus/azync/connection/struct.Connection.html)
+message handling and
+[high-level client-side proxy](https://dbus.pages.freedesktop.org/zbus/async.html#client) is also
+provided. High-level server-side API coming soon.
 
 ## zvariant
 
