@@ -18,6 +18,11 @@ use crate::fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy};
 
 type SignalHandler = Box<dyn FnMut(Message) -> BoxFuture<'static, Result<()>> + Send>;
 
+const FDO_DBUS_SERVICE: &str = "org.freedesktop.DBus";
+const FDO_DBUS_INTERFACE: &str = "org.freedesktop.DBus";
+const FDO_DBUS_PATH: &str = "/org/freedesktop/DBus";
+const FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS: [&str; 2] = ["NameAcquired", "NameLost"];
+
 /// The asynchronous sibling of [`crate::Proxy`].
 ///
 /// This API is mostly the same as [`crate::Proxy`], except it is asynchronous. One of the
@@ -245,11 +250,13 @@ impl<'a> Proxy<'a> {
     pub async fn receive_signal(&self, signal_name: &'static str) -> Result<SignalStream<'a>> {
         let match_rule = if self.core.conn.is_bus() {
             let rule = self.match_rule_for_signal(signal_name);
-            fdo::AsyncDBusProxy::new(&self.core.conn)?
-                .add_match(&rule)
-                .await?;
+            if let Some(rule) = &rule {
+                fdo::AsyncDBusProxy::new(&self.core.conn)?
+                    .add_match(rule)
+                    .await?;
+            }
 
-            Some(rule)
+            rule
         } else {
             None
         };
@@ -306,10 +313,11 @@ impl<'a> Proxy<'a> {
             .is_none()
             && self.core.conn.is_bus()
         {
-            let rule = self.match_rule_for_signal(signal_name);
-            fdo::AsyncDBusProxy::new(&self.core.conn)?
-                .add_match(&rule)
-                .await?;
+            if let Some(rule) = self.match_rule_for_signal(signal_name) {
+                fdo::AsyncDBusProxy::new(&self.core.conn)?
+                    .add_match(&rule)
+                    .await?;
+            }
         }
 
         Ok(())
@@ -330,10 +338,11 @@ impl<'a> Proxy<'a> {
     pub async fn disconnect_signal(&self, signal_name: &'static str) -> fdo::Result<bool> {
         if self.sig_handlers.lock().await.remove(signal_name).is_some() {
             if self.core.conn.is_bus() {
-                let rule = self.match_rule_for_signal(signal_name);
-                fdo::AsyncDBusProxy::new(&self.core.conn)?
-                    .remove_match(&rule)
-                    .await?;
+                if let Some(rule) = self.match_rule_for_signal(signal_name) {
+                    fdo::AsyncDBusProxy::new(&self.core.conn)?
+                        .remove_match(&rule)
+                        .await?;
+                }
             }
 
             Ok(true)
@@ -411,12 +420,23 @@ impl<'a> Proxy<'a> {
         self.sig_handlers.lock().await.contains_key(signal_name)
     }
 
-    fn match_rule_for_signal(&self, signal_name: &'static str) -> String {
+    fn match_rule_for_signal(&self, signal_name: &'static str) -> Option<String> {
+        if self.match_rule_excempt(signal_name) {
+            return None;
+        }
+
         // FIXME: Use the API to create this once we've it (issue#69).
-        format!(
+        Some(format!(
             "type='signal',sender='{}',path_namespace='{}',interface='{}',member='{}'",
             self.core.destination, self.core.path, self.core.interface, signal_name,
-        )
+        ))
+    }
+
+    fn match_rule_excempt(&self, signal_name: &'static str) -> bool {
+        self.destination() == FDO_DBUS_SERVICE
+            && self.interface() == FDO_DBUS_INTERFACE
+            && self.path().as_str() == FDO_DBUS_PATH
+            && FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS.contains(&signal_name)
     }
 }
 
