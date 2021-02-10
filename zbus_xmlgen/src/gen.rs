@@ -171,9 +171,9 @@ fn to_rust_type(ty: &str, input: bool) -> String {
             <&str>::SIGNATURE_CHAR => (if input || as_ref { "&str" } else { "String" }).into(),
             ObjectPath::SIGNATURE_CHAR => (if input {
                 if as_ref {
-                    "&zvariant::ObjectPath"
+                    "&zvariant::ObjectPath<'_>"
                 } else {
-                    "zvariant::ObjectPath"
+                    "zvariant::ObjectPath<'_>"
                 }
             } else {
                 "zvariant::OwnedObjectPath"
@@ -181,9 +181,9 @@ fn to_rust_type(ty: &str, input: bool) -> String {
             .into(),
             Signature::SIGNATURE_CHAR => (if input {
                 if as_ref {
-                    "&zvariant::Signature"
+                    "&zvariant::Signature<'_>"
                 } else {
-                    "zvariant::Signature"
+                    "zvariant::Signature<'_>"
                 }
             } else {
                 "zvariant::OwnedSignature"
