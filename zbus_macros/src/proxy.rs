@@ -1,6 +1,9 @@
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote};
-use syn::{self, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta, TraitItemMethod, Type};
+use quote::{format_ident, quote, quote_spanned};
+use syn::{
+    self, spanned::Spanned, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta, ReturnType,
+    TraitItemMethod, Type,
+};
 
 use crate::utils::*;
 
@@ -277,10 +280,20 @@ fn gen_proxy_property(
             }
         }
     } else {
+        // This should fail to compile only if the return type is wrong,
+        // so use that as the span.
+        let body_span = if let ReturnType::Type(_, ty) = &signature.output {
+            ty.span()
+        } else {
+            signature.span()
+        };
+        let body = quote_spanned! {body_span =>
+            Ok(self.0.get_property::<_>(#property_name)#wait?)
+        };
         quote! {
             #(#doc)*
             pub #usage #signature {
-                Ok(self.0.get_property(#property_name)#wait?)
+                #body
             }
         }
     }
