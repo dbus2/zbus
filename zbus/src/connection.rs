@@ -286,8 +286,7 @@ impl From<azync::Connection> for Connection {
 mod tests {
     use std::{os::unix::net::UnixStream, thread};
 
-    use crate::{Connection, Guid};
-
+    use crate::{Connection, Error, Guid};
     #[test]
     fn unix_p2p() {
         let guid = Guid::generate();
@@ -308,6 +307,8 @@ mod tests {
         let m = c.receive_message().unwrap();
         assert_eq!(m.to_string(), "Method call Test");
         c.reply(&m, &("yay")).unwrap();
+
+        assert!(matches!(c.receive_message().unwrap_err(), Error::Io(_)));
 
         let val = server_thread.join().expect("failed to join server thread");
         assert_eq!(val, "yay");

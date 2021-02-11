@@ -103,6 +103,12 @@ impl<S: Socket> Connection<S> {
                 let current_bytes = self.raw_in_buffer.len();
                 let mut buf = vec![0; MIN_MESSAGE_SIZE - current_bytes];
                 let (read, fds) = self.socket.recvmsg(&mut buf)?;
+                if read == 0 {
+                    return Err(crate::Error::Io(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "failed to receive message",
+                    )));
+                }
                 self.raw_in_buffer.extend(&buf[..read]);
                 self.raw_in_fds.extend(fds);
             }
