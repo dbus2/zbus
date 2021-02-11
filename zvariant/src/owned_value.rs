@@ -5,6 +5,9 @@ use crate::{
     Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Structure, Type, Value,
 };
 
+// FIXME: Replace with a generic impl<T: TryFrom<Value>> TryFrom<OwnedValue> for T?
+// https://gitlab.freedesktop.org/dbus/zbus/-/issues/138
+
 /// Owned [`Value`](enum.Value.html)
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct OwnedValue(Value<'static>);
@@ -90,6 +93,19 @@ where
     }
 }
 
+#[cfg(feature = "enumflags2")]
+impl<'a, F> TryFrom<OwnedValue> for enumflags2::BitFlags<F>
+where
+    F: enumflags2::RawBitFlags,
+    F::Type: TryFrom<Value<'a>, Error = crate::Error>,
+{
+    type Error = crate::Error;
+
+    fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
+        Self::try_from(value.0)
+    }
+}
+
 impl TryFrom<OwnedValue> for Vec<OwnedValue> {
     type Error = crate::Error;
 
@@ -161,6 +177,22 @@ mod tests {
     use std::{convert::TryFrom, error::Error, result::Result};
 
     use crate::{from_slice, to_bytes, EncodingContext, OwnedValue, Value};
+
+    #[cfg(feature = "enumflags2")]
+    #[test]
+    fn bitflags() -> Result<(), Box<dyn Error>> {
+        #[repr(u32)]
+        #[derive(enumflags2::BitFlags, Copy, Clone, Debug)]
+        pub enum Flaggy {
+            One = 0x1,
+            Two = 0x2,
+        }
+
+        let v = Value::from(0x2u32);
+        let ov: OwnedValue = v.into();
+        assert_eq!(<enumflags2::BitFlags<Flaggy>>::try_from(ov)?, Flaggy::Two);
+        Ok(())
+    }
 
     #[test]
     fn from_value() -> Result<(), Box<dyn Error>> {
