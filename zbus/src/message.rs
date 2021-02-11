@@ -240,6 +240,15 @@ enum Fds {
     Raw(Vec<RawFd>),
 }
 
+impl Clone for Fds {
+    fn clone(&self) -> Self {
+        Fds::Raw(match self {
+            Fds::Raw(v) => v.clone(),
+            Fds::Owned(v) => v.iter().map(|fd| fd.as_raw_fd()).collect(),
+        })
+    }
+}
+
 /// A D-Bus Message.
 ///
 /// The content of the message are stored in serialized format. To deserialize the body of the
@@ -252,10 +261,12 @@ enum Fds {
 ///
 /// **Note**: The message owns the received FDs and will close them when dropped. You can call
 /// [`disown_fds`] after deserializing to `RawFD` using [`body`] if you want to take the ownership.
+/// Moreover, a clone of a message with owned FDs will only receive unowned copies of the FDs.
 ///
 /// [`body`]: #method.body
 /// [`disown_fds`]: #method.disown_fds
 /// [`Connection`]: struct.Connection#method.call_method
+#[derive(Clone)]
 pub struct Message {
     bytes: Vec<u8>,
     fds: Fds,
