@@ -701,6 +701,21 @@ mod tests {
             "/org/freedesktop/MyService",
         )?;
 
+        let props_proxy = zbus::fdo::PropertiesProxy::new_for(
+            &conn,
+            "org.freedesktop.MyService",
+            "/org/freedesktop/MyService",
+        )
+        .unwrap();
+        props_proxy
+            .connect_properties_changed(|_, changed, _| {
+                let (name, _) = changed.iter().next().unwrap();
+                assert_eq!(*name, "Count");
+                Ok(())
+            })
+            .unwrap();
+        props_proxy.next_signal().unwrap();
+
         proxy.ping()?;
         assert_eq!(proxy.count()?, 1);
         proxy.test_header()?;
@@ -761,6 +776,10 @@ mod tests {
     #[test]
     #[timeout(2000)]
     fn basic_iface() {
+        let child = thread::spawn(|| my_iface_test().expect("child failed"));
+        // Wait a bit for the listener to be ready
+        thread::sleep(std::time::Duration::from_secs(1));
+
         let conn = Connection::new_session().unwrap();
         let mut object_server = ObjectServer::new(&conn);
         let action = Rc::new(Cell::new(NextAction::Nothing));
@@ -778,7 +797,11 @@ mod tests {
             .at("/org/freedesktop/MyService", iface)
             .unwrap();
 
-        let child = thread::spawn(|| my_iface_test().expect("child failed"));
+        object_server
+            .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl| {
+                iface.count_changed()
+            })
+            .unwrap();
 
         loop {
             let m = conn.receive_message().unwrap();
