@@ -188,3 +188,18 @@ pub fn error_parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttrib
 pub fn is_blank(s: &str) -> bool {
     s.trim().is_empty()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{pascal_case, snake_case};
+
+    #[test]
+    fn test_snake_to_pascal_case() {
+        assert_eq!("MeaningOfLife", &pascal_case("meaning_of_life"));
+    }
+
+    #[test]
+    fn test_pascal_case_on_pascal_cased_str() {
+        assert_eq!("MeaningOfLife", &pascal_case("MeaningOfLife"));
+    }
+}
