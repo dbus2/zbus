@@ -16,7 +16,7 @@ use crate::{azync::Connection, Error, Message, Result};
 
 use crate::fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy};
 
-type SignalHandler = Box<dyn FnMut(Message) -> BoxFuture<'static, Result<()>> + Send>;
+type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
 
 const FDO_DBUS_SERVICE: &str = "org.freedesktop.DBus";
 const FDO_DBUS_INTERFACE: &str = "org.freedesktop.DBus";
@@ -303,7 +303,7 @@ impl<'a> Proxy<'a> {
     /// connection.
     pub async fn connect_signal<H>(&self, signal_name: &'static str, handler: H) -> fdo::Result<()>
     where
-        H: FnMut(Message) -> BoxFuture<'static, Result<()>> + Send + 'static,
+        for<'msg> H: FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send + 'static,
     {
         if self
             .sig_handlers
@@ -359,28 +359,33 @@ impl<'a> Proxy<'a> {
     /// If the signal message was handled by a handler, `Ok(None)` is returned. Otherwise, the
     /// received message is returned.
     pub async fn next_signal(&self) -> Result<Option<Message>> {
-        let mut handlers = self.sig_handlers.lock().await;
-        let msg = self
-            .core
-            .conn
-            .receive_specific(|msg| {
-                let hdr = match msg.header() {
-                    Err(_) => return Ok(false),
-                    Ok(hdr) => hdr,
-                };
-                let member = match hdr.member() {
-                    Ok(Some(m)) => m,
-                    Ok(None) | Err(_) => return Ok(false),
-                };
+        let msg = {
+            let handlers = self.sig_handlers.lock().await;
+            self.core
+                .conn
+                .receive_specific(|msg| {
+                    let hdr = match msg.header() {
+                        Err(_) => return Ok(false),
+                        Ok(hdr) => hdr,
+                    };
+                    let member = match hdr.member() {
+                        Ok(Some(m)) => m,
+                        Ok(None) | Err(_) => return Ok(false),
+                    };
 
-                Ok(hdr.interface() == Ok(Some(self.interface()))
-                    && hdr.path() == Ok(Some(self.path()))
-                    && hdr.message_type() == Ok(crate::MessageType::Signal)
-                    && handlers.contains_key(member))
-            })
-            .await?;
+                    Ok(hdr.interface() == Ok(Some(self.interface()))
+                        && hdr.path() == Ok(Some(self.path()))
+                        && hdr.message_type() == Ok(crate::MessageType::Signal)
+                        && handlers.contains_key(member))
+                })
+                .await?
+        };
 
-        Self::handle_signal_(&mut handlers, msg).await
+        if self.handle_signal(&msg).await? {
+            Ok(None)
+        } else {
+            Ok(Some(msg))
+        }
     }
 
     /// Handle the provided signal message.
@@ -388,32 +393,24 @@ impl<'a> Proxy<'a> {
     /// Call any handlers registered through the [`Self::connect_signal`] method for the provided
     /// signal message.
     ///
-    /// If no errors are encountered, `Ok(None)` is returned if a handler was found and called for,
-    /// the signal; `Ok(Some(msg))` otherwise.
-    pub async fn handle_signal(&self, msg: Message) -> Result<Option<Message>> {
+    /// If no errors are encountered, `Ok(true)` is returned if a handler was found and called for,
+    /// the signal; `Ok(false)` otherwise.
+    pub async fn handle_signal(&self, msg: &Message) -> Result<bool> {
         let mut handlers = self.sig_handlers.lock().await;
-
-        Self::handle_signal_(&mut handlers, msg).await
-    }
-
-    async fn handle_signal_(
-        handlers: &mut HashMap<&'static str, SignalHandler>,
-        msg: Message,
-    ) -> Result<Option<Message>> {
         if handlers.is_empty() {
-            return Ok(Some(msg));
+            return Ok(false);
         }
 
         let hdr = msg.header()?;
         if let Some(name) = hdr.member()? {
             if let Some(handler) = handlers.get_mut(name) {
-                handler(msg).await?;
+                handler(&msg).await?;
 
-                return Ok(None);
+                return Ok(true);
             }
         }
 
-        Ok(Some(msg))
+        Ok(false)
     }
 
     pub(crate) async fn has_signal_handler(&self, signal_name: &str) -> bool {
