@@ -1,10 +1,14 @@
 use async_lock::Mutex;
 use futures_core::{future::BoxFuture, stream};
-use futures_util::stream::{unfold, StreamExt};
+use futures_util::{
+    future::FutureExt,
+    stream::{unfold, StreamExt},
+};
 use std::{
     borrow::Cow,
     collections::HashMap,
     convert::{TryFrom, TryInto},
+    future::ready,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -268,13 +272,14 @@ impl<'a> Proxy<'a> {
                 .receive_specific(|msg| {
                     let hdr = match msg.header() {
                         Ok(hdr) => hdr,
-                        Err(_) => return Ok(false),
+                        Err(_) => return ready(Ok(false)).boxed(),
                     };
 
-                    Ok(hdr.primary().msg_type() == crate::MessageType::Signal
+                    ready(Ok(hdr.primary().msg_type() == crate::MessageType::Signal
                         && hdr.interface() == Ok(Some(&proxy.interface))
                         && hdr.path() == Ok(Some(&proxy.path))
-                        && hdr.member() == Ok(Some(signal_name)))
+                        && hdr.member() == Ok(Some(signal_name))))
+                    .boxed()
                 })
                 .await
                 .ok()
@@ -361,22 +366,24 @@ impl<'a> Proxy<'a> {
     pub async fn next_signal(&self) -> Result<Option<Message>> {
         let msg = {
             let handlers = self.sig_handlers.lock().await;
+
             self.core
                 .conn
                 .receive_specific(|msg| {
-                    let hdr = match msg.header() {
-                        Err(_) => return Ok(false),
-                        Ok(hdr) => hdr,
-                    };
-                    let member = match hdr.member() {
-                        Ok(Some(m)) => m,
-                        Ok(None) | Err(_) => return Ok(false),
+                    let ret = match msg.header() {
+                        Err(_) => false,
+                        Ok(hdr) => match hdr.member() {
+                            Ok(None) | Err(_) => false,
+                            Ok(Some(member)) => {
+                                hdr.interface() == Ok(Some(self.interface()))
+                                    && hdr.path() == Ok(Some(self.path()))
+                                    && hdr.message_type() == Ok(crate::MessageType::Signal)
+                                    && handlers.contains_key(member)
+                            }
+                        },
                     };
 
-                    Ok(hdr.interface() == Ok(Some(self.interface()))
-                        && hdr.path() == Ok(Some(self.path()))
-                        && hdr.message_type() == Ok(crate::MessageType::Signal)
-                        && handlers.contains_key(member))
+                    ready(Ok(ret)).boxed()
                 })
                 .await?
         };
