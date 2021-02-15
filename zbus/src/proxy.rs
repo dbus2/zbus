@@ -174,7 +174,7 @@ impl<'a> Proxy<'a> {
     /// connection.
     pub fn connect_signal<H>(&self, signal_name: &'static str, mut handler: H) -> fdo::Result<()>
     where
-        H: FnMut(Message) -> Result<()> + Send + 'static,
+        H: FnMut(&Message) -> Result<()> + Send + 'static,
     {
         block_on(
             self.azync
@@ -215,9 +215,9 @@ impl<'a> Proxy<'a> {
     /// Call any handlers registered through the [`Self::connect_signal`] method for the provided
     /// signal message.
     ///
-    /// If no errors are encountered, `Ok(None)` is returned if a handler was found and called for,
-    /// the signal; `Ok(Some(msg))` otherwise.
-    pub fn handle_signal(&self, msg: Message) -> Result<Option<Message>> {
+    /// If no errors are encountered, `Ok(true)` is returned if a handler was found and called for,
+    /// the signal; `Ok(false)` otherwise.
+    pub fn handle_signal(&self, msg: &Message) -> Result<bool> {
         block_on(self.azync.handle_signal(msg))
     }
 

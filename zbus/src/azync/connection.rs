@@ -15,8 +15,8 @@ use std::{
 };
 use zvariant::ObjectPath;
 
-use futures_core::stream;
-use futures_util::{sink::SinkExt, stream::TryStreamExt};
+use futures_core::{future::BoxFuture, stream};
+use futures_util::{future::FutureExt, sink::SinkExt, stream::TryStreamExt};
 
 use crate::{
     azync::Authenticated,
@@ -233,12 +233,12 @@ impl Connection {
     /// `MessageStream`.
     pub async fn receive_specific<P>(&self, predicate: P) -> Result<Message>
     where
-        P: Fn(&Message) -> Result<bool>,
+        for<'msg> P: Fn(&'msg Message) -> BoxFuture<'msg, Result<bool>>,
     {
         loop {
             let mut queue = self.0.incoming_queue.lock().await;
             for (i, msg) in queue.iter().enumerate() {
-                if predicate(msg)? {
+                if predicate(msg).await? {
                     // SAFETY: we got the index from the queue enumerator so this shouldn't ever
                     // fail.
                     return Ok(queue.remove(i).expect("removing queue item"));
@@ -260,7 +260,7 @@ impl Connection {
                 }
             };
 
-            if predicate(&msg)? {
+            if predicate(&msg).await? {
                 return Ok(msg);
             } else {
                 if queue.len() >= *self.0.max_queued.read().await {
@@ -316,10 +316,13 @@ impl Connection {
 
         loop {
             match self
-                .receive_specific(|m| {
-                    let h = m.header()?;
+                .receive_specific(move |m| {
+                    async move {
+                        let h = m.header()?;
 
-                    Ok(h.reply_serial()? == Some(serial))
+                        Ok(h.reply_serial()? == Some(serial))
+                    }
+                    .boxed()
                 })
                 .await
             {
