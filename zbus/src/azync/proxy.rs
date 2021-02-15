@@ -365,11 +365,16 @@ impl<'a> Proxy<'a> {
     /// received message is returned.
     pub async fn next_signal(&self) -> Result<Option<Message>> {
         let msg = {
+            // We want to keep a lock on the handlers during `receive_specific` call but we also
+            // want to avoid using `handlers` directly as that somehow makes this call (or rather
+            // the future of this call) not `Sync` and we get a very scary error message from
+            // the compiler on using `next_signal` with `tokio::select` inside a tokio task.
             let handlers = self.sig_handlers.lock().await;
+            let signals: Vec<&str> = handlers.keys().copied().collect();
 
             self.core
                 .conn
-                .receive_specific(|msg| {
+                .receive_specific(move |msg| {
                     let ret = match msg.header() {
                         Err(_) => false,
                         Ok(hdr) => match hdr.member() {
@@ -378,7 +383,7 @@ impl<'a> Proxy<'a> {
                                 hdr.interface() == Ok(Some(self.interface()))
                                     && hdr.path() == Ok(Some(self.path()))
                                     && hdr.message_type() == Ok(crate::MessageType::Signal)
-                                    && handlers.contains_key(member)
+                                    && signals.contains(&member)
                             }
                         },
                     };
