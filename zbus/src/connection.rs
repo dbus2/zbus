@@ -1,5 +1,7 @@
+use futures_util::future::FutureExt;
 use std::{
     convert::TryInto,
+    future::ready,
     os::unix::{
         io::{AsRawFd, RawFd},
         net::UnixStream,
@@ -149,7 +151,7 @@ impl Connection {
     /// end up in a deadlock situation. It is therefore highly recommended not to use such a
     /// combination.
     pub fn receive_message(&self) -> Result<Message> {
-        block_on(self.0.receive_specific(|_| Ok(true)))
+        block_on(self.0.receive_specific(|_| ready(Ok(true)).boxed()))
     }
 
     /// Receive a specific message.
@@ -162,7 +164,7 @@ impl Connection {
     where
         P: Fn(&Message) -> Result<bool>,
     {
-        block_on(self.0.receive_specific(predicate))
+        block_on(self.0.receive_specific(|msg| ready(predicate(msg)).boxed()))
     }
 
     /// Send `msg` to the peer.

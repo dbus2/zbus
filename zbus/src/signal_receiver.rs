@@ -113,22 +113,26 @@ impl<'r, 'p> SignalReceiver<'r, 'p> {
             Ok(false)
         })?;
 
-        self.handle_signal(msg)
+        if self.handle_signal(&msg)? {
+            Ok(None)
+        } else {
+            Ok(Some(msg))
+        }
     }
 
     /// Handle the provided signal message.
     ///
     /// Call any handler registered (through [`Proxy::connect_signal`]) with a proxy in this receiver.
     ///
-    /// If no errors are encountered, `Ok(None)` is returned if a handler was found and called for,
-    /// the signal; `Ok(Some(msg))` otherwise.
-    pub fn handle_signal(&self, msg: crate::Message) -> Result<Option<crate::Message>> {
+    /// If no errors are encountered, `Ok(true)` is returned if a handler was found and called for,
+    /// the signal; `Ok(false)` otherwise.
+    pub fn handle_signal(&self, msg: &crate::Message) -> Result<bool> {
         let hdr = msg.header()?;
         let key = ProxyKey::try_from(&hdr)?;
 
         match self.proxies.get(&key) {
             Some(proxy) => proxy.handle_signal(msg),
-            None => Ok(Some(msg)),
+            None => Ok(false),
         }
     }
 }
