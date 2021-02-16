@@ -136,6 +136,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     quote! {
         #[doc = #proxy_doc]
         #(#doc)*
+        #[derive(Debug)]
         pub struct #proxy_name<'c>(#proxy_struct<'c>);
 
         impl<'c> #proxy_name<'c> {
