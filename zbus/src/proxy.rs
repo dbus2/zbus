@@ -50,6 +50,7 @@ use crate::fdo;
 /// * prevent auto-launching
 ///
 /// [`dbus_proxy`]: attr.dbus_proxy.html
+#[derive(Debug)]
 pub struct Proxy<'a> {
     conn: Connection,
     azync: azync::Proxy<'a>,

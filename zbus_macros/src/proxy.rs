@@ -136,6 +136,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     quote! {
         #[doc = #proxy_doc]
         #(#doc)*
+        #[derive(Debug)]
         pub struct #proxy_name<'c>(#proxy_struct<'c>);
 
         impl<'c> #proxy_name<'c> {
@@ -146,6 +147,16 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                     #default_service,
                     #default_path,
                     #name,
+                )?))
+            }
+
+            /// Creates a new proxy with the default service & path, taking ownership of `conn`.
+            pub fn new_owned(conn: #connection) -> ::#zbus::Result<Self> {
+                Ok(Self(#proxy_struct::new_owned(
+                    conn,
+                    String::from(#default_service),
+                    String::from(#default_path),
+                    String::from(#name),
                 )?))
             }
 

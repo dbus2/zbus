@@ -81,8 +81,11 @@ const FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS: [&str; 2] = ["NameAcquired", "NameLos
 ///
 /// [`futures` crate]: https://crates.io/crates/futures
 /// [`dbus_proxy`]: attr.dbus_proxy.html
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 pub struct Proxy<'a> {
     core: ProxyCore<'a>,
+    #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<HashMap<&'static str, SignalHandler>>,
 }
 
