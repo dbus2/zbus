@@ -99,7 +99,7 @@ impl Peer {
     }
 }
 
-struct Properties;
+pub struct Properties;
 
 #[dbus_interface(name = "org.freedesktop.DBus.Properties")]
 impl Properties {
@@ -147,7 +147,8 @@ impl Properties {
     }
 
     #[dbus_interface(signal)]
-    fn properties_changed(
+    #[rustfmt::skip]
+    pub fn properties_changed(
         &self,
         interface_name: &str,
         changed_properties: &HashMap<&str, &Value<'_>>,
