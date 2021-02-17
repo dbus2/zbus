@@ -9,7 +9,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
 use zvariant::{derive::Type, ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
-use crate::{dbus_proxy, DBusError};
+use crate::{dbus_interface, dbus_proxy, object_server::LOCAL_NODE, DBusError};
 
 /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
@@ -17,6 +17,18 @@ trait Introspectable {
     /// Returns an XML description of the object, including its interfaces (with signals and
     /// methods), objects below it in the object path tree, and its properties.
     fn introspect(&self) -> Result<String>;
+}
+
+/// Server-side implementation for the `org.freedesktop.DBus.Introspectable` interface.
+/// This interface is implemented automatically for any object registered to the
+/// [ObjectServer](crate::ObjectServer).
+pub(crate) struct Introspectable;
+
+#[dbus_interface(name = "org.freedesktop.DBus.Introspectable")]
+impl Introspectable {
+    fn introspect(&self) -> String {
+        LOCAL_NODE.with(|node| node.introspect())
+    }
 }
 
 /// Proxy for the `org.freedesktop.DBus.Properties` interface.
@@ -38,6 +50,62 @@ trait Properties {
         changed_properties: HashMap<&str, Value<'_>>,
         invalidated_properties: Vec<&str>,
     ) -> Result<()>;
+}
+
+/// Server-side implementation for the `org.freedesktop.DBus.Properties` interface.
+/// This interface is implemented automatically for any object registered to the
+/// [ObjectServer](crate::ObjectServer).
+pub struct Properties;
+
+#[dbus_interface(name = "org.freedesktop.DBus.Properties")]
+impl Properties {
+    fn get(&self, interface_name: &str, property_name: &str) -> Result<OwnedValue> {
+        LOCAL_NODE.with(|node| {
+            let iface = node.get_interface(interface_name).ok_or_else(|| {
+                Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
+            })?;
+
+            let res = iface.borrow().get(property_name);
+            res.ok_or_else(|| {
+                Error::UnknownProperty(format!("Unknown property '{}'", property_name))
+            })?
+        })
+    }
+
+    // TODO: should be able to take a &Value instead (but obscure deserialize error for now..)
+    fn set(&mut self, interface_name: &str, property_name: &str, value: OwnedValue) -> Result<()> {
+        LOCAL_NODE.with(|node| {
+            let iface = node.get_interface(interface_name).ok_or_else(|| {
+                Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
+            })?;
+
+            let res = iface.borrow_mut().set(property_name, &value);
+            res.ok_or_else(|| {
+                Error::UnknownProperty(format!("Unknown property '{}'", property_name))
+            })?
+        })
+    }
+
+    fn get_all(&self, interface_name: &str) -> Result<HashMap<String, OwnedValue>> {
+        LOCAL_NODE.with(|node| {
+            let iface = node.get_interface(interface_name).ok_or_else(|| {
+                Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
+            })?;
+
+            let res = iface.borrow().get_all();
+            Ok(res)
+        })
+    }
+
+    /// Emits the `org.freedesktop.DBus.Properties.PropertiesChanged` signal.
+    #[dbus_interface(signal)]
+    #[rustfmt::skip]
+    pub fn properties_changed(
+        &self,
+        interface_name: &str,
+        changed_properties: &HashMap<&str, &Value<'_>>,
+        invalidated_properties: &[&str],
+    ) -> zbus::Result<()>;
 }
 
 type ManagedObjects = HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>;
@@ -88,6 +156,36 @@ trait Peer {
     /// if possible, but this is not always possible to implement and is not guaranteed. It does not
     /// matter which object path a GetMachineId is sent to.
     fn get_machine_id(&self) -> Result<String>;
+}
+
+pub(crate) struct Peer;
+
+/// Server-side implementation for the `org.freedesktop.DBus.Peer` interface.
+/// This interface is implemented automatically for any object registered to the
+/// [ObjectServer](crate::ObjectServer).
+#[dbus_interface(name = "org.freedesktop.DBus.Peer")]
+impl Peer {
+    fn ping(&self) {}
+
+    fn get_machine_id(&self) -> Result<String> {
+        let mut id = match std::fs::read_to_string("/var/lib/dbus/machine-id") {
+            Ok(id) => id,
+            Err(e) => {
+                if let Ok(id) = std::fs::read_to_string("/etc/machine-id") {
+                    id
+                } else {
+                    return Err(Error::IOError(format!(
+                        "Failed to read from /var/lib/dbus/machine-id or /etc/machine-id: {}",
+                        e
+                    )));
+                }
+            }
+        };
+
+        let len = id.trim_end().len();
+        id.truncate(len);
+        Ok(id)
+    }
 }
 
 /// Proxy for the `org.freedesktop.DBus.Monitoring` interface.

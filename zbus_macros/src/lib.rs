@@ -148,6 +148,13 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * `out_args` - When returning multiple values from a method, naming the out arguments become
 ///   important. You can use `out_args` for specifying names for your out arguments.
 ///
+/// Note: a `<property_name_in_snake_case>_changed` method is generated along with property
+/// setters: this method emits the "PropertiesChanged" signal for the associated property. The
+/// setter will automatically call this method.
+/// For instance, a property setter named `set_foo` will be called to set the property "Foo", and
+/// will emit the "PropertiesChanged" signal with the new value for "Foo". Other changes to the
+/// "Foo" property can be signaled manually with the generated `foo_changed` method.
+///
 /// The method arguments offers some the following `zbus` attributes:
 ///
 /// * `header` - This marks the method argument to receive the message header associated with the
@@ -175,6 +182,8 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     }
 ///
 ///     // "TheAnswer" property (note: the "name" attribute), with its associated getter.
+///     // A `the_answer_changed` method has also been generated to emit the
+///     // "PropertiesChanged" signal for this property.
 ///     #[dbus_interface(property, name = "TheAnswer")]
 ///     fn answer(&self) -> u32 {
 ///         2 * 3 * 7

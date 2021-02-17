@@ -30,6 +30,8 @@ pub fn get_doc_attrs(attrs: &[Attribute]) -> Vec<&Attribute> {
     attrs.iter().filter(|x| x.path.is_ident("doc")).collect()
 }
 
+// Convert to pascal case, assuming snake case.
+// If `s` is already in pascal case, should yield the same result.
 pub fn pascal_case(s: &str) -> String {
     let mut pascal = String::new();
     let mut capitalize = true;
@@ -44,6 +46,19 @@ pub fn pascal_case(s: &str) -> String {
         }
     }
     pascal
+}
+
+// Convert to snake case, assuming pascal case.
+// If `s` is already in snake case, should yield the same result.
+pub fn snake_case(s: &str) -> String {
+    let mut snake = String::new();
+    for ch in s.chars() {
+        if ch.is_ascii_uppercase() && !snake.is_empty() {
+            snake.push('_');
+        }
+        snake.push(ch.to_ascii_lowercase());
+    }
+    snake
 }
 
 #[derive(Debug, PartialEq)]
@@ -185,4 +200,29 @@ pub fn error_parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttrib
 
 pub fn is_blank(s: &str) -> bool {
     s.trim().is_empty()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{pascal_case, snake_case};
+
+    #[test]
+    fn test_snake_to_pascal_case() {
+        assert_eq!("MeaningOfLife", &pascal_case("meaning_of_life"));
+    }
+
+    #[test]
+    fn test_pascal_case_on_pascal_cased_str() {
+        assert_eq!("MeaningOfLife", &pascal_case("MeaningOfLife"));
+    }
+
+    #[test]
+    fn test_pascal_case_to_snake_case() {
+        assert_eq!("meaning_of_life", &snake_case("MeaningOfLife"));
+    }
+
+    #[test]
+    fn test_snake_case_on_snake_cased_str() {
+        assert_eq!("meaning_of_life", &snake_case("meaning_of_life"));
+    }
 }

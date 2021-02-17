@@ -99,13 +99,35 @@ Let see how to use it:
 # use std::error::Error;
 # use zbus::{dbus_interface, fdo};
 #
-struct Greeter;
+struct Greeter {
+    name: String
+}
 
 #[dbus_interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
     fn say_hello(&self, name: &str) -> String {
         format!("Hello {}!", name)
     }
+
+    /// A "GreeterName" property.
+    #[dbus_interface(property)]
+    fn greeter_name(&self) -> &str {
+        &self.name
+    }
+
+    /// A setter for the "GreeterName" property.
+    ///
+    /// Additionally, a `greeter_name_changed` method has been generated for you if you need to 
+    /// notify listeners that "GreeterName" was updated. It will be automatically called when
+    /// using this setter.
+    #[dbus_interface(property)]
+    fn set_greeter_name(&mut self, name: String) {
+        self.name = name;
+    }
+
+    /// A signal; the implementation is provided by the macro.
+    #[dbus_interface(signal)]
+    fn greeted_everyone(&self) -> zbus::Result<()>;
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -116,13 +138,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 #     )?;
 
     let mut object_server = zbus::ObjectServer::new(&connection);
-    object_server.at("/org/zbus/MyGreeter", Greeter)?;
+    let greeter = Greeter { name: "GreeterName".to_string() };
+    object_server.at("/org/zbus/MyGreeter", greeter)?;
     loop {
         if let Err(err) = object_server.try_handle_next() {
             eprintln!("{}", err);
         }
     }
-
 }
 ```
 
@@ -154,6 +176,43 @@ messages (register the associated FD for input in poll/select to avoid blocking)
 at the time of the this writing (*pre-1.0*), zbus neither provides an event loop API, nor any
 integration with other event loop implementations. We are evaluating different options to make this
 easier, especially with *async* support.
+
+### Sending signals 
+
+Sending signals at an arbitrary point in any time is equally easy with the object server. The 
+`with` method allows you to run any closure for a given interface. Let's emit a signal defined
+by our interface:
+
+```rust,no_run
+# use std::error::Error;
+# use zbus::dbus_interface;
+# 
+# struct Greeter {
+#     name: String
+# }
+# 
+# #[dbus_interface(name = "org.zbus.MyGreeter1")]
+# impl Greeter {
+#     #[dbus_interface(property)]
+#     fn greeter_name(&self) -> &str {
+#         &self.name
+#     }
+# 
+#     #[dbus_interface(property)]
+#     fn set_greeter_name(&mut self, name: String) {
+#         self.name = name;
+#     }
+# }
+#
+# fn main() -> Result<(), Box<dyn Error>> {
+# let connection = zbus::Connection::new_session()?;
+# let mut object_server = zbus::ObjectServer::new(&connection);
+object_server.with("/org/zbus/MyGreeter", |iface: &Greeter| {
+    iface.greeter_name_changed()
+})?;
+# Ok(())
+# }
+```
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
 [`RequestName`]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-request-name
