@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use std::collections::HashMap;
 use syn::{
     self, parse_quote, punctuated::Punctuated, AngleBracketedGenericArguments, AttributeArgs,
@@ -38,6 +38,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
     let mut call_dispatch = quote!();
     let mut call_mut_dispatch = quote!();
     let mut introspect = quote!();
+    let mut generated_signals = quote!();
 
     // the impl Type
     let ty = match input.self_ty.as_ref() {
@@ -186,6 +187,9 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             if has_inputs {
                 p.write = true;
 
+                let prop_changed_method_name =
+                    format_ident!("{}_changed", snake_case(&member_name));
+
                 let set_call = if is_result_output {
                     quote!(self.#ident(val))
                 } else {
@@ -197,10 +201,31 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                             Ok(val) => val,
                             Err(e) => return Some(Err(::#zbus::MessageError::Variant(e).into())),
                         };
-                        Some(#set_call)
+                        let result = #set_call;
+                        if result.is_ok() {
+                            self.#prop_changed_method_name();
+                        }
+                        Some(result)
                     }
                 );
                 set_dispatch.extend(q);
+
+                let vis = &method.vis;
+                let q = quote!(
+                    #vis fn #prop_changed_method_name(&self) -> #zbus::Result<()> {
+                        let mut changed = ::std::collections::HashMap::new();
+                        let value = ::#zbus::Interface::get(self, &#member_name)
+                            .expect(&format!("Property '{}' does not exist", #member_name))?;
+                        changed.insert(#member_name, &*value);
+                        let properties_iface = ::#zbus::fdo::Properties;
+                        properties_iface.properties_changed(
+                            &#iface_name,
+                            &changed,
+                            &[]
+                        )
+                    }
+                );
+                generated_signals.extend(q)
             } else {
                 p.ty = Some(get_property_type(output)?);
                 p.read = true;
@@ -248,6 +273,12 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
     Ok(quote! {
         #input
+
+        impl #generics #self_ty
+        #where_clause
+        {
+            #generated_signals
+        }
 
         impl #generics ::#zbus::Interface for #self_ty
         #where_clause
