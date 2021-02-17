@@ -48,6 +48,19 @@ pub fn pascal_case(s: &str) -> String {
     pascal
 }
 
+// Convert to snake case, assuming pascal case.
+// If `s` is already in snake case, should yield the same result.
+pub fn snake_case(s: &str) -> String {
+    let mut snake = String::new();
+    for ch in s.chars() {
+        if ch.is_ascii_uppercase() && !snake.is_empty() {
+            snake.push('_');
+        }
+        snake.push(ch.to_ascii_lowercase());
+    }
+    snake
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ItemAttribute {
     Property,
@@ -201,5 +214,15 @@ mod tests {
     #[test]
     fn test_pascal_case_on_pascal_cased_str() {
         assert_eq!("MeaningOfLife", &pascal_case("MeaningOfLife"));
+    }
+
+    #[test]
+    fn test_pascal_case_to_snake_case() {
+        assert_eq!("meaning_of_life", &snake_case("MeaningOfLife"));
+    }
+
+    #[test]
+    fn test_snake_case_on_snake_cased_str() {
+        assert_eq!("meaning_of_life", &snake_case("meaning_of_life"));
     }
 }
