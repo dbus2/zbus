@@ -10,9 +10,13 @@ use std::{
 use scoped_tls::scoped_thread_local;
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
-use crate::{dbus_interface, fdo, Connection, Error, Message, MessageHeader, MessageType, Result};
+use crate::{
+    fdo,
+    fdo::{Introspectable, Peer, Properties},
+    Connection, Error, Message, MessageHeader, MessageType, Result,
+};
 
-scoped_thread_local!(static LOCAL_NODE: Node);
+scoped_thread_local!(pub(crate) static LOCAL_NODE: Node);
 scoped_thread_local!(static LOCAL_CONNECTION: Connection);
 
 /// The trait used to dispatch messages to an interface instance.
@@ -63,102 +67,9 @@ impl dyn Interface {
     }
 }
 
-struct Introspectable;
-
-#[dbus_interface(name = "org.freedesktop.DBus.Introspectable")]
-impl Introspectable {
-    fn introspect(&self) -> String {
-        LOCAL_NODE.with(|node| node.introspect())
-    }
-}
-
-struct Peer;
-
-#[dbus_interface(name = "org.freedesktop.DBus.Peer")]
-impl Peer {
-    fn ping(&self) {}
-
-    fn get_machine_id(&self) -> fdo::Result<String> {
-        let mut id = match std::fs::read_to_string("/var/lib/dbus/machine-id") {
-            Ok(id) => id,
-            Err(e) => {
-                if let Ok(id) = std::fs::read_to_string("/etc/machine-id") {
-                    id
-                } else {
-                    return Err(fdo::Error::IOError(format!(
-                        "Failed to read from /var/lib/dbus/machine-id or /etc/machine-id: {}",
-                        e
-                    )));
-                }
-            }
-        };
-
-        let len = id.trim_end().len();
-        id.truncate(len);
-        Ok(id)
-    }
-}
-
-pub struct Properties;
-
-#[dbus_interface(name = "org.freedesktop.DBus.Properties")]
-impl Properties {
-    fn get(&self, interface_name: &str, property_name: &str) -> fdo::Result<OwnedValue> {
-        LOCAL_NODE.with(|node| {
-            let iface = node.get_interface(interface_name).ok_or_else(|| {
-                fdo::Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
-            })?;
-
-            let res = iface.borrow().get(property_name);
-            res.ok_or_else(|| {
-                fdo::Error::UnknownProperty(format!("Unknown property '{}'", property_name))
-            })?
-        })
-    }
-
-    // TODO: should be able to take a &Value instead (but obscure deserialize error for now..)
-    fn set(
-        &mut self,
-        interface_name: &str,
-        property_name: &str,
-        value: OwnedValue,
-    ) -> fdo::Result<()> {
-        LOCAL_NODE.with(|node| {
-            let iface = node.get_interface(interface_name).ok_or_else(|| {
-                fdo::Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
-            })?;
-
-            let res = iface.borrow_mut().set(property_name, &value);
-            res.ok_or_else(|| {
-                fdo::Error::UnknownProperty(format!("Unknown property '{}'", property_name))
-            })?
-        })
-    }
-
-    fn get_all(&self, interface_name: &str) -> fdo::Result<HashMap<String, OwnedValue>> {
-        LOCAL_NODE.with(|node| {
-            let iface = node.get_interface(interface_name).ok_or_else(|| {
-                fdo::Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
-            })?;
-
-            let res = iface.borrow().get_all();
-            Ok(res)
-        })
-    }
-
-    #[dbus_interface(signal)]
-    #[rustfmt::skip]
-    pub fn properties_changed(
-        &self,
-        interface_name: &str,
-        changed_properties: &HashMap<&str, &Value<'_>>,
-        invalidated_properties: &[&str],
-    ) -> Result<()>;
-}
-
 #[derive(Default, derivative::Derivative)]
 #[derivative(Debug)]
-struct Node {
+pub(crate) struct Node {
     path: OwnedObjectPath,
     children: HashMap<String, Node>,
     #[derivative(Debug = "ignore")]
@@ -166,7 +77,7 @@ struct Node {
 }
 
 impl Node {
-    fn new(path: OwnedObjectPath) -> Self {
+    pub(crate) fn new(path: OwnedObjectPath) -> Self {
         let mut node = Self {
             path,
             ..Default::default()
@@ -178,7 +89,7 @@ impl Node {
         node
     }
 
-    fn get_interface(&self, iface: &str) -> Option<Rc<RefCell<dyn Interface>>> {
+    pub(crate) fn get_interface(&self, iface: &str) -> Option<Rc<RefCell<dyn Interface>>> {
         self.interfaces.get(iface).cloned()
     }
 
@@ -260,7 +171,7 @@ impl Node {
         }
     }
 
-    fn introspect(&self) -> String {
+    pub(crate) fn introspect(&self) -> String {
         let mut xml = String::with_capacity(1024);
 
         self.introspect_to_writer(&mut xml, 0);
