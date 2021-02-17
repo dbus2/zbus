@@ -30,6 +30,8 @@ pub fn get_doc_attrs(attrs: &[Attribute]) -> Vec<&Attribute> {
     attrs.iter().filter(|x| x.path.is_ident("doc")).collect()
 }
 
+// Convert to pascal case, assuming snake case.
+// If `s` is already in pascal case, should yield the same result.
 pub fn pascal_case(s: &str) -> String {
     let mut pascal = String::new();
     let mut capitalize = true;
