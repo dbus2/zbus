@@ -1,11 +1,10 @@
+use crate::utils::*;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
 use syn::{
     self, parse_quote, spanned::Spanned, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta,
     ReturnType, TraitItemMethod, Type,
 };
-
-use crate::utils::*;
 
 pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     let sync_proxy = create_proxy(&args, &input, false);
@@ -419,6 +418,38 @@ fn gen_proxy_signal(
             .push(parse_quote!(__H: #handler + Send + 'static));
     }
 
+    let mut generics = m.sig.generics.clone();
+    let signal_receiver = if azync {
+        let (_, ty_generics, where_clause) = generics.split_for_impl();
+        let receiver_name = Ident::new(&format!("receive_{}", snake_case_name), Span::call_site());
+        let receiver_gen_doc = format!(
+            "Wait till the {} signal is received. This a convenient wrapper around [`zbus::azync::Proxy::receive_signal`]
+            (https://docs.rs/zbus/latest/zbus/azync/struct.Proxy.html#method.receive_signal)", snake_case_name
+        );
+        quote! {
+            #[doc = #receiver_gen_doc]
+            #(#doc)*
+            pub async fn #receiver_name#ty_generics(&self) -> ::#zbus::fdo::Result<(#(#input_types),*)>
+            #where_clause
+            {
+                let mut stream = self.0.receive_signal(#signal_name).await?;
+                let message: ::#zbus::Message = ::#zbus::export::futures_util::StreamExt::next(&mut stream).await.unwrap();
+                let body: (#(#input_types),*) = message.body()?;
+                Ok(body)
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    generics.params.push(parse_quote!(__H));
+    {
+        let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
+        where_clause
+            .predicates
+            .push(parse_quote!(__H: #handler + Send + 'static));
+    }
+
     let (_, ty_generics, where_clause) = generics.split_for_impl();
     quote! {
         #[doc = #gen_doc]
@@ -435,5 +466,7 @@ fn gen_proxy_signal(
                 handler(#(#args),*)
             })#wait
         }
+
+        #signal_receiver
     }
 }
