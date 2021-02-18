@@ -223,7 +223,10 @@ use zvariant::{ObjectPath, OwnedObjectPath};
     default_path = "/org/freedesktop/GeoClue2/Manager"
 )]
 trait Manager {
-    fn get_client(&self) -> Result<OwnedObjectPath>;
+    #[dbus_proxy(object = "Client")]
+    /// The method normally returns an `ObjectPath`.
+    /// With the object attribute, we can make it return a `ClientProxy` directly.
+    fn get_client(&self);
 }
 
 #[dbus_proxy(
@@ -253,8 +256,7 @@ trait Location {
 }
 let conn = Connection::new_system().unwrap();
 let manager = ManagerProxy::new(&conn).unwrap();
-let client_path = manager.get_client().unwrap();
-let mut client = ClientProxy::new_for_path(&conn, &client_path).unwrap();
+let mut client = manager.get_client().unwrap();
 // Gotta do this, sorry!
 client.set_desktop_id("org.freedesktop.zbus").unwrap();
 
@@ -297,7 +299,8 @@ actually getting set:
 #     default_path = "/org/freedesktop/GeoClue2/Manager"
 # )]
 # trait Manager {
-#     fn get_client(&self) -> Result<OwnedObjectPath>;
+#     #[dbus_proxy(object = "Client")]
+#     fn get_client(&self);
 # }
 #
 # #[dbus_proxy(interface = "org.freedesktop.GeoClue2.Client")]
@@ -324,9 +327,7 @@ actually getting set:
 #
 # let conn = Connection::new_system().unwrap();
 # let manager = ManagerProxy::new(&conn).unwrap();
-# let client_path = manager.get_client().unwrap();
-# let mut client =
-#     ClientProxy::new_for(&conn, "org.freedesktop.GeoClue2", &client_path).unwrap();
+# let mut client = manager.get_client().unwrap();
 # // Gotta do this, sorry!
 # client.set_desktop_id("org.freedesktop.zbus").unwrap();
 #
@@ -351,7 +352,7 @@ client.connect_location_updated(move |_old, new| {
 let props = zbus::fdo::PropertiesProxy::new_for(
     &conn,
     "org.freedesktop.GeoClue2",
-    &client_path,
+    client.path(),
 ).unwrap();
 props.connect_properties_changed(|iface, changed, _| {
     for (name, value) in changed.iter() {

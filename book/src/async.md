@@ -34,7 +34,8 @@ async fn run() -> Result<()> {
         default_path = "/org/freedesktop/GeoClue2/Manager"
     )]
     trait Manager {
-        fn get_client(&self) -> Result<OwnedObjectPath>;
+        #[dbus_proxy(object = "Client")]
+        fn get_client(&self);
     }
 
     #[dbus_proxy(
@@ -64,8 +65,7 @@ async fn run() -> Result<()> {
     }
     let conn = Connection::new_system().await?;
     let manager = AsyncManagerProxy::new(&conn)?;
-    let client_path = manager.get_client().await?;
-    let mut client = AsyncClientProxy::new_for_path(&conn, &client_path)?;
+    let mut client = manager.get_client().await?;
     // Gotta do this, sorry!
     client.set_desktop_id("org.freedesktop.zbus").await?;
 
@@ -122,7 +122,8 @@ example again to receive multiple signals on different proxies:
 #         default_path = "/org/freedesktop/GeoClue2/Manager"
 #     )]
 #     trait Manager {
-#         fn get_client(&self) -> Result<OwnedObjectPath>;
+#         #[dbus_proxy(object = "Client")]
+#         fn get_client(&self);
 #     }
 #
 #     #[dbus_proxy(
@@ -152,8 +153,7 @@ example again to receive multiple signals on different proxies:
 #     }
 #     let conn = Connection::new_system().await?;
 #     let manager = AsyncManagerProxy::new(&conn)?;
-#     let client_path = manager.get_client().await?;
-#     let mut client = AsyncClientProxy::new_for_path(&conn, &client_path)?;
+#     let mut client = manager.get_client().await?;
 #
 	// Everything else remains the same before this point.
     client.set_desktop_id("org.freedesktop.zbus").await?;
@@ -161,7 +161,7 @@ example again to receive multiple signals on different proxies:
     let props = zbus::fdo::AsyncPropertiesProxy::new_for(
         &conn,
         "org.freedesktop.GeoClue2",
-        &client_path,
+        client.path(),
     )?;
     props
         .connect_properties_changed(move |iface, changed, _| {
