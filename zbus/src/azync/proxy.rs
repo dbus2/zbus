@@ -641,6 +641,9 @@ mod tests {
             }
         }
 
+        assert_eq!(proxy.disconnect_signal("NameOwnerChanged").await?, true);
+        assert_eq!(proxy.disconnect_signal("NameOwnerChanged").await?, false);
+
         Ok(())
     }
 }
