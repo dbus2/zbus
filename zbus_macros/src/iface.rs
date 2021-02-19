@@ -201,10 +201,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                             Ok(val) => val,
                             Err(e) => return Some(Err(::#zbus::MessageError::Variant(e).into())),
                         };
-                        let result = #set_call;
-                        if result.is_ok() {
-                            self.#prop_changed_method_name();
-                        }
+                        let result = #set_call.and_then(|set_result| {
+                            self.#prop_changed_method_name()?;
+                            Ok(set_result)
+                        });
                         Some(result)
                     }
                 );
