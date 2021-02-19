@@ -297,7 +297,7 @@ impl Connection {
         &self,
         destination: Option<&str>,
         path: impl TryInto<ObjectPath<'_>, Error = zvariant::Error>,
-        iface: Option<&str>,
+        interface: Option<&str>,
         method_name: &str,
         body: &B,
     ) -> Result<Message>
@@ -308,7 +308,7 @@ impl Connection {
             self.unique_name(),
             destination,
             path,
-            iface,
+            interface,
             method_name,
             body,
         )?;
@@ -343,7 +343,7 @@ impl Connection {
         &self,
         destination: Option<&str>,
         path: impl TryInto<ObjectPath<'_>, Error = zvariant::Error>,
-        iface: &str,
+        interface: &str,
         signal_name: &str,
         body: &B,
     ) -> Result<()>
@@ -354,7 +354,7 @@ impl Connection {
             self.unique_name(),
             destination,
             path,
-            iface,
+            interface,
             signal_name,
             body,
         )?;
