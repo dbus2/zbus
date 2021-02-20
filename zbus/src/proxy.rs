@@ -165,9 +165,6 @@ impl<'a> Proxy<'a> {
     /// Once a handler is successfully registered, call [`Self::next_signal`] to wait for the next
     /// signal to arrive and be handled by its registered handler.
     ///
-    /// If the associated connnection is to a bus, a match rule is added for the signal on the bus
-    /// so that the bus sends us the signals.
-    ///
     /// ### Errors
     ///
     /// This method can fail if addition of the relevant match rule on the bus fails. You can
@@ -185,10 +182,8 @@ impl<'a> Proxy<'a> {
 
     /// Deregister the handler for the signal named `signal_name`.
     ///
-    /// If the associated connnection is to a bus, the match rule is removed for the signal on the
-    /// bus so that the bus stops sending us the signal. This method returns `Ok(true)` if a
-    /// handler was registered for `signal_name` and was removed by this call; `Ok(false)`
-    /// otherwise.
+    /// This method returns `Ok(true)` if a handler was registered for `signal_name` and was removed
+    /// by this call; `Ok(false)` otherwise.
     ///
     /// ### Errors
     ///
