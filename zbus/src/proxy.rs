@@ -5,7 +5,10 @@ use std::{
 };
 use zvariant::{ObjectPath, OwnedValue, Value};
 
-use crate::{azync, Connection, Message, Result};
+use crate::{
+    azync::{self, SignalHandlerId},
+    Connection, Message, Result,
+};
 
 use crate::fdo;
 
@@ -163,14 +166,20 @@ impl<'a> Proxy<'a> {
     /// Register a handler for signal named `signal_name`.
     ///
     /// Once a handler is successfully registered, call [`Self::next_signal`] to wait for the next
-    /// signal to arrive and be handled by its registered handler.
+    /// signal to arrive and be handled by its registered handler. A unique ID for the handler is
+    /// returned, which can be used to deregister this handler using [`Self::disconnect_signal`]
+    /// method.
     ///
     /// ### Errors
     ///
     /// This method can fail if addition of the relevant match rule on the bus fails. You can
     /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
     /// connection.
-    pub fn connect_signal<H>(&self, signal_name: &'static str, mut handler: H) -> fdo::Result<()>
+    pub fn connect_signal<H>(
+        &self,
+        signal_name: &'static str,
+        mut handler: H,
+    ) -> fdo::Result<SignalHandlerId>
     where
         H: FnMut(&Message) -> Result<()> + Send + 'static,
     {
@@ -180,18 +189,18 @@ impl<'a> Proxy<'a> {
         )
     }
 
-    /// Deregister the handler for the signal named `signal_name`.
+    /// Deregister the signal handler with the ID `handler_id`.
     ///
-    /// This method returns `Ok(true)` if a handler was registered for `signal_name` and was removed
-    /// by this call; `Ok(false)` otherwise.
+    /// This method returns `Ok(true)` if a handler with the id `handler_id` is found and removed;
+    /// `Ok(false)` otherwise.
     ///
     /// ### Errors
     ///
     /// This method can fail if removal of the relevant match rule on the bus fails. You can
     /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
     /// connection.
-    pub fn disconnect_signal(&self, signal_name: &'static str) -> fdo::Result<bool> {
-        block_on(self.azync.disconnect_signal(signal_name))
+    pub fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
+        block_on(self.azync.disconnect_signal(handler_id))
     }
 
     /// Receive and handle the next incoming signal on the associated connection.

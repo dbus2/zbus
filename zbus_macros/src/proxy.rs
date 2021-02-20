@@ -320,11 +320,7 @@ fn gen_proxy_signal(
 ) -> TokenStream {
     let zbus = get_zbus_crate_ident();
     let doc = get_doc_attrs(&m.attrs);
-    let connect_method = format_ident!("connect_{}", snake_case_name);
-    let disconnect_method = Ident::new(
-        &format!("disconnect_{}", snake_case_name),
-        Span::call_site(),
-    );
+    let method = format_ident!("connect_{}", snake_case_name);
     let input_types: Vec<Box<Type>> = m
         .sig
         .inputs
@@ -346,7 +342,7 @@ fn gen_proxy_signal(
         quote! { FnMut(#(#input_types),*) -> ::#zbus::Result<()> }
     };
 
-    let (method, link) = if azync {
+    let (proxy_method, link) = if azync {
         (
             "zbus::azync::Proxy::connect_signal",
             "https://docs.rs/zbus/latest/zbus/azync/struct.Proxy.html#method.connect_signal",
@@ -357,26 +353,9 @@ fn gen_proxy_signal(
             "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_signal",
         )
     };
-    let connect_gen_doc = format!(
+    let gen_doc = format!(
         " Connect the handler for the `{}` signal. This is a convenient wrapper around [`{}`]({}).",
-        signal_name, method, link,
-    );
-
-    let (method, link) = if azync {
-        (
-            "zbus::azync::Proxy::disconnect_signal",
-            "https://docs.rs/zbus/latest/zbus/azync/struct.Proxy.html#method.disconnect_signal",
-        )
-    } else {
-        (
-            "zbus::Proxy::disconnect_signal",
-            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.disconnect_signal",
-        )
-    };
-    let disconnect_gen_doc = format!(
-        " Disconnected the handler (if any) for the `{}` signal. This is a convenient wrapper \
-        around [`{}`]({}).",
-        signal_name, method, link,
+        signal_name, proxy_method, link,
     );
 
     let mut generics = m.sig.generics.clone();
@@ -390,9 +369,12 @@ fn gen_proxy_signal(
 
     let (_, ty_generics, where_clause) = generics.split_for_impl();
     quote! {
-        #[doc = #connect_gen_doc]
+        #[doc = #gen_doc]
         #(#doc)*
-        pub #usage fn #connect_method#ty_generics(&self, mut handler: __H) -> ::#zbus::fdo::Result<()>
+        pub #usage fn #method#ty_generics(
+            &self,
+            mut handler: __H,
+        ) -> ::#zbus::fdo::Result<::#zbus::SignalHandlerId>
         #where_clause,
         {
             self.0.connect_signal(#signal_name, move |m| {
@@ -400,12 +382,6 @@ fn gen_proxy_signal(
 
                 handler(#(#args),*)
             })#wait
-        }
-
-        #[doc = #disconnect_gen_doc]
-        #(#doc)*
-        pub #usage fn #disconnect_method(&self) -> ::#zbus::fdo::Result<bool> {
-            self.0.disconnect_signal(#signal_name)#wait
         }
     }
 }

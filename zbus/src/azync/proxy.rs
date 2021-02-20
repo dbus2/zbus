@@ -4,9 +4,9 @@ use futures_util::{
     future::FutureExt,
     stream::{unfold, StreamExt},
 };
+use slotmap::{new_key_type, SlotMap};
 use std::{
     borrow::Cow,
-    collections::HashMap,
     convert::{TryFrom, TryInto},
     future::ready,
     pin::Pin,
@@ -21,6 +21,16 @@ use crate::{azync::Connection, Error, Message, Result};
 use crate::fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy};
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
+
+new_key_type! {
+    /// The ID for a registered signal handler.
+    pub struct SignalHandlerId;
+}
+
+struct SignalHandlerInfo {
+    signal_name: &'static str,
+    handler: SignalHandler,
+}
 
 /// The asynchronous sibling of [`crate::Proxy`].
 ///
@@ -81,7 +91,7 @@ type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, R
 pub struct Proxy<'a> {
     core: ProxyCore<'a>,
     #[derivative(Debug = "ignore")]
-    sig_handlers: Mutex<HashMap<&'static str, SignalHandler>>,
+    sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
 }
 
 #[derive(Clone, Debug)]
@@ -107,7 +117,7 @@ impl<'a> Proxy<'a> {
                 path: path.try_into()?,
                 interface: Cow::from(interface),
             },
-            sig_handlers: Mutex::new(HashMap::new()),
+            sig_handlers: Mutex::new(SlotMap::with_key()),
         })
     }
 
@@ -126,7 +136,7 @@ impl<'a> Proxy<'a> {
                 path: path.try_into()?,
                 interface: Cow::from(interface),
             },
-            sig_handlers: Mutex::new(HashMap::new()),
+            sig_handlers: Mutex::new(SlotMap::with_key()),
         })
     }
 
@@ -298,25 +308,29 @@ impl<'a> Proxy<'a> {
     /// Register a handler for signal named `signal_name`.
     ///
     /// Once a handler is successfully registered, call [`Self::next_signal`] to wait for the next
-    /// signal to arrive and be handled by its registered handler.
+    /// signal to arrive and be handled by its registered handler. A unique ID for the handler is
+    /// returned, which can be used to deregister this handler using [`Self::disconnect_signal`]
+    /// method.
     ///
     /// ### Errors
     ///
     /// This method can fail if addition of the relevant match rule on the bus fails. You can
     /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
     /// connection.
-    pub async fn connect_signal<H>(&self, signal_name: &'static str, handler: H) -> fdo::Result<()>
+    pub async fn connect_signal<H>(
+        &self,
+        signal_name: &'static str,
+        handler: H,
+    ) -> fdo::Result<SignalHandlerId>
     where
         for<'msg> H: FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send + 'static,
     {
-        if self
-            .sig_handlers
-            .lock()
-            .await
-            .insert(signal_name, Box::new(handler))
-            .is_none()
-            && self.core.conn.is_bus()
-        {
+        let id = self.sig_handlers.lock().await.insert(SignalHandlerInfo {
+            signal_name,
+            handler: Box::new(handler),
+        });
+
+        if self.core.conn.is_bus() {
             let _ = self
                 .core
                 .conn
@@ -329,37 +343,38 @@ impl<'a> Proxy<'a> {
                 .await?;
         }
 
-        Ok(())
+        Ok(id)
     }
 
-    /// Deregister the handler for the signal named `signal_name`.
+    /// Deregister the signal handler with the ID `handler_id`.
     ///
-    /// This method returns `Ok(true)` if a handler was registered for `signal_name` and was
-    /// removed by this call; `Ok(false)` otherwise.
+    /// This method returns `Ok(true)` if a handler with the id `handler_id` is found and removed;
+    /// `Ok(false)` otherwise.
     ///
     /// ### Errors
     ///
     /// This method can fail if removal of the relevant match rule on the bus fails. You can
     /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
     /// connection.
-    pub async fn disconnect_signal(&self, signal_name: &'static str) -> fdo::Result<bool> {
-        if self.sig_handlers.lock().await.remove(signal_name).is_some() {
-            if self.core.conn.is_bus() {
-                let _ = self
-                    .core
-                    .conn
-                    .unsubscribe_signal(
-                        self.destination(),
-                        self.path().as_str(),
-                        self.interface(),
-                        signal_name,
-                    )
-                    .await?;
-            }
+    pub async fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
+        match self.sig_handlers.lock().await.remove(handler_id) {
+            Some(handler_info) => {
+                if self.core.conn.is_bus() {
+                    let _ = self
+                        .core
+                        .conn
+                        .unsubscribe_signal(
+                            self.destination(),
+                            self.path().as_str(),
+                            self.interface(),
+                            handler_info.signal_name,
+                        )
+                        .await?;
+                }
 
-            Ok(true)
-        } else {
-            Ok(false)
+                Ok(true)
+            }
+            None => Ok(false),
         }
     }
 
@@ -377,7 +392,7 @@ impl<'a> Proxy<'a> {
             // the future of this call) not `Sync` and we get a very scary error message from
             // the compiler on using `next_signal` with `tokio::select` inside a tokio task.
             let handlers = self.sig_handlers.lock().await;
-            let signals: Vec<&str> = handlers.keys().copied().collect();
+            let signals: Vec<&str> = handlers.values().map(|info| info.signal_name).collect();
 
             self.core
                 .conn
@@ -412,7 +427,7 @@ impl<'a> Proxy<'a> {
     /// Call any handlers registered through the [`Self::connect_signal`] method for the provided
     /// signal message.
     ///
-    /// If no errors are encountered, `Ok(true)` is returned if a handler was found and called for,
+    /// If no errors are encountered, `Ok(true)` is returned if any handlers where found and called for,
     /// the signal; `Ok(false)` otherwise.
     pub async fn handle_signal(&self, msg: &Message) -> Result<bool> {
         let mut handlers = self.sig_handlers.lock().await;
@@ -422,18 +437,31 @@ impl<'a> Proxy<'a> {
 
         let hdr = msg.header()?;
         if let Some(name) = hdr.member()? {
-            if let Some(handler) = handlers.get_mut(name) {
-                handler(&msg).await?;
+            let mut handled = false;
 
-                return Ok(true);
+            for info in handlers
+                .values_mut()
+                .filter(|info| info.signal_name == name)
+            {
+                (*info.handler)(&msg).await?;
+
+                if !handled {
+                    handled = true;
+                }
             }
+
+            return Ok(handled);
         }
 
         Ok(false)
     }
 
     pub(crate) async fn has_signal_handler(&self, signal_name: &str) -> bool {
-        self.sig_handlers.lock().await.contains_key(signal_name)
+        self.sig_handlers
+            .lock()
+            .await
+            .values()
+            .any(|info| info.signal_name == signal_name)
     }
 }
 
@@ -574,6 +602,7 @@ mod tests {
         let conn = Connection::new_session().await?;
         let owner_change_signaled = Arc::new(Mutex::new(false));
         let name_acquired_signaled = Arc::new(Mutex::new(false));
+        let name_acquired_signaled2 = Arc::new(Mutex::new(false));
 
         let proxy = Proxy::new(
             &conn,
@@ -584,7 +613,7 @@ mod tests {
 
         let well_known = "org.freedesktop.zbus.async.ProxySignalConnectTest";
         let unique_name = conn.unique_name().unwrap().to_string();
-        {
+        let name_owner_changed_id = {
             let well_known = well_known.clone();
             let signaled = owner_change_signaled.clone();
 
@@ -606,9 +635,9 @@ mod tests {
                     }
                     .boxed()
                 })
-                .await?;
-        }
-        {
+                .await?
+        };
+        let name_acquired_id = {
             let signaled = name_acquired_signaled.clone();
             // `NameAcquired` is emitted twice, first when the unique name is assigned on
             // connection and secondly after we ask for a specific name.
@@ -625,8 +654,28 @@ mod tests {
                     }
                     .boxed()
                 })
-                .await?;
-        }
+                .await?
+        };
+        // Test multiple handers for the same signal
+        let name_acquired_id2 = {
+            let signaled = name_acquired_signaled2.clone();
+            // `NameAcquired` is emitted twice, first when the unique name is assigned on
+            // connection and secondly after we ask for a specific name.
+            proxy
+                .connect_signal("NameAcquired", move |m| {
+                    let signaled = signaled.clone();
+
+                    async move {
+                        if m.body::<&str>()? == well_known {
+                            *signaled.lock().await = true;
+                        }
+
+                        Ok(())
+                    }
+                    .boxed()
+                })
+                .await?
+        };
 
         fdo::DBusProxy::new(&crate::Connection::from(conn))
             .unwrap()
@@ -636,13 +685,18 @@ mod tests {
         loop {
             proxy.next_signal().await?;
 
-            if *owner_change_signaled.lock().await && *name_acquired_signaled.lock().await {
+            if *owner_change_signaled.lock().await
+                && *name_acquired_signaled.lock().await
+                && *name_acquired_signaled2.lock().await
+            {
                 break;
             }
         }
 
-        assert_eq!(proxy.disconnect_signal("NameOwnerChanged").await?, true);
-        assert_eq!(proxy.disconnect_signal("NameOwnerChanged").await?, false);
+        assert_eq!(proxy.disconnect_signal(name_owner_changed_id).await?, true);
+        assert_eq!(proxy.disconnect_signal(name_owner_changed_id).await?, false);
+        assert_eq!(proxy.disconnect_signal(name_acquired_id).await?, true);
+        assert_eq!(proxy.disconnect_signal(name_acquired_id2).await?, true);
 
         Ok(())
     }

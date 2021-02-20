@@ -70,15 +70,15 @@ mod utils;
 /// let _ = proxy.do_this("foo", 32, &Value::new(true));
 /// let _ = proxy.set_a_property("val");
 ///
-/// proxy.connect_some_signal(|s, u| {
+/// let handler_id = proxy.connect_some_signal(|s, u| {
 ///     println!("arg1: {}, arg2: {}", s, u);
 ///
 ///     Ok(())
 /// })?;
 ///
 /// // You'll want to make at least a call to `handle_next_signal` before disconnecting the signal.
-/// assert!(proxy.disconnect_some_signal()?);
-/// assert!(!proxy.disconnect_some_signal()?);
+/// assert!(proxy.disconnect_signal(handler_id)?);
+/// assert!(!proxy.disconnect_signal(handler_id)?);
 ///
 /// // Now the same again, but asynchronous.
 /// let proxy = AsyncSomeIfaceProxy::new(&connection.into())?;
@@ -86,15 +86,15 @@ mod utils;
 ///     let _ = proxy.do_this("foo", 32, &Value::new(true)).await;
 ///     let _ = proxy.set_a_property("val").await;
 ///
-///     proxy.connect_some_signal(|s, u| {
+///     let handler_id = proxy.connect_some_signal(|s, u| {
 ///         println!("arg1: {}, arg2: {}", s, u);
 ///
 ///         async { Ok(()) }.boxed()
 ///     }).await?;
 ///
 ///     // You'll want to make at least a call to `handle_next_signal` before disconnecting the signal.
-///     assert!(proxy.disconnect_some_signal().await?);
-///     assert!(!proxy.disconnect_some_signal().await?);
+///     assert!(proxy.disconnect_signal(handler_id).await?);
+///     assert!(!proxy.disconnect_signal(handler_id).await?);
 ///
 ///     Ok::<(), zbus::Error>(())
 /// })?;
