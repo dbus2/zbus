@@ -2,8 +2,9 @@ use async_io::Async;
 use async_lock::{Mutex, MutexGuard, RwLock};
 use once_cell::sync::OnceCell;
 use std::{
-    collections::VecDeque,
+    collections::{hash_map::DefaultHasher, HashMap, VecDeque},
     convert::TryInto,
+    hash::{Hash, Hasher},
     io::{self, ErrorKind},
     os::unix::{
         io::{AsRawFd, RawFd},
@@ -20,11 +21,73 @@ use futures_util::{future::FutureExt, sink::SinkExt, stream::TryStreamExt};
 
 use crate::{
     azync::Authenticated,
+    fdo,
     raw::{Connection as RawConnection, Socket},
     Error, Guid, Message, MessageType, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
+
+const FDO_DBUS_SERVICE: &str = "org.freedesktop.DBus";
+const FDO_DBUS_INTERFACE: &str = "org.freedesktop.DBus";
+const FDO_DBUS_PATH: &str = "/org/freedesktop/DBus";
+const FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS: [&str; 2] = ["NameAcquired", "NameLost"];
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+struct SignalInfo<'s> {
+    sender: &'s str,
+    path: ObjectPath<'s>,
+    interface: &'s str,
+    signal_name: &'s str,
+}
+
+impl<'s> SignalInfo<'s> {
+    fn new(
+        sender: &'s str,
+        path: impl TryInto<ObjectPath<'s>, Error = zvariant::Error>,
+        interface: &'s str,
+        signal_name: &'s str,
+    ) -> Result<Self> {
+        Ok(Self {
+            sender,
+            path: path.try_into()?,
+            interface,
+            signal_name,
+        })
+    }
+
+    fn create_match_rule(&self) -> Option<String> {
+        if self.match_rule_excempt() {
+            return None;
+        }
+
+        // FIXME: Use the API to create this once we've it (issue#69).
+        Some(format!(
+            "type='signal',sender='{}',path_namespace='{}',interface='{}',member='{}'",
+            self.sender, self.path, self.interface, self.signal_name,
+        ))
+    }
+
+    fn match_rule_excempt(&self) -> bool {
+        self.sender == FDO_DBUS_SERVICE
+            && self.interface == FDO_DBUS_INTERFACE
+            && self.path.as_str() == FDO_DBUS_PATH
+            && FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS.contains(&self.signal_name)
+    }
+
+    fn calc_hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+
+        hasher.finish()
+    }
+}
+
+#[derive(Debug)]
+struct SignalSubscription {
+    num_subscribers: usize,
+    match_rule: Option<String>,
+}
 
 #[derive(Debug)]
 struct ConnectionInner<S> {
@@ -43,6 +106,8 @@ struct ConnectionInner<S> {
 
     // Max number of messages to queue
     max_queued: RwLock<usize>,
+
+    signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 }
 
 /// The asynchronous sibling of [`zbus::Connection`].
@@ -297,7 +362,7 @@ impl Connection {
         &self,
         destination: Option<&str>,
         path: impl TryInto<ObjectPath<'_>, Error = zvariant::Error>,
-        iface: Option<&str>,
+        interface: Option<&str>,
         method_name: &str,
         body: &B,
     ) -> Result<Message>
@@ -308,7 +373,7 @@ impl Connection {
             self.unique_name(),
             destination,
             path,
-            iface,
+            interface,
             method_name,
             body,
         )?;
@@ -343,7 +408,7 @@ impl Connection {
         &self,
         destination: Option<&str>,
         path: impl TryInto<ObjectPath<'_>, Error = zvariant::Error>,
-        iface: &str,
+        interface: &str,
         signal_name: &str,
         body: &B,
     ) -> Result<()>
@@ -354,7 +419,7 @@ impl Connection {
             self.unique_name(),
             destination,
             path,
-            iface,
+            interface,
             signal_name,
             body,
         )?;
@@ -463,8 +528,74 @@ impl Connection {
         (self.0.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
+    pub(crate) async fn subscribe_signal<'s>(
+        &self,
+        sender: &'s str,
+        path: impl TryInto<ObjectPath<'s>, Error = zvariant::Error>,
+        interface: &'s str,
+        signal_name: &'s str,
+    ) -> Result<u64> {
+        let signal = SignalInfo::new(sender, path, interface, signal_name)?;
+        let hash = signal.calc_hash();
+        let mut subscriptions = self.0.signal_subscriptions.lock().await;
+        match subscriptions.get_mut(&hash) {
+            Some(subscription) => subscription.num_subscribers += 1,
+            None => {
+                let match_rule = signal.create_match_rule();
+                if let Some(match_rule) = &match_rule {
+                    fdo::AsyncDBusProxy::new(&self)?
+                        .add_match(&match_rule)
+                        .await?;
+                }
+
+                subscriptions.insert(
+                    hash,
+                    SignalSubscription {
+                        num_subscribers: 1,
+                        match_rule,
+                    },
+                );
+            }
+        }
+
+        Ok(hash)
+    }
+
+    pub(crate) async fn unsubscribe_signal<'s>(
+        &self,
+        sender: &'s str,
+        path: impl TryInto<ObjectPath<'s>, Error = zvariant::Error>,
+        interface: &'s str,
+        signal_name: &'s str,
+    ) -> Result<bool> {
+        let signal = SignalInfo::new(sender, path, interface, signal_name)?;
+        let hash = signal.calc_hash();
+
+        self.unsubscribe_signal_by_id(hash).await
+    }
+
+    pub(crate) async fn unsubscribe_signal_by_id(&self, subscription_id: u64) -> Result<bool> {
+        let mut subscriptions = self.0.signal_subscriptions.lock().await;
+        match subscriptions.get_mut(&subscription_id) {
+            Some(subscription) => {
+                subscription.num_subscribers -= 1;
+
+                if subscription.num_subscribers == 0 {
+                    if let Some(match_rule) = &subscription.match_rule {
+                        fdo::AsyncDBusProxy::new(&self)?
+                            .remove_match(match_rule.as_str())
+                            .await?;
+                    }
+                }
+
+                Ok(true)
+            }
+            None => Ok(false),
+        }
+    }
+
     async fn hello_bus(self) -> Result<Self> {
-        let name = crate::fdo::AsyncDBusProxy::new(&self)?.hello().await?;
+        let name = fdo::AsyncDBusProxy::new(&self)?.hello().await?;
 
         self.0
             .unique_name
@@ -493,6 +624,7 @@ impl Connection {
             unique_name: OnceCell::new(),
             incoming_queue: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
             max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
+            signal_subscriptions: Mutex::new(HashMap::new()),
         }));
 
         if !bus_connection {

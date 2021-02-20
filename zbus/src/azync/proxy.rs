@@ -22,11 +22,6 @@ use crate::fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy};
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
 
-const FDO_DBUS_SERVICE: &str = "org.freedesktop.DBus";
-const FDO_DBUS_INTERFACE: &str = "org.freedesktop.DBus";
-const FDO_DBUS_PATH: &str = "/org/freedesktop/DBus";
-const FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS: [&str; 2] = ["NameAcquired", "NameLost"];
-
 /// The asynchronous sibling of [`crate::Proxy`].
 ///
 /// This API is mostly the same as [`crate::Proxy`], except it is asynchronous. One of the
@@ -255,15 +250,19 @@ impl<'a> Proxy<'a> {
     /// stream. If you'd like to avoid this, you must close the stream explicitly, using the
     /// [`SignalStream::close`] method.
     pub async fn receive_signal(&self, signal_name: &'static str) -> Result<SignalStream<'a>> {
-        let match_rule = if self.core.conn.is_bus() {
-            let rule = self.match_rule_for_signal(signal_name);
-            if let Some(rule) = &rule {
-                fdo::AsyncDBusProxy::new(&self.core.conn)?
-                    .add_match(rule)
-                    .await?;
-            }
+        let subscription_id = if self.core.conn.is_bus() {
+            let id = self
+                .core
+                .conn
+                .subscribe_signal(
+                    self.destination(),
+                    self.path().as_str(),
+                    self.interface(),
+                    signal_name,
+                )
+                .await?;
 
-            rule
+            Some(id)
         } else {
             None
         };
@@ -292,7 +291,7 @@ impl<'a> Proxy<'a> {
         Ok(SignalStream {
             stream: stream.boxed(),
             conn: self.core.conn.clone(),
-            match_rule,
+            subscription_id,
         })
     }
 
@@ -300,9 +299,6 @@ impl<'a> Proxy<'a> {
     ///
     /// Once a handler is successfully registered, call [`Self::next_signal`] to wait for the next
     /// signal to arrive and be handled by its registered handler.
-    ///
-    /// If the associated connnection is to a bus, a match rule is added for the signal on the bus
-    /// so that the bus sends us the signals.
     ///
     /// ### Errors
     ///
@@ -321,11 +317,16 @@ impl<'a> Proxy<'a> {
             .is_none()
             && self.core.conn.is_bus()
         {
-            if let Some(rule) = self.match_rule_for_signal(signal_name) {
-                fdo::AsyncDBusProxy::new(&self.core.conn)?
-                    .add_match(&rule)
-                    .await?;
-            }
+            let _ = self
+                .core
+                .conn
+                .subscribe_signal(
+                    self.destination(),
+                    self.path().as_str(),
+                    self.interface(),
+                    signal_name,
+                )
+                .await?;
         }
 
         Ok(())
@@ -333,10 +334,8 @@ impl<'a> Proxy<'a> {
 
     /// Deregister the handler for the signal named `signal_name`.
     ///
-    /// If the associated connnection is to a bus, the match rule is removed for the signal on the
-    /// bus so that the bus stops sending us the signal. This method returns `Ok(true)` if a
-    /// handler was registered for `signal_name` and was removed by this call; `Ok(false)`
-    /// otherwise.
+    /// This method returns `Ok(true)` if a handler was registered for `signal_name` and was
+    /// removed by this call; `Ok(false)` otherwise.
     ///
     /// ### Errors
     ///
@@ -346,11 +345,16 @@ impl<'a> Proxy<'a> {
     pub async fn disconnect_signal(&self, signal_name: &'static str) -> fdo::Result<bool> {
         if self.sig_handlers.lock().await.remove(signal_name).is_some() {
             if self.core.conn.is_bus() {
-                if let Some(rule) = self.match_rule_for_signal(signal_name) {
-                    fdo::AsyncDBusProxy::new(&self.core.conn)?
-                        .remove_match(&rule)
-                        .await?;
-                }
+                let _ = self
+                    .core
+                    .conn
+                    .unsubscribe_signal(
+                        self.destination(),
+                        self.path().as_str(),
+                        self.interface(),
+                        signal_name,
+                    )
+                    .await?;
             }
 
             Ok(true)
@@ -431,25 +435,6 @@ impl<'a> Proxy<'a> {
     pub(crate) async fn has_signal_handler(&self, signal_name: &str) -> bool {
         self.sig_handlers.lock().await.contains_key(signal_name)
     }
-
-    fn match_rule_for_signal(&self, signal_name: &'static str) -> Option<String> {
-        if self.match_rule_excempt(signal_name) {
-            return None;
-        }
-
-        // FIXME: Use the API to create this once we've it (issue#69).
-        Some(format!(
-            "type='signal',sender='{}',path_namespace='{}',interface='{}',member='{}'",
-            self.core.destination, self.core.path, self.core.interface, signal_name,
-        ))
-    }
-
-    fn match_rule_excempt(&self, signal_name: &'static str) -> bool {
-        self.destination() == FDO_DBUS_SERVICE
-            && self.interface() == FDO_DBUS_INTERFACE
-            && self.path().as_str() == FDO_DBUS_PATH
-            && FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS.contains(&signal_name)
-    }
 }
 
 /// A [`stream::Stream`] implementation that yields signal [messages](`Message`).
@@ -458,7 +443,7 @@ impl<'a> Proxy<'a> {
 pub struct SignalStream<'s> {
     stream: stream::BoxStream<'s, Message>,
     conn: Connection,
-    match_rule: Option<String>,
+    subscription_id: Option<u64>,
 }
 
 impl SignalStream<'_> {
@@ -471,10 +456,8 @@ impl SignalStream<'_> {
     }
 
     async fn close_(&mut self) -> Result<()> {
-        if let Some(rule) = self.match_rule.take() {
-            fdo::AsyncDBusProxy::new(&self.conn)?
-                .remove_match(&rule)
-                .await?;
+        if let Some(id) = self.subscription_id {
+            let _ = self.conn.unsubscribe_signal_by_id(id).await?;
         }
 
         Ok(())
@@ -491,7 +474,7 @@ impl stream::Stream for SignalStream<'_> {
 
 impl std::ops::Drop for SignalStream<'_> {
     fn drop(&mut self) {
-        if self.match_rule.is_some() {
+        if self.subscription_id.is_some() {
             // User didn't close the stream explicitly so we've to do it synchronously ourselves.
             let _ = block_on(self.close_());
         }
@@ -657,6 +640,9 @@ mod tests {
                 break;
             }
         }
+
+        assert_eq!(proxy.disconnect_signal("NameOwnerChanged").await?, true);
+        assert_eq!(proxy.disconnect_signal("NameOwnerChanged").await?, false);
 
         Ok(())
     }
