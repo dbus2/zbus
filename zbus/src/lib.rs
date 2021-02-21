@@ -181,6 +181,7 @@ pub mod fdo;
 mod raw;
 
 pub mod azync;
+pub use azync::SignalHandlerId;
 mod handshake;
 
 pub mod xml;
