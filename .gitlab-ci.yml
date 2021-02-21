@@ -62,6 +62,8 @@ container:
 check:
   extends: .debian_img
   stage: "lint"
+  variables:
+    RUSTFLAGS: "-D warnings"
   script:
     - rustc --version
     - cargo --version
@@ -84,6 +86,8 @@ check:
 test:
   extends: .debian_img
   stage: test
+  variables:
+    RUSTFLAGS: "-D warnings"
   script:
     - rustup override set stable
     - *cargo_test
