@@ -164,7 +164,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             pub fn new_for(
                 conn: &#connection,
                 destination: &'c str,
-                path: impl std::convert::TryInto<::#zbus::export::zvariant::ObjectPath<'c>, Error = ::#zbus::export::zvariant::Error>,
+                path: impl #zbus::export::zvariant::IntoObjectPath<'c>,
             ) -> ::#zbus::Result<Self> {
                 Ok(Self(#proxy_struct::new(
                     conn,
@@ -178,7 +178,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             pub fn new_for_owned(
                 conn: #connection,
                 destination: String,
-                path: impl std::convert::TryInto<::#zbus::export::zvariant::ObjectPath<'static>, Error = ::#zbus::export::zvariant::Error>,
+                path: impl #zbus::export::zvariant::IntoObjectPath<'static>,
             ) -> ::#zbus::Result<Self> {
                 Ok(Self(#proxy_struct::new_owned(
                     conn,
@@ -191,7 +191,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             /// Creates a new proxy for the given `path`.
             pub fn new_for_path(
                 conn: &#connection,
-                path: impl std::convert::TryInto<::#zbus::export::zvariant::ObjectPath<'c>, Error = ::#zbus::export::zvariant::Error>,
+                path: impl #zbus::export::zvariant::IntoObjectPath<'c>,
             ) -> ::#zbus::Result<Self> {
                 Ok(Self(#proxy_struct::new(
                     conn,
@@ -204,7 +204,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             /// Same as `new_for_path` but takes ownership of the passed arguments.
             pub fn new_for_owned_path(
                 conn: #connection,
-                path: impl std::convert::TryInto<::#zbus::export::zvariant::ObjectPath<'static>, Error = ::#zbus::export::zvariant::Error>,
+                path: impl #zbus::export::zvariant::IntoObjectPath<'static>,
             ) -> ::#zbus::Result<Self> {
                 Ok(Self(#proxy_struct::new_owned(
                     conn,

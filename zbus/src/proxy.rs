@@ -1,9 +1,6 @@
 use async_io::block_on;
-use std::{
-    convert::{TryFrom, TryInto},
-    future::ready,
-};
-use zvariant::{ObjectPath, OwnedValue, Value};
+use std::{convert::TryFrom, future::ready};
+use zvariant::{IntoObjectPath, ObjectPath, OwnedValue, Value};
 
 use crate::{
     azync::{self, SignalHandlerId},
@@ -64,7 +61,7 @@ impl<'a> Proxy<'a> {
     pub fn new(
         conn: &Connection,
         destination: &'a str,
-        path: impl TryInto<ObjectPath<'a>, Error = zvariant::Error>,
+        path: impl IntoObjectPath<'a>,
         interface: &'a str,
     ) -> Result<Self> {
         let proxy = azync::Proxy::new(conn.inner(), destination, path, interface)?;
@@ -80,7 +77,7 @@ impl<'a> Proxy<'a> {
     pub fn new_owned(
         conn: Connection,
         destination: String,
-        path: impl TryInto<ObjectPath<'static>, Error = zvariant::Error>,
+        path: impl IntoObjectPath<'static>,
         interface: String,
     ) -> Result<Self> {
         let proxy =

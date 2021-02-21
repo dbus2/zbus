@@ -65,7 +65,7 @@ async fn run() -> Result<()> {
     let conn = Connection::new_system().await?;
     let manager = AsyncManagerProxy::new(&conn)?;
     let client_path = manager.get_client().await?;
-    let mut client = AsyncClientProxy::new_for_path(&conn, client_path.as_str())?;
+    let mut client = AsyncClientProxy::new_for_path(&conn, &client_path)?;
     // Gotta do this, sorry!
     client.set_desktop_id("org.freedesktop.zbus").await?;
 
@@ -153,7 +153,7 @@ example again to receive multiple signals on different proxies:
 #     let conn = Connection::new_system().await?;
 #     let manager = AsyncManagerProxy::new(&conn)?;
 #     let client_path = manager.get_client().await?;
-#     let mut client = AsyncClientProxy::new_for_path(&conn, client_path.as_str())?;
+#     let mut client = AsyncClientProxy::new_for_path(&conn, &client_path)?;
 #
 	// Everything else remains the same before this point.
     client.set_desktop_id("org.freedesktop.zbus").await?;
@@ -161,7 +161,7 @@ example again to receive multiple signals on different proxies:
     let props = zbus::fdo::AsyncPropertiesProxy::new_for(
         &conn,
         "org.freedesktop.GeoClue2",
-        client_path.as_str(),
+        &client_path,
     )?;
     props
         .connect_properties_changed(move |iface, changed, _| {
