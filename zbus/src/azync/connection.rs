@@ -3,7 +3,6 @@ use async_lock::{Mutex, MutexGuard, RwLock};
 use once_cell::sync::OnceCell;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap, VecDeque},
-    convert::TryInto,
     hash::{Hash, Hasher},
     io::{self, ErrorKind},
     os::unix::{
@@ -14,7 +13,7 @@ use std::{
     sync::Arc,
     task::{Context, Poll},
 };
-use zvariant::ObjectPath;
+use zvariant::{IntoObjectPath, ObjectPath};
 
 use futures_core::{future::BoxFuture, stream};
 use futures_util::{future::FutureExt, sink::SinkExt, stream::TryStreamExt};
@@ -44,13 +43,13 @@ struct SignalInfo<'s> {
 impl<'s> SignalInfo<'s> {
     fn new(
         sender: &'s str,
-        path: impl TryInto<ObjectPath<'s>, Error = zvariant::Error>,
+        path: impl IntoObjectPath<'s>,
         interface: &'s str,
         signal_name: &'s str,
     ) -> Result<Self> {
         Ok(Self {
             sender,
-            path: path.try_into()?,
+            path: path.into_object_path()?,
             interface,
             signal_name,
         })
@@ -361,7 +360,7 @@ impl Connection {
     pub async fn call_method<B>(
         &self,
         destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'_>, Error = zvariant::Error>,
+        path: impl IntoObjectPath<'_>,
         interface: Option<&str>,
         method_name: &str,
         body: &B,
@@ -407,7 +406,7 @@ impl Connection {
     pub async fn emit_signal<B>(
         &self,
         destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'_>, Error = zvariant::Error>,
+        path: impl IntoObjectPath<'_>,
         interface: &str,
         signal_name: &str,
         body: &B,
@@ -531,7 +530,7 @@ impl Connection {
     pub(crate) async fn subscribe_signal<'s>(
         &self,
         sender: &'s str,
-        path: impl TryInto<ObjectPath<'s>, Error = zvariant::Error>,
+        path: impl IntoObjectPath<'s>,
         interface: &'s str,
         signal_name: &'s str,
     ) -> Result<u64> {
@@ -564,7 +563,7 @@ impl Connection {
     pub(crate) async fn unsubscribe_signal<'s>(
         &self,
         sender: &'s str,
-        path: impl TryInto<ObjectPath<'s>, Error = zvariant::Error>,
+        path: impl IntoObjectPath<'s>,
         interface: &'s str,
         signal_name: &'s str,
     ) -> Result<bool> {

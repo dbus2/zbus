@@ -193,8 +193,7 @@ impl Node {
             panic!("emit_signal: Connection TLS not set");
         }
 
-        LOCAL_CONNECTION
-            .with(|conn| conn.emit_signal(dest, self.path.as_str(), iface, signal_name, body))
+        LOCAL_CONNECTION.with(|conn| conn.emit_signal(dest, &self.path, iface, signal_name, body))
     }
 }
 

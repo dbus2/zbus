@@ -1,11 +1,13 @@
 use std::{
-    convert::{TryFrom, TryInto},
+    convert::TryFrom,
     error, fmt,
     io::{Cursor, Error as IOError},
     os::unix::io::{AsRawFd, IntoRawFd, RawFd},
 };
 
-use zvariant::{EncodingContext, Error as VariantError, ObjectPath, Signature, Type};
+use zvariant::{
+    EncodingContext, Error as VariantError, IntoObjectPath, ObjectPath, Signature, Type,
+};
 
 use crate::{
     owned_fd::OwnedFd, utils::padding_for_8_bytes, EndianSig, MessageField, MessageFieldCode,
@@ -280,7 +282,7 @@ impl Message {
     pub fn method<'p, B>(
         sender: Option<&str>,
         destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'p>, Error = VariantError>,
+        path: impl IntoObjectPath<'p>,
         iface: Option<&str>,
         method_name: &str,
         body: &B,
@@ -288,7 +290,7 @@ impl Message {
     where
         B: serde::ser::Serialize + Type,
     {
-        let mut b = MessageBuilder::method(sender, path.try_into()?, method_name, body)?;
+        let mut b = MessageBuilder::method(sender, path.into_object_path()?, method_name, body)?;
         if let Some(destination) = destination {
             b = b.set_field(MessageField::Destination(destination.into()));
         }
@@ -304,7 +306,7 @@ impl Message {
     pub fn signal<'p, B>(
         sender: Option<&str>,
         destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'p>, Error = VariantError>,
+        path: impl IntoObjectPath<'p>,
         iface: &str,
         signal_name: &str,
         body: &B,
@@ -312,7 +314,8 @@ impl Message {
     where
         B: serde::ser::Serialize + Type,
     {
-        let mut b = MessageBuilder::signal(sender, path.try_into()?, iface, signal_name, body)?;
+        let mut b =
+            MessageBuilder::signal(sender, path.into_object_path()?, iface, signal_name, body)?;
         if let Some(destination) = destination {
             b = b.set_field(MessageField::Destination(destination.into()));
         }
