@@ -1,7 +1,11 @@
 // FIXME: Drop this when the deprecated `Basic::ALIGNMENT` is dropped in the next API break.
 #![allow(deprecated)]
 
-use core::{convert::TryFrom, fmt::Debug, str};
+use core::{
+    convert::{TryFrom, TryInto},
+    fmt::Debug,
+    str,
+};
 use serde::{
     de::{Deserialize, Deserializer, Visitor},
     ser::{Serialize, Serializer},
@@ -223,6 +227,35 @@ impl<'de> Visitor<'de> for ObjectPathVisitor {
     }
 }
 
+/// Trait to convert a type to [`ObjectPath`].
+///
+/// You should never implement this trait directly, as it's implemented for all types that
+/// implement `TryInto<ObjectPath>`.
+pub trait IntoObjectPath<'a> {
+    fn into_object_path(self) -> Result<ObjectPath<'a>>;
+}
+
+impl<'a, T> IntoObjectPath<'a> for T
+where
+    T: TryInto<ObjectPath<'a>, Error = Error>,
+{
+    fn into_object_path(self) -> Result<ObjectPath<'a>> {
+        self.try_into()
+    }
+}
+
+impl<'a> IntoObjectPath<'a> for ObjectPath<'a> {
+    fn into_object_path(self) -> Result<ObjectPath<'a>> {
+        Ok(self)
+    }
+}
+
+impl<'a> IntoObjectPath<'a> for &'_ ObjectPath<'a> {
+    fn into_object_path(self) -> Result<ObjectPath<'a>> {
+        Ok(self.clone())
+    }
+}
+
 fn ensure_correct_object_path_str(path: &[u8]) -> Result<()> {
     let mut prev = b'\0';
 
@@ -291,6 +324,12 @@ impl std::convert::From<OwnedObjectPath> for ObjectPath<'static> {
     }
 }
 
+impl<'unowned, 'owned: 'unowned> IntoObjectPath<'unowned> for &'owned OwnedObjectPath {
+    fn into_object_path(self) -> Result<ObjectPath<'unowned>> {
+        Ok(ObjectPath::from_str_unchecked(self.as_str()))
+    }
+}
+
 impl<'a> std::convert::From<ObjectPath<'a>> for OwnedObjectPath {
     fn from(o: ObjectPath<'a>) -> Self {
         OwnedObjectPath(o.into_owned())
@@ -323,5 +362,28 @@ impl<'de> Deserialize<'de> for OwnedObjectPath {
         deserializer
             .deserialize_string(visitor)
             .map(|v| OwnedObjectPath(v.to_owned()))
+    }
+}
+
+/// Trait to convert a type to [`OwnedObjectPath`].
+///
+/// You should never implement this trait directly, as it's implemented for all types that
+/// implement `TryInto<OwnedObjectPath>`.
+pub trait IntoOwnedObjectPath {
+    fn into_owned_object_path(self) -> Result<OwnedObjectPath>;
+}
+
+impl<T> IntoOwnedObjectPath for T
+where
+    T: TryInto<OwnedObjectPath, Error = Error>,
+{
+    fn into_owned_object_path(self) -> Result<OwnedObjectPath> {
+        self.try_into()
+    }
+}
+
+impl IntoOwnedObjectPath for OwnedObjectPath {
+    fn into_owned_object_path(self) -> Result<OwnedObjectPath> {
+        Ok(self)
     }
 }

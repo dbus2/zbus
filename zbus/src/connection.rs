@@ -1,13 +1,12 @@
 use futures_util::future::FutureExt;
 use std::{
-    convert::TryInto,
     future::ready,
     os::unix::{
         io::{AsRawFd, RawFd},
         net::UnixStream,
     },
 };
-use zvariant::ObjectPath;
+use zvariant::IntoObjectPath;
 
 use async_io::block_on;
 
@@ -200,7 +199,7 @@ impl Connection {
     pub fn call_method<'p, B>(
         &self,
         destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'p>, Error = zvariant::Error>,
+        path: impl IntoObjectPath<'p>,
         iface: Option<&str>,
         method_name: &str,
         body: &B,
@@ -220,7 +219,7 @@ impl Connection {
     pub fn emit_signal<'p, B>(
         &self,
         destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'p>, Error = zvariant::Error>,
+        path: impl IntoObjectPath<'p>,
         iface: &str,
         signal_name: &str,
         body: &B,

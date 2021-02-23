@@ -14,7 +14,7 @@ use std::{
 };
 
 use async_io::block_on;
-use zvariant::{ObjectPath, OwnedValue, Value};
+use zvariant::{IntoObjectPath, ObjectPath, OwnedValue, Value};
 
 use crate::{azync::Connection, Error, Message, Result};
 
@@ -107,14 +107,14 @@ impl<'a> Proxy<'a> {
     pub fn new(
         conn: &Connection,
         destination: &'a str,
-        path: impl TryInto<ObjectPath<'a>, Error = zvariant::Error>,
+        path: impl IntoObjectPath<'a>,
         interface: &'a str,
     ) -> Result<Self> {
         Ok(Self {
             core: ProxyCore {
                 conn: conn.clone(),
                 destination: Cow::from(destination),
-                path: path.try_into()?,
+                path: path.into_object_path()?,
                 interface: Cow::from(interface),
             },
             sig_handlers: Mutex::new(SlotMap::with_key()),
@@ -126,14 +126,14 @@ impl<'a> Proxy<'a> {
     pub fn new_owned(
         conn: Connection,
         destination: String,
-        path: impl TryInto<ObjectPath<'static>, Error = zvariant::Error>,
+        path: impl IntoObjectPath<'static>,
         interface: String,
     ) -> Result<Self> {
         Ok(Self {
             core: ProxyCore {
                 conn,
                 destination: Cow::from(destination),
-                path: path.try_into()?,
+                path: path.into_object_path()?,
                 interface: Cow::from(interface),
             },
             sig_handlers: Mutex::new(SlotMap::with_key()),
@@ -164,13 +164,9 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
-        AsyncIntrospectableProxy::new_for(
-            &self.core.conn,
-            &self.core.destination,
-            self.core.path.as_str(),
-        )?
-        .introspect()
-        .await
+        AsyncIntrospectableProxy::new_for(&self.core.conn, &self.core.destination, &self.core.path)?
+            .introspect()
+            .await
     }
 
     /// Get the property `property_name`.
@@ -180,15 +176,11 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        AsyncPropertiesProxy::new_for(
-            &self.core.conn,
-            &self.core.destination,
-            self.core.path.as_str(),
-        )?
-        .get(&self.core.interface, property_name)
-        .await?
-        .try_into()
-        .map_err(|_| Error::InvalidReply.into())
+        AsyncPropertiesProxy::new_for(&self.core.conn, &self.core.destination, &self.core.path)?
+            .get(&self.core.interface, property_name)
+            .await?
+            .try_into()
+            .map_err(|_| Error::InvalidReply.into())
     }
 
     /// Set the property `property_name`.
@@ -198,13 +190,9 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        AsyncPropertiesProxy::new_for(
-            &self.core.conn,
-            &self.core.destination,
-            self.core.path.as_str(),
-        )?
-        .set(&self.core.interface, property_name, &value.into())
-        .await
+        AsyncPropertiesProxy::new_for(&self.core.conn, &self.core.destination, &self.core.path)?
+            .set(&self.core.interface, property_name, &value.into())
+            .await
     }
 
     /// Call a method and return the reply.
@@ -266,7 +254,7 @@ impl<'a> Proxy<'a> {
                 .conn
                 .subscribe_signal(
                     self.destination(),
-                    self.path().as_str(),
+                    self.path(),
                     self.interface(),
                     signal_name,
                 )
@@ -336,7 +324,7 @@ impl<'a> Proxy<'a> {
                 .conn
                 .subscribe_signal(
                     self.destination(),
-                    self.path().as_str(),
+                    self.path(),
                     self.interface(),
                     signal_name,
                 )
@@ -365,7 +353,7 @@ impl<'a> Proxy<'a> {
                         .conn
                         .unsubscribe_signal(
                             self.destination(),
-                            self.path().as_str(),
+                            self.path(),
                             self.interface(),
                             handler_info.signal_name,
                         )
