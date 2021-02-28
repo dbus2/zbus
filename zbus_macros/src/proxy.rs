@@ -253,6 +253,21 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                 &mut *self
             }
         }
+
+        impl<'c> #zbus::export::zvariant::Type for #proxy_name<'c> {
+            fn signature() -> #zbus::export::zvariant::Signature<'static> {
+                #zbus::export::zvariant::OwnedObjectPath::signature()
+            }
+        }
+
+        impl<'c> #zbus::export::serde::ser::Serialize for #proxy_name<'c> {
+            fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+            where
+                S: #zbus::export::serde::ser::Serializer,
+            {
+                String::serialize(&self.inner().path().to_string(), serializer)
+            }
+        }
     }
 }
 
