@@ -414,6 +414,7 @@ trait Authority {
     ) -> zbus::Result<()>;
 
     /// This signal is emitted when actions and/or authorizations change
+    #[dbus_proxy(signal)]
     fn changed(&self) -> fdo::Result<()>;
 
     /// The features supported by the currently used Authority backend.
