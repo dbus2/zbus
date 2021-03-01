@@ -249,9 +249,9 @@ where
                 let array_de = ArrayDeserializer::new(self)?;
 
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
-                    visitor.visit_map(array_de)
+                    visitor.visit_map(ArrayMapDeserializer(array_de))
                 } else {
-                    visitor.visit_seq(array_de)
+                    visitor.visit_seq(ArraySeqDeserializer(array_de))
                 }
             }
             STRUCT_SIG_START_CHAR => {
@@ -325,7 +325,7 @@ where
         let len = B::read_u32(de.0.next_slice(4)?) as usize;
         let element_signature = de.0.sig_parser.next_signature()?;
         let element_alignment = alignment_for_signature(&element_signature, EncodingFormat::DBus);
-        let element_signature_len = element_signature.len();
+        let mut element_signature_len = element_signature.len();
 
         // D-Bus requires padding for the first element even when there is no first element
         // (i-e empty array) so we parse padding already.
@@ -334,6 +334,7 @@ where
 
         if de.0.sig_parser.next_char() == DICT_ENTRY_SIG_START_CHAR {
             de.0.sig_parser.skip_char()?;
+            element_signature_len -= 1;
         }
 
         Ok(Self {
@@ -345,114 +346,11 @@ where
         })
     }
 
-    fn done(&self) -> bool {
-        self.de.0.pos == self.start + self.len
-    }
-}
-
-impl<'d, 'de, 'sig, 'f, B> SeqAccess<'de> for ArrayDeserializer<'d, 'de, 'sig, 'f, B>
-where
-    B: byteorder::ByteOrder,
-{
-    type Error = Error;
-
-    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+    fn next<T>(&mut self, seed: T, sig_parser: SignatureParser<'_>) -> Result<T::Value>
     where
         T: DeserializeSeed<'de>,
     {
-        if self.done() {
-            self.de
-                .0
-                .sig_parser
-                .skip_chars(self.element_signature_len)?;
-
-            return Ok(None);
-        }
-
-        self.de.0.parse_padding(self.element_alignment)?;
-
         let ctxt = EncodingContext::new_dbus(self.de.0.ctxt.position() + self.de.0.pos);
-        // We want to keep parsing the same signature repeatedly for each key so we use a
-        // disposable clone.
-        let sig_parser = self.de.0.sig_parser.clone();
-        self.de.0.sig_parser = sig_parser.clone();
-
-        let mut de = Deserializer::<B>(crate::DeserializerCommon {
-            ctxt,
-            sig_parser,
-            bytes: &self.de.0.bytes[self.de.0.pos..],
-            fds: self.de.0.fds,
-            pos: 0,
-            b: PhantomData,
-        });
-        let v = seed.deserialize(&mut de).map(Some);
-        self.de.0.pos += de.0.pos;
-
-        if self.de.0.pos > self.start + self.len {
-            return Err(serde::de::Error::invalid_length(
-                self.len,
-                &format!(">= {}", self.de.0.pos - self.start).as_str(),
-            ));
-        }
-
-        v
-    }
-}
-
-impl<'d, 'de, 'sig, 'f, B> MapAccess<'de> for ArrayDeserializer<'d, 'de, 'sig, 'f, B>
-where
-    B: byteorder::ByteOrder,
-{
-    type Error = Error;
-
-    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
-    where
-        K: DeserializeSeed<'de>,
-    {
-        if self.done() {
-            // Starting bracket was already skipped
-            self.de
-                .0
-                .sig_parser
-                .skip_chars(self.element_signature_len - 1)?;
-
-            return Ok(None);
-        }
-
-        self.de.0.parse_padding(self.element_alignment)?;
-
-        let ctxt = EncodingContext::new_dbus(self.de.0.ctxt.position() + self.de.0.pos);
-        let mut de = Deserializer::<B>(crate::DeserializerCommon {
-            ctxt,
-            sig_parser: self.de.0.sig_parser.clone(),
-            bytes: &self.de.0.bytes[self.de.0.pos..],
-            fds: self.de.0.fds,
-            pos: 0,
-            b: PhantomData,
-        });
-        let v = seed.deserialize(&mut de).map(Some);
-        self.de.0.pos += de.0.pos;
-
-        if self.de.0.pos > self.start + self.len {
-            return Err(serde::de::Error::invalid_length(
-                self.len,
-                &format!(">= {}", self.de.0.pos - self.start).as_str(),
-            ));
-        }
-
-        v
-    }
-
-    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
-    where
-        V: DeserializeSeed<'de>,
-    {
-        let ctxt = EncodingContext::new_dbus(self.de.0.ctxt.position() + self.de.0.pos);
-        // We want to keep parsing the same signature repeatedly for each key so we use a
-        // disposable clone.
-        let mut sig_parser = self.de.0.sig_parser.clone();
-        // Skip key signature (always 1 char)
-        sig_parser.skip_char()?;
 
         let mut de = Deserializer::<B>(crate::DeserializerCommon {
             ctxt,
@@ -473,6 +371,76 @@ where
         }
 
         v
+    }
+
+    fn next_element<T>(
+        &mut self,
+        seed: T,
+        sig_parser: SignatureParser<'_>,
+    ) -> Result<Option<T::Value>>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        if self.done() {
+            self.de
+                .0
+                .sig_parser
+                .skip_chars(self.element_signature_len)?;
+
+            return Ok(None);
+        }
+
+        self.de.0.parse_padding(self.element_alignment)?;
+
+        self.next(seed, sig_parser).map(Some)
+    }
+
+    fn done(&self) -> bool {
+        self.de.0.pos == self.start + self.len
+    }
+}
+
+struct ArraySeqDeserializer<'d, 'de, 'sig, 'f, B>(ArrayDeserializer<'d, 'de, 'sig, 'f, B>);
+
+impl<'d, 'de, 'sig, 'f, B> SeqAccess<'de> for ArraySeqDeserializer<'d, 'de, 'sig, 'f, B>
+where
+    B: byteorder::ByteOrder,
+{
+    type Error = Error;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        let sig_parser = self.0.de.0.sig_parser.clone();
+        self.0.next_element(seed, sig_parser)
+    }
+}
+
+struct ArrayMapDeserializer<'d, 'de, 'sig, 'f, B>(ArrayDeserializer<'d, 'de, 'sig, 'f, B>);
+
+impl<'d, 'de, 'sig, 'f, B> MapAccess<'de> for ArrayMapDeserializer<'d, 'de, 'sig, 'f, B>
+where
+    B: byteorder::ByteOrder,
+{
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
+    where
+        K: DeserializeSeed<'de>,
+    {
+        let sig_parser = self.0.de.0.sig_parser.clone();
+        self.0.next_element(seed, sig_parser)
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        let mut sig_parser = self.0.de.0.sig_parser.clone();
+        // Skip key signature (always 1 char)
+        sig_parser.skip_char()?;
+        self.0.next(seed, sig_parser)
     }
 }
 
