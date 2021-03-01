@@ -112,6 +112,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
 
     if !has_introspect_method {
         methods.extend(quote! {
+            #[doc = "Introspect the associated object, and return the XML description."]
             pub #usage fn introspect(&self) -> ::#zbus::fdo::Result<String> {
                 self.0.introspect()#wait
             }
