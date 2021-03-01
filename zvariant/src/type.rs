@@ -228,4 +228,18 @@ where
     }
 }
 
+#[cfg(feature = "serde_bytes")]
+impl Type for serde_bytes::Bytes {
+    fn signature() -> Signature<'static> {
+        Signature::from_str_unchecked("ay")
+    }
+}
+
+#[cfg(feature = "serde_bytes")]
+impl Type for serde_bytes::ByteBuf {
+    fn signature() -> Signature<'static> {
+        Signature::from_str_unchecked("ay")
+    }
+}
+
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
