@@ -9,6 +9,25 @@ use zvariant::{
 };
 use zvariant_derive::Type;
 
+fn fixed_size_array(c: &mut Criterion) {
+    let ay = vec![77u8; 100_000];
+    let ctxt = Context::<LE>::new_dbus(0);
+    let signature = Vec::<u8>::signature();
+    c.bench_function("byte_array_ser", |b| {
+        b.iter(|| {
+            to_bytes_for_signature(black_box(ctxt), black_box(&signature), black_box(&ay)).unwrap()
+        })
+    });
+    let enc = to_bytes_for_signature(ctxt, &signature, &ay).unwrap();
+    c.bench_function("byte_array_de", |b| {
+        b.iter(|| {
+            let _: Vec<u8> =
+                from_slice_for_signature(black_box(&enc), black_box(ctxt), black_box(&signature))
+                    .unwrap();
+        })
+    });
+}
+
 fn big_array_ser_and_de(c: &mut Criterion) {
     #[derive(Deserialize, Serialize, Type, PartialEq, Debug, Clone)]
     struct ZVField<'f> {
@@ -107,5 +126,5 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, big_array_ser_and_de);
+criterion_group!(benches, big_array_ser_and_de, fixed_size_array);
 criterion_main!(benches);
