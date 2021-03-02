@@ -155,11 +155,8 @@ where
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
-        let mut seq = self.serialize_seq(Some(v.len()))?;
-        for byte in v {
-            seq.serialize_element(byte)?;
-        }
-
+        let seq = self.serialize_seq(Some(v.len()))?;
+        seq.ser.0.write(v).map_err(Error::Io)?;
         seq.end()
     }
 

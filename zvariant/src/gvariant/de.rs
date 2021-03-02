@@ -109,10 +109,24 @@ where
     deserialize_basic!(deserialize_f64);
     deserialize_basic!(deserialize_identifier);
 
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let bytes = deserialize_ay(self)?;
+        visitor.visit_byte_buf(bytes.into())
+    }
+
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let bytes = deserialize_ay(self)?;
+        visitor.visit_borrowed_bytes(bytes)
+    }
+
     deserialize_as!(deserialize_char => deserialize_str);
     deserialize_as!(deserialize_string => deserialize_str);
-    deserialize_as!(deserialize_bytes => deserialize_seq);
-    deserialize_as!(deserialize_byte_buf => deserialize_seq);
     deserialize_as!(deserialize_tuple(_l: usize) => deserialize_struct("", &[]));
     deserialize_as!(deserialize_tuple_struct(n: &'static str, _l: usize) => deserialize_struct(n, &[]));
     deserialize_as!(deserialize_struct(_n: &'static str, _f: &'static [&'static str]) => deserialize_seq());
@@ -308,6 +322,20 @@ where
             phantom: PhantomData,
         })
     }
+}
+
+fn deserialize_ay<'de, 'sig, 'f, B>(de: &mut Deserializer<'de, 'sig, 'f, B>) -> Result<&'de [u8]>
+where
+    B: byteorder::ByteOrder,
+{
+    if de.0.sig_parser.next_signature()? != "ay" {
+        return Err(de::Error::invalid_type(de::Unexpected::Seq, &"ay"));
+    }
+
+    de.0.sig_parser.skip_char()?;
+    let ad = ArrayDeserializer::new(de)?;
+    let len = dbg!(ad.len);
+    de.0.next_slice(len)
 }
 
 struct ArrayDeserializer<'d, 'de, 'sig, 'f, B> {
