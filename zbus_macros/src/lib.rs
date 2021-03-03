@@ -33,6 +33,9 @@ mod utils;
 ///   register and deregister a handler for the signal, whose signature must match that of the
 ///   signature declaration.
 ///
+/// * `object` - methods that returns an [`ObjectPath`] can be annotated with the `object` attribute
+///   to specify the proxy object to be constructed from the returned [`ObjectPath`].
+///
 ///   NB: Any doc comments provided shall be appended to the ones added by the macro.
 ///
 /// (the expanded `impl` also provides an `introspect()` method, for convenience)
@@ -63,7 +66,18 @@ mod utils;
 ///
 ///     #[dbus_proxy(signal)]
 ///     fn some_signal(&self, arg1: &str, arg2: u32) -> fdo::Result<()>;
+///
+///     #[dbus_proxy(object = "SomeOtherIface")]
+///     // The method will return a `SomeOtherIfaceProxy` or `AsyncSomeOtherIfaceProxy`, depending on
+///     // whether it is called on `SomeIfaceProxy` or `AsyncSomeIfaceProxy`, respectively.
+///     fn some_method(&self, arg1: &str);
 /// };
+///
+/// #[dbus_proxy(
+///     interface = "org.test.SomeOtherIface",
+///     default_service = "org.test.SomeOtherService"
+/// )]
+/// trait SomeOtherIface {}
 ///
 /// let connection = Connection::new_session()?;
 /// let proxy = SomeIfaceProxy::new(&connection)?;
@@ -109,6 +123,7 @@ mod utils;
 /// [`zbus::azync::Proxy`]: https://docs.rs/zbus/2.0.0-beta.2/zbus/azync/struct.Proxy.html
 /// [`zbus::SignalReceiver::receive_for`]:
 /// https://docs.rs/zbus/1.5.0/zbus/struct.SignalReceiver.html#method.receive_for
+/// [`ObjectPath`]: https://docs.rs/zvariant/2.5.0/zvariant/struct.ObjectPath.html
 #[proc_macro_attribute]
 pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
