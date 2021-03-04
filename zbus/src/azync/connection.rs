@@ -591,6 +591,8 @@ impl Connection {
                             .remove_match(match_rule.as_str())
                             .await?;
                     }
+
+                    subscriptions.remove(&subscription_id);
                 }
 
                 Ok(true)
