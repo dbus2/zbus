@@ -472,7 +472,7 @@ impl SignalStream<'_> {
     }
 
     async fn close_(&mut self) -> Result<()> {
-        if let Some(id) = self.subscription_id {
+        if let Some(id) = self.subscription_id.take() {
             let _ = self.conn.unsubscribe_signal_by_id(id).await?;
         }
 
