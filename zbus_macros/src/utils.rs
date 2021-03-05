@@ -68,6 +68,7 @@ pub enum ItemAttribute {
     StructReturn,
     OutArgs(Vec<String>),
     Name(String),
+    Object(String),
 }
 
 impl ItemAttribute {
@@ -151,6 +152,7 @@ fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
         "signal" => Ok(ItemAttribute::Signal),
         "struct_return" => Ok(ItemAttribute::StructReturn),
         "out_args" => Ok(ItemAttribute::OutArgs(values)),
+        "object" => Ok(ItemAttribute::Object(values.remove(0))),
         s => panic!("Unknown item meta {}", s),
     }
 }
