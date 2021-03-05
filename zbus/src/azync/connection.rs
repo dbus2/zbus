@@ -300,12 +300,17 @@ impl Connection {
         for<'msg> P: Fn(&'msg Message) -> BoxFuture<'msg, Result<bool>>,
     {
         loop {
-            let mut queue = self.0.incoming_queue.lock().await;
-            for (i, msg) in queue.iter().enumerate() {
-                if predicate(msg).await? {
-                    // SAFETY: we got the index from the queue enumerator so this shouldn't ever
-                    // fail.
-                    return Ok(queue.remove(i).expect("removing queue item"));
+            {
+                // We keep all the queue operations in separate blocks to ensure we don't keep the
+                // queue locked unnecessarily while waiting for new messages on the socket and
+                // ending up starving `receive_specific` calls.
+                let mut queue = self.0.incoming_queue.lock().await;
+                for (i, msg) in queue.iter().enumerate() {
+                    if predicate(msg).await? {
+                        // SAFETY: we got the index from the queue enumerator so this shouldn't ever
+                        // fail.
+                        return Ok(queue.remove(i).expect("removing queue item"));
+                    }
                 }
             }
 
@@ -327,6 +332,7 @@ impl Connection {
             if predicate(&msg).await? {
                 return Ok(msg);
             } else {
+                let mut queue = self.0.incoming_queue.lock().await;
                 if queue.len() >= *self.0.max_queued.read().await {
                     // Create room by dropping the oldest message.
                     queue.pop_front();
@@ -585,6 +591,8 @@ impl Connection {
                             .remove_match(match_rule.as_str())
                             .await?;
                     }
+
+                    subscriptions.remove(&subscription_id);
                 }
 
                 Ok(true)
