@@ -5,6 +5,13 @@ use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 #[test]
 fn test_proxy() {
     #[dbus_proxy(
+        interface = "org.freedesktop.zbus.ProxyParam",
+        default_service = "org.freedesktop.zbus",
+        default_path = "/org/freedesktop/zbus/test"
+    )]
+    trait ProxyParam {}
+
+    #[dbus_proxy(
         interface = "org.freedesktop.zbus.Test",
         default_service = "org.freedesktop.zbus",
         default_path = "/org/freedesktop/zbus/test"
@@ -12,6 +19,12 @@ fn test_proxy() {
     trait Test {
         /// comment for a_test()
         fn a_test(&self, val: &str) -> zbus::Result<u32>;
+
+        /// The generated proxies implement both `zvariant::Type` and `serde::ser::Serialize`
+        /// which is useful to pass in a proxy as a param. It serializes it as an `ObjectPath`.
+        fn some_method<T>(&self, object_path: &T) -> zbus::Result<()>
+        where
+            T: Into<ProxyParamProxy<'c>> + serde::ser::Serialize + zvariant::Type;
 
         #[dbus_proxy(name = "CheckRENAMING")]
         fn check_renaming(&self) -> zbus::Result<Vec<u8>>;

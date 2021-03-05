@@ -104,7 +104,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             } else if is_signal {
                 gen_proxy_signal(&name, &method_name, &m, &usage, &wait, azync)
             } else {
-                gen_proxy_method_call(&name, &m, &usage, &wait)
+                gen_proxy_method_call(&name, &method_name, &m, &usage, &wait, azync)
             };
             methods.extend(m);
         }
@@ -253,24 +253,75 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                 &mut *self
             }
         }
+
+        impl<'c> #zbus::export::zvariant::Type for #proxy_name<'c> {
+            fn signature() -> #zbus::export::zvariant::Signature<'static> {
+                #zbus::export::zvariant::OwnedObjectPath::signature()
+            }
+        }
+
+        impl<'c> #zbus::export::serde::ser::Serialize for #proxy_name<'c> {
+            fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+            where
+                S: #zbus::export::serde::ser::Serializer,
+            {
+                String::serialize(&self.inner().path().to_string(), serializer)
+            }
+        }
     }
 }
 
 fn gen_proxy_method_call(
     method_name: &str,
+    snake_case_name: &str,
     m: &TraitItemMethod,
     usage: &TokenStream,
     wait: &TokenStream,
+    azync: bool,
 ) -> TokenStream {
+    let zbus = get_zbus_crate_ident();
     let doc = get_doc_attrs(&m.attrs);
     let args = m.sig.inputs.iter().filter_map(|arg| arg_ident(arg));
-    let signature = &m.sig;
+    let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
+    let proxy_object = attrs.iter().find_map(|x| match x {
+        ItemAttribute::Object(o) => {
+            if azync {
+                Some(format!("Async{}Proxy", o))
+            } else {
+                Some(format!("{}Proxy", o))
+            }
+        }
+        _ => None,
+    });
+    if let Some(proxy_name) = proxy_object {
+        let method = Ident::new(snake_case_name, Span::call_site());
+        let proxy = Ident::new(&proxy_name, Span::call_site());
+        let inputs = &m.sig.inputs;
+        quote! {
+            #(#doc)*
+            pub #usage fn #method(#inputs) -> ::#zbus::Result<#proxy<'_>> {
+                let object_path: ::#zbus::export::zvariant::OwnedObjectPath =
+                    self.0.call(
+                        #method_name,
+                        &(#(#args),*),
+                    )
+                    #wait?;
+                let proxy = #proxy::new_for_owned_path(
+                    self.0.connection().clone(),
+                    object_path.into_inner(),
+                )?;
+                Ok(proxy)
+            }
+        }
+    } else {
+        let signature = &m.sig;
 
-    quote! {
-        #(#doc)*
-        pub #usage #signature {
-            let reply = self.0.call(#method_name, &(#(#args),*))#wait?;
-            Ok(reply)
+        quote! {
+            #(#doc)*
+            pub #usage #signature {
+                let reply = self.0.call(#method_name, &(#(#args),*))#wait?;
+                Ok(reply)
+            }
         }
     }
 }
