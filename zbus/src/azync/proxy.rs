@@ -456,7 +456,10 @@ impl<'a> Proxy<'a> {
 /// A [`stream::Stream`] implementation that yields signal [messages](`Message`).
 ///
 /// Use [`Proxy::receive_signal`] to create an instance of this type.
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 pub struct SignalStream<'s> {
+    #[derivative(Debug = "ignore")]
     stream: stream::BoxStream<'s, Message>,
     conn: Connection,
     subscription_id: Option<u64>,
