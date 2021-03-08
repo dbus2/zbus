@@ -666,6 +666,15 @@ impl Connection {
     pub async fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
         Self::new(Authenticated::for_address(address).await?, bus_connection).await
     }
+
+    /// Shutdown `Connection`.
+    ///
+    /// Shutdown the underlying socket.
+    ///
+    /// TODO: define the behavior for flush/async and subsequent Connection calls.
+    pub async fn shutdown(&self) -> Result<()> {
+        Ok(self.0.raw_in_conn.lock().await.socket().shutdown()?)
+    }
 }
 
 /// A [`futures_sink::Sink`] implementation that consumes [`Message`] instances.

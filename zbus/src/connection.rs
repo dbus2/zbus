@@ -275,6 +275,15 @@ impl Connection {
     pub fn into_inner(self) -> azync::Connection {
         self.0
     }
+
+    /// Shutdown `Connection`.
+    ///
+    /// Shutdown the underlying socket.
+    ///
+    /// TODO: define the behavior for flush/async and subsequent Connection calls.
+    pub fn shutdown(&self) -> Result<()> {
+        block_on(self.0.shutdown())
+    }
 }
 
 impl From<azync::Connection> for Connection {
@@ -311,6 +320,7 @@ mod tests {
 
         assert!(matches!(c.receive_message().unwrap_err(), Error::Io(_)));
 
+        c.shutdown().expect("failed to shutdown the connection");
         let val = server_thread.join().expect("failed to join server thread");
         assert_eq!(val, "yay");
     }
