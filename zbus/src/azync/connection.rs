@@ -730,7 +730,7 @@ impl futures_sink::Sink<Message> for MessageSink<'_> {
             Poll::Pending => return Poll::Pending,
         }
 
-        Poll::Ready((sink.raw_conn).close())
+        Poll::Ready((sink.raw_conn).shutdown())
     }
 }
 

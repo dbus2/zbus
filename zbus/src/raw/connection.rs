@@ -149,11 +149,11 @@ impl<S: Socket> Connection<S> {
         Ok(msg)
     }
 
-    /// Close the connection.
+    /// Shutdown the connection.
     ///
     /// After this call, all reading and writing operations will fail.
-    pub fn close(&self) -> crate::Result<()> {
-        self.socket().close().map_err(|e| e.into())
+    pub fn shutdown(&self) -> crate::Result<()> {
+        self.socket().shutdown().map_err(|e| e.into())
     }
 
     /// Access the underlying socket

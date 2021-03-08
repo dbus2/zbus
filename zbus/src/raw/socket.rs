@@ -46,13 +46,13 @@ pub trait Socket: std::fmt::Debug + AsRawFd + Send + Sync {
     /// will return `Err(ErrorKind::InvalidInput)`.
     fn sendmsg(&mut self, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize>;
 
-    /// Close the socket.
+    /// Shutdown the socket.
     ///
     /// After this call, all reading and writing operations will fail.
     ///
     /// NB: All currently implementations don't block so this method will never return
     /// `Err(Errorkind::Wouldblock)`.
-    fn close(&self) -> io::Result<()>;
+    fn shutdown(&self) -> io::Result<()>;
 
     /// Creates a new independently owned handle to the underlying socket.
     ///
@@ -74,8 +74,8 @@ impl Socket for Box<dyn Socket> {
         (**self).sendmsg(buffer, fds)
     }
 
-    fn close(&self) -> io::Result<()> {
-        (**self).close()
+    fn shutdown(&self) -> io::Result<()> {
+        (**self).shutdown()
     }
 
     fn try_clone(&self) -> io::Result<Self> {
@@ -138,7 +138,7 @@ impl Socket for UnixStream {
         }
     }
 
-    fn close(&self) -> io::Result<()> {
+    fn shutdown(&self) -> io::Result<()> {
         self.shutdown(std::net::Shutdown::Both)
     }
 
@@ -159,8 +159,8 @@ where
         self.get_mut().sendmsg(buffer, fds)
     }
 
-    fn close(&self) -> io::Result<()> {
-        self.get_ref().close()
+    fn shutdown(&self) -> io::Result<()> {
+        self.get_ref().shutdown()
     }
 
     fn try_clone(&self) -> io::Result<Box<dyn Socket>> {
