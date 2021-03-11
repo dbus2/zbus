@@ -32,6 +32,9 @@ pub enum Error {
     Unsupported,
     /// A [`fdo::Error`] tranformed into [`Error`].
     FDO(Box<fdo::Error>),
+    #[cfg(feature = "xml")]
+    /// An XML error
+    SerdeXml(serde_xml_rs::Error),
 }
 
 impl PartialEq for Error {
@@ -57,6 +60,8 @@ impl error::Error for Error {
             Error::InvalidGUID => None,
             Error::Unsupported => None,
             Error::FDO(e) => Some(e),
+            #[cfg(feature = "xml")]
+            Error::SerdeXml(e) => Some(e),
         }
     }
 }
@@ -80,6 +85,8 @@ impl fmt::Display for Error {
             Error::InvalidGUID => write!(f, "Invalid GUID"),
             Error::Unsupported => write!(f, "Connection support is lacking"),
             Error::FDO(e) => write!(f, "{}", e),
+            #[cfg(feature = "xml")]
+            Error::SerdeXml(e) => write!(f, "XML error: {}", e),
         }
     }
 }
@@ -116,6 +123,13 @@ impl From<fdo::Error> for Error {
             fdo::Error::ZBus(e) => e,
             e => Error::FDO(Box::new(e)),
         }
+    }
+}
+
+#[cfg(feature = "xml")]
+impl From<serde_xml_rs::Error> for Error {
+    fn from(val: serde_xml_rs::Error) -> Self {
+        Error::SerdeXml(val)
     }
 }
 
