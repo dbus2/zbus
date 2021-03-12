@@ -17,11 +17,13 @@
 //! [`org.freedesktop.DBus.Introspectable`]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-introspectable
 
 use serde::{Deserialize, Serialize};
-use serde_xml_rs::{from_reader, from_str, to_writer, Error};
+use serde_xml_rs::{from_reader, from_str, to_writer};
 use std::{
     io::{Read, Write},
     result::Result,
 };
+
+use crate::Error;
 
 // note: serde-xml-rs doesnt handle nicely interleaved elements, so we have to use enums:
 // https://github.com/RReverser/serde-xml-rs/issues/55
@@ -248,12 +250,12 @@ pub struct Node {
 impl Node {
     /// Parse the introspection XML document from reader.
     pub fn from_reader<R: Read>(reader: R) -> Result<Node, Error> {
-        from_reader(reader)
+        Ok(from_reader(reader)?)
     }
 
     /// Write the XML document to writer.
     pub fn to_writer<W: Write>(&self, writer: W) -> Result<(), Error> {
-        to_writer(writer, &self)
+        Ok(to_writer(writer, &self)?)
     }
 
     /// Returns the node name, if any.
@@ -277,7 +279,7 @@ impl std::str::FromStr for Node {
 
     /// Parse the introspection XML document from `s`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        from_str(s)
+        Ok(from_str(s)?)
     }
 }
 
