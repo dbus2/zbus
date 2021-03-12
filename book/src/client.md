@@ -363,8 +363,8 @@ props.connect_properties_changed(|iface, changed, _| {
 }).unwrap();
 
 let mut receiver = zbus::SignalReceiver::new(conn);
-receiver.receive_for(&client);
-receiver.receive_for(&props);
+receiver.receive_for(&client).unwrap();
+receiver.receive_for(&props).unwrap();
 
 client.start().unwrap();
 

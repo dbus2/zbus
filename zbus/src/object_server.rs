@@ -539,7 +539,14 @@ impl ObjectServer {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, collections::HashMap, error::Error, rc::Rc, thread};
+    use std::{
+        cell::Cell,
+        collections::HashMap,
+        error::Error,
+        rc::Rc,
+        sync::mpsc::{channel, Sender},
+        thread,
+    };
 
     use ntest::timeout;
     use serde::{Deserialize, Serialize};
@@ -692,7 +699,7 @@ mod tests {
         assert_eq!(map["bye"], "now");
     }
 
-    fn my_iface_test() -> std::result::Result<u32, Box<dyn Error>> {
+    fn my_iface_test(tx: Sender<()>) -> std::result::Result<u32, Box<dyn Error>> {
         let conn = Connection::new_session()?;
         let proxy = MyIfaceProxy::new_for(
             &conn,
@@ -713,6 +720,8 @@ mod tests {
                 Ok(())
             })
             .unwrap();
+        tx.send(()).unwrap();
+
         props_proxy.next_signal().unwrap();
 
         proxy.ping()?;
@@ -775,9 +784,7 @@ mod tests {
     #[test]
     #[timeout(2000)]
     fn basic_iface() {
-        let child = thread::spawn(|| my_iface_test().expect("child failed"));
-        // Wait a bit for the listener to be ready
-        thread::sleep(std::time::Duration::from_secs(1));
+        let (tx, rx) = channel::<()>();
 
         let conn = Connection::new_session().unwrap();
         let mut object_server = ObjectServer::new(&conn);
@@ -790,6 +797,10 @@ mod tests {
                 fdo::RequestNameFlags::ReplaceExisting.into(),
             )
             .unwrap();
+
+        let child = thread::spawn(move || my_iface_test(tx).expect("child failed"));
+        // Wait for the listener to be ready
+        rx.recv().unwrap();
 
         let iface = MyIfaceImpl::new(action.clone());
         object_server

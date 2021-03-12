@@ -4,6 +4,7 @@ use futures_util::{
     future::FutureExt,
     stream::{unfold, StreamExt},
 };
+use once_cell::sync::OnceCell;
 use slotmap::{new_key_type, SlotMap};
 use std::{
     borrow::Cow,
@@ -100,6 +101,7 @@ struct ProxyCore<'a> {
     destination: Cow<'a, str>,
     path: ObjectPath<'a>,
     interface: Cow<'a, str>,
+    dest_unique_name: OnceCell<String>,
 }
 
 impl<'a> Proxy<'a> {
@@ -116,6 +118,7 @@ impl<'a> Proxy<'a> {
                 destination: Cow::from(destination),
                 path: path.into_object_path()?,
                 interface: Cow::from(interface),
+                dest_unique_name: OnceCell::new(),
             },
             sig_handlers: Mutex::new(SlotMap::with_key()),
         })
@@ -135,6 +138,7 @@ impl<'a> Proxy<'a> {
                 destination: Cow::from(destination),
                 path: path.into_object_path()?,
                 interface: Cow::from(interface),
+                dest_unique_name: OnceCell::new(),
             },
             sig_handlers: Mutex::new(SlotMap::with_key()),
         })
@@ -247,6 +251,12 @@ impl<'a> Proxy<'a> {
     /// done with the stream, a synchronous D-Bus method call is made in the destructor of the
     /// stream. If you'd like to avoid this, you must close the stream explicitly, using the
     /// [`SignalStream::close`] method.
+    ///
+    /// # Errors
+    ///
+    /// Apart from general I/O errors that can result from socket communications, calling this
+    /// method will also result in an error if the destination service has not yet registered its
+    /// well-known name with the bus (assuming you're using the well-known name as destination).
     pub async fn receive_signal(&self, signal_name: &'static str) -> Result<SignalStream<'a>> {
         let subscription_id = if self.core.conn.is_bus() {
             let id = self
@@ -265,6 +275,8 @@ impl<'a> Proxy<'a> {
             None
         };
 
+        self.resolve_name().await?;
+
         let proxy = self.core.clone();
         let stream = unfold((proxy, signal_name), |(proxy, signal_name)| async move {
             proxy
@@ -274,9 +286,11 @@ impl<'a> Proxy<'a> {
                         Ok(hdr) => hdr,
                         Err(_) => return ready(Ok(false)).boxed(),
                     };
+                    let expected_sender = proxy.dest_unique_name.get().map(|s| s.as_str());
 
                     ready(Ok(hdr.primary().msg_type() == crate::MessageType::Signal
                         && hdr.interface() == Ok(Some(&proxy.interface))
+                        && hdr.sender() == Ok(expected_sender)
                         && hdr.path() == Ok(Some(&proxy.path))
                         && hdr.member() == Ok(Some(signal_name))))
                     .boxed()
@@ -373,6 +387,10 @@ impl<'a> Proxy<'a> {
     ///
     /// If the signal message was handled by a handler, `Ok(None)` is returned. Otherwise, the
     /// received message is returned.
+    ///
+    /// # Errors
+    ///
+    /// This method returns the same errors as [`Self::receive_signal`].
     pub async fn next_signal(&self) -> Result<Option<Message>> {
         let msg = {
             // We want to keep a lock on the handlers during `receive_specific` call but we also
@@ -382,6 +400,8 @@ impl<'a> Proxy<'a> {
             let handlers = self.sig_handlers.lock().await;
             let signals: Vec<&str> = handlers.values().map(|info| info.signal_name).collect();
 
+            self.resolve_name().await?;
+
             self.core
                 .conn
                 .receive_specific(move |msg| {
@@ -390,8 +410,11 @@ impl<'a> Proxy<'a> {
                         Ok(hdr) => match hdr.member() {
                             Ok(None) | Err(_) => false,
                             Ok(Some(member)) => {
+                                let expected_sender = self.destination_unique_name();
+
                                 hdr.interface() == Ok(Some(self.interface()))
                                     && hdr.path() == Ok(Some(self.path()))
+                                    && hdr.sender() == Ok(expected_sender)
                                     && hdr.message_type() == Ok(crate::MessageType::Signal)
                                     && signals.contains(&member)
                             }
@@ -450,6 +473,41 @@ impl<'a> Proxy<'a> {
             .await
             .values()
             .any(|info| info.signal_name == signal_name)
+    }
+
+    /// Resolve the destination name.
+    ///
+    /// Typically you would want to create the [`Proxy`] with the well-known name of the destination
+    /// service but signal messages only specify the unique name of the peer (except for signals
+    /// from `org.freedesktop.DBus` service). This means we have no means to check the sender of
+    /// the message. While in most cases this will not be a problem, it becomes a problem if you
+    /// need to commmunicate with multiple services exposing the same interface, over the same
+    /// connection. Hence the need for this method.
+    pub(crate) async fn resolve_name(&self) -> Result<()> {
+        if self.core.dest_unique_name.get().is_some() {
+            // Already resolved the name.
+            return Ok(());
+        }
+
+        let destination = &self.core.destination;
+        let unique_name = if destination.starts_with(':') || destination == "org.freedesktop.DBus" {
+            destination.to_string()
+        } else {
+            fdo::AsyncDBusProxy::new(&self.core.conn)?
+                .get_name_owner(destination)
+                .await?
+        };
+        self.core
+            .dest_unique_name
+            .set(unique_name)
+            // programmer (probably our) error if this fails.
+            .expect("Attempted to set dest_unique_name twice");
+
+        Ok(())
+    }
+
+    pub(crate) fn destination_unique_name(&self) -> Option<&str> {
+        self.core.dest_unique_name.get().map(|s| s.as_str())
     }
 }
 
