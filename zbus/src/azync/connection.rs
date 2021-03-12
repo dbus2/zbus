@@ -398,25 +398,28 @@ impl Connection {
         )?;
         let serial = self.send_message(m).await?;
 
-        loop {
-            match self
-                .receive_specific(move |m| {
-                    async move {
-                        let h = m.header()?;
+        match self
+            .receive_specific(move |m| {
+                async move {
+                    let h = m.header()?;
+                    let msg_type = h.message_type()?;
 
-                        Ok(h.reply_serial()? == Some(serial))
-                    }
-                    .boxed()
-                })
-                .await
-            {
-                Ok(m) => match m.header()?.message_type()? {
-                    MessageType::Error => return Err(m.into()),
-                    MessageType::MethodReturn => return Ok(m),
-                    _ => continue,
-                },
-                Err(e) => return Err(e),
-            };
+                    Ok(
+                        (msg_type == MessageType::Error || msg_type == MessageType::MethodReturn)
+                            && h.reply_serial()? == Some(serial),
+                    )
+                }
+                .boxed()
+            })
+            .await
+        {
+            Ok(m) => match m.header()?.message_type()? {
+                MessageType::Error => Err(m.into()),
+                MessageType::MethodReturn => Ok(m),
+                // We already established the msg type in `receive_specific` call above.
+                _ => unreachable!(),
+            },
+            Err(e) => Err(e),
         }
     }
 
