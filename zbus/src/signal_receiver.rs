@@ -72,7 +72,7 @@ impl<'r, 'p> SignalReceiver<'r, 'p> {
     ///
     /// This method will panic if you try to add a proxy with a different associated connection than
     /// the one associated with this receiver.
-    pub fn receive_for<'a: 'p, 'b: 'r, P>(&mut self, proxy: &'b P)
+    pub fn receive_for<'a: 'p, 'b: 'r, P>(&mut self, proxy: &'b P) -> Result<()>
     where
         P: AsRef<Proxy<'a>>,
     {
@@ -81,6 +81,8 @@ impl<'r, 'p> SignalReceiver<'r, 'p> {
 
         let key = ProxyKey::from(proxy);
         self.proxies.insert(key, proxy);
+
+        Ok(())
     }
 
     /// Received and handle the next incoming signal on the associated connection.
@@ -170,7 +172,7 @@ mod tests {
 
             Ok(())
         })?;
-        receiver.receive_for(&proxy1);
+        receiver.receive_for(&proxy1)?;
 
         let proxy2 = MultiSignalProxy::new_for(
             &conn,
@@ -184,7 +186,7 @@ mod tests {
 
             Ok(())
         })?;
-        receiver.receive_for(&proxy2);
+        receiver.receive_for(&proxy2)?;
 
         proxy1.emit_it("hi")?;
         proxy2.emit_it("bye")?;
