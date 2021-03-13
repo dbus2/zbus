@@ -1,5 +1,5 @@
 use async_io::{block_on, Async};
-use async_lock::{Mutex, MutexGuard, RwLock};
+use async_lock::{Mutex, MutexGuard};
 use once_cell::sync::OnceCell;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap, VecDeque},
@@ -12,7 +12,7 @@ use std::{
     },
     pin::Pin,
     sync::{
-        atomic::{AtomicUsize, Ordering::SeqCst},
+        atomic::{AtomicU32, AtomicUsize, Ordering::SeqCst},
         Arc,
     },
     task::{Context, Poll},
@@ -110,7 +110,7 @@ struct ConnectionInner<S> {
     raw_in_conn: Mutex<RawConnection<Async<S>>>,
     raw_out_conn: Mutex<RawConnection<Async<S>>>,
     // Serial number for next outgoing message
-    serial: Mutex<u32>,
+    serial: AtomicU32,
 
     // Queue of incoming messages
     incoming_queue: Mutex<VecDeque<Result<Message>>>,
@@ -122,7 +122,7 @@ struct ConnectionInner<S> {
     num_consumers: AtomicUsize,
 
     // Max number of messages to queue
-    max_queued: RwLock<usize>,
+    max_queued: AtomicUsize,
 
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 }
@@ -494,7 +494,7 @@ impl Connection {
     ///
     /// This method can fail if `msg` is corrupt.
     pub async fn assign_serial_num(&self, msg: &mut Message) -> Result<u32> {
-        let serial = self.next_serial().await;
+        let serial = self.next_serial();
         msg.modify_primary_header(|primary| {
             primary.set_serial_num(serial);
 
@@ -510,8 +510,8 @@ impl Connection {
     }
 
     /// Max number of messages to queue.
-    pub async fn max_queued(&self) -> usize {
-        *self.0.max_queued.read().await
+    pub fn max_queued(&self) -> usize {
+        self.0.max_queued.load(SeqCst)
     }
 
     /// Set the max number of messages to queue.
@@ -530,9 +530,8 @@ impl Connection {
     ///# block_on(async {
     /// let conn = Connection::new_session()
     ///     .await?
-    ///     .set_max_queued(30)
-    ///     .await;
-    /// assert_eq!(conn.max_queued().await, 30);
+    ///     .set_max_queued(30);
+    /// assert_eq!(conn.max_queued(), 30);
     ///
     ///#     Ok::<(), zbus::Error>(())
     ///# });
@@ -540,8 +539,8 @@ impl Connection {
     /// // Do something usefull with `conn`..
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub async fn set_max_queued(self, max: usize) -> Self {
-        *self.0.max_queued.write().await = max;
+    pub fn set_max_queued(self, max: usize) -> Self {
+        self.0.max_queued.store(max, SeqCst);
 
         self
     }
@@ -656,13 +655,13 @@ impl Connection {
             server_guid: auth.server_guid,
             cap_unix_fd: auth.cap_unix_fd,
             bus_conn: bus_connection,
-            serial: Mutex::new(1),
+            serial: AtomicU32::new(1),
             unique_name: OnceCell::new(),
             incoming_queue: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
             msg_available_event: Event::new(),
             num_consumers_event: Event::new(),
             num_consumers: AtomicUsize::new(0),
-            max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
+            max_queued: AtomicUsize::new(DEFAULT_MAX_QUEUED),
             signal_subscriptions: Mutex::new(HashMap::new()),
         }));
 
@@ -674,12 +673,8 @@ impl Connection {
         connection.hello_bus().await
     }
 
-    async fn next_serial(&self) -> u32 {
-        let mut serial = self.0.serial.lock().await;
-        let current = *serial;
-        *serial = current + 1;
-
-        current
+    fn next_serial(&self) -> u32 {
+        self.0.serial.fetch_add(1, SeqCst)
     }
 
     /// Create a `Connection` to the session/user message bus.
@@ -741,7 +736,7 @@ impl Connection {
             };
 
             let mut queue = self.0.incoming_queue.lock().await;
-            if queue.len() >= *self.0.max_queued.read().await {
+            if queue.len() >= self.0.max_queued.load(SeqCst) {
                 // Create room by dropping the oldest message.
                 queue.pop_front();
             }
@@ -942,10 +937,10 @@ mod tests {
 
     async fn test_serial_monotonically_increases() {
         let c = Connection::new_session().await.unwrap();
-        let serial = c.next_serial().await + 1;
+        let serial = c.next_serial() + 1;
 
         for next in serial..serial + 10 {
-            assert_eq!(next, c.next_serial().await);
+            assert_eq!(next, c.next_serial());
         }
     }
 }
