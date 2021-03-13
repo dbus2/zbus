@@ -9,6 +9,7 @@ use zvariant::ObjectPath;
 #[derive(Hash, Eq, PartialEq)]
 struct ProxyKey<'key> {
     interface: Cow<'key, str>,
+    destination: Cow<'key, str>,
     path: ObjectPath<'key>,
 }
 
@@ -21,6 +22,14 @@ where
         ProxyKey {
             interface: Cow::from(proxy.interface().to_owned()),
             path: proxy.path().to_owned(),
+            // SAFETY: we ensure proxy's name is resolved before creating a key for it, in
+            // `SignalReceiver::receive_for` method.
+            destination: Cow::from(
+                proxy
+                    .destination_unique_name()
+                    .expect("Destination unique name")
+                    .to_owned(),
+            ),
         }
     }
 }
@@ -29,12 +38,13 @@ impl<'key> TryFrom<&'key MessageHeader<'_>> for ProxyKey<'key> {
     type Error = Error;
 
     fn try_from(hdr: &'key MessageHeader<'_>) -> Result<Self> {
-        match (hdr.interface()?, hdr.path()?.cloned()) {
-            (Some(interface), Some(path)) => Ok(ProxyKey {
+        match (hdr.interface()?, hdr.path()?.cloned(), hdr.sender()?) {
+            (Some(interface), Some(path), Some(destination)) => Ok(ProxyKey {
                 interface: Cow::from(interface),
+                destination: Cow::from(destination),
                 path,
             }),
-            (_, _) => Err(Error::Message(crate::MessageError::MissingField)),
+            (_, _, _) => Err(Error::Message(crate::MessageError::MissingField)),
         }
     }
 }
@@ -72,15 +82,19 @@ impl<'r, 'p> SignalReceiver<'r, 'p> {
     ///
     /// This method will panic if you try to add a proxy with a different associated connection than
     /// the one associated with this receiver.
-    pub fn receive_for<'a: 'p, 'b: 'r, P>(&mut self, proxy: &'b P)
+    pub fn receive_for<'a: 'p, 'b: 'r, P>(&mut self, proxy: &'b P) -> Result<()>
     where
         P: AsRef<Proxy<'a>>,
     {
         let proxy = proxy.as_ref();
         assert_eq!(proxy.connection().unique_name(), self.conn.unique_name());
+        // Ensure the destination name is resolved.
+        proxy.resolve_name()?;
 
         let key = ProxyKey::from(proxy);
         self.proxies.insert(key, proxy);
+
+        Ok(())
     }
 
     /// Received and handle the next incoming signal on the associated connection.
@@ -170,7 +184,7 @@ mod tests {
 
             Ok(())
         })?;
-        receiver.receive_for(&proxy1);
+        receiver.receive_for(&proxy1)?;
 
         let proxy2 = MultiSignalProxy::new_for(
             &conn,
@@ -184,7 +198,7 @@ mod tests {
 
             Ok(())
         })?;
-        receiver.receive_for(&proxy2);
+        receiver.receive_for(&proxy2)?;
 
         proxy1.emit_it("hi")?;
         proxy2.emit_it("bye")?;

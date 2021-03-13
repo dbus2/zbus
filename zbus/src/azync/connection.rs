@@ -1,4 +1,4 @@
-use async_io::Async;
+use async_io::{block_on, Async};
 use async_lock::{Mutex, MutexGuard, RwLock};
 use once_cell::sync::OnceCell;
 use std::{
@@ -10,13 +10,21 @@ use std::{
         net::UnixStream,
     },
     pin::Pin,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering::SeqCst},
+        Arc,
+    },
     task::{Context, Poll},
 };
 use zvariant::{IntoObjectPath, ObjectPath};
 
+use event_listener::Event;
 use futures_core::{future::BoxFuture, stream};
-use futures_util::{future::FutureExt, sink::SinkExt, stream::TryStreamExt};
+use futures_util::{
+    future::{select, Either, FutureExt},
+    sink::SinkExt,
+    stream::TryStreamExt,
+};
 
 use crate::{
     azync::Authenticated,
@@ -101,7 +109,13 @@ struct ConnectionInner<S> {
     serial: Mutex<u32>,
 
     // Queue of incoming messages
-    incoming_queue: Mutex<VecDeque<Message>>,
+    incoming_queue: Mutex<VecDeque<Result<Message>>>,
+
+    // To notify the waiting calls on `receive_message` when new msg is available on the queue.
+    msg_available_event: Event,
+    // To notify msg receeiver task about changes in `num_consumers`.
+    num_consumers_event: Event,
+    num_consumers: AtomicUsize,
 
     // Max number of messages to queue
     max_queued: RwLock<usize>,
@@ -299,48 +313,48 @@ impl Connection {
     where
         for<'msg> P: Fn(&'msg Message) -> BoxFuture<'msg, Result<bool>>,
     {
-        loop {
+        let mut first_iteration = true;
+        let prev_num_consumers = self.0.num_consumers.fetch_add(1, SeqCst);
+
+        let msg = 'outer: loop {
+            let msg_available = self.0.msg_available_event.listen();
             {
                 // We keep all the queue operations in separate blocks to ensure we don't keep the
-                // queue locked unnecessarily while waiting for new messages on the socket and
-                // ending up starving `receive_specific` calls.
+                // queue locked unnecessarily while waiting for new messages ending up starving
+                // `receive_specific` calls.
                 let mut queue = self.0.incoming_queue.lock().await;
                 for (i, msg) in queue.iter().enumerate() {
-                    if predicate(msg).await? {
+                    let found = match msg {
+                        Ok(msg) => predicate(msg).await?,
+                        Err(_) => true,
+                    };
+
+                    if found {
                         // SAFETY: we got the index from the queue enumerator so this shouldn't ever
                         // fail.
-                        return Ok(queue.remove(i).expect("removing queue item"));
+                        break 'outer queue.remove(i).expect("removing queue item");
                     }
                 }
             }
 
-            let mut stream = MessageStream {
-                raw_conn: self.0.raw_in_conn.lock().await,
-                incoming_queue: None,
-            };
-            let msg = match stream.try_next().await? {
-                Some(msg) => msg,
-                None => {
-                    // If MessageStream gives us None, that means the socket was closed
-                    return Err(Error::Io(io::Error::new(
-                        ErrorKind::BrokenPipe,
-                        "socket closed",
-                    )));
-                }
-            };
+            if first_iteration {
+                first_iteration = false;
 
-            if predicate(&msg).await? {
-                return Ok(msg);
-            } else {
-                let mut queue = self.0.incoming_queue.lock().await;
-                if queue.len() >= *self.0.max_queued.read().await {
-                    // Create room by dropping the oldest message.
-                    queue.pop_front();
-                }
+                if prev_num_consumers == 0 {
+                    let conn = self.clone();
 
-                queue.push_back(msg);
+                    // Start the producer task
+                    std::thread::spawn(move || block_on(conn.receive_msg()));
+                }
             }
-        }
+
+            msg_available.await;
+        };
+
+        self.0.num_consumers.fetch_sub(1, SeqCst);
+        self.0.num_consumers_event.notify(1);
+
+        msg
     }
 
     /// Send `msg` to the peer.
@@ -384,25 +398,28 @@ impl Connection {
         )?;
         let serial = self.send_message(m).await?;
 
-        loop {
-            match self
-                .receive_specific(move |m| {
-                    async move {
-                        let h = m.header()?;
+        match self
+            .receive_specific(move |m| {
+                async move {
+                    let h = m.header()?;
+                    let msg_type = h.message_type()?;
 
-                        Ok(h.reply_serial()? == Some(serial))
-                    }
-                    .boxed()
-                })
-                .await
-            {
-                Ok(m) => match m.header()?.message_type()? {
-                    MessageType::Error => return Err(m.into()),
-                    MessageType::MethodReturn => return Ok(m),
-                    _ => continue,
-                },
-                Err(e) => return Err(e),
-            };
+                    Ok(
+                        (msg_type == MessageType::Error || msg_type == MessageType::MethodReturn)
+                            && h.reply_serial()? == Some(serial),
+                    )
+                }
+                .boxed()
+            })
+            .await
+        {
+            Ok(m) => match m.header()?.message_type()? {
+                MessageType::Error => Err(m.into()),
+                MessageType::MethodReturn => Ok(m),
+                // We already established the msg type in `receive_specific` call above.
+                _ => unreachable!(),
+            },
+            Err(e) => Err(e),
         }
     }
 
@@ -630,6 +647,9 @@ impl Connection {
             serial: Mutex::new(1),
             unique_name: OnceCell::new(),
             incoming_queue: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
+            msg_available_event: Event::new(),
+            num_consumers_event: Event::new(),
+            num_consumers: AtomicUsize::new(0),
             max_queued: RwLock::new(DEFAULT_MAX_QUEUED),
             signal_subscriptions: Mutex::new(HashMap::new()),
         }));
@@ -665,6 +685,66 @@ impl Connection {
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub async fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
         Self::new(Authenticated::for_address(address).await?, bus_connection).await
+    }
+
+    // Keep receiving messages and put them on the queue until there are consumers
+    // (`receive_specific` callers basically).
+    async fn receive_msg(&self) {
+        loop {
+            let raw_conn = self.0.raw_in_conn.lock().await;
+
+            let mut stream = MessageStream {
+                raw_conn,
+                incoming_queue: None,
+            };
+            let msg = match select(
+                Box::pin(stream.try_next()),
+                self.0.num_consumers_event.listen(),
+            )
+            .await
+            {
+                Either::Left((msg, _)) => msg,
+                Either::Right((_, _)) => {
+                    if self.0.num_consumers.load(SeqCst) == 0 {
+                        break;
+                    } else {
+                        continue;
+                    }
+                }
+            };
+
+            let msg = match msg {
+                Ok(Some(msg)) => {
+                    //print_msg(&msg, "zb: queueing ");
+                    Ok(msg)
+                }
+                Ok(None) => {
+                    // If MessageStream gives us None, that means the socket was closed
+                    Err(Error::Io(io::Error::new(
+                        ErrorKind::BrokenPipe,
+                        "socket closed",
+                    )))
+                }
+                Err(e) => Err(e),
+            };
+
+            let mut queue = self.0.incoming_queue.lock().await;
+            if queue.len() >= *self.0.max_queued.read().await {
+                // Create room by dropping the oldest message.
+                queue.pop_front();
+            }
+
+            queue.push_back(msg);
+
+            // The queue lock is held here so num_consumers can't change here between the time its
+            // value is loaded and loop iteration ends.
+            let num_consumers = self.0.num_consumers.load(SeqCst);
+            if num_consumers > 0 {
+                self.0.msg_available_event.notify(num_consumers);
+            } else {
+                break;
+            }
+        }
     }
 }
 
@@ -746,7 +826,7 @@ impl futures_sink::Sink<Message> for MessageSink<'_> {
 /// recommended not to use such a combination.
 pub struct MessageStream<'s> {
     raw_conn: MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
-    incoming_queue: Option<MutexGuard<'s, VecDeque<Message>>>,
+    incoming_queue: Option<MutexGuard<'s, VecDeque<Result<Message>>>>,
 }
 
 impl<'s> stream::Stream for MessageStream<'s> {
@@ -757,7 +837,7 @@ impl<'s> stream::Stream for MessageStream<'s> {
 
         if let Some(queue) = &mut stream.incoming_queue {
             if let Some(msg) = queue.pop_front() {
-                return Poll::Ready(Some(Ok(msg)));
+                return Poll::Ready(Some(msg));
             }
         }
 

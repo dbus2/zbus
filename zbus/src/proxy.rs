@@ -208,6 +208,12 @@ impl<'a> Proxy<'a> {
     ///
     /// If the signal message was handled by a handler, `Ok(None)` is returned. Otherwise, the
     /// received message is returned.
+    ///
+    /// # Errors
+    ///
+    /// Apart from general I/O errors that can result from socket communications, calling this
+    /// method will also result in an error if the destination service has not yet registered its
+    /// well-known name with the bus (assuming you're using the well-known name as destination).
     pub fn next_signal(&self) -> Result<Option<Message>> {
         block_on(self.azync.next_signal())
     }
@@ -235,6 +241,14 @@ impl<'a> Proxy<'a> {
 
     pub(crate) fn has_signal_handler(&self, signal_name: &str) -> bool {
         block_on(self.azync.has_signal_handler(signal_name))
+    }
+
+    pub(crate) fn resolve_name(&self) -> Result<()> {
+        block_on(self.azync.resolve_name())
+    }
+
+    pub(crate) fn destination_unique_name(&self) -> Option<&str> {
+        self.azync.destination_unique_name()
     }
 }
 
