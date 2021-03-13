@@ -115,7 +115,7 @@ pub(crate) fn is_fixed_sized_signature<'a>(signature: &'a Signature<'a>) -> Resu
         .as_bytes()
         .first()
         .map(|b| *b as char)
-        .ok_or_else(|| serde::de::Error::invalid_length(0, &">= 1 character"))?
+        .ok_or_else(|| -> Error { serde::de::Error::invalid_length(0, &">= 1 character") })?
     {
         u8::SIGNATURE_CHAR
         | bool::SIGNATURE_CHAR

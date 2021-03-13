@@ -180,16 +180,18 @@ macro_rules! tuple_impls {
                 }
             }
 
-            impl<'a, $($name),+> std::convert::TryFrom<Structure<'a>> for ($($name),+,)
+            impl<'a, E, $($name),+> std::convert::TryFrom<Structure<'a>> for ($($name),+,)
             where
-                $($name: std::convert::TryFrom<Value<'a>>,)+
+                $($name: std::convert::TryFrom<Value<'a>, Error = E>,)+
+                crate::Error: From<E>,
+
             {
                 type Error = crate::Error;
 
                 fn try_from(mut s: Structure<'a>) -> core::result::Result<Self, Self::Error> {
                     Ok((
                     $(
-                        s.fields.remove(0).downcast::<$name>().ok_or(crate::Error::IncorrectType)?,
+                         $name::try_from(s.fields.remove(0))?,
                     )+
                     ))
                 }
