@@ -217,7 +217,7 @@ example again to receive multiple signals on different proxies:
 No high-level server-side API are provided yet. Rest assured, it's very high on our priority list.
 Stay tuned!
 
-[synchronous `Connection` API]: https://docs.rs/zbus/2.0.0-beta.2/zbus/struct.Connection.html
-[`azync::Connection`]: https://docs.rs/zbus/2.0.0-beta.2/zbus/azync/connection/struct.Connection.html
+[synchronous `Connection` API]: https://docs.rs/zbus/2.0.0-beta.3/zbus/struct.Connection.html
+[`azync::Connection`]: https://docs.rs/zbus/2.0.0-beta.3/zbus/azync/connection/struct.Connection.html
 [`futures::stream::Stream`]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
 [`futures::sink::Sink`]: https://docs.rs/futures/latest/futures/sink/trait.Sink.html
