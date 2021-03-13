@@ -1,6 +1,6 @@
 [package]
 name = "zbus_xmlgen"
-version = "1.0.0"
+version = "2.0.0-beta.3"
 authors = [
     "Bilal Elmoussaoui <bil.elmoussaoui@gmail.com>",
     "Federico Mena Quintero <federico@gnome.org>",
