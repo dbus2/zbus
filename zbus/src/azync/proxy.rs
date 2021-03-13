@@ -14,7 +14,7 @@ use std::{
 };
 
 use async_io::block_on;
-use zvariant::{IntoObjectPath, ObjectPath, OwnedValue, Value};
+use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{azync::Connection, Error, Message, Result};
 
@@ -104,17 +104,20 @@ struct ProxyCore<'a> {
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
-    pub fn new(
+    pub fn new<E>(
         conn: &Connection,
         destination: &'a str,
-        path: impl IntoObjectPath<'a>,
+        path: impl TryInto<ObjectPath<'a>, Error = E>,
         interface: &'a str,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        Error: From<E>,
+    {
         Ok(Self {
             core: ProxyCore {
                 conn: conn.clone(),
                 destination: Cow::from(destination),
-                path: path.into_object_path()?,
+                path: path.try_into()?,
                 interface: Cow::from(interface),
             },
             sig_handlers: Mutex::new(SlotMap::with_key()),
@@ -123,17 +126,20 @@ impl<'a> Proxy<'a> {
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
     /// passed arguments.
-    pub fn new_owned(
+    pub fn new_owned<E>(
         conn: Connection,
         destination: String,
-        path: impl IntoObjectPath<'static>,
+        path: impl TryInto<ObjectPath<'static>, Error = E>,
         interface: String,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        Error: From<E>,
+    {
         Ok(Self {
             core: ProxyCore {
                 conn,
                 destination: Cow::from(destination),
-                path: path.into_object_path()?,
+                path: path.try_into()?,
                 interface: Cow::from(interface),
             },
             sig_handlers: Mutex::new(SlotMap::with_key()),
@@ -254,7 +260,7 @@ impl<'a> Proxy<'a> {
                 .conn
                 .subscribe_signal(
                     self.destination(),
-                    self.path(),
+                    self.path().clone(),
                     self.interface(),
                     signal_name,
                 )
@@ -324,7 +330,7 @@ impl<'a> Proxy<'a> {
                 .conn
                 .subscribe_signal(
                     self.destination(),
-                    self.path(),
+                    self.path().clone(),
                     self.interface(),
                     signal_name,
                 )
@@ -353,7 +359,7 @@ impl<'a> Proxy<'a> {
                         .conn
                         .unsubscribe_signal(
                             self.destination(),
-                            self.path(),
+                            self.path().clone(),
                             self.interface(),
                             handler_info.signal_name,
                         )

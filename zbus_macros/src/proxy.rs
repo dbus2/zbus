@@ -162,11 +162,14 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             }
 
             /// Creates a new proxy for the given `destination` and `path`.
-            pub fn new_for(
+            pub fn new_for<E>(
                 conn: &#connection,
                 destination: &'c str,
-                path: impl #zbus::export::zvariant::IntoObjectPath<'c>,
-            ) -> ::#zbus::Result<Self> {
+                path: impl std::convert::TryInto<#zbus::export::zvariant::ObjectPath<'c>, Error = E>,
+            ) -> ::#zbus::Result<Self>
+            where
+                ::#zbus::Error: From<E>,
+            {
                 Ok(Self(#proxy_struct::new(
                     conn,
                     destination,
@@ -176,11 +179,14 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             }
 
             /// Same as `new_for` but takes ownership of the passed arguments.
-            pub fn new_for_owned(
+            pub fn new_for_owned<E>(
                 conn: #connection,
                 destination: String,
-                path: impl #zbus::export::zvariant::IntoObjectPath<'static>,
-            ) -> ::#zbus::Result<Self> {
+                path: impl std::convert::TryInto<#zbus::export::zvariant::ObjectPath<'static>, Error = E>,
+            ) -> ::#zbus::Result<Self>
+            where
+                ::#zbus::Error: From<E>,
+            {
                 Ok(Self(#proxy_struct::new_owned(
                     conn,
                     destination,
@@ -190,10 +196,13 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             }
 
             /// Creates a new proxy for the given `path`.
-            pub fn new_for_path(
+            pub fn new_for_path<E>(
                 conn: &#connection,
-                path: impl #zbus::export::zvariant::IntoObjectPath<'c>,
-            ) -> ::#zbus::Result<Self> {
+                path: impl std::convert::TryInto<#zbus::export::zvariant::ObjectPath<'c>, Error = E>,
+            ) -> ::#zbus::Result<Self>
+            where
+                ::#zbus::Error: From<E>,
+            {
                 Ok(Self(#proxy_struct::new(
                     conn,
                     #default_service,
@@ -203,10 +212,13 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             }
 
             /// Same as `new_for_path` but takes ownership of the passed arguments.
-            pub fn new_for_owned_path(
+            pub fn new_for_owned_path<E>(
                 conn: #connection,
-                path: impl #zbus::export::zvariant::IntoObjectPath<'static>,
-            ) -> ::#zbus::Result<Self> {
+                path: impl std::convert::TryInto<#zbus::export::zvariant::ObjectPath<'static>, Error = E>,
+            ) -> ::#zbus::Result<Self>
+            where
+                ::#zbus::Error: From<E>,
+            {
                 Ok(Self(#proxy_struct::new_owned(
                     conn,
                     #default_service.to_owned(),

@@ -1,10 +1,13 @@
 use async_io::block_on;
-use std::{convert::TryFrom, future::ready};
-use zvariant::{IntoObjectPath, ObjectPath, OwnedValue, Value};
+use std::{
+    convert::{TryFrom, TryInto},
+    future::ready,
+};
+use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
     azync::{self, SignalHandlerId},
-    Connection, Message, Result,
+    Connection, Error, Message, Result,
 };
 
 use crate::fdo;
@@ -58,12 +61,15 @@ pub struct Proxy<'a> {
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
-    pub fn new(
+    pub fn new<E>(
         conn: &Connection,
         destination: &'a str,
-        path: impl IntoObjectPath<'a>,
+        path: impl TryInto<ObjectPath<'a>, Error = E>,
         interface: &'a str,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        Error: From<E>,
+    {
         let proxy = azync::Proxy::new(conn.inner(), destination, path, interface)?;
 
         Ok(Self {
@@ -74,12 +80,15 @@ impl<'a> Proxy<'a> {
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
     /// passed arguments.
-    pub fn new_owned(
+    pub fn new_owned<E>(
         conn: Connection,
         destination: String,
-        path: impl IntoObjectPath<'static>,
+        path: impl TryInto<ObjectPath<'static>, Error = E>,
         interface: String,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        Error: From<E>,
+    {
         let proxy =
             azync::Proxy::new_owned(conn.clone().into_inner(), destination, path, interface)?;
 
