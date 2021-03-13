@@ -297,9 +297,21 @@ fn gen_proxy_method_call(
         let method = Ident::new(snake_case_name, Span::call_site());
         let proxy = Ident::new(&proxy_name, Span::call_site());
         let inputs = &m.sig.inputs;
+        let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
+        let signature = if where_clause.is_some() {
+            quote! {
+                fn #method#ty_generics(#inputs) -> ::#zbus::Result<#proxy<'_>>
+                #where_clause,
+            }
+        } else {
+            quote! {
+                fn #method(#inputs) -> ::#zbus::Result<#proxy<'_>>
+            }
+        };
+
         quote! {
             #(#doc)*
-            pub #usage fn #method(#inputs) -> ::#zbus::Result<#proxy<'_>> {
+            pub #usage #signature {
                 let object_path: ::#zbus::export::zvariant::OwnedObjectPath =
                     self.0.call(
                         #method_name,

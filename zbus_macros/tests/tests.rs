@@ -9,7 +9,12 @@ fn test_proxy() {
         default_service = "org.freedesktop.zbus",
         default_path = "/org/freedesktop/zbus/test"
     )]
-    trait ProxyParam {}
+    trait ProxyParam {
+        #[dbus_proxy(object = "Test")]
+        fn some_method<T>(&self, test: &T)
+        where
+            T: Into<TestProxy<'c>> + serde::ser::Serialize + zvariant::Type;
+    }
 
     #[dbus_proxy(
         interface = "org.freedesktop.zbus.Test",
