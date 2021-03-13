@@ -1,5 +1,5 @@
 use std::{
-    convert::TryFrom,
+    convert::{Infallible, TryFrom},
     error, fmt,
     io::{Cursor, Error as IOError},
     os::unix::io::{AsRawFd, IntoRawFd, RawFd},
@@ -45,6 +45,9 @@ pub enum MessageError {
     Variant(VariantError),
     /// A required field is missing in the headers.
     MissingField,
+    /// Only exists to allow `TryFrom<T> for T` conversions. You should never actually be getting
+    /// this error from any API.
+    Infallible,
 }
 
 impl PartialEq for MessageError {
@@ -58,6 +61,7 @@ impl PartialEq for MessageError {
             (Self::UnmatchedBodySignature, Self::UnmatchedBodySignature) => true,
             (Self::InvalidField, Self::InvalidField) => true,
             (Self::Variant(s), Self::Variant(o)) => s == o,
+            (Self::Infallible, Self::Infallible) => true,
             (_, _) => false,
         }
     }
@@ -85,6 +89,7 @@ impl fmt::Display for MessageError {
             MessageError::UnmatchedBodySignature => write!(f, "unmatched body signature"),
             MessageError::Variant(e) => write!(f, "{}", e),
             MessageError::MissingField => write!(f, "A required field is missing"),
+            MessageError::Infallible => write!(f, "Infallible conversion failed"),
         }
     }
 }
@@ -98,6 +103,12 @@ impl From<VariantError> for MessageError {
 impl From<IOError> for MessageError {
     fn from(val: IOError) -> MessageError {
         MessageError::Io(val)
+    }
+}
+
+impl From<Infallible> for MessageError {
+    fn from(_: Infallible) -> Self {
+        MessageError::Infallible
     }
 }
 
