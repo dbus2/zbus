@@ -155,6 +155,12 @@ impl<'a> TryFrom<String> for ObjectPath<'a> {
     }
 }
 
+impl<'o> From<&ObjectPath<'o>> for ObjectPath<'o> {
+    fn from(o: &ObjectPath<'o>) -> Self {
+        o.clone()
+    }
+}
+
 impl<'a> std::ops::Deref for ObjectPath<'a> {
     type Target = str;
 
@@ -324,9 +330,15 @@ impl std::convert::From<OwnedObjectPath> for ObjectPath<'static> {
     }
 }
 
+impl<'unowned, 'owned: 'unowned> From<&'owned OwnedObjectPath> for ObjectPath<'unowned> {
+    fn from(o: &'owned OwnedObjectPath) -> Self {
+        ObjectPath::from_str_unchecked(o.as_str())
+    }
+}
+
 impl<'unowned, 'owned: 'unowned> IntoObjectPath<'unowned> for &'owned OwnedObjectPath {
     fn into_object_path(self) -> Result<ObjectPath<'unowned>> {
-        Ok(ObjectPath::from_str_unchecked(self.as_str()))
+        Ok(self.into())
     }
 }
 
