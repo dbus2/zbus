@@ -103,7 +103,7 @@ impl Connection {
 
     /// Max number of messages to queue.
     pub fn max_queued(&self) -> usize {
-        block_on(self.0.max_queued())
+        self.0.max_queued()
     }
 
     /// Set the max number of messages to queue.
@@ -124,7 +124,7 @@ impl Connection {
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn set_max_queued(self, max: usize) -> Self {
-        Self(block_on(self.0.set_max_queued(max)))
+        Self(self.0.set_max_queued(max))
     }
 
     /// The server's GUID.
