@@ -1,4 +1,4 @@
-use std::{error, fmt, io};
+use std::{convert::Infallible, error, fmt, io};
 use zvariant::Error as VariantError;
 
 use crate::{fdo, Message, MessageError, MessageType};
@@ -35,6 +35,9 @@ pub enum Error {
     #[cfg(feature = "xml")]
     /// An XML error
     SerdeXml(serde_xml_rs::Error),
+    /// Only exists to allow `TryFrom<T> for T` conversions. You should never actually be getting
+    /// this error from any API.
+    Infallible,
 }
 
 impl PartialEq for Error {
@@ -62,6 +65,7 @@ impl error::Error for Error {
             Error::FDO(e) => Some(e),
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => Some(e),
+            Error::Infallible => None,
         }
     }
 }
@@ -87,6 +91,7 @@ impl fmt::Display for Error {
             Error::FDO(e) => write!(f, "{}", e),
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => write!(f, "XML error: {}", e),
+            Error::Infallible => write!(f, "Infallible conversion failed"),
         }
     }
 }
@@ -130,6 +135,12 @@ impl From<fdo::Error> for Error {
 impl From<serde_xml_rs::Error> for Error {
     fn from(val: serde_xml_rs::Error) -> Self {
         Error::SerdeXml(val)
+    }
+}
+
+impl From<Infallible> for Error {
+    fn from(_: Infallible) -> Self {
+        Error::Infallible
     }
 }
 

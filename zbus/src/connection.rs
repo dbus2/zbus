@@ -1,16 +1,17 @@
 use futures_util::future::FutureExt;
 use std::{
+    convert::TryInto,
     future::ready,
     os::unix::{
         io::{AsRawFd, RawFd},
         net::UnixStream,
     },
 };
-use zvariant::IntoObjectPath;
+use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, Guid, Message, Result};
+use crate::{azync, Guid, Message, MessageError, Result};
 
 /// A D-Bus connection.
 ///
@@ -196,16 +197,17 @@ impl Connection {
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     /// [`MethodError`]: enum.Error.html#variant.MethodError
     /// [`sent_message`]: struct.Connection.html#method.send_message
-    pub fn call_method<'p, B>(
+    pub fn call_method<'p, B, E>(
         &self,
         destination: Option<&str>,
-        path: impl IntoObjectPath<'p>,
+        path: impl TryInto<ObjectPath<'p>, Error = E>,
         iface: Option<&str>,
         method_name: &str,
         body: &B,
     ) -> Result<Message>
     where
         B: serde::ser::Serialize + zvariant::Type,
+        MessageError: From<E>,
     {
         block_on(
             self.0
@@ -216,16 +218,17 @@ impl Connection {
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub fn emit_signal<'p, B>(
+    pub fn emit_signal<'p, B, E>(
         &self,
         destination: Option<&str>,
-        path: impl IntoObjectPath<'p>,
+        path: impl TryInto<ObjectPath<'p>, Error = E>,
         iface: &str,
         signal_name: &str,
         body: &B,
     ) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::Type,
+        MessageError: From<E>,
     {
         block_on(
             self.0

@@ -150,13 +150,14 @@ where
             // GVariant decided to skip the trailing nul at the end of signature string
             str::from_utf8(slice).map_err(Error::Utf8)?
         } else {
-            let cstr = CStr::from_bytes_with_nul(&self.0.bytes[self.0.pos..]).map_err(|_| {
-                let c = self.0.bytes[self.0.bytes.len() - 1] as char;
-                de::Error::invalid_value(
-                    de::Unexpected::Char(c),
-                    &"nul byte expected at the end of strings",
-                )
-            })?;
+            let cstr =
+                CStr::from_bytes_with_nul(&self.0.bytes[self.0.pos..]).map_err(|_| -> Error {
+                    let c = self.0.bytes[self.0.bytes.len() - 1] as char;
+                    de::Error::invalid_value(
+                        de::Unexpected::Char(c),
+                        &"nul byte expected at the end of strings",
+                    )
+                })?;
             let s = cstr.to_str().map_err(Error::Utf8)?;
             self.0.pos += s.len() + 1; // string and trailing null byte
 

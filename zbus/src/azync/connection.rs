@@ -3,6 +3,7 @@ use async_lock::{Mutex, MutexGuard, RwLock};
 use once_cell::sync::OnceCell;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap, VecDeque},
+    convert::TryInto,
     hash::{Hash, Hasher},
     io::{self, ErrorKind},
     os::unix::{
@@ -16,7 +17,7 @@ use std::{
     },
     task::{Context, Poll},
 };
-use zvariant::{IntoObjectPath, ObjectPath};
+use zvariant::ObjectPath;
 
 use event_listener::Event;
 use futures_core::{future::BoxFuture, stream};
@@ -30,7 +31,7 @@ use crate::{
     azync::Authenticated,
     fdo,
     raw::{Connection as RawConnection, Socket},
-    Error, Guid, Message, MessageType, Result,
+    Error, Guid, Message, MessageError, MessageType, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -49,15 +50,18 @@ struct SignalInfo<'s> {
 }
 
 impl<'s> SignalInfo<'s> {
-    fn new(
+    fn new<E>(
         sender: &'s str,
-        path: impl IntoObjectPath<'s>,
+        path: impl TryInto<ObjectPath<'s>, Error = E>,
         interface: &'s str,
         signal_name: &'s str,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        Error: From<E>,
+    {
         Ok(Self {
             sender,
-            path: path.into_object_path()?,
+            path: path.try_into()?,
             interface,
             signal_name,
         })
@@ -377,16 +381,17 @@ impl Connection {
     ///
     /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
     /// error replies are returned as [`Error::MethodError`].
-    pub async fn call_method<B>(
+    pub async fn call_method<B, E>(
         &self,
         destination: Option<&str>,
-        path: impl IntoObjectPath<'_>,
+        path: impl TryInto<ObjectPath<'_>, Error = E>,
         interface: Option<&str>,
         method_name: &str,
         body: &B,
     ) -> Result<Message>
     where
         B: serde::ser::Serialize + zvariant::Type,
+        MessageError: From<E>,
     {
         let m = Message::method(
             self.unique_name(),
@@ -426,16 +431,17 @@ impl Connection {
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub async fn emit_signal<B>(
+    pub async fn emit_signal<B, E>(
         &self,
         destination: Option<&str>,
-        path: impl IntoObjectPath<'_>,
+        path: impl TryInto<ObjectPath<'_>, Error = E>,
         interface: &str,
         signal_name: &str,
         body: &B,
     ) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::Type,
+        MessageError: From<E>,
     {
         let m = Message::signal(
             self.unique_name(),
@@ -550,13 +556,16 @@ impl Connection {
         (self.0.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
-    pub(crate) async fn subscribe_signal<'s>(
+    pub(crate) async fn subscribe_signal<'s, E>(
         &self,
         sender: &'s str,
-        path: impl IntoObjectPath<'s>,
+        path: impl TryInto<ObjectPath<'s>, Error = E>,
         interface: &'s str,
         signal_name: &'s str,
-    ) -> Result<u64> {
+    ) -> Result<u64>
+    where
+        Error: From<E>,
+    {
         let signal = SignalInfo::new(sender, path, interface, signal_name)?;
         let hash = signal.calc_hash();
         let mut subscriptions = self.0.signal_subscriptions.lock().await;
@@ -583,13 +592,16 @@ impl Connection {
         Ok(hash)
     }
 
-    pub(crate) async fn unsubscribe_signal<'s>(
+    pub(crate) async fn unsubscribe_signal<'s, E>(
         &self,
         sender: &'s str,
-        path: impl IntoObjectPath<'s>,
+        path: impl TryInto<ObjectPath<'s>, Error = E>,
         interface: &'s str,
         signal_name: &'s str,
-    ) -> Result<bool> {
+    ) -> Result<bool>
+    where
+        Error: From<E>,
+    {
         let signal = SignalInfo::new(sender, path, interface, signal_name)?;
         let hash = signal.calc_hash();
 

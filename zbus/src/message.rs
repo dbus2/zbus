@@ -1,13 +1,11 @@
 use std::{
-    convert::TryFrom,
+    convert::{Infallible, TryFrom, TryInto},
     error, fmt,
     io::{Cursor, Error as IOError},
     os::unix::io::{AsRawFd, IntoRawFd, RawFd},
 };
 
-use zvariant::{
-    EncodingContext, Error as VariantError, IntoObjectPath, ObjectPath, Signature, Type,
-};
+use zvariant::{EncodingContext, Error as VariantError, ObjectPath, Signature, Type};
 
 use crate::{
     owned_fd::OwnedFd, utils::padding_for_8_bytes, EndianSig, MessageField, MessageFieldCode,
@@ -45,6 +43,9 @@ pub enum MessageError {
     Variant(VariantError),
     /// A required field is missing in the headers.
     MissingField,
+    /// Only exists to allow `TryFrom<T> for T` conversions. You should never actually be getting
+    /// this error from any API.
+    Infallible,
 }
 
 impl PartialEq for MessageError {
@@ -58,6 +59,7 @@ impl PartialEq for MessageError {
             (Self::UnmatchedBodySignature, Self::UnmatchedBodySignature) => true,
             (Self::InvalidField, Self::InvalidField) => true,
             (Self::Variant(s), Self::Variant(o)) => s == o,
+            (Self::Infallible, Self::Infallible) => true,
             (_, _) => false,
         }
     }
@@ -85,6 +87,7 @@ impl fmt::Display for MessageError {
             MessageError::UnmatchedBodySignature => write!(f, "unmatched body signature"),
             MessageError::Variant(e) => write!(f, "{}", e),
             MessageError::MissingField => write!(f, "A required field is missing"),
+            MessageError::Infallible => write!(f, "Infallible conversion failed"),
         }
     }
 }
@@ -98,6 +101,12 @@ impl From<VariantError> for MessageError {
 impl From<IOError> for MessageError {
     fn from(val: IOError) -> MessageError {
         MessageError::Io(val)
+    }
+}
+
+impl From<Infallible> for MessageError {
+    fn from(_: Infallible) -> Self {
+        MessageError::Infallible
     }
 }
 
@@ -279,18 +288,19 @@ impl Message {
     /// Create a message of type [`MessageType::MethodCall`].
     ///
     /// [`MessageType::MethodCall`]: enum.MessageType.html#variant.MethodCall
-    pub fn method<'p, B>(
+    pub fn method<'p, B, E>(
         sender: Option<&str>,
         destination: Option<&str>,
-        path: impl IntoObjectPath<'p>,
+        path: impl TryInto<ObjectPath<'p>, Error = E>,
         iface: Option<&str>,
         method_name: &str,
         body: &B,
     ) -> Result<Self, MessageError>
     where
         B: serde::ser::Serialize + Type,
+        MessageError: From<E>,
     {
-        let mut b = MessageBuilder::method(sender, path.into_object_path()?, method_name, body)?;
+        let mut b = MessageBuilder::method(sender, path.try_into()?, method_name, body)?;
         if let Some(destination) = destination {
             b = b.set_field(MessageField::Destination(destination.into()));
         }
@@ -303,19 +313,19 @@ impl Message {
     /// Create a message of type [`MessageType::Signal`].
     ///
     /// [`MessageType::Signal`]: enum.MessageType.html#variant.Signal
-    pub fn signal<'p, B>(
+    pub fn signal<'p, B, E>(
         sender: Option<&str>,
         destination: Option<&str>,
-        path: impl IntoObjectPath<'p>,
+        path: impl TryInto<ObjectPath<'p>, Error = E>,
         iface: &str,
         signal_name: &str,
         body: &B,
     ) -> Result<Self, MessageError>
     where
         B: serde::ser::Serialize + Type,
+        MessageError: From<E>,
     {
-        let mut b =
-            MessageBuilder::signal(sender, path.into_object_path()?, iface, signal_name, body)?;
+        let mut b = MessageBuilder::signal(sender, path.try_into()?, iface, signal_name, body)?;
         if let Some(destination) = destination {
             b = b.set_field(MessageField::Destination(destination.into()));
         }

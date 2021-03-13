@@ -1,5 +1,5 @@
 use serde::{de, ser};
-use std::{error, fmt, result};
+use std::{convert::Infallible, error, fmt, result};
 
 /// Error type used by zvariant API.
 #[derive(Debug)]
@@ -21,6 +21,9 @@ pub enum Error {
     MissingFramingOffset,
     /// The type (signature as first argument) being (de)serialized is not supported by the format.
     IncompatibleFormat(crate::Signature<'static>, crate::EncodingFormat),
+    /// Only exists to allow `TryFrom<T> for T` conversions. You should never actually be getting
+    /// this error from any API.
+    Infallible,
 }
 
 impl PartialEq for Error {
@@ -65,7 +68,14 @@ impl fmt::Display for Error {
                 "Type `{}` is not compatible with `{}` format",
                 sig, format,
             ),
+            Error::Infallible => write!(f, "Infallible conversion failed"),
         }
+    }
+}
+
+impl From<Infallible> for Error {
+    fn from(_: Infallible) -> Self {
+        Error::Infallible
     }
 }
 
