@@ -328,12 +328,10 @@ impl Connection {
                 // `receive_specific` calls.
                 let mut queue = self.0.incoming_queue.lock().await;
                 for (i, msg) in queue.iter().enumerate() {
-                    let found = match msg {
+                    if match msg {
                         Ok(msg) => predicate(msg).await?,
                         Err(_) => true,
-                    };
-
-                    if found {
+                    } {
                         // SAFETY: we got the index from the queue enumerator so this shouldn't ever
                         // fail.
                         break 'outer queue.remove(i).expect("removing queue item");
