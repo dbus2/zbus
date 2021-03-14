@@ -113,8 +113,12 @@ struct ConnectionInner<S> {
     serial: AtomicU32,
 
     // Queue of incoming messages
-    incoming_queue: Mutex<VecDeque<Result<Message>>>,
+    in_queue: Mutex<VecDeque<Result<Message>>>,
 
+    // Queue of freshingly arrived message. This is kept separate from `in_queue` so
+    // `receive_message` calls don't have to go through all the messages each timme they're
+    // notified of new messages.
+    in_queue_fresh: Mutex<VecDeque<Result<Message>>>,
     // To notify the waiting calls on `receive_message` when new msg is available on the queue.
     msg_available_event: Event,
     // To notify msg receeiver task that no more consumers left and it can exit.
@@ -284,7 +288,7 @@ impl Connection {
     /// this limitation will hopefully be removed in the near future.
     pub async fn stream(&self) -> MessageStream<'_> {
         let raw_conn = self.0.raw_in_conn.lock().await;
-        let incoming_queue = Some(self.0.incoming_queue.lock().await);
+        let incoming_queue = Some(self.0.in_queue.lock().await);
 
         MessageStream {
             raw_conn,
@@ -317,6 +321,24 @@ impl Connection {
     where
         for<'msg> P: Fn(&'msg Message) -> BoxFuture<'msg, Result<bool>>,
     {
+        // First check the long-term queue.
+        {
+            // We keep all the queue operations in separate blocks to ensure we don't keep the
+            // queue locked unnecessarily while waiting for new messages ending up starving
+            // `receive_specific` calls.
+            let mut queue = self.0.in_queue.lock().await;
+            for (i, msg) in queue.iter().enumerate() {
+                if match msg {
+                    Ok(msg) => predicate(msg).await?,
+                    Err(_) => true,
+                } {
+                    // SAFETY: we got the index from the queue enumerator so this shouldn't ever
+                    // fail.
+                    return queue.remove(i).expect("removing queue item");
+                }
+            }
+        }
+
         let mut first_iteration = true;
         let prev_num_consumers = self.0.num_consumers.fetch_add(1, SeqCst);
 
@@ -326,7 +348,7 @@ impl Connection {
                 // We keep all the queue operations in separate blocks to ensure we don't keep the
                 // queue locked unnecessarily while waiting for new messages ending up starving
                 // `receive_specific` calls.
-                let mut queue = self.0.incoming_queue.lock().await;
+                let mut queue = self.0.in_queue_fresh.lock().await;
                 for (i, msg) in queue.iter().enumerate() {
                     if match msg {
                         Ok(msg) => predicate(msg).await?,
@@ -355,6 +377,13 @@ impl Connection {
 
         if self.0.num_consumers.fetch_sub(1, SeqCst) == 1 {
             self.0.no_consumers_event.notify(1);
+
+            // Clear fresh queue by moving all remaining messages to `in_queue`.
+            let mut fresh_queue = self.0.in_queue_fresh.lock().await;
+            let mut in_queue = self.0.in_queue.lock().await;
+            for msg in fresh_queue.drain(..) {
+                in_queue.push_back(msg);
+            }
         }
 
         msg
@@ -656,7 +685,8 @@ impl Connection {
             bus_conn: bus_connection,
             serial: AtomicU32::new(1),
             unique_name: OnceCell::new(),
-            incoming_queue: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
+            in_queue: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
+            in_queue_fresh: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
             msg_available_event: Event::new(),
             no_consumers_event: Event::new(),
             num_consumers: AtomicUsize::new(0),
@@ -734,8 +764,9 @@ impl Connection {
                 Err(e) => Err(e),
             };
 
-            let mut queue = self.0.incoming_queue.lock().await;
-            if queue.len() >= self.0.max_queued.load(SeqCst) {
+            let mut queue = self.0.in_queue_fresh.lock().await;
+            let total_queued = queue.len() + self.0.in_queue.lock().await.len();
+            if total_queued >= self.0.max_queued.load(SeqCst) {
                 // Create room by dropping the oldest message.
                 queue.pop_front();
             }
