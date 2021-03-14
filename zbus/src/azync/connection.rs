@@ -117,8 +117,8 @@ struct ConnectionInner<S> {
 
     // To notify the waiting calls on `receive_message` when new msg is available on the queue.
     msg_available_event: Event,
-    // To notify msg receeiver task about changes in `num_consumers`.
-    num_consumers_event: Event,
+    // To notify msg receeiver task that no more consumers left and it can exit.
+    no_consumers_event: Event,
     num_consumers: AtomicUsize,
 
     // Max number of messages to queue
@@ -355,8 +355,9 @@ impl Connection {
             msg_available.await;
         };
 
-        self.0.num_consumers.fetch_sub(1, SeqCst);
-        self.0.num_consumers_event.notify(1);
+        if self.0.num_consumers.fetch_sub(1, SeqCst) == 1 {
+            self.0.no_consumers_event.notify(1);
+        }
 
         msg
     }
@@ -659,7 +660,7 @@ impl Connection {
             unique_name: OnceCell::new(),
             incoming_queue: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
             msg_available_event: Event::new(),
-            num_consumers_event: Event::new(),
+            no_consumers_event: Event::new(),
             num_consumers: AtomicUsize::new(0),
             max_queued: AtomicUsize::new(DEFAULT_MAX_QUEUED),
             signal_subscriptions: Mutex::new(HashMap::new()),
@@ -706,7 +707,7 @@ impl Connection {
             };
             let msg = match select(
                 Box::pin(stream.try_next()),
-                self.0.num_consumers_event.listen(),
+                self.0.no_consumers_event.listen(),
             )
             .await
             {
