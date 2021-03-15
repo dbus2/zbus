@@ -116,7 +116,7 @@ struct ConnectionInner<S> {
     in_queue: Mutex<VecDeque<Result<Message>>>,
 
     // Queue of freshingly arrived message. This is kept separate from `in_queue` so
-    // `receive_message` calls don't have to go through all the messages each timme they're
+    // `receive_message` calls don't have to go through all the messages each time they're
     // notified of new messages.
     in_queue_fresh: Mutex<VecDeque<Result<Message>>>,
     // To notify the waiting calls on `receive_message` when new msg is available on the queue.
