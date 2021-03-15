@@ -750,10 +750,7 @@ impl Connection {
             };
 
             let msg = match msg {
-                Ok(Some(msg)) => {
-                    //print_msg(&msg, "zb: queueing ");
-                    Ok(msg)
-                }
+                Ok(Some(msg)) => Ok(msg),
                 Ok(None) => {
                     // If MessageStream gives us None, that means the socket was closed
                     Err(Error::Io(io::Error::new(
