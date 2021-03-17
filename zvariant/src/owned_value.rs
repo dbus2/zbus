@@ -148,6 +148,12 @@ impl<'a> From<&Value<'a>> for OwnedValue {
     }
 }
 
+impl From<OwnedValue> for Value<'static> {
+    fn from(v: OwnedValue) -> Value<'static> {
+        v.into_inner()
+    }
+}
+
 impl<'a> Type for OwnedValue {
     fn signature() -> Signature<'static> {
         Value::signature()
