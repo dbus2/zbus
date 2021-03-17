@@ -135,6 +135,8 @@ where
     }
 }
 
+// tuple conversions in `structure` module for avoiding code-duplication.
+
 impl<'a> From<Value<'a>> for OwnedValue {
     fn from(v: Value<'a>) -> Self {
         // TODO: add into_owned, avoiding copy if already owned..
