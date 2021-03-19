@@ -45,13 +45,13 @@ fn signature_for_struct(fields: Fields) -> TokenStream {
         }
     } else {
         quote! {
-                let mut s = String::from("(");
-                #(
-                    s.push_str(<#field_types as zvariant::Type>::signature().as_str());
-                )*
-                s.push_str(")");
+            let mut s = String::from("(");
+            #(
+                s.push_str(<#field_types as zvariant::Type>::signature().as_str());
+            )*
+            s.push_str(")");
 
-                zvariant::Signature::from_string_unchecked(s)
+            zvariant::Signature::from_string_unchecked(s)
         }
     }
 }
