@@ -35,7 +35,6 @@ messages (method calls, signals etc) for you.
 
 zbus crate is currently Linux-specific[^otheros].
 
-
 [zbus]: https://gitlab.freedesktop.org/dbus/zbus
 [Rust]: https://www.rust-lang.org/
 [D-Bus]: https://dbus.freedesktop.org/
