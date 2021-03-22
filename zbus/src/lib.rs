@@ -212,7 +212,7 @@ mod tests {
     use enumflags2::BitFlags;
     use ntest::timeout;
 
-    use zvariant::{Fd, OwnedValue, Type};
+    use zvariant::{Fd, OwnedObjectPath, OwnedValue, Type};
 
     use crate::{
         azync,
@@ -566,7 +566,7 @@ mod tests {
         // the return type and zbus only removing the outer `()` only and then it not matching the
         // signature we receive on the reply message.
         use std::{cell::RefCell, convert::TryFrom, rc::Rc};
-        use zvariant::{ObjectPath, OwnedObjectPath, Value};
+        use zvariant::{ObjectPath, Value};
         let conn = Connection::new_session().unwrap();
         let service_name = conn.unique_name().unwrap().to_string();
         let mut object_server = super::ObjectServer::new(&conn);
@@ -603,7 +603,7 @@ mod tests {
                     &self,
                     algorithm: &str,
                     input: &zvariant::Value<'_>,
-                ) -> zbus::Result<(zvariant::OwnedValue, zvariant::OwnedObjectPath)>;
+                ) -> zbus::Result<(OwnedValue, OwnedObjectPath)>;
             }
 
             let proxy =
@@ -648,7 +648,7 @@ mod tests {
         trait IBus {
             /// CurrentInputContext property
             #[dbus_proxy(property)]
-            fn current_input_context(&self) -> zbus::Result<zvariant::OwnedObjectPath>;
+            fn current_input_context(&self) -> zbus::Result<OwnedObjectPath>;
 
             /// Engines property
             #[dbus_proxy(property)]
@@ -703,5 +703,29 @@ mod tests {
         conn.send_message(msg).unwrap();
 
         child.join().unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn issue_81() {
+        use zbus::dbus_proxy;
+        use zvariant::derive::{OwnedValue, Type};
+
+        #[derive(
+            Debug, PartialEq, Clone, Type, OwnedValue, serde::Serialize, serde::Deserialize,
+        )]
+        pub struct DbusPath {
+            id: String,
+            path: OwnedObjectPath,
+        }
+
+        #[dbus_proxy]
+        trait Session {
+            #[dbus_proxy(property)]
+            fn sessions_tuple(&self) -> zbus::Result<(String, String)>;
+
+            #[dbus_proxy(property)]
+            fn sessions_struct(&self) -> zbus::Result<DbusPath>;
+        }
     }
 }

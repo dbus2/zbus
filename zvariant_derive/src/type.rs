@@ -31,12 +31,13 @@ fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
 
 fn signature_for_struct(fields: Fields) -> TokenStream {
     let field_types = fields.iter().map(|field| field.ty.to_token_stream());
-    let named = match fields {
-        Fields::Named(_) => true,
+    let new_type = match fields {
+        Fields::Named(_) => false,
+        Fields::Unnamed(_) if field_types.len() == 1 => true,
         Fields::Unnamed(_) => false,
         Fields::Unit => panic!("signature_for_struct must not be called for unit fields"),
     };
-    if !named && field_types.len() == 1 {
+    if new_type {
         quote! {
             #(
                 <#field_types as zvariant::Type>::signature()
@@ -44,13 +45,13 @@ fn signature_for_struct(fields: Fields) -> TokenStream {
         }
     } else {
         quote! {
-                let mut s = String::from("(");
-                #(
-                    s.push_str(<#field_types as zvariant::Type>::signature().as_str());
-                )*
-                s.push_str(")");
+            let mut s = String::from("(");
+            #(
+                s.push_str(<#field_types as zvariant::Type>::signature().as_str());
+            )*
+            s.push_str(")");
 
-                zvariant::Signature::from_string_unchecked(s)
+            zvariant::Signature::from_string_unchecked(s)
         }
     }
 }

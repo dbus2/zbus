@@ -197,7 +197,7 @@ mod signature_parser;
 
 // FIXME: Re-export derive macros from the crate root with the next breaking-change release.
 pub mod derive {
-    pub use zvariant_derive::{DeserializeDict, SerializeDict, Type, TypeDict};
+    pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, TypeDict, Value};
 }
 
 // Required for the macros to function within this crate.

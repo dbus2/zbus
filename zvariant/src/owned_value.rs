@@ -2,7 +2,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 use crate::{
-    Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Structure, Type, Value,
+    Array, Dict, Fd, Maybe, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure,
+    Type, Value,
 };
 
 // FIXME: Replace with a generic impl<T: TryFrom<Value>> TryFrom<OwnedValue> for T?
@@ -58,6 +59,8 @@ ov_try_from!(ObjectPath<'a>);
 ov_try_from!(OwnedObjectPath);
 ov_try_from!(Array<'a>);
 ov_try_from!(Dict<'a, 'a>);
+ov_try_from!(Maybe<'a>);
+ov_try_from!(Str<'a>);
 ov_try_from!(Structure<'a>);
 ov_try_from!(Fd);
 
@@ -75,7 +78,9 @@ ov_try_from_ref!(&'a Signature<'a>);
 ov_try_from_ref!(&'a ObjectPath<'a>);
 ov_try_from_ref!(&'a Array<'a>);
 ov_try_from_ref!(&'a Dict<'a, 'a>);
+ov_try_from_ref!(&'a Str<'a>);
 ov_try_from_ref!(&'a Structure<'a>);
+ov_try_from_ref!(&'a Maybe<'a>);
 ov_try_from_ref!(Fd);
 
 impl<'a, T> TryFrom<OwnedValue> for Vec<T>
@@ -135,6 +140,8 @@ where
     }
 }
 
+// tuple conversions in `structure` module for avoiding code-duplication.
+
 impl<'a> From<Value<'a>> for OwnedValue {
     fn from(v: Value<'a>) -> Self {
         // TODO: add into_owned, avoiding copy if already owned..
@@ -145,6 +152,40 @@ impl<'a> From<Value<'a>> for OwnedValue {
 impl<'a> From<&Value<'a>> for OwnedValue {
     fn from(v: &Value<'a>) -> Self {
         OwnedValue(v.to_owned())
+    }
+}
+
+macro_rules! to_value {
+    ($from:ty) => {
+        impl<'a> From<$from> for OwnedValue {
+            fn from(v: $from) -> Self {
+                OwnedValue::from(<Value<'a>>::from(v))
+            }
+        }
+    };
+}
+
+to_value!(u8);
+to_value!(bool);
+to_value!(i16);
+to_value!(u16);
+to_value!(i32);
+to_value!(u32);
+to_value!(i64);
+to_value!(u64);
+to_value!(f64);
+to_value!(Array<'a>);
+to_value!(Dict<'a, 'a>);
+to_value!(Maybe<'a>);
+to_value!(Str<'a>);
+to_value!(Signature<'a>);
+to_value!(Structure<'a>);
+to_value!(ObjectPath<'a>);
+to_value!(Fd);
+
+impl From<OwnedValue> for Value<'static> {
+    fn from(v: OwnedValue) -> Value<'static> {
+        v.into_inner()
     }
 }
 

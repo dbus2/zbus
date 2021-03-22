@@ -11,6 +11,7 @@ use syn::{self, DeriveInput};
 mod dict;
 mod r#type;
 mod utils;
+mod value;
 
 /// Derive macro to add [`Type`] implementation to structs and enums.
 ///
@@ -184,4 +185,130 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
     dict::expand_deserialize_derive(input).into()
+}
+
+/// Implements conversions for your type to/from [`Value`].
+///
+/// Implements `TryFrom<Value>` and `Into<Value>` for your type.
+///
+/// # Examples
+///
+/// Simple owned strutures:
+///
+/// ```
+/// use std::convert::TryFrom;
+/// use zvariant::{OwnedObjectPath, OwnedValue, Value};
+/// use zvariant_derive::{OwnedValue, Value};
+///
+/// #[derive(Clone, Value, OwnedValue)]
+/// struct OwnedStruct {
+///     owned_str: String,
+///     owned_path: OwnedObjectPath,
+/// }
+///
+/// let s = OwnedStruct {
+///     owned_str: String::from("hi"),
+///     owned_path: OwnedObjectPath::try_from("/blah").unwrap(),
+/// };
+/// let value = Value::from(s.clone());
+/// let _ = OwnedStruct::try_from(value).unwrap();
+/// let value = OwnedValue::from(s);
+/// let s = OwnedStruct::try_from(value).unwrap();
+/// assert_eq!(s.owned_str, "hi");
+/// assert_eq!(s.owned_path.as_str(), "/blah");
+/// ```
+///
+/// Now for the more exciting case of unowned structures:
+///
+/// ```
+///# use std::convert::TryFrom;
+/// use zvariant::{ObjectPath, Str};
+///# use zvariant::{OwnedValue, Value};
+///# use zvariant_derive::{OwnedValue, Value};
+///#
+/// #[derive(Clone, Value, OwnedValue)]
+/// struct UnownedStruct<'a> {
+///     s: Str<'a>,
+///     path: ObjectPath<'a>,
+/// }
+///
+/// let hi = String::from("hi");
+/// let s = UnownedStruct {
+///     s: Str::from(&hi),
+///     path: ObjectPath::try_from("/blah").unwrap(),
+/// };
+/// let value = Value::from(s.clone());
+/// let s = UnownedStruct::try_from(value).unwrap();
+///
+/// let value = OwnedValue::from(s);
+/// let s = UnownedStruct::try_from(value).unwrap();
+/// assert_eq!(s.s, "hi");
+/// assert_eq!(s.path, "/blah");
+/// ```
+///
+/// Generic structures also supported:
+///
+/// ```
+///# use std::convert::TryFrom;
+///# use zvariant::{OwnedObjectPath, OwnedValue, Value};
+///# use zvariant_derive::{OwnedValue, Value};
+///#
+/// #[derive(Clone, Value, OwnedValue)]
+/// struct GenericStruct<S, O> {
+///     field1: S,
+///     field2: O,
+/// }
+///
+/// let s = GenericStruct {
+///     field1: String::from("hi"),
+///     field2: OwnedObjectPath::try_from("/blah").unwrap(),
+/// };
+/// let value = Value::from(s.clone());
+/// let _ = GenericStruct::<String, OwnedObjectPath>::try_from(value).unwrap();
+/// let value = OwnedValue::from(s);
+/// let s = GenericStruct::<String, OwnedObjectPath>::try_from(value).unwrap();
+/// assert_eq!(s.field1, "hi");
+/// assert_eq!(s.field2.as_str(), "/blah");
+/// ```
+///
+/// Enums also supported but currently only simple ones w/ an integer representation:
+///
+/// ```
+///# use std::convert::TryFrom;
+///# use zvariant::{OwnedObjectPath, OwnedValue, Value};
+///# use zvariant_derive::{OwnedValue, Value};
+///#
+/// #[derive(Debug, PartialEq, Value, OwnedValue)]
+/// #[repr(u8)]
+/// enum Enum {
+///     Variant1 = 1,
+///     Variant2 = 2,
+/// }
+///
+/// let value = Value::from(Enum::Variant1);
+/// let e = Enum::try_from(value).unwrap();
+/// assert_eq!(e, Enum::Variant1);
+/// let value = OwnedValue::from(Enum::Variant2);
+/// let e = Enum::try_from(value).unwrap();
+/// assert_eq!(e, Enum::Variant2);
+/// ```
+///
+/// [`Value`]: https://docs.rs/zvariant/2.0.0/zvariant/enum.Value.html
+#[proc_macro_derive(Value)]
+pub fn value_macro_derive(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    value::expand_derive(ast, value::ValueType::Value).into()
+}
+
+/// Implements conversions for your type to/from [`OwnedValue`].
+///
+/// Implements `TryFrom<OwnedValue>` and `Into<OwnedValue>` for your type.
+///
+/// See [`Value`] documentation for examples.
+///
+/// [`OwnedValue`]: https://docs.rs/zvariant/2.0.0/zvariant/struct.OwnedValue.html
+#[proc_macro_derive(OwnedValue)]
+pub fn owned_value_macro_derive(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    value::expand_derive(ast, value::ValueType::OwnedValue).into()
 }
