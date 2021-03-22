@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
-use crate::{Array, Dict, Fd, ObjectPath, Signature, Structure, Type, Value};
+use crate::{Array, Dict, Fd, ObjectPath, Signature, Str, Structure, Type, Value};
 
 //
 // Conversions from encodable types to `Value`
@@ -37,6 +37,7 @@ into_value!(f64, F64);
 into_value!(Fd, Fd);
 
 into_value!(&'a str, Str);
+into_value!(Str<'a>, Str);
 into_value!(Signature<'a>, Signature);
 into_value!(ObjectPath<'a>, ObjectPath);
 into_value!(Array<'a>, Array);

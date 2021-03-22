@@ -117,6 +117,8 @@ impl TryFrom<Value<'_>> for OwnedSignature {
     }
 }
 
+// tuple conversions in `structure` module for avoiding code-duplication.
+
 #[cfg(feature = "enumflags2")]
 impl<'a, F> TryFrom<Value<'a>> for enumflags2::BitFlags<F>
 where
