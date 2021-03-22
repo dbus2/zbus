@@ -74,6 +74,11 @@ impl<'a> Structure<'a> {
         &self.fields
     }
 
+    /// Converts `self` to a `Vec` containing all its fields.
+    pub fn into_fields(self) -> Vec<Value<'a>> {
+        self.fields
+    }
+
     /// Create a new `Structure`.
     ///
     /// Same as `Structure::default()`.
