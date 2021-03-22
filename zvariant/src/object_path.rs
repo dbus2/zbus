@@ -297,6 +297,12 @@ impl std::convert::From<OwnedObjectPath> for ObjectPath<'static> {
     }
 }
 
+impl std::convert::From<OwnedObjectPath> for crate::Value<'static> {
+    fn from(o: OwnedObjectPath) -> Self {
+        o.into_inner().into()
+    }
+}
+
 impl<'unowned, 'owned: 'unowned> From<&'owned OwnedObjectPath> for ObjectPath<'unowned> {
     fn from(o: &'owned OwnedObjectPath) -> Self {
         ObjectPath::from_str_unchecked(o.as_str())

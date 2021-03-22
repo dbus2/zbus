@@ -395,6 +395,12 @@ impl<'a> std::convert::From<Signature<'a>> for OwnedSignature {
     }
 }
 
+impl std::convert::From<OwnedSignature> for crate::Value<'static> {
+    fn from(o: OwnedSignature) -> Self {
+        o.into_inner().into()
+    }
+}
+
 impl<'de> Deserialize<'de> for OwnedSignature {
     fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
