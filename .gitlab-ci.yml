@@ -45,9 +45,9 @@ pages:
     - export PATH="$PATH:$CARGO_HOME/bin"
     - mdbook --version || cargo install --debug mdbook
   script:
-    - mkdir public
+    - mkdir -p public/1.0
     - mdbook build book
-    - cp -r ./book/book/* ./public
+    - cp -r ./book/book/* ./public/1.0/
     - find $PWD/public | grep "\.html\$"
 
   artifacts:
@@ -56,6 +56,6 @@ pages:
 
   only:
     refs:
-      - master
+      - zbus-1
     changes:
       - book/**/*
