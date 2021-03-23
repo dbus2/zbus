@@ -165,6 +165,12 @@ impl<'a> std::ops::Deref for ObjectPath<'a> {
     }
 }
 
+impl<'a> PartialEq<str> for ObjectPath<'a> {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
 impl<'a> PartialEq<&str> for ObjectPath<'a> {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
