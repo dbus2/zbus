@@ -636,9 +636,16 @@ mod tests {
             Err(zbus::fdo::Error::Failed("error raised".to_string()))
         }
 
-        fn test_single_struct_arg(&self, arg: ArgStructTest) {
+        fn test_single_struct_arg(
+            &self,
+            arg: ArgStructTest,
+            #[zbus(header)] header: MessageHeader<'_>,
+        ) -> zbus::Result<()> {
+            assert_eq!(header.signature()?.unwrap(), "(is)");
             assert_eq!(arg.foo, 1);
             assert_eq!(arg.bar, "TestString");
+
+            Ok(())
         }
 
         // This attribute is a noop but add to ensure user specifying it doesn't break anything.

@@ -293,7 +293,12 @@ fn gen_proxy_method_call(
 ) -> TokenStream {
     let zbus = get_zbus_crate_ident();
     let doc = get_doc_attrs(&m.attrs);
-    let args = m.sig.inputs.iter().filter_map(|arg| arg_ident(arg));
+    let args: Vec<_> = m
+        .sig
+        .inputs
+        .iter()
+        .filter_map(|arg| arg_ident(arg))
+        .collect();
     let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
     let proxy_object = attrs.iter().find_map(|x| match x {
         ItemAttribute::Object(o) => {
@@ -339,11 +344,23 @@ fn gen_proxy_method_call(
         }
     } else {
         let signature = &m.sig;
+        let body = if args.len() == 1 {
+            // Wrap single arg in a tuple so if it's a struct/tuple itself, zbus will only remove
+            // the '()' from the signature that we add and not the actual intended ones.
+            let arg = &args[0];
+            quote! {
+                &(#arg,)
+            }
+        } else {
+            quote! {
+                &(#(#args),*)
+            }
+        };
 
         quote! {
             #(#doc)*
             pub #usage #signature {
-                let reply = self.0.call(#method_name, &(#(#args),*))#wait?;
+                let reply = self.0.call(#method_name, #body)#wait?;
                 Ok(reply)
             }
         }
