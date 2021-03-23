@@ -85,6 +85,12 @@ impl<'a> std::ops::Deref for Str<'a> {
     }
 }
 
+impl<'a> PartialEq<str> for Str<'a> {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
 impl<'a> PartialEq<&str> for Str<'a> {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
