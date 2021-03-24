@@ -401,6 +401,11 @@ impl Connection {
             let mut fresh_queue = self.0.in_queue_fresh.lock().await;
             let mut in_queue = self.0.in_queue.lock().await;
             for msg in fresh_queue.drain(..) {
+                if in_queue.len() >= self.0.max_queued.load(SeqCst) {
+                    // Create room by dropping the oldest message.
+                    in_queue.pop_front();
+                }
+
                 in_queue.push_back(msg);
             }
         }
@@ -779,14 +784,13 @@ impl Connection {
                 Err(e) => Err(e),
             };
 
-            let mut queue = self.0.in_queue_fresh.lock().await;
-            let total_queued = queue.len() + self.0.in_queue.lock().await.len();
-            if total_queued >= self.0.max_queued.load(SeqCst) {
+            let mut in_queue_fresh = self.0.in_queue_fresh.lock().await;
+            if in_queue_fresh.len() >= self.0.max_queued.load(SeqCst) {
                 // Create room by dropping the oldest message.
-                queue.pop_front();
+                in_queue_fresh.pop_front();
             }
 
-            queue.push_back(msg);
+            in_queue_fresh.push_back(msg);
 
             // The queue lock is held here so num_consumers can't change here between the time its
             // value is loaded and loop iteration ends.
