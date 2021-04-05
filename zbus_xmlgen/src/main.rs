@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn Error>> {
          //! You may prefer to adapt it, instead of using it verbatim.
          //!
          //! More information can be found in the
-         //! [Writing a client proxy](https://zeenix.pages.freedesktop.org/zbus/client.html)
+         //! [Writing a client proxy](https://dbus.pages.freedesktop.org/zbus/client.html)
          //! section of the zbus documentation.
          //!
         ",

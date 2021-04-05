@@ -37,6 +37,6 @@ See the `unix_p2p` test in the [zbus source code] for a simple example.
 [NetworkManager]: https://developer.gnome.org/NetworkManager/stable/spec.html
 [BlueZ]: https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc
 [PID1]: https://www.freedesktop.org/wiki/Software/systemd/dbus/
-[zbus source code]: https://gitlab.freedesktop.org/zeenix/zbus/-/blob/master/zbus/src/connection.rs
+[zbus source code]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/master/zbus/src/connection.rs
 
 [^bus-less] Unless you implemented them, none of the bus methods will exist.

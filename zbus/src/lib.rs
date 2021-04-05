@@ -119,7 +119,7 @@
 //! it that you can do through the high-level asynchronous API (when it exists), it's [not at all as
 //! hard to use](azync::Connection#monitoring-all-messages) as it may sound.
 //!
-//! [book]: https://zeenix.pages.freedesktop.org/zbus/
+//! [book]: https://dbus.pages.freedesktop.org/zbus/
 //! [low-level asynchronous API]: azync::Connection
 //!
 //! [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus
@@ -548,7 +548,7 @@ mod tests {
     #[test]
     #[timeout(1000)]
     fn issue_68() {
-        // Tests the fix for https://gitlab.freedesktop.org/zeenix/zbus/-/issues/68
+        // Tests the fix for https://gitlab.freedesktop.org/dbus/zbus/-/issues/68
         //
         // While this is not an exact reproduction of the issue 68, the underlying problem it
         // produces is exactly the same: `Connection::call_method` dropping all incoming messages
@@ -582,7 +582,7 @@ mod tests {
     #[test]
     #[timeout(1000)]
     fn issue104() {
-        // Tests the fix for https://gitlab.freedesktop.org/zeenix/zbus/-/issues/104
+        // Tests the fix for https://gitlab.freedesktop.org/dbus/zbus/-/issues/104
         //
         // The issue is caused by `dbus_proxy` macro adding `()` around the return value of methods
         // with multiple out arguments, ending up with double paranthesis around the signature of

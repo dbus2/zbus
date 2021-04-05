@@ -89,7 +89,7 @@ struct ConnectionInner<S> {
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 /// [`dbus_interface`]: attr.dbus_interface.html
 /// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
-/// [file an issue]: https://gitlab.freedesktop.org/zeenix/zbus/-/issues/new
+/// [file an issue]: https://gitlab.freedesktop.org/dbus/zbus/-/issues/new
 /// [`receive_message`]: struct.Connection.html#method.receive_message
 /// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
 #[derive(Debug, Clone)]
