@@ -18,7 +18,7 @@ stages:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: '2021-02-26.1'
+    FDO_DISTRIBUTION_TAG: '2021-04-05.1'
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
@@ -68,7 +68,7 @@ check:
     - rustc --version
     - cargo --version
     - cargo fmt --all -- --check
-    - cargo clippy -- -D warnings
+    - cargo clippy -- -D warnings -Aclippy::upper_case_acronyms
     - cargo audit
 
 .cargo_test_var: &cargo_test
