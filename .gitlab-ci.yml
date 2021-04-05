@@ -68,7 +68,7 @@ check:
     - rustc --version
     - cargo --version
     - cargo fmt --all -- --check
-    - cargo clippy -- -D warnings
+    - cargo clippy -- -D warnings -Aclippy::upper_case_acronyms
     - cargo audit
 
 .cargo_test_var: &cargo_test
