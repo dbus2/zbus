@@ -1,7 +1,6 @@
 stages:
   - lint
   - test
-  - pages
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/cargo
@@ -37,25 +36,3 @@ cache:
     - apt/
     - cargo/
     - target/
-
-pages:
-  image: "hrektts/mdbook"
-  stage: pages
-  before_script:
-    - export PATH="$PATH:$CARGO_HOME/bin"
-    - mdbook --version || cargo install --debug mdbook
-  script:
-    - mkdir public
-    - mdbook build book
-    - cp -r ./book/book/* ./public
-    - find $PWD/public | grep "\.html\$"
-
-  artifacts:
-    paths:
-      - public
-
-  only:
-    refs:
-      - master
-    changes:
-      - book/**/*
