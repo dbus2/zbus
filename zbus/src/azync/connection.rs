@@ -263,16 +263,32 @@ impl Connection {
     /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
     /// can be sent and received.
     pub async fn new_unix_server(stream: UnixStream, guid: &Guid) -> Result<Self> {
-        use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+        #[cfg(any(target_os = "android", target_os = "linux"))]
+        let client_uid = {
+            use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
 
-        // FIXME: Could and should this be async?
-        let creds = getsockopt(stream.as_raw_fd(), PeerCredentials)
-            .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
+            let creds = getsockopt(stream.as_raw_fd(), PeerCredentials)
+                .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
+
+            creds.uid()
+        };
+        #[cfg(any(
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "openbsd",
+            target_os = "netbsd"
+        ))]
+        let client_uid = nix::unistd::getpeereid(stream.as_raw_fd())
+            .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?
+            .0
+            .into();
 
         let auth = Authenticated::server(
             Async::new(Box::new(stream) as Box<dyn Socket>)?,
             guid.clone(),
-            creds.uid(),
+            client_uid,
         )
         .await?;
 
