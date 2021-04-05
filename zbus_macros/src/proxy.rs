@@ -223,6 +223,7 @@ fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> TokenStream {
         let value = arg_ident(signature.inputs.last().unwrap()).unwrap();
         quote! {
             #(#doc)*
+            #[allow(clippy::needless_question_mark)]
             pub #signature {
                 Ok(self.0.set_property(#property_name, #value)?)
             }
@@ -230,6 +231,7 @@ fn gen_proxy_property(property_name: &str, m: &TraitItemMethod) -> TokenStream {
     } else {
         quote! {
             #(#doc)*
+            #[allow(clippy::needless_question_mark)]
             pub #signature {
                 Ok(self.0.get_property(#property_name)?)
             }
