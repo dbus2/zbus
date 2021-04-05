@@ -19,7 +19,7 @@ stages:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: '2021-04-05.1'
+    FDO_DISTRIBUTION_TAG: '2021-04-05.2'
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
@@ -118,12 +118,9 @@ coverage:
       cobertura: coverage.xml
 
 crosscheck:
-  image: "rustdocker/rustfmt_clippy:stable"
+  extends: .debian_img
   stage: crosscheck
   script:
-    - rustc --version
-    - cargo --version
-    - rustup target add x86_64-apple-darwin x86_64-unknown-freebsd x86_64-unknown-netbsd
     - cargo check --target x86_64-apple-darwin
     - cargo check --target x86_64-unknown-freebsd
     - cargo check --target x86_64-unknown-netbsd
