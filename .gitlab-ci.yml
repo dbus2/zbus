@@ -13,6 +13,7 @@ stages:
   - lint
   - test
   - extras
+  - crosscheck
   - pages
 
 .debian:
@@ -115,6 +116,17 @@ coverage:
       - 'coverage'
     reports:
       cobertura: coverage.xml
+
+crosscheck:
+  image: "rustdocker/rustfmt_clippy:stable"
+  stage: crosscheck
+  script:
+    - rustc --version
+    - cargo --version
+    - rustup target add x86_64-apple-darwin x86_64-unknown-freebsd x86_64-unknown-netbsd
+    - cargo check --target x86_64-apple-darwin
+    - cargo check --target x86_64-unknown-freebsd
+    - cargo check --target x86_64-unknown-netbsd
 
 pages:
   image: "hrektts/mdbook"

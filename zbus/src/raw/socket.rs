@@ -103,6 +103,10 @@ impl Socket for UnixStream {
             Ok(msg) => {
                 let mut fds = vec![];
                 for cmsg in msg.cmsgs() {
+                    #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+                    if let ControlMessageOwned::ScmCreds(_) = cmsg {
+                        continue;
+                    }
                     if let ControlMessageOwned::ScmRights(fd) = cmsg {
                         fds.extend(fd.iter().map(|&f| unsafe { OwnedFd::from_raw_fd(f) }));
                     } else {
