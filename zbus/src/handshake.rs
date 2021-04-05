@@ -423,7 +423,8 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
             if self.step == Init {
                 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 
-                let zero = &[self.send_buffer.drain(..1).next().unwrap()];
+                // Steal the leading null byte from the buffer.
+                let zero = &[self.send_buffer.drain(0..1).next().unwrap()];
                 let iov = [nix::sys::uio::IoVec::from_slice(zero)];
 
                 if sendmsg(
