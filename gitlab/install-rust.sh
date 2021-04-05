@@ -18,6 +18,7 @@ rustc --version
 
 rustup component add clippy-preview
 rustup component add rustfmt
+rustup target add x86_64-apple-darwin x86_64-unknown-freebsd x86_64-unknown-netbsd
 cargo install --force cargo-audit
 cargo install --force grcov
 
