@@ -384,7 +384,9 @@ impl Connection {
                     let conn = self.clone();
 
                     // Start the producer task
-                    std::thread::spawn(move || block_on(conn.receive_msg()));
+                    std::thread::Builder::new()
+                        .name("zbus::azync::Connection::receive_specific::producer_thread".into())
+                        .spawn(move || block_on(conn.receive_msg()))?;
                 }
             }
 
