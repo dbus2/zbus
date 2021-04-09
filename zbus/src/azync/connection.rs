@@ -412,7 +412,7 @@ impl Connection {
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
     pub async fn send_message(&self, mut msg: Message) -> Result<u32> {
-        let serial = self.assign_serial_num(&mut msg).await?;
+        let serial = self.assign_serial_num(&mut msg)?;
 
         self.sink().await.send(msg).await?;
 
@@ -537,7 +537,7 @@ impl Connection {
     /// Assigns a serial number to `msg` that is unique to this connection.
     ///
     /// This method can fail if `msg` is corrupt.
-    pub async fn assign_serial_num(&self, msg: &mut Message) -> Result<u32> {
+    pub fn assign_serial_num(&self, msg: &mut Message) -> Result<u32> {
         let serial = self.next_serial();
         msg.modify_primary_header(|primary| {
             primary.set_serial_num(serial);
