@@ -304,7 +304,7 @@ impl Connection {
     /// this limitation will hopefully be removed in the near future.
     pub async fn stream(&self) -> MessageStream<'_> {
         let raw_conn = self.0.raw_in_conn.lock().await;
-        let incoming_queue = Some(self.0.in_queue.lock().await);
+        let incoming_queue = self.0.in_queue.lock().await;
 
         MessageStream {
             raw_conn,
@@ -745,11 +745,10 @@ impl Connection {
     // (`receive_specific` callers basically).
     async fn receive_msg(&self) {
         loop {
-            let raw_conn = self.0.raw_in_conn.lock().await;
+            let mut raw_conn = self.0.raw_in_conn.lock().await;
 
-            let mut stream = MessageStream {
-                raw_conn,
-                incoming_queue: None,
+            let mut stream = SocketStream {
+                raw_conn: &mut raw_conn,
             };
             let msg = match select(
                 Box::pin(stream.try_next()),
@@ -770,7 +769,7 @@ impl Connection {
             let msg = match msg {
                 Ok(Some(msg)) => Ok(msg),
                 Ok(None) => {
-                    // If MessageStream gives us None, that means the socket was closed
+                    // If SocketStream gives us None, that means the socket was closed
                     Err(Error::Io(io::Error::new(
                         ErrorKind::BrokenPipe,
                         "socket closed",
@@ -878,7 +877,7 @@ impl futures_sink::Sink<Message> for MessageSink<'_> {
 /// recommended not to use such a combination.
 pub struct MessageStream<'s> {
     raw_conn: MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
-    incoming_queue: Option<MutexGuard<'s, VecDeque<Result<Message>>>>,
+    incoming_queue: MutexGuard<'s, VecDeque<Result<Message>>>,
 }
 
 impl<'s> stream::Stream for MessageStream<'s> {
@@ -887,11 +886,27 @@ impl<'s> stream::Stream for MessageStream<'s> {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let stream = self.get_mut();
 
-        if let Some(queue) = &mut stream.incoming_queue {
-            if let Some(msg) = queue.pop_front() {
-                return Poll::Ready(Some(msg));
-            }
+        if let Some(msg) = stream.incoming_queue.pop_front() {
+            return Poll::Ready(Some(msg));
         }
+
+        let mut stream = SocketStream {
+            raw_conn: &mut stream.raw_conn,
+        };
+
+        stream::Stream::poll_next(Pin::new(&mut stream), cx)
+    }
+}
+
+pub struct SocketStream<'r, 's> {
+    raw_conn: &'r mut MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
+}
+
+impl<'r, 's> stream::Stream for SocketStream<'r, 's> {
+    type Item = Result<Message>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let stream = self.get_mut();
 
         loop {
             match stream.raw_conn.try_receive_message() {
