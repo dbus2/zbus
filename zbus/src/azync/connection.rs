@@ -4,6 +4,7 @@ use once_cell::sync::OnceCell;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap, VecDeque},
     convert::TryInto,
+    future::ready,
     hash::{Hash, Hasher},
     io::{self, ErrorKind},
     os::unix::{
@@ -24,7 +25,7 @@ use futures_core::{future::BoxFuture, stream};
 use futures_util::{
     future::{select, Either, FutureExt},
     sink::SinkExt,
-    stream::TryStreamExt,
+    stream::{unfold, StreamExt, TryStreamExt},
 };
 
 use crate::{
@@ -296,19 +297,19 @@ impl Connection {
     }
 
     /// Get a stream to receive incoming messages.
-    ///
-    /// **Note:** At the moment, a stream requires locking all other incoming messages on the
-    /// connection. Therefore once you have created a stream for a connection, all receiving
-    /// operations will not yield any results until the stream is dropped. However, this is not as
-    /// big an issue since all operations in this API are asynchronous (i-e non-blocking). Moreover,
-    /// this limitation will hopefully be removed in the near future.
-    pub async fn stream(&self) -> MessageStream<'_> {
-        let raw_conn = self.0.raw_in_conn.lock().await;
-        let incoming_queue = self.0.in_queue.lock().await;
+    pub async fn stream(&self) -> MessageStream {
+        let conn = self.clone();
+        let stream = unfold(conn, |conn| async move {
+            // In the end it's just `receive_specific` with `*` filter.
+            match conn.receive_specific(|_| ready(Ok(true)).boxed()).await {
+                Ok(msg) => Some((Ok(msg), conn)),
+                Err(Error::Io(e)) if e.kind() == ErrorKind::BrokenPipe => None,
+                Err(e) => Some((Err(e), conn)),
+            }
+        });
 
         MessageStream {
-            raw_conn,
-            incoming_queue,
+            stream: stream.boxed(),
         }
     }
 
@@ -875,26 +876,15 @@ impl futures_sink::Sink<Message> for MessageSink<'_> {
 /// from multiple tasks, you can end up with situation where the stream takes away the message
 /// the `receive_specific` is waiting for and end up in a deadlock situation. It is therefore highly
 /// recommended not to use such a combination.
-pub struct MessageStream<'s> {
-    raw_conn: MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
-    incoming_queue: MutexGuard<'s, VecDeque<Result<Message>>>,
+pub struct MessageStream {
+    stream: stream::BoxStream<'static, Result<Message>>,
 }
 
-impl<'s> stream::Stream for MessageStream<'s> {
+impl stream::Stream for MessageStream {
     type Item = Result<Message>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let stream = self.get_mut();
-
-        if let Some(msg) = stream.incoming_queue.pop_front() {
-            return Poll::Ready(Some(msg));
-        }
-
-        let mut stream = SocketStream {
-            raw_conn: &mut stream.raw_conn,
-        };
-
-        stream::Stream::poll_next(Pin::new(&mut stream), cx)
+        stream::Stream::poll_next(self.get_mut().stream.as_mut(), cx)
     }
 }
 
