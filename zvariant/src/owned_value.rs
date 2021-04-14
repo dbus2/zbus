@@ -2,9 +2,12 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 use crate::{
-    Array, Dict, Fd, Maybe, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure,
+    Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure,
     Type, Value,
 };
+
+#[cfg(feature = "gvariant")]
+use crate::Maybe;
 
 // FIXME: Replace with a generic impl<T: TryFrom<Value>> TryFrom<OwnedValue> for T?
 // https://gitlab.freedesktop.org/dbus/zbus/-/issues/138
@@ -59,6 +62,7 @@ ov_try_from!(ObjectPath<'a>);
 ov_try_from!(OwnedObjectPath);
 ov_try_from!(Array<'a>);
 ov_try_from!(Dict<'a, 'a>);
+#[cfg(feature = "gvariant")]
 ov_try_from!(Maybe<'a>);
 ov_try_from!(Str<'a>);
 ov_try_from!(Structure<'a>);
@@ -80,6 +84,7 @@ ov_try_from_ref!(&'a Array<'a>);
 ov_try_from_ref!(&'a Dict<'a, 'a>);
 ov_try_from_ref!(&'a Str<'a>);
 ov_try_from_ref!(&'a Structure<'a>);
+#[cfg(feature = "gvariant")]
 ov_try_from_ref!(&'a Maybe<'a>);
 ov_try_from_ref!(Fd);
 
@@ -176,6 +181,7 @@ to_value!(u64);
 to_value!(f64);
 to_value!(Array<'a>);
 to_value!(Dict<'a, 'a>);
+#[cfg(feature = "gvariant")]
 to_value!(Maybe<'a>);
 to_value!(Str<'a>);
 to_value!(Signature<'a>);
