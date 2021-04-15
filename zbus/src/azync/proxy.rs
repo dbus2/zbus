@@ -11,6 +11,7 @@ use std::{
     convert::{TryFrom, TryInto},
     future::ready,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -87,21 +88,21 @@ struct SignalHandlerInfo {
 ///
 /// [`futures` crate]: https://crates.io/crates/futures
 /// [`dbus_proxy`]: attr.dbus_proxy.html
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct Proxy<'a> {
-    core: ProxyCore<'a>,
-    #[derivative(Debug = "ignore")]
-    sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
+    core: Arc<ProxyCore<'a>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 struct ProxyCore<'a> {
     conn: Connection,
     destination: Cow<'a, str>,
     path: ObjectPath<'a>,
     interface: Cow<'a, str>,
     dest_unique_name: OnceCell<String>,
+    #[derivative(Debug = "ignore")]
+    sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
 }
 
 impl<'a> ProxyCore<'a> {
@@ -117,6 +118,7 @@ impl<'a> ProxyCore<'a> {
             path,
             interface,
             dest_unique_name: OnceCell::new(),
+            sig_handlers: Mutex::new(SlotMap::with_key()),
         }
     }
 }
@@ -124,8 +126,7 @@ impl<'a> ProxyCore<'a> {
 impl<'a> Proxy<'a> {
     fn new_with_core(core: ProxyCore<'a>) -> Self {
         Self {
-            core,
-            sig_handlers: Mutex::new(SlotMap::with_key()),
+            core: Arc::new(core),
         }
     }
 
@@ -349,10 +350,15 @@ impl<'a> Proxy<'a> {
     where
         for<'msg> H: FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send + 'static,
     {
-        let id = self.sig_handlers.lock().await.insert(SignalHandlerInfo {
-            signal_name,
-            handler: Box::new(handler),
-        });
+        let id = self
+            .core
+            .sig_handlers
+            .lock()
+            .await
+            .insert(SignalHandlerInfo {
+                signal_name,
+                handler: Box::new(handler),
+            });
 
         if self.core.conn.is_bus() {
             let _ = self
@@ -381,7 +387,7 @@ impl<'a> Proxy<'a> {
     /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
     /// connection.
     pub async fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
-        match self.sig_handlers.lock().await.remove(handler_id) {
+        match self.core.sig_handlers.lock().await.remove(handler_id) {
             Some(handler_info) => {
                 if self.core.conn.is_bus() {
                     let _ = self
@@ -419,7 +425,7 @@ impl<'a> Proxy<'a> {
             // want to avoid using `handlers` directly as that somehow makes this call (or rather
             // the future of this call) not `Sync` and we get a very scary error message from
             // the compiler on using `next_signal` with `tokio::select` inside a tokio task.
-            let handlers = self.sig_handlers.lock().await;
+            let handlers = self.core.sig_handlers.lock().await;
             let signals: Vec<&str> = handlers.values().map(|info| info.signal_name).collect();
 
             self.resolve_name().await?;
@@ -463,7 +469,7 @@ impl<'a> Proxy<'a> {
     /// If no errors are encountered, `Ok(true)` is returned if any handlers where found and called for,
     /// the signal; `Ok(false)` otherwise.
     pub async fn handle_signal(&self, msg: &Message) -> Result<bool> {
-        let mut handlers = self.sig_handlers.lock().await;
+        let mut handlers = self.core.sig_handlers.lock().await;
         if handlers.is_empty() {
             return Ok(false);
         }
@@ -490,7 +496,8 @@ impl<'a> Proxy<'a> {
     }
 
     pub(crate) async fn has_signal_handler(&self, signal_name: &str) -> bool {
-        self.sig_handlers
+        self.core
+            .sig_handlers
             .lock()
             .await
             .values()
