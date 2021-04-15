@@ -39,12 +39,29 @@ struct SignalHandlerInfo {
     handler: SignalHandler,
 }
 
+type PropertyChangedHandler =
+    Box<dyn for<'v> FnMut(Option<&'v Value<'_>>) -> BoxFuture<'v, ()> + Send>;
+
+new_key_type! {
+    /// The ID for a registered proprety changed handler.
+    pub struct PropertyChangedHandlerId;
+}
+
+pub(crate) struct PropertyChangedHandlerInfo {
+    property_name: &'static str,
+    handler: PropertyChangedHandler,
+}
+
 // Hold proxy properties related data.
-#[derive(Default, Debug)]
+#[derive(derivative::Derivative)]
+#[derivative(Debug, Default)]
 pub(crate) struct ProxyProperties<'a> {
     pub(crate) proxy: OnceCell<AsyncPropertiesProxy<'a>>,
     pub(crate) values: Mutex<HashMap<String, OwnedValue>>,
     task: OnceCell<Task<()>>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) changed_handlers:
+        Mutex<SlotMap<PropertyChangedHandlerId, PropertyChangedHandlerInfo>>,
 }
 
 /// The asynchronous sibling of [`crate::Proxy`].
@@ -126,6 +143,19 @@ pub(crate) struct ProxyInner<'a> {
     signal_msg_stream: OnceCell<Mutex<MessageStream>>,
 }
 
+impl<'a> ProxyProperties<'a> {
+    async fn changed(&self, property_name: &str, value: Option<&Value<'_>>) {
+        let mut handlers = self.changed_handlers.lock().await;
+
+        for info in handlers
+            .values_mut()
+            .filter(|info| info.property_name == property_name)
+        {
+            (*info.handler)(value).await;
+        }
+    }
+}
+
 impl<'a> ProxyInner<'a> {
     pub(crate) fn new(
         conn: Connection,
@@ -199,6 +229,58 @@ impl<'a> Proxy<'a> {
             .await
     }
 
+    /// Register a changed handler for the property named `property_name`.
+    ///
+    /// Once a handler is successfully registered, call [`Self::next_signal`] to wait for the next
+    /// signal to arrive and be handled by its registered handler. A unique ID for the handler is
+    /// returned, which can be used to deregister this handler using
+    /// [`Self::disconnect_property_changed`] method.
+    ///
+    /// # Errors
+    ///
+    /// The current implementation requires cached properties. It returns an [`Error::Unsupported`]
+    /// if the proxy isn't setup with cache.
+    pub async fn connect_property_changed<H>(
+        &self,
+        property_name: &'static str,
+        handler: H,
+    ) -> Result<PropertyChangedHandlerId>
+    where
+        for<'v> H: FnMut(Option<&'v Value<'_>>) -> BoxFuture<'v, ()> + Send + 'static,
+    {
+        if !self.has_cached_properties() {
+            return Err(Error::Unsupported);
+        }
+
+        let id = self
+            .properties
+            .changed_handlers
+            .lock()
+            .await
+            .insert(PropertyChangedHandlerInfo {
+                property_name,
+                handler: Box::new(handler),
+            });
+        Ok(id)
+    }
+
+    /// Deregister the property handler with the ID `handler_id`.
+    ///
+    /// This method returns `Ok(true)` if a handler with the id `handler_id` is found and removed;
+    /// `Ok(false)` otherwise.
+    pub async fn disconnect_property_changed(
+        &self,
+        handler_id: PropertyChangedHandlerId,
+    ) -> Result<bool> {
+        Ok(self
+            .properties
+            .changed_handlers
+            .lock()
+            .await
+            .remove(handler_id)
+            .is_some())
+    }
+
     /// Get a reference to the associated connection.
     pub fn connection(&self) -> &Connection {
         &self.inner.conn
@@ -263,13 +345,19 @@ impl<'a> Proxy<'a> {
                 if let Ok(args) = changed.args() {
                     let mut values = properties.values.lock().await;
                     for inval in args.invalidated_properties() {
+                        properties.changed(inval, None).await;
                         values.remove(*inval);
                     }
-                    values.extend(
-                        args.changed_properties()
-                            .iter()
-                            .map(|(k, v)| (k.to_string(), v.into())),
-                    );
+
+                    for (property_name, value) in args
+                        .changed_properties()
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), OwnedValue::from(v)))
+                    {
+                        // we should notify after insert, but this requires extra lookup atm
+                        properties.changed(&property_name, Some(&value)).await;
+                        values.insert(property_name, value);
+                    }
                 }
             }
         });
@@ -308,6 +396,10 @@ impl<'a> Proxy<'a> {
             .await?)
     }
 
+    fn has_cached_properties(&self) -> bool {
+        self.properties.task.get().is_some()
+    }
+
     /// Get the property `property_name`.
     ///
     /// Get the property value from the cache (if caching is enabled on this proxy) or call the
@@ -316,7 +408,7 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        let value = if self.properties.task.get().is_some() {
+        let value = if self.has_cached_properties() {
             if let Some(value) = self.get_cached_property(property_name).await {
                 value
             } else {
