@@ -36,6 +36,12 @@ struct SignalHandlerInfo {
     handler: SignalHandler,
 }
 
+// Hold proxy properties related data.
+#[derive(Default, Debug)]
+struct ProxyProperties<'a> {
+    proxy: OnceCell<AsyncPropertiesProxy<'a>>,
+}
+
 /// The asynchronous sibling of [`crate::Proxy`].
 ///
 /// This API is mostly the same as [`crate::Proxy`], except it is asynchronous. One of the
@@ -104,6 +110,9 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) destination: Cow<'a, str>,
     pub(crate) path: ObjectPath<'a>,
     pub(crate) interface: Cow<'a, str>,
+    // Use a 'static as we can't self-reference ProxyInner fields
+    // eventually, we could make destination/path inside an Arc
+    properties: ProxyProperties<'static>,
     dest_unique_name: OnceCell<String>,
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
@@ -123,6 +132,7 @@ impl<'a> ProxyInner<'a> {
             destination,
             path,
             interface,
+            properties: Default::default(),
             dest_unique_name: OnceCell::new(),
             sig_handlers: Mutex::new(SlotMap::with_key()),
             signal_msg_stream: OnceCell::new(),
@@ -142,6 +152,25 @@ impl<'a> ProxyInner<'a> {
             h.member().ok().flatten()
         } else {
             None
+        }
+    }
+
+    async fn properties_proxy(&self) -> Result<&AsyncPropertiesProxy<'static>> {
+        match self.properties.proxy.get() {
+            Some(proxy) => Ok(proxy),
+            None => {
+                let proxy = AsyncPropertiesProxy::builder(&self.conn)
+                    .destination(self.destination.to_string())
+                    // Safe because already checked earlier
+                    .path(self.path.to_owned())
+                    .unwrap()
+                    .build_async()
+                    .await?;
+                // doesn't matter if another thread sets it before
+                let _ = self.properties.proxy.set(proxy);
+                // but we must have a Ok() here
+                self.properties.proxy.get().ok_or_else(|| panic!())
+            }
         }
     }
 }
@@ -223,12 +252,9 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
-            .destination(self.inner.destination.as_ref())
-            .path(&self.inner.path)?
-            .build()?;
-
-        proxy
+        self.inner
+            .properties_proxy()
+            .await?
             .get(&self.inner.interface, property_name)
             .await?
             .try_into()
@@ -242,12 +268,9 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
-            .destination(self.inner.destination.as_ref())
-            .path(&self.inner.path)?
-            .build()?;
-
-        proxy
+        self.inner
+            .properties_proxy()
+            .await?
             .set(&self.inner.interface, property_name, &value.into())
             .await
     }
