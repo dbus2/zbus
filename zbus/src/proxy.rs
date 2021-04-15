@@ -137,7 +137,8 @@ impl<'a> Proxy<'a> {
 
     /// Get the property `property_name`.
     ///
-    /// Effectively, call the `Get` method of the `org.freedesktop.DBus.Properties` interface.
+    /// Get the property value from the cache or call the `Get` method of the
+    /// `org.freedesktop.DBus.Properties` interface.
     pub fn get_property<T>(&self, property_name: &str) -> fdo::Result<T>
     where
         T: TryFrom<OwnedValue>,

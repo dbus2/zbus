@@ -282,19 +282,54 @@ impl<'a> Proxy<'a> {
         Ok(())
     }
 
+    async fn get_cached_property(&self, property_name: &str) -> Option<OwnedValue> {
+        self.properties
+            .values
+            .lock()
+            .await
+            .get(property_name)
+            .cloned()
+    }
+
+    async fn set_cached_property(&self, property_name: String, value: Option<OwnedValue>) {
+        let mut values = self.properties.values.lock().await;
+        if let Some(value) = value {
+            values.insert(property_name, value);
+        } else {
+            values.remove(&property_name);
+        }
+    }
+
+    async fn get_proxy_property(&self, property_name: &str) -> Result<OwnedValue> {
+        Ok(self
+            .properties_proxy()
+            .await?
+            .get(&self.inner.interface, property_name)
+            .await?)
+    }
+
     /// Get the property `property_name`.
     ///
-    /// Effectively, call the `Get` method of the `org.freedesktop.DBus.Properties` interface.
+    /// Get the property value from the cache (if caching is enabled on this proxy) or call the
+    /// `Get` method of the `org.freedesktop.DBus.Properties` interface.
     pub async fn get_property<T>(&self, property_name: &str) -> fdo::Result<T>
     where
         T: TryFrom<OwnedValue>,
     {
-        self.properties_proxy()
-            .await?
-            .get(&self.inner.interface, property_name)
-            .await?
-            .try_into()
-            .map_err(|_| Error::InvalidReply.into())
+        let value = if self.properties.task.get().is_some() {
+            if let Some(value) = self.get_cached_property(property_name).await {
+                value
+            } else {
+                let value = self.get_proxy_property(property_name).await?;
+                self.set_cached_property(property_name.to_string(), Some(value.clone()))
+                    .await;
+                value
+            }
+        } else {
+            self.get_proxy_property(property_name).await?
+        };
+
+        value.try_into().map_err(|_| Error::InvalidReply.into())
     }
 
     /// Set the property `property_name`.
