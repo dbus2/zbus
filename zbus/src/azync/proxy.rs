@@ -90,12 +90,12 @@ struct SignalHandlerInfo {
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 #[derive(Debug)]
 pub struct Proxy<'a> {
-    core: Arc<ProxyCore<'a>>,
+    inner: Arc<ProxyInner<'a>>,
 }
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
-struct ProxyCore<'a> {
+struct ProxyInner<'a> {
     conn: Connection,
     destination: Cow<'a, str>,
     path: ObjectPath<'a>,
@@ -105,7 +105,7 @@ struct ProxyCore<'a> {
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
 }
 
-impl<'a> ProxyCore<'a> {
+impl<'a> ProxyInner<'a> {
     pub(crate) fn new(
         conn: Connection,
         destination: Cow<'a, str>,
@@ -124,12 +124,6 @@ impl<'a> ProxyCore<'a> {
 }
 
 impl<'a> Proxy<'a> {
-    fn new_with_core(core: ProxyCore<'a>) -> Self {
-        Self {
-            core: Arc::new(core),
-        }
-    }
-
     /// Create a new `Proxy` for the given destination/path/interface.
     pub fn new<E>(
         conn: &Connection,
@@ -140,12 +134,14 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        Ok(Self::new_with_core(ProxyCore::new(
-            conn.clone(),
-            Cow::from(destination),
-            path.try_into()?,
-            Cow::from(interface),
-        )))
+        Ok(Self {
+            inner: Arc::new(ProxyInner::new(
+                conn.clone(),
+                Cow::from(destination),
+                path.try_into()?,
+                Cow::from(interface),
+            )),
+        })
     }
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
@@ -159,41 +155,47 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        Ok(Self::new_with_core(ProxyCore::new(
-            conn,
-            Cow::from(destination),
-            path.try_into()?,
-            Cow::from(interface),
-        )))
+        Ok(Self {
+            inner: Arc::new(ProxyInner::new(
+                conn,
+                Cow::from(destination),
+                path.try_into()?,
+                Cow::from(interface),
+            )),
+        })
     }
 
     /// Get a reference to the associated connection.
     pub fn connection(&self) -> &Connection {
-        &self.core.conn
+        &self.inner.conn
     }
 
     /// Get a reference to the destination service name.
     pub fn destination(&self) -> &str {
-        &self.core.destination
+        &self.inner.destination
     }
 
     /// Get a reference to the object path.
     pub fn path(&self) -> &ObjectPath<'_> {
-        &self.core.path
+        &self.inner.path
     }
 
     /// Get a reference to the interface.
     pub fn interface(&self) -> &str {
-        &self.core.interface
+        &self.inner.interface
     }
 
     /// Introspect the associated object, and return the XML description.
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
-        AsyncIntrospectableProxy::new_for(&self.core.conn, &self.core.destination, &self.core.path)?
-            .introspect()
-            .await
+        AsyncIntrospectableProxy::new_for(
+            &self.inner.conn,
+            &self.inner.destination,
+            &self.inner.path,
+        )?
+        .introspect()
+        .await
     }
 
     /// Get the property `property_name`.
@@ -203,8 +205,8 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        AsyncPropertiesProxy::new_for(&self.core.conn, &self.core.destination, &self.core.path)?
-            .get(&self.core.interface, property_name)
+        AsyncPropertiesProxy::new_for(&self.inner.conn, &self.inner.destination, &self.inner.path)?
+            .get(&self.inner.interface, property_name)
             .await?
             .try_into()
             .map_err(|_| Error::InvalidReply.into())
@@ -217,8 +219,8 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        AsyncPropertiesProxy::new_for(&self.core.conn, &self.core.destination, &self.core.path)?
-            .set(&self.core.interface, property_name, &value.into())
+        AsyncPropertiesProxy::new_for(&self.inner.conn, &self.inner.destination, &self.inner.path)?
+            .set(&self.inner.interface, property_name, &value.into())
             .await
     }
 
@@ -234,12 +236,12 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::Type,
     {
         let reply = self
-            .core
+            .inner
             .conn
             .call_method(
-                Some(&self.core.destination),
-                self.core.path.as_str(),
-                Some(&self.core.interface),
+                Some(&self.inner.destination),
+                self.inner.path.as_str(),
+                Some(&self.inner.interface),
                 method_name,
                 body,
             )
@@ -281,9 +283,9 @@ impl<'a> Proxy<'a> {
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
     pub async fn receive_signal(&self, signal_name: &'static str) -> Result<SignalStream<'a>> {
-        let subscription_id = if self.core.conn.is_bus() {
+        let subscription_id = if self.inner.conn.is_bus() {
             let id = self
-                .core
+                .inner
                 .conn
                 .subscribe_signal(
                     self.destination(),
@@ -300,7 +302,7 @@ impl<'a> Proxy<'a> {
 
         self.resolve_name().await?;
 
-        let proxy = self.core.clone();
+        let proxy = self.inner.clone();
         let stream = unfold((proxy, signal_name), |(proxy, signal_name)| async move {
             proxy
                 .conn
@@ -325,7 +327,7 @@ impl<'a> Proxy<'a> {
 
         Ok(SignalStream {
             stream: stream.boxed(),
-            conn: self.core.conn.clone(),
+            conn: self.inner.conn.clone(),
             subscription_id,
         })
     }
@@ -351,7 +353,7 @@ impl<'a> Proxy<'a> {
         for<'msg> H: FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send + 'static,
     {
         let id = self
-            .core
+            .inner
             .sig_handlers
             .lock()
             .await
@@ -360,9 +362,9 @@ impl<'a> Proxy<'a> {
                 handler: Box::new(handler),
             });
 
-        if self.core.conn.is_bus() {
+        if self.inner.conn.is_bus() {
             let _ = self
-                .core
+                .inner
                 .conn
                 .subscribe_signal(
                     self.destination(),
@@ -387,11 +389,11 @@ impl<'a> Proxy<'a> {
     /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
     /// connection.
     pub async fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
-        match self.core.sig_handlers.lock().await.remove(handler_id) {
+        match self.inner.sig_handlers.lock().await.remove(handler_id) {
             Some(handler_info) => {
-                if self.core.conn.is_bus() {
+                if self.inner.conn.is_bus() {
                     let _ = self
-                        .core
+                        .inner
                         .conn
                         .unsubscribe_signal(
                             self.destination(),
@@ -425,12 +427,12 @@ impl<'a> Proxy<'a> {
             // want to avoid using `handlers` directly as that somehow makes this call (or rather
             // the future of this call) not `Sync` and we get a very scary error message from
             // the compiler on using `next_signal` with `tokio::select` inside a tokio task.
-            let handlers = self.core.sig_handlers.lock().await;
+            let handlers = self.inner.sig_handlers.lock().await;
             let signals: Vec<&str> = handlers.values().map(|info| info.signal_name).collect();
 
             self.resolve_name().await?;
 
-            self.core
+            self.inner
                 .conn
                 .receive_specific(move |msg| {
                     let ret = match msg.header() {
@@ -469,7 +471,7 @@ impl<'a> Proxy<'a> {
     /// If no errors are encountered, `Ok(true)` is returned if any handlers where found and called for,
     /// the signal; `Ok(false)` otherwise.
     pub async fn handle_signal(&self, msg: &Message) -> Result<bool> {
-        let mut handlers = self.core.sig_handlers.lock().await;
+        let mut handlers = self.inner.sig_handlers.lock().await;
         if handlers.is_empty() {
             return Ok(false);
         }
@@ -496,7 +498,7 @@ impl<'a> Proxy<'a> {
     }
 
     pub(crate) async fn has_signal_handler(&self, signal_name: &str) -> bool {
-        self.core
+        self.inner
             .sig_handlers
             .lock()
             .await
@@ -513,20 +515,20 @@ impl<'a> Proxy<'a> {
     /// need to commmunicate with multiple services exposing the same interface, over the same
     /// connection. Hence the need for this method.
     pub(crate) async fn resolve_name(&self) -> Result<()> {
-        if self.core.dest_unique_name.get().is_some() {
+        if self.inner.dest_unique_name.get().is_some() {
             // Already resolved the name.
             return Ok(());
         }
 
-        let destination = &self.core.destination;
+        let destination = &self.inner.destination;
         let unique_name = if destination.starts_with(':') || destination == "org.freedesktop.DBus" {
             destination.to_string()
         } else {
-            fdo::AsyncDBusProxy::new(&self.core.conn)?
+            fdo::AsyncDBusProxy::new(&self.inner.conn)?
                 .get_name_owner(destination)
                 .await?
         };
-        self.core
+        self.inner
             .dest_unique_name
             .set(unique_name)
             // programmer (probably our) error if this fails.
@@ -536,7 +538,7 @@ impl<'a> Proxy<'a> {
     }
 
     pub(crate) fn destination_unique_name(&self) -> Option<&str> {
-        self.core.dest_unique_name.get().map(|s| s.as_str())
+        self.inner.dest_unique_name.get().map(|s| s.as_str())
     }
 }
 
