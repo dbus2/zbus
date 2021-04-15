@@ -104,7 +104,31 @@ struct ProxyCore<'a> {
     dest_unique_name: OnceCell<String>,
 }
 
+impl<'a> ProxyCore<'a> {
+    pub(crate) fn new(
+        conn: Connection,
+        destination: Cow<'a, str>,
+        path: ObjectPath<'a>,
+        interface: Cow<'a, str>,
+    ) -> Self {
+        Self {
+            conn,
+            destination,
+            path,
+            interface,
+            dest_unique_name: OnceCell::new(),
+        }
+    }
+}
+
 impl<'a> Proxy<'a> {
+    fn new_with_core(core: ProxyCore<'a>) -> Self {
+        Self {
+            core,
+            sig_handlers: Mutex::new(SlotMap::with_key()),
+        }
+    }
+
     /// Create a new `Proxy` for the given destination/path/interface.
     pub fn new<E>(
         conn: &Connection,
@@ -115,16 +139,12 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        Ok(Self {
-            core: ProxyCore {
-                conn: conn.clone(),
-                destination: Cow::from(destination),
-                path: path.try_into()?,
-                interface: Cow::from(interface),
-                dest_unique_name: OnceCell::new(),
-            },
-            sig_handlers: Mutex::new(SlotMap::with_key()),
-        })
+        Ok(Self::new_with_core(ProxyCore::new(
+            conn.clone(),
+            Cow::from(destination),
+            path.try_into()?,
+            Cow::from(interface),
+        )))
     }
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
@@ -138,16 +158,12 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        Ok(Self {
-            core: ProxyCore {
-                conn,
-                destination: Cow::from(destination),
-                path: path.try_into()?,
-                interface: Cow::from(interface),
-                dest_unique_name: OnceCell::new(),
-            },
-            sig_handlers: Mutex::new(SlotMap::with_key()),
-        })
+        Ok(Self::new_with_core(ProxyCore::new(
+            conn,
+            Cow::from(destination),
+            path.try_into()?,
+            Cow::from(interface),
+        )))
     }
 
     /// Get a reference to the associated connection.
