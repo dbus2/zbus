@@ -895,7 +895,7 @@ impl stream::Stream for MessageStream {
     }
 }
 
-pub struct ReceiveMessage<'r, 's> {
+struct ReceiveMessage<'r, 's> {
     raw_conn: &'r mut MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
 }
 
