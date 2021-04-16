@@ -6,7 +6,7 @@ use std::{
     convert::TryInto,
     future::ready,
     hash::{Hash, Hasher},
-    io::{self, ErrorKind},
+    io::ErrorKind,
     os::unix::{
         io::{AsRawFd, RawFd},
         net::UnixStream,
@@ -21,11 +21,11 @@ use std::{
 use zvariant::ObjectPath;
 
 use event_listener::Event;
-use futures_core::{future::BoxFuture, stream};
+use futures_core::{future::BoxFuture, stream, Future};
 use futures_util::{
     future::{select, Either, FutureExt},
     sink::SinkExt,
-    stream::{unfold, StreamExt, TryStreamExt},
+    stream::{unfold, StreamExt},
 };
 
 use crate::{
@@ -178,29 +178,16 @@ impl MessageReceiverThread<Box<dyn Socket>> {
         while self.run_recv_thread.load(SeqCst) {
             let mut raw_conn = self.raw_in_conn.lock().await;
 
-            let mut stream = SocketStream {
-                raw_conn: &mut raw_conn,
-            };
             let msg = match select(
-                Box::pin(stream.try_next()),
+                Box::pin(ReceiveMessage {
+                    raw_conn: &mut raw_conn,
+                }),
                 self.run_recv_thread_event.listen(),
             )
             .await
             {
                 Either::Left((msg, _)) => msg,
                 Either::Right((_, _)) => continue,
-            };
-
-            let msg = match msg {
-                Ok(Some(msg)) => Ok(msg),
-                Ok(None) => {
-                    // If SocketStream gives us None, that means the socket was closed
-                    Err(Error::Io(io::Error::new(
-                        ErrorKind::BrokenPipe,
-                        "socket closed",
-                    )))
-                }
-                Err(e) => Err(e),
             };
 
             let mut in_queue_fresh = self.in_queue_fresh.lock().await;
@@ -908,19 +895,18 @@ impl stream::Stream for MessageStream {
     }
 }
 
-pub struct SocketStream<'r, 's> {
+pub struct ReceiveMessage<'r, 's> {
     raw_conn: &'r mut MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
 }
 
-impl<'r, 's> stream::Stream for SocketStream<'r, 's> {
-    type Item = Result<Message>;
+impl<'r, 's> Future for ReceiveMessage<'r, 's> {
+    type Output = Result<Message>;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let stream = self.get_mut();
 
         loop {
             match stream.raw_conn.try_receive_message() {
-                Ok(m) => return Poll::Ready(Some(Ok(m))),
                 Err(Error::Io(e)) if e.kind() == ErrorKind::WouldBlock => {
                     let poll = stream.raw_conn.socket().poll_readable(cx);
 
@@ -928,11 +914,10 @@ impl<'r, 's> stream::Stream for SocketStream<'r, 's> {
                         Poll::Pending => return Poll::Pending,
                         // Guess socket became ready already so let's try it again.
                         Poll::Ready(Ok(_)) => continue,
-                        Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
+                        Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
                     }
                 }
-                Err(Error::Io(e)) if e.kind() == ErrorKind::BrokenPipe => return Poll::Ready(None),
-                Err(e) => return Poll::Ready(Some(Err(e))),
+                m => return Poll::Ready(m),
             }
         }
     }
@@ -946,6 +931,7 @@ impl From<crate::Connection> for Connection {
 
 #[cfg(test)]
 mod tests {
+    use futures_util::stream::TryStreamExt;
     use std::os::unix::net::UnixStream;
 
     use super::*;
