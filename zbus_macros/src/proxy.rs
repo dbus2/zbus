@@ -404,7 +404,7 @@ fn gen_proxy_property(
             signature.span()
         };
         let body = quote_spanned! {body_span =>
-            Ok(self.0.get_property::<_>(#property_name)#wait?)
+            Ok(self.0.get_property(#property_name)#wait?)
         };
         quote! {
             #(#doc)*
