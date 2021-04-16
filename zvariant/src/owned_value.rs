@@ -2,8 +2,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 use crate::{
-    Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure,
-    Type, Value,
+    Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure, Type,
+    Value,
 };
 
 #[cfg(feature = "gvariant")]
