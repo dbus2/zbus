@@ -378,6 +378,11 @@ mod tests {
             .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .unwrap();
 
+        let h = proxy
+            .connect_features_changed(|val| {
+                dbg!(val);
+            })
+            .unwrap();
         loop {
             proxy.next_signal().unwrap();
 
@@ -387,5 +392,6 @@ mod tests {
                 break;
             }
         }
+        proxy.disconnect_property_changed(h).unwrap();
     }
 }

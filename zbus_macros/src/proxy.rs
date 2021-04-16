@@ -111,7 +111,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                 });
             let m = if is_property {
                 has_properties = true;
-                gen_proxy_property(&name, m, &async_opts)
+                gen_proxy_property(&name, &method_name, m, &async_opts)
             } else if is_signal {
                 let (method, types) =
                     gen_proxy_signal(&proxy_name, &name, &method_name, m, &async_opts);
@@ -345,10 +345,12 @@ fn gen_proxy_method_call(
 
 fn gen_proxy_property(
     property_name: &str,
+    method_name: &str,
     m: &TraitItemMethod,
     async_opts: &AsyncOpts,
 ) -> TokenStream {
-    let AsyncOpts { usage, wait, .. } = async_opts;
+    let AsyncOpts { usage, wait, azync } = async_opts;
+    let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let signature = &m.sig;
     if signature.inputs.len() > 1 {
@@ -371,11 +373,55 @@ fn gen_proxy_property(
         let body = quote_spanned! {body_span =>
             ::std::result::Result::Ok(self.0.get_property(#property_name)#wait?)
         };
+
+        let connect = format_ident!("connect_{}_changed", method_name);
+        let handler = if *azync {
+            parse_quote! {
+                for<'v> __H: FnMut(Option<&'v #zbus::export::zvariant::Value<'_>>) ->
+                    #zbus::export::futures_core::future::BoxFuture<'v, ()> + Send + 'static
+            }
+        } else {
+            parse_quote! { __H: FnMut(Option<&#zbus::export::zvariant::Value<'_>>) + Send + 'static }
+        };
+        let (proxy_method, link) = if *azync {
+            (
+                "zbus::azync::Proxy::connect_property_changed",
+                "https://docs.rs/zbus/latest/zbus/azync/struct.Proxy.html#method.connect_property_changed",
+            )
+        } else {
+            (
+                "zbus::Proxy::connect_property_changed",
+                "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_property_changed",
+            )
+        };
+        let gen_doc = format!(
+            " Connect the handler for the `{}` property. This is a convenient wrapper around [`{}`]({}).",
+            property_name, proxy_method, link,
+        );
+        let mut generics = m.sig.generics.clone();
+        generics.params.push(parse_quote!(__H));
+        {
+            let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
+            where_clause.predicates.push(handler);
+        }
+
+        let (_, ty_generics, where_clause) = generics.split_for_impl();
+
         quote! {
             #(#doc)*
             #[allow(clippy::needless_question_mark)]
             pub #usage #signature {
                 #body
+            }
+
+            #[doc = #gen_doc]
+            pub #usage fn #connect#ty_generics(
+                &self,
+                mut handler: __H,
+            ) -> #zbus::Result<#zbus::PropertyChangedHandlerId>
+            #where_clause,
+            {
+                self.0.connect_property_changed(#property_name, handler)#wait
             }
         }
     }
