@@ -7,6 +7,7 @@ use crate::{fdo, Message, MessageError, MessageType};
 ///
 /// The various errors that can be reported by this crate.
 #[derive(Debug)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Error {
     /// Interface not found
     InterfaceNotFound,
