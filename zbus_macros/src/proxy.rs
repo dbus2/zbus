@@ -7,6 +7,23 @@ use syn::{
 
 use crate::utils::*;
 
+struct AsyncOpts {
+    azync: bool,
+    usage: TokenStream,
+    wait: TokenStream,
+}
+
+impl AsyncOpts {
+    fn new(azync: bool) -> Self {
+        let (usage, wait) = if azync {
+            (quote! { async }, quote! { .await })
+        } else {
+            (quote! {}, quote! {})
+        };
+        Self { azync, usage, wait }
+    }
+}
+
 pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     let sync_proxy = create_proxy(&args, &input, false);
     let async_proxy = create_proxy(&args, &input, true);
@@ -66,13 +83,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     let default_path = default_path.unwrap_or(format!("/org/freedesktop/{}", ident));
     let default_service = default_service.unwrap_or_else(|| name.clone());
     let mut methods = TokenStream::new();
-
-    // FIXME: Create an enum type to hold these two.
-    let (usage, wait) = if azync {
-        (quote! { async }, quote! { .await })
-    } else {
-        (quote! {}, quote! {})
-    };
+    let async_opts = AsyncOpts::new(azync);
 
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
@@ -100,16 +111,17 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                     })
                 });
             let m = if is_property {
-                gen_proxy_property(&name, &m, &usage, &wait)
+                gen_proxy_property(&name, &m, &async_opts)
             } else if is_signal {
-                gen_proxy_signal(&name, &method_name, &m, &usage, &wait, azync)
+                gen_proxy_signal(&name, &method_name, &m, &async_opts)
             } else {
-                gen_proxy_method_call(&name, &method_name, &m, &usage, &wait, azync)
+                gen_proxy_method_call(&name, &method_name, &m, &async_opts)
             };
             methods.extend(m);
         }
     }
 
+    let AsyncOpts { usage, wait, .. } = async_opts;
     if !has_introspect_method {
         methods.extend(quote! {
             #[doc = "Introspect the associated object, and return the XML description."]
@@ -287,10 +299,9 @@ fn gen_proxy_method_call(
     method_name: &str,
     snake_case_name: &str,
     m: &TraitItemMethod,
-    usage: &TokenStream,
-    wait: &TokenStream,
-    azync: bool,
+    async_opts: &AsyncOpts,
 ) -> TokenStream {
+    let AsyncOpts { usage, wait, azync } = async_opts;
     let zbus = get_zbus_crate_ident();
     let doc = get_doc_attrs(&m.attrs);
     let args: Vec<_> = m
@@ -302,7 +313,7 @@ fn gen_proxy_method_call(
     let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
     let proxy_object = attrs.iter().find_map(|x| match x {
         ItemAttribute::Object(o) => {
-            if azync {
+            if *azync {
                 Some(format!("Async{}Proxy", o))
             } else {
                 Some(format!("{}Proxy", o))
@@ -370,9 +381,9 @@ fn gen_proxy_method_call(
 fn gen_proxy_property(
     property_name: &str,
     m: &TraitItemMethod,
-    usage: &TokenStream,
-    wait: &TokenStream,
+    async_opts: &AsyncOpts,
 ) -> TokenStream {
+    let AsyncOpts { usage, wait, .. } = async_opts;
     let doc = get_doc_attrs(&m.attrs);
     let signature = &m.sig;
     if signature.inputs.len() > 1 {
@@ -393,7 +404,7 @@ fn gen_proxy_property(
             signature.span()
         };
         let body = quote_spanned! {body_span =>
-            Ok(self.0.get_property::<_>(#property_name)#wait?)
+            Ok(self.0.get_property(#property_name)#wait?)
         };
         quote! {
             #(#doc)*
@@ -409,10 +420,9 @@ fn gen_proxy_signal(
     signal_name: &str,
     snake_case_name: &str,
     m: &TraitItemMethod,
-    usage: &TokenStream,
-    wait: &TokenStream,
-    azync: bool,
+    async_opts: &AsyncOpts,
 ) -> TokenStream {
+    let AsyncOpts { usage, wait, azync } = async_opts;
     let zbus = get_zbus_crate_ident();
     let doc = get_doc_attrs(&m.attrs);
     let method = format_ident!("connect_{}", snake_case_name);
@@ -431,13 +441,13 @@ fn gen_proxy_signal(
         .iter()
         .filter_map(|arg| arg_ident(arg).cloned())
         .collect();
-    let handler = if azync {
+    let handler = if *azync {
         quote! { FnMut(#(#input_types),*) -> ::#zbus::export::futures_core::future::BoxFuture<'static, ::#zbus::Result<()>> }
     } else {
         quote! { FnMut(#(#input_types),*) -> ::#zbus::Result<()> }
     };
 
-    let (proxy_method, link) = if azync {
+    let (proxy_method, link) = if *azync {
         (
             "zbus::azync::Proxy::connect_signal",
             "https://docs.rs/zbus/latest/zbus/azync/struct.Proxy.html#method.connect_signal",

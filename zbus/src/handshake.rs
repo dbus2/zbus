@@ -21,6 +21,7 @@ use crate::{
  */
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(clippy::upper_case_acronyms)]
 enum ClientHandshakeStep {
     Init,
     MechanismInit,
@@ -49,6 +50,7 @@ enum Mechanism {
 //
 // These are all the known commands, which can be parsed from or serialized to text.
 #[derive(Debug)]
+#[allow(clippy::upper_case_acronyms)]
 enum Command {
     Auth(Option<Mechanism>, Option<String>),
     Cancel,
@@ -466,6 +468,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
  */
 
 #[derive(Debug)]
+#[allow(clippy::upper_case_acronyms)]
 enum ServerHandshakeStep {
     WaitingForNull,
     WaitingForAuth,
