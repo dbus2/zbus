@@ -3,6 +3,7 @@ use std::{
     error, fmt,
     io::{Cursor, Error as IOError},
     os::unix::io::{AsRawFd, IntoRawFd, RawFd},
+    sync::{Arc, RwLock},
 };
 
 use zvariant::{EncodingContext, Error as VariantError, ObjectPath, Signature, Type};
@@ -14,6 +15,8 @@ use crate::{
 };
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
+const LOCK_PANIC_MSG: &str = "lock poisoned";
+
 macro_rules! dbus_context {
     ($n_bytes_before: expr) => {
         EncodingContext::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
@@ -187,7 +190,7 @@ where
 
         Ok(Message {
             bytes,
-            fds: Fds::Raw(fds),
+            fds: Arc::new(RwLock::new(Fds::Raw(fds))),
         })
     }
 
@@ -280,7 +283,7 @@ impl Clone for Fds {
 #[derive(Clone)]
 pub struct Message {
     bytes: Vec<u8>,
-    fds: Fds,
+    fds: Arc<RwLock<Fds>>,
 }
 
 // TODO: Handle non-native byte order: https://gitlab.freedesktop.org/dbus/zbus/-/issues/19
@@ -371,7 +374,7 @@ impl Message {
         }
 
         let bytes = bytes.to_vec();
-        let fds = Fds::Raw(vec![]);
+        let fds = Arc::new(RwLock::new(Fds::Raw(vec![])));
         Ok(Self { bytes, fds })
     }
 
@@ -385,8 +388,8 @@ impl Message {
         Ok(())
     }
 
-    pub(crate) fn set_owned_fds(&mut self, fds: Vec<OwnedFd>) {
-        self.fds = Fds::Owned(fds);
+    pub(crate) fn set_owned_fds(&self, fds: Vec<OwnedFd>) {
+        *self.fds.write().expect(LOCK_PANIC_MSG) = Fds::Owned(fds);
     }
 
     /// Disown the associated file descriptors.
@@ -395,10 +398,11 @@ impl Message {
     /// contain associated FDs. To prevent the message from closing
     /// those FDs on drop, you may remove the ownership thanks to this
     /// method, after that you are responsible for closing them.
-    pub fn disown_fds(&mut self) {
-        if let Fds::Owned(ref mut fds) = &mut self.fds {
+    pub fn disown_fds(&self) {
+        let mut fds_lock = self.fds.write().expect(LOCK_PANIC_MSG);
+        if let Fds::Owned(ref mut fds) = *fds_lock {
             // From now on, it's the caller responsability to close the fds
-            self.fds = Fds::Raw(fds.drain(..).map(|fd| fd.into_raw_fd()).collect());
+            *fds_lock = Fds::Raw(fds.drain(..).map(|fd| fd.into_raw_fd()).collect());
         }
     }
 
@@ -505,7 +509,7 @@ impl Message {
     }
 
     pub(crate) fn fds(&self) -> Vec<RawFd> {
-        match &self.fds {
+        match &*self.fds.read().expect(LOCK_PANIC_MSG) {
             Fds::Raw(fds) => fds.clone(),
             Fds::Owned(fds) => fds.iter().map(|f| f.as_raw_fd()).collect(),
         }
@@ -549,8 +553,9 @@ impl fmt::Debug for Message {
         if let Ok(s) = self.body_signature() {
             msg.field("body", &s);
         }
-        if !self.fds().is_empty() {
-            msg.field("fds", &self.fds);
+        let fds = self.fds();
+        if !fds.is_empty() {
+            msg.field("fds", &fds);
         }
         msg.finish()
     }
@@ -630,7 +635,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
-        assert_eq!(m.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
+        assert_eq!(*m.fds.read().unwrap(), Fds::Raw(vec![stdout.as_raw_fd()]));
 
         let body: Result<u32, MessageError> = m.body();
         assert_eq!(body.unwrap_err(), MessageError::UnmatchedBodySignature);

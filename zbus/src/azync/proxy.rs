@@ -262,7 +262,7 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::Type,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
-        let mut reply = self.call_method(method_name, body).await?;
+        let reply = self.call_method(method_name, body).await?;
         // Since we don't keep the reply msg around and user still might use the FDs after this
         // call returns, we must disown the FDs so we don't end up closing them after the call.
         reply.disown_fds();

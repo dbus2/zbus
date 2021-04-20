@@ -301,7 +301,7 @@ mod tests {
     fn fdpass_systemd() {
         let connection = crate::Connection::new_system().unwrap();
 
-        let mut reply = connection
+        let reply = connection
             .call_method(
                 Some("org.freedesktop.systemd1"),
                 "/org/freedesktop/systemd1",
