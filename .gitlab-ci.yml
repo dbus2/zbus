@@ -93,6 +93,19 @@ test:
     - rustup override set stable
     - *cargo_test
 
+nightly:
+  extends: .debian_img
+  stage: test
+  allow_failure: true
+  variables:
+    RUSTFLAGS: "-D warnings"
+  script:
+    - rustup override set nightly
+    - *cargo_test
+    - cargo fmt --all -- --check
+    - cargo clippy -- -D warnings -Aclippy::upper_case_acronyms
+    - cargo audit
+
 coverage:
   extends: .debian_img
   stage: extras
