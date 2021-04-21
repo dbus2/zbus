@@ -20,7 +20,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{azync::Connection, Error, Message, Result};
 
-use crate::fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy};
+use crate::fdo::{self, AsyncIntrospectableProxyBuilder, AsyncPropertiesProxyBuilder};
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
 
@@ -242,13 +242,12 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
-        AsyncIntrospectableProxy::new_for(
-            &self.inner.conn,
-            &self.inner.destination,
-            &self.inner.path,
-        )?
-        .introspect()
-        .await
+        AsyncIntrospectableProxyBuilder::new(&self.inner.conn)?
+            .destination(self.inner.destination.as_ref())
+            .path(&self.inner.path)?
+            .build()?
+            .introspect()
+            .await
     }
 
     /// Get the property `property_name`.
@@ -258,7 +257,10 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        AsyncPropertiesProxy::new_for(&self.inner.conn, &self.inner.destination, &self.inner.path)?
+        AsyncPropertiesProxyBuilder::new(&self.inner.conn)?
+            .destination(self.inner.destination.as_ref())
+            .path(&self.inner.path)?
+            .build()?
             .get(&self.inner.interface, property_name)
             .await?
             .try_into()
@@ -272,7 +274,10 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        AsyncPropertiesProxy::new_for(&self.inner.conn, &self.inner.destination, &self.inner.path)?
+        AsyncPropertiesProxyBuilder::new(&self.inner.conn)?
+            .destination(self.inner.destination.as_ref())
+            .path(&self.inner.path)?
+            .build()?
             .set(&self.inner.interface, property_name, &value.into())
             .await
     }
