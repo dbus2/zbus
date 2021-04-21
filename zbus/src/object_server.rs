@@ -98,12 +98,10 @@ impl Node {
     }
 
     fn is_empty(&self) -> bool {
-        self.interfaces
+        !self
+            .interfaces
             .keys()
-            .find(|k| {
-                *k != &Peer::name() && *k != &Introspectable::name() && *k != &Properties::name()
-            })
-            .is_none()
+            .any(|&k| k != Peer::name() && k != Introspectable::name() && k != Properties::name())
     }
 
     fn remove_node(&mut self, node: &str) -> bool {
