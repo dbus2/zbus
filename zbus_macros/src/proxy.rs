@@ -364,6 +364,7 @@ fn gen_proxy_method_call(
     if let Some(proxy_name) = proxy_object {
         let method = Ident::new(snake_case_name, Span::call_site());
         let proxy = Ident::new(&proxy_name, Span::call_site());
+        let proxy_builder = Ident::new(&format!("{}Builder", proxy_name), Span::call_site());
         let inputs = &m.sig.inputs;
         let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
         let signature = if where_clause.is_some() {
@@ -386,10 +387,9 @@ fn gen_proxy_method_call(
                         &(#(#args),*),
                     )
                     #wait?;
-                let proxy = #proxy::new_for_owned_path(
-                    self.0.connection().clone(),
-                    object_path.into_inner(),
-                )?;
+                let proxy = #proxy_builder::new(self.0.connection())?
+                    .path(object_path)?
+                    .build()?;
                 Ok(proxy)
             }
         }
