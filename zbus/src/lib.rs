@@ -606,8 +606,13 @@ mod tests {
                 ) -> zbus::Result<(OwnedValue, OwnedObjectPath)>;
             }
 
-            let proxy =
-                SecretProxy::new_for(&conn, &service_name, "/org/freedesktop/secrets").unwrap();
+            let proxy = SecretProxyBuilder::new(&conn)
+                .unwrap()
+                .destination(&service_name)
+                .path("/org/freedesktop/secrets")
+                .unwrap()
+                .build()
+                .unwrap();
 
             proxy.open_session("plain", &Value::from("")).unwrap();
 

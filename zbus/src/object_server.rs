@@ -706,18 +706,16 @@ mod tests {
 
     fn my_iface_test(tx: Sender<()>) -> std::result::Result<u32, Box<dyn Error>> {
         let conn = Connection::new_session()?;
-        let proxy = MyIfaceProxy::new_for(
-            &conn,
-            "org.freedesktop.MyService",
-            "/org/freedesktop/MyService",
-        )?;
+        let proxy = MyIfaceProxyBuilder::new(&conn)?
+            .destination("org.freedesktop.MyService")
+            .path("/org/freedesktop/MyService")?
+            .build()?;
 
-        let props_proxy = zbus::fdo::PropertiesProxy::new_for(
-            &conn,
-            "org.freedesktop.MyService",
-            "/org/freedesktop/MyService",
-        )
-        .unwrap();
+        let props_proxy = zbus::fdo::PropertiesProxyBuilder::new(&conn)?
+            .destination("org.freedesktop.MyService")
+            .path("/org/freedesktop/MyService")?
+            .build()?;
+
         props_proxy
             .connect_properties_changed(|_, changed, _| {
                 let (name, _) = changed.iter().next().unwrap();
@@ -775,8 +773,10 @@ mod tests {
         let val = proxy.ping()?;
 
         proxy.create_obj("MyObj")?;
-        let my_obj_proxy =
-            MyIfaceProxy::new_for(&conn, "org.freedesktop.MyService", "/zbus/test/MyObj")?;
+        let my_obj_proxy = MyIfaceProxyBuilder::new(&conn)?
+            .destination("org.freedesktop.MyService")
+            .path("/zbus/test/MyObj")?
+            .build()?;
         my_obj_proxy.ping()?;
         proxy.destroy_obj("MyObj")?;
         assert!(my_obj_proxy.introspect().is_err());
