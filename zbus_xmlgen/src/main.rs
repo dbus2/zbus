@@ -36,7 +36,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 bus.trim_start_matches("--")
             );
 
-            let ip = zbus::fdo::IntrospectableProxy::new_for(&connection, &service, path)?;
+            let ip = zbus::fdo::IntrospectableProxyBuilder::new(&connection)?
+                .destination(&service)
+                .path(path)?
+                .build()?;
             Node::from_str(&ip.introspect()?)?
         }
         Some(address) if address == "--address" => {
@@ -48,7 +51,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             input_src = format!("Interface '{}' from service '{}'", path, service);
 
-            let ip = zbus::fdo::IntrospectableProxy::new_for(&connection, &service, path)?;
+            let ip = zbus::fdo::IntrospectableProxyBuilder::new(&connection)?
+                .destination(&service)
+                .path(path)?
+                .build()?;
             Node::from_str(&ip.introspect()?)?
         }
         Some(path) => {
