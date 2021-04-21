@@ -25,6 +25,8 @@ cargo install --force grcov
 # nightly, used to generate tests coverage
 rustup install nightly
 rustup component add llvm-tools-preview
+rustup component add --toolchain nightly clippy
+rustup component add --toolchain nightly rustfmt
 
 # fetch project deps
 cargo fetch

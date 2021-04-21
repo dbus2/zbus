@@ -318,7 +318,7 @@ pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
 ///
 /// Using this serializer involves an redirection to the actual serializer. It's best to use the
 /// serialization functions, e.g [`to_bytes`] or specific serializers, [`dbus::Serializer`] or
-/// [`gvariant::Serializer`].
+/// [`zvariant::Serializer`].
 pub enum Serializer<'ser, 'sig, B, W> {
     DBus(DBusSerializer<'ser, 'sig, B, W>),
     #[cfg(feature = "gvariant")]
