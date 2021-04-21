@@ -218,67 +218,6 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                 #builder_name::new(conn)?.build()
             }
 
-            /// Creates a new proxy with the default service & path, taking ownership of `conn`.
-            pub fn new_owned(conn: #connection) -> ::#zbus::Result<Self> {
-                #builder_name::new(&conn)?.build()
-            }
-
-            /// Creates a new proxy for the given `destination` and `path`.
-            pub fn new_for<E>(
-                conn: &#connection,
-                destination: &'c str,
-                path: impl std::convert::TryInto<#zbus::export::zvariant::ObjectPath<'c>, Error = E>,
-            ) -> ::#zbus::Result<Self>
-            where
-                ::#zbus::Error: From<E>,
-            {
-                #builder_name::new(conn)?
-                    .destination(destination)
-                    .path(path)?
-                    .build()
-            }
-
-            /// Same as `new_for` but takes ownership of the passed arguments.
-            pub fn new_for_owned<E>(
-                conn: #connection,
-                destination: String,
-                path: impl std::convert::TryInto<#zbus::export::zvariant::ObjectPath<'static>, Error = E>,
-            ) -> ::#zbus::Result<Self>
-            where
-                ::#zbus::Error: From<E>,
-            {
-                #builder_name::new(&conn)?
-                    .destination(destination)
-                    .path(path)?
-                    .build()
-            }
-
-            /// Creates a new proxy for the given `path`.
-            pub fn new_for_path<E>(
-                conn: &#connection,
-                path: impl std::convert::TryInto<#zbus::export::zvariant::ObjectPath<'c>, Error = E>,
-            ) -> ::#zbus::Result<Self>
-            where
-                ::#zbus::Error: From<E>,
-            {
-                #builder_name::new(&conn)?
-                    .path(path)?
-                    .build()
-            }
-
-            /// Same as `new_for_path` but takes ownership of the passed arguments.
-            pub fn new_for_owned_path<E>(
-                conn: #connection,
-                path: impl std::convert::TryInto<#zbus::export::zvariant::ObjectPath<'static>, Error = E>,
-            ) -> ::#zbus::Result<Self>
-            where
-                ::#zbus::Error: From<E>,
-            {
-                #builder_name::new(&conn)?
-                    .path(path)?
-                    .build()
-            }
-
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
             pub fn into_inner(self) -> #proxy_struct<'c> {
                 self.0
