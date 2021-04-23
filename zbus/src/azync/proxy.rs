@@ -179,6 +179,29 @@ impl<'a> ProxyBuilder<'a> {
             inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
         }
     }
+
+    /// Build a proxy from the builder.
+    ///
+    /// This function is meant to be called with higher-level proxies, generated from the
+    /// [`dbus_proxy`] macro. When missing, default values are taken from [`ProxyDefault`].
+    ///
+    /// If you need a low-level [`Proxy`], you can use [`build_bare`] instead.
+    pub fn build<P>(self) -> P
+    where
+        P: ProxyDefault + From<Proxy<'a>>,
+    {
+        let conn = self.conn;
+        let destination = self.destination.unwrap_or_else(|| P::DESTINATION.into());
+        let path = self
+            .path
+            .unwrap_or_else(|| P::PATH.try_into().expect("invalid default path"));
+        let interface = self.interface.unwrap_or_else(|| P::INTERFACE.into());
+
+        Proxy {
+            inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
+        }
+        .into()
+    }
 }
 
 /// Trait for the default associated values of a proxy.
