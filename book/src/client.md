@@ -213,7 +213,7 @@ Let's look at this API in action, with an example where we get our location from
 [Geoclue](https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md):
 
 ```rust,no_run
-use zbus::{Connection, dbus_proxy, Result};
+use zbus::{Connection, dbus_proxy, Result, azync::ProxyBuilder};
 use zvariant::{ObjectPath, OwnedObjectPath};
 
 #[dbus_proxy(
@@ -261,7 +261,9 @@ client.set_desktop_id("org.freedesktop.zbus").unwrap();
 
 client
     .connect_location_updated(move |_old, new| {
-        let location = LocationProxyBuilder::new(&conn)?.path(new.as_str())?.build()?;
+        let location: LocationProxy<'_> = ProxyBuilder::new(&conn.clone().into())
+            .path(new.as_str())?
+            .build();
         println!(
             "Latitude: {}\nLongitude: {}",
             location.latitude()?,
@@ -289,7 +291,7 @@ by watching for `Active` property (that we must set to be able to get location f
 actually getting set:
 
 ```rust,no_run
-# use zbus::{Connection, dbus_proxy, Result};
+# use zbus::{Connection, dbus_proxy, Result, azync::ProxyBuilder};
 # use zvariant::{ObjectPath, OwnedObjectPath};
 #
 # #[dbus_proxy(
@@ -334,10 +336,10 @@ actually getting set:
 
 let conn_clone = conn.clone();
 client.connect_location_updated(move |_old, new| {
-    let location = LocationProxyBuilder::new(&conn_clone)?
+    let location: LocationProxy<'_> = ProxyBuilder::new(&conn_clone.clone().into())
         .destination("org.freedesktop.GeoClue2")
         .path(new.as_str())?
-        .build()?;
+        .build();
     println!(
         "Latitude: {}\nLongitude: {}",
         location.latitude()?,
@@ -347,10 +349,10 @@ client.connect_location_updated(move |_old, new| {
     Ok(())
 }).unwrap();
 
-let props = zbus::fdo::PropertiesProxyBuilder::new(&conn).unwrap()
+let props: zbus::fdo::PropertiesProxy<'_> = ProxyBuilder::new(&conn.clone().into())
     .destination("org.freedesktop.GeoClue2")
     .path(client.path()).unwrap()
-    .build().unwrap();
+    .build();
 props.connect_properties_changed(|iface, changed, _| {
     for (name, value) in changed.iter() {
         println!("{}.{} changed to `{:?}`", iface, name, value);

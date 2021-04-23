@@ -22,7 +22,7 @@ and proxy:
 
 ```rust,no_run
 use futures_util::future::FutureExt;
-use zbus::{azync::Connection, dbus_proxy, Result};
+use zbus::{azync::Connection, azync::ProxyBuilder, dbus_proxy, Result};
 use zvariant::{ObjectPath, OwnedObjectPath};
 
 # async_io::block_on(run()).unwrap();
@@ -75,7 +75,7 @@ async fn run() -> Result<()> {
             let conn = conn.clone();
 
             async move {
-                let location = AsyncLocationProxyBuilder::new(&conn)?.path(new)?.build()?;
+                let location: AsyncLocationProxy<'_> = ProxyBuilder::new(&conn).path(new)?.build();
                 println!(
                     "Latitude: {}\nLongitude: {}",
                     location.latitude().await?,
@@ -110,7 +110,7 @@ example again to receive multiple signals on different proxies:
 
 ```rust,no_run
 # use futures_util::future::FutureExt;
-# use zbus::{azync::Connection, dbus_proxy, Result};
+# use zbus::{azync::Connection, azync::ProxyBuilder, dbus_proxy, Result};
 # use zvariant::{ObjectPath, OwnedObjectPath};
 #
 # async_io::block_on(run()).unwrap();
@@ -158,10 +158,10 @@ example again to receive multiple signals on different proxies:
 	// Everything else remains the same before this point.
     client.set_desktop_id("org.freedesktop.zbus").await?;
 
-    let props = zbus::fdo::AsyncPropertiesProxyBuilder::new(&conn)?
+    let props: zbus::fdo::AsyncPropertiesProxy<'_> = zbus::azync::ProxyBuilder::new(&conn)
         .destination("org.freedesktop.GeoClue2")
         .path(client.path())?
-        .build()?;
+        .build();
     props
         .connect_properties_changed(move |iface, changed, _| {
             for (name, value) in changed.iter() {
@@ -178,7 +178,9 @@ example again to receive multiple signals on different proxies:
             let conn = conn.clone();
 
             async move {
-                let location = AsyncLocationProxyBuilder::new(&conn)?.path(new)?.build()?;
+                let location: AsyncLocationProxy<'_> = ProxyBuilder::new(&conn.clone().into())
+                    .path(new)?
+                    .build();
                 println!(
                     "Latitude: {}\nLongitude: {}",
                     location.latitude().await?,
