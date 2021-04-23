@@ -222,6 +222,12 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             #methods
         }
 
+        impl<'c> std::convert::From<::#zbus::azync::Proxy<'c>> for #proxy_name<'c> {
+            fn from(proxy: ::#zbus::azync::Proxy<'c>) -> Self {
+                #proxy_name(proxy.into())
+            }
+        }
+
         impl<'c> std::ops::Deref for #proxy_name<'c> {
             type Target = #proxy_struct<'c>;
 
