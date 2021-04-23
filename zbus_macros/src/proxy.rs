@@ -187,7 +187,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             ///
             /// An error is returned when the builder is lacking the necessary details.
             pub fn build(self) -> ::#zbus::Result<#proxy_name<'a>> {
-                let inner = self.0.build()?;
+                let inner = self.0.try_build_bare()?;
                 Ok(#proxy_name(inner.into()))
             }
         }

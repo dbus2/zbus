@@ -167,7 +167,7 @@ impl<'a> ProxyBuilder<'a> {
     /// Build a [`Proxy`] from the builder.
     ///
     /// An error is returned when the builder is lacking the necessary details.
-    pub fn build(self) -> Result<Proxy<'a>> {
+    pub fn try_build_bare(self) -> Result<Proxy<'a>> {
         match self {
             ProxyBuilder {
                 conn,
@@ -197,7 +197,7 @@ impl<'a> Proxy<'a> {
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build()
+            .try_build_bare()
     }
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
@@ -215,7 +215,7 @@ impl<'a> Proxy<'a> {
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build()
+            .try_build_bare()
     }
 
     /// Get a reference to the associated connection.
@@ -665,7 +665,7 @@ mod tests {
         let conn = Connection::new_session().await?;
 
         let builder = ProxyBuilder::new(&conn);
-        assert!(builder.clone().build().is_err());
+        assert!(builder.clone().try_build_bare().is_err());
 
         let builder = builder
             .destination("org.freedesktop.DBus")
@@ -675,7 +675,7 @@ mod tests {
             builder.clone().destination.unwrap(),
             Cow::Borrowed(_)
         ));
-        let proxy = builder.build().unwrap();
+        let proxy = builder.try_build_bare().unwrap();
         assert!(matches!(proxy.inner.destination, Cow::Borrowed(_)));
         assert!(matches!(proxy.inner.interface, Cow::Borrowed(_)));
 
