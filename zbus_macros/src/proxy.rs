@@ -141,6 +141,12 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     let builder_build_doc = format!("Build a [`{}`] from the builder.", proxy_name);
 
     quote! {
+        impl<'a> ::#zbus::azync::ProxyDefault for #proxy_name<'a> {
+            const INTERFACE: &'static str = #name;
+            const DESTINATION: &'static str = #default_service;
+            const PATH: &'static str = #default_path;
+        }
+
         #[doc = #builder_doc]
         #[derive(Debug)]
         pub struct #builder_name<'a>(::#zbus::azync::ProxyBuilder<'a>);
