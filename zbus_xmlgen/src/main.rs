@@ -19,6 +19,14 @@ use gen::GenTrait;
 fn main() -> Result<(), Box<dyn Error>> {
     let input_src;
 
+    let proxy = |conn: zbus::Connection, service, path| {
+        zbus::azync::ProxyBuilder::new(&conn.into())
+            .destination(service)
+            .path(path)
+            .expect("invalid path")
+            .build::<zbus::fdo::IntrospectableProxy<'_>>()
+    };
+
     let node: Node = match args().nth(1) {
         Some(bus) if bus == "--system" || bus == "--session" => {
             let connection = if bus == "--system" {
@@ -36,11 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 bus.trim_start_matches("--")
             );
 
-            let ip = zbus::fdo::IntrospectableProxyBuilder::new(&connection)?
-                .destination(&service)
-                .path(path)?
-                .build()?;
-            Node::from_str(&ip.introspect()?)?
+            Node::from_str(&proxy(connection, &service, path).introspect()?)?
         }
         Some(address) if address == "--address" => {
             let address = args().nth(2).expect("Missing param for address path");
@@ -51,11 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             input_src = format!("Interface '{}' from service '{}'", path, service);
 
-            let ip = zbus::fdo::IntrospectableProxyBuilder::new(&connection)?
-                .destination(&service)
-                .path(path)?
-                .build()?;
-            Node::from_str(&ip.introspect()?)?
+            Node::from_str(&proxy(connection, &service, path).introspect()?)?
         }
         Some(path) => {
             input_src = Path::new(&path)
