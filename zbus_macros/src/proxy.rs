@@ -132,69 +132,11 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
         (doc, proxy, connection)
     };
 
-    let builder_doc = format!("A builder for [`{}`].", proxy_name);
-    let builder_new_doc = format!(
-        "Create a new [`{}`] for the given connection.",
-        builder_name
-    );
-    let builder_build_doc = format!("Build a [`{}`] from the builder.", proxy_name);
-
     quote! {
         impl<'a> ::#zbus::azync::ProxyDefault for #proxy_name<'a> {
             const INTERFACE: &'static str = #name;
             const DESTINATION: &'static str = #default_service;
             const PATH: &'static str = #default_path;
-        }
-
-        #[doc = #builder_doc]
-        #[derive(Debug)]
-        pub struct #builder_name<'a>(::#zbus::azync::ProxyBuilder<'a>);
-
-        impl<'a> #builder_name<'a> {
-            #[doc = #builder_new_doc]
-            pub fn new(conn: &#connection) -> ::#zbus::Result<Self> {
-                let conn = conn.clone().into();
-
-                Ok(Self(
-                    ::#zbus::azync::ProxyBuilder::new(&conn)
-                        .destination(#default_service)
-                        .path(#default_path)?
-                    .interface(#name)
-                ))
-            }
-
-            /// Set the proxy destination address.
-            pub fn destination<D>(mut self, destination: D) -> Self
-            where
-                D: std::convert::Into<std::borrow::Cow<'a, str>>
-            {
-                Self(self.0.destination(destination))
-            }
-
-            /// Set the proxy path.
-            pub fn path<E, P>(mut self, path: P) -> ::#zbus::Result<Self>
-            where
-                P: std::convert::TryInto<::#zbus::export::zvariant::ObjectPath<'a>, Error = E>,
-                ::#zbus::Error: From<E>,
-            {
-                Ok(Self(self.0.path(path)?))
-            }
-
-            /// Set the proxy interface.
-            pub fn interface<I>(mut self, interface: I) -> Self
-            where
-                I: std::convert::Into<std::borrow::Cow<'a, str>>
-            {
-                Self(self.0.interface(interface))
-            }
-
-            #[doc = #builder_build_doc]
-            ///
-            /// An error is returned when the builder is lacking the necessary details.
-            pub fn build(self) -> ::#zbus::Result<#proxy_name<'a>> {
-                let inner = self.0.build_bare();
-                Ok(#proxy_name(inner.into()))
-            }
         }
 
         #[doc = #proxy_doc]
