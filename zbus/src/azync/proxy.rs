@@ -181,6 +181,16 @@ impl<'a> ProxyBuilder<'a> {
     }
 }
 
+/// Trait for the default associated values of a proxy.
+///
+/// The trait is automatically implemented by the [`dbus_proxy`] macro on your behalf, and may be
+/// later used to retrieve the associated constants.
+pub trait ProxyDefault {
+    const INTERFACE: &'static str;
+    const DESTINATION: &'static str;
+    const PATH: &'static str;
+}
+
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
     pub fn new<E>(
