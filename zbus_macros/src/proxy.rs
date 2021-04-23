@@ -39,7 +39,6 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     let mut iface_name = None;
     let mut default_path = None;
     let mut default_service = None;
-    let mut has_introspect_method = false;
 
     let zbus = get_zbus_crate_ident();
 
@@ -90,10 +89,6 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
             let method_name = m.sig.ident.to_string();
-            if method_name == "introspect" {
-                has_introspect_method = true;
-            }
-
             let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
             let is_property = attrs.iter().any(|x| x.is_property());
             let is_signal = attrs.iter().any(|x| x.is_signal());
@@ -122,16 +117,6 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             methods.extend(m);
         }
     }
-
-    let AsyncOpts { usage, wait, .. } = async_opts;
-    if !has_introspect_method {
-        methods.extend(quote! {
-            #[doc = "Introspect the associated object, and return the XML description."]
-            pub #usage fn introspect(&self) -> ::#zbus::fdo::Result<String> {
-                self.0.introspect()#wait
-            }
-        });
-    };
 
     let (proxy_doc, proxy_struct, connection) = if azync {
         let sync_proxy = Ident::new(&format!("{}Proxy", input.ident), Span::call_site());
