@@ -125,8 +125,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 ```
 
 A `TProxy` has a few associated methods, such as `new(connection)`, using the default associated
-service name and object path, and `new_for(connection, service_name, object_path)` if you need to
-specify something different.
+service name and object path, and an associated builder if you need to specify something different.
 
 This should help to avoid the kind of mistakes we saw earlier. It's also a bit easier to use, thanks
 to Rust type inference. This makes it also possible to have higher-level types, they fit more
@@ -262,7 +261,7 @@ client.set_desktop_id("org.freedesktop.zbus").unwrap();
 
 client
     .connect_location_updated(move |_old, new| {
-        let location = LocationProxy::new_for_path(&conn, new.as_str())?;
+        let location = LocationProxyBuilder::new(&conn)?.path(new.as_str())?.build()?;
         println!(
             "Latitude: {}\nLongitude: {}",
             location.latitude()?,
@@ -335,11 +334,10 @@ actually getting set:
 
 let conn_clone = conn.clone();
 client.connect_location_updated(move |_old, new| {
-    let location = LocationProxy::new_for(
-        &conn_clone,
-        "org.freedesktop.GeoClue2",
-        new.as_str(),
-    )?;
+    let location = LocationProxyBuilder::new(&conn_clone)?
+        .destination("org.freedesktop.GeoClue2")
+        .path(new.as_str())?
+        .build()?;
     println!(
         "Latitude: {}\nLongitude: {}",
         location.latitude()?,
@@ -349,11 +347,10 @@ client.connect_location_updated(move |_old, new| {
     Ok(())
 }).unwrap();
 
-let props = zbus::fdo::PropertiesProxy::new_for(
-    &conn,
-    "org.freedesktop.GeoClue2",
-    client.path(),
-).unwrap();
+let props = zbus::fdo::PropertiesProxyBuilder::new(&conn).unwrap()
+    .destination("org.freedesktop.GeoClue2")
+    .path(client.path()).unwrap()
+    .build().unwrap();
 props.connect_properties_changed(|iface, changed, _| {
     for (name, value) in changed.iter() {
         println!("{}.{} changed to `{:?}`", iface, name, value);

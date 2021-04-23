@@ -172,11 +172,10 @@ mod tests {
         let conn = Connection::new_session()?;
         let mut receiver = SignalReceiver::new(conn.clone());
 
-        let proxy1 = MultiSignalProxy::new_for(
-            &conn,
-            "org.freedesktop.zbus.MultiSignal",
-            "/org/freedesktop/zbus/MultiSignal/1",
-        )?;
+        let proxy1 = MultiSignalProxyBuilder::new(&conn)?
+            .destination("org.freedesktop.zbus.MultiSignal")
+            .path("/org/freedesktop/zbus/MultiSignal/1")?
+            .build()?;
         let proxy1_str = Arc::new(Mutex::new(None));
         let clone = proxy1_str.clone();
         proxy1.connect_some_signal(move |s| {
@@ -186,11 +185,10 @@ mod tests {
         })?;
         receiver.receive_for(&proxy1)?;
 
-        let proxy2 = MultiSignalProxy::new_for(
-            &conn,
-            "org.freedesktop.zbus.MultiSignal",
-            "/org/freedesktop/zbus/MultiSignal/2",
-        )?;
+        let proxy2 = MultiSignalProxyBuilder::new(&conn)?
+            .destination("org.freedesktop.zbus.MultiSignal")
+            .path("/org/freedesktop/zbus/MultiSignal/2")?
+            .build()?;
         let proxy2_str = Arc::new(Mutex::new(None));
         let clone = proxy2_str.clone();
         proxy2.connect_some_signal(move |s| {

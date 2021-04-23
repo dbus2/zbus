@@ -20,7 +20,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{azync::Connection, Error, Message, Result};
 
-use crate::fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy};
+use crate::fdo::{self, AsyncIntrospectableProxyBuilder, AsyncPropertiesProxyBuilder};
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
 
@@ -123,6 +123,65 @@ impl<'a> ProxyInner<'a> {
     }
 }
 
+/// Builder for [`Proxy`].
+#[derive(Debug, Clone)]
+pub struct ProxyBuilder<'a> {
+    conn: Connection,
+    destination: Option<Cow<'a, str>>,
+    path: Option<ObjectPath<'a>>,
+    interface: Option<Cow<'a, str>>,
+}
+
+impl<'a> ProxyBuilder<'a> {
+    /// Create a new [`ProxyBuilder`] for the given connection.
+    pub fn new(conn: &Connection) -> Self {
+        Self {
+            conn: conn.clone(),
+            destination: None,
+            path: None,
+            interface: None,
+        }
+    }
+
+    /// Set the proxy destination address.
+    pub fn destination<D: Into<Cow<'a, str>>>(mut self, destination: D) -> Self {
+        self.destination = Some(destination.into());
+        self
+    }
+
+    /// Set the proxy path.
+    pub fn path<E, P: TryInto<ObjectPath<'a>, Error = E>>(mut self, path: P) -> Result<Self>
+    where
+        Error: From<E>,
+    {
+        self.path = Some(path.try_into()?);
+        Ok(self)
+    }
+
+    /// Set the proxy interface.
+    pub fn interface<I: Into<Cow<'a, str>>>(mut self, interface: I) -> Self {
+        self.interface = Some(interface.into());
+        self
+    }
+
+    /// Build a [`Proxy`] from the builder.
+    ///
+    /// An error is returned when the builder is lacking the necessary details.
+    pub fn build(self) -> Result<Proxy<'a>> {
+        match self {
+            ProxyBuilder {
+                conn,
+                destination: Some(destination),
+                path: Some(path),
+                interface: Some(interface),
+            } => Ok(Proxy {
+                inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
+            }),
+            _ => Err(Error::Unsupported),
+        }
+    }
+}
+
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
     pub fn new<E>(
@@ -134,14 +193,11 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        Ok(Self {
-            inner: Arc::new(ProxyInner::new(
-                conn.clone(),
-                Cow::from(destination),
-                path.try_into()?,
-                Cow::from(interface),
-            )),
-        })
+        ProxyBuilder::new(conn)
+            .destination(destination)
+            .path(path)?
+            .interface(interface)
+            .build()
     }
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
@@ -155,14 +211,11 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        Ok(Self {
-            inner: Arc::new(ProxyInner::new(
-                conn,
-                Cow::from(destination),
-                path.try_into()?,
-                Cow::from(interface),
-            )),
-        })
+        ProxyBuilder::new(&conn)
+            .destination(destination)
+            .path(path)?
+            .interface(interface)
+            .build()
     }
 
     /// Get a reference to the associated connection.
@@ -189,13 +242,12 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
-        AsyncIntrospectableProxy::new_for(
-            &self.inner.conn,
-            &self.inner.destination,
-            &self.inner.path,
-        )?
-        .introspect()
-        .await
+        AsyncIntrospectableProxyBuilder::new(&self.inner.conn)?
+            .destination(self.inner.destination.as_ref())
+            .path(&self.inner.path)?
+            .build()?
+            .introspect()
+            .await
     }
 
     /// Get the property `property_name`.
@@ -205,7 +257,10 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        AsyncPropertiesProxy::new_for(&self.inner.conn, &self.inner.destination, &self.inner.path)?
+        AsyncPropertiesProxyBuilder::new(&self.inner.conn)?
+            .destination(self.inner.destination.as_ref())
+            .path(&self.inner.path)?
+            .build()?
             .get(&self.inner.interface, property_name)
             .await?
             .try_into()
@@ -219,7 +274,10 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        AsyncPropertiesProxy::new_for(&self.inner.conn, &self.inner.destination, &self.inner.path)?
+        AsyncPropertiesProxyBuilder::new(&self.inner.conn)?
+            .destination(self.inner.destination.as_ref())
+            .path(&self.inner.path)?
+            .build()?
             .set(&self.inner.interface, property_name, &value.into())
             .await
     }
@@ -597,6 +655,32 @@ mod tests {
     use enumflags2::BitFlags;
     use futures_util::future::FutureExt;
     use std::{future::ready, sync::Arc};
+
+    #[test]
+    fn builder() {
+        block_on(test_builder()).unwrap();
+    }
+
+    async fn test_builder() -> Result<()> {
+        let conn = Connection::new_session().await?;
+
+        let builder = ProxyBuilder::new(&conn);
+        assert!(builder.clone().build().is_err());
+
+        let builder = builder
+            .destination("org.freedesktop.DBus")
+            .path("/some/path")?
+            .interface("org.freedesktop.Interface");
+        assert!(matches!(
+            builder.clone().destination.unwrap(),
+            Cow::Borrowed(_)
+        ));
+        let proxy = builder.build().unwrap();
+        assert!(matches!(proxy.inner.destination, Cow::Borrowed(_)));
+        assert!(matches!(proxy.inner.interface, Cow::Borrowed(_)));
+
+        Ok(())
+    }
 
     #[test]
     fn signal_stream() {
