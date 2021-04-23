@@ -77,7 +77,6 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     } else {
         format!("{}Proxy", input.ident)
     };
-    let builder_name = Ident::new(&format!("{}Builder", proxy_name), Span::call_site());
     let proxy_name = Ident::new(&proxy_name, Span::call_site());
     let ident = input.ident.to_string();
     let name = iface_name.unwrap_or(format!("org.freedesktop.{}", ident));
@@ -301,7 +300,6 @@ fn gen_proxy_method_call(
     if let Some(proxy_name) = proxy_object {
         let method = Ident::new(snake_case_name, Span::call_site());
         let proxy = Ident::new(&proxy_name, Span::call_site());
-        let proxy_builder = Ident::new(&format!("{}Builder", proxy_name), Span::call_site());
         let inputs = &m.sig.inputs;
         let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
         let signature = if where_clause.is_some() {
@@ -324,9 +322,9 @@ fn gen_proxy_method_call(
                         &(#(#args),*),
                     )
                     #wait?;
-                let proxy = #proxy_builder::new(self.0.connection())?
+                let proxy: #proxy<'_> = ::#zbus::azync::ProxyBuilder::new(&self.0.connection().clone().into())
                     .path(object_path)?
-                    .build()?;
+                    .build();
                 Ok(proxy)
             }
         }
