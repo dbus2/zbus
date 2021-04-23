@@ -154,7 +154,7 @@ impl<'r, 'p> SignalReceiver<'r, 'p> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{dbus_interface, dbus_proxy, fdo};
+    use crate::{azync::ProxyBuilder, dbus_interface, dbus_proxy, fdo};
     use std::{
         cell::RefCell,
         rc::Rc,
@@ -172,10 +172,10 @@ mod tests {
         let conn = Connection::new_session()?;
         let mut receiver = SignalReceiver::new(conn.clone());
 
-        let proxy1 = MultiSignalProxyBuilder::new(&conn)?
+        let proxy1: MultiSignalProxy<'_> = ProxyBuilder::new(&conn.clone().into())
             .destination("org.freedesktop.zbus.MultiSignal")
             .path("/org/freedesktop/zbus/MultiSignal/1")?
-            .build()?;
+            .build();
         let proxy1_str = Arc::new(Mutex::new(None));
         let clone = proxy1_str.clone();
         proxy1.connect_some_signal(move |s| {
@@ -185,10 +185,10 @@ mod tests {
         })?;
         receiver.receive_for(&proxy1)?;
 
-        let proxy2 = MultiSignalProxyBuilder::new(&conn)?
+        let proxy2: MultiSignalProxy<'_> = ProxyBuilder::new(&conn.clone().into())
             .destination("org.freedesktop.zbus.MultiSignal")
             .path("/org/freedesktop/zbus/MultiSignal/2")?
-            .build()?;
+            .build();
         let proxy2_str = Arc::new(Mutex::new(None));
         let clone = proxy2_str.clone();
         proxy2.connect_some_signal(move |s| {

@@ -551,7 +551,8 @@ mod tests {
     use zvariant::derive::Type;
 
     use crate::{
-        dbus_interface, dbus_proxy, fdo, Connection, MessageHeader, MessageType, ObjectServer,
+        azync::ProxyBuilder, dbus_interface, dbus_proxy, fdo, Connection, MessageHeader,
+        MessageType, ObjectServer,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -706,15 +707,15 @@ mod tests {
 
     fn my_iface_test(tx: Sender<()>) -> std::result::Result<u32, Box<dyn Error>> {
         let conn = Connection::new_session()?;
-        let proxy = MyIfaceProxyBuilder::new(&conn)?
+        let proxy: MyIfaceProxy<'_> = ProxyBuilder::new(&conn.clone().into())
             .destination("org.freedesktop.MyService")
             .path("/org/freedesktop/MyService")?
-            .build()?;
+            .build();
 
-        let props_proxy = zbus::fdo::PropertiesProxyBuilder::new(&conn)?
+        let props_proxy: zbus::fdo::PropertiesProxy<'_> = ProxyBuilder::new(&conn.clone().into())
             .destination("org.freedesktop.MyService")
             .path("/org/freedesktop/MyService")?
-            .build()?;
+            .build();
 
         props_proxy
             .connect_properties_changed(|_, changed, _| {
@@ -773,10 +774,10 @@ mod tests {
         let val = proxy.ping()?;
 
         proxy.create_obj("MyObj")?;
-        let my_obj_proxy = MyIfaceProxyBuilder::new(&conn)?
+        let my_obj_proxy: MyIfaceProxy<'_> = ProxyBuilder::new(&conn.clone().into())
             .destination("org.freedesktop.MyService")
             .path("/zbus/test/MyObj")?
-            .build()?;
+            .build();
         my_obj_proxy.ping()?;
         proxy.destroy_obj("MyObj")?;
         assert!(my_obj_proxy.introspect().is_err());

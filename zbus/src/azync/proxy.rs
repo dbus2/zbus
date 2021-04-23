@@ -18,9 +18,11 @@ use std::{
 use async_io::block_on;
 use zvariant::{ObjectPath, OwnedValue, Value};
 
-use crate::{azync::Connection, Error, Message, Result};
-
-use crate::fdo::{self, AsyncIntrospectableProxyBuilder, AsyncPropertiesProxyBuilder};
+use crate::{
+    azync::Connection,
+    fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
+    Error, Message, Result,
+};
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
 
@@ -274,12 +276,12 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
-        AsyncIntrospectableProxyBuilder::new(&self.inner.conn)?
+        let proxy: AsyncIntrospectableProxy<'_> = ProxyBuilder::new(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
-            .build()?
-            .introspect()
-            .await
+            .build();
+
+        proxy.introspect().await
     }
 
     /// Get the property `property_name`.
@@ -289,10 +291,12 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        AsyncPropertiesProxyBuilder::new(&self.inner.conn)?
+        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
-            .build()?
+            .build();
+
+        proxy
             .get(&self.inner.interface, property_name)
             .await?
             .try_into()
@@ -306,10 +310,12 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        AsyncPropertiesProxyBuilder::new(&self.inner.conn)?
+        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
-            .build()?
+            .build();
+
+        proxy
             .set(&self.inner.interface, property_name, &value.into())
             .await
     }
