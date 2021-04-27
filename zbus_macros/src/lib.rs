@@ -80,7 +80,7 @@ mod utils;
 /// trait SomeOtherIface {}
 ///
 /// let connection = Connection::new_session()?;
-/// let proxy = SomeIfaceProxy::new(&connection)?;
+/// let proxy = SomeIfaceProxy::new(&connection);
 /// let _ = proxy.do_this("foo", 32, &Value::new(true));
 /// let _ = proxy.set_a_property("val");
 ///
@@ -95,7 +95,7 @@ mod utils;
 /// assert!(!proxy.disconnect_signal(handler_id)?);
 ///
 /// // Now the same again, but asynchronous.
-/// let proxy = AsyncSomeIfaceProxy::new(&connection.into())?;
+/// let proxy = AsyncSomeIfaceProxy::new(&connection.into());
 /// block_on(async move {
 ///     let _ = proxy.do_this("foo", 32, &Value::new(true)).await;
 ///     let _ = proxy.set_a_property("val").await;

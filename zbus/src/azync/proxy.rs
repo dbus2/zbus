@@ -618,7 +618,7 @@ impl<'a> Proxy<'a> {
         let unique_name = if destination.starts_with(':') || destination == "org.freedesktop.DBus" {
             destination.to_string()
         } else {
-            fdo::AsyncDBusProxy::new(&self.inner.conn)?
+            fdo::AsyncDBusProxy::new(&self.inner.conn)
                 .get_name_owner(destination)
                 .await?
         };
@@ -875,7 +875,6 @@ mod tests {
         };
 
         fdo::DBusProxy::new(&crate::Connection::from(conn))
-            .unwrap()
             .request_name(&well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .unwrap();
 

@@ -47,7 +47,7 @@ fn test_proxy() {
     }
 
     let connection = zbus::Connection::new_session().unwrap();
-    let proxy = TestProxy::new(&connection).unwrap();
+    let proxy = TestProxy::new(&connection);
     proxy
         .connect_signal(move |_arg, other: String| {
             println!("{}", other);

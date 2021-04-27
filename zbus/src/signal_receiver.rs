@@ -230,7 +230,6 @@ mod tests {
 
         let conn = Connection::new_session().unwrap();
         fdo::DBusProxy::new(&conn)
-            .unwrap()
             .request_name(
                 "org.freedesktop.zbus.MultiSignal",
                 fdo::RequestNameFlags::ReplaceExisting.into(),

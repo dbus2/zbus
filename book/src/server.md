@@ -22,7 +22,7 @@ use zbus::fdo;
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let connection = Connection::new_session()?;
 
-    fdo::DBusProxy::new(&connection)?.request_name(
+    fdo::DBusProxy::new(&connection).request_name(
         "org.zbus.MyGreeter",
         fdo::RequestNameFlags::ReplaceExisting.into(),
     )?;
@@ -53,7 +53,7 @@ by replacing the loop above with this code:
 ```rust,no_run
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
 #    let connection = zbus::Connection::new_session()?;
-#    zbus::fdo::DBusProxy::new(&connection)?.request_name(
+#    zbus::fdo::DBusProxy::new(&connection).request_name(
 #        "org.zbus.MyGreeter",
 #        zbus::fdo::RequestNameFlags::ReplaceExisting.into(),
 #    )?;
@@ -132,7 +132,7 @@ impl Greeter {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = zbus::Connection::new_session()?;
-#     fdo::DBusProxy::new(&connection)?.request_name(
+#     fdo::DBusProxy::new(&connection).request_name(
 #         "org.zbus.MyGreeter",
 #         fdo::RequestNameFlags::ReplaceExisting.into(),
 #     )?;

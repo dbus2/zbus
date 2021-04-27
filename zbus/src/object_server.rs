@@ -797,7 +797,6 @@ mod tests {
         let action = Rc::new(Cell::new(NextAction::Nothing));
 
         fdo::DBusProxy::new(&conn)
-            .unwrap()
             .request_name(
                 "org.freedesktop.MyService",
                 fdo::RequestNameFlags::ReplaceExisting.into(),

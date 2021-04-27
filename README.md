@@ -67,7 +67,7 @@ trait Notifications {
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = zbus::Connection::new_session()?;
 
-    let proxy = NotificationsProxy::new(&connection)?;
+    let proxy = NotificationsProxy::new(&connection);
     let reply = proxy.notify(
         "my-app",
         0,
@@ -106,7 +106,7 @@ impl Greeter {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = zbus::Connection::new_session()?;
-    fdo::DBusProxy::new(&connection)?.request_name(
+    fdo::DBusProxy::new(&connection).request_name(
         "org.zbus.MyGreeter",
         fdo::RequestNameFlags::ReplaceExisting.into(),
     )?;
@@ -278,7 +278,7 @@ use zbus::Connection;
 use zbus_polkit::policykit1::*;
 
 let connection = Connection::new_system().unwrap();
-let proxy = AuthorityProxy::new(&connection).unwrap();
+let proxy = AuthorityProxy::new(&connection);
 let subject = Subject::new_for_owner(std::process::id(), None, None).unwrap();
 let result = proxy.check_authorization(
     &subject,

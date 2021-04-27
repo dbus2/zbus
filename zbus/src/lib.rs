@@ -45,7 +45,7 @@
 //! fn main() -> Result<(), Box<dyn Error>> {
 //!     let connection = zbus::Connection::new_session()?;
 //!
-//!     let proxy = NotificationsProxy::new(&connection)?;
+//!     let proxy = NotificationsProxy::new(&connection);
 //!     let reply = proxy.notify(
 //!         "my-app",
 //!         0,
@@ -84,7 +84,7 @@
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
 //!     let connection = zbus::Connection::new_session()?;
-//!     fdo::DBusProxy::new(&connection)?.request_name(
+//!     fdo::DBusProxy::new(&connection).request_name(
 //!         "org.zbus.MyGreeter",
 //!         fdo::RequestNameFlags::ReplaceExisting.into(),
 //!     )?;
@@ -545,7 +545,7 @@ mod tests {
         .unwrap();
         let serial = client_conn.send_message(msg).unwrap();
 
-        crate::fdo::DBusProxy::new(&conn).unwrap().get_id().unwrap();
+        crate::fdo::DBusProxy::new(&conn).get_id().unwrap();
 
         loop {
             let msg = conn.receive_message().unwrap();
