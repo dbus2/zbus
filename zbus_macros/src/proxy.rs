@@ -269,7 +269,7 @@ fn gen_proxy_method_call(
                         &(#(#args),*),
                     )
                     #wait?;
-                let proxy: #proxy<'_> = ::#zbus::azync::ProxyBuilder::new(&self.0.connection().clone().into())
+                let proxy = #proxy::builder(&self.0.connection())
                     .path(object_path)?
                     .build();
                 Ok(proxy)

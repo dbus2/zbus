@@ -293,7 +293,7 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
-        let proxy: AsyncIntrospectableProxy<'_> = ProxyBuilder::new(&self.inner.conn)
+        let proxy = AsyncIntrospectableProxy::builder(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
             .build();
@@ -308,7 +308,7 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new(&self.inner.conn)
+        let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
             .build();
@@ -327,7 +327,7 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new(&self.inner.conn)
+        let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
             .build();

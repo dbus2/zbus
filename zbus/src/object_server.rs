@@ -551,8 +551,7 @@ mod tests {
     use zvariant::derive::Type;
 
     use crate::{
-        azync::ProxyBuilder, dbus_interface, dbus_proxy, fdo, Connection, MessageHeader,
-        MessageType, ObjectServer,
+        dbus_interface, dbus_proxy, fdo, Connection, MessageHeader, MessageType, ObjectServer,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -707,12 +706,12 @@ mod tests {
 
     fn my_iface_test(tx: Sender<()>) -> std::result::Result<u32, Box<dyn Error>> {
         let conn = Connection::new_session()?;
-        let proxy: MyIfaceProxy<'_> = ProxyBuilder::new(&conn.clone().into())
+        let proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")
             .path("/org/freedesktop/MyService")?
             .build();
 
-        let props_proxy: zbus::fdo::PropertiesProxy<'_> = ProxyBuilder::new(&conn.clone().into())
+        let props_proxy = zbus::fdo::PropertiesProxy::builder(&conn)
             .destination("org.freedesktop.MyService")
             .path("/org/freedesktop/MyService")?
             .build();
@@ -774,7 +773,7 @@ mod tests {
         let val = proxy.ping()?;
 
         proxy.create_obj("MyObj")?;
-        let my_obj_proxy: MyIfaceProxy<'_> = ProxyBuilder::new(&conn.clone().into())
+        let my_obj_proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")
             .path("/zbus/test/MyObj")?
             .build();
