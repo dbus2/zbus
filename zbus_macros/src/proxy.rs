@@ -148,7 +148,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             /// Creates a new proxy with the default service & path.
             pub fn new(conn: &#connection) -> Self {
                 let conn = &conn.clone().into();
-                ::#zbus::azync::ProxyBuilder::new_bare(conn).build()
+                ::#zbus::azync::ProxyBuilder::new(conn).build()
             }
 
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
@@ -264,7 +264,7 @@ fn gen_proxy_method_call(
                         &(#(#args),*),
                     )
                     #wait?;
-                let proxy: #proxy<'_> = ::#zbus::azync::ProxyBuilder::new_bare(&self.0.connection().clone().into())
+                let proxy: #proxy<'_> = ::#zbus::azync::ProxyBuilder::new(&self.0.connection().clone().into())
                     .path(object_path)?
                     .build();
                 Ok(proxy)

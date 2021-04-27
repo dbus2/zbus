@@ -146,7 +146,9 @@ impl<'a> ProxyBuilder<'a> {
             proxy_type: std::marker::PhantomData,
         }
     }
+}
 
+impl<'a, T> ProxyBuilder<'a, T> {
     /// Set the proxy destination address.
     pub fn destination<D: Into<Cow<'a, str>>>(mut self, destination: D) -> Self {
         self.destination = Some(destination.into());
@@ -183,6 +185,22 @@ impl<'a> ProxyBuilder<'a> {
             inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
         }
     }
+}
+
+impl<'a, T> ProxyBuilder<'a, T>
+where
+    T: ProxyDefault + From<Proxy<'a>>,
+{
+    /// Create a new [`ProxyBuilder`] for the given connection.
+    pub fn new(conn: &Connection) -> Self {
+        Self {
+            conn: conn.clone(),
+            destination: None,
+            path: None,
+            interface: None,
+            proxy_type: std::marker::PhantomData,
+        }
+    }
 
     /// Build a proxy from the builder.
     ///
@@ -190,16 +208,13 @@ impl<'a> ProxyBuilder<'a> {
     /// [`dbus_proxy`] macro. When missing, default values are taken from [`ProxyDefault`].
     ///
     /// If you need a low-level [`Proxy`], you can use [`build_bare`] instead.
-    pub fn build<P>(self) -> P
-    where
-        P: ProxyDefault + From<Proxy<'a>>,
-    {
+    pub fn build(self) -> T {
         let conn = self.conn;
-        let destination = self.destination.unwrap_or_else(|| P::DESTINATION.into());
+        let destination = self.destination.unwrap_or_else(|| T::DESTINATION.into());
         let path = self
             .path
-            .unwrap_or_else(|| P::PATH.try_into().expect("invalid default path"));
-        let interface = self.interface.unwrap_or_else(|| P::INTERFACE.into());
+            .unwrap_or_else(|| T::PATH.try_into().expect("invalid default path"));
+        let interface = self.interface.unwrap_or_else(|| T::INTERFACE.into());
 
         Proxy {
             inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
@@ -278,7 +293,7 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
-        let proxy: AsyncIntrospectableProxy<'_> = ProxyBuilder::new_bare(&self.inner.conn)
+        let proxy: AsyncIntrospectableProxy<'_> = ProxyBuilder::new(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
             .build();
@@ -293,7 +308,7 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new_bare(&self.inner.conn)
+        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
             .build();
@@ -312,7 +327,7 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new_bare(&self.inner.conn)
+        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
             .build();

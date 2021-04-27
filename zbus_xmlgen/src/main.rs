@@ -19,12 +19,12 @@ use gen::GenTrait;
 fn main() -> Result<(), Box<dyn Error>> {
     let input_src;
 
-    let proxy = |conn: zbus::Connection, service, path| {
-        zbus::azync::ProxyBuilder::new_bare(&conn.into())
+    let proxy = |conn: zbus::Connection, service, path| -> zbus::fdo::IntrospectableProxy<'_> {
+        zbus::azync::ProxyBuilder::new(&conn.into())
             .destination(service)
             .path(path)
             .expect("invalid path")
-            .build::<zbus::fdo::IntrospectableProxy<'_>>()
+            .build()
     };
 
     let node: Node = match args().nth(1) {

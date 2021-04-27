@@ -172,7 +172,7 @@ mod tests {
         let conn = Connection::new_session()?;
         let mut receiver = SignalReceiver::new(conn.clone());
 
-        let proxy1: MultiSignalProxy<'_> = ProxyBuilder::new_bare(&conn.clone().into())
+        let proxy1: MultiSignalProxy<'_> = ProxyBuilder::new(&conn.clone().into())
             .destination("org.freedesktop.zbus.MultiSignal")
             .path("/org/freedesktop/zbus/MultiSignal/1")?
             .build();
@@ -185,7 +185,7 @@ mod tests {
         })?;
         receiver.receive_for(&proxy1)?;
 
-        let proxy2: MultiSignalProxy<'_> = ProxyBuilder::new_bare(&conn.clone().into())
+        let proxy2: MultiSignalProxy<'_> = ProxyBuilder::new(&conn.clone().into())
             .destination("org.freedesktop.zbus.MultiSignal")
             .path("/org/freedesktop/zbus/MultiSignal/2")?
             .build();
