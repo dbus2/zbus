@@ -92,16 +92,16 @@ struct SignalHandlerInfo {
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 #[derive(Debug)]
 pub struct Proxy<'a> {
-    inner: Arc<ProxyInner<'a>>,
+    pub(crate) inner: Arc<ProxyInner<'a>>,
 }
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
-struct ProxyInner<'a> {
-    conn: Connection,
-    destination: Cow<'a, str>,
-    path: ObjectPath<'a>,
-    interface: Cow<'a, str>,
+pub(crate) struct ProxyInner<'a> {
+    pub(crate) conn: Connection,
+    pub(crate) destination: Cow<'a, str>,
+    pub(crate) path: ObjectPath<'a>,
+    pub(crate) interface: Cow<'a, str>,
     dest_unique_name: OnceCell<String>,
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
@@ -125,114 +125,6 @@ impl<'a> ProxyInner<'a> {
     }
 }
 
-/// Builder for [`Proxy`].
-#[derive(Debug, Clone)]
-pub struct ProxyBuilder<'a, T = ()> {
-    conn: Connection,
-    destination: Option<Cow<'a, str>>,
-    path: Option<ObjectPath<'a>>,
-    interface: Option<Cow<'a, str>>,
-    proxy_type: std::marker::PhantomData<T>,
-}
-
-impl<'a> ProxyBuilder<'a> {
-    /// Create a new [`ProxyBuilder`] for the given connection.
-    pub fn new_bare(conn: &Connection) -> Self {
-        Self {
-            conn: conn.clone(),
-            destination: None,
-            path: None,
-            interface: None,
-            proxy_type: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<'a, T> ProxyBuilder<'a, T> {
-    /// Set the proxy destination address.
-    pub fn destination<D: Into<Cow<'a, str>>>(mut self, destination: D) -> Self {
-        self.destination = Some(destination.into());
-        self
-    }
-
-    /// Set the proxy path.
-    pub fn path<E, P: TryInto<ObjectPath<'a>, Error = E>>(mut self, path: P) -> Result<Self>
-    where
-        Error: From<E>,
-    {
-        self.path = Some(path.try_into()?);
-        Ok(self)
-    }
-
-    /// Set the proxy interface.
-    pub fn interface<I: Into<Cow<'a, str>>>(mut self, interface: I) -> Self {
-        self.interface = Some(interface.into());
-        self
-    }
-
-    /// Build a [`Proxy`] from the builder.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the builder is lacking the necessary details to build a proxy.
-    pub fn build_bare(self) -> Proxy<'a> {
-        let conn = self.conn;
-        let destination = self.destination.expect("missing `destination`");
-        let path = self.path.expect("missing `path`");
-        let interface = self.interface.expect("missing `interface`");
-
-        Proxy {
-            inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
-        }
-    }
-}
-
-impl<'a, T> ProxyBuilder<'a, T>
-where
-    T: ProxyDefault + From<Proxy<'a>>,
-{
-    /// Create a new [`ProxyBuilder`] for the given connection.
-    pub fn new(conn: &Connection) -> Self {
-        Self {
-            conn: conn.clone(),
-            destination: None,
-            path: None,
-            interface: None,
-            proxy_type: std::marker::PhantomData,
-        }
-    }
-
-    /// Build a proxy from the builder.
-    ///
-    /// This function is meant to be called with higher-level proxies, generated from the
-    /// [`dbus_proxy`] macro. When missing, default values are taken from [`ProxyDefault`].
-    ///
-    /// If you need a low-level [`Proxy`], you can use [`build_bare`] instead.
-    pub fn build(self) -> T {
-        let conn = self.conn;
-        let destination = self.destination.unwrap_or_else(|| T::DESTINATION.into());
-        let path = self
-            .path
-            .unwrap_or_else(|| T::PATH.try_into().expect("invalid default path"));
-        let interface = self.interface.unwrap_or_else(|| T::INTERFACE.into());
-
-        Proxy {
-            inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
-        }
-        .into()
-    }
-}
-
-/// Trait for the default associated values of a proxy.
-///
-/// The trait is automatically implemented by the [`dbus_proxy`] macro on your behalf, and may be
-/// later used to retrieve the associated constants.
-pub trait ProxyDefault {
-    const INTERFACE: &'static str;
-    const DESTINATION: &'static str;
-    const PATH: &'static str;
-}
-
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
     pub fn new<E>(
@@ -244,11 +136,11 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        Ok(ProxyBuilder::new_bare(conn)
+        Ok(crate::ProxyBuilder::new_bare(conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build_bare())
+            .build_bare_async())
     }
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
@@ -262,11 +154,11 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        Ok(ProxyBuilder::new_bare(&conn)
+        Ok(crate::ProxyBuilder::new_bare(&conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build_bare())
+            .build_bare_async())
     }
 
     /// Get a reference to the associated connection.
@@ -710,29 +602,6 @@ mod tests {
     use enumflags2::BitFlags;
     use futures_util::future::FutureExt;
     use std::{future::ready, sync::Arc};
-
-    #[test]
-    fn builder() {
-        block_on(test_builder()).unwrap();
-    }
-
-    async fn test_builder() -> Result<()> {
-        let conn = Connection::new_session().await?;
-
-        let builder = ProxyBuilder::new_bare(&conn)
-            .destination("org.freedesktop.DBus")
-            .path("/some/path")?
-            .interface("org.freedesktop.Interface");
-        assert!(matches!(
-            builder.clone().destination.unwrap(),
-            Cow::Borrowed(_)
-        ));
-        let proxy = builder.build_bare();
-        assert!(matches!(proxy.inner.destination, Cow::Borrowed(_)));
-        assert!(matches!(proxy.inner.interface, Cow::Borrowed(_)));
-
-        Ok(())
-    }
 
     #[test]
     fn signal_stream() {

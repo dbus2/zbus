@@ -165,6 +165,9 @@ pub use connection::*;
 mod proxy;
 pub use proxy::*;
 
+mod proxy_builder;
+pub use proxy_builder::*;
+
 mod signal_receiver;
 pub use signal_receiver::*;
 

@@ -133,7 +133,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     };
 
     quote! {
-        impl<'a> ::#zbus::azync::ProxyDefault for #proxy_name<'a> {
+        impl<'a> ::#zbus::ProxyDefault for #proxy_name<'a> {
             const INTERFACE: &'static str = #name;
             const DESTINATION: &'static str = #default_service;
             const PATH: &'static str = #default_path;
@@ -151,9 +151,8 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             }
 
             /// Returns a customizable builder for this proxy.
-            pub fn builder(conn: &#connection) -> ::#zbus::azync::ProxyBuilder<'c, Self> {
-                let conn = &conn.clone().into();
-                ::#zbus::azync::ProxyBuilder::new(conn)
+            pub fn builder(conn: &#connection) -> ::#zbus::ProxyBuilder<'c, Self> {
+                ::#zbus::ProxyBuilder::new(conn)
             }
 
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
