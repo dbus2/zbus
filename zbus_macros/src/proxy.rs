@@ -147,8 +147,13 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
         impl<'c> #proxy_name<'c> {
             /// Creates a new proxy with the default service & path.
             pub fn new(conn: &#connection) -> Self {
+                Self::builder(conn).build()
+            }
+
+            /// Returns a customizable builder for this proxy.
+            pub fn builder(conn: &#connection) -> ::#zbus::azync::ProxyBuilder<'c, Self> {
                 let conn = &conn.clone().into();
-                ::#zbus::azync::ProxyBuilder::new(conn).build()
+                ::#zbus::azync::ProxyBuilder::new(conn)
             }
 
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
