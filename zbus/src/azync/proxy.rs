@@ -166,18 +166,17 @@ impl<'a> ProxyBuilder<'a> {
 
     /// Build a [`Proxy`] from the builder.
     ///
-    /// An error is returned when the builder is lacking the necessary details.
-    pub fn try_build_bare(self) -> Result<Proxy<'a>> {
-        match self {
-            ProxyBuilder {
-                conn,
-                destination: Some(destination),
-                path: Some(path),
-                interface: Some(interface),
-            } => Ok(Proxy {
-                inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
-            }),
-            _ => Err(Error::Unsupported),
+    /// # Panics
+    ///
+    /// Panics if the builder is lacking the necessary details to build a proxy.
+    pub fn build_bare(self) -> Proxy<'a> {
+        let conn = self.conn;
+        let destination = self.destination.expect("missing `destination`");
+        let path = self.path.expect("missing `path`");
+        let interface = self.interface.expect("missing `interface`");
+
+        Proxy {
+            inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
         }
     }
 }
@@ -193,11 +192,11 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        ProxyBuilder::new(conn)
+        Ok(ProxyBuilder::new(conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .try_build_bare()
+            .build_bare())
     }
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
@@ -211,11 +210,11 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        ProxyBuilder::new(&conn)
+        Ok(ProxyBuilder::new(&conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .try_build_bare()
+            .build_bare())
     }
 
     /// Get a reference to the associated connection.
@@ -664,10 +663,7 @@ mod tests {
     async fn test_builder() -> Result<()> {
         let conn = Connection::new_session().await?;
 
-        let builder = ProxyBuilder::new(&conn);
-        assert!(builder.clone().try_build_bare().is_err());
-
-        let builder = builder
+        let builder = ProxyBuilder::new(&conn)
             .destination("org.freedesktop.DBus")
             .path("/some/path")?
             .interface("org.freedesktop.Interface");
@@ -675,7 +671,7 @@ mod tests {
             builder.clone().destination.unwrap(),
             Cow::Borrowed(_)
         ));
-        let proxy = builder.try_build_bare().unwrap();
+        let proxy = builder.build_bare();
         assert!(matches!(proxy.inner.destination, Cow::Borrowed(_)));
         assert!(matches!(proxy.inner.interface, Cow::Borrowed(_)));
 
