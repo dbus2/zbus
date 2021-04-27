@@ -127,11 +127,12 @@ impl<'a> ProxyInner<'a> {
 
 /// Builder for [`Proxy`].
 #[derive(Debug, Clone)]
-pub struct ProxyBuilder<'a> {
+pub struct ProxyBuilder<'a, T = ()> {
     conn: Connection,
     destination: Option<Cow<'a, str>>,
     path: Option<ObjectPath<'a>>,
     interface: Option<Cow<'a, str>>,
+    proxy_type: std::marker::PhantomData<T>,
 }
 
 impl<'a> ProxyBuilder<'a> {
@@ -142,6 +143,7 @@ impl<'a> ProxyBuilder<'a> {
             destination: None,
             path: None,
             interface: None,
+            proxy_type: std::marker::PhantomData,
         }
     }
 
