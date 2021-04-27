@@ -261,7 +261,7 @@ client.set_desktop_id("org.freedesktop.zbus").unwrap();
 
 client
     .connect_location_updated(move |_old, new| {
-        let location: LocationProxy<'_> = ProxyBuilder::new(&conn.clone().into())
+        let location: LocationProxy<'_> = ProxyBuilder::new_bare(&conn.clone().into())
             .path(new.as_str())?
             .build();
         println!(
@@ -336,7 +336,7 @@ actually getting set:
 
 let conn_clone = conn.clone();
 client.connect_location_updated(move |_old, new| {
-    let location: LocationProxy<'_> = ProxyBuilder::new(&conn_clone.clone().into())
+    let location: LocationProxy<'_> = ProxyBuilder::new_bare(&conn_clone.clone().into())
         .destination("org.freedesktop.GeoClue2")
         .path(new.as_str())?
         .build();
@@ -349,7 +349,7 @@ client.connect_location_updated(move |_old, new| {
     Ok(())
 }).unwrap();
 
-let props: zbus::fdo::PropertiesProxy<'_> = ProxyBuilder::new(&conn.clone().into())
+let props: zbus::fdo::PropertiesProxy<'_> = ProxyBuilder::new_bare(&conn.clone().into())
     .destination("org.freedesktop.GeoClue2")
     .path(client.path()).unwrap()
     .build();

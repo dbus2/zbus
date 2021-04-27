@@ -606,7 +606,7 @@ mod tests {
                 ) -> zbus::Result<(OwnedValue, OwnedObjectPath)>;
             }
 
-            let proxy: SecretProxy<'_> = zbus::azync::ProxyBuilder::new(&conn.clone().into())
+            let proxy: SecretProxy<'_> = zbus::azync::ProxyBuilder::new_bare(&conn.clone().into())
                 .destination(&service_name)
                 .path("/org/freedesktop/secrets")
                 .unwrap()

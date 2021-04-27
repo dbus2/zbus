@@ -137,7 +137,7 @@ pub struct ProxyBuilder<'a, T = ()> {
 
 impl<'a> ProxyBuilder<'a> {
     /// Create a new [`ProxyBuilder`] for the given connection.
-    pub fn new(conn: &Connection) -> Self {
+    pub fn new_bare(conn: &Connection) -> Self {
         Self {
             conn: conn.clone(),
             destination: None,
@@ -229,7 +229,7 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        Ok(ProxyBuilder::new(conn)
+        Ok(ProxyBuilder::new_bare(conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
@@ -247,7 +247,7 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        Ok(ProxyBuilder::new(&conn)
+        Ok(ProxyBuilder::new_bare(&conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
@@ -278,7 +278,7 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
-        let proxy: AsyncIntrospectableProxy<'_> = ProxyBuilder::new(&self.inner.conn)
+        let proxy: AsyncIntrospectableProxy<'_> = ProxyBuilder::new_bare(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
             .build();
@@ -293,7 +293,7 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new(&self.inner.conn)
+        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new_bare(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
             .build();
@@ -312,7 +312,7 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new(&self.inner.conn)
+        let proxy: AsyncPropertiesProxy<'_> = ProxyBuilder::new_bare(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
             .build();
@@ -704,7 +704,7 @@ mod tests {
     async fn test_builder() -> Result<()> {
         let conn = Connection::new_session().await?;
 
-        let builder = ProxyBuilder::new(&conn)
+        let builder = ProxyBuilder::new_bare(&conn)
             .destination("org.freedesktop.DBus")
             .path("/some/path")?
             .interface("org.freedesktop.Interface");

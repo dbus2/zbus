@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let input_src;
 
     let proxy = |conn: zbus::Connection, service, path| {
-        zbus::azync::ProxyBuilder::new(&conn.into())
+        zbus::azync::ProxyBuilder::new_bare(&conn.into())
             .destination(service)
             .path(path)
             .expect("invalid path")
