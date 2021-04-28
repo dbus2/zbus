@@ -115,7 +115,7 @@ trait Notifications {
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = zbus::Connection::new_session()?;
 
-    let proxy = NotificationsProxy::new(&connection)?;
+    let proxy = NotificationsProxy::new(&connection);
     let reply = proxy.notify("my-app", 0, "dialog-information", "A summary", "Some body",
                              &[], HashMap::new(), 5000)?;
     dbg!(reply);
@@ -173,7 +173,7 @@ trait SystemdManager {
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = zbus::Connection::new_session()?;
 
-    let proxy = SystemdManagerProxy::new(&connection)?;
+    let proxy = SystemdManagerProxy::new(&connection);
     println!("Host architecture: {}", proxy.architecture()?);
     println!("Environment:");
     for env in proxy.environment()? {
@@ -254,14 +254,16 @@ trait Location {
     fn longitude(&self) -> Result<f64>;
 }
 let conn = Connection::new_system().unwrap();
-let manager = ManagerProxy::new(&conn).unwrap();
+let manager = ManagerProxy::new(&conn);
 let mut client = manager.get_client().unwrap();
 // Gotta do this, sorry!
 client.set_desktop_id("org.freedesktop.zbus").unwrap();
 
 client
     .connect_location_updated(move |_old, new| {
-        let location = LocationProxyBuilder::new(&conn)?.path(new.as_str())?.build()?;
+        let location = LocationProxy::builder(&conn)
+            .path(new.as_str())?
+            .build();
         println!(
             "Latitude: {}\nLongitude: {}",
             location.latitude()?,
@@ -325,7 +327,7 @@ actually getting set:
 # }
 #
 # let conn = Connection::new_system().unwrap();
-# let manager = ManagerProxy::new(&conn).unwrap();
+# let manager = ManagerProxy::new(&conn);
 # let mut client = manager.get_client().unwrap();
 # // Gotta do this, sorry!
 # client.set_desktop_id("org.freedesktop.zbus").unwrap();
@@ -334,10 +336,10 @@ actually getting set:
 
 let conn_clone = conn.clone();
 client.connect_location_updated(move |_old, new| {
-    let location = LocationProxyBuilder::new(&conn_clone)?
+    let location = LocationProxy::builder(&conn_clone)
         .destination("org.freedesktop.GeoClue2")
         .path(new.as_str())?
-        .build()?;
+        .build();
     println!(
         "Latitude: {}\nLongitude: {}",
         location.latitude()?,
@@ -347,10 +349,10 @@ client.connect_location_updated(move |_old, new| {
     Ok(())
 }).unwrap();
 
-let props = zbus::fdo::PropertiesProxyBuilder::new(&conn).unwrap()
+let props = zbus::fdo::PropertiesProxy::builder(&conn)
     .destination("org.freedesktop.GeoClue2")
     .path(client.path()).unwrap()
-    .build().unwrap();
+    .build();
 props.connect_properties_changed(|iface, changed, _| {
     for (name, value) in changed.iter() {
         println!("{}.{} changed to `{:?}`", iface, name, value);

@@ -260,7 +260,7 @@ client.set_desktop_id("org.freedesktop.zbus").unwrap();
 
 client
     .connect_location_updated(move |_old, new| {
-        let location = LocationProxy::new_for_path(&conn, &new)?;
+        let location = LocationProxy::new_for_path(&conn, &new);
         println!(
             "Latitude: {}\nLongitude: {}",
             location.latitude()?,
@@ -326,7 +326,7 @@ actually getting set:
 # let manager = ManagerProxy::new(&conn).unwrap();
 # let client_path = manager.get_client().unwrap();
 # let mut client =
-#     ClientProxy::new_for(&conn, "org.freedesktop.GeoClue2", &client_path).unwrap();
+#     ClientProxy::new_for(&conn, "org.freedesktop.GeoClue2", &client_path);
 # // Gotta do this, sorry!
 # client.set_desktop_id("org.freedesktop.zbus").unwrap();
 #

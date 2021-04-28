@@ -64,7 +64,7 @@ async fn run() -> Result<()> {
         fn longitude(&self) -> Result<f64>;
     }
     let conn = Connection::new_system().await?;
-    let manager = AsyncManagerProxy::new(&conn)?;
+    let manager = AsyncManagerProxy::new(&conn);
     let mut client = manager.get_client().await?;
     // Gotta do this, sorry!
     client.set_desktop_id("org.freedesktop.zbus").await?;
@@ -75,7 +75,7 @@ async fn run() -> Result<()> {
             let conn = conn.clone();
 
             async move {
-                let location = AsyncLocationProxyBuilder::new(&conn)?.path(new)?.build()?;
+                let location = AsyncLocationProxy::builder(&conn).path(new)?.build();
                 println!(
                     "Latitude: {}\nLongitude: {}",
                     location.latitude().await?,
@@ -152,16 +152,16 @@ example again to receive multiple signals on different proxies:
 #         fn longitude(&self) -> Result<f64>;
 #     }
 #     let conn = Connection::new_system().await?;
-#     let manager = AsyncManagerProxy::new(&conn)?;
+#     let manager = AsyncManagerProxy::new(&conn);
 #     let mut client = manager.get_client().await?;
 #
 	// Everything else remains the same before this point.
     client.set_desktop_id("org.freedesktop.zbus").await?;
 
-    let props = zbus::fdo::AsyncPropertiesProxyBuilder::new(&conn)?
+    let props = zbus::fdo::AsyncPropertiesProxy::builder(&conn)
         .destination("org.freedesktop.GeoClue2")
         .path(client.path())?
-        .build()?;
+        .build();
     props
         .connect_properties_changed(move |iface, changed, _| {
             for (name, value) in changed.iter() {
@@ -178,7 +178,9 @@ example again to receive multiple signals on different proxies:
             let conn = conn.clone();
 
             async move {
-                let location = AsyncLocationProxyBuilder::new(&conn)?.path(new)?.build()?;
+                let location = AsyncLocationProxy::builder(&conn)
+                    .path(new)?
+                    .build();
                 println!(
                     "Latitude: {}\nLongitude: {}",
                     location.latitude().await?,
