@@ -52,16 +52,21 @@ impl<'a, T> ProxyBuilder<'a, T> {
         self
     }
 
-    /// Build a [`Proxy`] from the builder.
+    /// Build a generic [`Proxy`] from the builder.
+    ///
+    /// Note: to build a higher-level proxy, generated from [`dbus_proxy`] macro, you should use
+    /// [`ProxyBuilder::build`] instead.
     ///
     /// # Panics
     ///
     /// Panics if the builder is lacking the necessary details to build a proxy.
+    ///
+    /// [`dbus_proxy`]: attr.dbus_proxy.html
     pub fn build_bare(self) -> Proxy<'a> {
         self.build_bare_async().into()
     }
 
-    /// Build a [`azync::Proxy`] from the builder.
+    /// Build a generic [`azync::Proxy`] from the builder.
     ///
     /// # Panics
     ///
@@ -101,7 +106,7 @@ where
     /// This function is meant to be called with higher-level proxies, generated from the
     /// [`dbus_proxy`] macro. When missing, default values are taken from [`ProxyDefault`].
     ///
-    /// If you need a low-level [`Proxy`], you can use [`ProxyBuilder::build_bare`] instead.
+    /// If you need a generic [`Proxy`], you can use [`ProxyBuilder::build_bare`] instead.
     ///
     /// [`dbus_proxy`]: attr.dbus_proxy.html
     pub fn build(self) -> T {
