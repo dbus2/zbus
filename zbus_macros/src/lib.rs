@@ -16,9 +16,9 @@ mod utils;
 ///
 /// The macro must be applied on a `trait T`. Two matching `impl T` will provide a synchronous Proxy
 /// implementation, named `TraitNameProxy` and an asynchronous one, named `AsyncTraitNameProxy`. The
-/// proxy instances can be created with the associated `new()` or `new_for()` methods. The former
+/// proxy instances can be created with the associated `new()` or `builder()` methods. The former
 /// doesn't take any argument and uses the default service name and path. The later allows you to
-/// specify both.
+/// specify non-default proxy arguments.
 ///
 /// Each trait method will be expanded to call to the associated D-Bus remote interface.
 ///
@@ -37,8 +37,6 @@ mod utils;
 ///   to specify the proxy object to be constructed from the returned [`ObjectPath`].
 ///
 ///   NB: Any doc comments provided shall be appended to the ones added by the macro.
-///
-/// (the expanded `impl` also provides an `introspect()` method, for convenience)
 ///
 /// # Example
 ///
@@ -80,7 +78,10 @@ mod utils;
 /// trait SomeOtherIface {}
 ///
 /// let connection = Connection::new_session()?;
-/// let proxy = SomeIfaceProxy::new(&connection);
+/// // Use `builder` to override the default arguments, `new` otherwise.
+/// let proxy = SomeIfaceProxy::builder(&connection)
+///                .destination("org.another.Service")
+///                .build();
 /// let _ = proxy.do_this("foo", 32, &Value::new(true));
 /// let _ = proxy.set_a_property("val");
 ///
