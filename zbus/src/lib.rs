@@ -45,7 +45,7 @@
 //! fn main() -> Result<(), Box<dyn Error>> {
 //!     let connection = zbus::Connection::new_session()?;
 //!
-//!     let proxy = NotificationsProxy::new(&connection)?;
+//!     let proxy = NotificationsProxy::new(&connection);
 //!     let reply = proxy.notify(
 //!         "my-app",
 //!         0,
@@ -84,7 +84,7 @@
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
 //!     let connection = zbus::Connection::new_session()?;
-//!     fdo::DBusProxy::new(&connection)?.request_name(
+//!     fdo::DBusProxy::new(&connection).request_name(
 //!         "org.zbus.MyGreeter",
 //!         fdo::RequestNameFlags::ReplaceExisting.into(),
 //!     )?;
@@ -164,6 +164,9 @@ pub use connection::*;
 
 mod proxy;
 pub use proxy::*;
+
+mod proxy_builder;
+pub use proxy_builder::*;
 
 mod signal_receiver;
 pub use signal_receiver::*;
@@ -545,7 +548,7 @@ mod tests {
         .unwrap();
         let serial = client_conn.send_message(msg).unwrap();
 
-        crate::fdo::DBusProxy::new(&conn).unwrap().get_id().unwrap();
+        crate::fdo::DBusProxy::new(&conn).get_id().unwrap();
 
         loop {
             let msg = conn.receive_message().unwrap();
@@ -606,13 +609,11 @@ mod tests {
                 ) -> zbus::Result<(OwnedValue, OwnedObjectPath)>;
             }
 
-            let proxy = SecretProxyBuilder::new(&conn)
-                .unwrap()
+            let proxy = SecretProxy::builder(&conn)
                 .destination(&service_name)
                 .path("/org/freedesktop/secrets")
                 .unwrap()
-                .build()
-                .unwrap();
+                .build();
 
             proxy.open_session("plain", &Value::from("")).unwrap();
 

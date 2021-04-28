@@ -628,7 +628,7 @@ mod tests {
         let owner_change_signaled = Arc::new(Mutex::new(false));
         let name_acquired_signaled = Arc::new(Mutex::new(false));
 
-        let proxy = fdo::DBusProxy::new(&conn).unwrap();
+        let proxy = fdo::DBusProxy::new(&conn);
 
         let well_known = "org.freedesktop.zbus.FdoSignalTest";
         let unique_name = conn.unique_name().unwrap().to_string();

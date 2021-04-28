@@ -332,7 +332,6 @@ mod tests {
         }
 
         fdo::DBusProxy::new(&conn)
-            .unwrap()
             .request_name(&well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .unwrap();
 

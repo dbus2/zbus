@@ -110,7 +110,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             ItemAttribute::OutArgs(a) => a,
             _ => unreachable!(),
         });
-        assert_eq!(is_property && is_signal, false);
+        assert!(!is_property || !is_signal);
 
         let has_inputs = inputs.len() > 1;
 

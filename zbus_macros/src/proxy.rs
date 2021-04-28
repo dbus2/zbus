@@ -77,7 +77,6 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     } else {
         format!("{}Proxy", input.ident)
     };
-    let builder_name = Ident::new(&format!("{}Builder", proxy_name), Span::call_site());
     let proxy_name = Ident::new(&proxy_name, Span::call_site());
     let ident = input.ident.to_string();
     let name = iface_name.unwrap_or(format!("org.freedesktop.{}", ident));
@@ -133,63 +132,11 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
         (doc, proxy, connection)
     };
 
-    let builder_doc = format!("A builder for [`{}`].", proxy_name);
-    let builder_new_doc = format!(
-        "Create a new [`{}`] for the given connection.",
-        builder_name
-    );
-    let builder_build_doc = format!("Build a [`{}`] from the builder.", proxy_name);
-
     quote! {
-        #[doc = #builder_doc]
-        #[derive(Debug)]
-        pub struct #builder_name<'a>(::#zbus::azync::ProxyBuilder<'a>);
-
-        impl<'a> #builder_name<'a> {
-            #[doc = #builder_new_doc]
-            pub fn new(conn: &#connection) -> ::#zbus::Result<Self> {
-                let conn = conn.clone().into();
-
-                Ok(Self(
-                    ::#zbus::azync::ProxyBuilder::new(&conn)
-                        .destination(#default_service)
-                        .path(#default_path)?
-                    .interface(#name)
-                ))
-            }
-
-            /// Set the proxy destination address.
-            pub fn destination<D>(mut self, destination: D) -> Self
-            where
-                D: std::convert::Into<std::borrow::Cow<'a, str>>
-            {
-                Self(self.0.destination(destination))
-            }
-
-            /// Set the proxy path.
-            pub fn path<E, P>(mut self, path: P) -> ::#zbus::Result<Self>
-            where
-                P: std::convert::TryInto<::#zbus::export::zvariant::ObjectPath<'a>, Error = E>,
-                ::#zbus::Error: From<E>,
-            {
-                Ok(Self(self.0.path(path)?))
-            }
-
-            /// Set the proxy interface.
-            pub fn interface<I>(mut self, interface: I) -> Self
-            where
-                I: std::convert::Into<std::borrow::Cow<'a, str>>
-            {
-                Self(self.0.interface(interface))
-            }
-
-            #[doc = #builder_build_doc]
-            ///
-            /// An error is returned when the builder is lacking the necessary details.
-            pub fn build(self) -> ::#zbus::Result<#proxy_name<'a>> {
-                let inner = self.0.build()?;
-                Ok(#proxy_name(inner.into()))
-            }
+        impl<'a> ::#zbus::ProxyDefault for #proxy_name<'a> {
+            const INTERFACE: &'static str = #name;
+            const DESTINATION: &'static str = #default_service;
+            const PATH: &'static str = #default_path;
         }
 
         #[doc = #proxy_doc]
@@ -199,8 +146,13 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
 
         impl<'c> #proxy_name<'c> {
             /// Creates a new proxy with the default service & path.
-            pub fn new(conn: &#connection) -> ::#zbus::Result<Self> {
-                #builder_name::new(conn)?.build()
+            pub fn new(conn: &#connection) -> Self {
+                Self::builder(conn).build()
+            }
+
+            /// Returns a customizable builder for this proxy.
+            pub fn builder(conn: &#connection) -> ::#zbus::ProxyBuilder<'c, Self> {
+                ::#zbus::ProxyBuilder::new(conn)
             }
 
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
@@ -214,6 +166,12 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             }
 
             #methods
+        }
+
+        impl<'c> std::convert::From<::#zbus::azync::Proxy<'c>> for #proxy_name<'c> {
+            fn from(proxy: ::#zbus::azync::Proxy<'c>) -> Self {
+                #proxy_name(proxy.into())
+            }
         }
 
         impl<'c> std::ops::Deref for #proxy_name<'c> {
@@ -288,7 +246,6 @@ fn gen_proxy_method_call(
     if let Some(proxy_name) = proxy_object {
         let method = Ident::new(snake_case_name, Span::call_site());
         let proxy = Ident::new(&proxy_name, Span::call_site());
-        let proxy_builder = Ident::new(&format!("{}Builder", proxy_name), Span::call_site());
         let inputs = &m.sig.inputs;
         let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
         let signature = if where_clause.is_some() {
@@ -311,9 +268,9 @@ fn gen_proxy_method_call(
                         &(#(#args),*),
                     )
                     #wait?;
-                let proxy = #proxy_builder::new(self.0.connection())?
+                let proxy = #proxy::builder(&self.0.connection())
                     .path(object_path)?
-                    .build()?;
+                    .build();
                 Ok(proxy)
             }
         }
