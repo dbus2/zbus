@@ -151,7 +151,7 @@ impl Connection {
     /// end up in a deadlock situation. It is therefore highly recommended not to use such a
     /// combination.
     pub fn receive_message(&self) -> Result<Message> {
-        block_on(self.0.receive_specific(|_| ready(Ok(true)).boxed()))
+        self.receive_specific(|_| Ok(true))
     }
 
     /// Receive a specific message.
