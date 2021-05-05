@@ -53,11 +53,13 @@ use crate::{azync, Guid, Message, MessageError, Result};
 /// [`receive_message`]: struct.Connection.html#method.receive_message
 /// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
 #[derive(Debug, Clone)]
-pub struct Connection(azync::Connection);
+pub struct Connection {
+    inner: azync::Connection,
+}
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        block_on(self.0.as_raw_fd())
+        block_on(self.inner.as_raw_fd())
     }
 }
 
@@ -70,24 +72,24 @@ impl Connection {
     /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
     /// can be sent and received.
     pub fn new_unix_client(stream: UnixStream, bus_connection: bool) -> Result<Self> {
-        block_on(azync::Connection::new_unix_client(stream, bus_connection)).map(Self)
+        block_on(azync::Connection::new_unix_client(stream, bus_connection)).map(Self::from)
     }
 
     /// Create a `Connection` to the session/user message bus.
     pub fn new_session() -> Result<Self> {
-        block_on(azync::Connection::new_session()).map(Self)
+        block_on(azync::Connection::new_session()).map(Self::from)
     }
 
     /// Create a `Connection` to the system-wide message bus.
     pub fn new_system() -> Result<Self> {
-        block_on(azync::Connection::new_system()).map(Self)
+        block_on(azync::Connection::new_system()).map(Self::from)
     }
 
     /// Create a `Connection` for the given [D-Bus address].
     ///
     /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
-        block_on(azync::Connection::new_for_address(address, bus_connection)).map(Self)
+        block_on(azync::Connection::new_for_address(address, bus_connection)).map(Self::from)
     }
 
     /// Create a server `Connection` for the given `UnixStream` and the server `guid`.
@@ -98,12 +100,12 @@ impl Connection {
     /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
     /// can be sent and received.
     pub fn new_unix_server(stream: UnixStream, guid: &Guid) -> Result<Self> {
-        block_on(azync::Connection::new_unix_server(stream, guid)).map(Self)
+        block_on(azync::Connection::new_unix_server(stream, guid)).map(Self::from)
     }
 
     /// Max number of messages to queue.
     pub fn max_queued(&self) -> usize {
-        self.0.max_queued()
+        self.inner.max_queued()
     }
 
     /// Set the max number of messages to queue.
@@ -124,17 +126,17 @@ impl Connection {
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn set_max_queued(self, max: usize) -> Self {
-        Self(self.0.set_max_queued(max))
+        Self::from(self.inner.set_max_queued(max))
     }
 
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
-        self.0.server_guid()
+        self.inner.server_guid()
     }
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
     pub fn unique_name(&self) -> Option<&str> {
-        self.0.unique_name()
+        self.inner.unique_name()
     }
 
     /// Fetch the next message from the connection.
@@ -164,7 +166,10 @@ impl Connection {
     where
         P: Fn(&Message) -> Result<bool>,
     {
-        block_on(self.0.receive_specific(|msg| ready(predicate(msg)).boxed()))
+        block_on(
+            self.inner
+                .receive_specific(|msg| ready(predicate(msg)).boxed()),
+        )
     }
 
     /// Send `msg` to the peer.
@@ -179,7 +184,7 @@ impl Connection {
     ///
     /// [`flush`]: struct.Connection.html#method.flush
     pub fn send_message(&self, msg: Message) -> Result<u32> {
-        block_on(self.0.send_message(msg))
+        block_on(self.inner.send_message(msg))
     }
 
     /// Send a method call.
@@ -210,7 +215,7 @@ impl Connection {
         MessageError: From<E>,
     {
         block_on(
-            self.0
+            self.inner
                 .call_method(destination, path, iface, method_name, body),
         )
     }
@@ -231,7 +236,7 @@ impl Connection {
         MessageError: From<E>,
     {
         block_on(
-            self.0
+            self.inner
                 .emit_signal(destination, path, iface, signal_name, body),
         )
     }
@@ -246,7 +251,7 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        block_on(self.0.reply(call, body))
+        block_on(self.inner.reply(call, body))
     }
 
     /// Reply an error to a message.
@@ -259,30 +264,30 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
-        block_on(self.0.reply_error(call, error_name, body))
+        block_on(self.inner.reply_error(call, error_name, body))
     }
 
     /// Checks if `self` is a connection to a message bus.
     ///
     /// This will return `false` for p2p connections.
     pub fn is_bus(&self) -> bool {
-        self.0.is_bus()
+        self.inner.is_bus()
     }
 
     /// Get a reference to the underlying async Connection.
     pub fn inner(&self) -> &azync::Connection {
-        &self.0
+        &self.inner
     }
 
     /// Get the underlying async Connection, consuming `self`.
     pub fn into_inner(self) -> azync::Connection {
-        self.0
+        self.inner
     }
 }
 
 impl From<azync::Connection> for Connection {
     fn from(conn: azync::Connection) -> Self {
-        Self(conn)
+        Self { inner: conn }
     }
 }
 
