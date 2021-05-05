@@ -410,7 +410,7 @@ impl Connection {
     /// not. All messages received during this call that are not returned by it, are pushed to the
     /// queue to be picked by the susubsequent or awaiting call to this method or by the
     /// `MessageStream`.
-    pub async fn receive_specific<P>(&self, predicate: P) -> Result<Message>
+    pub async fn receive_specific<P>(&self, predicate: P) -> Result<Arc<Message>>
     where
         for<'msg> P: Fn(&'msg Message) -> BoxFuture<'msg, Result<bool>>,
     {
@@ -427,7 +427,7 @@ impl Connection {
                 } {
                     // SAFETY: we got the index from the queue enumerator so this shouldn't ever
                     // fail.
-                    return queue.remove(i).expect("removing queue item");
+                    return queue.remove(i).expect("removing queue item").map(Arc::new);
                 }
             }
         }
@@ -470,7 +470,7 @@ impl Connection {
             }
         }
 
-        msg
+        msg.map(Arc::new)
     }
 
     /// Send `msg` to the peer.
@@ -500,7 +500,7 @@ impl Connection {
         interface: Option<&str>,
         method_name: &str,
         body: &B,
-    ) -> Result<Message>
+    ) -> Result<Arc<Message>>
     where
         B: serde::ser::Serialize + zvariant::Type,
         MessageError: From<E>,
@@ -884,11 +884,11 @@ impl futures_sink::Sink<Message> for MessageSink<'_> {
 /// the `receive_specific` is waiting for and end up in a deadlock situation. It is therefore highly
 /// recommended not to use such a combination.
 pub struct MessageStream {
-    stream: stream::BoxStream<'static, Result<Message>>,
+    stream: stream::BoxStream<'static, Result<Arc<Message>>>,
 }
 
 impl stream::Stream for MessageStream {
-    type Item = Result<Message>;
+    type Item = Result<Arc<Message>>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         stream::Stream::poll_next(self.get_mut().stream.as_mut(), cx)
@@ -953,7 +953,7 @@ mod tests {
         let (client_conn, server_conn) = futures_util::try_join!(client, server)?;
 
         let server_future = async {
-            let mut method: Option<Message> = None;
+            let mut method: Option<Arc<Message>> = None;
             while let Some(m) = server_conn.stream().await.try_next().await? {
                 if m.to_string() == "Method call Test" {
                     method.replace(m);

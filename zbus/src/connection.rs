@@ -6,6 +6,7 @@ use std::{
         io::{AsRawFd, RawFd},
         net::UnixStream,
     },
+    sync::Arc,
 };
 use zvariant::ObjectPath;
 
@@ -152,7 +153,7 @@ impl Connection {
     /// with situation where this method takes away the message the other API is awaiting for and
     /// end up in a deadlock situation. It is therefore highly recommended not to use such a
     /// combination.
-    pub fn receive_message(&self) -> Result<Message> {
+    pub fn receive_message(&self) -> Result<Arc<Message>> {
         self.receive_specific(|_| Ok(true))
     }
 
@@ -162,7 +163,7 @@ impl Connection {
     /// decides if the message received should be returned by this method or not. Message received
     /// during this call that are not returned by it, are pushed to the queue to be picked by the
     /// susubsequent call to `receive_message`] or this method.
-    pub fn receive_specific<P>(&self, predicate: P) -> Result<Message>
+    pub fn receive_specific<P>(&self, predicate: P) -> Result<Arc<Message>>
     where
         P: Fn(&Message) -> Result<bool>,
     {
@@ -209,7 +210,7 @@ impl Connection {
         iface: Option<&str>,
         method_name: &str,
         body: &B,
-    ) -> Result<Message>
+    ) -> Result<Arc<Message>>
     where
         B: serde::ser::Serialize + zvariant::Type,
         MessageError: From<E>,

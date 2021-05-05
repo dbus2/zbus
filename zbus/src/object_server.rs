@@ -5,6 +5,7 @@ use std::{
     convert::TryInto,
     fmt::Write,
     rc::Rc,
+    sync::Arc,
 };
 
 use scoped_tls::scoped_thread_local;
@@ -524,7 +525,7 @@ impl ObjectServer {
     /// interface, it returns `Ok(None)`. If not, it returns the received message.
     ///
     /// Returns an error if the message is malformed or an error occured.
-    pub fn try_handle_next(&mut self) -> Result<Option<Message>> {
+    pub fn try_handle_next(&mut self) -> Result<Option<Arc<Message>>> {
         let msg = self.conn.receive_message()?;
 
         if !self.dispatch_message(&msg)? {

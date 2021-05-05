@@ -3,6 +3,7 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     convert::{AsRef, TryFrom},
+    sync::Arc,
 };
 use zvariant::ObjectPath;
 
@@ -104,7 +105,7 @@ impl<'r, 'p> SignalReceiver<'r, 'p> {
     ///
     /// If the signal message was handled by a handler, `Ok(None)` is returned. Otherwise, the
     /// received message is returned.
-    pub fn next_signal(&self) -> Result<Option<crate::Message>> {
+    pub fn next_signal(&self) -> Result<Option<Arc<crate::Message>>> {
         let msg = self.conn.receive_specific(|msg| {
             let hdr = msg.header()?;
 

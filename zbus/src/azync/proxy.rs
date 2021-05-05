@@ -236,7 +236,7 @@ impl<'a> Proxy<'a> {
     /// allocation/copying, by deserializing the reply to an unowned type).
     ///
     /// [`call`]: struct.Proxy.html#method.call
-    pub async fn call_method<B>(&self, method_name: &str, body: &B) -> Result<Message>
+    pub async fn call_method<B>(&self, method_name: &str, body: &B) -> Result<Arc<Message>>
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
@@ -422,7 +422,7 @@ impl<'a> Proxy<'a> {
     /// # Errors
     ///
     /// This method returns the same errors as [`Self::receive_signal`].
-    pub async fn next_signal(&self) -> Result<Option<Message>> {
+    pub async fn next_signal(&self) -> Result<Option<Arc<Message>>> {
         let msg = {
             // We want to keep a lock on the handlers during `receive_specific` call but we also
             // want to avoid using `handlers` directly as that somehow makes this call (or rather
@@ -550,7 +550,7 @@ impl<'a> Proxy<'a> {
 #[derivative(Debug)]
 pub struct SignalStream<'s> {
     #[derivative(Debug = "ignore")]
-    stream: stream::BoxStream<'s, Message>,
+    stream: stream::BoxStream<'s, Arc<Message>>,
     conn: Connection,
     subscription_id: Option<u64>,
 }
@@ -574,7 +574,7 @@ impl SignalStream<'_> {
 }
 
 impl stream::Stream for SignalStream<'_> {
-    type Item = Message;
+    type Item = Arc<Message>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         stream::Stream::poll_next(self.get_mut().stream.as_mut(), cx)
