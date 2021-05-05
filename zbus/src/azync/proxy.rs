@@ -599,7 +599,6 @@ impl<'azync, 'sync: 'azync> From<crate::Proxy<'sync>> for Proxy<'azync> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use enumflags2::BitFlags;
     use futures_util::future::FutureExt;
     use std::{future::ready, sync::Arc};
 
@@ -614,13 +613,7 @@ mod tests {
         let conn = Connection::new_session().await?;
         let unique_name = conn.unique_name().unwrap();
 
-        let proxy = Proxy::new(
-            &conn,
-            "org.freedesktop.DBus",
-            "/org/freedesktop/DBus",
-            "org.freedesktop.DBus",
-        )
-        .unwrap();
+        let proxy = fdo::AsyncDBusProxy::new(&conn);
 
         let well_known = "org.freedesktop.zbus.async.ProxySignalStreamTest";
         let owner_changed_stream = proxy
@@ -642,18 +635,9 @@ mod tests {
             ready(false)
         });
 
-        // TODO: Use fdo API when it has async proxy
         let reply = proxy
-            .call_method(
-                "RequestName",
-                &(
-                    well_known,
-                    BitFlags::from(fdo::RequestNameFlags::ReplaceExisting),
-                ),
-            )
-            .await
-            .unwrap();
-        let reply: fdo::RequestNameReply = reply.body().unwrap();
+            .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+            .await?;
         assert_eq!(reply, fdo::RequestNameReply::PrimaryOwner);
 
         let (changed_signal, acquired_signal) = futures_util::join!(
