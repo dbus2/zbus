@@ -115,7 +115,7 @@ trait Notifications {
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = zbus::Connection::new_session()?;
 
-    let proxy = NotificationsProxy::new(&connection);
+    let proxy = NotificationsProxy::new(&connection)?;
     let reply = proxy.notify("my-app", 0, "dialog-information", "A summary", "Some body",
                              &[], HashMap::new(), 5000)?;
     dbg!(reply);
