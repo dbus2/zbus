@@ -280,6 +280,7 @@ impl<'p, 'a: 'p> From<azync::Proxy<'a>> for Proxy<'p> {
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+    use test_env_log::test;
 
     #[test]
     fn signal() {

@@ -601,6 +601,7 @@ mod tests {
     use super::*;
     use futures_util::future::FutureExt;
     use std::{future::ready, sync::Arc};
+    use test_env_log::test;
 
     #[test]
     fn signal_stream() {

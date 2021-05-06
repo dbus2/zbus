@@ -173,6 +173,7 @@ mod tests {
     use super::Connection;
     use crate::message::Message;
     use std::os::unix::net::UnixStream;
+    use test_env_log::test;
 
     #[test]
     fn raw_send_receive() {

@@ -289,6 +289,7 @@ impl From<azync::Connection> for Connection {
 #[cfg(test)]
 mod tests {
     use std::{os::unix::net::UnixStream, thread};
+    use test_env_log::test;
 
     use crate::{Connection, Error, Guid};
     #[test]

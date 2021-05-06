@@ -614,6 +614,7 @@ impl fmt::Display for Message {
 mod tests {
     use super::{Fds, Message, MessageError};
     use std::os::unix::io::AsRawFd;
+    use test_env_log::test;
     use zvariant::Fd;
 
     #[test]

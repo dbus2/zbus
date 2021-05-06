@@ -933,6 +933,7 @@ impl From<crate::Connection> for Connection {
 mod tests {
     use futures_util::stream::TryStreamExt;
     use std::os::unix::net::UnixStream;
+    use test_env_log::test;
 
     use super::*;
 

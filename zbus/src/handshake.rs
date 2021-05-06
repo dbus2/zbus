@@ -808,6 +808,7 @@ impl FromStr for Command {
 #[cfg(test)]
 mod tests {
     use std::os::unix::net::UnixStream;
+    use test_env_log::test;
 
     use super::*;
 

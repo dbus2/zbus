@@ -140,6 +140,7 @@ pub trait ProxyDefault {
 mod tests {
     use super::*;
     use crate::Connection;
+    use test_env_log::test;
 
     #[test]
     fn builder() {

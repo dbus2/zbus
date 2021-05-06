@@ -323,6 +323,7 @@ mod tests {
     use crate::{MessageField, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType};
 
     use std::{convert::TryFrom, error::Error, result::Result};
+    use test_env_log::test;
     use zvariant::{ObjectPath, Signature};
 
     #[test]

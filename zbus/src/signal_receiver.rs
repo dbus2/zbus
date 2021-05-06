@@ -160,6 +160,7 @@ mod tests {
         rc::Rc,
         sync::{Arc, Mutex},
     };
+    use test_env_log::test;
 
     fn multiple_signal_iface_test() -> std::result::Result<u32, Box<dyn std::error::Error>> {
         #[dbus_proxy(interface = "org.freedesktop.zbus.MultiSignal")]

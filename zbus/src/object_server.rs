@@ -548,6 +548,7 @@ mod tests {
 
     use ntest::timeout;
     use serde::{Deserialize, Serialize};
+    use test_env_log::test;
     use zvariant::derive::Type;
 
     use crate::{

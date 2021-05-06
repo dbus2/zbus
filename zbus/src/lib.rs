@@ -214,6 +214,7 @@ mod tests {
 
     use enumflags2::BitFlags;
     use ntest::timeout;
+    use test_env_log::test;
 
     use zvariant::{Fd, OwnedObjectPath, OwnedValue, Type};
 
