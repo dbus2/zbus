@@ -669,13 +669,7 @@ mod tests {
         let name_acquired_signaled = Arc::new(Mutex::new(false));
         let name_acquired_signaled2 = Arc::new(Mutex::new(false));
 
-        let proxy = Proxy::new(
-            &conn,
-            "org.freedesktop.DBus",
-            "/org/freedesktop/DBus",
-            "org.freedesktop.DBus",
-        )?;
-
+        let proxy = fdo::AsyncDBusProxy::new(&conn);
         let well_known = "org.freedesktop.zbus.async.ProxySignalConnectTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         let name_owner_changed_id = {
