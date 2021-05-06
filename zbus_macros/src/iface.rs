@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 use syn::{
     self, parse_quote, punctuated::Punctuated, AngleBracketedGenericArguments, AttributeArgs,
     FnArg, Ident, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue,
@@ -179,16 +179,31 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 )
             });
         } else if is_property {
-            let p = properties
-                .entry(member_name.to_string())
-                .or_insert_with(Property::new);
+            let p = properties.entry(member_name.to_string());
+            let prop_changed_method_name = format_ident!("{}_changed", snake_case(&member_name));
 
+            if matches!(p, Entry::Vacant(_)) {
+                let prop_changed_method = quote!(
+                    pub fn #prop_changed_method_name(&self) -> #zbus::Result<()> {
+                        let mut changed = ::std::collections::HashMap::new();
+                        let value = ::#zbus::Interface::get(self, &#member_name)
+                            .expect(&format!("Property '{}' does not exist", #member_name))?;
+                        changed.insert(#member_name, &*value);
+                        let properties_iface = ::#zbus::fdo::Properties;
+                        properties_iface.properties_changed(
+                            &#iface_name,
+                            &changed,
+                            &[],
+                        )
+                    }
+                );
+                generated_signals.extend(prop_changed_method);
+            }
+
+            let p = p.or_insert_with(Property::new);
             p.doc_comments.extend(doc_comments);
             if has_inputs {
                 p.write = true;
-
-                let prop_changed_method_name =
-                    format_ident!("{}_changed", snake_case(&member_name));
 
                 let set_call = if is_result_output {
                     quote!(self.#ident(val))
@@ -209,23 +224,6 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     }
                 );
                 set_dispatch.extend(q);
-
-                let vis = &method.vis;
-                let q = quote!(
-                    #vis fn #prop_changed_method_name(&self) -> #zbus::Result<()> {
-                        let mut changed = ::std::collections::HashMap::new();
-                        let value = ::#zbus::Interface::get(self, &#member_name)
-                            .expect(&format!("Property '{}' does not exist", #member_name))?;
-                        changed.insert(#member_name, &*value);
-                        let properties_iface = ::#zbus::fdo::Properties;
-                        properties_iface.properties_changed(
-                            &#iface_name,
-                            &changed,
-                            &[]
-                        )
-                    }
-                );
-                generated_signals.extend(q)
             } else {
                 p.ty = Some(get_property_type(output)?);
                 p.read = true;

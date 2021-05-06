@@ -164,9 +164,9 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * `out_args` - When returning multiple values from a method, naming the out arguments become
 ///   important. You can use `out_args` for specifying names for your out arguments.
 ///
-/// Note: a `<property_name_in_snake_case>_changed` method is generated along with property
-/// setters: this method emits the "PropertiesChanged" signal for the associated property. The
-/// setter will automatically call this method.
+/// Note: a `<property_name_in_snake_case>_changed` method is generated for each property: this
+/// method emits the "PropertiesChanged" signal for the associated property. The setter (if it
+/// exists) will automatically call this method.
 /// For instance, a property setter named `set_foo` will be called to set the property "Foo", and
 /// will emit the "PropertiesChanged" signal with the new value for "Foo". Other changes to the
 /// "Foo" property can be signaled manually with the generated `foo_changed` method.
