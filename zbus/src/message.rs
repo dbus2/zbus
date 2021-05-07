@@ -189,6 +189,7 @@ where
         let (_, fds) = zvariant::to_writer_fds(&mut cursor, ctxt, body)?;
 
         Ok(Message {
+            primary_header: header.into_primary(),
             bytes,
             fds: Arc::new(RwLock::new(Fds::Raw(fds))),
         })
@@ -282,6 +283,7 @@ impl Clone for Fds {
 /// [`Connection`]: struct.Connection#method.call_method
 #[derive(Clone)]
 pub struct Message {
+    primary_header: MessagePrimaryHeader,
     bytes: Vec<u8>,
     fds: Arc<RwLock<Fds>>,
 }
@@ -373,9 +375,15 @@ impl Message {
             return Err(MessageError::IncorrectEndian);
         }
 
+        let primary_header =
+            zvariant::from_slice(bytes, dbus_context!(0)).map_err(MessageError::from)?;
         let bytes = bytes.to_vec();
         let fds = Arc::new(RwLock::new(Fds::Raw(vec![])));
-        Ok(Self { bytes, fds })
+        Ok(Self {
+            primary_header,
+            bytes,
+            fds,
+        })
     }
 
     pub(crate) fn add_bytes(&mut self, bytes: &[u8]) -> Result<(), MessageError> {
@@ -435,18 +443,17 @@ impl Message {
 
     /// Deserialize the primary header.
     pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {
-        zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
+        Ok(self.primary_header.clone())
     }
 
     pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
     where
         F: FnMut(&mut MessagePrimaryHeader) -> Result<(), MessageError>,
     {
-        let mut primary = self.primary_header()?;
-        modifier(&mut primary)?;
+        modifier(&mut self.primary_header)?;
 
         let mut cursor = Cursor::new(&mut self.bytes);
-        zvariant::to_writer(&mut cursor, dbus_context!(0), &primary)
+        zvariant::to_writer(&mut cursor, dbus_context!(0), &self.primary_header)
             .map(|_| ())
             .map_err(MessageError::from)
     }
