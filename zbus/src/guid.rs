@@ -72,6 +72,7 @@ impl FromStr for Guid {
 #[cfg(test)]
 mod tests {
     use crate::Guid;
+    use test_env_log::test;
 
     #[test]
     fn generate() {
