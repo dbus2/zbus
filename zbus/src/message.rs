@@ -168,8 +168,11 @@ where
         } = self;
 
         if let Some(reply_to) = reply_to.as_ref() {
-            let serial = reply_to.primary().serial_num();
-            fields.add(MessageField::ReplySerial(serial));
+            let serial = reply_to
+                .primary()
+                .serial_num()
+                .ok_or(MessageError::MissingField)?;
+            fields.add(MessageField::ReplySerial(*serial));
 
             if let Some(sender) = reply_to.sender()? {
                 fields.add(MessageField::Destination(sender.into()));

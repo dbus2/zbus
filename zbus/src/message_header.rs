@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 
 use enumflags2::BitFlags;
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -92,6 +93,45 @@ pub enum MessageFlags {
     AllowInteractiveAuth = 0x4,
 }
 
+#[derive(Clone, Debug)]
+struct SerialNum(OnceCell<u32>);
+
+// FIXME: Can use `zvariant::derive::Type` after `zvariant` provides a blanket implementation for
+// `OnceCell<T>`.
+impl zvariant::Type for SerialNum {
+    fn signature() -> Signature<'static> {
+        u32::signature()
+    }
+}
+
+// Unfortunately Serde doesn't provide a blanket impl. for `Cell<T>` so we have to implement manually.
+//
+// https://github.com/serde-rs/serde/issues/1952
+impl Serialize for SerialNum {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // `Message` serializes the PrimaryHeader at construct time before the user has the
+        // time to tweak it and set a correct serial_num. We should probably avoid this but
+        // for now, let's silently use a default serialized value.
+        self.0
+            .get()
+            .cloned()
+            .unwrap_or_default()
+            .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for SerialNum {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(SerialNum(OnceCell::from(u32::deserialize(deserializer)?)))
+    }
+}
+
 /// The primary message header, which is present in all D-Bus messages.
 ///
 /// This header contains all the essential information about a message, regardless of its type.
@@ -102,7 +142,7 @@ pub struct MessagePrimaryHeader {
     flags: BitFlags<MessageFlags>,
     protocol_version: u8,
     body_len: u32,
-    serial_num: u32,
+    serial_num: SerialNum,
 }
 
 impl MessagePrimaryHeader {
@@ -114,7 +154,7 @@ impl MessagePrimaryHeader {
             flags: BitFlags::empty(),
             protocol_version: 1,
             body_len,
-            serial_num: u32::max_value(),
+            serial_num: SerialNum(OnceCell::new()),
         }
     }
 
@@ -172,18 +212,21 @@ impl MessagePrimaryHeader {
         self.body_len = len;
     }
 
-    /// The serial number of the message.
+    /// The serial number of the message (if set).
     ///
     /// This is used to match a reply to a method call.
     ///
     /// **Note:** There is no setter provided for this in the public API since this is set by the
     /// [`Connection`](struct.Connection.html) the message is sent over.
-    pub fn serial_num(&self) -> u32 {
-        self.serial_num
+    pub fn serial_num(&self) -> Option<&u32> {
+        self.serial_num.0.get()
     }
 
-    pub(crate) fn set_serial_num(&mut self, serial: u32) {
-        self.serial_num = serial;
+    pub(crate) fn serial_num_or_init<F>(&mut self, f: F) -> &u32
+    where
+        F: FnOnce() -> u32,
+    {
+        self.serial_num.0.get_or_init(f)
     }
 }
 

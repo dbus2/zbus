@@ -606,10 +606,9 @@ impl Connection {
     ///
     /// This method can fail if `msg` is corrupt.
     pub fn assign_serial_num(&self, msg: &mut Message) -> Result<u32> {
-        let serial = self.next_serial();
+        let mut serial = 0;
         msg.modify_primary_header(|primary| {
-            primary.set_serial_num(serial);
-
+            serial = *primary.serial_num_or_init(|| self.next_serial());
             Ok(())
         })?;
 
