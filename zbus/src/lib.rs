@@ -242,7 +242,7 @@ mod tests {
             Ok(())
         })
         .unwrap();
-        let primary = m.primary_header().unwrap();
+        let primary = m.primary_header();
         assert!(primary.serial_num() == 11);
         assert!(primary.flags() == MessageFlags::NoAutoStart);
     }
@@ -554,7 +554,7 @@ mod tests {
         loop {
             let msg = conn.receive_message().unwrap();
 
-            if msg.primary_header().unwrap().serial_num() == serial {
+            if msg.primary_header().serial_num() == serial {
                 break;
             }
         }

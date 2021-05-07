@@ -417,7 +417,7 @@ impl Message {
     pub(crate) fn bytes_to_completion(&self) -> Result<usize, MessageError> {
         let header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         let body_padding = padding_for_8_bytes(header_len);
-        let body_len = self.primary_header()?.body_len();
+        let body_len = self.primary_header().body_len();
         let required = header_len + body_padding + body_len as usize;
 
         Ok(required - self.bytes.len())
@@ -441,9 +441,8 @@ impl Message {
         }
     }
 
-    /// Deserialize the primary header.
-    pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {
-        Ok(self.primary_header.clone())
+    pub fn primary_header(&self) -> &MessagePrimaryHeader {
+        &self.primary_header
     }
 
     pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
