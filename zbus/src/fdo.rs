@@ -604,6 +604,7 @@ mod tests {
         convert::TryInto,
         sync::{Arc, Mutex},
     };
+    use test_env_log::test;
 
     #[test]
     fn error_from_zerror() {

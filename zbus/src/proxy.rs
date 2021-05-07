@@ -2,6 +2,7 @@ use async_io::block_on;
 use std::{
     convert::{TryFrom, TryInto},
     future::ready,
+    sync::Arc,
 };
 use zvariant::{ObjectPath, OwnedValue, Value};
 
@@ -149,7 +150,7 @@ impl<'a> Proxy<'a> {
     /// allocation/copying, by deserializing the reply to an unowned type).
     ///
     /// [`call`]: struct.Proxy.html#method.call
-    pub fn call_method<B>(&self, method_name: &str, body: &B) -> Result<Message>
+    pub fn call_method<B>(&self, method_name: &str, body: &B) -> Result<Arc<Message>>
     where
         B: serde::ser::Serialize + zvariant::Type,
     {
@@ -223,7 +224,7 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub fn next_signal(&self) -> Result<Option<Message>> {
+    pub fn next_signal(&self) -> Result<Option<Arc<Message>>> {
         block_on(self.azync.next_signal())
     }
 
@@ -280,6 +281,7 @@ impl<'p, 'a: 'p> From<azync::Proxy<'a>> for Proxy<'p> {
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+    use test_env_log::test;
 
     #[test]
     fn signal() {
@@ -289,14 +291,7 @@ mod tests {
         let owner_change_signaled = Arc::new(Mutex::new(false));
         let name_acquired_signaled = Arc::new(Mutex::new(false));
 
-        let proxy = Proxy::new(
-            &conn,
-            "org.freedesktop.DBus",
-            "/org/freedesktop/DBus",
-            "org.freedesktop.DBus",
-        )
-        .unwrap();
-
+        let proxy = fdo::DBusProxy::new(&conn);
         let well_known = "org.freedesktop.zbus.ProxySignalTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         {

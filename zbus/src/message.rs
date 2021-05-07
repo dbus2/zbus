@@ -3,6 +3,7 @@ use std::{
     error, fmt,
     io::{Cursor, Error as IOError},
     os::unix::io::{AsRawFd, IntoRawFd, RawFd},
+    sync::{Arc, RwLock},
 };
 
 use zvariant::{EncodingContext, Error as VariantError, ObjectPath, Signature, Type};
@@ -14,6 +15,8 @@ use crate::{
 };
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
+const LOCK_PANIC_MSG: &str = "lock poisoned";
+
 macro_rules! dbus_context {
     ($n_bytes_before: expr) => {
         EncodingContext::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
@@ -165,8 +168,11 @@ where
         } = self;
 
         if let Some(reply_to) = reply_to.as_ref() {
-            let serial = reply_to.primary().serial_num();
-            fields.add(MessageField::ReplySerial(serial));
+            let serial = reply_to
+                .primary()
+                .serial_num()
+                .ok_or(MessageError::MissingField)?;
+            fields.add(MessageField::ReplySerial(*serial));
 
             if let Some(sender) = reply_to.sender()? {
                 fields.add(MessageField::Destination(sender.into()));
@@ -186,8 +192,9 @@ where
         let (_, fds) = zvariant::to_writer_fds(&mut cursor, ctxt, body)?;
 
         Ok(Message {
+            primary_header: header.into_primary(),
             bytes,
-            fds: Fds::Raw(fds),
+            fds: Arc::new(RwLock::new(Fds::Raw(fds))),
         })
     }
 
@@ -279,8 +286,9 @@ impl Clone for Fds {
 /// [`Connection`]: struct.Connection#method.call_method
 #[derive(Clone)]
 pub struct Message {
+    primary_header: MessagePrimaryHeader,
     bytes: Vec<u8>,
-    fds: Fds,
+    fds: Arc<RwLock<Fds>>,
 }
 
 // TODO: Handle non-native byte order: https://gitlab.freedesktop.org/dbus/zbus/-/issues/19
@@ -370,9 +378,15 @@ impl Message {
             return Err(MessageError::IncorrectEndian);
         }
 
+        let primary_header =
+            zvariant::from_slice(bytes, dbus_context!(0)).map_err(MessageError::from)?;
         let bytes = bytes.to_vec();
-        let fds = Fds::Raw(vec![]);
-        Ok(Self { bytes, fds })
+        let fds = Arc::new(RwLock::new(Fds::Raw(vec![])));
+        Ok(Self {
+            primary_header,
+            bytes,
+            fds,
+        })
     }
 
     pub(crate) fn add_bytes(&mut self, bytes: &[u8]) -> Result<(), MessageError> {
@@ -385,8 +399,8 @@ impl Message {
         Ok(())
     }
 
-    pub(crate) fn set_owned_fds(&mut self, fds: Vec<OwnedFd>) {
-        self.fds = Fds::Owned(fds);
+    pub(crate) fn set_owned_fds(&self, fds: Vec<OwnedFd>) {
+        *self.fds.write().expect(LOCK_PANIC_MSG) = Fds::Owned(fds);
     }
 
     /// Disown the associated file descriptors.
@@ -395,17 +409,18 @@ impl Message {
     /// contain associated FDs. To prevent the message from closing
     /// those FDs on drop, you may remove the ownership thanks to this
     /// method, after that you are responsible for closing them.
-    pub fn disown_fds(&mut self) {
-        if let Fds::Owned(ref mut fds) = &mut self.fds {
+    pub fn disown_fds(&self) {
+        let mut fds_lock = self.fds.write().expect(LOCK_PANIC_MSG);
+        if let Fds::Owned(ref mut fds) = *fds_lock {
             // From now on, it's the caller responsability to close the fds
-            self.fds = Fds::Raw(fds.drain(..).map(|fd| fd.into_raw_fd()).collect());
+            *fds_lock = Fds::Raw(fds.drain(..).map(|fd| fd.into_raw_fd()).collect());
         }
     }
 
     pub(crate) fn bytes_to_completion(&self) -> Result<usize, MessageError> {
         let header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         let body_padding = padding_for_8_bytes(header_len);
-        let body_len = self.primary_header()?.body_len();
+        let body_len = self.primary_header().body_len();
         let required = header_len + body_padding + body_len as usize;
 
         Ok(required - self.bytes.len())
@@ -429,20 +444,18 @@ impl Message {
         }
     }
 
-    /// Deserialize the primary header.
-    pub fn primary_header(&self) -> Result<MessagePrimaryHeader, MessageError> {
-        zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
+    pub fn primary_header(&self) -> &MessagePrimaryHeader {
+        &self.primary_header
     }
 
     pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
     where
         F: FnMut(&mut MessagePrimaryHeader) -> Result<(), MessageError>,
     {
-        let mut primary = self.primary_header()?;
-        modifier(&mut primary)?;
+        modifier(&mut self.primary_header)?;
 
         let mut cursor = Cursor::new(&mut self.bytes);
-        zvariant::to_writer(&mut cursor, dbus_context!(0), &primary)
+        zvariant::to_writer(&mut cursor, dbus_context!(0), &self.primary_header)
             .map(|_| ())
             .map_err(MessageError::from)
     }
@@ -505,7 +518,7 @@ impl Message {
     }
 
     pub(crate) fn fds(&self) -> Vec<RawFd> {
-        match &self.fds {
+        match &*self.fds.read().expect(LOCK_PANIC_MSG) {
             Fds::Raw(fds) => fds.clone(),
             Fds::Owned(fds) => fds.iter().map(|f| f.as_raw_fd()).collect(),
         }
@@ -549,8 +562,9 @@ impl fmt::Debug for Message {
         if let Ok(s) = self.body_signature() {
             msg.field("body", &s);
         }
-        if !self.fds().is_empty() {
-            msg.field("fds", &self.fds);
+        let fds = self.fds();
+        if !fds.is_empty() {
+            msg.field("fds", &fds);
         }
         msg.finish()
     }
@@ -614,6 +628,7 @@ impl fmt::Display for Message {
 mod tests {
     use super::{Fds, Message, MessageError};
     use std::os::unix::io::AsRawFd;
+    use test_env_log::test;
     use zvariant::Fd;
 
     #[test]
@@ -629,7 +644,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
-        assert_eq!(m.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
+        assert_eq!(*m.fds.read().unwrap(), Fds::Raw(vec![stdout.as_raw_fd()]));
 
         let body: Result<u32, MessageError> = m.body();
         assert_eq!(body.unwrap_err(), MessageError::UnmatchedBodySignature);

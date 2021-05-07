@@ -144,7 +144,7 @@ impl<S: Socket> Connection<S> {
         }
 
         // If we reach here, the message is complete, return it
-        let mut msg = self.msg_in_buffer.take().unwrap();
+        let msg = self.msg_in_buffer.take().unwrap();
         msg.set_owned_fds(std::mem::take(&mut self.raw_in_fds));
         Ok(msg)
     }
@@ -173,6 +173,7 @@ mod tests {
     use super::Connection;
     use crate::message::Message;
     use std::os::unix::net::UnixStream;
+    use test_env_log::test;
 
     #[test]
     fn raw_send_receive() {

@@ -214,6 +214,7 @@ mod tests {
 
     use enumflags2::BitFlags;
     use ntest::timeout;
+    use test_env_log::test;
 
     use zvariant::{Fd, OwnedObjectPath, OwnedValue, Type};
 
@@ -236,13 +237,13 @@ mod tests {
         .unwrap();
         m.modify_primary_header(|primary| {
             primary.set_flags(BitFlags::from(MessageFlags::NoAutoStart));
-            primary.set_serial_num(11);
+            primary.serial_num_or_init(|| 11);
 
             Ok(())
         })
         .unwrap();
-        let primary = m.primary_header().unwrap();
-        assert!(primary.serial_num() == 11);
+        let primary = m.primary_header();
+        assert!(*primary.serial_num().unwrap() == 11);
         assert!(primary.flags() == MessageFlags::NoAutoStart);
     }
 
@@ -300,7 +301,7 @@ mod tests {
     fn fdpass_systemd() {
         let connection = crate::Connection::new_system().unwrap();
 
-        let mut reply = connection
+        let reply = connection
             .call_method(
                 Some("org.freedesktop.systemd1"),
                 "/org/freedesktop/systemd1",
@@ -553,7 +554,7 @@ mod tests {
         loop {
             let msg = conn.receive_message().unwrap();
 
-            if msg.primary_header().unwrap().serial_num() == serial {
+            if *msg.primary_header().serial_num().unwrap() == serial {
                 break;
             }
         }

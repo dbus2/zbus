@@ -120,6 +120,7 @@ mod tests {
     use super::Address;
     use crate::Error;
     use std::str::FromStr;
+    use test_env_log::test;
 
     #[test]
     fn parse_dbus_addresses() {

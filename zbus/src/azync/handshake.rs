@@ -144,6 +144,7 @@ where
 mod tests {
     use nix::unistd::Uid;
     use std::os::unix::net::UnixStream;
+    use test_env_log::test;
 
     use super::*;
 

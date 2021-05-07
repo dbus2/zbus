@@ -1,4 +1,4 @@
-use std::{convert::Infallible, error, fmt, io};
+use std::{convert::Infallible, error, fmt, io, sync::Arc};
 use zvariant::Error as VariantError;
 
 use crate::{fdo, Message, MessageError, MessageType};
@@ -26,7 +26,7 @@ pub enum Error {
     /// A D-Bus method error reply.
     // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds anything more than a
     // string description.
-    MethodError(String, Option<String>, Message),
+    MethodError(String, Option<String>, Arc<Message>),
     /// Invalid D-Bus GUID.
     InvalidGUID,
     /// Unsupported function, or support currently lacking.
@@ -148,6 +148,12 @@ impl From<Infallible> for Error {
 // For messages that are D-Bus error returns
 impl From<Message> for Error {
     fn from(message: Message) -> Error {
+        Self::from(Arc::new(message))
+    }
+}
+
+impl From<Arc<Message>> for Error {
+    fn from(message: Arc<Message>) -> Error {
         // FIXME: Instead of checking this, we should have Method as trait and specific types for
         // each message type.
         let header = match message.header() {
