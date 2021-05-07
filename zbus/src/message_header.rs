@@ -95,7 +95,7 @@ pub enum MessageFlags {
 /// The primary message header, which is present in all D-Bus messages.
 ///
 /// This header contains all the essential information about a message, regardless of its type.
-#[derive(Debug, Serialize, Deserialize, Type)]
+#[derive(Clone, Debug, Serialize, Deserialize, Type)]
 pub struct MessagePrimaryHeader {
     endian_sig: EndianSig,
     msg_type: MessageType,
