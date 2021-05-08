@@ -117,15 +117,15 @@ struct ConnectionInner<S> {
     in_queue: Mutex<VecDeque<Result<Message>>>,
 
     // Message receiver thread
-    msg_receiver: Arc<MessageReceiverThread<S>>,
+    msg_receiver_thread: Arc<MessageReceiverThread<S>>,
 
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 }
 
 impl<S> Drop for ConnectionInner<S> {
     fn drop(&mut self) {
-        self.msg_receiver.run_recv_thread.store(false, SeqCst);
-        self.msg_receiver.run_recv_thread_event.notify(1);
+        self.msg_receiver_thread.run.store(false, SeqCst);
+        self.msg_receiver_thread.run_event.notify(1);
     }
 }
 
@@ -142,8 +142,8 @@ struct MessageReceiverThread<S> {
     num_consumers: AtomicUsize,
 
     // To notify msg receeiver thread that it doesn't need to run anymore.
-    run_recv_thread_event: Event,
-    run_recv_thread: AtomicBool,
+    run_event: Event,
+    run: AtomicBool,
 
     // Max number of messages to queue
     max_queued: AtomicUsize,
@@ -157,8 +157,8 @@ impl MessageReceiverThread<Box<dyn Socket>> {
             msg_available_event: Event::new(),
             num_consumers: AtomicUsize::new(0),
             max_queued: AtomicUsize::new(DEFAULT_MAX_QUEUED),
-            run_recv_thread_event: Event::new(),
-            run_recv_thread: AtomicBool::new(true),
+            run_event: Event::new(),
+            run: AtomicBool::new(true),
         })
     }
 
@@ -176,14 +176,14 @@ impl MessageReceiverThread<Box<dyn Socket>> {
 
     // Keep receiving messages and put them on the queue.
     async fn receive_msg(self: Arc<Self>) {
-        while self.run_recv_thread.load(SeqCst) {
+        while self.run.load(SeqCst) {
             let mut raw_conn = self.raw_in_conn.lock().await;
 
             let msg = match select(
                 Box::pin(ReceiveMessage {
                     raw_conn: &mut raw_conn,
                 }),
-                self.run_recv_thread_event.listen(),
+                self.run_event.listen(),
             )
             .await
             {
@@ -666,7 +666,7 @@ impl Connection {
 
     /// Get the raw file descriptor of this connection.
     pub async fn as_raw_fd(&self) -> RawFd {
-        (self.0.msg_receiver.raw_in_conn.lock().await.socket()).as_raw_fd()
+        (self.0.msg_receiver_thread.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
     pub(crate) async fn subscribe_signal<'s, E>(
@@ -762,7 +762,7 @@ impl Connection {
         let auth = auth.into_inner();
         let out_socket = auth.conn.socket().get_ref().try_clone()?;
         let out_conn = RawConnection::wrap(Async::new(out_socket)?);
-        let msg_receiver = MessageReceiverThread::new(auth.conn);
+        let msg_receiver_thread = MessageReceiverThread::new(auth.conn);
 
         let connection = Self(Arc::new(ConnectionInner {
             raw_out_conn: Mutex::new(out_conn),
@@ -773,11 +773,11 @@ impl Connection {
             unique_name: OnceCell::new(),
             in_queue: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
             signal_subscriptions: Mutex::new(HashMap::new()),
-            msg_receiver: msg_receiver.clone(),
+            msg_receiver_thread: msg_receiver_thread.clone(),
         }));
 
         // Start the message receiver thread.
-        msg_receiver.launch()?;
+        msg_receiver_thread.launch()?;
 
         if !bus_connection {
             return Ok(connection);
