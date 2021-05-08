@@ -25,7 +25,7 @@ use std::{
 use zvariant::ObjectPath;
 
 use event_listener::Event;
-use futures_core::{future::BoxFuture, stream, Future};
+use futures_core::{stream, Future};
 use futures_util::{
     future::{select, Either},
     sink::SinkExt,
@@ -167,9 +167,9 @@ impl MessageReceiverThread<Box<dyn Socket>> {
 
     fn launch(self: Arc<Self>) -> Result<()> {
         // FIXME: Perhaps this should be a task but something needs to drive it then then. Maybe
-        // `receive_specific` should run the task but then we'll probably be back to the issue of
-        // `receive_specific` not being reliable in all situations, which is precisely why we split
-        // the message receiving into a separate thread.
+        // the message stream should run the task but then we'll probably be back to the issue of
+        // stream not being reliable in all situations, which is precisely why we split the message
+        // receiving into a separate thread.
         std::thread::Builder::new()
             .name("zbus::azync::Connection::receive_msg".into())
             .spawn(move || block_on(self.receive_msg()))?;
@@ -238,9 +238,6 @@ impl MessageReceiverThread<Box<dyn Socket>> {
 /// [`zbus::Connection::receive_message`] method provided. This is because the `futures` crate
 /// already provides a nice rich API that makes use of the [`stream::Stream`] implementation that is
 /// returned by [`Connection::stream`] method.
-///
-/// There is also [`Connection::receive_specific`] method, which takes a predicate function,
-/// using which you get to decided which message you're interested in.
 ///
 /// ### Examples
 ///
@@ -400,32 +397,6 @@ impl Connection {
             raw_conn: self.0.raw_out_conn.lock().await,
             cap_unix_fd: self.0.cap_unix_fd,
         }
-    }
-
-    /// Receive a specific message.
-    ///
-    /// This is the same as receiving messages from [`MessageStream`], except that this takes a
-    /// predicate function that decides if the message received should be returned by this method or
-    /// not.
-    pub async fn receive_specific<P>(&self, predicate: P) -> Result<Arc<Message>>
-    where
-        for<'msg> P: Fn(&'msg Message) -> BoxFuture<'msg, Result<bool>>,
-    {
-        let mut stream = self.stream().await;
-
-        while let Some(msg) = stream.next().await {
-            let msg = msg?;
-
-            if predicate(&msg).await? {
-                return Ok(msg);
-            }
-        }
-
-        // If SocketStream gives us None, that means the socket was closed
-        Err(crate::Error::Io(io::Error::new(
-            ErrorKind::BrokenPipe,
-            "socket closed",
-        )))
     }
 
     /// Send `msg` to the peer.
