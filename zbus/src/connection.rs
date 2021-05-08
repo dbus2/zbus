@@ -1,19 +1,22 @@
-use futures_util::future::FutureExt;
+use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
 use std::{
     convert::TryInto,
-    future::ready,
+    io::{self, ErrorKind},
     os::unix::{
         io::{AsRawFd, RawFd},
         net::UnixStream,
     },
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, Guid, Message, MessageError, Result};
+use crate::{
+    azync::{self, MessageStream},
+    Guid, Message, MessageError, Result,
+};
 
 /// A D-Bus connection.
 ///
@@ -54,9 +57,12 @@ use crate::{azync, Guid, Message, MessageError, Result};
 /// [file an issue]: https://gitlab.freedesktop.org/dbus/zbus/-/issues/new
 /// [`receive_message`]: struct.Connection.html#method.receive_message
 /// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
-#[derive(Debug, Clone)]
+#[derive(derivative::Derivative, Clone)]
+#[derivative(Debug)]
 pub struct Connection {
     inner: azync::Connection,
+    #[derivative(Debug = "ignore")]
+    stream: Arc<Mutex<MessageStream>>,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
@@ -170,10 +176,21 @@ impl Connection {
     where
         P: Fn(&Message) -> Result<bool>,
     {
-        block_on(
-            self.inner
-                .receive_specific(|msg| ready(predicate(msg)).boxed()),
-        )
+        let mut stream = self.stream.lock().expect("lock poisoned");
+
+        while let Some(msg) = block_on(stream.next()) {
+            let msg = msg?;
+
+            if predicate(&msg)? {
+                return Ok(msg);
+            }
+        }
+
+        // If SocketStream gives us None, that means the socket was closed
+        Err(crate::Error::Io(io::Error::new(
+            ErrorKind::BrokenPipe,
+            "socket closed",
+        )))
     }
 
     /// Send `msg` to the peer.
@@ -291,7 +308,12 @@ impl Connection {
 
 impl From<azync::Connection> for Connection {
     fn from(conn: azync::Connection) -> Self {
-        Self { inner: conn }
+        let stream = Arc::new(Mutex::new(block_on(conn.stream())));
+
+        Self {
+            inner: conn,
+            stream,
+        }
     }
 }
 
