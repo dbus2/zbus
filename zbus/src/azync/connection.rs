@@ -957,10 +957,12 @@ mod tests {
         let client = Connection::new_unix_client(p1, false);
 
         let (client_conn, server_conn) = futures_util::try_join!(client, server)?;
+        let mut client_stream = client_conn.stream().await;
+        let mut server_stream = server_conn.stream().await;
 
         let server_future = async {
             let mut method: Option<Arc<Message>> = None;
-            while let Some(m) = server_conn.stream().await.try_next().await? {
+            while let Some(m) = server_stream.try_next().await? {
                 if m.to_string() == "Method call Test" {
                     method.replace(m);
 
@@ -982,7 +984,7 @@ mod tests {
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
             // Check we didn't miss the signal that was sent during the call.
-            let m = client_conn.stream().await.try_next().await?.unwrap();
+            let m = client_stream.try_next().await?.unwrap();
             assert_eq!(m.to_string(), "Signal ASignalForYou");
             reply.body::<String>().map_err(|e| e.into())
         };
