@@ -243,7 +243,7 @@ impl<'a> Proxy<'a> {
     }
 
     /// Get a reference to the underlying async Proxy.
-    pub fn inner(&self) -> &azync::Proxy<'_> {
+    pub fn inner(&self) -> &azync::Proxy<'a> {
         &self.azync
     }
 

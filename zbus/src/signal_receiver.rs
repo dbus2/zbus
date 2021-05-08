@@ -15,7 +15,7 @@ struct ProxyKey<'key> {
     path: ObjectPath<'key>,
 }
 
-impl<'p, P> From<&P> for ProxyKey<'_>
+impl<'p, P> From<&P> for ProxyKey<'static>
 where
     P: AsRef<Proxy<'p>>,
 {
@@ -36,10 +36,10 @@ where
     }
 }
 
-impl<'key> TryFrom<&'key MessageHeader<'_>> for ProxyKey<'key> {
+impl<'key> TryFrom<&'key MessageHeader<'key>> for ProxyKey<'key> {
     type Error = Error;
 
-    fn try_from(hdr: &'key MessageHeader<'_>) -> Result<Self> {
+    fn try_from(hdr: &'key MessageHeader<'key>) -> Result<Self> {
         match (hdr.interface()?, hdr.path()?.cloned(), hdr.sender()?) {
             (Some(interface), Some(path), Some(destination)) => Ok(ProxyKey {
                 interface: Cow::from(interface),
@@ -76,7 +76,7 @@ impl<'a> SignalReceiver<'a> {
     }
 
     /// Get a iterator for all the proxies in this receiver.
-    pub fn proxies(&self) -> impl Iterator<Item = &&Proxy<'_>> {
+    pub fn proxies(&self) -> impl Iterator<Item = &&Proxy<'a>> {
         self.proxies.values()
     }
 
