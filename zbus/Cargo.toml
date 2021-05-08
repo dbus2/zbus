@@ -32,7 +32,7 @@ futures-core = "0.3.14"
 futures-sink = "0.3.14"
 futures-util = { version = "0.3.8", default-features = false, features = ["sink", "std"] }
 async-lock = "2.3.0"
-async-broadcast = "0.2.0"
+async-broadcast = "0.3.1"
 async-channel = "1.6.1"
 hex = "0.4.2"
 rand = "0.8.2"

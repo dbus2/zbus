@@ -1,20 +1,23 @@
+use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
+use async_channel::{bounded, Receiver, Sender};
 use async_io::{block_on, Async};
 use async_lock::{Mutex, MutexGuard};
 use once_cell::sync::OnceCell;
 use static_assertions::assert_impl_all;
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap, VecDeque},
+    collections::{hash_map::DefaultHasher, HashMap},
     convert::TryInto,
     future::ready,
     hash::{Hash, Hasher},
-    io::ErrorKind,
+    io::{self, ErrorKind},
     os::unix::{
         io::{AsRawFd, RawFd},
         net::UnixStream,
     },
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering::SeqCst},
+        self,
+        atomic::{AtomicBool, AtomicU32, Ordering::SeqCst},
         Arc,
     },
     task::{Context, Poll},
@@ -24,9 +27,9 @@ use zvariant::ObjectPath;
 use event_listener::Event;
 use futures_core::{future::BoxFuture, stream, Future};
 use futures_util::{
-    future::{select, Either, FutureExt},
+    future::{select, Either},
     sink::SinkExt,
-    stream::{unfold, StreamExt},
+    stream::{select as stream_select, StreamExt},
 };
 
 use crate::{
@@ -113,11 +116,14 @@ struct ConnectionInner<S> {
     // Serial number for next outgoing message
     serial: AtomicU32,
 
-    // Queue of incoming messages
-    in_queue: Mutex<VecDeque<Result<Message>>>,
-
     // Message receiver thread
     msg_receiver_thread: Arc<MessageReceiverThread<S>>,
+
+    // We're using sync Mutex here as we don't intend to keep it locked while awaiting.
+    msg_receiver: sync::RwLock<InactiveReceiver<Arc<Message>>>,
+
+    // Receiver side of the error channel
+    error_receiver: Receiver<Error>,
 
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 }
@@ -133,30 +139,27 @@ impl<S> Drop for ConnectionInner<S> {
 struct MessageReceiverThread<S> {
     raw_in_conn: Mutex<RawConnection<Async<S>>>,
 
-    // Queue of freshingly arrived message. This is kept separate from `in_queue` so
-    // `receive_message` calls don't have to go through all the messages each time they're
-    // notified of new messages.
-    in_queue_fresh: Mutex<VecDeque<Result<Message>>>,
-    // To notify the waiting calls on `receive_message` when new msg is available on the queue.
-    msg_available_event: Event,
-    num_consumers: AtomicUsize,
+    // Message broadcaster.
+    msg_sender: Broadcaster<Arc<Message>>,
+
+    // Sender side of the error channel
+    error_sender: Sender<Error>,
 
     // To notify msg receeiver thread that it doesn't need to run anymore.
     run_event: Event,
     run: AtomicBool,
-
-    // Max number of messages to queue
-    max_queued: AtomicUsize,
 }
 
 impl MessageReceiverThread<Box<dyn Socket>> {
-    fn new(raw_in_conn: RawConnection<Async<Box<dyn Socket>>>) -> Arc<Self> {
+    fn new(
+        raw_in_conn: RawConnection<Async<Box<dyn Socket>>>,
+        msg_sender: Broadcaster<Arc<Message>>,
+        error_sender: Sender<Error>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             raw_in_conn: Mutex::new(raw_in_conn),
-            in_queue_fresh: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
-            msg_available_event: Event::new(),
-            num_consumers: AtomicUsize::new(0),
-            max_queued: AtomicUsize::new(DEFAULT_MAX_QUEUED),
+            msg_sender,
+            error_sender,
             run_event: Event::new(),
             run: AtomicBool::new(true),
         })
@@ -179,6 +182,11 @@ impl MessageReceiverThread<Box<dyn Socket>> {
         while self.run.load(SeqCst) {
             let mut raw_conn = self.raw_in_conn.lock().await;
 
+            // Ignore errors from sending to msg or error channels. The only reason these calls
+            // fail is when the channel is closed and that will only happen when `Connection` is
+            // being dropped.
+            // TODO: We should still log in case of error when we've logging.
+
             let msg = match select(
                 Box::pin(ReceiveMessage {
                     raw_conn: &mut raw_conn,
@@ -187,24 +195,23 @@ impl MessageReceiverThread<Box<dyn Socket>> {
             )
             .await
             {
-                Either::Left((msg, _)) => msg,
+                Either::Left((msg, _)) => {
+                    match msg {
+                        Ok(msg) => msg,
+                        Err(e) => {
+                            // Ignoring errors. See comment above.
+                            let _ = self.error_sender.send(e).await;
+
+                            continue;
+                        }
+                    }
+                }
                 Either::Right((_, _)) => continue,
             };
 
-            let mut in_queue_fresh = self.in_queue_fresh.lock().await;
-            if in_queue_fresh.len() >= self.max_queued.load(SeqCst) {
-                // Create room by dropping the oldest message.
-                in_queue_fresh.pop_front();
-            }
-
-            in_queue_fresh.push_back(msg);
-
-            // The queue lock is held here so num_consumers can't change here between the time its
-            // value is loaded and loop iteration ends.
-            let num_consumers = self.num_consumers.load(SeqCst);
-            if num_consumers > 0 {
-                self.msg_available_event.notify(num_consumers);
-            }
+            let msg = Arc::new(msg);
+            // Ignoring errors. See comment above.
+            let _ = self.msg_sender.broadcast(msg.clone()).await;
         }
     }
 }
@@ -377,19 +384,18 @@ impl Connection {
 
     /// Get a stream to receive incoming messages.
     pub async fn stream(&self) -> MessageStream {
-        let conn = self.clone();
-        let stream = unfold(conn, |conn| async move {
-            // In the end it's just `receive_specific` with `*` filter.
-            match conn.receive_specific(|_| ready(Ok(true)).boxed()).await {
-                Ok(msg) => Some((Ok(msg), conn)),
-                Err(Error::Io(e)) if e.kind() == ErrorKind::BrokenPipe => None,
-                Err(e) => Some((Err(e), conn)),
-            }
-        });
+        let msg_receiver = self
+            .0
+            .msg_receiver
+            .read()
+            // SAFETY: Not much we can do about a poisoned mutex.
+            .expect("poisoned lock")
+            .activate_cloned()
+            .map(Ok);
+        let error_stream = self.0.error_receiver.clone().map(Err);
+        let stream = stream_select(error_stream, msg_receiver).boxed();
 
-        MessageStream {
-            stream: stream.boxed(),
-        }
+        MessageStream { stream }
     }
 
     /// Get a sink to send out messages.
@@ -417,63 +423,21 @@ impl Connection {
     where
         for<'msg> P: Fn(&'msg Message) -> BoxFuture<'msg, Result<bool>>,
     {
-        // First check the long-term queue.
-        {
-            // We keep all the queue operations in separate blocks to ensure we don't keep the
-            // queue locked unnecessarily while waiting for new messages ending up starving
-            // `receive_specific` calls.
-            let mut queue = self.0.in_queue.lock().await;
-            for (i, msg) in queue.iter().enumerate() {
-                if match msg {
-                    Ok(msg) => predicate(msg).await?,
-                    Err(_) => true,
-                } {
-                    // SAFETY: we got the index from the queue enumerator so this shouldn't ever
-                    // fail.
-                    return queue.remove(i).expect("removing queue item").map(Arc::new);
-                }
+        let mut stream = self.stream().await;
+
+        while let Some(msg) = stream.next().await {
+            let msg = msg?;
+
+            if predicate(&msg).await? {
+                return Ok(msg);
             }
         }
 
-        self.0.msg_receiver.num_consumers.fetch_add(1, SeqCst);
-
-        let msg = 'outer: loop {
-            let msg_available = self.0.msg_receiver.msg_available_event.listen();
-            {
-                // We keep all the queue operations in separate blocks to ensure we don't keep the
-                // queue locked unnecessarily while waiting for new messages ending up starving
-                // `receive_specific` calls.
-                let mut queue = self.0.msg_receiver.in_queue_fresh.lock().await;
-                for (i, msg) in queue.iter().enumerate() {
-                    if match msg {
-                        Ok(msg) => predicate(msg).await?,
-                        Err(_) => true,
-                    } {
-                        // SAFETY: we got the index from the queue enumerator so this shouldn't ever
-                        // fail.
-                        break 'outer queue.remove(i).expect("removing queue item");
-                    }
-                }
-            }
-
-            msg_available.await;
-        };
-
-        if self.0.msg_receiver.num_consumers.fetch_sub(1, SeqCst) == 1 {
-            // Clear fresh queue by moving all remaining messages to `in_queue`.
-            let mut fresh_queue = self.0.msg_receiver.in_queue_fresh.lock().await;
-            let mut in_queue = self.0.in_queue.lock().await;
-            for msg in fresh_queue.drain(..) {
-                if in_queue.len() >= self.0.msg_receiver.max_queued.load(SeqCst) {
-                    // Create room by dropping the oldest message.
-                    in_queue.pop_front();
-                }
-
-                in_queue.push_back(msg);
-            }
-        }
-
-        msg.map(Arc::new)
+        // If SocketStream gives us None, that means the socket was closed
+        Err(crate::Error::Io(io::Error::new(
+            ErrorKind::BrokenPipe,
+            "socket closed",
+        )))
     }
 
     /// Send `msg` to the peer.
@@ -508,6 +472,7 @@ impl Connection {
         B: serde::ser::Serialize + zvariant::Type,
         MessageError: From<E>,
     {
+        let stream = self.stream().await;
         let m = Message::method(
             self.unique_name(),
             destination,
@@ -517,29 +482,46 @@ impl Connection {
             body,
         )?;
         let serial = self.send_message(m).await?;
+        match stream
+            .filter(move |m| {
+                let h = match m {
+                    Ok(m) => match m.header() {
+                        Ok(h) => h,
+                        Err(_) => return ready(false),
+                    },
+                    Err(_) => return ready(false),
+                };
+                let msg_type = match h.message_type() {
+                    Ok(t) => t,
+                    Err(_) => return ready(false),
+                };
 
-        match self
-            .receive_specific(move |m| {
-                async move {
-                    let h = m.header()?;
-                    let msg_type = h.message_type()?;
-
-                    Ok(
-                        (msg_type == MessageType::Error || msg_type == MessageType::MethodReturn)
-                            && h.reply_serial()? == Some(serial),
-                    )
-                }
-                .boxed()
+                ready(
+                    (msg_type == MessageType::Error || msg_type == MessageType::MethodReturn)
+                        && h.reply_serial() == Ok(Some(serial)),
+                )
             })
+            .next()
             .await
         {
-            Ok(m) => match m.header()?.message_type()? {
-                MessageType::Error => Err(m.into()),
-                MessageType::MethodReturn => Ok(m),
-                // We already established the msg type in `receive_specific` call above.
-                _ => unreachable!(),
+            Some(msg) => match msg {
+                Ok(m) => {
+                    match m.header()?.message_type()? {
+                        MessageType::Error => Err(m.into()),
+                        MessageType::MethodReturn => Ok(m),
+                        // We already established the msg type in `filter` above.
+                        _ => unreachable!(),
+                    }
+                }
+                Err(e) => Err(e),
             },
-            Err(e) => Err(e),
+            None => {
+                // If SocketStream gives us None, that means the socket was closed
+                Err(crate::Error::Io(io::Error::new(
+                    ErrorKind::BrokenPipe,
+                    "socket closed",
+                )))
+            }
         }
     }
 
@@ -625,7 +607,11 @@ impl Connection {
 
     /// Max number of messages to queue.
     pub fn max_queued(&self) -> usize {
-        self.0.msg_receiver.max_queued.load(SeqCst)
+        self.0
+            .msg_receiver
+            .read()
+            .expect("poisoned lock")
+            .capacity()
     }
 
     /// Set the max number of messages to queue.
@@ -654,7 +640,11 @@ impl Connection {
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn set_max_queued(self, max: usize) -> Self {
-        self.0.msg_receiver.max_queued.store(max, SeqCst);
+        self.0
+            .msg_receiver
+            .write()
+            .expect("poisoned lock")
+            .set_capacity(max);
 
         self
     }
@@ -762,18 +752,23 @@ impl Connection {
         let auth = auth.into_inner();
         let out_socket = auth.conn.socket().get_ref().try_clone()?;
         let out_conn = RawConnection::wrap(Async::new(out_socket)?);
-        let msg_receiver_thread = MessageReceiverThread::new(auth.conn);
+        let (mut msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
+        msg_sender.set_overflow(true);
+        let msg_receiver = msg_receiver.deactivate();
+        let (error_sender, error_receiver) = bounded(1);
+        let msg_receiver_thread = MessageReceiverThread::new(auth.conn, msg_sender, error_sender);
 
         let connection = Self(Arc::new(ConnectionInner {
             raw_out_conn: Mutex::new(out_conn),
+            error_receiver,
             server_guid: auth.server_guid,
             cap_unix_fd: auth.cap_unix_fd,
             bus_conn: bus_connection,
             serial: AtomicU32::new(1),
             unique_name: OnceCell::new(),
-            in_queue: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
             signal_subscriptions: Mutex::new(HashMap::new()),
             msg_receiver_thread: msg_receiver_thread.clone(),
+            msg_receiver: sync::RwLock::new(msg_receiver),
         }));
 
         // Start the message receiver thread.
