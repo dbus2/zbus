@@ -4,15 +4,19 @@ use std::{
     collections::{hash_map::Entry, HashMap},
     convert::TryInto,
     fmt::Write,
+    io::{self, ErrorKind},
     rc::Rc,
     sync::Arc,
 };
 
+use async_io::block_on;
+use futures_util::StreamExt;
 use scoped_tls::scoped_thread_local;
 use static_assertions::assert_impl_all;
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
+    azync::MessageStream,
     fdo,
     fdo::{Introspectable, Peer, Properties},
     Connection, Error, Message, MessageHeader, MessageType, Result,
@@ -262,10 +266,13 @@ impl Node {
 /// }
 ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
-#[derive(Debug)]
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 pub struct ObjectServer {
     conn: Connection,
     root: Node,
+    #[derivative(Debug = "ignore")]
+    msg_stream: MessageStream,
 }
 
 assert_impl_all!(ObjectServer: Unpin);
@@ -275,6 +282,7 @@ impl ObjectServer {
     pub fn new(connection: &Connection) -> Self {
         Self {
             conn: connection.clone(),
+            msg_stream: block_on(connection.inner().stream()),
             root: Node::new("/".try_into().expect("zvariant bug")),
         }
     }
@@ -529,13 +537,24 @@ impl ObjectServer {
     ///
     /// Returns an error if the message is malformed or an error occured.
     pub fn try_handle_next(&mut self) -> Result<Option<Arc<Message>>> {
-        let msg = self.conn.receive_message()?;
+        match block_on(self.msg_stream.next()) {
+            Some(msg) => {
+                let msg = msg?;
 
-        if !self.dispatch_message(&msg)? {
-            return Ok(Some(msg));
+                if !self.dispatch_message(&msg)? {
+                    Ok(Some(msg))
+                } else {
+                    Ok(None)
+                }
+            }
+            None => {
+                // If SocketStream gives us None, that means the socket was closed
+                Err(Error::Io(io::Error::new(
+                    ErrorKind::BrokenPipe,
+                    "socket closed",
+                )))
+            }
         }
-
-        Ok(None)
     }
 }
 
