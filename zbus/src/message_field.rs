@@ -6,6 +6,7 @@ use serde::{
 };
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+use static_assertions::assert_impl_all;
 use zvariant::{derive::Type, ObjectPath, Signature, Str, Type, Value};
 
 /// The message field code.
@@ -41,6 +42,8 @@ pub enum MessageFieldCode {
     /// Code for [`MessageField::UnixFDs`](enum.MessageField.html#variant.UnixFDs)
     UnixFDs = 9,
 }
+
+assert_impl_all!(MessageFieldCode: Send, Sync, Unpin);
 
 impl From<u8> for MessageFieldCode {
     fn from(val: u8) -> MessageFieldCode {
@@ -111,6 +114,8 @@ pub enum MessageField<'f> {
     /// The number of Unix file descriptors that accompany the message.
     UnixFDs(u32),
 }
+
+assert_impl_all!(MessageField<'_>: Send, Sync, Unpin);
 
 impl<'f> Type for MessageField<'f> {
     fn signature() -> Signature<'static> {
