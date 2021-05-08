@@ -271,7 +271,7 @@ impl<'asref, 'p: 'asref> std::convert::AsRef<Proxy<'asref>> for Proxy<'p> {
     }
 }
 
-impl<'p, 'a: 'p> From<azync::Proxy<'a>> for Proxy<'p> {
+impl<'a> From<azync::Proxy<'a>> for Proxy<'a> {
     fn from(proxy: azync::Proxy<'a>) -> Self {
         Self {
             conn: proxy.connection().clone().into(),
