@@ -38,12 +38,9 @@ use crate::{
 /// parts of your code. `Connection` also implements [`std::marker::Sync`] and[`std::marker::Send`]
 /// so you can send and share a connection instance across threads as well.
 ///
-/// Since there are times when important messages arrive between a method call message is sent and
-/// its reply is received, `Connection` keeps an internal queue of incoming messages so that these
-/// messages are not lost and subsequent calls to [`receive_message`] will retreive messages from
-/// this queue first. The size of this queue is configurable through the [`set_max_queued`] method.
-/// The default size is 64. When the queue is full, messages are dropped to create room, starting
-/// from the oldest one.
+/// `Connection` keeps an internal ringbuffer of incoming message. The maximum capacity of this
+/// ringbuffer is configurable through the [`set_max_queued`] method. The default size is 64. When
+/// the buffer is full, messages are dropped to create room, starting from the oldest one.
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
@@ -55,7 +52,6 @@ use crate::{
 /// [`dbus_interface`]: attr.dbus_interface.html
 /// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
 /// [file an issue]: https://gitlab.freedesktop.org/dbus/zbus/-/issues/new
-/// [`receive_message`]: struct.Connection.html#method.receive_message
 /// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
 #[derive(derivative::Derivative, Clone)]
 #[derivative(Debug)]
@@ -152,16 +148,7 @@ impl Connection {
     /// Fetch the next message from the connection.
     ///
     /// Read from the connection until a message is received or an error is reached. Return the
-    /// message on success. If there are pending messages in the queue, the first one from the queue
-    /// is returned instead of attempting to read the connection.
-    ///
-    /// # Warning
-    ///
-    /// If you use this method in combination with [`Self::receive_specific`] or
-    /// [`Proxy`](crate::Proxy) API on the same connection from multiple threads, you can end up
-    /// with situation where this method takes away the message the other API is awaiting for and
-    /// end up in a deadlock situation. It is therefore highly recommended not to use such a
-    /// combination.
+    /// message on success.
     pub fn receive_message(&self) -> Result<Arc<Message>> {
         self.receive_specific(|_| Ok(true))
     }
@@ -169,9 +156,7 @@ impl Connection {
     /// Receive a specific message.
     ///
     /// This is the same as [`Self::receive_message`], except that it takes a predicate function that
-    /// decides if the message received should be returned by this method or not. Message received
-    /// during this call that are not returned by it, are pushed to the queue to be picked by the
-    /// susubsequent call to `receive_message`] or this method.
+    /// decides if the message received should be returned by this method or not.
     pub fn receive_specific<P>(&self, predicate: P) -> Result<Arc<Message>>
     where
         P: Fn(&Message) -> Result<bool>,
@@ -198,12 +183,6 @@ impl Connection {
     /// The connection sets a unique serial number on the message before sending it off.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
-    ///
-    /// **Note:** if this connection is in non-blocking mode, the message may not actually
-    /// have been sent when this method returns, and you need to call the [`flush`] method
-    /// so that pending messages are written to the socket.
-    ///
-    /// [`flush`]: struct.Connection.html#method.flush
     pub fn send_message(&self, msg: Message) -> Result<u32> {
         block_on(self.inner.send_message(msg))
     }
@@ -217,12 +196,8 @@ impl Connection {
     /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
     /// error replies are returned as [`MethodError`].
     ///
-    /// *Note:* This method will block until the response is received even if the connection is
-    /// in non-blocking mode. If you don't want to block like this, use [`Connection::send_message`].
-    ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     /// [`MethodError`]: enum.Error.html#variant.MethodError
-    /// [`sent_message`]: struct.Connection.html#method.send_message
     pub fn call_method<'p, B, E>(
         &self,
         destination: Option<&str>,

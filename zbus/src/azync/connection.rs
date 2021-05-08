@@ -239,18 +239,8 @@ impl MessageReceiverThread<Box<dyn Socket>> {
 /// already provides a nice rich API that makes use of the [`stream::Stream`] implementation that is
 /// returned by [`Connection::stream`] method.
 ///
-/// However, there is [`Connection::receive_specific`] method, which takes a predicate function,
-/// using which you get to decided which message you're interested in. It first checks if there
-/// was already a message received by a previous call to [`Connection::receive_specific`]
-/// or during a [`Connection::call_method`] call that fits the predicate and returns that immediate.
-/// Otherwise, it awaits on the connection for the message of interest to be received. All other
-/// messages received, while waiting, are appended to the end of the incoming message queue to be
-/// picked up by a following or already awaiting `receive_specific` call or [`stream::Stream`]
-/// API.
-///
-/// In summary, if you're going to call D-Bus methods on the connection in one task, while receiving
-/// messages in another, it's best to use `receive_specific` method. Otherwise, you'd want to make
-/// use of the `stream` method.
+/// There is also [`Connection::receive_specific`] method, which takes a predicate function,
+/// using which you get to decided which message you're interested in.
 ///
 /// ### Examples
 ///
@@ -416,9 +406,7 @@ impl Connection {
     ///
     /// This is the same as receiving messages from [`MessageStream`], except that this takes a
     /// predicate function that decides if the message received should be returned by this method or
-    /// not. All messages received during this call that are not returned by it, are pushed to the
-    /// queue to be picked by the susubsequent or awaiting call to this method or by the
-    /// `MessageStream`.
+    /// not.
     pub async fn receive_specific<P>(&self, predicate: P) -> Result<Arc<Message>>
     where
         for<'msg> P: Fn(&'msg Message) -> BoxFuture<'msg, Result<bool>>,
@@ -875,13 +863,6 @@ impl futures_sink::Sink<Message> for MessageSink<'_> {
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
 /// Use [`Connection::stream`] to create an instance of this type.
-///
-/// # Warning
-///
-/// If you use this in combination with [`Connection::receive_specific`] on the same connection
-/// from multiple tasks, you can end up with situation where the stream takes away the message
-/// the `receive_specific` is waiting for and end up in a deadlock situation. It is therefore highly
-/// recommended not to use such a combination.
 pub struct MessageStream {
     stream: stream::BoxStream<'static, Result<Arc<Message>>>,
 }
