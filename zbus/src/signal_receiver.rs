@@ -1,4 +1,5 @@
 use crate::{Connection, Error, MessageHeader, Proxy, Result};
+use static_assertions::assert_impl_all;
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -57,6 +58,8 @@ pub struct SignalReceiver<'r, 'p> {
     conn: Connection,
     proxies: HashMap<ProxyKey<'static>, &'r Proxy<'p>>,
 }
+
+assert_impl_all!(SignalReceiver<'_, '_>: Send, Sync, Unpin);
 
 impl<'r, 'p> SignalReceiver<'r, 'p> {
     /// Create a new `SignalReceiver` instance.

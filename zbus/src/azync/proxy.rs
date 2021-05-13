@@ -6,6 +6,7 @@ use futures_util::{
 };
 use once_cell::sync::OnceCell;
 use slotmap::{new_key_type, SlotMap};
+use static_assertions::assert_impl_all;
 use std::{
     borrow::Cow,
     convert::{TryFrom, TryInto},
@@ -30,6 +31,8 @@ new_key_type! {
     /// The ID for a registered signal handler.
     pub struct SignalHandlerId;
 }
+
+assert_impl_all!(SignalHandlerId: Send, Sync, Unpin);
 
 struct SignalHandlerInfo {
     signal_name: &'static str,
@@ -94,6 +97,8 @@ struct SignalHandlerInfo {
 pub struct Proxy<'a> {
     pub(crate) inner: Arc<ProxyInner<'a>>,
 }
+
+assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
@@ -554,6 +559,8 @@ pub struct SignalStream<'s> {
     conn: Connection,
     subscription_id: Option<u64>,
 }
+
+assert_impl_all!(SignalStream<'_>: Send, Unpin);
 
 impl SignalStream<'_> {
     /// Close this stream.

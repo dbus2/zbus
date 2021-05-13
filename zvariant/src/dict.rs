@@ -1,6 +1,7 @@
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
+use static_assertions::assert_impl_all;
 
 use crate::{Basic, Error, Signature, Type, Value};
 
@@ -18,6 +19,8 @@ pub struct Dict<'k, 'v> {
     // should use a separate lifetime or everything should use the same but API break.
     signature: Signature<'k>,
 }
+
+assert_impl_all!(Dict<'_, '_>: Send, Sync, Unpin);
 
 impl<'k, 'v> Dict<'k, 'v> {
     /// Create a new empty `Dict`, given the signature of the keys and values.

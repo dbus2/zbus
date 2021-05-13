@@ -1,4 +1,5 @@
 use futures_util::future::FutureExt;
+use static_assertions::assert_impl_all;
 use std::{
     convert::TryInto,
     future::ready,
@@ -57,6 +58,8 @@ use crate::{azync, Guid, Message, MessageError, Result};
 pub struct Connection {
     inner: azync::Connection,
 }
+
+assert_impl_all!(Connection: Send, Sync, Unpin);
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {

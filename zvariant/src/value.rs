@@ -8,6 +8,7 @@ use serde::{
     },
     ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer},
 };
+use static_assertions::assert_impl_all;
 
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
@@ -92,6 +93,8 @@ pub enum Value<'a> {
 
     Fd(Fd),
 }
+
+assert_impl_all!(Value<'_>: Send, Sync, Unpin);
 
 macro_rules! serialize_value {
     ($self:ident $serializer:ident.$method:ident $($first_arg:expr)*) => {

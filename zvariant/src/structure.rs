@@ -1,4 +1,5 @@
 use serde::ser::{Serialize, SerializeTupleStruct, Serializer};
+use static_assertions::assert_impl_all;
 
 use crate::{OwnedValue, Signature, Type, Value};
 
@@ -7,6 +8,8 @@ use crate::{OwnedValue, Signature, Type, Value};
 /// [`Structure`]: struct.Structure.html
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct StructureBuilder<'a>(Vec<Value<'a>>);
+
+assert_impl_all!(StructureBuilder<'_>: Send, Sync, Unpin);
 
 impl<'a> StructureBuilder<'a> {
     /// Create a new `StructureBuilder`.
@@ -67,6 +70,8 @@ pub struct Structure<'a> {
     fields: Vec<Value<'a>>,
     signature: Signature<'a>,
 }
+
+assert_impl_all!(Structure<'_>: Send, Sync, Unpin);
 
 impl<'a> Structure<'a> {
     /// Get a reference to all the fields of `self`.

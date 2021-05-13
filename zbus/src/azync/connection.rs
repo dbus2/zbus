@@ -1,6 +1,7 @@
 use async_io::{block_on, Async};
 use async_lock::{Mutex, MutexGuard};
 use once_cell::sync::OnceCell;
+use static_assertions::assert_impl_all;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap, VecDeque},
     convert::TryInto,
@@ -316,6 +317,8 @@ impl MessageReceiverThread<Box<dyn Socket>> {
 /// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
 #[derive(Clone, Debug)]
 pub struct Connection(Arc<ConnectionInner<Box<dyn Socket>>>);
+
+assert_impl_all!(Connection: Send, Sync, Unpin);
 
 impl Connection {
     /// Create and open a D-Bus connection from a `UnixStream`.
@@ -814,6 +817,8 @@ pub struct MessageSink<'s> {
     cap_unix_fd: bool,
 }
 
+assert_impl_all!(MessageSink<'_>: Send, Sync, Unpin);
+
 impl MessageSink<'_> {
     fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         loop {
@@ -885,6 +890,8 @@ impl futures_sink::Sink<Message> for MessageSink<'_> {
 pub struct MessageStream {
     stream: stream::BoxStream<'static, Result<Arc<Message>>>,
 }
+
+assert_impl_all!(MessageStream: Send, Unpin);
 
 impl stream::Stream for MessageStream {
     type Item = Result<Arc<Message>>;

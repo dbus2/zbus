@@ -1,5 +1,6 @@
 use byteorder::WriteBytesExt;
 use serde::{ser, Serialize};
+use static_assertions::assert_impl_all;
 use std::{
     io::{Seek, Write},
     marker::PhantomData,
@@ -324,6 +325,8 @@ pub enum Serializer<'ser, 'sig, B, W> {
     #[cfg(feature = "gvariant")]
     GVariant(GVSerializer<'ser, 'sig, B, W>),
 }
+
+assert_impl_all!(Serializer<'_, '_, i32, i32>: Send, Sync, Unpin);
 
 impl<'ser, 'sig, B, W> Serializer<'ser, 'sig, B, W>
 where

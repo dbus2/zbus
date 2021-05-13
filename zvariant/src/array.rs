@@ -1,4 +1,5 @@
 use serde::ser::{Serialize, SerializeSeq, Serializer};
+use static_assertions::assert_impl_all;
 use std::convert::TryFrom;
 
 use crate::{Error, Result, Signature, Type, Value};
@@ -15,6 +16,8 @@ pub struct Array<'a> {
     elements: Vec<Value<'a>>,
     signature: Signature<'a>,
 }
+
+assert_impl_all!(Array<'_>: Send, Sync, Unpin);
 
 impl<'a> Array<'a> {
     /// Create a new empty `Array`, given the signature of the elements.

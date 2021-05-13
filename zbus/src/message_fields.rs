@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use static_assertions::assert_impl_all;
 use zvariant::derive::Type;
 
 use crate::{MessageField, MessageFieldCode};
@@ -11,6 +12,8 @@ const MAX_FIELDS_IN_MESSAGE: usize = 16;
 /// [`MessageField`]: enum.MessageField.html
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct MessageFields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
+
+assert_impl_all!(MessageFields<'_>: Send, Sync, Unpin);
 
 impl<'m> MessageFields<'m> {
     /// Creates an empty collection of fields.

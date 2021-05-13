@@ -7,6 +7,7 @@ use serde::{
     de::{Deserialize, Deserializer, Visitor},
     ser::{Serialize, Serializer},
 };
+use static_assertions::assert_impl_all;
 use std::{
     ops::{Bound, RangeBounds},
     sync::Arc,
@@ -86,6 +87,8 @@ pub struct Signature<'a> {
     pos: usize,
     end: usize,
 }
+
+assert_impl_all!(Signature<'_>: Send, Sync, Unpin);
 
 impl<'a> Signature<'a> {
     /// The signature as a string.
@@ -374,6 +377,8 @@ fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
 /// Owned [`Signature`](struct.Signature.html)
 #[derive(Debug, Clone, PartialEq, serde::Serialize, zvariant_derive::Type)]
 pub struct OwnedSignature(Signature<'static>);
+
+assert_impl_all!(OwnedSignature: Send, Sync, Unpin);
 
 impl OwnedSignature {
     pub fn into_inner(self) -> Signature<'static> {

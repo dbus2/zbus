@@ -18,6 +18,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_xml_rs::{from_reader, from_str, to_writer};
+use static_assertions::assert_impl_all;
 use std::{
     io::{Read, Write},
     result::Result,
@@ -43,6 +44,8 @@ pub struct Annotation {
     value: String,
 }
 
+assert_impl_all!(Annotation: Send, Sync, Unpin);
+
 impl Annotation {
     /// Return the annotation name/key.
     pub fn name(&self) -> &str {
@@ -64,6 +67,8 @@ pub struct Arg {
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
+
+assert_impl_all!(Arg: Send, Sync, Unpin);
 
 impl Arg {
     /// Return the argument name, if any.
@@ -103,6 +108,8 @@ pub struct Method {
     elems: Vec<MethodElement>,
 }
 
+assert_impl_all!(Method: Send, Sync, Unpin);
+
 impl Method {
     /// Return the method name.
     pub fn name(&self) -> &str {
@@ -136,6 +143,8 @@ pub struct Signal {
     elems: Vec<SignalElement>,
 }
 
+assert_impl_all!(Signal: Send, Sync, Unpin);
+
 impl Signal {
     /// Return the signal name.
     pub fn name(&self) -> &str {
@@ -163,6 +172,8 @@ pub struct Property {
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
+
+assert_impl_all!(Property: Send, Sync, Unpin);
 
 impl Property {
     /// Returns the property name.
@@ -203,6 +214,8 @@ pub struct Interface {
     #[serde(rename = "$value", default)]
     elems: Vec<InterfaceElement>,
 }
+
+assert_impl_all!(Interface: Send, Sync, Unpin);
 
 impl Interface {
     /// Returns the interface name.
@@ -246,6 +259,8 @@ pub struct Node {
     #[serde(rename = "$value", default)]
     elems: Vec<NodeElement>,
 }
+
+assert_impl_all!(Node: Send, Sync, Unpin);
 
 impl Node {
     /// Parse the introspection XML document from reader.
