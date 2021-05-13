@@ -2,6 +2,7 @@
 #![allow(deprecated)]
 
 use serde::{Deserialize, Serialize};
+use static_assertions::assert_impl_all;
 use std::{borrow::Cow, str};
 
 use crate::{Basic, EncodingFormat, Signature, Type};
@@ -17,6 +18,8 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
 #[serde(rename(serialize = "zvariant::Str", deserialize = "zvariant::Str"))]
 pub struct Str<'a>(#[serde(borrow)] Cow<'a, str>);
+
+assert_impl_all!(Str<'_>: Send, Sync, Unpin);
 
 impl<'a> Str<'a> {
     /// The underlying string.

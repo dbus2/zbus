@@ -1,6 +1,7 @@
 use core::convert::TryFrom;
 
 use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, Visitor};
+use static_assertions::assert_impl_all;
 
 use std::{marker::PhantomData, os::unix::io::RawFd, str};
 
@@ -12,6 +13,8 @@ use crate::{
 /// Our D-Bus deserialization implementation.
 #[derive(Debug)]
 pub struct Deserializer<'de, 'sig, 'f, B>(pub(crate) crate::DeserializerCommon<'de, 'sig, 'f, B>);
+
+assert_impl_all!(Deserializer<'_, '_, '_, i32>: Send, Sync, Unpin);
 
 impl<'de, 'sig, 'f, B> Deserializer<'de, 'sig, 'f, B>
 where

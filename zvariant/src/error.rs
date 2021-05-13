@@ -1,4 +1,5 @@
 use serde::{de, ser};
+use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, result};
 
 /// Error type used by zvariant API.
@@ -25,6 +26,8 @@ pub enum Error {
     /// this error from any API.
     Infallible,
 }
+
+assert_impl_all!(Error: Send, Sync, Unpin);
 
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {

@@ -1,5 +1,6 @@
 use byteorder::WriteBytesExt;
 use serde::{ser, ser::SerializeSeq, Serialize};
+use static_assertions::assert_impl_all;
 use std::{
     io::{Seek, Write},
     marker::PhantomData,
@@ -14,6 +15,8 @@ use crate::{
 
 /// Our D-Bus serialization implementation.
 pub struct Serializer<'ser, 'sig, B, W>(pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>);
+
+assert_impl_all!(Serializer<'_, '_, i32, i32>: Send, Sync, Unpin);
 
 impl<'ser, 'sig, B, W> Serializer<'ser, 'sig, B, W>
 where
