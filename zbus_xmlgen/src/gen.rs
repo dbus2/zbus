@@ -167,7 +167,7 @@ fn to_rust_type(ty: &str, input: bool) -> String {
             i64::SIGNATURE_CHAR => "i64".into(),
             u64::SIGNATURE_CHAR => "u64".into(),
             f64::SIGNATURE_CHAR => "f64".into(),
-            Fd::SIGNATURE_CHAR => "std::os::unix::io::RawFd".into(),
+            Fd::SIGNATURE_CHAR => "zvariant::Fd".into(),
             <&str>::SIGNATURE_CHAR => (if input || as_ref { "&str" } else { "String" }).into(),
             ObjectPath::SIGNATURE_CHAR => (if input {
                 if as_ref {
