@@ -319,7 +319,7 @@ mod tests {
         assert_eq!(m.to_string(), "Method call Test");
         c.reply(&m, &("yay")).unwrap();
 
-        assert!(matches!(c.receive_message().unwrap_err(), Error::Io(_)));
+        while !matches!(c.receive_message(), Err(Error::Io(_))) {}
 
         let val = server_thread.join().expect("failed to join server thread");
         assert_eq!(val, "yay");
