@@ -3,6 +3,7 @@ use std::{collections::HashMap, convert::TryFrom, io::BufRead, result::Result};
 use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use static_assertions::assert_impl_all;
 use zbus::{dbus_proxy, fdo};
 use zvariant::{derive::Type, OwnedValue, Value};
 
@@ -17,6 +18,8 @@ pub enum CheckAuthorizationFlags {
     /// method will block while the user is being asked to authenticate.
     AllowUserInteraction = 0x01,
 }
+
+assert_impl_all!(CheckAuthorizationFlags: Send, Sync, Unpin);
 
 /// An enumeration for granting implicit authorizations.
 #[repr(u32)]
@@ -36,6 +39,8 @@ pub enum ImplicitAuthorization {
     Authorized = 5,
 }
 
+assert_impl_all!(ImplicitAuthorization: Send, Sync, Unpin);
+
 /// Flags describing features supported by the Authority implementation.
 #[repr(u32)]
 #[derive(Type, BitFlags, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
@@ -43,6 +48,8 @@ pub enum AuthorityFeatures {
     /// The authority supports temporary authorizations that can be obtained through authentication.
     TemporaryAuthorization = 0x01,
 }
+
+assert_impl_all!(AuthorityFeatures: Send, Sync, Unpin);
 
 impl TryFrom<OwnedValue> for AuthorityFeatures {
     type Error = <u32 as TryFrom<OwnedValue>>::Error;
@@ -76,6 +83,8 @@ pub struct TemporaryAuthorization {
     pub time_expires: u64,
 }
 
+assert_impl_all!(TemporaryAuthorization: Send, Sync, Unpin);
+
 /// This struct describes identities such as UNIX users and UNIX groups. It is typically used to
 /// check if a given process is authorized for an action.
 ///
@@ -90,6 +99,8 @@ pub struct Identity<'a> {
 
     pub identity_details: &'a HashMap<&'a str, Value<'a>>,
 }
+
+assert_impl_all!(Identity<'_>: Send, Sync, Unpin);
 
 fn pid_start_time(pid: u32) -> Result<u64, Error> {
     let fname = format!("/proc/{}/stat", pid);
@@ -144,6 +155,8 @@ pub struct Subject {
     /// key/value pairs are guaranteed to be available.
     pub subject_details: HashMap<String, OwnedValue>,
 }
+
+assert_impl_all!(Subject: Send, Sync, Unpin);
 
 impl Subject {
     /// Create a `Subject` for `pid`, `start_time` & `uid`.
@@ -244,6 +257,8 @@ pub struct ActionDescription {
     pub annotations: HashMap<String, String>,
 }
 
+assert_impl_all!(ActionDescription: Send, Sync, Unpin);
+
 /// Describes the result of calling `CheckAuthorization()`
 #[derive(Debug, Type, Serialize, Deserialize)]
 pub struct AuthorizationResult {
@@ -263,6 +278,8 @@ pub struct AuthorizationResult {
     /// the user).
     pub details: std::collections::HashMap<String, String>,
 }
+
+assert_impl_all!(AuthorizationResult: Send, Sync, Unpin);
 
 /// This D-Bus interface is implemented by the /org/freedesktop/PolicyKit1/Authority object on the
 /// well-known name org.freedesktop.PolicyKit1 on the system message bus.
@@ -427,3 +444,6 @@ trait Authority {
     #[dbus_proxy(property)]
     fn backend_version(&self) -> fdo::Result<String>;
 }
+
+assert_impl_all!(AsyncAuthorityProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(AuthorityProxy<'_>: Send, Sync, Unpin);
