@@ -2,6 +2,7 @@
 #![allow(deprecated)]
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use static_assertions::assert_impl_all;
 use std::os::unix::io;
 
 use crate::{Basic, EncodingFormat, Signature, Type};
@@ -18,6 +19,8 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 /// [serializer]: fn.to_bytes_fds.html
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct Fd(io::RawFd);
+
+assert_impl_all!(Fd: Send, Sync, Unpin);
 
 impl Basic for Fd {
     const SIGNATURE_CHAR: char = 'h';

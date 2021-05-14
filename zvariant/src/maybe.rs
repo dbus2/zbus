@@ -1,4 +1,5 @@
 use serde::ser::{Serialize, Serializer};
+use static_assertions::assert_impl_all;
 use std::convert::TryFrom;
 
 use crate::{Error, Signature, Type, Value};
@@ -14,6 +15,8 @@ pub struct Maybe<'a> {
     value_signature: Signature<'a>,
     signature: Signature<'a>,
 }
+
+assert_impl_all!(Maybe<'_>: Send, Sync, Unpin);
 
 impl<'a> Maybe<'a> {
     /// Get a reference to underlying value.

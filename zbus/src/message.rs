@@ -6,6 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use static_assertions::assert_impl_all;
 use zvariant::{EncodingContext, Error as VariantError, ObjectPath, Signature, Type};
 
 use crate::{
@@ -50,6 +51,8 @@ pub enum MessageError {
     /// this error from any API.
     Infallible,
 }
+
+assert_impl_all!(MessageError: Send, Sync, Unpin);
 
 impl PartialEq for MessageError {
     fn eq(&self, other: &Self) -> bool {
@@ -290,6 +293,8 @@ pub struct Message {
     bytes: Vec<u8>,
     fds: Arc<RwLock<Fds>>,
 }
+
+assert_impl_all!(Message: Send, Sync, Unpin);
 
 // TODO: Handle non-native byte order: https://gitlab.freedesktop.org/dbus/zbus/-/issues/19
 impl Message {

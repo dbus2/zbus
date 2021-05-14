@@ -6,6 +6,7 @@
 use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use static_assertions::assert_impl_all;
 use std::collections::HashMap;
 use zvariant::{derive::Type, ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
@@ -18,6 +19,9 @@ trait Introspectable {
     /// methods), objects below it in the object path tree, and its properties.
     fn introspect(&self) -> Result<String>;
 }
+
+assert_impl_all!(AsyncIntrospectableProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(IntrospectableProxy<'_>: Send, Sync, Unpin);
 
 /// Server-side implementation for the `org.freedesktop.DBus.Introspectable` interface.
 /// This interface is implemented automatically for any object registered to the
@@ -52,10 +56,15 @@ trait Properties {
     ) -> Result<()>;
 }
 
+assert_impl_all!(AsyncPropertiesProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(PropertiesProxy<'_>: Send, Sync, Unpin);
+
 /// Server-side implementation for the `org.freedesktop.DBus.Properties` interface.
 /// This interface is implemented automatically for any object registered to the
 /// [ObjectServer](crate::ObjectServer).
 pub struct Properties;
+
+assert_impl_all!(Properties: Send, Sync, Unpin);
 
 #[dbus_interface(name = "org.freedesktop.DBus.Properties")]
 impl Properties {
@@ -143,6 +152,9 @@ trait ObjectManager {
     fn interfaces_removed(&self, object_path: ObjectPath<'_>, interfaces: Vec<&str>) -> Result<()>;
 }
 
+assert_impl_all!(AsyncObjectManagerProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(ObjectManagerProxy<'_>: Send, Sync, Unpin);
+
 /// Proxy for the `org.freedesktop.DBus.Peer` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Peer")]
 trait Peer {
@@ -157,6 +169,9 @@ trait Peer {
     /// matter which object path a GetMachineId is sent to.
     fn get_machine_id(&self) -> Result<String>;
 }
+
+assert_impl_all!(AsyncPeerProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(PeerProxy<'_>: Send, Sync, Unpin);
 
 pub(crate) struct Peer;
 
@@ -196,6 +211,9 @@ trait Monitoring {
     fn become_monitor(&self, n1: &[&str], n2: u32) -> Result<()>;
 }
 
+assert_impl_all!(AsyncMonitoringProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(MonitoringProxy<'_>: Send, Sync, Unpin);
+
 /// Proxy for the `org.freedesktop.DBus.Stats` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Debug.Stats")]
 trait Stats {
@@ -208,6 +226,9 @@ trait Stats {
     /// GetAllMatchRules (undocumented)
     fn get_all_match_rules(&self) -> Result<Vec<HashMap<String, Vec<String>>>>;
 }
+
+assert_impl_all!(AsyncStatsProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(StatsProxy<'_>: Send, Sync, Unpin);
 
 /// The flags used by the bus [`request_name`] method.
 ///
@@ -242,6 +263,8 @@ pub enum RequestNameFlags {
     DoNotQueue = 0x04,
 }
 
+assert_impl_all!(RequestNameFlags: Send, Sync, Unpin);
+
 /// The return code of the [`request_name`] method.
 ///
 /// [`request_name`]: struct.DBusProxy.html#method.request_name
@@ -275,6 +298,8 @@ pub enum RequestNameReply {
     AlreadyOwner = 0x04,
 }
 
+assert_impl_all!(RequestNameReply: Send, Sync, Unpin);
+
 /// The return code of the [`release_name`] method.
 ///
 /// [`release_name`]: struct.DBusProxy.html#method.release_name
@@ -292,6 +317,8 @@ pub enum ReleaseNameReply {
     /// own this name.
     NotOwner = 0x03,
 }
+
+assert_impl_all!(ReleaseNameReply: Send, Sync, Unpin);
 
 /// Proxy for the `org.freedesktop.DBus` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus")]
@@ -394,6 +421,9 @@ trait DBus {
     #[dbus_proxy(property)]
     fn interfaces(&self) -> Result<Vec<String>>;
 }
+
+assert_impl_all!(AsyncDBusProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(DBusProxy<'_>: Send, Sync, Unpin);
 
 /// Errors from <https://gitlab.freedesktop.org/dbus/dbus/-/blob/master/dbus/dbus-protocol.h>
 #[derive(Debug, DBusError, PartialEq)]
@@ -562,6 +592,8 @@ pub enum Error {
     /// The connection is not from a container, or the specified container instance does not exist.
     NotContainer(String),
 }
+
+assert_impl_all!(Error: Send, Sync, Unpin);
 
 /// Alias for a `Result` with the error type [`zbus::fdo::Error`].
 ///

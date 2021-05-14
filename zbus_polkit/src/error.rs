@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use static_assertions::assert_impl_all;
+
 /// The error type for `zbus_polkit`.
 ///
 /// The various errors that can be reported by this crate.
@@ -17,6 +19,8 @@ pub enum Error {
     /// Missing sender header in the message.
     MissingSender,
 }
+
+assert_impl_all!(Error: Send, Sync, Unpin);
 
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {

@@ -9,6 +9,7 @@ use std::{
 };
 
 use scoped_tls::scoped_thread_local;
+use static_assertions::assert_impl_all;
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
@@ -266,6 +267,8 @@ pub struct ObjectServer {
     conn: Connection,
     root: Node,
 }
+
+assert_impl_all!(ObjectServer: Unpin);
 
 impl ObjectServer {
     /// Creates a new D-Bus `ObjectServer` for a given connection.

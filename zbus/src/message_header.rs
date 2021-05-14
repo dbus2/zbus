@@ -5,6 +5,7 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+use static_assertions::assert_impl_all;
 use zvariant::{derive::Type, ObjectPath, Signature};
 
 use crate::{MessageError, MessageField, MessageFieldCode, MessageFields};
@@ -22,6 +23,8 @@ pub enum EndianSig {
     /// The D-Bus message is in little-endian byte order.
     Little = b'l',
 }
+
+assert_impl_all!(EndianSig: Send, Sync, Unpin);
 
 // Such a shame I've to do this manually
 impl TryFrom<u8> for EndianSig {
@@ -59,6 +62,8 @@ pub enum MessageType {
     Signal = 4,
 }
 
+assert_impl_all!(MessageType: Send, Sync, Unpin);
+
 // Such a shame I've to do this manually
 impl From<u8> for MessageType {
     fn from(val: u8) -> MessageType {
@@ -92,6 +97,8 @@ pub enum MessageFlags {
     /// passwords or confirmation via Polkit or a similar framework.
     AllowInteractiveAuth = 0x4,
 }
+
+assert_impl_all!(MessageFlags: Send, Sync, Unpin);
 
 #[derive(Clone, Debug)]
 struct SerialNum(OnceCell<u32>);
@@ -144,6 +151,8 @@ pub struct MessagePrimaryHeader {
     body_len: u32,
     serial_num: SerialNum,
 }
+
+assert_impl_all!(MessagePrimaryHeader: Send, Sync, Unpin);
 
 impl MessagePrimaryHeader {
     /// Create a new `MessagePrimaryHeader` instance.
@@ -243,6 +252,8 @@ pub struct MessageHeader<'m> {
     fields: MessageFields<'m>,
     end: ((),), // To ensure header end on 8-byte boundry
 }
+
+assert_impl_all!(MessageHeader<'_>: Send, Sync, Unpin);
 
 macro_rules! get_field {
     ($self:ident, $kind:ident) => {

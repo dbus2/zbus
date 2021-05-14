@@ -1,4 +1,5 @@
 use async_io::block_on;
+use static_assertions::assert_impl_all;
 use std::{
     convert::{TryFrom, TryInto},
     future::ready,
@@ -59,6 +60,8 @@ pub struct Proxy<'a> {
     conn: Connection,
     azync: azync::Proxy<'a>,
 }
+
+assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.

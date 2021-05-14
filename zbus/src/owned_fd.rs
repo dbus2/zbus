@@ -3,6 +3,8 @@ use std::{
     os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd},
 };
 
+use static_assertions::assert_impl_all;
+
 /// An owned representation of a file descriptor
 ///
 /// When it is dropped, the underlying file descriptor will be dropped.
@@ -14,6 +16,8 @@ use std::{
 pub struct OwnedFd {
     inner: RawFd,
 }
+
+assert_impl_all!(OwnedFd: Send, Sync, Unpin);
 
 impl FromRawFd for OwnedFd {
     unsafe fn from_raw_fd(fd: RawFd) -> OwnedFd {

@@ -1,5 +1,7 @@
 use std::marker::PhantomData;
 
+use static_assertions::assert_impl_all;
+
 /// The encoding format.
 ///
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -11,6 +13,8 @@ pub enum EncodingFormat {
     #[cfg(feature = "gvariant")]
     GVariant,
 }
+
+assert_impl_all!(EncodingFormat: Send, Sync, Unpin);
 
 impl Default for EncodingFormat {
     fn default() -> Self {
@@ -64,6 +68,8 @@ pub struct EncodingContext<B> {
 
     b: PhantomData<B>,
 }
+
+assert_impl_all!(EncodingContext<byteorder::NativeEndian>: Send, Sync, Unpin);
 
 impl<B> EncodingContext<B>
 where

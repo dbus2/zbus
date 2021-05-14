@@ -19,3 +19,4 @@ zvariant = { path = "../zvariant", version = "2", default-features = false, feat
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1"
 enumflags2 = { version = "0.6.4", features = ["serde"] }
+static_assertions = "1.1.0"

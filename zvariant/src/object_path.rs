@@ -6,6 +6,7 @@ use serde::{
     de::{Deserialize, Deserializer, Visitor},
     ser::{Serialize, Serializer},
 };
+use static_assertions::assert_impl_all;
 use std::borrow::Cow;
 
 use crate::{Basic, EncodingFormat, Error, Result, Signature, Type};
@@ -37,6 +38,8 @@ use crate::{Basic, EncodingFormat, Error, Result, Signature, Type};
 /// ```
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct ObjectPath<'a>(Cow<'a, [u8]>);
+
+assert_impl_all!(ObjectPath<'_>: Send, Sync, Unpin);
 
 impl<'a> ObjectPath<'a> {
     /// The object path as a string.
@@ -282,6 +285,8 @@ fn ensure_correct_object_path_str(path: &[u8]) -> Result<()> {
 /// Owned [`ObjectPath`](struct.ObjectPath.html)
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, serde::Serialize, zvariant_derive::Type)]
 pub struct OwnedObjectPath(ObjectPath<'static>);
+
+assert_impl_all!(OwnedObjectPath: Send, Sync, Unpin);
 
 impl OwnedObjectPath {
     pub fn into_inner(self) -> ObjectPath<'static> {

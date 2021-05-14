@@ -6,6 +6,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use static_assertions::assert_impl_all;
+
 /// A D-Bus server GUID.
 ///
 /// See the D-Bus specification [UUIDs chapter] for details.
@@ -16,6 +18,8 @@ use std::{
 /// [TryFrom]: #impl-TryFrom%3C%26%27_%20str%3E
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub struct Guid(String);
+
+assert_impl_all!(Guid: Send, Sync, Unpin);
 
 impl Guid {
     /// Generate a D-Bus GUID that can be used with e.g. [`Connection::new_unix_server`].

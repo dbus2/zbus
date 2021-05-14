@@ -1,4 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize};
+use static_assertions::assert_impl_all;
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 use crate::{
@@ -15,6 +16,8 @@ use crate::Maybe;
 /// Owned [`Value`](enum.Value.html)
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct OwnedValue(Value<'static>);
+
+assert_impl_all!(OwnedValue: Send, Sync, Unpin);
 
 impl OwnedValue {
     pub(crate) fn into_inner(self) -> Value<'static> {

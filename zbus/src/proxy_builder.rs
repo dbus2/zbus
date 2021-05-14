@@ -1,5 +1,6 @@
 use std::{borrow::Cow, convert::TryInto, marker::PhantomData, sync::Arc};
 
+use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
 use crate::{azync, Error, Proxy, Result};
@@ -13,6 +14,8 @@ pub struct ProxyBuilder<'a, T = ()> {
     interface: Option<Cow<'a, str>>,
     proxy_type: PhantomData<T>,
 }
+
+assert_impl_all!(ProxyBuilder<'_>: Send, Sync, Unpin);
 
 impl<'a> ProxyBuilder<'a> {
     /// Create a new [`ProxyBuilder`] for the given connection.
