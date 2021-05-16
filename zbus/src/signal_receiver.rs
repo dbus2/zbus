@@ -15,7 +15,7 @@ struct ProxyKey<'key> {
     path: ObjectPath<'key>,
 }
 
-impl<'p, P> From<&P> for ProxyKey<'_>
+impl<'p, P> From<&P> for ProxyKey<'static>
 where
     P: AsRef<Proxy<'p>>,
 {
@@ -36,10 +36,10 @@ where
     }
 }
 
-impl<'key> TryFrom<&'key MessageHeader<'_>> for ProxyKey<'key> {
+impl<'key> TryFrom<&'key MessageHeader<'key>> for ProxyKey<'key> {
     type Error = Error;
 
-    fn try_from(hdr: &'key MessageHeader<'_>) -> Result<Self> {
+    fn try_from(hdr: &'key MessageHeader<'key>) -> Result<Self> {
         match (hdr.interface()?, hdr.path()?.cloned(), hdr.sender()?) {
             (Some(interface), Some(path), Some(destination)) => Ok(ProxyKey {
                 interface: Cow::from(interface),
@@ -54,14 +54,14 @@ impl<'key> TryFrom<&'key MessageHeader<'_>> for ProxyKey<'key> {
 /// Receives signals for [`Proxy`] instances.
 ///
 /// Use this to receive signals on a given connection for a bunch of proxies at the same time.
-pub struct SignalReceiver<'r, 'p> {
+pub struct SignalReceiver<'a> {
     conn: Connection,
-    proxies: HashMap<ProxyKey<'static>, &'r Proxy<'p>>,
+    proxies: HashMap<ProxyKey<'static>, &'a Proxy<'a>>,
 }
 
-assert_impl_all!(SignalReceiver<'_, '_>: Send, Sync, Unpin);
+assert_impl_all!(SignalReceiver<'_>: Send, Sync, Unpin);
 
-impl<'r, 'p> SignalReceiver<'r, 'p> {
+impl<'a> SignalReceiver<'a> {
     /// Create a new `SignalReceiver` instance.
     pub fn new(conn: Connection) -> Self {
         Self {
@@ -76,7 +76,7 @@ impl<'r, 'p> SignalReceiver<'r, 'p> {
     }
 
     /// Get a iterator for all the proxies in this receiver.
-    pub fn proxies(&self) -> impl Iterator<Item = &&Proxy<'_>> {
+    pub fn proxies(&self) -> impl Iterator<Item = &&Proxy<'a>> {
         self.proxies.values()
     }
 
@@ -86,7 +86,7 @@ impl<'r, 'p> SignalReceiver<'r, 'p> {
     ///
     /// This method will panic if you try to add a proxy with a different associated connection than
     /// the one associated with this receiver.
-    pub fn receive_for<'a: 'p, 'b: 'r, P>(&mut self, proxy: &'b P) -> Result<()>
+    pub fn receive_for<P>(&mut self, proxy: &'a P) -> Result<()>
     where
         P: AsRef<Proxy<'a>>,
     {

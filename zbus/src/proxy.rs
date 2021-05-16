@@ -243,7 +243,7 @@ impl<'a> Proxy<'a> {
     }
 
     /// Get a reference to the underlying async Proxy.
-    pub fn inner(&self) -> &azync::Proxy<'_> {
+    pub fn inner(&self) -> &azync::Proxy<'a> {
         &self.azync
     }
 
@@ -265,13 +265,13 @@ impl<'a> Proxy<'a> {
     }
 }
 
-impl<'asref, 'p: 'asref> std::convert::AsRef<Proxy<'asref>> for Proxy<'p> {
-    fn as_ref(&self) -> &Proxy<'asref> {
+impl<'a> std::convert::AsRef<Proxy<'a>> for Proxy<'a> {
+    fn as_ref(&self) -> &Proxy<'a> {
         &self
     }
 }
 
-impl<'p, 'a: 'p> From<azync::Proxy<'a>> for Proxy<'p> {
+impl<'a> From<azync::Proxy<'a>> for Proxy<'a> {
     fn from(proxy: azync::Proxy<'a>) -> Self {
         Self {
             conn: proxy.connection().clone().into(),
