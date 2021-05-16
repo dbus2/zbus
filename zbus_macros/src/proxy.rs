@@ -161,7 +161,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             }
 
             /// The reference to the underlying `zbus::Proxy`.
-            pub fn inner(&self) -> &#proxy_struct {
+            pub fn inner(&self) -> &#proxy_struct<'c> {
                 &self.0
             }
 
@@ -250,12 +250,12 @@ fn gen_proxy_method_call(
         let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
         let signature = if where_clause.is_some() {
             quote! {
-                fn #method#ty_generics(#inputs) -> ::#zbus::Result<#proxy<'_>>
+                fn #method#ty_generics(#inputs) -> ::#zbus::Result<#proxy<'c>>
                 #where_clause,
             }
         } else {
             quote! {
-                fn #method(#inputs) -> ::#zbus::Result<#proxy<'_>>
+                fn #method(#inputs) -> ::#zbus::Result<#proxy<'c>>
             }
         };
 

@@ -597,8 +597,8 @@ impl std::ops::Drop for SignalStream<'_> {
     }
 }
 
-impl<'azync, 'sync: 'azync> From<crate::Proxy<'sync>> for Proxy<'azync> {
-    fn from(proxy: crate::Proxy<'sync>) -> Self {
+impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
+    fn from(proxy: crate::Proxy<'a>) -> Self {
         proxy.into_inner()
     }
 }
