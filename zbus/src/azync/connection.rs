@@ -885,12 +885,14 @@ impl From<crate::Connection> for Connection {
 #[cfg(test)]
 mod tests {
     use futures_util::stream::TryStreamExt;
+    use ntest::timeout;
     use std::os::unix::net::UnixStream;
     use test_env_log::test;
 
     use super::*;
 
     #[test]
+    #[timeout(1000)]
     fn unix_p2p() {
         async_io::block_on(test_unix_p2p()).unwrap();
     }
@@ -943,6 +945,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(1000)]
     fn serial_monotonically_increases() {
         async_io::block_on(test_serial_monotonically_increases());
     }

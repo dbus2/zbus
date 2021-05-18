@@ -294,11 +294,13 @@ impl From<azync::Connection> for Connection {
 
 #[cfg(test)]
 mod tests {
+    use ntest::timeout;
     use std::{os::unix::net::UnixStream, thread};
     use test_env_log::test;
 
     use crate::{Connection, Error, Guid};
     #[test]
+    #[timeout(1000)]
     fn unix_p2p() {
         let guid = Guid::generate();
 

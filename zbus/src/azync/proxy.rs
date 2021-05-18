@@ -636,10 +636,12 @@ impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
 mod tests {
     use super::*;
     use futures_util::future::FutureExt;
+    use ntest::timeout;
     use std::{future::ready, sync::Arc};
     use test_env_log::test;
 
     #[test]
+    #[timeout(1000)]
     fn signal_stream() {
         block_on(test_signal_stream()).unwrap();
     }
@@ -694,6 +696,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(1000)]
     fn signal_connect() {
         block_on(test_signal_connect()).unwrap();
     }

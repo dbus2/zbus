@@ -632,6 +632,7 @@ impl From<zbus::MessageError> for Error {
 #[cfg(test)]
 mod tests {
     use crate::{fdo, Error, Message};
+    use ntest::timeout;
     use std::{
         convert::TryInto,
         sync::{Arc, Mutex},
@@ -654,6 +655,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(1000)]
     fn signal() {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
