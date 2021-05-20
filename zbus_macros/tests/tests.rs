@@ -55,6 +55,34 @@ fn test_proxy() {
             Ok(())
         })
         .unwrap();
+    // Let's also test signal streams.
+    let connection = zbus::azync::Connection::from(connection);
+    let proxy = AsyncTestProxy::new(&connection);
+    block_on(async move {
+        fdo::AsyncDBusProxy::new(&connection)
+            .request_name(
+                "org.freedesktop.zbus_macros",
+                fdo::RequestNameFlags::DoNotQueue.into(),
+            )
+            .await
+            .unwrap();
+        let mut stream = proxy.receive_a_signal().await.unwrap();
+
+        let left_future = async move {
+            // These calls will never happen so just testing the build mostly.
+            let signal = stream.next().await.unwrap();
+            assert_eq!(signal.view().unwrap(), (0u8, "whatever"));
+        };
+        futures_util::pin_mut!(left_future);
+        let right_future = async {
+            ready(()).await;
+        };
+        futures_util::pin_mut!(right_future);
+
+        if let Either::Left((_, _)) = select(left_future, right_future).await {
+            panic!("Shouldn't be receiving our dummy signal: `ASignal`");
+        }
+    });
 }
 
 #[test]

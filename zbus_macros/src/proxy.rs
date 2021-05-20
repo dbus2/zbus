@@ -84,6 +84,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     let default_path = default_path.unwrap_or(format!("/org/freedesktop/{}", ident));
     let default_service = default_service.unwrap_or_else(|| name.clone());
     let mut methods = TokenStream::new();
+    let mut stream_types = TokenStream::new();
     let async_opts = AsyncOpts::new(azync);
 
     for i in input.items.iter() {
@@ -110,7 +111,11 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             let m = if is_property {
                 gen_proxy_property(&name, &m, &async_opts)
             } else if is_signal {
-                gen_proxy_signal(&name, &method_name, &m, &async_opts)
+                let (method, types) =
+                    gen_proxy_signal(&proxy_name, &name, &method_name, &m, &async_opts);
+                stream_types.extend(types);
+
+                method
             } else {
                 gen_proxy_method_call(&name, &method_name, &m, &async_opts)
             };
@@ -215,6 +220,8 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                 String::serialize(&self.inner().path().to_string(), serializer)
             }
         }
+
+        #stream_types
     }
 }
 
@@ -363,11 +370,12 @@ fn gen_proxy_property(
 }
 
 fn gen_proxy_signal(
+    proxy_name: &Ident,
     signal_name: &str,
     snake_case_name: &str,
     m: &TraitItemMethod,
     async_opts: &AsyncOpts,
-) -> TokenStream {
+) -> (TokenStream, TokenStream) {
     let AsyncOpts { usage, wait, azync } = async_opts;
     let zbus = get_zbus_crate_ident();
     let doc = get_doc_attrs(&m.attrs);
@@ -387,6 +395,90 @@ fn gen_proxy_signal(
         .iter()
         .filter_map(|arg| arg_ident(arg).cloned())
         .collect();
+
+    let (receive_signal, stream_types) = if async_opts.azync {
+        let mut generics = m.sig.generics.clone();
+        let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
+        for param in &mut generics.params {
+            where_clause
+                .predicates
+                .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'__v> + zbus::export::zvariant::Type));
+        }
+        generics.params.push(parse_quote!('__v));
+
+        let (_, ty_generics, where_clause) = generics.split_for_impl();
+        let (receiver_name, stream_name, signal_name_ident) = (
+            format_ident!("receive_{}", snake_case_name),
+            format_ident!("{}Stream", signal_name),
+            format_ident!("{}", signal_name),
+        );
+        let receive_signal_link =
+            "https://docs.rs/zbus/latest/zbus/azync/struct.Proxy.html#method.receive_signal";
+        let receive_gen_doc = format!(
+            "Create a stream that receives `{}` signals.\n\
+            \n\
+            This a convenient wrapper around [`zbus::azync::Proxy::receive_signal`]({}).",
+            signal_name, receive_signal_link,
+        );
+        let receive_signal = quote! {
+            #[doc = #receive_gen_doc]
+            #(#doc)*
+            pub async fn #receiver_name(&self) -> ::#zbus::Result<#stream_name<'c>>
+            {
+                self.receive_signal(#signal_name).await.map(#stream_name)
+            }
+        };
+
+        let stream_gen_doc = format!(
+            "A [`stream::Stream`] implementation that yields [`{}`] signals.\n\
+            \n\
+            Use [`{}::receive_{}`] to create an instance of this type.",
+            signal_name, proxy_name, snake_case_name,
+        );
+        let view_struct_gen_doc = format!("A `{}` signal.", signal_name);
+        let stream_types = quote! {
+            #[doc = #stream_gen_doc]
+            pub struct #stream_name<'s>(::#zbus::azync::SignalStream<'s>);
+
+            ::#zbus::export::static_assertions::assert_impl_all!(#stream_name<'_>: Send, Unpin);
+
+            impl ::#zbus::export::futures_core::stream::Stream for #stream_name<'_> {
+                type Item = #signal_name_ident;
+
+                fn poll_next(
+                    self: std::pin::Pin<&mut Self>,
+                    cx: &mut std::task::Context<'_>,
+                    ) -> std::task::Poll<Option<Self::Item>> {
+                    ::#zbus::export::futures_core::stream::Stream::poll_next(
+                        std::pin::Pin::new(&mut self.get_mut().0),
+                        cx,
+                    )
+                    .map(|msg| msg.map(#signal_name_ident))
+                }
+            }
+
+            #[doc = #view_struct_gen_doc]
+            pub struct #signal_name_ident(std::sync::Arc<zbus::Message>);
+
+            impl #signal_name_ident {
+                /// Retreive the signal arguments.
+                ///
+                /// Instead of providing separate getters for each argument, one method is provided
+                /// to retreive all the arguments since retrieval requires deserialization of the
+                /// underlying message, which is not a zero-cost operation.
+                pub fn view#ty_generics(&'__v self) -> zbus::Result<(#(#input_types),*)>
+                #where_clause
+                {
+                    self.0.body().map_err(Into::into)
+                }
+            }
+        };
+
+        (receive_signal, stream_types)
+    } else {
+        (quote! {}, quote! {})
+    };
+
     let handler = if *azync {
         quote! { FnMut(#(#input_types),*) -> ::#zbus::export::futures_core::future::BoxFuture<'static, ::#zbus::Result<()>> }
     } else {
@@ -424,7 +516,7 @@ fn gen_proxy_signal(
     generics.params.push(parse_quote!(__H));
 
     let (_, ty_generics, where_clause) = generics.split_for_impl();
-    quote! {
+    let methods = quote! {
         #[doc = #gen_doc]
         #(#doc)*
         pub #usage fn #method#ty_generics(
@@ -439,5 +531,9 @@ fn gen_proxy_signal(
                 handler(#(#args),*)
             })#wait
         }
-    }
+
+        #receive_signal
+    };
+
+    (methods, stream_types)
 }
