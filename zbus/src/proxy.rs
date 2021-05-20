@@ -283,10 +283,12 @@ impl<'a> From<azync::Proxy<'a>> for Proxy<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ntest::timeout;
     use std::sync::{Arc, Mutex};
     use test_env_log::test;
 
     #[test]
+    #[timeout(1000)]
     fn signal() {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
