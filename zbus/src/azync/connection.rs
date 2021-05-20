@@ -1,20 +1,23 @@
+use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
+use async_channel::{bounded, Receiver, Sender};
 use async_io::{block_on, Async};
 use async_lock::{Mutex, MutexGuard};
 use once_cell::sync::OnceCell;
 use static_assertions::assert_impl_all;
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap, VecDeque},
+    collections::{hash_map::DefaultHasher, HashMap},
     convert::TryInto,
     future::ready,
     hash::{Hash, Hasher},
-    io::ErrorKind,
+    io::{self, ErrorKind},
     os::unix::{
         io::{AsRawFd, RawFd},
         net::UnixStream,
     },
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering::SeqCst},
+        self,
+        atomic::{AtomicBool, AtomicU32, Ordering::SeqCst},
         Arc,
     },
     task::{Context, Poll},
@@ -22,11 +25,11 @@ use std::{
 use zvariant::ObjectPath;
 
 use event_listener::Event;
-use futures_core::{future::BoxFuture, stream, Future};
+use futures_core::{stream, Future};
 use futures_util::{
-    future::{select, Either, FutureExt},
+    future::{select, Either},
     sink::SinkExt,
-    stream::{unfold, StreamExt},
+    stream::{select as stream_select, StreamExt},
 };
 
 use crate::{
@@ -113,19 +116,22 @@ struct ConnectionInner<S> {
     // Serial number for next outgoing message
     serial: AtomicU32,
 
-    // Queue of incoming messages
-    in_queue: Mutex<VecDeque<Result<Message>>>,
-
     // Message receiver thread
-    msg_receiver: Arc<MessageReceiverThread<S>>,
+    msg_receiver_thread: Arc<MessageReceiverThread<S>>,
+
+    // We're using sync Mutex here as we don't intend to keep it locked while awaiting.
+    msg_receiver: sync::RwLock<InactiveReceiver<Arc<Message>>>,
+
+    // Receiver side of the error channel
+    error_receiver: Receiver<Error>,
 
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 }
 
 impl<S> Drop for ConnectionInner<S> {
     fn drop(&mut self) {
-        self.msg_receiver.run_recv_thread.store(false, SeqCst);
-        self.msg_receiver.run_recv_thread_event.notify(1);
+        self.msg_receiver_thread.run.store(false, SeqCst);
+        self.msg_receiver_thread.run_event.notify(1);
     }
 }
 
@@ -133,40 +139,37 @@ impl<S> Drop for ConnectionInner<S> {
 struct MessageReceiverThread<S> {
     raw_in_conn: Mutex<RawConnection<Async<S>>>,
 
-    // Queue of freshingly arrived message. This is kept separate from `in_queue` so
-    // `receive_message` calls don't have to go through all the messages each time they're
-    // notified of new messages.
-    in_queue_fresh: Mutex<VecDeque<Result<Message>>>,
-    // To notify the waiting calls on `receive_message` when new msg is available on the queue.
-    msg_available_event: Event,
-    num_consumers: AtomicUsize,
+    // Message broadcaster.
+    msg_sender: Broadcaster<Arc<Message>>,
+
+    // Sender side of the error channel
+    error_sender: Sender<Error>,
 
     // To notify msg receeiver thread that it doesn't need to run anymore.
-    run_recv_thread_event: Event,
-    run_recv_thread: AtomicBool,
-
-    // Max number of messages to queue
-    max_queued: AtomicUsize,
+    run_event: Event,
+    run: AtomicBool,
 }
 
 impl MessageReceiverThread<Box<dyn Socket>> {
-    fn new(raw_in_conn: RawConnection<Async<Box<dyn Socket>>>) -> Arc<Self> {
+    fn new(
+        raw_in_conn: RawConnection<Async<Box<dyn Socket>>>,
+        msg_sender: Broadcaster<Arc<Message>>,
+        error_sender: Sender<Error>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             raw_in_conn: Mutex::new(raw_in_conn),
-            in_queue_fresh: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
-            msg_available_event: Event::new(),
-            num_consumers: AtomicUsize::new(0),
-            max_queued: AtomicUsize::new(DEFAULT_MAX_QUEUED),
-            run_recv_thread_event: Event::new(),
-            run_recv_thread: AtomicBool::new(true),
+            msg_sender,
+            error_sender,
+            run_event: Event::new(),
+            run: AtomicBool::new(true),
         })
     }
 
     fn launch(self: Arc<Self>) -> Result<()> {
         // FIXME: Perhaps this should be a task but something needs to drive it then then. Maybe
-        // `receive_specific` should run the task but then we'll probably be back to the issue of
-        // `receive_specific` not being reliable in all situations, which is precisely why we split
-        // the message receiving into a separate thread.
+        // the message stream should run the task but then we'll probably be back to the issue of
+        // stream not being reliable in all situations, which is precisely why we split the message
+        // receiving into a separate thread.
         std::thread::Builder::new()
             .name("zbus::azync::Connection::receive_msg".into())
             .spawn(move || block_on(self.receive_msg()))?;
@@ -176,35 +179,39 @@ impl MessageReceiverThread<Box<dyn Socket>> {
 
     // Keep receiving messages and put them on the queue.
     async fn receive_msg(self: Arc<Self>) {
-        while self.run_recv_thread.load(SeqCst) {
+        while self.run.load(SeqCst) {
             let mut raw_conn = self.raw_in_conn.lock().await;
+
+            // Ignore errors from sending to msg or error channels. The only reason these calls
+            // fail is when the channel is closed and that will only happen when `Connection` is
+            // being dropped.
+            // TODO: We should still log in case of error when we've logging.
 
             let msg = match select(
                 Box::pin(ReceiveMessage {
                     raw_conn: &mut raw_conn,
                 }),
-                self.run_recv_thread_event.listen(),
+                self.run_event.listen(),
             )
             .await
             {
-                Either::Left((msg, _)) => msg,
+                Either::Left((msg, _)) => {
+                    match msg {
+                        Ok(msg) => msg,
+                        Err(e) => {
+                            // Ignoring errors. See comment above.
+                            let _ = self.error_sender.send(e).await;
+
+                            continue;
+                        }
+                    }
+                }
                 Either::Right((_, _)) => continue,
             };
 
-            let mut in_queue_fresh = self.in_queue_fresh.lock().await;
-            if in_queue_fresh.len() >= self.max_queued.load(SeqCst) {
-                // Create room by dropping the oldest message.
-                in_queue_fresh.pop_front();
-            }
-
-            in_queue_fresh.push_back(msg);
-
-            // The queue lock is held here so num_consumers can't change here between the time its
-            // value is loaded and loop iteration ends.
-            let num_consumers = self.num_consumers.load(SeqCst);
-            if num_consumers > 0 {
-                self.msg_available_event.notify(num_consumers);
-            }
+            let msg = Arc::new(msg);
+            // Ignoring errors. See comment above.
+            let _ = self.msg_sender.broadcast(msg.clone()).await;
         }
     }
 }
@@ -231,19 +238,6 @@ impl MessageReceiverThread<Box<dyn Socket>> {
 /// [`zbus::Connection::receive_message`] method provided. This is because the `futures` crate
 /// already provides a nice rich API that makes use of the [`stream::Stream`] implementation that is
 /// returned by [`Connection::stream`] method.
-///
-/// However, there is [`Connection::receive_specific`] method, which takes a predicate function,
-/// using which you get to decided which message you're interested in. It first checks if there
-/// was already a message received by a previous call to [`Connection::receive_specific`]
-/// or during a [`Connection::call_method`] call that fits the predicate and returns that immediate.
-/// Otherwise, it awaits on the connection for the message of interest to be received. All other
-/// messages received, while waiting, are appended to the end of the incoming message queue to be
-/// picked up by a following or already awaiting `receive_specific` call or [`stream::Stream`]
-/// API.
-///
-/// In summary, if you're going to call D-Bus methods on the connection in one task, while receiving
-/// messages in another, it's best to use `receive_specific` method. Otherwise, you'd want to make
-/// use of the `stream` method.
 ///
 /// ### Examples
 ///
@@ -377,19 +371,18 @@ impl Connection {
 
     /// Get a stream to receive incoming messages.
     pub async fn stream(&self) -> MessageStream {
-        let conn = self.clone();
-        let stream = unfold(conn, |conn| async move {
-            // In the end it's just `receive_specific` with `*` filter.
-            match conn.receive_specific(|_| ready(Ok(true)).boxed()).await {
-                Ok(msg) => Some((Ok(msg), conn)),
-                Err(Error::Io(e)) if e.kind() == ErrorKind::BrokenPipe => None,
-                Err(e) => Some((Err(e), conn)),
-            }
-        });
+        let msg_receiver = self
+            .0
+            .msg_receiver
+            .read()
+            // SAFETY: Not much we can do about a poisoned mutex.
+            .expect("poisoned lock")
+            .activate_cloned()
+            .map(Ok);
+        let error_stream = self.0.error_receiver.clone().map(Err);
+        let stream = stream_select(error_stream, msg_receiver).boxed();
 
-        MessageStream {
-            stream: stream.boxed(),
-        }
+        MessageStream { stream }
     }
 
     /// Get a sink to send out messages.
@@ -404,76 +397,6 @@ impl Connection {
             raw_conn: self.0.raw_out_conn.lock().await,
             cap_unix_fd: self.0.cap_unix_fd,
         }
-    }
-
-    /// Receive a specific message.
-    ///
-    /// This is the same as receiving messages from [`MessageStream`], except that this takes a
-    /// predicate function that decides if the message received should be returned by this method or
-    /// not. All messages received during this call that are not returned by it, are pushed to the
-    /// queue to be picked by the susubsequent or awaiting call to this method or by the
-    /// `MessageStream`.
-    pub async fn receive_specific<P>(&self, predicate: P) -> Result<Arc<Message>>
-    where
-        for<'msg> P: Fn(&'msg Message) -> BoxFuture<'msg, Result<bool>>,
-    {
-        // First check the long-term queue.
-        {
-            // We keep all the queue operations in separate blocks to ensure we don't keep the
-            // queue locked unnecessarily while waiting for new messages ending up starving
-            // `receive_specific` calls.
-            let mut queue = self.0.in_queue.lock().await;
-            for (i, msg) in queue.iter().enumerate() {
-                if match msg {
-                    Ok(msg) => predicate(msg).await?,
-                    Err(_) => true,
-                } {
-                    // SAFETY: we got the index from the queue enumerator so this shouldn't ever
-                    // fail.
-                    return queue.remove(i).expect("removing queue item").map(Arc::new);
-                }
-            }
-        }
-
-        self.0.msg_receiver.num_consumers.fetch_add(1, SeqCst);
-
-        let msg = 'outer: loop {
-            let msg_available = self.0.msg_receiver.msg_available_event.listen();
-            {
-                // We keep all the queue operations in separate blocks to ensure we don't keep the
-                // queue locked unnecessarily while waiting for new messages ending up starving
-                // `receive_specific` calls.
-                let mut queue = self.0.msg_receiver.in_queue_fresh.lock().await;
-                for (i, msg) in queue.iter().enumerate() {
-                    if match msg {
-                        Ok(msg) => predicate(msg).await?,
-                        Err(_) => true,
-                    } {
-                        // SAFETY: we got the index from the queue enumerator so this shouldn't ever
-                        // fail.
-                        break 'outer queue.remove(i).expect("removing queue item");
-                    }
-                }
-            }
-
-            msg_available.await;
-        };
-
-        if self.0.msg_receiver.num_consumers.fetch_sub(1, SeqCst) == 1 {
-            // Clear fresh queue by moving all remaining messages to `in_queue`.
-            let mut fresh_queue = self.0.msg_receiver.in_queue_fresh.lock().await;
-            let mut in_queue = self.0.in_queue.lock().await;
-            for msg in fresh_queue.drain(..) {
-                if in_queue.len() >= self.0.msg_receiver.max_queued.load(SeqCst) {
-                    // Create room by dropping the oldest message.
-                    in_queue.pop_front();
-                }
-
-                in_queue.push_back(msg);
-            }
-        }
-
-        msg.map(Arc::new)
     }
 
     /// Send `msg` to the peer.
@@ -508,6 +431,7 @@ impl Connection {
         B: serde::ser::Serialize + zvariant::Type,
         MessageError: From<E>,
     {
+        let stream = self.stream().await;
         let m = Message::method(
             self.unique_name(),
             destination,
@@ -517,29 +441,46 @@ impl Connection {
             body,
         )?;
         let serial = self.send_message(m).await?;
+        match stream
+            .filter(move |m| {
+                let h = match m {
+                    Ok(m) => match m.header() {
+                        Ok(h) => h,
+                        Err(_) => return ready(false),
+                    },
+                    Err(_) => return ready(false),
+                };
+                let msg_type = match h.message_type() {
+                    Ok(t) => t,
+                    Err(_) => return ready(false),
+                };
 
-        match self
-            .receive_specific(move |m| {
-                async move {
-                    let h = m.header()?;
-                    let msg_type = h.message_type()?;
-
-                    Ok(
-                        (msg_type == MessageType::Error || msg_type == MessageType::MethodReturn)
-                            && h.reply_serial()? == Some(serial),
-                    )
-                }
-                .boxed()
+                ready(
+                    (msg_type == MessageType::Error || msg_type == MessageType::MethodReturn)
+                        && h.reply_serial() == Ok(Some(serial)),
+                )
             })
+            .next()
             .await
         {
-            Ok(m) => match m.header()?.message_type()? {
-                MessageType::Error => Err(m.into()),
-                MessageType::MethodReturn => Ok(m),
-                // We already established the msg type in `receive_specific` call above.
-                _ => unreachable!(),
+            Some(msg) => match msg {
+                Ok(m) => {
+                    match m.header()?.message_type()? {
+                        MessageType::Error => Err(m.into()),
+                        MessageType::MethodReturn => Ok(m),
+                        // We already established the msg type in `filter` above.
+                        _ => unreachable!(),
+                    }
+                }
+                Err(e) => Err(e),
             },
-            Err(e) => Err(e),
+            None => {
+                // If SocketStream gives us None, that means the socket was closed
+                Err(crate::Error::Io(io::Error::new(
+                    ErrorKind::BrokenPipe,
+                    "socket closed",
+                )))
+            }
         }
     }
 
@@ -625,7 +566,11 @@ impl Connection {
 
     /// Max number of messages to queue.
     pub fn max_queued(&self) -> usize {
-        self.0.msg_receiver.max_queued.load(SeqCst)
+        self.0
+            .msg_receiver
+            .read()
+            .expect("poisoned lock")
+            .capacity()
     }
 
     /// Set the max number of messages to queue.
@@ -654,7 +599,11 @@ impl Connection {
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn set_max_queued(self, max: usize) -> Self {
-        self.0.msg_receiver.max_queued.store(max, SeqCst);
+        self.0
+            .msg_receiver
+            .write()
+            .expect("poisoned lock")
+            .set_capacity(max);
 
         self
     }
@@ -666,7 +615,7 @@ impl Connection {
 
     /// Get the raw file descriptor of this connection.
     pub async fn as_raw_fd(&self) -> RawFd {
-        (self.0.msg_receiver.raw_in_conn.lock().await.socket()).as_raw_fd()
+        (self.0.msg_receiver_thread.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
     pub(crate) async fn subscribe_signal<'s, E>(
@@ -762,22 +711,27 @@ impl Connection {
         let auth = auth.into_inner();
         let out_socket = auth.conn.socket().get_ref().try_clone()?;
         let out_conn = RawConnection::wrap(Async::new(out_socket)?);
-        let msg_receiver = MessageReceiverThread::new(auth.conn);
+        let (mut msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
+        msg_sender.set_overflow(true);
+        let msg_receiver = msg_receiver.deactivate();
+        let (error_sender, error_receiver) = bounded(1);
+        let msg_receiver_thread = MessageReceiverThread::new(auth.conn, msg_sender, error_sender);
 
         let connection = Self(Arc::new(ConnectionInner {
             raw_out_conn: Mutex::new(out_conn),
+            error_receiver,
             server_guid: auth.server_guid,
             cap_unix_fd: auth.cap_unix_fd,
             bus_conn: bus_connection,
             serial: AtomicU32::new(1),
             unique_name: OnceCell::new(),
-            in_queue: Mutex::new(VecDeque::with_capacity(DEFAULT_MAX_QUEUED)),
             signal_subscriptions: Mutex::new(HashMap::new()),
-            msg_receiver: msg_receiver.clone(),
+            msg_receiver_thread: msg_receiver_thread.clone(),
+            msg_receiver: sync::RwLock::new(msg_receiver),
         }));
 
         // Start the message receiver thread.
-        msg_receiver.launch()?;
+        msg_receiver_thread.launch()?;
 
         if !bus_connection {
             return Ok(connection);
@@ -880,13 +834,6 @@ impl futures_sink::Sink<Message> for MessageSink<'_> {
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
 /// Use [`Connection::stream`] to create an instance of this type.
-///
-/// # Warning
-///
-/// If you use this in combination with [`Connection::receive_specific`] on the same connection
-/// from multiple tasks, you can end up with situation where the stream takes away the message
-/// the `receive_specific` is waiting for and end up in a deadlock situation. It is therefore highly
-/// recommended not to use such a combination.
 pub struct MessageStream {
     stream: stream::BoxStream<'static, Result<Arc<Message>>>,
 }
@@ -938,12 +885,14 @@ impl From<crate::Connection> for Connection {
 #[cfg(test)]
 mod tests {
     use futures_util::stream::TryStreamExt;
+    use ntest::timeout;
     use std::os::unix::net::UnixStream;
     use test_env_log::test;
 
     use super::*;
 
     #[test]
+    #[timeout(1000)]
     fn unix_p2p() {
         async_io::block_on(test_unix_p2p()).unwrap();
     }
@@ -957,10 +906,12 @@ mod tests {
         let client = Connection::new_unix_client(p1, false);
 
         let (client_conn, server_conn) = futures_util::try_join!(client, server)?;
+        let mut client_stream = client_conn.stream().await;
+        let mut server_stream = server_conn.stream().await;
 
         let server_future = async {
             let mut method: Option<Arc<Message>> = None;
-            while let Some(m) = server_conn.stream().await.try_next().await? {
+            while let Some(m) = server_stream.try_next().await? {
                 if m.to_string() == "Method call Test" {
                     method.replace(m);
 
@@ -982,7 +933,7 @@ mod tests {
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
             // Check we didn't miss the signal that was sent during the call.
-            let m = client_conn.stream().await.try_next().await?.unwrap();
+            let m = client_stream.try_next().await?.unwrap();
             assert_eq!(m.to_string(), "Signal ASignalForYou");
             reply.body::<String>().map_err(|e| e.into())
         };
@@ -994,6 +945,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(1000)]
     fn serial_monotonically_increases() {
         async_io::block_on(test_serial_monotonically_increases());
     }

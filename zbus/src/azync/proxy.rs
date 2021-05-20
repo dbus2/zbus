@@ -1,9 +1,6 @@
 use async_lock::Mutex;
 use futures_core::{future::BoxFuture, stream};
-use futures_util::{
-    future::FutureExt,
-    stream::{unfold, StreamExt},
-};
+use futures_util::stream::StreamExt;
 use once_cell::sync::OnceCell;
 use slotmap::{new_key_type, SlotMap};
 use static_assertions::assert_impl_all;
@@ -11,6 +8,7 @@ use std::{
     borrow::Cow,
     convert::{TryFrom, TryInto},
     future::ready,
+    io::{self, ErrorKind},
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -20,7 +18,7 @@ use async_io::block_on;
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
-    azync::Connection,
+    azync::{Connection, MessageStream},
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
     Error, Message, Result,
 };
@@ -110,6 +108,8 @@ pub(crate) struct ProxyInner<'a> {
     dest_unique_name: OnceCell<String>,
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
+    #[derivative(Debug = "ignore")]
+    signal_msg_stream: OnceCell<Mutex<MessageStream>>,
 }
 
 impl<'a> ProxyInner<'a> {
@@ -126,6 +126,7 @@ impl<'a> ProxyInner<'a> {
             interface,
             dest_unique_name: OnceCell::new(),
             sig_handlers: Mutex::new(SlotMap::with_key()),
+            signal_msg_stream: OnceCell::new(),
         }
     }
 }
@@ -309,27 +310,31 @@ impl<'a> Proxy<'a> {
         self.resolve_name().await?;
 
         let proxy = self.inner.clone();
-        let stream = unfold((proxy, signal_name), |(proxy, signal_name)| async move {
-            proxy
-                .conn
-                .receive_specific(|msg| {
-                    let hdr = match msg.header() {
-                        Ok(hdr) => hdr,
-                        Err(_) => return ready(Ok(false)).boxed(),
-                    };
-                    let expected_sender = proxy.dest_unique_name.get().map(|s| s.as_str());
+        let stream = self
+            .inner
+            .conn
+            .stream()
+            .await
+            .filter(move |msg| {
+                let hdr = match msg {
+                    Ok(m) => match m.header() {
+                        Ok(h) => h,
+                        Err(_) => return ready(false),
+                    },
+                    Err(_) => return ready(false),
+                };
+                let expected_sender = proxy.dest_unique_name.get().map(|s| s.as_str());
 
-                    ready(Ok(hdr.primary().msg_type() == crate::MessageType::Signal
+                ready(
+                    hdr.primary().msg_type() == crate::MessageType::Signal
                         && hdr.interface() == Ok(Some(&proxy.interface))
                         && hdr.sender() == Ok(expected_sender)
                         && hdr.path() == Ok(Some(&proxy.path))
-                        && hdr.member() == Ok(Some(signal_name))))
-                    .boxed()
-                })
-                .await
-                .ok()
-                .map(|msg| (msg, (proxy, signal_name)))
-        });
+                        && hdr.member() == Ok(Some(signal_name)),
+                )
+            })
+            // Safety: Filter above ensures we only get `Ok(msg)`.
+            .map(|msg| msg.unwrap());
 
         Ok(SignalStream {
             stream: stream.boxed(),
@@ -358,6 +363,9 @@ impl<'a> Proxy<'a> {
     where
         for<'msg> H: FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send + 'static,
     {
+        // Ensure the stream.
+        self.msg_stream().await;
+
         let id = self
             .inner
             .sig_handlers
@@ -428,45 +436,47 @@ impl<'a> Proxy<'a> {
     ///
     /// This method returns the same errors as [`Self::receive_signal`].
     pub async fn next_signal(&self) -> Result<Option<Arc<Message>>> {
-        let msg = {
-            // We want to keep a lock on the handlers during `receive_specific` call but we also
-            // want to avoid using `handlers` directly as that somehow makes this call (or rather
-            // the future of this call) not `Sync` and we get a very scary error message from
-            // the compiler on using `next_signal` with `tokio::select` inside a tokio task.
+        // We want to keep a lock on the handlers during `receive_specific` call but we also
+        // want to avoid using `handlers` directly as that somehow makes this call (or rather
+        // the future of this call) not `Sync` and we get a very scary error message from
+        // the compiler on using `next_signal` with `tokio::select` inside a tokio task.
+        let signals: Vec<&str> = {
             let handlers = self.inner.sig_handlers.lock().await;
-            let signals: Vec<&str> = handlers.values().map(|info| info.signal_name).collect();
 
-            self.resolve_name().await?;
-
-            self.inner
-                .conn
-                .receive_specific(move |msg| {
-                    let ret = match msg.header() {
-                        Err(_) => false,
-                        Ok(hdr) => match hdr.member() {
-                            Ok(None) | Err(_) => false,
-                            Ok(Some(member)) => {
-                                let expected_sender = self.destination_unique_name();
-
-                                hdr.interface() == Ok(Some(self.interface()))
-                                    && hdr.path() == Ok(Some(self.path()))
-                                    && hdr.sender() == Ok(expected_sender)
-                                    && hdr.message_type() == Ok(crate::MessageType::Signal)
-                                    && signals.contains(&member)
-                            }
-                        },
-                    };
-
-                    ready(Ok(ret)).boxed()
-                })
-                .await?
+            handlers.values().map(|info| info.signal_name).collect()
         };
 
-        if self.handle_signal(&msg).await? {
-            Ok(None)
-        } else {
-            Ok(Some(msg))
+        let mut stream = self.msg_stream().await.lock().await;
+
+        self.resolve_name().await?;
+        let expected_sender = self.destination_unique_name();
+
+        while let Some(msg) = stream.next().await {
+            let msg = msg?;
+
+            let hdr = msg.header()?;
+            let member = match hdr.member()? {
+                None => continue,
+                Some(member) => member,
+            };
+            if hdr.interface() == Ok(Some(self.interface()))
+                && hdr.path() == Ok(Some(self.path()))
+                && hdr.sender() == Ok(expected_sender)
+                && hdr.message_type() == Ok(crate::MessageType::Signal)
+                && signals.contains(&member)
+                && self.handle_signal(&msg).await?
+            {
+                return Ok(None);
+            } else {
+                return Ok(Some(msg));
+            }
         }
+
+        // If SocketStream gives us None, that means the socket was closed
+        Err(crate::Error::Io(io::Error::new(
+            ErrorKind::BrokenPipe,
+            "socket closed",
+        )))
     }
 
     /// Handle the provided signal message.
@@ -546,6 +556,25 @@ impl<'a> Proxy<'a> {
     pub(crate) fn destination_unique_name(&self) -> Option<&str> {
         self.inner.dest_unique_name.get().map(|s| s.as_str())
     }
+
+    async fn msg_stream(&self) -> &Mutex<MessageStream> {
+        match self.inner.signal_msg_stream.get() {
+            Some(stream) => stream,
+            None => {
+                let stream = self.inner.conn.stream().await;
+                self.inner
+                    .signal_msg_stream
+                    .set(Mutex::new(stream))
+                    .unwrap_or_else(|_| panic!("Attempted to set stream twice"));
+
+                // Safety: We just set it in the previous line.
+                self.inner
+                    .signal_msg_stream
+                    .get()
+                    .expect("message stream not set")
+            }
+        }
+    }
 }
 
 /// A [`stream::Stream`] implementation that yields signal [messages](`Message`).
@@ -607,10 +636,12 @@ impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
 mod tests {
     use super::*;
     use futures_util::future::FutureExt;
+    use ntest::timeout;
     use std::{future::ready, sync::Arc};
     use test_env_log::test;
 
     #[test]
+    #[timeout(1000)]
     fn signal_stream() {
         block_on(test_signal_stream()).unwrap();
     }
@@ -665,6 +696,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(1000)]
     fn signal_connect() {
         block_on(test_signal_connect()).unwrap();
     }
