@@ -66,10 +66,6 @@ fn impl_struct(
         (None, None)
     };
     let (impl_generics, ty_generics, _) = generics.split_for_impl();
-    let field_types: Vec<_> = fields
-        .iter()
-        .map(|field| field.ty.to_token_stream())
-        .collect();
     match fields {
         Fields::Named(_) => {
             let field_names: Vec<_> = fields
@@ -113,7 +109,7 @@ fn impl_struct(
                 }
             }
         }
-        Fields::Unnamed(_) if field_types.len() == 1 => {
+        Fields::Unnamed(_) if fields.iter().next().is_some() => {
             // Newtype struct.
             quote! {
                 impl #impl_generics std::convert::TryFrom<#value_type> for #name #ty_generics
