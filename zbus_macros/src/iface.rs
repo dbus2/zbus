@@ -348,7 +348,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     writer,
                     r#"{:indent$}<interface name="{}">"#,
                     "",
-                    Self::name(),
+                    <Self as ::#zbus::Interface>::name(),
                     indent = level
                 ).unwrap();
                 {
