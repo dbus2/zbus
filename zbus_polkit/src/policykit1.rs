@@ -1,6 +1,6 @@
 use std::{collections::HashMap, convert::TryFrom, io::BufRead, result::Result};
 
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
@@ -10,8 +10,9 @@ use zvariant::{derive::Type, OwnedValue, Value};
 use crate::Error;
 
 /// Flags used in the CheckAuthorization() method.
+#[bitflags]
 #[repr(u32)]
-#[derive(Type, BitFlags, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Type, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum CheckAuthorizationFlags {
     /// If the Subject can obtain the authorization through authentication, and an authentication
     /// agent is available, then attempt to do so. Note, this means that the CheckAuthorization()
@@ -42,8 +43,9 @@ pub enum ImplicitAuthorization {
 assert_impl_all!(ImplicitAuthorization: Send, Sync, Unpin);
 
 /// Flags describing features supported by the Authority implementation.
+#[bitflags]
 #[repr(u32)]
-#[derive(Type, BitFlags, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Type, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum AuthorityFeatures {
     /// The authority supports temporary authorizations that can be obtained through authentication.
     TemporaryAuthorization = 0x01,

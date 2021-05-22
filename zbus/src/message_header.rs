@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -79,8 +79,9 @@ impl From<u8> for MessageType {
 }
 
 /// Pre-defined flags that can be passed in Message header.
+#[bitflags]
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, BitFlags, Type)]
+#[derive(Debug, Copy, Clone, PartialEq, Type)]
 pub enum MessageFlags {
     /// This message does not expect method return replies or error replies, even if it is of a type
     /// that can have a reply; the reply should be omitted.

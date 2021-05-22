@@ -324,7 +324,7 @@ where
 #[cfg(feature = "enumflags2")]
 impl<F> Type for enumflags2::BitFlags<F>
 where
-    F: Type + enumflags2::RawBitFlags,
+    F: Type + enumflags2::BitFlag,
 {
     #[inline]
     fn signature() -> Signature<'static> {
