@@ -284,7 +284,7 @@ impl<'a> From<azync::Proxy<'a>> for Proxy<'a> {
 mod tests {
     use super::*;
     use ntest::timeout;
-    use std::sync::{Arc, Mutex};
+    use std::sync::atomic::{AtomicBool, Ordering};
     use test_env_log::test;
 
     #[test]
@@ -293,8 +293,8 @@ mod tests {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = Connection::new_session().unwrap();
-        let owner_change_signaled = Arc::new(Mutex::new(false));
-        let name_acquired_signaled = Arc::new(Mutex::new(false));
+        let owner_change_signaled = Arc::new(AtomicBool::new(false));
+        let name_acquired_signaled = Arc::new(AtomicBool::new(false));
 
         let proxy = fdo::DBusProxy::new(&conn);
         let well_known = "org.freedesktop.zbus.ProxySignalTest";
@@ -309,7 +309,7 @@ mod tests {
                         return Ok(());
                     }
                     assert_eq!(new_owner, unique_name);
-                    *signaled.lock().unwrap() = true;
+                    signaled.store(true, Ordering::Release);
 
                     Ok(())
                 })
@@ -322,7 +322,7 @@ mod tests {
             proxy
                 .connect_signal("NameAcquired", move |m| {
                     if m.body::<&str>()? == well_known {
-                        *signaled.lock().unwrap() = true;
+                        signaled.store(true, Ordering::Release);
                     }
 
                     Ok(())
@@ -337,7 +337,9 @@ mod tests {
         loop {
             proxy.next_signal().unwrap();
 
-            if *owner_change_signaled.lock().unwrap() && *name_acquired_signaled.lock().unwrap() {
+            if owner_change_signaled.load(Ordering::Acquire)
+                && name_acquired_signaled.load(Ordering::Acquire)
+            {
                 break;
             }
         }
