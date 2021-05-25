@@ -568,8 +568,8 @@ mod tests {
         let ctxt = Context::<BE>::new_dbus(0);
         let (encoded, fds) = to_bytes_fds(ctxt, &()).unwrap();
         assert_eq!(encoded.len(), 0, "invalid encoding using `to_bytes`");
-        let decoded: () = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
-        assert_eq!(decoded, (), "invalid decoding using `from_slice`");
+        let _decoded: () = from_slice_fds(&encoded, Some(&fds), ctxt)
+            .expect("invalid decoding using `from_slice`");
     }
 
     #[test]
