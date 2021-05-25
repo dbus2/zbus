@@ -56,8 +56,7 @@ fn big_array_ser_and_de(c: &mut Criterion) {
             idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx
         ));
     }
-    for idx in 0..1024 * 10 {
-        let s = &strings[idx];
+    for s in &strings {
         string_array.push(s.as_str());
         dict.insert(s.as_str(), Value::from(s.as_str()));
     }

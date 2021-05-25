@@ -635,7 +635,10 @@ mod tests {
     use ntest::timeout;
     use std::{
         convert::TryInto,
-        sync::{Arc, Mutex},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
     };
     use test_env_log::test;
 
@@ -660,15 +663,14 @@ mod tests {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = crate::Connection::new_session().unwrap();
-        let owner_change_signaled = Arc::new(Mutex::new(false));
-        let name_acquired_signaled = Arc::new(Mutex::new(false));
+        let owner_change_signaled = Arc::new(AtomicBool::new(false));
+        let name_acquired_signaled = Arc::new(AtomicBool::new(false));
 
         let proxy = fdo::DBusProxy::new(&conn);
 
         let well_known = "org.freedesktop.zbus.FdoSignalTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         {
-            let well_known = well_known.clone();
             let signaled = owner_change_signaled.clone();
             proxy
                 .connect_name_owner_changed(move |name, _, new_owner| {
@@ -677,20 +679,20 @@ mod tests {
                         return Ok(());
                     }
                     assert_eq!(new_owner, unique_name);
-                    *signaled.lock().unwrap() = true;
+                    signaled.store(true, Ordering::Release);
 
                     Ok(())
                 })
                 .unwrap();
         }
         {
-            let signaled = name_acquired_signaled.clone();
             // `NameAcquired` is emitted twice, first when the unique name is assigned on
             // connection and secondly after we ask for a specific name.
+            let signaled = name_acquired_signaled.clone();
             proxy
                 .connect_name_acquired(move |name| {
                     if name == well_known {
-                        *signaled.lock().unwrap() = true;
+                        signaled.store(true, Ordering::Release);
                     }
 
                     Ok(())
@@ -705,7 +707,9 @@ mod tests {
         loop {
             proxy.next_signal().unwrap();
 
-            if *owner_change_signaled.lock().unwrap() && *name_acquired_signaled.lock().unwrap() {
+            if owner_change_signaled.load(Ordering::Acquire)
+                && name_acquired_signaled.load(Ordering::Acquire)
+            {
                 break;
             }
         }
