@@ -664,6 +664,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::mutex_atomic)]
     fn issue_122() {
         let conn = Connection::new_session().unwrap();
         let conn_clone = conn.clone();

@@ -559,6 +559,7 @@ impl ObjectServer {
 }
 
 #[cfg(test)]
+#[allow(clippy::blacklisted_name)]
 mod tests {
     use std::{
         cell::Cell,

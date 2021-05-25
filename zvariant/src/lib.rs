@@ -1,3 +1,4 @@
+#![allow(clippy::unusual_byte_groupings)]
 #![deny(rust_2018_idioms)]
 #![doc(
     html_logo_url = "https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
@@ -210,6 +211,7 @@ pub mod export {
 }
 
 #[cfg(test)]
+#[allow(clippy::blacklisted_name)]
 mod tests {
     use std::{
         collections::HashMap,
@@ -307,6 +309,62 @@ mod tests {
 
             encoded
         }};
+    }
+
+    fn f64_type_test(
+        format: EncodingFormat,
+        value: f64,
+        expected_len: usize,
+        expected_value_len: usize,
+    ) -> Vec<u8> {
+        // Lie that we're starting at byte 1 in the overall message to test padding
+        let ctxt = Context::<BE>::new(format, 1);
+        let (encoded, fds) = to_bytes_fds(ctxt, &value).unwrap();
+        let padding = crate::padding_for_n_bytes(1, 8);
+        assert_eq!(
+            encoded.len(),
+            expected_len + padding,
+            "invalid encoding using `to_bytes`"
+        );
+
+        let decoded: f64 = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
+        assert!(
+            (decoded - value).abs() < f64::EPSILON,
+            "invalid decoding using `from_slice`"
+        );
+
+        // Now encode w/o padding
+        let ctxt = Context::<BE>::new(format, 0);
+        let (encoded, _) = to_bytes_fds(ctxt, &value).unwrap();
+        assert_eq!(
+            encoded.len(),
+            expected_len,
+            "invalid encoding using `to_bytes`"
+        );
+
+        f64_type_test_as_value(format, value, expected_value_len);
+        encoded
+    }
+
+    fn f64_type_test_as_value(format: EncodingFormat, value: f64, expected_value_len: usize) {
+        let v: Value<'_> = value.into();
+        assert_eq!(v.value_signature(), f64::SIGNATURE_STR);
+        assert_eq!(v, Value::F64(value));
+        f64_value_test(format, v.clone(), expected_value_len);
+        let v: f64 = v.try_into().unwrap();
+        assert!((v - value).abs() < f64::EPSILON);
+    }
+
+    fn f64_value_test(format: EncodingFormat, v: Value<'_>, expected_value_len: usize) {
+        let ctxt = Context::<LE>::new(format, 0);
+        let (encoded, fds) = to_bytes_fds(ctxt, &v).unwrap();
+        assert_eq!(
+            encoded.len(),
+            expected_value_len,
+            "invalid encoding using `to_bytes`"
+        );
+        let decoded: Value<'_> = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
+        assert!(decoded == v, "invalid decoding using `from_slice`");
     }
 
     #[cfg(feature = "gvariant")]
@@ -411,15 +469,15 @@ mod tests {
 
     #[test]
     fn f64_value() {
-        let encoded = basic_type_test!(BE, DBus, 99999.99999_f64, 8, f64, 8, F64, 16);
-        assert_eq!(LE::read_f64(&encoded), -5759340900185448e-143);
+        let encoded = f64_type_test(EncodingFormat::DBus, 99999.99999_f64, 8, 16);
+        assert!((LE::read_f64(&encoded) - -5.759340900185448e-128).abs() < f64::EPSILON);
         #[cfg(feature = "gvariant")]
         {
-            assert_eq!(
-                decode_with_gvariant::<_, f64>(encoded),
-                -5759340900185448e-143
+            assert!(
+                (decode_with_gvariant::<_, f64>(encoded) - -5.759340900185448e-128).abs()
+                    < f64::EPSILON
             );
-            basic_type_test!(BE, GVariant, 99999.99999_f64, 8, f64, 8, F64, 10);
+            f64_type_test(EncodingFormat::GVariant, 99999.99999_f64, 8, 10);
         }
     }
 
@@ -456,8 +514,6 @@ mod tests {
             assert_eq!(variant.get_str().unwrap(), "hello world");
         }
 
-        let v: String = v.try_into().unwrap();
-        assert_eq!(v, "hello world");
         let v: String = v.try_into().unwrap();
         assert_eq!(v, "hello world");
 
@@ -569,8 +625,8 @@ mod tests {
         let ctxt = Context::<BE>::new_dbus(0);
         let (encoded, fds) = to_bytes_fds(ctxt, &()).unwrap();
         assert_eq!(encoded.len(), 0, "invalid encoding using `to_bytes`");
-        let decoded: () = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
-        assert_eq!(decoded, (), "invalid decoding using `from_slice`");
+        let _decoded: () = from_slice_fds(&encoded, Some(&fds), ctxt)
+            .expect("invalid decoding using `from_slice`");
     }
 
     #[test]
