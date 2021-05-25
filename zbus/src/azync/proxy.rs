@@ -713,7 +713,6 @@ mod tests {
         let well_known = "org.freedesktop.zbus.async.ProxySignalConnectTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         let name_owner_changed_id = {
-            let well_known = well_known.clone();
             let signaled = owner_change_signaled.clone();
 
             proxy

@@ -300,7 +300,6 @@ mod tests {
         let well_known = "org.freedesktop.zbus.ProxySignalTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         {
-            let well_known = well_known.clone();
             let signaled = owner_change_signaled.clone();
             proxy
                 .connect_signal("NameOwnerChanged", move |m| {

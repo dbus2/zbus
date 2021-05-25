@@ -668,7 +668,6 @@ mod tests {
         let well_known = "org.freedesktop.zbus.FdoSignalTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         {
-            let well_known = well_known.clone();
             let signaled = owner_change_signaled.clone();
             proxy
                 .connect_name_owner_changed(move |name, _, new_owner| {
