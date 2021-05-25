@@ -459,8 +459,6 @@ mod tests {
 
         let v: String = v.try_into().unwrap();
         assert_eq!(v, "hello world");
-        let v: String = v.try_into().unwrap();
-        assert_eq!(v, "hello world");
 
         // Check for interior null bytes which are not allowed
         let ctxt = Context::<LE>::new_dbus(0);
