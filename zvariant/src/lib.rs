@@ -413,12 +413,12 @@ mod tests {
     #[test]
     fn f64_value() {
         let encoded = basic_type_test!(BE, DBus, 99999.99999_f64, 8, f64, 8, F64, 16);
-        assert_eq!(LE::read_f64(&encoded), -5759340900185448e-143);
+        assert_eq!(LE::read_f64(&encoded), -5.759340900185448e-128);
         #[cfg(feature = "gvariant")]
         {
             assert_eq!(
                 decode_with_gvariant::<_, f64>(encoded),
-                -5759340900185448e-143
+                -5.759340900185448e-128
             );
             basic_type_test!(BE, GVariant, 99999.99999_f64, 8, f64, 8, F64, 10);
         }
