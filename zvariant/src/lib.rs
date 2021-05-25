@@ -210,6 +210,7 @@ pub mod export {
 }
 
 #[cfg(test)]
+#[allow(clippy::blacklisted_name)]
 mod tests {
     use std::{
         collections::HashMap,
