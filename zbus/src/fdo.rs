@@ -659,7 +659,7 @@ mod tests {
 
     #[test]
     #[timeout(1000)]
-    fn signal() {
+    fn signal_connect() {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = crate::Connection::new_session().unwrap();
@@ -668,7 +668,7 @@ mod tests {
 
         let proxy = fdo::DBusProxy::new(&conn);
 
-        let well_known = "org.freedesktop.zbus.FdoSignalTest";
+        let well_known = "org.freedesktop.zbus.FdoSignalConnectTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         {
             let signaled = owner_change_signaled.clone();

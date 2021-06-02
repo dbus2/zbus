@@ -1,12 +1,18 @@
+use async_io::block_on;
+use futures_util::{
+    future::{select, Either},
+    stream::StreamExt,
+};
+use std::future::ready;
 use zbus::{self, fdo};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]
 fn test_proxy() {
     #[dbus_proxy(
-        interface = "org.freedesktop.zbus.ProxyParam",
-        default_service = "org.freedesktop.zbus",
-        default_path = "/org/freedesktop/zbus/test"
+        interface = "org.freedesktop.zbus_macros.ProxyParam",
+        default_service = "org.freedesktop.zbus_macros",
+        default_path = "/org/freedesktop/zbus_macros/test"
     )]
     trait ProxyParam {
         #[dbus_proxy(object = "Test")]
@@ -16,9 +22,9 @@ fn test_proxy() {
     }
 
     #[dbus_proxy(
-        interface = "org.freedesktop.zbus.Test",
-        default_service = "org.freedesktop.zbus",
-        default_path = "/org/freedesktop/zbus/test"
+        interface = "org.freedesktop.zbus_macros.Test",
+        default_service = "org.freedesktop.zbus_macros",
+        default_path = "/org/freedesktop/zbus_macros/test"
     )]
     trait Test {
         /// comment for a_test()
@@ -40,7 +46,7 @@ fn test_proxy() {
         fn set_property(&self, val: u16) -> fdo::Result<()>;
 
         #[dbus_proxy(signal)]
-        fn signal<T>(&self, arg: u8, other: T) -> fdo::Result<()>
+        fn a_signal<T>(&self, arg: u8, other: T) -> fdo::Result<()>
         where
             T: AsRef<str>;
     }
@@ -48,7 +54,7 @@ fn test_proxy() {
     let connection = zbus::Connection::new_session().unwrap();
     let proxy = TestProxy::new(&connection);
     proxy
-        .connect_signal(move |_arg, other: String| {
+        .connect_a_signal(move |_arg, other: String| {
             println!("{}", other);
             Ok(())
         })
