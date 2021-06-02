@@ -256,12 +256,8 @@ impl<'a> Proxy<'a> {
         block_on(self.azync.has_signal_handler(signal_name))
     }
 
-    pub(crate) fn resolve_name(&self) -> Result<()> {
-        block_on(self.azync.resolve_name())
-    }
-
-    pub(crate) fn destination_unique_name(&self) -> Option<&str> {
-        self.azync.destination_unique_name()
+    pub(crate) fn destination_unique_name(&self) -> Result<&str> {
+        block_on(self.azync.destination_unique_name())
     }
 }
 
