@@ -451,12 +451,12 @@ impl<'a> Proxy<'a> {
         self.resolve_name().await?;
         let expected_sender = self.destination_unique_name();
 
-        while let Some(msg) = stream.next().await {
+        if let Some(msg) = stream.next().await {
             let msg = msg?;
 
             let hdr = msg.header()?;
             let member = match hdr.member()? {
-                None => continue,
+                None => return Ok(Some(msg)),
                 Some(member) => member,
             };
             if hdr.interface() == Ok(Some(self.interface()))
