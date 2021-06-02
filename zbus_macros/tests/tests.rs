@@ -1,25 +1,28 @@
-use serde::de::DeserializeOwned;
+use async_io::block_on;
+use futures_util::{
+    future::{select, Either},
+    stream::StreamExt,
+};
+use std::future::ready;
 use zbus::{self, fdo};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]
 fn test_proxy() {
     #[dbus_proxy(
-        interface = "org.freedesktop.zbus.ProxyParam",
-        default_service = "org.freedesktop.zbus",
-        default_path = "/org/freedesktop/zbus/test"
+        interface = "org.freedesktop.zbus_macros.ProxyParam",
+        default_service = "org.freedesktop.zbus_macros",
+        default_path = "/org/freedesktop/zbus_macros/test"
     )]
     trait ProxyParam {
         #[dbus_proxy(object = "Test")]
-        fn some_method<T>(&self, test: &T)
-        where
-            T: Into<TestProxy<'c>> + serde::ser::Serialize + zvariant::Type;
+        fn some_method<T>(&self, test: &T);
     }
 
     #[dbus_proxy(
-        interface = "org.freedesktop.zbus.Test",
-        default_service = "org.freedesktop.zbus",
-        default_path = "/org/freedesktop/zbus/test"
+        interface = "org.freedesktop.zbus_macros.Test",
+        default_service = "org.freedesktop.zbus_macros",
+        default_path = "/org/freedesktop/zbus_macros/test"
     )]
     trait Test {
         /// comment for a_test()
@@ -27,9 +30,7 @@ fn test_proxy() {
 
         /// The generated proxies implement both `zvariant::Type` and `serde::ser::Serialize`
         /// which is useful to pass in a proxy as a param. It serializes it as an `ObjectPath`.
-        fn some_method<T>(&self, object_path: &T) -> zbus::Result<()>
-        where
-            T: Into<ProxyParamProxy<'c>> + serde::ser::Serialize + zvariant::Type;
+        fn some_method<T>(&self, object_path: &T) -> zbus::Result<()>;
 
         #[dbus_proxy(name = "CheckRENAMING")]
         fn check_renaming(&self) -> zbus::Result<Vec<u8>>;
@@ -41,19 +42,47 @@ fn test_proxy() {
         fn set_property(&self, val: u16) -> fdo::Result<()>;
 
         #[dbus_proxy(signal)]
-        fn signal<T>(&self, arg: u8, other: T) -> fdo::Result<()>
+        fn a_signal<T>(&self, arg: u8, other: T) -> fdo::Result<()>
         where
-            T: DeserializeOwned + zvariant::Type + AsRef<str>;
+            T: AsRef<str>;
     }
 
     let connection = zbus::Connection::new_session().unwrap();
     let proxy = TestProxy::new(&connection);
     proxy
-        .connect_signal(move |_arg, other: String| {
+        .connect_a_signal(move |_arg, other: String| {
             println!("{}", other);
             Ok(())
         })
         .unwrap();
+    // Let's also test signal streams.
+    let connection = zbus::azync::Connection::from(connection);
+    let proxy = AsyncTestProxy::new(&connection);
+    block_on(async move {
+        fdo::AsyncDBusProxy::new(&connection)
+            .request_name(
+                "org.freedesktop.zbus_macros",
+                fdo::RequestNameFlags::DoNotQueue.into(),
+            )
+            .await
+            .unwrap();
+        let mut stream = proxy.receive_a_signal().await.unwrap();
+
+        let left_future = async move {
+            // These calls will never happen so just testing the build mostly.
+            let signal = stream.next().await.unwrap();
+            assert_eq!(signal.view().unwrap(), (0u8, "whatever"));
+        };
+        futures_util::pin_mut!(left_future);
+        let right_future = async {
+            ready(()).await;
+        };
+        futures_util::pin_mut!(right_future);
+
+        if let Either::Left((_, _)) = select(left_future, right_future).await {
+            panic!("Shouldn't be receiving our dummy signal: `ASignal`");
+        }
+    });
 }
 
 #[test]
