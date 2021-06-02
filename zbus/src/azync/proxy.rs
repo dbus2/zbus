@@ -436,16 +436,6 @@ impl<'a> Proxy<'a> {
     ///
     /// This method returns the same errors as [`Self::receive_signal`].
     pub async fn next_signal(&self) -> Result<Option<Arc<Message>>> {
-        // We want to keep a lock on the handlers during `receive_specific` call but we also
-        // want to avoid using `handlers` directly as that somehow makes this call (or rather
-        // the future of this call) not `Sync` and we get a very scary error message from
-        // the compiler on using `next_signal` with `tokio::select` inside a tokio task.
-        let signals: Vec<&str> = {
-            let handlers = self.inner.sig_handlers.lock().await;
-
-            handlers.values().map(|info| info.signal_name).collect()
-        };
-
         let mut stream = self.msg_stream().await.lock().await;
 
         self.resolve_name().await?;
@@ -455,15 +445,10 @@ impl<'a> Proxy<'a> {
             let msg = msg?;
 
             let hdr = msg.header()?;
-            let member = match hdr.member()? {
-                None => return Ok(Some(msg)),
-                Some(member) => member,
-            };
             if hdr.interface() == Ok(Some(self.interface()))
                 && hdr.path() == Ok(Some(self.path()))
                 && hdr.sender() == Ok(expected_sender)
                 && hdr.message_type() == Ok(crate::MessageType::Signal)
-                && signals.contains(&member)
                 && self.handle_signal(&msg).await?
             {
                 return Ok(None);
