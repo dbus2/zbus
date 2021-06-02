@@ -199,6 +199,7 @@ extern crate self as zbus;
 pub mod export {
     pub use futures_core;
     pub use serde;
+    pub use static_assertions;
     pub use zvariant;
 }
 
