@@ -435,22 +435,16 @@ impl<'a> Proxy<'a> {
     /// This method returns the same errors as [`Self::receive_signal`].
     pub async fn next_signal(&self) -> Result<Option<Arc<Message>>> {
         let mut stream = self.msg_stream().await.lock().await;
+        let msg = stream
+            .next()
+            .await
+            .ok_or_else(|| Error::Io(io::Error::new(ErrorKind::BrokenPipe, "socket closed")))??;
 
-        if let Some(msg) = stream.next().await {
-            let msg = msg?;
-
-            if self.handle_signal(&msg).await? {
-                return Ok(None);
-            } else {
-                return Ok(Some(msg));
-            }
+        if self.handle_signal(&msg).await? {
+            Ok(None)
+        } else {
+            Ok(Some(msg))
         }
-
-        // If SocketStream gives us None, that means the socket was closed
-        Err(crate::Error::Io(io::Error::new(
-            ErrorKind::BrokenPipe,
-            "socket closed",
-        )))
     }
 
     /// Handle the provided signal message.
