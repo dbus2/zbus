@@ -1,4 +1,3 @@
-use serde::de::DeserializeOwned;
 use zbus::{self, fdo};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
@@ -43,7 +42,7 @@ fn test_proxy() {
         #[dbus_proxy(signal)]
         fn signal<T>(&self, arg: u8, other: T) -> fdo::Result<()>
         where
-            T: DeserializeOwned + zvariant::Type + AsRef<str>;
+            T: AsRef<str>;
     }
 
     let connection = zbus::Connection::new_session().unwrap();

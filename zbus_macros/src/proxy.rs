@@ -385,13 +385,18 @@ fn gen_proxy_signal(
     );
 
     let mut generics = m.sig.generics.clone();
-    generics.params.push(parse_quote!(__H));
     {
         let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
+        for param in &mut generics.params {
+            where_clause
+                .predicates
+                .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + zbus::export::zvariant::Type));
+        }
         where_clause
             .predicates
             .push(parse_quote!(__H: #handler + Send + 'static));
     }
+    generics.params.push(parse_quote!(__H));
 
     let (_, ty_generics, where_clause) = generics.split_for_impl();
     quote! {
