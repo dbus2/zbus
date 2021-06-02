@@ -1,5 +1,6 @@
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, quote_spanned};
+use quote::{format_ident, quote, quote_spanned, ToTokens};
+use regex::Regex;
 use syn::{
     self, parse_quote, spanned::Spanned, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta,
     ReturnType, TraitItemMethod, Type,
@@ -243,20 +244,40 @@ fn gen_proxy_method_call(
         }
         _ => None,
     });
-    if let Some(proxy_name) = proxy_object {
-        let method = Ident::new(snake_case_name, Span::call_site());
-        let proxy = Ident::new(&proxy_name, Span::call_site());
-        let inputs = &m.sig.inputs;
-        let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
-        let signature = if where_clause.is_some() {
-            quote! {
-                fn #method#ty_generics(#inputs) -> ::#zbus::Result<#proxy<'c>>
-                #where_clause,
+    let method = Ident::new(snake_case_name, Span::call_site());
+    let inputs = &m.sig.inputs;
+    let mut generics = m.sig.generics.clone();
+    let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
+    for param in &mut generics.params {
+        let is_input_type = inputs.iter().any(|arg| {
+            // FIXME: We want to only require `Serialize` from input types and `DeserializeOwned`
+            // from output types but since we don't have type introspection, we employ this
+            // workaround of regex matching on string reprepresention of the the types to figure out
+            // which generic types are input types.
+            if let FnArg::Typed(pat) = arg {
+                let pattern = format!("& *{}", param.to_token_stream());
+                let regex = Regex::new(&pattern).unwrap();
+                regex.is_match(&pat.ty.to_token_stream().to_string())
+            } else {
+                false
             }
+        });
+        let serde_bound: TokenStream = if is_input_type {
+            parse_quote!(#zbus::export::serde::ser::Serialize)
         } else {
-            quote! {
-                fn #method(#inputs) -> ::#zbus::Result<#proxy<'c>>
-            }
+            parse_quote!(#zbus::export::serde::de::DeserializeOwned)
+        };
+        where_clause.predicates.push(parse_quote!(
+            #param: #serde_bound + zbus::export::zvariant::Type
+        ));
+    }
+    let (_, ty_generics, where_clause) = generics.split_for_impl();
+
+    if let Some(proxy_name) = proxy_object {
+        let proxy = Ident::new(&proxy_name, Span::call_site());
+        let signature = quote! {
+            fn #method#ty_generics(#inputs) -> ::#zbus::Result<#proxy<'c>>
+            #where_clause
         };
 
         quote! {
@@ -275,7 +296,6 @@ fn gen_proxy_method_call(
             }
         }
     } else {
-        let signature = &m.sig;
         let body = if args.len() == 1 {
             // Wrap single arg in a tuple so if it's a struct/tuple itself, zbus will only remove
             // the '()' from the signature that we add and not the actual intended ones.
@@ -289,6 +309,11 @@ fn gen_proxy_method_call(
             }
         };
 
+        let output = &m.sig.output;
+        let signature = quote! {
+            fn #method#ty_generics(#inputs) #output
+            #where_clause
+        };
         quote! {
             #(#doc)*
             pub #usage #signature {

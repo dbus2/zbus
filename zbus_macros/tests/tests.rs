@@ -16,9 +16,7 @@ fn test_proxy() {
     )]
     trait ProxyParam {
         #[dbus_proxy(object = "Test")]
-        fn some_method<T>(&self, test: &T)
-        where
-            T: Into<TestProxy<'c>> + serde::ser::Serialize + zvariant::Type;
+        fn some_method<T>(&self, test: &T);
     }
 
     #[dbus_proxy(
@@ -32,9 +30,7 @@ fn test_proxy() {
 
         /// The generated proxies implement both `zvariant::Type` and `serde::ser::Serialize`
         /// which is useful to pass in a proxy as a param. It serializes it as an `ObjectPath`.
-        fn some_method<T>(&self, object_path: &T) -> zbus::Result<()>
-        where
-            T: Into<ProxyParamProxy<'c>> + serde::ser::Serialize + zvariant::Type;
+        fn some_method<T>(&self, object_path: &T) -> zbus::Result<()>;
 
         #[dbus_proxy(name = "CheckRENAMING")]
         fn check_renaming(&self) -> zbus::Result<Vec<u8>>;
