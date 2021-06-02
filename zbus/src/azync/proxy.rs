@@ -435,18 +435,11 @@ impl<'a> Proxy<'a> {
     /// This method returns the same errors as [`Self::receive_signal`].
     pub async fn next_signal(&self) -> Result<Option<Arc<Message>>> {
         let mut stream = self.msg_stream().await.lock().await;
-        let dest_unique_name = self.destination_unique_name().await?;
 
         if let Some(msg) = stream.next().await {
             let msg = msg?;
 
-            let hdr = msg.header()?;
-            if hdr.interface() == Ok(Some(self.interface()))
-                && hdr.path() == Ok(Some(self.path()))
-                && hdr.sender() == Ok(Some(dest_unique_name))
-                && hdr.message_type() == Ok(crate::MessageType::Signal)
-                && self.handle_signal(&msg).await?
-            {
+            if self.handle_signal(&msg).await? {
                 return Ok(None);
             } else {
                 return Ok(Some(msg));
@@ -473,7 +466,16 @@ impl<'a> Proxy<'a> {
             return Ok(false);
         }
 
+        let dest_unique_name = self.destination_unique_name().await?;
         let hdr = msg.header()?;
+        if hdr.interface() != Ok(Some(self.interface()))
+            || hdr.path() != Ok(Some(self.path()))
+            || hdr.sender() != Ok(Some(dest_unique_name))
+            || hdr.message_type() != Ok(crate::MessageType::Signal)
+        {
+            return Ok(false);
+        }
+
         if let Some(name) = hdr.member()? {
             let mut handled = false;
 
