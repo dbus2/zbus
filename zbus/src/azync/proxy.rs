@@ -142,11 +142,11 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        let proxy = crate::ProxyBuilder::new_bare(conn)
+        let proxy = crate::ProxyBuilder::<Self>::new_bare(conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build_bare_async()
+            .build_async()
             .await;
         Ok(proxy)
     }
@@ -166,7 +166,7 @@ impl<'a> Proxy<'a> {
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build_bare_async()
+            .build_async()
             .await;
         Ok(proxy)
     }

@@ -16,9 +16,21 @@ pub struct ProxyBuilder<'a, T = ()> {
     proxy_type: PhantomData<T>,
 }
 
+impl<'a, T> Clone for ProxyBuilder<'a, T> {
+    fn clone(&self) -> Self {
+        Self {
+            conn: self.conn.clone(),
+            destination: self.destination.clone(),
+            path: self.path.clone(),
+            interface: self.interface.clone(),
+            proxy_type: PhantomData,
+        }
+    }
+}
+
 assert_impl_all!(ProxyBuilder<'_>: Send, Sync, Unpin);
 
-impl<'a> ProxyBuilder<'a> {
+impl<'a, T> ProxyBuilder<'a, T> {
     /// Create a new [`ProxyBuilder`] for the given connection.
     pub fn new_bare<C>(conn: &C) -> Self
     where
@@ -65,15 +77,18 @@ impl<'a, T> ProxyBuilder<'a, T> {
     where
         T: From<azync::Proxy<'a>>,
     {
-        block_on(self.build_bare_async()).into()
+        block_on(self.build_async())
     }
 
-    /// Build a generic [`azync::Proxy`] from the builder.
+    /// Build a proxy from the builder, asynchronously.
     ///
     /// # Panics
     ///
     /// Panics if the builder is lacking the necessary details to build a proxy.
-    pub async fn build_bare_async(self) -> azync::Proxy<'a> {
+    pub async fn build_async(self) -> T
+    where
+        T: From<azync::Proxy<'a>>,
+    {
         let conn = self.conn;
         let destination = self.destination.expect("missing `destination`");
         let path = self.path.expect("missing `path`");
@@ -82,6 +97,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
         azync::Proxy {
             inner: Arc::new(azync::ProxyInner::new(conn, destination, path, interface)),
         }
+        .into()
     }
 }
 
@@ -126,7 +142,7 @@ mod tests {
     fn builder() {
         let conn = Connection::new_session().unwrap();
 
-        let builder = ProxyBuilder::new_bare(&conn)
+        let builder = ProxyBuilder::<azync::Proxy<'_>>::new_bare(&conn)
             .destination("org.freedesktop.DBus")
             .path("/some/path")
             .unwrap()
@@ -135,7 +151,7 @@ mod tests {
             builder.clone().destination.unwrap(),
             Cow::Borrowed(_)
         ));
-        let proxy = block_on(builder.build_bare_async());
+        let proxy = builder.build();
         assert!(matches!(proxy.inner.destination, Cow::Borrowed(_)));
         assert!(matches!(proxy.inner.interface, Cow::Borrowed(_)));
     }
