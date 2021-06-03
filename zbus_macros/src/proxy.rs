@@ -423,7 +423,7 @@ fn gen_proxy_signal(
         let receive_signal = quote! {
             #[doc = #receive_gen_doc]
             #(#doc)*
-            pub async fn #receiver_name(&self) -> ::#zbus::Result<#stream_name<'c>>
+            pub async fn #receiver_name(&self) -> ::#zbus::Result<#stream_name<'_>>
             {
                 self.receive_signal(#signal_name).await.map(#stream_name)
             }
