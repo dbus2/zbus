@@ -66,7 +66,7 @@ struct SignalHandlerInfo {
 ///         "org.freedesktop.DBus",
 ///         "/org/freedesktop/DBus",
 ///         "org.freedesktop.DBus",
-///     )?;
+///     ).await?;
 ///     // owned return value
 ///     let _id: String = p.call("GetId", &()).await?;
 ///     // borrowed return value
@@ -133,38 +133,40 @@ impl<'a> ProxyInner<'a> {
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
-    pub fn new<E>(
+    pub async fn new<E>(
         conn: &Connection,
         destination: &'a str,
         path: impl TryInto<ObjectPath<'a>, Error = E>,
         interface: &'a str,
-    ) -> Result<Self>
+    ) -> Result<Proxy<'a>>
     where
         Error: From<E>,
     {
-        Ok(crate::ProxyBuilder::new_bare(conn)
+        let proxy = crate::ProxyBuilder::new_bare(conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build_bare_async())
+            .build_bare_async();
+        Ok(proxy)
     }
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
     /// passed arguments.
-    pub fn new_owned<E>(
+    pub async fn new_owned<E>(
         conn: Connection,
         destination: String,
         path: impl TryInto<ObjectPath<'static>, Error = E>,
         interface: String,
-    ) -> Result<Self>
+    ) -> Result<Proxy<'a>>
     where
         Error: From<E>,
     {
-        Ok(crate::ProxyBuilder::new_bare(&conn)
+        let proxy = crate::ProxyBuilder::new_bare(&conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build_bare_async())
+            .build_bare_async();
+        Ok(proxy)
     }
 
     /// Get a reference to the associated connection.

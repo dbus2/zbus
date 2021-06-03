@@ -74,7 +74,12 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        let proxy = azync::Proxy::new(conn.inner(), destination, path, interface)?;
+        let proxy = block_on(azync::Proxy::new(
+            conn.inner(),
+            destination,
+            path,
+            interface,
+        ))?;
 
         Ok(Self {
             conn: conn.clone(),
@@ -93,8 +98,12 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        let proxy =
-            azync::Proxy::new_owned(conn.clone().into_inner(), destination, path, interface)?;
+        let proxy = block_on(azync::Proxy::new_owned(
+            conn.clone().into_inner(),
+            destination,
+            path,
+            interface,
+        ))?;
 
         Ok(Self { conn, azync: proxy })
     }
