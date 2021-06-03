@@ -15,7 +15,7 @@ use async_io::block_on;
 
 use crate::{
     azync::{self, MessageStream},
-    Guid, Message, MessageError, Result,
+    Error, Guid, Message, MessageError, Result,
 };
 
 /// A D-Bus connection.
@@ -150,32 +150,9 @@ impl Connection {
     /// Read from the connection until a message is received or an error is reached. Return the
     /// message on success.
     pub fn receive_message(&self) -> Result<Arc<Message>> {
-        self.receive_specific(|_| Ok(true))
-    }
-
-    /// Receive a specific message.
-    ///
-    /// This is the same as [`Self::receive_message`], except that it takes a predicate function that
-    /// decides if the message received should be returned by this method or not.
-    pub fn receive_specific<P>(&self, predicate: P) -> Result<Arc<Message>>
-    where
-        P: Fn(&Message) -> Result<bool>,
-    {
         let mut stream = self.stream.lock().expect("lock poisoned");
-
-        while let Some(msg) = block_on(stream.next()) {
-            let msg = msg?;
-
-            if predicate(&msg)? {
-                return Ok(msg);
-            }
-        }
-
-        // If SocketStream gives us None, that means the socket was closed
-        Err(crate::Error::Io(io::Error::new(
-            ErrorKind::BrokenPipe,
-            "socket closed",
-        )))
+        block_on(stream.next())
+            .ok_or_else(|| Error::Io(io::Error::new(ErrorKind::BrokenPipe, "socket closed")))?
     }
 
     /// Send `msg` to the peer.
