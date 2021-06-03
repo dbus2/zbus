@@ -1,7 +1,9 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
+use async_executor::Executor;
 use async_io::{block_on, Async};
 use async_lock::{Mutex, MutexGuard};
+use async_task::Task;
 use once_cell::sync::OnceCell;
 use static_assertions::assert_impl_all;
 use std::{
@@ -17,17 +19,15 @@ use std::{
     pin::Pin,
     sync::{
         self,
-        atomic::{AtomicBool, AtomicU32, Ordering::SeqCst},
+        atomic::{AtomicU32, Ordering::SeqCst},
         Arc,
     },
     task::{Context, Poll},
 };
 use zvariant::ObjectPath;
 
-use event_listener::Event;
 use futures_core::{stream, Future};
 use futures_util::{
-    future::{select, Either},
     sink::SinkExt,
     stream::{select as stream_select, StreamExt},
 };
@@ -112,12 +112,16 @@ struct ConnectionInner<S> {
     bus_conn: bool,
     unique_name: OnceCell<String>,
 
+    raw_in_conn: Arc<Mutex<RawConnection<Async<S>>>>,
     raw_out_conn: Mutex<RawConnection<Async<S>>>,
     // Serial number for next outgoing message
     serial: AtomicU32,
 
-    // Message receiver thread
-    msg_receiver_thread: Arc<MessageReceiverThread<S>>,
+    // Our executor
+    executor: Arc<Executor<'static>>,
+
+    // Message receiver task
+    msg_receiver_task: Option<Task<()>>,
 
     // We're using sync Mutex here as we don't intend to keep it locked while awaiting.
     msg_receiver: sync::RwLock<InactiveReceiver<Arc<Message>>>,
@@ -128,58 +132,51 @@ struct ConnectionInner<S> {
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 }
 
+// FIXME: Should really use `AsyncDrop` when we've something like that:
+//
+// https://github.com/rust-lang/wg-async-foundations/issues/65
 impl<S> Drop for ConnectionInner<S> {
     fn drop(&mut self) {
-        self.msg_receiver_thread.run.store(false, SeqCst);
-        self.msg_receiver_thread.run_event.notify(1);
+        // SAFETY: `msg_receiver_task` is set in the constructor so it can't be None.
+        block_on(self.msg_receiver_task.take().unwrap().cancel());
     }
 }
 
 #[derive(Debug)]
-struct MessageReceiverThread<S> {
-    raw_in_conn: Mutex<RawConnection<Async<S>>>,
+struct MessageReceiverTask<S> {
+    raw_in_conn: Arc<Mutex<RawConnection<Async<S>>>>,
 
     // Message broadcaster.
     msg_sender: Broadcaster<Arc<Message>>,
 
     // Sender side of the error channel
     error_sender: Sender<Error>,
-
-    // To notify msg receeiver thread that it doesn't need to run anymore.
-    run_event: Event,
-    run: AtomicBool,
 }
 
-impl MessageReceiverThread<Box<dyn Socket>> {
+type DynSocketConnection = RawConnection<Async<Box<dyn Socket>>>;
+
+impl MessageReceiverTask<Box<dyn Socket>> {
     fn new(
-        raw_in_conn: RawConnection<Async<Box<dyn Socket>>>,
+        raw_in_conn: Arc<Mutex<DynSocketConnection>>,
         msg_sender: Broadcaster<Arc<Message>>,
         error_sender: Sender<Error>,
     ) -> Arc<Self> {
         Arc::new(Self {
-            raw_in_conn: Mutex::new(raw_in_conn),
+            raw_in_conn,
             msg_sender,
             error_sender,
-            run_event: Event::new(),
-            run: AtomicBool::new(true),
         })
     }
 
-    fn launch(self: Arc<Self>) -> Result<()> {
-        // FIXME: Perhaps this should be a task but something needs to drive it then then. Maybe
-        // the message stream should run the task but then we'll probably be back to the issue of
-        // stream not being reliable in all situations, which is precisely why we split the message
-        // receiving into a separate thread.
-        std::thread::Builder::new()
-            .name("zbus::azync::Connection::receive_msg".into())
-            .spawn(move || block_on(self.receive_msg()))?;
-
-        Ok(())
+    fn spawn(self: Arc<Self>, executor: &Executor<'_>) -> Task<()> {
+        executor.spawn(async move {
+            self.receive_msg().await;
+        })
     }
 
     // Keep receiving messages and put them on the queue.
     async fn receive_msg(self: Arc<Self>) {
-        while self.run.load(SeqCst) {
+        loop {
             let mut raw_conn = self.raw_in_conn.lock().await;
 
             // Ignore errors from sending to msg or error channels. The only reason these calls
@@ -187,26 +184,17 @@ impl MessageReceiverThread<Box<dyn Socket>> {
             // being dropped.
             // TODO: We should still log in case of error when we've logging.
 
-            let msg = match select(
-                Box::pin(ReceiveMessage {
-                    raw_conn: &mut raw_conn,
-                }),
-                self.run_event.listen(),
-            )
-            .await
-            {
-                Either::Left((msg, _)) => {
-                    match msg {
-                        Ok(msg) => msg,
-                        Err(e) => {
-                            // Ignoring errors. See comment above.
-                            let _ = self.error_sender.send(e).await;
+            let receive_msg = ReceiveMessage {
+                raw_conn: &mut raw_conn,
+            };
+            let msg = match receive_msg.await {
+                Ok(msg) => msg,
+                Err(e) => {
+                    // Ignoring errors. See comment above.
+                    let _ = self.error_sender.send(e).await;
 
-                            continue;
-                        }
-                    }
+                    continue;
                 }
-                Either::Right((_, _)) => continue,
             };
 
             let msg = Arc::new(msg);
@@ -609,7 +597,7 @@ impl Connection {
 
     /// Get the raw file descriptor of this connection.
     pub async fn as_raw_fd(&self) -> RawFd {
-        (self.0.msg_receiver_thread.raw_in_conn.lock().await.socket()).as_raw_fd()
+        (self.0.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
     pub(crate) async fn subscribe_signal<'s, E>(
@@ -709,9 +697,16 @@ impl Connection {
         msg_sender.set_overflow(true);
         let msg_receiver = msg_receiver.deactivate();
         let (error_sender, error_receiver) = bounded(1);
-        let msg_receiver_thread = MessageReceiverThread::new(auth.conn, msg_sender, error_sender);
+        let executor = Arc::new(Executor::new());
+        let raw_in_conn = Arc::new(Mutex::new(auth.conn));
+
+        // Start the message receiver task.
+        let msg_receiver_task =
+            MessageReceiverTask::new(raw_in_conn.clone(), msg_sender, error_sender)
+                .spawn(&executor);
 
         let connection = Self(Arc::new(ConnectionInner {
+            raw_in_conn,
             raw_out_conn: Mutex::new(out_conn),
             error_receiver,
             server_guid: auth.server_guid,
@@ -720,12 +715,21 @@ impl Connection {
             serial: AtomicU32::new(1),
             unique_name: OnceCell::new(),
             signal_subscriptions: Mutex::new(HashMap::new()),
-            msg_receiver_thread: msg_receiver_thread.clone(),
             msg_receiver: sync::RwLock::new(msg_receiver),
+            executor: executor.clone(),
+            msg_receiver_task: Some(msg_receiver_task),
         }));
 
-        // Start the message receiver thread.
-        msg_receiver_thread.launch()?;
+        std::thread::Builder::new()
+            .name("zbus::azync::Connection::receive_msg".into())
+            .spawn(move || {
+                block_on(async move {
+                    // Run as long as there is a task to run.
+                    while !executor.is_empty() {
+                        executor.tick().await;
+                    }
+                })
+            })?;
 
         if !bus_connection {
             return Ok(connection);
