@@ -4,10 +4,10 @@ use async_io::block_on;
 use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
-use crate::{azync, Error, Proxy, Result};
+use crate::{azync, Error, Result};
 
 /// Builder for [`Proxy`]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ProxyBuilder<'a, T = ()> {
     conn: azync::Connection,
     destination: Option<Cow<'a, str>>,
@@ -56,17 +56,15 @@ impl<'a, T> ProxyBuilder<'a, T> {
         self
     }
 
-    /// Build a generic [`Proxy`] from the builder.
-    ///
-    /// Note: to build a higher-level proxy, generated from [`dbus_proxy`] macro, you should use
-    /// [`ProxyBuilder::build`] instead.
+    /// Build a proxy from the builder.
     ///
     /// # Panics
     ///
     /// Panics if the builder is lacking the necessary details to build a proxy.
-    ///
-    /// [`dbus_proxy`]: attr.dbus_proxy.html
-    pub fn build_bare(self) -> Proxy<'a> {
+    pub fn build(self) -> T
+    where
+        T: From<azync::Proxy<'a>>,
+    {
         block_on(self.build_bare_async()).into()
     }
 
@@ -89,7 +87,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
 
 impl<'a, T> ProxyBuilder<'a, T>
 where
-    T: ProxyDefault + From<azync::Proxy<'a>>,
+    T: ProxyDefault,
 {
     /// Create a new [`ProxyBuilder`] for the given connection.
     pub fn new<C>(conn: &C) -> Self
@@ -103,18 +101,6 @@ where
             interface: Some(T::INTERFACE.into()),
             proxy_type: PhantomData,
         }
-    }
-
-    /// Build a proxy from the builder.
-    ///
-    /// This function is meant to be called with higher-level proxies, generated from the
-    /// [`dbus_proxy`] macro. When missing, default values are taken from [`ProxyDefault`].
-    ///
-    /// If you need a generic [`Proxy`], you can use [`ProxyBuilder::build_bare`] instead.
-    ///
-    /// [`dbus_proxy`]: attr.dbus_proxy.html
-    pub fn build(self) -> T {
-        block_on(self.build_bare_async()).into()
     }
 }
 
