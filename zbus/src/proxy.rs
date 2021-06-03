@@ -252,10 +252,6 @@ impl<'a> Proxy<'a> {
         self.azync
     }
 
-    pub(crate) fn has_signal_handler(&self, signal_name: &str) -> bool {
-        block_on(self.azync.has_signal_handler(signal_name))
-    }
-
     pub(crate) fn destination_unique_name(&self) -> Result<&str> {
         block_on(self.azync.destination_unique_name())
     }

@@ -490,15 +490,6 @@ impl<'a> Proxy<'a> {
         Ok(false)
     }
 
-    pub(crate) async fn has_signal_handler(&self, signal_name: &str) -> bool {
-        self.inner
-            .sig_handlers
-            .lock()
-            .await
-            .values()
-            .any(|info| info.signal_name == signal_name)
-    }
-
     /// Resolves the destination name to the associated unique connection name.
     ///
     /// Typically you would want to create the [`Proxy`] with the well-known name of the destination
