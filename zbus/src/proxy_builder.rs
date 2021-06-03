@@ -97,9 +97,9 @@ where
     {
         Self {
             conn: conn.clone().into(),
-            destination: None,
-            path: None,
-            interface: None,
+            destination: Some(T::DESTINATION.into()),
+            path: Some(T::PATH.try_into().expect("invalid default path")),
+            interface: Some(T::INTERFACE.into()),
             proxy_type: PhantomData,
         }
     }
@@ -113,17 +113,7 @@ where
     ///
     /// [`dbus_proxy`]: attr.dbus_proxy.html
     pub fn build(self) -> T {
-        let conn = self.conn;
-        let destination = self.destination.unwrap_or_else(|| T::DESTINATION.into());
-        let path = self
-            .path
-            .unwrap_or_else(|| T::PATH.try_into().expect("invalid default path"));
-        let interface = self.interface.unwrap_or_else(|| T::INTERFACE.into());
-
-        azync::Proxy {
-            inner: Arc::new(azync::ProxyInner::new(conn, destination, path, interface)),
-        }
-        .into()
+        self.build_bare_async().into()
     }
 }
 
