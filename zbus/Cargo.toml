@@ -34,6 +34,8 @@ futures-util = { version = "0.3.8", default-features = false, features = ["sink"
 async-lock = "2.3.0"
 async-broadcast = "0.3.1"
 async-channel = "1.6.1"
+async-executor = "1.4.1"
+async-task = "4.0.3"
 hex = "0.4.2"
 rand = "0.8.2"
 sha1 = { version = "0.6.0", features = ["std"] }
