@@ -107,27 +107,7 @@ impl<'a> SignalReceiver<'a> {
     /// If the signal message was handled by a handler, `Ok(None)` is returned. Otherwise, the
     /// received message is returned.
     pub fn next_signal(&self) -> Result<Option<Arc<crate::Message>>> {
-        let msg = self.conn.receive_specific(|msg| {
-            let hdr = msg.header()?;
-
-            if hdr.message_type()? != crate::MessageType::Signal {
-                return Ok(false);
-            }
-            let member = match hdr.member()? {
-                Some(m) => m,
-                None => return Ok(false),
-            };
-
-            let key = ProxyKey::try_from(&hdr)?;
-
-            if let Some(proxy) = self.proxies.get(&key) {
-                if proxy.has_signal_handler(member) {
-                    return Ok(true);
-                }
-            }
-
-            Ok(false)
-        })?;
+        let msg = self.conn.receive_message()?;
 
         if self.handle_signal(&msg)? {
             Ok(None)
@@ -144,12 +124,14 @@ impl<'a> SignalReceiver<'a> {
     /// the signal; `Ok(false)` otherwise.
     pub fn handle_signal(&self, msg: &crate::Message) -> Result<bool> {
         let hdr = msg.header()?;
-        let key = ProxyKey::try_from(&hdr)?;
 
-        match self.proxies.get(&key) {
-            Some(proxy) => proxy.handle_signal(msg),
-            None => Ok(false),
+        if let Ok(key) = ProxyKey::try_from(&hdr) {
+            if let Some(proxy) = self.proxies.get(&key) {
+                return proxy.handle_signal(msg);
+            }
         }
+
+        Ok(false)
     }
 }
 
