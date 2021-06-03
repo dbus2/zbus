@@ -25,6 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .path(path)
             .expect("invalid path")
             .build()
+            .unwrap()
     };
 
     let node: Node = match args().nth(1) {

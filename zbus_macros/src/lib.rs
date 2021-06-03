@@ -81,7 +81,7 @@ mod utils;
 /// // Use `builder` to override the default arguments, `new` otherwise.
 /// let proxy = SomeIfaceProxy::builder(&connection)
 ///                .destination("org.another.Service")
-///                .build();
+///                .build()?;
 /// let _ = proxy.do_this("foo", 32, &Value::new(true));
 /// let _ = proxy.set_a_property("val");
 ///
@@ -96,7 +96,7 @@ mod utils;
 /// assert!(!proxy.disconnect_signal(handler_id)?);
 ///
 /// // Now the same again, but asynchronous.
-/// let proxy = AsyncSomeIfaceProxy::new(&connection.into());
+/// let proxy = AsyncSomeIfaceProxy::new(&connection.into()).unwrap();
 /// block_on(async move {
 ///     let _ = proxy.do_this("foo", 32, &Value::new(true)).await;
 ///     let _ = proxy.set_a_property("val").await;

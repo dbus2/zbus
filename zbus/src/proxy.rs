@@ -74,7 +74,12 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        let proxy = azync::Proxy::new(conn.inner(), destination, path, interface)?;
+        let proxy = block_on(azync::Proxy::new(
+            conn.inner(),
+            destination,
+            path,
+            interface,
+        ))?;
 
         Ok(Self {
             conn: conn.clone(),
@@ -93,8 +98,12 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        let proxy =
-            azync::Proxy::new_owned(conn.clone().into_inner(), destination, path, interface)?;
+        let proxy = block_on(azync::Proxy::new_owned(
+            conn.clone().into_inner(),
+            destination,
+            path,
+            interface,
+        ))?;
 
         Ok(Self { conn, azync: proxy })
     }
@@ -288,7 +297,7 @@ mod tests {
         let owner_change_signaled = Arc::new(AtomicBool::new(false));
         let name_acquired_signaled = Arc::new(AtomicBool::new(false));
 
-        let proxy = fdo::DBusProxy::new(&conn);
+        let proxy = fdo::DBusProxy::new(&conn).unwrap();
         let well_known = "org.freedesktop.zbus.ProxySignalTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         {
@@ -323,6 +332,7 @@ mod tests {
         }
 
         fdo::DBusProxy::new(&conn)
+            .unwrap()
             .request_name(&well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .unwrap();
 

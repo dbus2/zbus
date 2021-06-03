@@ -66,7 +66,7 @@ struct SignalHandlerInfo {
 ///         "org.freedesktop.DBus",
 ///         "/org/freedesktop/DBus",
 ///         "org.freedesktop.DBus",
-///     )?;
+///     ).await?;
 ///     // owned return value
 ///     let _id: String = p.call("GetId", &()).await?;
 ///     // borrowed return value
@@ -133,38 +133,40 @@ impl<'a> ProxyInner<'a> {
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
-    pub fn new<E>(
+    pub async fn new<E>(
         conn: &Connection,
         destination: &'a str,
         path: impl TryInto<ObjectPath<'a>, Error = E>,
         interface: &'a str,
-    ) -> Result<Self>
+    ) -> Result<Proxy<'a>>
     where
         Error: From<E>,
     {
-        Ok(crate::ProxyBuilder::new_bare(conn)
+        crate::ProxyBuilder::new_bare(conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build_bare_async())
+            .build_async()
+            .await
     }
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
     /// passed arguments.
-    pub fn new_owned<E>(
+    pub async fn new_owned<E>(
         conn: Connection,
         destination: String,
         path: impl TryInto<ObjectPath<'static>, Error = E>,
         interface: String,
-    ) -> Result<Self>
+    ) -> Result<Proxy<'a>>
     where
         Error: From<E>,
     {
-        Ok(crate::ProxyBuilder::new_bare(&conn)
+        crate::ProxyBuilder::new_bare(&conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build_bare_async())
+            .build_async()
+            .await
     }
 
     /// Get a reference to the associated connection.
@@ -194,7 +196,7 @@ impl<'a> Proxy<'a> {
         let proxy = AsyncIntrospectableProxy::builder(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
-            .build();
+            .build()?;
 
         proxy.introspect().await
     }
@@ -209,7 +211,7 @@ impl<'a> Proxy<'a> {
         let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
-            .build();
+            .build()?;
 
         proxy
             .get(&self.inner.interface, property_name)
@@ -228,7 +230,7 @@ impl<'a> Proxy<'a> {
         let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
-            .build();
+            .build()?;
 
         proxy
             .set(&self.inner.interface, property_name, &value.into())
@@ -508,7 +510,7 @@ impl<'a> Proxy<'a> {
         let unique_name = if destination.starts_with(':') || destination == "org.freedesktop.DBus" {
             destination.to_string()
         } else {
-            fdo::AsyncDBusProxy::new(&self.inner.conn)
+            fdo::AsyncDBusProxy::new(&self.inner.conn)?
                 .get_name_owner(destination)
                 .await?
         };
@@ -616,7 +618,7 @@ mod tests {
         let conn = Connection::new_session().await?;
         let unique_name = conn.unique_name().unwrap();
 
-        let proxy = fdo::AsyncDBusProxy::new(&conn);
+        let proxy = fdo::AsyncDBusProxy::new(&conn)?;
 
         let well_known = "org.freedesktop.zbus.async.ProxySignalStreamTest";
         let owner_changed_stream = proxy
@@ -673,7 +675,7 @@ mod tests {
         let name_acquired_signaled = Arc::new(Mutex::new(false));
         let name_acquired_signaled2 = Arc::new(Mutex::new(false));
 
-        let proxy = fdo::AsyncDBusProxy::new(&conn);
+        let proxy = fdo::AsyncDBusProxy::new(&conn)?;
         let well_known = "org.freedesktop.zbus.async.ProxySignalConnectTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         let name_owner_changed_id = {
@@ -739,7 +741,7 @@ mod tests {
                 .await?
         };
 
-        fdo::DBusProxy::new(&crate::Connection::from(conn))
+        fdo::DBusProxy::new(&crate::Connection::from(conn))?
             .request_name(&well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .unwrap();
 
