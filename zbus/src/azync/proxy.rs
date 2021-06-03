@@ -142,13 +142,12 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        let proxy = crate::ProxyBuilder::<Self>::new_bare(conn)
+        crate::ProxyBuilder::new_bare(conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
             .build_async()
-            .await;
-        Ok(proxy)
+            .await
     }
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
@@ -162,13 +161,12 @@ impl<'a> Proxy<'a> {
     where
         Error: From<E>,
     {
-        let proxy = crate::ProxyBuilder::new_bare(&conn)
+        crate::ProxyBuilder::new_bare(&conn)
             .destination(destination)
             .path(path)?
             .interface(interface)
             .build_async()
-            .await;
-        Ok(proxy)
+            .await
     }
 
     /// Get a reference to the associated connection.
@@ -198,7 +196,7 @@ impl<'a> Proxy<'a> {
         let proxy = AsyncIntrospectableProxy::builder(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
-            .build();
+            .build()?;
 
         proxy.introspect().await
     }
@@ -213,7 +211,7 @@ impl<'a> Proxy<'a> {
         let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
-            .build();
+            .build()?;
 
         proxy
             .get(&self.inner.interface, property_name)
@@ -232,7 +230,7 @@ impl<'a> Proxy<'a> {
         let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
             .destination(self.inner.destination.as_ref())
             .path(&self.inner.path)?
-            .build();
+            .build()?;
 
         proxy
             .set(&self.inner.interface, property_name, &value.into())
@@ -512,7 +510,7 @@ impl<'a> Proxy<'a> {
         let unique_name = if destination.starts_with(':') || destination == "org.freedesktop.DBus" {
             destination.to_string()
         } else {
-            fdo::AsyncDBusProxy::new(&self.inner.conn)
+            fdo::AsyncDBusProxy::new(&self.inner.conn)?
                 .get_name_owner(destination)
                 .await?
         };
@@ -620,7 +618,7 @@ mod tests {
         let conn = Connection::new_session().await?;
         let unique_name = conn.unique_name().unwrap();
 
-        let proxy = fdo::AsyncDBusProxy::new(&conn);
+        let proxy = fdo::AsyncDBusProxy::new(&conn)?;
 
         let well_known = "org.freedesktop.zbus.async.ProxySignalStreamTest";
         let owner_changed_stream = proxy
@@ -677,7 +675,7 @@ mod tests {
         let name_acquired_signaled = Arc::new(Mutex::new(false));
         let name_acquired_signaled2 = Arc::new(Mutex::new(false));
 
-        let proxy = fdo::AsyncDBusProxy::new(&conn);
+        let proxy = fdo::AsyncDBusProxy::new(&conn)?;
         let well_known = "org.freedesktop.zbus.async.ProxySignalConnectTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         let name_owner_changed_id = {
@@ -743,7 +741,7 @@ mod tests {
                 .await?
         };
 
-        fdo::DBusProxy::new(&crate::Connection::from(conn))
+        fdo::DBusProxy::new(&crate::Connection::from(conn))?
             .request_name(&well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .unwrap();
 

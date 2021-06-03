@@ -297,7 +297,7 @@ mod tests {
         let owner_change_signaled = Arc::new(AtomicBool::new(false));
         let name_acquired_signaled = Arc::new(AtomicBool::new(false));
 
-        let proxy = fdo::DBusProxy::new(&conn);
+        let proxy = fdo::DBusProxy::new(&conn).unwrap();
         let well_known = "org.freedesktop.zbus.ProxySignalTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         {
@@ -332,6 +332,7 @@ mod tests {
         }
 
         fdo::DBusProxy::new(&conn)
+            .unwrap()
             .request_name(&well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .unwrap();
 

@@ -73,7 +73,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
     /// # Panics
     ///
     /// Panics if the builder is lacking the necessary details to build a proxy.
-    pub fn build(self) -> T
+    pub fn build(self) -> Result<T>
     where
         T: From<azync::Proxy<'a>>,
     {
@@ -85,7 +85,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
     /// # Panics
     ///
     /// Panics if the builder is lacking the necessary details to build a proxy.
-    pub async fn build_async(self) -> T
+    pub async fn build_async(self) -> Result<T>
     where
         T: From<azync::Proxy<'a>>,
     {
@@ -94,10 +94,10 @@ impl<'a, T> ProxyBuilder<'a, T> {
         let path = self.path.expect("missing `path`");
         let interface = self.interface.expect("missing `interface`");
 
-        azync::Proxy {
+        Ok(azync::Proxy {
             inner: Arc::new(azync::ProxyInner::new(conn, destination, path, interface)),
         }
-        .into()
+        .into())
     }
 }
 
@@ -151,7 +151,7 @@ mod tests {
             builder.clone().destination.unwrap(),
             Cow::Borrowed(_)
         ));
-        let proxy = builder.build();
+        let proxy = builder.build().unwrap();
         assert!(matches!(proxy.inner.destination, Cow::Borrowed(_)));
         assert!(matches!(proxy.inner.interface, Cow::Borrowed(_)));
     }

@@ -152,7 +152,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
 
         impl<'c> #proxy_name<'c> {
             /// Creates a new proxy with the default service & path.
-            pub fn new(conn: &#connection) -> Self {
+            pub fn new(conn: &#connection) -> ::#zbus::Result<Self> {
                 Self::builder(conn).build()
             }
 
@@ -296,10 +296,9 @@ fn gen_proxy_method_call(
                         &(#(#args),*),
                     )
                     #wait?;
-                let proxy = #proxy::builder(&self.0.connection())
+                #proxy::builder(&self.0.connection())
                     .path(object_path)?
-                    .build();
-                Ok(proxy)
+                    .build()
             }
         }
     } else {
