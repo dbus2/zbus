@@ -432,10 +432,12 @@ fn gen_proxy_signal(
         let stream_gen_doc = format!(
             "A [`stream::Stream`] implementation that yields [`{}`] signals.\n\
             \n\
-            Use [`{}::receive_{}`] to create an instance of this type.",
+            Use [`{}::receive_{}`] to create an instance of this type.\n\
+            \n\
+            [`stream::Stream`]: https://docs.rs/futures/0.3.15/futures/stream/trait.Stream.html",
             signal_name, proxy_name, snake_case_name,
         );
-        let view_struct_gen_doc = format!("A `{}` signal.", signal_name);
+        let args_struct_gen_doc = format!("A `{}` signal.", signal_name);
         let stream_types = quote! {
             #[doc = #stream_gen_doc]
             pub struct #stream_name<'s>(::#zbus::azync::SignalStream<'s>);
@@ -457,16 +459,16 @@ fn gen_proxy_signal(
                 }
             }
 
-            #[doc = #view_struct_gen_doc]
+            #[doc = #args_struct_gen_doc]
             pub struct #signal_name_ident(std::sync::Arc<zbus::Message>);
 
             impl #signal_name_ident {
-                /// Retreive the signal arguments.
+                /// Retrieve the signal arguments.
                 ///
                 /// Instead of providing separate getters for each argument, one method is provided
-                /// to retreive all the arguments since retrieval requires deserialization of the
+                /// to retrieve all the arguments since retrieval requires deserialization of the
                 /// underlying message, which is not a zero-cost operation.
-                pub fn view#ty_generics(&'__v self) -> zbus::Result<(#(#input_types),*)>
+                pub fn args#ty_generics(&'__v self) -> zbus::Result<(#(#input_types),*)>
                 #where_clause
                 {
                     self.0.body().map_err(Into::into)

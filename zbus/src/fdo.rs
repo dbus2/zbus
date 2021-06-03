@@ -742,7 +742,7 @@ mod tests {
                     .await
                     .unwrap()
                     .filter(|signal| {
-                        let (name, _, new_owner) = signal.view().unwrap();
+                        let (name, _, new_owner) = signal.args().unwrap();
 
                         if name != well_known {
                             // Meant for the other testcase then
@@ -759,7 +759,7 @@ mod tests {
                     .await
                     .unwrap()
                     .filter(|signal| {
-                        let name = signal.view().unwrap();
+                        let name = signal.args().unwrap();
                         // `NameAcquired` is emitted twice, first when the unique name is assigned on
                         // connection and secondly after we ask for a specific name.
                         ready(name == well_known)
@@ -772,9 +772,9 @@ mod tests {
                 .unwrap();
 
             let (name_owner_changed, name_acquired) = stream.next().await.unwrap();
-            assert_eq!(name_owner_changed.view().unwrap().0, well_known);
-            assert_eq!(name_owner_changed.view().unwrap().2, unique_name);
-            assert_eq!(name_acquired.view().unwrap(), well_known);
+            assert_eq!(name_owner_changed.args().unwrap().0, well_known);
+            assert_eq!(name_owner_changed.args().unwrap().2, unique_name);
+            assert_eq!(name_acquired.args().unwrap(), well_known);
 
             let result = proxy.release_name(&well_known).await.unwrap();
             assert_eq!(result, fdo::ReleaseNameReply::Released);
