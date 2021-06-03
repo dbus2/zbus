@@ -289,7 +289,7 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub async fn receive_signal(&self, signal_name: &'static str) -> Result<SignalStream<'a>> {
+    pub async fn receive_signal(&self, signal_name: &'static str) -> Result<SignalStream<'_>> {
         let subscription_id = if self.inner.conn.is_bus() {
             let id = self
                 .inner
@@ -307,8 +307,7 @@ impl<'a> Proxy<'a> {
             None
         };
 
-        self.resolve_name().await?;
-
+        let dest_unique_name = self.destination_unique_name().await?;
         let proxy = self.inner.clone();
         let stream = self
             .inner
@@ -323,12 +322,11 @@ impl<'a> Proxy<'a> {
                     },
                     Err(_) => return ready(false),
                 };
-                let expected_sender = proxy.dest_unique_name.get().map(|s| s.as_str());
 
                 ready(
                     hdr.primary().msg_type() == crate::MessageType::Signal
                         && hdr.interface() == Ok(Some(&proxy.interface))
-                        && hdr.sender() == Ok(expected_sender)
+                        && hdr.sender() == Ok(Some(dest_unique_name))
                         && hdr.path() == Ok(Some(&proxy.path))
                         && hdr.member() == Ok(Some(signal_name)),
                 )
@@ -436,47 +434,17 @@ impl<'a> Proxy<'a> {
     ///
     /// This method returns the same errors as [`Self::receive_signal`].
     pub async fn next_signal(&self) -> Result<Option<Arc<Message>>> {
-        // We want to keep a lock on the handlers during `receive_specific` call but we also
-        // want to avoid using `handlers` directly as that somehow makes this call (or rather
-        // the future of this call) not `Sync` and we get a very scary error message from
-        // the compiler on using `next_signal` with `tokio::select` inside a tokio task.
-        let signals: Vec<&str> = {
-            let handlers = self.inner.sig_handlers.lock().await;
-
-            handlers.values().map(|info| info.signal_name).collect()
-        };
-
         let mut stream = self.msg_stream().await.lock().await;
+        let msg = stream
+            .next()
+            .await
+            .ok_or_else(|| Error::Io(io::Error::new(ErrorKind::BrokenPipe, "socket closed")))??;
 
-        self.resolve_name().await?;
-        let expected_sender = self.destination_unique_name();
-
-        while let Some(msg) = stream.next().await {
-            let msg = msg?;
-
-            let hdr = msg.header()?;
-            let member = match hdr.member()? {
-                None => continue,
-                Some(member) => member,
-            };
-            if hdr.interface() == Ok(Some(self.interface()))
-                && hdr.path() == Ok(Some(self.path()))
-                && hdr.sender() == Ok(expected_sender)
-                && hdr.message_type() == Ok(crate::MessageType::Signal)
-                && signals.contains(&member)
-                && self.handle_signal(&msg).await?
-            {
-                return Ok(None);
-            } else {
-                return Ok(Some(msg));
-            }
+        if self.handle_signal(&msg).await? {
+            Ok(None)
+        } else {
+            Ok(Some(msg))
         }
-
-        // If SocketStream gives us None, that means the socket was closed
-        Err(crate::Error::Io(io::Error::new(
-            ErrorKind::BrokenPipe,
-            "socket closed",
-        )))
     }
 
     /// Handle the provided signal message.
@@ -492,7 +460,16 @@ impl<'a> Proxy<'a> {
             return Ok(false);
         }
 
+        let dest_unique_name = self.destination_unique_name().await?;
         let hdr = msg.header()?;
+        if hdr.interface() != Ok(Some(self.interface()))
+            || hdr.path() != Ok(Some(self.path()))
+            || hdr.sender() != Ok(Some(dest_unique_name))
+            || hdr.message_type() != Ok(crate::MessageType::Signal)
+        {
+            return Ok(false);
+        }
+
         if let Some(name) = hdr.member()? {
             let mut handled = false;
 
@@ -522,7 +499,7 @@ impl<'a> Proxy<'a> {
             .any(|info| info.signal_name == signal_name)
     }
 
-    /// Resolve the destination name.
+    /// Resolves the destination name to the associated unique connection name.
     ///
     /// Typically you would want to create the [`Proxy`] with the well-known name of the destination
     /// service but signal messages only specify the unique name of the peer (except for signals
@@ -530,10 +507,10 @@ impl<'a> Proxy<'a> {
     /// the message. While in most cases this will not be a problem, it becomes a problem if you
     /// need to commmunicate with multiple services exposing the same interface, over the same
     /// connection. Hence the need for this method.
-    pub(crate) async fn resolve_name(&self) -> Result<()> {
-        if self.inner.dest_unique_name.get().is_some() {
+    pub(crate) async fn destination_unique_name(&self) -> Result<&str> {
+        if let Some(name) = self.inner.dest_unique_name.get() {
             // Already resolved the name.
-            return Ok(());
+            return Ok(name);
         }
 
         let destination = &self.inner.destination;
@@ -550,11 +527,7 @@ impl<'a> Proxy<'a> {
             // programmer (probably our) error if this fails.
             .expect("Attempted to set dest_unique_name twice");
 
-        Ok(())
-    }
-
-    pub(crate) fn destination_unique_name(&self) -> Option<&str> {
-        self.inner.dest_unique_name.get().map(|s| s.as_str())
+        Ok(self.inner.dest_unique_name.get().unwrap())
     }
 
     async fn msg_stream(&self) -> &Mutex<MessageStream> {

@@ -92,8 +92,6 @@ impl<'a> SignalReceiver<'a> {
     {
         let proxy = proxy.as_ref();
         assert_eq!(proxy.connection().unique_name(), self.conn.unique_name());
-        // Ensure the destination name is resolved.
-        proxy.resolve_name()?;
 
         let key = ProxyKey::from(proxy);
         self.proxies.insert(key, proxy);
