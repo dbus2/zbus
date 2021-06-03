@@ -1,5 +1,6 @@
 use std::{borrow::Cow, convert::TryInto, marker::PhantomData, sync::Arc};
 
+use async_io::block_on;
 use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
@@ -66,7 +67,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
     ///
     /// [`dbus_proxy`]: attr.dbus_proxy.html
     pub fn build_bare(self) -> Proxy<'a> {
-        self.build_bare_async().into()
+        block_on(self.build_bare_async()).into()
     }
 
     /// Build a generic [`azync::Proxy`] from the builder.
@@ -74,7 +75,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
     /// # Panics
     ///
     /// Panics if the builder is lacking the necessary details to build a proxy.
-    pub fn build_bare_async(self) -> azync::Proxy<'a> {
+    pub async fn build_bare_async(self) -> azync::Proxy<'a> {
         let conn = self.conn;
         let destination = self.destination.expect("missing `destination`");
         let path = self.path.expect("missing `path`");
@@ -113,7 +114,7 @@ where
     ///
     /// [`dbus_proxy`]: attr.dbus_proxy.html
     pub fn build(self) -> T {
-        self.build_bare_async().into()
+        block_on(self.build_bare_async()).into()
     }
 }
 
@@ -148,7 +149,7 @@ mod tests {
             builder.clone().destination.unwrap(),
             Cow::Borrowed(_)
         ));
-        let proxy = builder.build_bare_async();
+        let proxy = block_on(builder.build_bare_async());
         assert!(matches!(proxy.inner.destination, Cow::Borrowed(_)));
         assert!(matches!(proxy.inner.interface, Cow::Borrowed(_)));
     }

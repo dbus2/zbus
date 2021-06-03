@@ -146,7 +146,8 @@ impl<'a> Proxy<'a> {
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build_bare_async();
+            .build_bare_async()
+            .await;
         Ok(proxy)
     }
 
@@ -165,7 +166,8 @@ impl<'a> Proxy<'a> {
             .destination(destination)
             .path(path)?
             .interface(interface)
-            .build_bare_async();
+            .build_bare_async()
+            .await;
         Ok(proxy)
     }
 
