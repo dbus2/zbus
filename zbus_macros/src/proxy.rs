@@ -461,10 +461,10 @@ fn gen_proxy_signal(
             pub struct #signal_name_ident(std::sync::Arc<zbus::Message>);
 
             impl #signal_name_ident {
-                /// Retreive the signal arguments.
+                /// Retrieve the signal arguments.
                 ///
                 /// Instead of providing separate getters for each argument, one method is provided
-                /// to retreive all the arguments since retrieval requires deserialization of the
+                /// to retrieve all the arguments since retrieval requires deserialization of the
                 /// underlying message, which is not a zero-cost operation.
                 pub fn view#ty_generics(&'__v self) -> zbus::Result<(#(#input_types),*)>
                 #where_clause
