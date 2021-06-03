@@ -432,7 +432,9 @@ fn gen_proxy_signal(
         let stream_gen_doc = format!(
             "A [`stream::Stream`] implementation that yields [`{}`] signals.\n\
             \n\
-            Use [`{}::receive_{}`] to create an instance of this type.",
+            Use [`{}::receive_{}`] to create an instance of this type.\n\
+            \n\
+            [`stream::Stream`]: https://docs.rs/futures/0.3.15/futures/stream/trait.Stream.html",
             signal_name, proxy_name, snake_case_name,
         );
         let args_struct_gen_doc = format!("A `{}` signal.", signal_name);
