@@ -40,7 +40,6 @@ hex = "0.4.2"
 rand = "0.8.2"
 sha1 = { version = "0.6.0", features = ["std"] }
 slotmap = "1.0"
-event-listener = "2.5.1"
 static_assertions = "1.1.0"
 
 [dev-dependencies]
