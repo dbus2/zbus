@@ -443,21 +443,15 @@ impl Connection {
         let serial = self.send_message(m).await?;
         match stream
             .filter(move |m| {
-                let h = match m {
-                    Ok(m) => match m.header() {
-                        Ok(h) => h,
-                        Err(_) => return ready(false),
-                    },
-                    Err(_) => return ready(false),
-                };
-                let msg_type = match h.message_type() {
-                    Ok(t) => t,
-                    Err(_) => return ready(false),
-                };
-
                 ready(
-                    (msg_type == MessageType::Error || msg_type == MessageType::MethodReturn)
-                        && h.reply_serial() == Ok(Some(serial)),
+                    m.as_ref()
+                        .map(|m| {
+                            matches!(
+                                m.primary_header().msg_type(),
+                                MessageType::Error | MessageType::MethodReturn
+                            ) && m.header().and_then(|h| h.reply_serial()) == Ok(Some(serial))
+                        })
+                        .unwrap_or(false),
                 )
             })
             .next()
