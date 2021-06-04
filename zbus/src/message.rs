@@ -437,7 +437,7 @@ impl Message {
     /// syntax), D-Bus does not. Since this method gives you the signature expected on the wire by
     /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
     /// multiple arguments.
-    pub fn body_signature<'b, 's: 'b>(&'s self) -> Result<Signature<'b>, MessageError> {
+    pub fn body_signature(&self) -> Result<Signature<'_>, MessageError> {
         match self
             .header()?
             .into_fields()
@@ -466,12 +466,12 @@ impl Message {
     }
 
     /// Deserialize the header.
-    pub fn header<'h, 'm: 'h>(&'m self) -> Result<MessageHeader<'h>, MessageError> {
+    pub fn header(&self) -> Result<MessageHeader<'_>, MessageError> {
         zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
     }
 
     /// Deserialize the fields.
-    pub fn fields<'f, 'm: 'f>(&'m self) -> Result<MessageFields<'f>, MessageError> {
+    pub fn fields(&self) -> Result<MessageFields<'_>, MessageError> {
         let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
         zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt)
             .map_err(MessageError::from)
