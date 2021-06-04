@@ -669,7 +669,7 @@ mod tests {
         let owner_change_signaled = Arc::new(AtomicBool::new(false));
         let name_acquired_signaled = Arc::new(AtomicBool::new(false));
 
-        let proxy = fdo::DBusProxy::new(&conn);
+        let proxy = fdo::DBusProxy::new(&conn).unwrap();
 
         let well_known = "org.freedesktop.zbus.FdoSignalConnectTest";
         let unique_name = conn.unique_name().unwrap().to_string();
@@ -732,7 +732,7 @@ mod tests {
 
         block_on(async {
             let conn = crate::azync::Connection::new_session().await.unwrap();
-            let proxy = fdo::AsyncDBusProxy::new(&conn);
+            let proxy = fdo::AsyncDBusProxy::new(&conn).unwrap();
 
             let well_known = "org.freedesktop.zbus.FdoSignalStreamTest";
             let unique_name = conn.unique_name().unwrap().to_string();

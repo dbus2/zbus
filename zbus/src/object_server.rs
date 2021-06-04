@@ -730,12 +730,12 @@ mod tests {
         let proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")
             .path("/org/freedesktop/MyService")?
-            .build();
+            .build()?;
 
         let props_proxy = zbus::fdo::PropertiesProxy::builder(&conn)
             .destination("org.freedesktop.MyService")
             .path("/org/freedesktop/MyService")?
-            .build();
+            .build()?;
 
         props_proxy
             .connect_properties_changed(|_, changed, _| {
@@ -797,7 +797,7 @@ mod tests {
         let my_obj_proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")
             .path("/zbus/test/MyObj")?
-            .build();
+            .build()?;
         my_obj_proxy.ping()?;
         proxy.destroy_obj("MyObj")?;
         assert!(my_obj_proxy.introspect().is_err());
@@ -817,6 +817,7 @@ mod tests {
         let action = Rc::new(Cell::new(NextAction::Nothing));
 
         fdo::DBusProxy::new(&conn)
+            .unwrap()
             .request_name(
                 "org.freedesktop.MyService",
                 fdo::RequestNameFlags::ReplaceExisting.into(),
