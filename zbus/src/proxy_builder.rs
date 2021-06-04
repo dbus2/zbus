@@ -6,7 +6,7 @@ use zvariant::ObjectPath;
 
 use crate::{azync, Error, Result};
 
-/// Builder for [`Proxy`]
+/// Builder for proxies.
 #[derive(Debug)]
 pub struct ProxyBuilder<'a, T = ()> {
     conn: azync::Connection,
