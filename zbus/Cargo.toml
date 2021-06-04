@@ -45,7 +45,6 @@ slotmap = "1.0"
 static_assertions = "1.1.0"
 
 [dev-dependencies]
-zbus_polkit = { path = "../zbus_polkit", version = "1" }
 doc-comment = "0.3.3"
 futures-util = "0.3.8" # activate default features
 ntest = "0.7.1"
