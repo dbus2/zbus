@@ -1,7 +1,9 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
-use async_io::{block_on, Async};
+#[cfg(feature = "internal-executor")]
+use async_io::block_on;
+use async_io::Async;
 use async_lock::{Mutex, MutexGuard};
 use async_task::Task;
 use once_cell::sync::OnceCell;
@@ -121,7 +123,7 @@ struct ConnectionInner<S> {
     executor: Arc<Executor<'static>>,
 
     // Message receiver task
-    msg_receiver_task: Option<Task<()>>,
+    msg_receiver_task: sync::Mutex<Option<Task<()>>>,
 
     // We're using sync Mutex here as we don't intend to keep it locked while awaiting.
     msg_receiver: sync::RwLock<InactiveReceiver<Arc<Message>>>,
@@ -138,7 +140,18 @@ struct ConnectionInner<S> {
 impl<S> Drop for ConnectionInner<S> {
     fn drop(&mut self) {
         // SAFETY: `msg_receiver_task` is set in the constructor so it can't be None.
-        block_on(self.msg_receiver_task.take().unwrap().cancel());
+        #[cfg(feature = "internal-executor")]
+        // In case of external executor running the task, we can't just use block_on (IOW another
+        // executor) to cancel the task. Dropping the task cancels it automatically anyway. The
+        // only difference is the explicit cancellation waits for it to be cancelled/resolved.
+        block_on(
+            self.msg_receiver_task
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap()
+                .cancel(),
+        );
     }
 }
 
@@ -595,6 +608,46 @@ impl Connection {
         self.0.server_guid.as_str()
     }
 
+    #[cfg(any(doc, not(feature = "internal-executor")))]
+    /// The underlying executor.
+    ///
+    /// This method is available when built with the default `internal-executor` feature disabled.
+    /// Since zbus will not spawn thread internally to run the executor in this case, you're
+    /// responsible to continuously [tick the executor][tte]. Failure to do so will result in hangs.
+    ///
+    /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
+    pub fn executor(&self) -> &Executor<'static> {
+        &self.0.executor
+    }
+
+    #[cfg(any(doc, not(feature = "internal-executor")))]
+    /// Shutdown the connection.
+    ///
+    /// This method is available when built with the default `internal-executor` feature disabled.
+    ///
+    /// When using single-threaded external executors, such as [tokio's current-thread
+    /// scheduler][tcts], this method must be called to drop the connection. Otherwise your thread
+    /// will hang. On the other hand, calling this method is optional when using multi-threaded
+    /// external executors, such as [tokio's multi-thread scheduler][tmts].
+    ///
+    /// # Panics
+    ///
+    /// This method panics if called more than once for the same connection. You must ensure that
+    /// it's only called when dropping the last clone of a connection.
+    ///
+    /// [tcts]: https://docs.rs/tokio/1.6.1/tokio/runtime/index.html#current-thread-scheduler
+    /// [tmts]: https://docs.rs/tokio/1.6.1/tokio/runtime/index.html#multi-thread-scheduler
+    pub async fn shutdown(self) {
+        self.0
+            .msg_receiver_task
+            .lock()
+            .unwrap()
+            .take()
+            .expect("shutdown called twice on a connection")
+            .cancel()
+            .await;
+    }
+
     /// Get the raw file descriptor of this connection.
     pub async fn as_raw_fd(&self) -> RawFd {
         (self.0.raw_in_conn.lock().await.socket()).as_raw_fd()
@@ -674,8 +727,36 @@ impl Connection {
         }
     }
 
-    async fn hello_bus(self) -> Result<Self> {
-        let name = fdo::AsyncDBusProxy::new(&self)?.hello().await?;
+    async fn hello_bus(&self) -> Result<()> {
+        let dbus_proxy = fdo::AsyncDBusProxy::new(self)?;
+        let future = dbus_proxy.hello();
+
+        #[cfg(feature = "internal-executor")]
+        let name = future.await?;
+
+        // With external executor, our executor is only run after the connection construction is
+        // completed and this method is (and must) run before that so we need to tick the executor
+        // ourselves in parallel to making the method call.
+        #[cfg(not(feature = "internal-executor"))]
+        let name = {
+            use futures_util::future::{select, Either};
+
+            let executor = self.0.executor.clone();
+            let ticking_future = async move {
+                // Keep running as long as this task/future is not cancelled.
+                loop {
+                    executor.tick().await;
+                }
+            };
+
+            futures_util::pin_mut!(future);
+            futures_util::pin_mut!(ticking_future);
+
+            match select(future, ticking_future).await {
+                Either::Left((res, _)) => res?,
+                Either::Right((_, _)) => unreachable!("ticking task future shouldn't finish"),
+            }
+        };
 
         self.0
             .unique_name
@@ -683,7 +764,7 @@ impl Connection {
             // programmer (probably our) error if this fails.
             .expect("Attempted to set unique_name twice");
 
-        Ok(self)
+        Ok(())
     }
 
     async fn new(
@@ -717,9 +798,10 @@ impl Connection {
             signal_subscriptions: Mutex::new(HashMap::new()),
             msg_receiver: sync::RwLock::new(msg_receiver),
             executor: executor.clone(),
-            msg_receiver_task: Some(msg_receiver_task),
+            msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
         }));
 
+        #[cfg(feature = "internal-executor")]
         std::thread::Builder::new()
             .name("zbus::azync::Connection::receive_msg".into())
             .spawn(move || {
@@ -736,7 +818,9 @@ impl Connection {
         }
 
         // Now that the server has approved us, we must send the bus Hello, as per specs
-        connection.hello_bus().await
+        connection.hello_bus().await?;
+
+        Ok(connection)
     }
 
     fn next_serial(&self) -> u32 {

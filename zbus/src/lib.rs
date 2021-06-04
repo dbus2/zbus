@@ -117,9 +117,20 @@
 //! Runtime-agnostic async/await-compatible API for both [(not so) low-level] message handling and
 //! [high-level client-side proxy] is also provided. High-level server-side API coming soon.
 //!
+//! ### Compatibility with async runtimes
+//!
+//! zbus is runtime-agnostic and should work out of the box with different Rust async runtimes.
+//! However, in order to achieve that, zbus spawns a thread per connection to handle various
+//! internal tasks. If that is something you would like to avoid, you need to:
+//!   * disable the `internal-executor` feature (which is a default feature).
+//!   * Ensure the [internal executor keeps ticking continuously][iektc].
+//!   * In case of single-threaded schedulers, [manually shutdown the connection][mstc].
+//!
 //! [book]: https://dbus.pages.freedesktop.org/zbus/
 //! [(not so) low-level]: azync::Connection
 //! [high-level client-side proxy]: https://dbus.pages.freedesktop.org/zbus/async.html#client
+//! [iektc]: `azync::Connection::executor`
+//! [mstc]: `azync::Connection::shutdown`
 //!
 //! [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus
 //!   clients in javascript (running from any browser) do exist though. And zbus may also be
