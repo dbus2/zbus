@@ -20,7 +20,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 use crate::{
     azync::{Connection, MessageStream},
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
-    Error, Message, Result,
+    Error, Message, MessageHeader, MessageType, Result,
 };
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
@@ -127,6 +127,22 @@ impl<'a> ProxyInner<'a> {
             dest_unique_name: OnceCell::new(),
             sig_handlers: Mutex::new(SlotMap::with_key()),
             signal_msg_stream: OnceCell::new(),
+        }
+    }
+
+    // panic if dest_unique_name has not been resolved before
+    fn matching_signal<'m>(&self, msg: &'m Message, h: &'m MessageHeader<'m>) -> Option<&'m str> {
+        if msg.primary_header().msg_type() != MessageType::Signal {
+            return None;
+        }
+        let uniq = self.dest_unique_name.get().unwrap();
+        if h.interface() == Ok(Some(&self.interface))
+            && h.sender() == Ok(Some(uniq))
+            && h.path() == Ok(Some(&self.path))
+        {
+            h.member().ok().flatten()
+        } else {
+            None
         }
     }
 }
@@ -309,28 +325,23 @@ impl<'a> Proxy<'a> {
             None
         };
 
-        let dest_unique_name = self.destination_unique_name().await?;
+        self.destination_unique_name().await?;
         let proxy = self.inner.clone();
         let stream = self
             .inner
             .conn
             .stream()
             .await
-            .filter(move |msg| {
-                let hdr = match msg {
-                    Ok(m) => match m.header() {
-                        Ok(h) => h,
-                        Err(_) => return ready(false),
-                    },
-                    Err(_) => return ready(false),
-                };
-
+            .filter(move |m| {
                 ready(
-                    hdr.primary().msg_type() == crate::MessageType::Signal
-                        && hdr.interface() == Ok(Some(&proxy.interface))
-                        && hdr.sender() == Ok(Some(dest_unique_name))
-                        && hdr.path() == Ok(Some(&proxy.path))
-                        && hdr.member() == Ok(Some(signal_name)),
+                    m.as_ref()
+                        .ok()
+                        .and_then(|m| {
+                            m.header()
+                                .map(|h| proxy.matching_signal(m, &h) == Some(signal_name))
+                                .ok()
+                        })
+                        .unwrap_or(false),
                 )
             })
             // Safety: Filter above ensures we only get `Ok(msg)`.
@@ -462,34 +473,26 @@ impl<'a> Proxy<'a> {
             return Ok(false);
         }
 
-        let dest_unique_name = self.destination_unique_name().await?;
-        let hdr = msg.header()?;
-        if hdr.interface() != Ok(Some(self.interface()))
-            || hdr.path() != Ok(Some(self.path()))
-            || hdr.sender() != Ok(Some(dest_unique_name))
-            || hdr.message_type() != Ok(crate::MessageType::Signal)
+        self.destination_unique_name().await?;
+        let h = match msg.header() {
+            Ok(h) => h,
+            _ => return Ok(false),
+        };
+        let signal_name = match self.inner.matching_signal(msg, &h) {
+            Some(signal) => signal,
+            _ => return Ok(false),
+        };
+
+        let mut handled = false;
+        for info in handlers
+            .values_mut()
+            .filter(|info| info.signal_name == signal_name)
         {
-            return Ok(false);
+            (*info.handler)(&msg).await?;
+            handled = true;
         }
 
-        if let Some(name) = hdr.member()? {
-            let mut handled = false;
-
-            for info in handlers
-                .values_mut()
-                .filter(|info| info.signal_name == name)
-            {
-                (*info.handler)(&msg).await?;
-
-                if !handled {
-                    handled = true;
-                }
-            }
-
-            return Ok(handled);
-        }
-
-        Ok(false)
+        Ok(handled)
     }
 
     /// Resolves the destination name to the associated unique connection name.
