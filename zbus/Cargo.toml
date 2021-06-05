@@ -50,6 +50,7 @@ futures-util = "0.3.8" # activate default features
 ntest = "0.7.1"
 env_logger = "*"
 test-env-log = "0.2.6"
+tokio = { version = "1", features = ["rt-multi-thread"] }
 
 [package.metadata.docs.rs]
 all-features = true
