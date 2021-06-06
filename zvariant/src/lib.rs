@@ -838,7 +838,7 @@ mod tests {
         assert_eq!(r.1, u32::max_value());
         let inner_r = &r.2;
         assert_eq!(inner_r.0, i64::max_value());
-        assert_eq!(inner_r.1, true);
+        assert!(inner_r.1);
         assert_eq!(inner_r.2, i64::max_value());
         let as_ = &inner_r.3;
         assert_eq!(as_.len(), 2);
@@ -863,7 +863,7 @@ mod tests {
             assert_eq!(r.1, u32::max_value());
             let inner_r = &r.2;
             assert_eq!(inner_r.0, i64::max_value());
-            assert_eq!(inner_r.1, true);
+            assert!(inner_r.1);
             assert_eq!(inner_r.2, i64::max_value());
             let as_ = &inner_r.3;
             assert_eq!(as_.len(), 2);
