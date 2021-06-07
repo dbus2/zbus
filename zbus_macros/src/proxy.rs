@@ -174,13 +174,13 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             #methods
         }
 
-        impl<'c> std::convert::From<#zbus::azync::Proxy<'c>> for #proxy_name<'c> {
+        impl<'c> ::std::convert::From<#zbus::azync::Proxy<'c>> for #proxy_name<'c> {
             fn from(proxy: #zbus::azync::Proxy<'c>) -> Self {
-                #proxy_name(proxy.into())
+                #proxy_name(::std::convert::Into::into(proxy))
             }
         }
 
-        impl<'c> std::ops::Deref for #proxy_name<'c> {
+        impl<'c> ::std::ops::Deref for #proxy_name<'c> {
             type Target = #proxy_struct<'c>;
 
             fn deref(&self) -> &Self::Target {
@@ -188,19 +188,19 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             }
         }
 
-        impl<'c> std::ops::DerefMut for #proxy_name<'c> {
+        impl<'c> ::std::ops::DerefMut for #proxy_name<'c> {
             fn deref_mut(&mut self) -> &mut Self::Target {
                 &mut self.0
             }
         }
 
-        impl<'c> std::convert::AsRef<#proxy_struct<'c>> for #proxy_name<'c> {
+        impl<'c> ::std::convert::AsRef<#proxy_struct<'c>> for #proxy_name<'c> {
             fn as_ref(&self) -> &#proxy_struct<'c> {
                 &*self
             }
         }
 
-        impl<'c> std::convert::AsMut<#proxy_struct<'c>> for #proxy_name<'c> {
+        impl<'c> ::std::convert::AsMut<#proxy_struct<'c>> for #proxy_name<'c> {
             fn as_mut(&mut self) -> &mut #proxy_struct<'c> {
                 &mut *self
             }
@@ -213,11 +213,14 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
         }
 
         impl<'c> #zbus::export::serde::ser::Serialize for #proxy_name<'c> {
-            fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+            fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
             where
                 S: #zbus::export::serde::ser::Serializer,
             {
-                String::serialize(&self.inner().path().to_string(), serializer)
+                ::std::string::String::serialize(
+                    &::std::string::ToString::to_string(self.inner().path()),
+                    serializer,
+                )
             }
         }
 
@@ -324,7 +327,7 @@ fn gen_proxy_method_call(
             #(#doc)*
             pub #usage #signature {
                 let reply = self.0.call(#method_name, #body)#wait?;
-                Ok(reply)
+                ::std::result::Result::Ok(reply)
             }
         }
     }
@@ -344,7 +347,7 @@ fn gen_proxy_property(
             #(#doc)*
             #[allow(clippy::needless_question_mark)]
             pub #usage #signature {
-                Ok(self.0.set_property(#property_name, #value)#wait?)
+                ::std::result::Result::Ok(self.0.set_property(#property_name, #value)#wait?)
             }
         }
     } else {
@@ -356,7 +359,7 @@ fn gen_proxy_property(
             signature.span()
         };
         let body = quote_spanned! {body_span =>
-            Ok(self.0.get_property(#property_name)#wait?)
+            ::std::result::Result::Ok(self.0.get_property(#property_name)#wait?)
         };
         quote! {
             #(#doc)*
@@ -441,17 +444,19 @@ fn gen_proxy_signal(
             #[doc = #stream_gen_doc]
             pub struct #stream_name<'s>(#zbus::azync::SignalStream<'s>);
 
-            #zbus::export::static_assertions::assert_impl_all!(#stream_name<'_>: Send, Unpin);
+            #zbus::export::static_assertions::assert_impl_all!(
+                #stream_name<'_>: ::std::marker::Send, ::std::marker::Unpin
+            );
 
             impl #zbus::export::futures_core::stream::Stream for #stream_name<'_> {
                 type Item = #signal_name_ident;
 
                 fn poll_next(
-                    self: std::pin::Pin<&mut Self>,
-                    cx: &mut std::task::Context<'_>,
-                    ) -> std::task::Poll<Option<Self::Item>> {
+                    self: ::std::pin::Pin<&mut Self>,
+                    cx: &mut ::std::task::Context<'_>,
+                    ) -> ::std::task::Poll<::std::option::Option<Self::Item>> {
                     #zbus::export::futures_core::stream::Stream::poll_next(
-                        std::pin::Pin::new(&mut self.get_mut().0),
+                        ::std::pin::Pin::new(&mut self.get_mut().0),
                         cx,
                     )
                     .map(|msg| msg.map(#signal_name_ident))
@@ -459,7 +464,7 @@ fn gen_proxy_signal(
             }
 
             #[doc = #args_struct_gen_doc]
-            pub struct #signal_name_ident(std::sync::Arc<#zbus::Message>);
+            pub struct #signal_name_ident(::std::sync::Arc<#zbus::Message>);
 
             impl #signal_name_ident {
                 /// Retrieve the signal arguments.
@@ -470,7 +475,7 @@ fn gen_proxy_signal(
                 pub fn args#ty_generics(&'__v self) -> #zbus::Result<(#(#input_types),*)>
                 #where_clause
                 {
-                    self.0.body().map_err(Into::into)
+                    self.0.body().map_err(::std::convert::Into::into)
                 }
             }
         };
@@ -481,9 +486,13 @@ fn gen_proxy_signal(
     };
 
     let handler = if *azync {
-        quote! { FnMut(#(#input_types),*) -> #zbus::export::futures_core::future::BoxFuture<'static, #zbus::Result<()>> }
+        quote! {
+            ::std::ops::FnMut(
+                #(#input_types),*
+            ) -> #zbus::export::futures_core::future::BoxFuture<'static, #zbus::Result<()>>
+        }
     } else {
-        quote! { FnMut(#(#input_types),*) -> #zbus::Result<()> }
+        quote! { ::std::ops::FnMut(#(#input_types),*) -> #zbus::Result<()> }
     };
 
     let (proxy_method, link) = if *azync {
@@ -512,7 +521,7 @@ fn gen_proxy_signal(
         }
         where_clause
             .predicates
-            .push(parse_quote!(__H: #handler + Send + 'static));
+            .push(parse_quote!(__H: #handler + ::std::marker::Send + 'static));
     }
     generics.params.push(parse_quote!(__H));
 
