@@ -151,7 +151,7 @@ where
         }
 
         self.0.sig_parser.skip_char()?;
-        self.0.write_all(&v.as_bytes()).map_err(Error::Io)?;
+        self.0.write_all(v.as_bytes()).map_err(Error::Io)?;
         self.0.write_all(&b"\0"[..]).map_err(Error::Io)?;
 
         Ok(())

@@ -349,7 +349,7 @@ impl<'a> Value<'a> {
         if let Value::Value(v) = self {
             <&T>::try_from(v).ok()
         } else {
-            <&T>::try_from(&self).ok()
+            <&T>::try_from(self).ok()
         }
     }
 }

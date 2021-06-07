@@ -166,7 +166,7 @@ pub fn parse_item_attributes(attrs: &[Attribute], attr_name: &str) -> Result<Vec
         Some(meta) => meta
             .nested
             .iter()
-            .map(|m| proxy_parse_item_attribute(&m).unwrap())
+            .map(|m| proxy_parse_item_attribute(m).unwrap())
             .collect(),
         None => Vec::new(),
     };
@@ -192,7 +192,7 @@ pub fn error_parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttrib
         Some(meta) => meta
             .nested
             .iter()
-            .map(|m| error_parse_item_attribute(&m).unwrap())
+            .map(|m| error_parse_item_attribute(m).unwrap())
             .collect(),
         None => Vec::new(),
     };

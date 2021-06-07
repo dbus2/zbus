@@ -166,7 +166,7 @@ where
         // Strings in GVariant format require no alignment.
 
         self.0.sig_parser.skip_char()?;
-        self.0.write_all(&v.as_bytes()).map_err(Error::Io)?;
+        self.0.write_all(v.as_bytes()).map_err(Error::Io)?;
         self.0.write_all(&b"\0"[..]).map_err(Error::Io)?;
 
         Ok(())
@@ -475,7 +475,7 @@ where
                 self.ser.0.write_all(&b"\0"[..]).map_err(Error::Io)?;
                 self.ser
                     .0
-                    .write_all(&signature.as_bytes())
+                    .write_all(signature.as_bytes())
                     .map_err(Error::Io)?;
 
                 Ok(())

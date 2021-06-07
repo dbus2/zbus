@@ -268,7 +268,7 @@ impl<'a> Proxy<'a> {
 
 impl<'a> std::convert::AsRef<Proxy<'a>> for Proxy<'a> {
     fn as_ref(&self) -> &Proxy<'a> {
-        &self
+        self
     }
 }
 

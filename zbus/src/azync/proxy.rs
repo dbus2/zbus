@@ -488,7 +488,7 @@ impl<'a> Proxy<'a> {
             .values_mut()
             .filter(|info| info.signal_name == signal_name)
         {
-            (*info.handler)(&msg).await?;
+            (*info.handler)(msg).await?;
             handled = true;
         }
 
