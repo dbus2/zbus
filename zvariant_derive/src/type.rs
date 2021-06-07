@@ -49,7 +49,7 @@ fn signature_for_struct(fields: Fields, zv: &TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            let mut s = String::from("(");
+            let mut s = <::std::string::String as ::std::convert::From<_>>::from("(");
             #(
                 s.push_str(<#field_types as #zv::Type>::signature().as_str());
             )*

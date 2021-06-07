@@ -57,13 +57,13 @@ fn impl_struct(
             Some(quote! {
                 where
                 #(
-                    #type_params: std::convert::TryFrom<#zv::Value<#value_lifetime>> + #zv::Type
+                    #type_params: ::std::convert::TryFrom<#zv::Value<#value_lifetime>> + #zv::Type
                 ),*
             }),
             Some(quote! {
                 where
                 #(
-                    #type_params: Into<#zv::Value<#value_lifetime>> + #zv::Type
+                    #type_params: ::std::convert::Into<#zv::Value<#value_lifetime>> + #zv::Type
                 ),*
             }),
         )
@@ -78,7 +78,7 @@ fn impl_struct(
                 .map(|field| field.ident.to_token_stream())
                 .collect();
             quote! {
-                impl #impl_generics std::convert::TryFrom<#value_type> for #name #ty_generics
+                impl #impl_generics ::std::convert::TryFrom<#value_type> for #name #ty_generics
                     #from_value_where_clause
                 {
                     type Error = #zv::Error;
@@ -87,7 +87,7 @@ fn impl_struct(
                     fn try_from(value: #value_type) -> #zv::Result<Self> {
                         let mut fields = #zv::Structure::try_from(value)?.into_fields();
 
-                        Ok(Self {
+                        ::std::result::Result::Ok(Self {
                             #(
                                 #field_names:
                                     fields
@@ -117,14 +117,14 @@ fn impl_struct(
         Fields::Unnamed(_) if fields.iter().next().is_some() => {
             // Newtype struct.
             quote! {
-                impl #impl_generics std::convert::TryFrom<#value_type> for #name #ty_generics
+                impl #impl_generics ::std::convert::TryFrom<#value_type> for #name #ty_generics
                     #from_value_where_clause
                 {
                     type Error = #zv::Error;
 
                     #[inline]
                     fn try_from(value: #value_type) -> #zv::Result<Self> {
-                        std::convert::TryInto::try_into(value).map(Self)
+                        ::std::convert::TryInto::try_into(value).map(Self)
                     }
                 }
 
@@ -185,23 +185,23 @@ fn impl_enum(
     };
 
     quote! {
-        impl std::convert::TryFrom<#value_type> for #name {
+        impl ::std::convert::TryFrom<#value_type> for #name {
             type Error = #zv::Error;
 
             #[inline]
             fn try_from(value: #value_type) -> #zv::Result<Self> {
-                let v: #repr = std::convert::TryInto::try_into(value)?;
+                let v: #repr = ::std::convert::TryInto::try_into(value)?;
 
-                Ok(match v {
+                ::std::result::Result::Ok(match v {
                     #(
                         #variant_values => #name::#variant_names
                      ),*,
-                    _ => return Err(#zv::Error::IncorrectType),
+                    _ => return ::std::result::Result::Err(#zv::Error::IncorrectType),
                 })
             }
         }
 
-        impl std::convert::From<#name> for #value_type {
+        impl ::std::convert::From<#name> for #value_type {
             #[inline]
             fn from(e: #name) -> Self {
                 let u: #repr = match e {
@@ -210,7 +210,7 @@ fn impl_enum(
                      ),*
                 };
 
-                #zv::Value::from(u).into()
+                <#zv::Value as ::std::convert::From<_>>::from(u).into()
              }
         }
     }
