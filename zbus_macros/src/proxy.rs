@@ -275,7 +275,7 @@ fn gen_proxy_method_call(
             parse_quote!(#zbus::export::serde::de::DeserializeOwned)
         };
         where_clause.predicates.push(parse_quote!(
-            #param: #serde_bound + zbus::export::zvariant::Type
+            #param: #serde_bound + #zbus::export::zvariant::Type
         ));
     }
     let (_, ty_generics, where_clause) = generics.split_for_impl();
@@ -401,7 +401,7 @@ fn gen_proxy_signal(
         for param in &mut generics.params {
             where_clause
                 .predicates
-                .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'__v> + zbus::export::zvariant::Type));
+                .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'__v> + #zbus::export::zvariant::Type));
         }
         generics.params.push(parse_quote!('__v));
 
@@ -459,7 +459,7 @@ fn gen_proxy_signal(
             }
 
             #[doc = #args_struct_gen_doc]
-            pub struct #signal_name_ident(std::sync::Arc<zbus::Message>);
+            pub struct #signal_name_ident(std::sync::Arc<#zbus::Message>);
 
             impl #signal_name_ident {
                 /// Retrieve the signal arguments.
@@ -467,7 +467,7 @@ fn gen_proxy_signal(
                 /// Instead of providing separate getters for each argument, one method is provided
                 /// to retrieve all the arguments since retrieval requires deserialization of the
                 /// underlying message, which is not a zero-cost operation.
-                pub fn args#ty_generics(&'__v self) -> zbus::Result<(#(#input_types),*)>
+                pub fn args#ty_generics(&'__v self) -> #zbus::Result<(#(#input_types),*)>
                 #where_clause
                 {
                     self.0.body().map_err(Into::into)
@@ -508,7 +508,7 @@ fn gen_proxy_signal(
         for param in &mut generics.params {
             where_clause
                 .predicates
-                .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + zbus::export::zvariant::Type));
+                .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + #zbus::export::zvariant::Type));
         }
         where_clause
             .predicates
