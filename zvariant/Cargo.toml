@@ -20,7 +20,7 @@ ostree-tests = ["gvariant"]
 [dependencies]
 byteorder = "1.3.1"
 serde = { version = "1.0", features = ["derive"] }
-arrayvec = { version = "0.5.1", features = ["serde"], optional = true }
+arrayvec = { version = "0.7.1", features = ["serde"], optional = true }
 enumflags2 = { version = "0.6.4", features = ["serde"], optional = true }
 zvariant_derive = { version = "=2.6.0", path = "../zvariant_derive" }
 serde_bytes = { version = "0.11", optional = true }
