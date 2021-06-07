@@ -5,20 +5,24 @@ use syn::{
     LifetimeDef,
 };
 
+use crate::utils::zvariant_path;
+
 pub enum ValueType {
     Value,
     OwnedValue,
 }
 
 pub fn expand_derive(ast: DeriveInput, value_type: ValueType) -> TokenStream {
+    let zv = zvariant_path();
+
     match ast.data {
         Data::Struct(ds) => match ds.fields {
             Fields::Named(_) | Fields::Unnamed(_) => {
-                impl_struct(value_type, ast.ident, ast.generics, ds.fields)
+                impl_struct(value_type, ast.ident, ast.generics, ds.fields, &zv)
             }
             Fields::Unit => panic!("Unit structures not supported"),
         },
-        Data::Enum(data) => impl_enum(value_type, ast.ident, ast.generics, ast.attrs, data),
+        Data::Enum(data) => impl_enum(value_type, ast.ident, ast.generics, ast.attrs, data, &zv),
         _ => panic!("Only structures and enums supported at the moment"),
     }
 }
@@ -28,6 +32,7 @@ fn impl_struct(
     name: Ident,
     generics: Generics,
     fields: Fields,
+    zv: &TokenStream,
 ) -> TokenStream {
     let statc_lifetime = LifetimeDef::new(Lifetime::new("'static", Span::call_site()));
     let (value_type, value_lifetime) = match value_type {
@@ -41,9 +46,9 @@ fn impl_struct(
                 panic!("Type with more than 1 lifetime not supported");
             }
 
-            (quote! { zvariant::Value<#value_lifetime> }, value_lifetime)
+            (quote! { #zv::Value<#value_lifetime> }, value_lifetime)
         }
-        ValueType::OwnedValue => (quote! { zvariant::OwnedValue }, statc_lifetime),
+        ValueType::OwnedValue => (quote! { #zv::OwnedValue }, statc_lifetime),
     };
 
     let type_params = generics.type_params().cloned().collect::<Vec<_>>();
@@ -52,13 +57,13 @@ fn impl_struct(
             Some(quote! {
                 where
                 #(
-                    #type_params: std::convert::TryFrom<zvariant::Value<#value_lifetime>> + zvariant::Type
+                    #type_params: std::convert::TryFrom<#zv::Value<#value_lifetime>> + #zv::Type
                 ),*
             }),
             Some(quote! {
                 where
                 #(
-                    #type_params: Into<zvariant::Value<#value_lifetime>> + zvariant::Type
+                    #type_params: Into<#zv::Value<#value_lifetime>> + #zv::Type
                 ),*
             }),
         )
@@ -76,11 +81,11 @@ fn impl_struct(
                 impl #impl_generics std::convert::TryFrom<#value_type> for #name #ty_generics
                     #from_value_where_clause
                 {
-                    type Error = zvariant::Error;
+                    type Error = #zv::Error;
 
                     #[inline]
-                    fn try_from(value: #value_type) -> zvariant::Result<Self> {
-                        let mut fields = zvariant::Structure::try_from(value)?.into_fields();
+                    fn try_from(value: #value_type) -> #zv::Result<Self> {
+                        let mut fields = #zv::Structure::try_from(value)?.into_fields();
 
                         Ok(Self {
                             #(
@@ -88,7 +93,7 @@ fn impl_struct(
                                     fields
                                     .remove(0)
                                     .downcast()
-                                    .ok_or_else(|| zvariant::Error::IncorrectType)?
+                                    .ok_or_else(|| #zv::Error::IncorrectType)?
                              ),*
                         })
                     }
@@ -99,7 +104,7 @@ fn impl_struct(
                 {
                     #[inline]
                     fn from(s: #name #ty_generics) -> Self {
-                        zvariant::StructureBuilder::new()
+                        #zv::StructureBuilder::new()
                         #(
                             .add_field(s.#field_names)
                         )*
@@ -115,10 +120,10 @@ fn impl_struct(
                 impl #impl_generics std::convert::TryFrom<#value_type> for #name #ty_generics
                     #from_value_where_clause
                 {
-                    type Error = zvariant::Error;
+                    type Error = #zv::Error;
 
                     #[inline]
-                    fn try_from(value: #value_type) -> zvariant::Result<Self> {
+                    fn try_from(value: #value_type) -> #zv::Result<Self> {
                         std::convert::TryInto::try_into(value).map(Self)
                     }
                 }
@@ -144,6 +149,7 @@ fn impl_enum(
     _generics: Generics,
     attrs: Vec<Attribute>,
     data: DataEnum,
+    zv: &TokenStream,
 ) -> TokenStream {
     let repr: TokenStream = match attrs.iter().find(|attr| attr.path.is_ident("repr")) {
         Some(repr_attr) => repr_attr
@@ -174,23 +180,23 @@ fn impl_enum(
     }
 
     let value_type = match value_type {
-        ValueType::Value => quote! { zvariant::Value<'_> },
-        ValueType::OwnedValue => quote! { zvariant::OwnedValue },
+        ValueType::Value => quote! { #zv::Value<'_> },
+        ValueType::OwnedValue => quote! { #zv::OwnedValue },
     };
 
     quote! {
         impl std::convert::TryFrom<#value_type> for #name {
-            type Error = zvariant::Error;
+            type Error = #zv::Error;
 
             #[inline]
-            fn try_from(value: #value_type) -> zvariant::Result<Self> {
+            fn try_from(value: #value_type) -> #zv::Result<Self> {
                 let v: #repr = std::convert::TryInto::try_into(value)?;
 
                 Ok(match v {
                     #(
                         #variant_values => #name::#variant_names
                      ),*,
-                    _ => return Err(zvariant::Error::IncorrectType),
+                    _ => return Err(#zv::Error::IncorrectType),
                 })
             }
         }
@@ -204,7 +210,7 @@ fn impl_enum(
                      ),*
                 };
 
-                zvariant::Value::from(u).into()
+                #zv::Value::from(u).into()
              }
         }
     }
