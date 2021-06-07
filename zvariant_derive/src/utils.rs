@@ -1,15 +1,15 @@
-use proc_macro2::Span;
+use proc_macro2::TokenStream;
 use proc_macro_crate::crate_name;
-use syn::{Attribute, Ident, Lit, Meta, Meta::List, MetaList, NestedMeta, Result};
+use quote::{format_ident, quote};
+use syn::{Attribute, Lit, Meta, Meta::List, MetaList, NestedMeta, Result};
 
-pub fn get_zvariant_crate_ident() -> Ident {
-    Ident::new(
-        crate_name("zvariant")
-            .as_ref()
-            .map(String::as_str)
-            .unwrap_or("zvariant"),
-        Span::call_site(),
-    )
+pub fn zvariant_path() -> TokenStream {
+    if let Ok(name) = crate_name("zvariant") {
+        let ident = format_ident!("{}", name);
+        quote! { ::#ident }
+    } else {
+        quote! { ::zvariant }
+    }
 }
 
 // find the #[@attr_name] attribute in @attrs
