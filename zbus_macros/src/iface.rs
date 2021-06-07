@@ -3,7 +3,7 @@ use quote::{format_ident, quote};
 use std::collections::{hash_map::Entry, HashMap};
 use syn::{
     self, parse_quote, punctuated::Punctuated, AngleBracketedGenericArguments, AttributeArgs,
-    FnArg, Ident, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue,
+    FnArg, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue,
     NestedMeta, PatType, PathArguments, ReturnType, Signature, Token, Type, TypePath,
 };
 
@@ -29,7 +29,7 @@ impl<'a> Property<'a> {
 }
 
 pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
-    let zbus = get_zbus_crate_ident();
+    let zbus = zbus_path();
 
     let mut properties = HashMap::new();
     let mut set_dispatch = quote!();
@@ -145,7 +145,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             quote!(match reply {
                 Ok(r) => c.reply(m, &#ret),
-                Err(e) => ::#zbus::fdo::Error::from(e).reply(c, m),
+                Err(e) => #zbus::fdo::Error::from(e).reply(c, m),
             })
         } else {
             quote!(c.reply(m, &reply))
@@ -171,7 +171,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             introspect_add_signal(&mut introspect, &member_name, &intro_args);
 
             method.block = parse_quote!({
-                ::#zbus::ObjectServer::local_node_emit_signal(
+                #zbus::ObjectServer::local_node_emit_signal(
                     None,
                     #iface_name,
                     #member_name,
@@ -186,10 +186,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 let prop_changed_method = quote!(
                     pub fn #prop_changed_method_name(&self) -> #zbus::Result<()> {
                         let mut changed = ::std::collections::HashMap::new();
-                        let value = ::#zbus::Interface::get(self, &#member_name)
+                        let value = #zbus::Interface::get(self, &#member_name)
                             .expect(&format!("Property '{}' does not exist", #member_name))?;
                         changed.insert(#member_name, &*value);
-                        let properties_iface = ::#zbus::fdo::Properties;
+                        let properties_iface = #zbus::fdo::Properties;
                         properties_iface.properties_changed(
                             &#iface_name,
                             &changed,
@@ -214,7 +214,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     #member_name => {
                         let val = match value.try_into() {
                             Ok(val) => val,
-                            Err(e) => return Some(Err(::#zbus::MessageError::Variant(e).into())),
+                            Err(e) => return Some(Err(#zbus::MessageError::Variant(e).into())),
                         };
                         let result = #set_call.and_then(|set_result| {
                             self.#prop_changed_method_name()?;
@@ -230,7 +230,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
                 let q = quote!(
                     #member_name => {
-                        Some(Ok(::#zbus::export::zvariant::Value::from(self.#ident()).into()))
+                        Some(Ok(#zbus::export::zvariant::Value::from(self.#ident()).into()))
                     },
                 );
                 get_dispatch.extend(q);
@@ -238,7 +238,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 let q = quote!(
                     props.insert(
                         #member_name.to_string(),
-                        ::#zbus::export::zvariant::Value::from(self.#ident()).into(),
+                        #zbus::export::zvariant::Value::from(self.#ident()).into(),
                     );
                 );
                 get_all.extend(q)
@@ -278,7 +278,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             #generated_signals
         }
 
-        impl #generics ::#zbus::Interface for #self_ty
+        impl #generics #zbus::Interface for #self_ty
         #where_clause
         {
             fn name() -> &'static str {
@@ -288,7 +288,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             fn get(
                 &self,
                 property_name: &str,
-            ) -> Option<::#zbus::fdo::Result<::#zbus::export::zvariant::OwnedValue>> {
+            ) -> Option<#zbus::fdo::Result<#zbus::export::zvariant::OwnedValue>> {
                 match property_name {
                     #get_dispatch
                     _ => None,
@@ -297,10 +297,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             fn get_all(
                 &self,
-            ) -> std::collections::HashMap<String, ::#zbus::export::zvariant::OwnedValue> {
+            ) -> std::collections::HashMap<String, #zbus::export::zvariant::OwnedValue> {
                 let mut props: std::collections::HashMap<
                     String,
-                    ::#zbus::export::zvariant::OwnedValue,
+                    #zbus::export::zvariant::OwnedValue,
                 > = std::collections::HashMap::new();
                 #get_all
                 props
@@ -309,8 +309,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             fn set(
                 &mut self,
                 property_name: &str,
-                value: &::#zbus::export::zvariant::Value,
-            ) -> Option<::#zbus::fdo::Result<()>> {
+                value: &#zbus::export::zvariant::Value,
+            ) -> Option<#zbus::fdo::Result<()>> {
                 use std::convert::TryInto;
 
                 match property_name {
@@ -321,10 +321,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             fn call(
                 &self,
-                c: &::#zbus::Connection,
-                m: &::#zbus::Message,
+                c: &#zbus::Connection,
+                m: &#zbus::Message,
                 name: &str,
-            ) -> std::option::Option<::#zbus::Result<u32>> {
+            ) -> std::option::Option<#zbus::Result<u32>> {
                 match name {
                     #call_dispatch
                     _ => None,
@@ -333,10 +333,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             fn call_mut(
                 &mut self,
-                c: &::#zbus::Connection,
-                m: &::#zbus::Message,
+                c: &#zbus::Connection,
+                m: &#zbus::Message,
                 name: &str,
-            ) -> std::option::Option<::#zbus::Result<u32>> {
+            ) -> std::option::Option<#zbus::Result<u32>> {
                 match name {
                     #call_mut_dispatch
                     _ => None,
@@ -348,11 +348,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     writer,
                     r#"{:indent$}<interface name="{}">"#,
                     "",
-                    <Self as ::#zbus::Interface>::name(),
+                    <Self as #zbus::Interface>::name(),
                     indent = level
                 ).unwrap();
                 {
-                    use ::#zbus::export::zvariant::Type;
+                    use #zbus::export::zvariant::Type;
 
                     let level = level + 2;
                     #introspect
@@ -365,7 +365,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
 fn get_args_from_inputs(
     inputs: &[&PatType],
-    zbus: &Ident,
+    zbus: &TokenStream,
 ) -> syn::Result<(TokenStream, TokenStream)> {
     if inputs.is_empty() {
         Ok((quote!(), quote!()))
@@ -424,7 +424,7 @@ fn get_args_from_inputs(
                 header_arg_decl = Some(quote! {
                     let #header_arg = match m.header() {
                         Ok(r) => r,
-                        Err(e) => return Some(::#zbus::fdo::Error::from(e).reply(c, m)),
+                        Err(e) => return Some(#zbus::fdo::Error::from(e).reply(c, m)),
                     };
                 });
             } else {
@@ -439,7 +439,7 @@ fn get_args_from_inputs(
             let (#(#args),*): (#(#tys),*) =
                 match m.body() {
                     Ok(r) => r,
-                    Err(e) => return Some(::#zbus::fdo::Error::from(e).reply(c, m)),
+                    Err(e) => return Some(#zbus::fdo::Error::from(e).reply(c, m)),
                 };
         };
 

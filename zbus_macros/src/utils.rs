@@ -1,17 +1,17 @@
-use proc_macro2::Span;
+use proc_macro2::TokenStream;
 use proc_macro_crate::crate_name;
+use quote::{format_ident, quote};
 use syn::{
     Attribute, FnArg, Ident, Lit, Meta, MetaList, NestedMeta, Pat, PatIdent, PatType, Result,
 };
 
-pub fn get_zbus_crate_ident() -> Ident {
-    Ident::new(
-        crate_name("zbus")
-            .as_ref()
-            .map(String::as_str)
-            .unwrap_or("zbus"),
-        Span::call_site(),
-    )
+pub fn zbus_path() -> TokenStream {
+    if let Ok(name) = crate_name("zbus") {
+        let ident = format_ident!("{}", name);
+        quote! { ::#ident }
+    } else {
+        quote! { ::zbus }
+    }
 }
 
 pub fn arg_ident(arg: &FnArg) -> Option<&Ident> {
