@@ -971,12 +971,20 @@ mod tests {
             assert_eq!(r.0, u8::max_value());
             assert_eq!(r.1, u32::max_value());
 
-            let rng = thread_rng();
+            let mut rng = thread_rng();
             // Let's test GVariant ser/de of a 254 byte array with variable-width elements as to ensure
             // no problems with non-normal BS of GVariant.
             let as_ = vec![
-                rng.sample_iter(Alphanumeric).take(126).collect::<String>(),
-                rng.sample_iter(Alphanumeric).take(126).collect::<String>(),
+                (&mut rng)
+                    .sample_iter(Alphanumeric)
+                    .map(char::from)
+                    .take(126)
+                    .collect::<String>(),
+                (&mut rng)
+                    .sample_iter(Alphanumeric)
+                    .map(char::from)
+                    .take(126)
+                    .collect::<String>(),
             ];
             let gv_encoded = to_bytes(ctxt, &as_).unwrap();
             // 252 chars + 2 null terminator bytes doesn't leave room for 2 framing offset bytes so a
