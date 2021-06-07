@@ -531,7 +531,7 @@ impl ObjectServer {
     /// to [`dispatch_message()`](Self::dispatch_message). If the message was handled by an an
     /// interface, it returns `Ok(None)`. If not, it returns the received message.
     ///
-    /// Returns an error if the message is malformed or an error occured.
+    /// Returns an error if the message is malformed or an error occurred.
     pub fn try_handle_next(&mut self) -> Result<Option<Arc<Message>>> {
         match block_on(self.msg_stream.next()) {
             Some(msg) => {

@@ -354,7 +354,7 @@ where
 pub struct SeqSerializer<'ser, 'sig, 'b, B, W> {
     ser: &'b mut Serializer<'ser, 'sig, B, W>,
     start: usize,
-    // alignement of element
+    // alignment of element
     element_alignment: usize,
     // size of element signature
     element_signature_len: usize,

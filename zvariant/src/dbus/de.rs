@@ -326,7 +326,7 @@ struct ArrayDeserializer<'d, 'de, 'sig, 'f, B> {
     de: &'d mut Deserializer<'de, 'sig, 'f, B>,
     len: usize,
     start: usize,
-    // alignement of element
+    // alignment of element
     element_alignment: usize,
     // where value signature starts
     element_signature_len: usize,

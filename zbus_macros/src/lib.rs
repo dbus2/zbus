@@ -241,7 +241,7 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [`zbus::Error`]. However, for this to work, we require a variant by the name `ZBus` that
 /// contains an unnamed field of type [`zbus::Error`].
 ///
-/// Additionnally, the derived `impl E` will provide the following convenience methods:
+/// Additionally, the derived `impl E` will provide the following convenience methods:
 ///
 /// * `name(&self)` - get the associated D-Bus error name.
 ///

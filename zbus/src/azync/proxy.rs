@@ -296,7 +296,7 @@ impl<'a> Proxy<'a> {
 
     /// Create a stream for signal named `signal_name`.
     ///
-    /// If the associated connnection is to a bus, a match rule is added for the signal on the bus
+    /// If the associated connection is to a bus, a match rule is added for the signal on the bus
     /// so that the bus sends us the signals. Since this match rule needs to be removed when you're
     /// done with the stream, a synchronous D-Bus method call is made in the destructor of the
     /// stream. If you'd like to avoid this, you must close the stream explicitly, using the
@@ -364,7 +364,7 @@ impl<'a> Proxy<'a> {
     /// ### Errors
     ///
     /// This method can fail if addition of the relevant match rule on the bus fails. You can
-    /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
+    /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
     /// connection.
     pub async fn connect_signal<H>(
         &self,
@@ -411,7 +411,7 @@ impl<'a> Proxy<'a> {
     /// ### Errors
     ///
     /// This method can fail if removal of the relevant match rule on the bus fails. You can
-    /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
+    /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
     /// connection.
     pub async fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
         match self.inner.sig_handlers.lock().await.remove(handler_id) {
@@ -501,7 +501,7 @@ impl<'a> Proxy<'a> {
     /// service but signal messages only specify the unique name of the peer (except for signals
     /// from `org.freedesktop.DBus` service). This means we have no means to check the sender of
     /// the message. While in most cases this will not be a problem, it becomes a problem if you
-    /// need to commmunicate with multiple services exposing the same interface, over the same
+    /// need to communicate with multiple services exposing the same interface, over the same
     /// connection. Hence the need for this method.
     pub(crate) async fn destination_unique_name(&self) -> Result<&str> {
         if let Some(name) = self.inner.dest_unique_name.get() {

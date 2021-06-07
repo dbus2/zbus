@@ -65,7 +65,7 @@ impl<S: Socket> Connection<S> {
                 match self.socket.sendmsg(data, &[]) {
                     Ok(n) => data = &data[n..],
                     Err(e) => {
-                        // an error occured, we cannot send more, store the remaining into
+                        // an error occurred, we cannot send more, store the remaining into
                         // raw_out_buffer and forward the error
                         self.raw_out_buffer.extend(data);
                         return Err(e);
