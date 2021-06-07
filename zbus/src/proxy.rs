@@ -192,7 +192,7 @@ impl<'a> Proxy<'a> {
     /// ### Errors
     ///
     /// This method can fail if addition of the relevant match rule on the bus fails. You can
-    /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
+    /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
     /// connection.
     pub fn connect_signal<H>(
         &self,
@@ -216,7 +216,7 @@ impl<'a> Proxy<'a> {
     /// ### Errors
     ///
     /// This method can fail if removal of the relevant match rule on the bus fails. You can
-    /// safely `unwrap` the `Result` if you're certain that associated connnection is not a bus
+    /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
     /// connection.
     pub fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
         block_on(self.azync.disconnect_signal(handler_id))
@@ -268,7 +268,7 @@ impl<'a> Proxy<'a> {
 
 impl<'a> std::convert::AsRef<Proxy<'a>> for Proxy<'a> {
     fn as_ref(&self) -> &Proxy<'a> {
-        &self
+        self
     }
 }
 

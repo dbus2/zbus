@@ -37,8 +37,8 @@ impl std::fmt::Display for EncodingFormat {
 /// This type is generic over the [ByteOrder] trait. Moreover, the encoding is dependent on the
 /// position of the encoding in the entire message and hence the need to [specify] the byte
 /// position of the data being serialized or deserialized. Simply pass `0` if serializing or
-/// deserializing to or from the beginning of message, or the preceeding bytes end on an 8-byte
-/// boundry.
+/// deserializing to or from the beginning of message, or the preceding bytes end on an 8-byte
+/// boundary.
 ///
 /// # Examples
 ///

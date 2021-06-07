@@ -128,7 +128,7 @@ pub trait Handshake<S> {
     /// until it returns `Ok(())`. Once it does, the handshake is finished
     /// and you can invoke the [`Handshake::try_finish`] method.
     ///
-    /// Note that only the intial handshake is done. If you need to send a
+    /// Note that only the initial handshake is done. If you need to send a
     /// Bus Hello, this remains to be done.
     fn advance_handshake(&mut self) -> Result<()>;
 
@@ -147,7 +147,7 @@ pub trait Handshake<S> {
 }
 
 impl<S: Socket> ClientHandshake<S> {
-    /// Start a handsake on this client socket
+    /// Start a handshake on this client socket
     pub fn new(socket: S) -> ClientHandshake<S> {
         let mut mechanisms = VecDeque::new();
         mechanisms.push_back(Mechanism::External);
@@ -177,7 +177,7 @@ impl<S: Socket> ClientHandshake<S> {
             let mut buf = [0; 40];
             let (read, fds) = self.socket.recvmsg(&mut buf)?;
             if !fds.is_empty() {
-                return Err(Error::Handshake("Unexecpted FDs during handshake".into()));
+                return Err(Error::Handshake("Unexpected FDs during handshake".into()));
             }
             self.recv_buffer.extend(&buf[..read]);
         }

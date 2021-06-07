@@ -63,7 +63,7 @@
 //! trait in addition to [`Serialize`] or [`Deserialize`], respectively. Please refer to [`Type`
 //! module documentation] for more details.
 //!
-//! Most of the [basic types] of D-Bus match 1-1 wit all the primitive Rust types. The only two
+//! Most of the [basic types] of D-Bus match 1-1 with all the primitive Rust types. The only two
 //! exceptions being, [`Signature`] and [`ObjectPath`], which are really just strings. These types
 //! are covered by the [`Basic`] trait.
 //!
@@ -701,7 +701,7 @@ mod tests {
         let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 10);
 
-        // Emtpy array
+        // Empty array
         let at: Vec<u64> = vec![];
         let encoded = to_bytes::<LE, _>(ctxt, &at).unwrap();
         assert_eq!(encoded.len(), 8);

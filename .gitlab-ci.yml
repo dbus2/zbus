@@ -19,7 +19,7 @@ stages:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: '2021-05-20.1'
+    FDO_DISTRIBUTION_TAG: '2021-06-07.2'
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
@@ -37,7 +37,8 @@ stages:
       python3-setuptools
     FDO_DISTRIBUTION_EXEC: >-
       gitlab/install-rust.sh stable &&
-      pip3 install lcov_cobertura
+      pip3 install lcov_cobertura &&
+      pip3 install codespell
   before_script:
     - source ./gitlab/env.sh
     - mkdir .cargo && echo -e "[net]\ngit-fetch-with-cli = true" > .cargo/config
@@ -71,6 +72,7 @@ check:
     - cargo fmt --all -- --check
     - cargo clippy -- -D warnings -Aclippy::upper_case_acronyms
     - cargo audit
+    - codespell
 
 .cargo_test_var: &cargo_test
     - rustc --version

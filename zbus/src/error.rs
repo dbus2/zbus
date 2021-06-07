@@ -32,7 +32,7 @@ pub enum Error {
     InvalidGUID,
     /// Unsupported function, or support currently lacking.
     Unsupported,
-    /// A [`fdo::Error`] tranformed into [`Error`].
+    /// A [`fdo::Error`] transformed into [`Error`].
     FDO(Box<fdo::Error>),
     #[cfg(feature = "xml")]
     /// An XML error

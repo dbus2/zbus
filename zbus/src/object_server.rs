@@ -472,7 +472,7 @@ impl ObjectServer {
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
 
         let node = self
-            .get_node_mut(&path, false)
+            .get_node_mut(path, false)
             .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
         let iface = node.get_interface(iface).ok_or_else(|| {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
@@ -480,8 +480,8 @@ impl ObjectServer {
 
         LOCAL_CONNECTION.set(&conn, || {
             LOCAL_NODE.set(node, || {
-                let res = iface.borrow().call(&conn, &msg, member);
-                res.or_else(|| iface.borrow_mut().call_mut(&conn, &msg, member))
+                let res = iface.borrow().call(&conn, msg, member);
+                res.or_else(|| iface.borrow_mut().call_mut(&conn, msg, member))
                     .ok_or_else(|| {
                         fdo::Error::UnknownMethod(format!("Unknown method '{}'", member))
                     })
@@ -517,7 +517,7 @@ impl ObjectServer {
 
         match msg_header.message_type()? {
             MessageType::MethodCall => {
-                self.dispatch_method_call(&msg_header, &msg)?;
+                self.dispatch_method_call(&msg_header, msg)?;
                 Ok(true)
             }
             _ => Ok(false),
@@ -531,7 +531,7 @@ impl ObjectServer {
     /// to [`dispatch_message()`](Self::dispatch_message). If the message was handled by an an
     /// interface, it returns `Ok(None)`. If not, it returns the received message.
     ///
-    /// Returns an error if the message is malformed or an error occured.
+    /// Returns an error if the message is malformed or an error occurred.
     pub fn try_handle_next(&mut self) -> Result<Option<Arc<Message>>> {
         match block_on(self.msg_stream.next()) {
             Some(msg) => {

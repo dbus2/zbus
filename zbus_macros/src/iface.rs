@@ -134,7 +134,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
         let mut intro_args = quote!();
         introspect_add_input_args(&mut intro_args, &typed_inputs, is_signal);
-        let is_result_output = introspect_add_output_args(&mut intro_args, &output, &out_args)?;
+        let is_result_output = introspect_add_output_args(&mut intro_args, output, &out_args)?;
 
         let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus)?;
 
@@ -546,7 +546,7 @@ fn get_result_type(p: &TypePath) -> syn::Result<&Type> {
         .arguments
     {
         if let Some(syn::GenericArgument::Type(ty)) = args.first() {
-            return Ok(&ty);
+            return Ok(ty);
         }
     }
 

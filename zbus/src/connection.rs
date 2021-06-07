@@ -128,7 +128,7 @@ impl Connection {
     /// let conn = zbus::Connection::new_session()?.set_max_queued(30);
     /// assert_eq!(conn.max_queued(), 30);
     ///
-    /// // Do something usefull with `conn`..
+    /// // Do something useful with `conn`..
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn set_max_queued(self, max: usize) -> Self {

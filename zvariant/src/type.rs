@@ -155,7 +155,7 @@ tuple_impls! {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// Arrays are serialized as tupples/structs by Serde so we treat them as such too even though
+// Arrays are serialized as tuples/structs by Serde so we treat them as such too even though
 // it's very strange. Slices and arrayvec::ArrayVec can be used anyway so I guess it's no big
 // deal.
 // TODO: Mention this fact in the module docs.

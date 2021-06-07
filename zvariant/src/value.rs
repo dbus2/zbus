@@ -20,7 +20,7 @@ use crate::{
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
 ///
-/// Note that this type correponds to the `VARIANT` data type defined by the [D-Bus specification]
+/// Note that this type corresponds to the `VARIANT` data type defined by the [D-Bus specification]
 /// and as such, its encoding is not the same as that of the enclosed value.
 ///
 /// # Examples
@@ -129,7 +129,7 @@ impl<'a> Value<'a> {
     /// Make a [`Value`] for a given value.
     ///
     /// In general, you can use [`Into`] trait on basic types, except
-    /// when you explicitely need to wrap [`Value`] itself, in which
+    /// when you explicitly need to wrap [`Value`] itself, in which
     /// case this constructor comes handy.
     ///
     /// # Examples
@@ -349,7 +349,7 @@ impl<'a> Value<'a> {
         if let Value::Value(v) = self {
             <&T>::try_from(v).ok()
         } else {
-            <&T>::try_from(&self).ok()
+            <&T>::try_from(self).ok()
         }
     }
 }

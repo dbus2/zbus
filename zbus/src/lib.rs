@@ -567,7 +567,7 @@ mod tests {
         // Tests the fix for https://gitlab.freedesktop.org/dbus/zbus/-/issues/104
         //
         // The issue is caused by `dbus_proxy` macro adding `()` around the return value of methods
-        // with multiple out arguments, ending up with double paranthesis around the signature of
+        // with multiple out arguments, ending up with double parenthesis around the signature of
         // the return type and zbus only removing the outer `()` only and then it not matching the
         // signature we receive on the reply message.
         use std::{cell::RefCell, convert::TryFrom, rc::Rc};
@@ -697,7 +697,7 @@ mod tests {
         while !*started {
             started = cvar.wait(started).unwrap();
         }
-        // Still give it some miliseconds to ensure it's already blocking on receive_message call
+        // Still give it some milliseconds to ensure it's already blocking on receive_message call
         // when we send a message.
         std::thread::sleep(std::time::Duration::from_millis(100));
 

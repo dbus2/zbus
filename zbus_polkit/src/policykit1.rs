@@ -347,7 +347,7 @@ trait Authority {
     /// The key `polkit.icon_name` is used to override the icon shown in the authentication dialog.
     ///
     /// If non-empty, then the request will fail with `org.freedesktop.PolicyKit1.Error.Failed`
-    /// unless the process doing the check itsef is sufficiently authorized (e.g. running as uid 0).
+    /// unless the process doing the check itself is sufficiently authorized (e.g. running as uid 0).
     ///
     /// * `flags` - A set of `CheckAuthorizationFlags`.
     ///

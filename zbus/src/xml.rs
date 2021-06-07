@@ -26,7 +26,7 @@ use std::{
 
 use crate::Error;
 
-// note: serde-xml-rs doesnt handle nicely interleaved elements, so we have to use enums:
+// note: serde-xml-rs doesn't handle nicely interleaved elements, so we have to use enums:
 // https://github.com/RReverser/serde-xml-rs/issues/55
 
 macro_rules! get_vec {

@@ -42,7 +42,7 @@ impl<'b> std::ops::Deref for Bytes<'b> {
     fn deref(&self) -> &[u8] {
         match self {
             Bytes::Borrowed(borrowed) => borrowed,
-            Bytes::Owned(owned) => &owned,
+            Bytes::Owned(owned) => owned,
         }
     }
 }
