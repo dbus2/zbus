@@ -23,7 +23,7 @@ pub(crate) fn wait_on(fd: RawFd, flags: PollFlags) -> std::io::Result<()> {
             Ok(_) => break,
             Err(nix::Error::Sys(e)) => {
                 if e == Errno::EAGAIN || e == Errno::EINTR {
-                    // we got interupted, try polling again
+                    // we got interrupted, try polling again
                     continue;
                 } else {
                     return Err(std::io::Error::from(e));

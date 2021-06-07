@@ -346,13 +346,13 @@ struct ArrayDeserializer<'d, 'de, 'sig, 'f, B> {
     de: &'d mut Deserializer<'de, 'sig, 'f, B>,
     len: usize,
     start: usize,
-    // alignement of element
+    // alignment of element
     element_alignment: usize,
     // where value signature starts
     element_signature_len: usize,
     // All offsets (GVariant-specific)
     offsets: Option<FramingOffsets>,
-    // Length of all the offsets after the arrray
+    // Length of all the offsets after the array
     offsets_len: usize,
     // size of the framing offset of last dict-entry key read (GVariant-specific)
     key_offset_size: Option<FramingOffsetSize>,
@@ -603,7 +603,7 @@ struct StructureDeserializer<'d, 'de, 'sig, 'f, B> {
     de: &'d mut Deserializer<'de, 'sig, 'f, B>,
     start: usize,
     end: usize,
-    // Length of all the offsets after the arrray
+    // Length of all the offsets after the array
     offsets_len: usize,
     // size of the framing offset
     offset_size: FramingOffsetSize,
@@ -688,25 +688,25 @@ where
 {
     fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>) -> Result<Self> {
         // GVariant format has signature at the end
-        let mut seperator_pos = None;
+        let mut separator_pos = None;
 
-        // Search for the nul byte seperator
+        // Search for the nul byte separator
         for i in (de.0.pos..de.0.bytes.len() - 1).rev() {
             if de.0.bytes[i] == b'\0' {
-                seperator_pos = Some(i);
+                separator_pos = Some(i);
 
                 break;
             }
         }
 
-        let (sig_start, sig_end, value_start, value_end) = match seperator_pos {
+        let (sig_start, sig_end, value_start, value_end) = match separator_pos {
             None => {
                 return Err(de::Error::invalid_value(
                     de::Unexpected::Bytes(&de.0.bytes[de.0.pos..]),
-                    &"nul byte seperator between Variant's value & signature",
+                    &"nul byte separator between Variant's value & signature",
                 ));
             }
-            Some(seperator_pos) => (seperator_pos + 1, de.0.bytes.len(), de.0.pos, seperator_pos),
+            Some(separator_pos) => (separator_pos + 1, de.0.bytes.len(), de.0.pos, separator_pos),
         };
 
         Ok(ValueDeserializer::<B> {

@@ -408,7 +408,7 @@ trait DBus {
 
     /// This property lists interfaces provided by the `/org/freedesktop/DBus` object, and can be
     /// used by clients to detect the capabilities of the message bus with which they are
-    /// communicating. Unlike the standard Introspectable interface, querying this property does ot
+    /// communicating. Unlike the standard Introspectable interface, querying this property does not
     /// require parsing XML. This property was added in version 1.11.x of the reference
     /// implementation of the message bus.
     ///

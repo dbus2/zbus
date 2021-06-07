@@ -155,7 +155,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
     for iface in &needed_ifaces {
         writeln!(rustfmt_stdin)?;
-        let gen = GenTrait(&iface).to_string();
+        let gen = GenTrait(iface).to_string();
         rustfmt_stdin.write_all(gen.as_bytes())?;
     }
     process.wait()?;

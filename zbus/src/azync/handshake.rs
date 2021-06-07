@@ -113,7 +113,7 @@ where
                         .expect("<Handshake as Future>::poll() called unexpectedly");
                     let authenticated = handshake
                         .try_finish()
-                        .expect("Failed to finish a successfull handshake");
+                        .expect("Failed to finish a successful handshake");
 
                     return Poll::Ready(Ok(Authenticated(authenticated)));
                 }

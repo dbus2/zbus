@@ -250,7 +250,7 @@ pub struct MessageHeader<'m> {
     primary: MessagePrimaryHeader,
     #[serde(borrow)]
     fields: MessageFields<'m>,
-    end: ((),), // To ensure header end on 8-byte boundry
+    end: ((),), // To ensure header end on 8-byte boundary
 }
 
 assert_impl_all!(MessageHeader<'_>: Send, Sync, Unpin);

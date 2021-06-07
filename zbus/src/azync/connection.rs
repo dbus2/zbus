@@ -589,7 +589,7 @@ impl Connection {
     ///#     Ok::<(), zbus::Error>(())
     ///# });
     ///#
-    /// // Do something usefull with `conn`..
+    /// // Do something useful with `conn`..
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn set_max_queued(self, max: usize) -> Self {
@@ -630,8 +630,8 @@ impl Connection {
             None => {
                 let match_rule = signal.create_match_rule();
                 if let Some(match_rule) = &match_rule {
-                    fdo::AsyncDBusProxy::new(&self)?
-                        .add_match(&match_rule)
+                    fdo::AsyncDBusProxy::new(self)?
+                        .add_match(match_rule)
                         .await?;
                 }
 
@@ -672,7 +672,7 @@ impl Connection {
 
                 if subscription.num_subscribers == 0 {
                     if let Some(match_rule) = &subscription.match_rule {
-                        fdo::AsyncDBusProxy::new(&self)?
+                        fdo::AsyncDBusProxy::new(self)?
                             .remove_match(match_rule.as_str())
                             .await?;
                     }

@@ -71,7 +71,7 @@ pub fn parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> 
         Some(meta) => meta
             .nested
             .iter()
-            .map(|m| parse_item_attribute(&m).unwrap())
+            .map(|m| parse_item_attribute(m).unwrap())
             .collect(),
         None => Vec::new(),
     };

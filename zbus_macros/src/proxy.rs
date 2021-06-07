@@ -109,15 +109,15 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                     })
                 });
             let m = if is_property {
-                gen_proxy_property(&name, &m, &async_opts)
+                gen_proxy_property(&name, m, &async_opts)
             } else if is_signal {
                 let (method, types) =
-                    gen_proxy_signal(&proxy_name, &name, &method_name, &m, &async_opts);
+                    gen_proxy_signal(&proxy_name, &name, &method_name, m, &async_opts);
                 stream_types.extend(types);
 
                 method
             } else {
-                gen_proxy_method_call(&name, &method_name, &m, &async_opts)
+                gen_proxy_method_call(&name, &method_name, m, &async_opts)
             };
             methods.extend(m);
         }

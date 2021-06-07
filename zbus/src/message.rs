@@ -417,7 +417,7 @@ impl Message {
     pub fn disown_fds(&self) {
         let mut fds_lock = self.fds.write().expect(LOCK_PANIC_MSG);
         if let Fds::Owned(ref mut fds) = *fds_lock {
-            // From now on, it's the caller responsability to close the fds
+            // From now on, it's the caller responsibility to close the fds
             *fds_lock = Fds::Raw(fds.drain(..).map(|fd| fd.into_raw_fd()).collect());
         }
     }
