@@ -704,7 +704,7 @@ mod tests {
         }
 
         proxy
-            .request_name(&well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+            .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .unwrap();
 
         loop {
@@ -717,10 +717,10 @@ mod tests {
             }
         }
 
-        let result = proxy.release_name(&well_known).unwrap();
+        let result = proxy.release_name(well_known).unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::Released);
 
-        let result = proxy.release_name(&well_known).unwrap();
+        let result = proxy.release_name(well_known).unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::NonExistent);
     }
 
@@ -767,7 +767,7 @@ mod tests {
             let mut stream = owner_change_stream.zip(name_acquired_stream);
 
             proxy
-                .request_name(&well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+                .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
                 .await
                 .unwrap();
 
@@ -776,10 +776,10 @@ mod tests {
             assert_eq!(name_owner_changed.args().unwrap().2, unique_name);
             assert_eq!(name_acquired.args().unwrap(), well_known);
 
-            let result = proxy.release_name(&well_known).await.unwrap();
+            let result = proxy.release_name(well_known).await.unwrap();
             assert_eq!(result, fdo::ReleaseNameReply::Released);
 
-            let result = proxy.release_name(&well_known).await.unwrap();
+            let result = proxy.release_name(well_known).await.unwrap();
             assert_eq!(result, fdo::ReleaseNameReply::NonExistent);
         });
     }
