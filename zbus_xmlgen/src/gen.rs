@@ -296,7 +296,7 @@ mod tests {
     #[test]
     fn gen() -> Result<(), Box<dyn Error>> {
         let node = Node::from_reader(EXAMPLE.as_bytes())?;
-        let t = format!("{}", GenTrait(&node.interfaces()[0]));
+        let t = format!("{}", GenTrait(node.interfaces()[0]));
         println!("{}", t);
         Ok(())
     }
