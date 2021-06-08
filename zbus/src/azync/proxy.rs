@@ -759,10 +759,10 @@ mod tests {
             }
         }
 
-        assert_eq!(proxy.disconnect_signal(name_owner_changed_id).await?, true);
-        assert_eq!(proxy.disconnect_signal(name_owner_changed_id).await?, false);
-        assert_eq!(proxy.disconnect_signal(name_acquired_id).await?, true);
-        assert_eq!(proxy.disconnect_signal(name_acquired_id2).await?, true);
+        assert!(proxy.disconnect_signal(name_owner_changed_id).await?);
+        assert!(!proxy.disconnect_signal(name_owner_changed_id).await?);
+        assert!(proxy.disconnect_signal(name_acquired_id).await?);
+        assert!(proxy.disconnect_signal(name_acquired_id2).await?);
 
         Ok(())
     }
