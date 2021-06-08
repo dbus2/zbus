@@ -193,7 +193,7 @@ fn test_interface() {
 </interface>
 "#;
     let t = Test {
-        something: &"somewhere",
+        something: "somewhere",
         generic: 42u32,
     };
     let mut xml = String::new();

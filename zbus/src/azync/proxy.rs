@@ -745,7 +745,7 @@ mod tests {
         };
 
         fdo::DBusProxy::new(&crate::Connection::from(conn))?
-            .request_name(&well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+            .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .unwrap();
 
         loop {
