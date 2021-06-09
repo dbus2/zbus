@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{btree_map::Entry, BTreeMap};
 use syn::{
     self, parse_quote, punctuated::Punctuated, AngleBracketedGenericArguments, AttributeArgs,
     FnArg, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue,
@@ -31,7 +31,7 @@ impl<'a> Property<'a> {
 pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
     let zbus = zbus_path();
 
-    let mut properties = HashMap::new();
+    let mut properties = BTreeMap::new();
     let mut set_dispatch = quote!();
     let mut get_dispatch = quote!();
     let mut get_all = quote!();
@@ -644,7 +644,7 @@ fn get_property_type(output: &ReturnType) -> syn::Result<&Type> {
 
 fn introspect_add_properties(
     introspect: &mut TokenStream,
-    properties: HashMap<String, Property<'_>>,
+    properties: BTreeMap<String, Property<'_>>,
 ) {
     for (name, prop) in properties {
         let access = if prop.read && prop.write {
