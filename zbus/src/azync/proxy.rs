@@ -96,7 +96,7 @@ struct ProxyProperties<'a> {
 ///
 /// [`futures` crate]: https://crates.io/crates/futures
 /// [`dbus_proxy`]: attr.dbus_proxy.html
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Proxy<'a> {
     pub(crate) inner: Arc<ProxyInner<'a>>,
 }
