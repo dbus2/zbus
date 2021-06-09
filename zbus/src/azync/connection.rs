@@ -615,6 +615,37 @@ impl Connection {
     /// Since zbus will not spawn thread internally to run the executor in this case, you're
     /// responsible to continuously [tick the executor][tte]. Failure to do so will result in hangs.
     ///
+    /// # Examples
+    ///
+    /// Here is how one would typically run the zbus executor through tokio's single-threaded
+    /// scheduler:
+    ///
+    /// ```
+    /// use zbus::azync::Connection;
+    /// use tokio::runtime;
+    ///
+    ///# #[cfg(not(feature = "internal-executor"))]
+    /// runtime::Builder::new_current_thread()
+    ///        .build()
+    ///        .unwrap()
+    ///        .block_on(async {
+    ///     let conn = Connection::new_session().await.unwrap();
+    ///     {
+    ///        let conn = conn.clone();
+    ///        tokio::task::spawn(async move {
+    ///            loop {
+    ///                conn.executor().tick().await;
+    ///            }
+    ///        });
+    ///     }
+    ///
+    ///     // All your other async code goes here.
+    ///
+    ///     // Not needed for multi-threaded scheduler.
+    ///     conn.shutdown().await;
+    /// });
+    /// ```
+    ///
     /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
     pub fn executor(&self) -> &Executor<'static> {
         &self.0.executor
