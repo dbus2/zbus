@@ -32,3 +32,8 @@ mod error;
 pub use error::*;
 
 pub mod policykit1;
+
+#[cfg(doctest)]
+mod doctests {
+    doc_comment::doctest!("../../README.md");
+}
