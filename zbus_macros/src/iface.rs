@@ -71,13 +71,12 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
     }
     let iface_name = iface_name.unwrap_or(format!("org.freedesktop.{}", ty));
 
-    for method in input.items.iter_mut().filter_map(|i| {
-        if let ImplItem::Method(m) = i {
-            Some(m)
-        } else {
-            None
-        }
-    }) {
+    for method in &mut input.items {
+        let mut method = match method {
+            ImplItem::Method(m) => m,
+            _ => continue,
+        };
+
         let Signature {
             ident,
             inputs,
