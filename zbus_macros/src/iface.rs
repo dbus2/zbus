@@ -132,7 +132,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             .collect::<Vec<_>>();
 
         let mut intro_args = quote!();
-        introspect_add_input_args(&mut intro_args, &typed_inputs, is_signal);
+        intro_args.extend(introspect_input_args(&typed_inputs, is_signal));
         let is_result_output = introspect_add_output_args(&mut intro_args, output, &out_args)?;
 
         let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus)?;
@@ -169,7 +169,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
         if is_signal {
             introspect.extend(doc_comments);
-            introspect_add_signal(&mut introspect, &member_name, &intro_args);
+            introspect.extend(introspect_signal(&member_name, &intro_args));
 
             method.block = parse_quote!({
                 #zbus::ObjectServer::local_node_emit_signal(
@@ -260,7 +260,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             }
         } else {
             introspect.extend(doc_comments);
-            introspect_add_method(&mut introspect, &member_name, &intro_args);
+            introspect.extend(introspect_method(&member_name, &intro_args));
 
             let m = quote!(
                 #member_name => {
@@ -278,7 +278,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         }
     }
 
-    introspect_add_properties(&mut introspect, properties);
+    introspect.extend(introspect_properties(properties));
 
     let self_ty = &input.self_ty;
     let generics = &input.generics;
@@ -482,83 +482,82 @@ fn clean_input_args(inputs: &mut Punctuated<FnArg, Token![,]>) {
     }
 }
 
-fn introspect_add_signal(introspect: &mut TokenStream, name: &str, args: &TokenStream) {
-    let intro = quote!(
+fn introspect_signal(name: &str, args: &TokenStream) -> TokenStream {
+    quote!(
         ::std::writeln!(writer, "{:indent$}<signal name=\"{}\">", "", #name, indent = level).unwrap();
         {
             let level = level + 2;
             #args
         }
         ::std::writeln!(writer, "{:indent$}</signal>", "", indent = level).unwrap();
-    );
-
-    introspect.extend(intro);
+    )
 }
 
-fn introspect_add_method(introspect: &mut TokenStream, name: &str, args: &TokenStream) {
-    let intro = quote!(
+fn introspect_method(name: &str, args: &TokenStream) -> TokenStream {
+    quote!(
         ::std::writeln!(writer, "{:indent$}<method name=\"{}\">", "", #name, indent = level).unwrap();
         {
             let level = level + 2;
             #args
         }
         ::std::writeln!(writer, "{:indent$}</method>", "", indent = level).unwrap();
-    );
-
-    introspect.extend(intro);
+    )
 }
 
-fn introspect_add_input_args(args: &mut TokenStream, inputs: &[&PatType], is_signal: bool) {
-    for PatType { pat, ty, attrs, .. } in inputs {
-        let is_header_arg = attrs.iter().any(|attr| {
-            if !attr.path.is_ident("zbus") {
-                return false;
+fn introspect_input_args<'a>(
+    inputs: &'a [&PatType],
+    is_signal: bool,
+) -> impl Iterator<Item = TokenStream> + 'a {
+    inputs
+        .iter()
+        .filter_map(move |PatType { pat, ty, attrs, .. }| {
+            let is_header_arg = attrs.iter().any(|attr| {
+                if !attr.path.is_ident("zbus") {
+                    return false;
+                }
+
+                let meta = match attr.parse_meta() {
+                    ::std::result::Result::Ok(meta) => meta,
+                    ::std::result::Result::Err(_) => return false,
+                };
+
+                let nested = match meta {
+                    Meta::List(MetaList { nested, .. }) => nested,
+                    _ => return false,
+                };
+
+                let res = nested.iter().any(|nested_meta| {
+                    matches!(
+                        nested_meta,
+                        NestedMeta::Meta(Meta::Path(path)) if path.is_ident("header")
+                    )
+                });
+
+                res
+            });
+            if is_header_arg {
+                return None;
             }
 
-            let meta = match attr.parse_meta() {
-                ::std::result::Result::Ok(meta) => meta,
-                ::std::result::Result::Err(_) => return false,
-            };
-
-            let nested = match meta {
-                Meta::List(MetaList { nested, .. }) => nested,
-                _ => return false,
-            };
-
-            let res = nested.iter().any(|nested_meta| {
-                matches!(
-                    nested_meta,
-                    NestedMeta::Meta(Meta::Path(path)) if path.is_ident("header")
-                )
-            });
-
-            res
-        });
-        if is_header_arg {
-            continue;
-        }
-
-        let arg_name = quote!(#pat).to_string();
-        let dir = if is_signal { "" } else { " direction=\"in\"" };
-        let arg = quote!(
-            ::std::writeln!(writer, "{:indent$}<arg name=\"{}\" type=\"{}\"{}/>", "",
-                     #arg_name, <#ty>::signature(), #dir, indent = level).unwrap();
-        );
-        args.extend(arg);
-    }
+            let arg_name = quote!(#pat).to_string();
+            let dir = if is_signal { "" } else { " direction=\"in\"" };
+            Some(quote!(
+                ::std::writeln!(writer, "{:indent$}<arg name=\"{}\" type=\"{}\"{}/>", "",
+                         #arg_name, <#ty>::signature(), #dir, indent = level).unwrap();
+            ))
+        })
 }
 
-fn introspect_add_output_arg(args: &mut TokenStream, ty: &Type, arg_name: Option<&String>) {
+fn introspect_output_arg(ty: &Type, arg_name: Option<&String>) -> TokenStream {
     let arg_name = match arg_name {
         Some(name) => format!("name=\"{}\" ", name),
         None => String::from(""),
     };
 
-    let arg = quote!(
+    quote!(
         ::std::writeln!(writer, "{:indent$}<arg {}type=\"{}\" direction=\"out\"/>", "",
                  #arg_name, <#ty>::signature(), indent = level).unwrap();
-    );
-    args.extend(arg);
+    )
 }
 
 fn get_result_type(p: &TypePath) -> syn::Result<&Type> {
@@ -608,10 +607,10 @@ fn introspect_add_output_args(
             }
             for i in 0..t.elems.len() {
                 let name = arg_names.map(|names| &names[i]);
-                introspect_add_output_arg(args, &t.elems[i], name);
+                args.extend(introspect_output_arg(&t.elems[i], name));
             }
         } else {
-            introspect_add_output_arg(args, ty, None);
+            args.extend(introspect_output_arg(ty, None));
         }
     }
 
@@ -641,11 +640,10 @@ fn get_property_type(output: &ReturnType) -> syn::Result<&Type> {
     }
 }
 
-fn introspect_add_properties(
-    introspect: &mut TokenStream,
+fn introspect_properties(
     properties: BTreeMap<String, Property<'_>>,
-) {
-    for (name, prop) in properties {
+) -> impl Iterator<Item = TokenStream> + '_ {
+    properties.into_iter().filter_map(|(name, prop)| {
         let access = if prop.read && prop.write {
             "readwrite"
         } else if prop.read {
@@ -654,22 +652,22 @@ fn introspect_add_properties(
             "write"
         } else {
             eprintln!("Property '{}' is not readable nor writable!", name);
-            continue;
+            return None;
         };
         let ty = prop
             .ty
             .expect("Write-only properties aren't supported yet.");
 
-        introspect.extend(prop.doc_comments);
-        let intro = quote!(
+        let doc_comments = prop.doc_comments;
+        Some(quote!(
+            #doc_comments
             ::std::writeln!(
                 writer,
                 "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
                 "", #name, <#ty>::signature(), #access, indent = level,
             ).unwrap();
-        );
-        introspect.extend(intro);
-    }
+        ))
+    })
 }
 
 pub fn to_xml_docs(lines: Vec<String>) -> TokenStream {
