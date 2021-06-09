@@ -1,7 +1,11 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
-use async_io::{block_on, Async};
+use async_executor::Executor;
+#[cfg(feature = "internal-executor")]
+use async_io::block_on;
+use async_io::Async;
 use async_lock::{Mutex, MutexGuard};
+use async_task::Task;
 use once_cell::sync::OnceCell;
 use static_assertions::assert_impl_all;
 use std::{
@@ -17,17 +21,15 @@ use std::{
     pin::Pin,
     sync::{
         self,
-        atomic::{AtomicBool, AtomicU32, Ordering::SeqCst},
+        atomic::{AtomicU32, Ordering::SeqCst},
         Arc,
     },
     task::{Context, Poll},
 };
 use zvariant::ObjectPath;
 
-use event_listener::Event;
 use futures_core::{stream, Future};
 use futures_util::{
-    future::{select, Either},
     sink::SinkExt,
     stream::{select as stream_select, StreamExt},
 };
@@ -112,12 +114,16 @@ struct ConnectionInner<S> {
     bus_conn: bool,
     unique_name: OnceCell<String>,
 
+    raw_in_conn: Arc<Mutex<RawConnection<Async<S>>>>,
     raw_out_conn: Mutex<RawConnection<Async<S>>>,
     // Serial number for next outgoing message
     serial: AtomicU32,
 
-    // Message receiver thread
-    msg_receiver_thread: Arc<MessageReceiverThread<S>>,
+    // Our executor
+    executor: Arc<Executor<'static>>,
+
+    // Message receiver task
+    msg_receiver_task: sync::Mutex<Option<Task<()>>>,
 
     // We're using sync Mutex here as we don't intend to keep it locked while awaiting.
     msg_receiver: sync::RwLock<InactiveReceiver<Arc<Message>>>,
@@ -128,58 +134,62 @@ struct ConnectionInner<S> {
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 }
 
+// FIXME: Should really use `AsyncDrop` when we've something like that:
+//
+// https://github.com/rust-lang/wg-async-foundations/issues/65
 impl<S> Drop for ConnectionInner<S> {
     fn drop(&mut self) {
-        self.msg_receiver_thread.run.store(false, SeqCst);
-        self.msg_receiver_thread.run_event.notify(1);
+        // SAFETY: `msg_receiver_task` is set in the constructor so it can't be None.
+        #[cfg(feature = "internal-executor")]
+        // In case of external executor running the task, we can't just use block_on (IOW another
+        // executor) to cancel the task. Dropping the task cancels it automatically anyway. The
+        // only difference is the explicit cancellation waits for it to be cancelled/resolved.
+        block_on(
+            self.msg_receiver_task
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap()
+                .cancel(),
+        );
     }
 }
 
 #[derive(Debug)]
-struct MessageReceiverThread<S> {
-    raw_in_conn: Mutex<RawConnection<Async<S>>>,
+struct MessageReceiverTask<S> {
+    raw_in_conn: Arc<Mutex<RawConnection<Async<S>>>>,
 
     // Message broadcaster.
     msg_sender: Broadcaster<Arc<Message>>,
 
     // Sender side of the error channel
     error_sender: Sender<Error>,
-
-    // To notify msg receeiver thread that it doesn't need to run anymore.
-    run_event: Event,
-    run: AtomicBool,
 }
 
-impl MessageReceiverThread<Box<dyn Socket>> {
+type DynSocketConnection = RawConnection<Async<Box<dyn Socket>>>;
+
+impl MessageReceiverTask<Box<dyn Socket>> {
     fn new(
-        raw_in_conn: RawConnection<Async<Box<dyn Socket>>>,
+        raw_in_conn: Arc<Mutex<DynSocketConnection>>,
         msg_sender: Broadcaster<Arc<Message>>,
         error_sender: Sender<Error>,
     ) -> Arc<Self> {
         Arc::new(Self {
-            raw_in_conn: Mutex::new(raw_in_conn),
+            raw_in_conn,
             msg_sender,
             error_sender,
-            run_event: Event::new(),
-            run: AtomicBool::new(true),
         })
     }
 
-    fn launch(self: Arc<Self>) -> Result<()> {
-        // FIXME: Perhaps this should be a task but something needs to drive it then then. Maybe
-        // the message stream should run the task but then we'll probably be back to the issue of
-        // stream not being reliable in all situations, which is precisely why we split the message
-        // receiving into a separate thread.
-        std::thread::Builder::new()
-            .name("zbus::azync::Connection::receive_msg".into())
-            .spawn(move || block_on(self.receive_msg()))?;
-
-        Ok(())
+    fn spawn(self: Arc<Self>, executor: &Executor<'_>) -> Task<()> {
+        executor.spawn(async move {
+            self.receive_msg().await;
+        })
     }
 
     // Keep receiving messages and put them on the queue.
     async fn receive_msg(self: Arc<Self>) {
-        while self.run.load(SeqCst) {
+        loop {
             let mut raw_conn = self.raw_in_conn.lock().await;
 
             // Ignore errors from sending to msg or error channels. The only reason these calls
@@ -187,26 +197,17 @@ impl MessageReceiverThread<Box<dyn Socket>> {
             // being dropped.
             // TODO: We should still log in case of error when we've logging.
 
-            let msg = match select(
-                Box::pin(ReceiveMessage {
-                    raw_conn: &mut raw_conn,
-                }),
-                self.run_event.listen(),
-            )
-            .await
-            {
-                Either::Left((msg, _)) => {
-                    match msg {
-                        Ok(msg) => msg,
-                        Err(e) => {
-                            // Ignoring errors. See comment above.
-                            let _ = self.error_sender.send(e).await;
+            let receive_msg = ReceiveMessage {
+                raw_conn: &mut raw_conn,
+            };
+            let msg = match receive_msg.await {
+                Ok(msg) => msg,
+                Err(e) => {
+                    // Ignoring errors. See comment above.
+                    let _ = self.error_sender.send(e).await;
 
-                            continue;
-                        }
-                    }
+                    continue;
                 }
-                Either::Right((_, _)) => continue,
             };
 
             let msg = Arc::new(msg);
@@ -607,9 +608,80 @@ impl Connection {
         self.0.server_guid.as_str()
     }
 
+    #[cfg(any(doc, not(feature = "internal-executor")))]
+    /// The underlying executor.
+    ///
+    /// This method is available when built with the default `internal-executor` feature disabled.
+    /// Since zbus will not spawn thread internally to run the executor in this case, you're
+    /// responsible to continuously [tick the executor][tte]. Failure to do so will result in hangs.
+    ///
+    /// # Examples
+    ///
+    /// Here is how one would typically run the zbus executor through tokio's single-threaded
+    /// scheduler:
+    ///
+    /// ```
+    /// use zbus::azync::Connection;
+    /// use tokio::runtime;
+    ///
+    ///# #[cfg(not(feature = "internal-executor"))]
+    /// runtime::Builder::new_current_thread()
+    ///        .build()
+    ///        .unwrap()
+    ///        .block_on(async {
+    ///     let conn = Connection::new_session().await.unwrap();
+    ///     {
+    ///        let conn = conn.clone();
+    ///        tokio::task::spawn(async move {
+    ///            loop {
+    ///                conn.executor().tick().await;
+    ///            }
+    ///        });
+    ///     }
+    ///
+    ///     // All your other async code goes here.
+    ///
+    ///     // Not needed for multi-threaded scheduler.
+    ///     conn.shutdown().await;
+    /// });
+    /// ```
+    ///
+    /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
+    pub fn executor(&self) -> &Executor<'static> {
+        &self.0.executor
+    }
+
+    #[cfg(any(doc, not(feature = "internal-executor")))]
+    /// Shutdown the connection.
+    ///
+    /// This method is available when built with the default `internal-executor` feature disabled.
+    ///
+    /// When using single-threaded external executors, such as [tokio's current-thread
+    /// scheduler][tcts], this method must be called to drop the connection. Otherwise your thread
+    /// will hang. On the other hand, calling this method is optional when using multi-threaded
+    /// external executors, such as [tokio's multi-thread scheduler][tmts].
+    ///
+    /// # Panics
+    ///
+    /// This method panics if called more than once for the same connection. You must ensure that
+    /// it's only called when dropping the last clone of a connection.
+    ///
+    /// [tcts]: https://docs.rs/tokio/1.6.1/tokio/runtime/index.html#current-thread-scheduler
+    /// [tmts]: https://docs.rs/tokio/1.6.1/tokio/runtime/index.html#multi-thread-scheduler
+    pub async fn shutdown(self) {
+        self.0
+            .msg_receiver_task
+            .lock()
+            .unwrap()
+            .take()
+            .expect("shutdown called twice on a connection")
+            .cancel()
+            .await;
+    }
+
     /// Get the raw file descriptor of this connection.
     pub async fn as_raw_fd(&self) -> RawFd {
-        (self.0.msg_receiver_thread.raw_in_conn.lock().await.socket()).as_raw_fd()
+        (self.0.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
     pub(crate) async fn subscribe_signal<'s, E>(
@@ -686,8 +758,36 @@ impl Connection {
         }
     }
 
-    async fn hello_bus(self) -> Result<Self> {
-        let name = fdo::AsyncDBusProxy::new(&self)?.hello().await?;
+    async fn hello_bus(&self) -> Result<()> {
+        let dbus_proxy = fdo::AsyncDBusProxy::new(self)?;
+        let future = dbus_proxy.hello();
+
+        #[cfg(feature = "internal-executor")]
+        let name = future.await?;
+
+        // With external executor, our executor is only run after the connection construction is
+        // completed and this method is (and must) run before that so we need to tick the executor
+        // ourselves in parallel to making the method call.
+        #[cfg(not(feature = "internal-executor"))]
+        let name = {
+            use futures_util::future::{select, Either};
+
+            let executor = self.0.executor.clone();
+            let ticking_future = async move {
+                // Keep running as long as this task/future is not cancelled.
+                loop {
+                    executor.tick().await;
+                }
+            };
+
+            futures_util::pin_mut!(future);
+            futures_util::pin_mut!(ticking_future);
+
+            match select(future, ticking_future).await {
+                Either::Left((res, _)) => res?,
+                Either::Right((_, _)) => unreachable!("ticking task future shouldn't finish"),
+            }
+        };
 
         self.0
             .unique_name
@@ -695,7 +795,7 @@ impl Connection {
             // programmer (probably our) error if this fails.
             .expect("Attempted to set unique_name twice");
 
-        Ok(self)
+        Ok(())
     }
 
     async fn new(
@@ -709,9 +809,16 @@ impl Connection {
         msg_sender.set_overflow(true);
         let msg_receiver = msg_receiver.deactivate();
         let (error_sender, error_receiver) = bounded(1);
-        let msg_receiver_thread = MessageReceiverThread::new(auth.conn, msg_sender, error_sender);
+        let executor = Arc::new(Executor::new());
+        let raw_in_conn = Arc::new(Mutex::new(auth.conn));
+
+        // Start the message receiver task.
+        let msg_receiver_task =
+            MessageReceiverTask::new(raw_in_conn.clone(), msg_sender, error_sender)
+                .spawn(&executor);
 
         let connection = Self(Arc::new(ConnectionInner {
+            raw_in_conn,
             raw_out_conn: Mutex::new(out_conn),
             error_receiver,
             server_guid: auth.server_guid,
@@ -720,19 +827,31 @@ impl Connection {
             serial: AtomicU32::new(1),
             unique_name: OnceCell::new(),
             signal_subscriptions: Mutex::new(HashMap::new()),
-            msg_receiver_thread: msg_receiver_thread.clone(),
             msg_receiver: sync::RwLock::new(msg_receiver),
+            executor: executor.clone(),
+            msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
         }));
 
-        // Start the message receiver thread.
-        msg_receiver_thread.launch()?;
+        #[cfg(feature = "internal-executor")]
+        std::thread::Builder::new()
+            .name("zbus::azync::Connection::receive_msg".into())
+            .spawn(move || {
+                block_on(async move {
+                    // Run as long as there is a task to run.
+                    while !executor.is_empty() {
+                        executor.tick().await;
+                    }
+                })
+            })?;
 
         if !bus_connection {
             return Ok(connection);
         }
 
         // Now that the server has approved us, we must send the bus Hello, as per specs
-        connection.hello_bus().await
+        connection.hello_bus().await?;
+
+        Ok(connection)
     }
 
     fn next_serial(&self) -> u32 {

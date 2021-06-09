@@ -632,7 +632,6 @@ impl From<zbus::MessageError> for Error {
 #[cfg(test)]
 mod tests {
     use crate::{fdo, Error, Message};
-    use async_io::block_on;
     use futures_util::StreamExt;
     use ntest::timeout;
     use std::{
@@ -644,6 +643,7 @@ mod tests {
         },
     };
     use test_env_log::test;
+    use tokio::runtime;
 
     #[test]
     fn error_from_zerror() {
@@ -727,60 +727,84 @@ mod tests {
     #[test]
     #[timeout(1000)]
     fn signal_stream() {
+        // Multi-threaded scheduler.
+        runtime::Runtime::new()
+            .unwrap()
+            .block_on(test_signal_stream(false));
+
+        // single-threaded scheduler.
+        runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(test_signal_stream(true));
+    }
+
+    async fn test_signal_stream(single_threaded: bool) {
+        let conn = crate::azync::Connection::new_session().await.unwrap();
+        let proxy = fdo::AsyncDBusProxy::new(&conn).unwrap();
+
+        #[cfg(not(feature = "internal-executor"))]
+        {
+            let conn = conn.clone();
+            tokio::task::spawn(async move {
+                loop {
+                    conn.executor().tick().await;
+                }
+            });
+        }
+
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
-
-        block_on(async {
-            let conn = crate::azync::Connection::new_session().await.unwrap();
-            let proxy = fdo::AsyncDBusProxy::new(&conn).unwrap();
-
-            let well_known = "org.freedesktop.zbus.FdoSignalStreamTest";
-            let unique_name = conn.unique_name().unwrap().to_string();
-            let owner_change_stream =
-                proxy
-                    .receive_name_owner_changed()
-                    .await
-                    .unwrap()
-                    .filter(|signal| {
-                        let (name, _, new_owner) = signal.args().unwrap();
-
-                        if name != well_known {
-                            // Meant for the other testcase then
-                            return ready(false);
-                        }
-                        assert_eq!(new_owner, unique_name);
-
-                        ready(true)
-                    });
-
-            let name_acquired_stream =
-                proxy
-                    .receive_name_acquired()
-                    .await
-                    .unwrap()
-                    .filter(|signal| {
-                        let name = signal.args().unwrap();
-                        // `NameAcquired` is emitted twice, first when the unique name is assigned on
-                        // connection and secondly after we ask for a specific name.
-                        ready(name == well_known)
-                    });
-            let mut stream = owner_change_stream.zip(name_acquired_stream);
-
+        let well_known = "org.freedesktop.zbus.FdoSignalStreamTest";
+        let unique_name = conn.unique_name().unwrap().to_string();
+        let owner_change_stream =
             proxy
-                .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+                .receive_name_owner_changed()
                 .await
-                .unwrap();
+                .unwrap()
+                .filter(|signal| {
+                    let (name, _, new_owner) = signal.args().unwrap();
 
-            let (name_owner_changed, name_acquired) = stream.next().await.unwrap();
-            assert_eq!(name_owner_changed.args().unwrap().0, well_known);
-            assert_eq!(name_owner_changed.args().unwrap().2, unique_name);
-            assert_eq!(name_acquired.args().unwrap(), well_known);
+                    if name != well_known {
+                        // Meant for the other testcase then
+                        return ready(false);
+                    }
+                    assert_eq!(new_owner, unique_name);
 
-            let result = proxy.release_name(well_known).await.unwrap();
-            assert_eq!(result, fdo::ReleaseNameReply::Released);
+                    ready(true)
+                });
 
-            let result = proxy.release_name(well_known).await.unwrap();
-            assert_eq!(result, fdo::ReleaseNameReply::NonExistent);
-        });
+        let name_acquired_stream = proxy
+            .receive_name_acquired()
+            .await
+            .unwrap()
+            .filter(|signal| {
+                let name = signal.args().unwrap();
+                // `NameAcquired` is emitted twice, first when the unique name is assigned on
+                // connection and secondly after we ask for a specific name.
+                ready(name == well_known)
+            });
+        let mut stream = owner_change_stream.zip(name_acquired_stream);
+
+        proxy
+            .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+            .await
+            .unwrap();
+
+        let (name_owner_changed, name_acquired) = stream.next().await.unwrap();
+        assert_eq!(name_owner_changed.args().unwrap().0, well_known);
+        assert_eq!(name_owner_changed.args().unwrap().2, unique_name);
+        assert_eq!(name_acquired.args().unwrap(), well_known);
+
+        let result = proxy.release_name(well_known).await.unwrap();
+        assert_eq!(result, fdo::ReleaseNameReply::Released);
+
+        let result = proxy.release_name(well_known).await.unwrap();
+        assert_eq!(result, fdo::ReleaseNameReply::NonExistent);
+
+        if single_threaded {
+            #[cfg(not(feature = "internal-executor"))]
+            conn.shutdown().await;
+        }
     }
 }

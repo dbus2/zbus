@@ -1,2 +1,3 @@
 [workspace]
 members = ["zbus", "zvariant", "zvariant_derive", "zbus_macros", "zbus_xmlgen", "zbus_polkit"]
+resolver = "2"
