@@ -1,10 +1,10 @@
 use proc_macro2::TokenStream;
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
 use syn::{Attribute, Lit, Meta, Meta::List, MetaList, NestedMeta, Result};
 
 pub fn zvariant_path() -> TokenStream {
-    if let Ok(name) = crate_name("zvariant") {
+    if let Ok(FoundCrate::Name(name)) = crate_name("zvariant") {
         let ident = format_ident!("{}", name);
         quote! { ::#ident }
     } else {

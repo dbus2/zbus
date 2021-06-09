@@ -1,12 +1,12 @@
 use proc_macro2::TokenStream;
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
 use syn::{
     Attribute, FnArg, Ident, Lit, Meta, MetaList, NestedMeta, Pat, PatIdent, PatType, Result,
 };
 
 pub fn zbus_path() -> TokenStream {
-    if let Ok(name) = crate_name("zbus") {
+    if let Ok(FoundCrate::Name(name)) = crate_name("zbus") {
         let ident = format_ident!("{}", name);
         quote! { ::#ident }
     } else {
