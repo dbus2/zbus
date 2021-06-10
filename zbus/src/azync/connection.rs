@@ -134,26 +134,10 @@ struct ConnectionInner<S> {
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 }
 
-// FIXME: Should really use `AsyncDrop` when we've something like that:
+// FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
+//        cancel `msg_receiver_task` manually to ensure task is gone before the connection is.
 //
-// https://github.com/rust-lang/wg-async-foundations/issues/65
-impl<S> Drop for ConnectionInner<S> {
-    fn drop(&mut self) {
-        // SAFETY: `msg_receiver_task` is set in the constructor so it can't be None.
-        #[cfg(feature = "internal-executor")]
-        // In case of external executor running the task, we can't just use block_on (IOW another
-        // executor) to cancel the task. Dropping the task cancels it automatically anyway. The
-        // only difference is the explicit cancellation waits for it to be cancelled/resolved.
-        block_on(
-            self.msg_receiver_task
-                .lock()
-                .unwrap()
-                .take()
-                .unwrap()
-                .cancel(),
-        );
-    }
-}
+// [`AsyncDrop`]: https://github.com/rust-lang/wg-async-foundations/issues/65
 
 #[derive(Debug)]
 struct MessageReceiverTask<S> {
