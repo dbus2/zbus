@@ -258,7 +258,11 @@ fn gen_proxy_method_call(
     let inputs = &m.sig.inputs;
     let mut generics = m.sig.generics.clone();
     let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-    for param in &mut generics.params {
+    for param in generics
+        .params
+        .iter()
+        .filter(|a| matches!(a, syn::GenericParam::Type(_)))
+    {
         let is_input_type = inputs.iter().any(|arg| {
             // FIXME: We want to only require `Serialize` from input types and `DeserializeOwned`
             // from output types but since we don't have type introspection, we employ this
@@ -401,7 +405,11 @@ fn gen_proxy_signal(
     let (receive_signal, stream_types) = if async_opts.azync {
         let mut generics = m.sig.generics.clone();
         let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-        for param in &mut generics.params {
+        for param in generics
+            .params
+            .iter()
+            .filter(|a| matches!(a, syn::GenericParam::Type(_)))
+        {
             where_clause
                 .predicates
                 .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'__v> + #zbus::export::zvariant::Type));
@@ -540,7 +548,11 @@ fn gen_proxy_signal(
     let mut generics = m.sig.generics.clone();
     {
         let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-        for param in &mut generics.params {
+        for param in generics
+            .params
+            .iter()
+            .filter(|a| matches!(a, syn::GenericParam::Type(_)))
+        {
             where_clause
                 .predicates
                 .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + #zbus::export::zvariant::Type));
