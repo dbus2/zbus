@@ -465,25 +465,25 @@ fn gen_proxy_signal(
 
             impl<'s> #stream_name<'s> {
                 /// Consumes `self`, returning the underlying `zbus::azync::SignalStream`.
-                pub fn into_inner(self) -> ::#zbus::azync::SignalStream<'s> {
+                pub fn into_inner(self) -> #zbus::azync::SignalStream<'s> {
                     self.0
                 }
 
                 /// The reference to the underlying `zbus::azync::SignalStream`.
-                pub fn inner(&self) -> & ::#zbus::azync::SignalStream<'s> {
+                pub fn inner(&self) -> & #zbus::azync::SignalStream<'s> {
                     &self.0
                 }
             }
 
-            impl<'s> std::ops::Deref for #stream_name<'s> {
-                type Target = ::#zbus::azync::SignalStream<'s>;
+            impl<'s> ::std::ops::Deref for #stream_name<'s> {
+                type Target = #zbus::azync::SignalStream<'s>;
 
                 fn deref(&self) -> &Self::Target {
                     &self.0
                 }
             }
 
-            impl std::ops::DerefMut for #stream_name<'_> {
+            impl ::std::ops::DerefMut for #stream_name<'_> {
                 fn deref_mut(&mut self) -> &mut Self::Target {
                     &mut self.0
                 }
