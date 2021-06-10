@@ -716,7 +716,7 @@ impl Connection {
         self.0
             .executor
             .spawn(async move {
-                let _ = conn.unsubscribe_signal_by_id(subscription_id);
+                let _ = conn.unsubscribe_signal_by_id(subscription_id).await;
             })
             .detach()
     }
