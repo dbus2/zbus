@@ -640,43 +640,12 @@ impl Connection {
     ///     }
     ///
     ///     // All your other async code goes here.
-    ///
-    ///     // Not needed for multi-threaded scheduler.
-    ///     conn.shutdown().await;
     /// });
     /// ```
     ///
     /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
     pub fn executor(&self) -> &Executor<'static> {
         &self.0.executor
-    }
-
-    #[cfg(any(doc, not(feature = "internal-executor")))]
-    /// Shutdown the connection.
-    ///
-    /// This method is available when built with the default `internal-executor` feature disabled.
-    ///
-    /// When using single-threaded external executors, such as [tokio's current-thread
-    /// scheduler][tcts], this method must be called to drop the connection. Otherwise your thread
-    /// will hang. On the other hand, calling this method is optional when using multi-threaded
-    /// external executors, such as [tokio's multi-thread scheduler][tmts].
-    ///
-    /// # Panics
-    ///
-    /// This method panics if called more than once for the same connection. You must ensure that
-    /// it's only called when dropping the last clone of a connection.
-    ///
-    /// [tcts]: https://docs.rs/tokio/1.6.1/tokio/runtime/index.html#current-thread-scheduler
-    /// [tmts]: https://docs.rs/tokio/1.6.1/tokio/runtime/index.html#multi-thread-scheduler
-    pub async fn shutdown(self) {
-        self.0
-            .msg_receiver_task
-            .lock()
-            .unwrap()
-            .take()
-            .expect("shutdown called twice on a connection")
-            .cancel()
-            .await;
     }
 
     /// Get the raw file descriptor of this connection.
