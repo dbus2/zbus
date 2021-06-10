@@ -306,7 +306,7 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub async fn receive_signal(&self, signal_name: &'static str) -> Result<SignalStream<'_>> {
+    pub async fn receive_signal(&self, signal_name: &'static str) -> Result<SignalStream<'a>> {
         let subscription_id = if self.inner.conn.is_bus() {
             let id = self
                 .inner
