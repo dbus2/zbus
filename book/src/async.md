@@ -75,7 +75,10 @@ async fn run() -> Result<()> {
             let conn = conn.clone();
 
             async move {
-                let location = AsyncLocationProxy::builder(&conn).path(new)?.build()?;
+                let location = AsyncLocationProxy::builder(&conn)
+                    .path(new)?
+                    .build_async()
+                    .await?;
                 println!(
                     "Latitude: {}\nLongitude: {}",
                     location.latitude().await?,
@@ -161,7 +164,8 @@ example again to receive multiple signals on different proxies:
     let props = zbus::fdo::AsyncPropertiesProxy::builder(&conn)
         .destination("org.freedesktop.GeoClue2")
         .path(client.path())?
-        .build()?;
+        .build_async()
+        .await?;
     props
         .connect_properties_changed(move |iface, changed, _| {
             for (name, value) in changed.iter() {
@@ -180,7 +184,8 @@ example again to receive multiple signals on different proxies:
             async move {
                 let location = AsyncLocationProxy::builder(&conn)
                     .path(new)?
-                    .build()?;
+                    .build_async()
+                    .await?;
                 println!(
                     "Latitude: {}\nLongitude: {}",
                     location.latitude().await?,
