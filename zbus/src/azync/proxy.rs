@@ -14,7 +14,6 @@ use std::{
     task::{Context, Poll},
 };
 
-use async_io::block_on;
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
@@ -560,32 +559,6 @@ pub struct SignalStream<'s> {
 
 assert_impl_all!(SignalStream<'_>: Send, Unpin);
 
-impl SignalStream<'_> {
-    /// Close this stream.
-    ///
-    /// If not called explicitly on the stream, it is done for you but at the cost of synchronous
-    /// D-Bus calls.
-    ///
-    /// # Warning
-    ///
-    /// While we do close the stream for you, you should not drop a stream from an asynchronous
-    /// context. Otherwise, you will likely hang your threads with certain runtimes, such as
-    /// [tokio's current-thread scheduler][tcts].
-    ///
-    /// [tcts]: https://docs.rs/tokio/1.6.1/tokio/runtime/index.html#current-thread-scheduler
-    pub async fn close(mut self) -> Result<()> {
-        self.close_().await
-    }
-
-    async fn close_(&mut self) -> Result<()> {
-        if let Some(id) = self.subscription_id.take() {
-            let _ = self.conn.unsubscribe_signal_by_id(id).await?;
-        }
-
-        Ok(())
-    }
-}
-
 impl stream::Stream for SignalStream<'_> {
     type Item = Arc<Message>;
 
@@ -596,9 +569,8 @@ impl stream::Stream for SignalStream<'_> {
 
 impl std::ops::Drop for SignalStream<'_> {
     fn drop(&mut self) {
-        if self.subscription_id.is_some() {
-            // User didn't close the stream explicitly so we've to do it synchronously ourselves.
-            let _ = block_on(self.close_());
+        if let Some(id) = self.subscription_id.take() {
+            self.conn.queue_unsubscribe_signal(id);
         }
     }
 }
@@ -612,6 +584,7 @@ impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_io::block_on;
     use futures_util::future::FutureExt;
     use ntest::timeout;
     use std::{future::ready, sync::Arc};
