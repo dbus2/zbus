@@ -23,7 +23,7 @@ and proxy:
 ```rust,no_run
 use futures_util::future::FutureExt;
 use zbus::{azync::Connection, dbus_proxy, Result};
-use zvariant::{ObjectPath, OwnedObjectPath};
+use zvariant::ObjectPath;
 
 # async_io::block_on(run()).unwrap();
 #
@@ -114,7 +114,7 @@ example again to receive multiple signals on different proxies:
 ```rust,no_run
 # use futures_util::future::FutureExt;
 # use zbus::{azync::Connection, dbus_proxy, Result};
-# use zvariant::{ObjectPath, OwnedObjectPath};
+# use zvariant::ObjectPath;
 #
 # async_io::block_on(run()).unwrap();
 #
