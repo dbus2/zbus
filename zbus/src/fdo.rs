@@ -730,16 +730,16 @@ mod tests {
         // Multi-threaded scheduler.
         runtime::Runtime::new()
             .unwrap()
-            .block_on(test_signal_stream(false));
+            .block_on(test_signal_stream());
 
         // single-threaded scheduler.
         runtime::Builder::new_current_thread()
             .build()
             .unwrap()
-            .block_on(test_signal_stream(true));
+            .block_on(test_signal_stream());
     }
 
-    async fn test_signal_stream(single_threaded: bool) {
+    async fn test_signal_stream() {
         let conn = crate::azync::Connection::new_session().await.unwrap();
         let proxy = fdo::AsyncDBusProxy::new(&conn).unwrap();
 
@@ -802,9 +802,21 @@ mod tests {
         let result = proxy.release_name(well_known).await.unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::NonExistent);
 
-        if single_threaded {
-            #[cfg(not(feature = "internal-executor"))]
-            conn.shutdown().await;
-        }
+        // Gotta explicitly close the streams. Otherwise we get a hang in case of single-threaded
+        // scheduler. Alternatively, we can just return the streams and let them be dropped outside
+        // this async context.
+        let (owner_change_stream, name_acquired_stream) = stream.into_inner();
+        owner_change_stream
+            .into_inner()
+            .into_inner()
+            .close()
+            .await
+            .unwrap();
+        name_acquired_stream
+            .into_inner()
+            .into_inner()
+            .close()
+            .await
+            .unwrap();
     }
 }
