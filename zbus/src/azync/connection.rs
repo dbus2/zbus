@@ -727,6 +727,16 @@ impl Connection {
         }
     }
 
+    pub(crate) fn queue_unsubscribe_signal(&self, subscription_id: u64) {
+        let conn = self.clone();
+        self.0
+            .executor
+            .spawn(async move {
+                let _ = conn.unsubscribe_signal_by_id(subscription_id);
+            })
+            .detach()
+    }
+
     async fn hello_bus(&self) -> Result<()> {
         let dbus_proxy = fdo::AsyncDBusProxy::new(self)?;
         let future = dbus_proxy.hello();

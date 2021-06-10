@@ -801,22 +801,5 @@ mod tests {
 
         let result = proxy.release_name(well_known).await.unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::NonExistent);
-
-        // Gotta explicitly close the streams. Otherwise we get a hang in case of single-threaded
-        // scheduler. Alternatively, we can just return the streams and let them be dropped outside
-        // this async context.
-        let (owner_change_stream, name_acquired_stream) = stream.into_inner();
-        owner_change_stream
-            .into_inner()
-            .into_inner()
-            .close()
-            .await
-            .unwrap();
-        name_acquired_stream
-            .into_inner()
-            .into_inner()
-            .close()
-            .await
-            .unwrap();
     }
 }
