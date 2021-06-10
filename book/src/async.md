@@ -218,6 +218,111 @@ example again to receive multiple signals on different proxies:
 # }
 ```
 
+### Signal Streams: A better way
+
+While you can connect your callbacks to receive signals (as we saw in the previous example), zbus
+also provides another method of receiving signals with better ergonomics for use in typical
+asynchronous Rust code: signal streams. Let's change the previous example to make use of signal
+streams to see how that works:
+
+```rust,no_run
+    // Instead of `futures_util::future::FutureExt`
+    use futures_util::stream::StreamExt;
+
+# use zbus::{azync::Connection, dbus_proxy, Result};
+# use zvariant::ObjectPath;
+#
+# async_io::block_on(run()).unwrap();
+#
+# async fn run() -> Result<()> {
+#     #[dbus_proxy(
+#         default_service = "org.freedesktop.GeoClue2",
+#         interface = "org.freedesktop.GeoClue2.Manager",
+#         default_path = "/org/freedesktop/GeoClue2/Manager"
+#     )]
+#     trait Manager {
+#         #[dbus_proxy(object = "Client")]
+#         fn get_client(&self);
+#     }
+#
+#     #[dbus_proxy(
+#         default_service = "org.freedesktop.GeoClue2",
+#         interface = "org.freedesktop.GeoClue2.Client"
+#     )]
+#     trait Client {
+#         fn start(&self) -> Result<()>;
+#         fn stop(&self) -> Result<()>;
+#
+#         #[dbus_proxy(property)]
+#         fn set_desktop_id(&mut self, id: &str) -> Result<()>;
+#
+#         #[dbus_proxy(signal)]
+#         fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> Result<()>;
+#     }
+#
+#     #[dbus_proxy(
+#         default_service = "org.freedesktop.GeoClue2",
+#         interface = "org.freedesktop.GeoClue2.Location"
+#     )]
+#     trait Location {
+#         #[dbus_proxy(property)]
+#         fn latitude(&self) -> Result<f64>;
+#         #[dbus_proxy(property)]
+#         fn longitude(&self) -> Result<f64>;
+#     }
+#     let conn = Connection::new_system().await?;
+#     let manager = AsyncManagerProxy::new(&conn)?;
+#     let mut client = manager.get_client().await?;
+#
+#   client.set_desktop_id("org.freedesktop.zbus").await?;
+#
+    // Everything else remains the same before this point.
+    let props = zbus::fdo::AsyncPropertiesProxy::builder(&conn)
+        .destination("org.freedesktop.GeoClue2")
+        .path(client.path())?
+        .build_async()
+        .await?;
+    let mut props_changed_stream = props.receive_properties_changed().await?;
+    let mut location_updated_stream = client.receive_location_updated().await?;
+
+    client.start().await?;
+
+    futures_util::try_join!(
+        async {
+            while let Some(signal) = props_changed_stream.next().await {
+                let (iface, changed, _) = signal.args()?;
+
+                for (name, value) in changed.iter() {
+                    println!("{}.{} changed to `{:?}`", iface, name, value);
+                }
+            }
+
+            Ok::<(), zbus::Error>(())
+        },
+        async {
+            while let Some(signal) = location_updated_stream.next().await {
+                let (_old, new) = signal.args()?;
+
+                let location = AsyncLocationProxy::builder(&conn)
+                    .path(new)?
+                    .build_async()
+                    .await?;
+                println!(
+                    "Latitude: {}\nLongitude: {}",
+                    location.latitude().await?,
+                    location.longitude().await?,
+                );
+            }
+
+            // No need to specify type of Result each time
+            Ok(())
+        }
+    )?;
+#
+#   Ok(())
+# }
+```
+
 ## Server
 
 No high-level server-side API are provided yet. Rest assured, it's very high on our priority list.
