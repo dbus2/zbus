@@ -565,6 +565,14 @@ impl SignalStream<'_> {
     ///
     /// If not called explicitly on the stream, it is done for you but at the cost of synchronous
     /// D-Bus calls.
+    ///
+    /// # Warning
+    ///
+    /// While we do close the stream for you, you should not drop a stream from an asynchronous
+    /// context. Otherwise, you will likely hang your threads with certain runtimes, such as
+    /// [tokio's current-thread scheduler][tcts].
+    ///
+    /// [tcts]: https://docs.rs/tokio/1.6.1/tokio/runtime/index.html#current-thread-scheduler
     pub async fn close(mut self) -> Result<()> {
         self.close_().await
     }
