@@ -43,7 +43,7 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
         _ => panic!("Only works with DBus error enums"),
     };
 
-    let zbus = get_zbus_crate_ident();
+    let zbus = zbus_path();
     let mut replies = quote! {};
     let mut error_names = quote! {};
     let mut error_descriptions = quote! {};
@@ -154,32 +154,32 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
 
             #vis fn reply(
                 &self,
-                c: &::#zbus::Connection,
-                call: &::#zbus::Message,
-            ) -> std::result::Result<u32, ::#zbus::Error> {
+                c: &#zbus::Connection,
+                call: &#zbus::Message,
+            ) -> ::std::result::Result<u32, #zbus::Error> {
                 let name = self.name();
 
                 match self {
                     #replies
-                    Self::ZBus(_) => panic!("Can not reply with ZBus error type"),
+                    Self::ZBus(_) => ::std::panic!("Can not reply with ZBus error type"),
                 }
             }
         }
 
-        impl std::fmt::Display for #name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}: {}", self.name(), self.description())
+        impl ::std::fmt::Display for #name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                ::std::write!(f, "{}: {}", self.name(), self.description())
             }
         }
 
-        impl std::error::Error for #name {}
+        impl ::std::error::Error for #name {}
 
-        impl From<::#zbus::Error> for #name {
-            fn from(value: ::#zbus::Error) -> #name {
-                if let ::#zbus::Error::MethodError(name, desc, _) = &value {
-                    // FIXME: 100% sure this String cloning is not needed.
-                    let desc = desc.as_ref().map(String::from).unwrap_or_else(|| String::from(""));
-                    match name.as_ref() {
+        impl ::std::convert::From<#zbus::Error> for #name {
+            fn from(value: #zbus::Error) -> #name {
+                if let #zbus::Error::MethodError(name, desc, _) = &value {
+                    let desc = ::std::clone::Clone::clone(desc)
+                        .unwrap_or_else(::std::string::String::new);
+                    match name.as_str() {
                         #error_converts
                         _ => Self::ZBus(value),
                     }

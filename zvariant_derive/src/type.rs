@@ -2,34 +2,38 @@ use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{self, Attribute, Data, DataEnum, DeriveInput, Fields, Generics, Ident};
 
+use crate::utils::zvariant_path;
+
 pub fn expand_derive(ast: DeriveInput) -> TokenStream {
+    let zv = zvariant_path();
+
     match ast.data {
         Data::Struct(ds) => match ds.fields {
             Fields::Named(_) | Fields::Unnamed(_) => {
-                impl_struct(ast.ident, ast.generics, ds.fields)
+                impl_struct(ast.ident, ast.generics, ds.fields, &zv)
             }
-            Fields::Unit => impl_unit_struct(ast.ident, ast.generics),
+            Fields::Unit => impl_unit_struct(ast.ident, ast.generics, &zv),
         },
-        Data::Enum(data) => impl_enum(ast.ident, ast.generics, ast.attrs, data),
+        Data::Enum(data) => impl_enum(ast.ident, ast.generics, ast.attrs, data, &zv),
         _ => panic!("Only structures and enums supported at the moment"),
     }
 }
 
-fn impl_struct(name: Ident, generics: Generics, fields: Fields) -> TokenStream {
+fn impl_struct(name: Ident, generics: Generics, fields: Fields, zv: &TokenStream) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    let signature = signature_for_struct(fields);
+    let signature = signature_for_struct(fields, zv);
 
     quote! {
-        impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
+        impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
             #[inline]
-            fn signature() -> zvariant::Signature<'static> {
+            fn signature() -> #zv::Signature<'static> {
                 #signature
             }
         }
     }
 }
 
-fn signature_for_struct(fields: Fields) -> TokenStream {
+fn signature_for_struct(fields: Fields, zv: &TokenStream) -> TokenStream {
     let field_types = fields.iter().map(|field| field.ty.to_token_stream());
     let new_type = match fields {
         Fields::Named(_) => false,
@@ -40,30 +44,30 @@ fn signature_for_struct(fields: Fields) -> TokenStream {
     if new_type {
         quote! {
             #(
-                <#field_types as zvariant::Type>::signature()
+                <#field_types as #zv::Type>::signature()
              )*
         }
     } else {
         quote! {
-            let mut s = String::from("(");
+            let mut s = <::std::string::String as ::std::convert::From<_>>::from("(");
             #(
-                s.push_str(<#field_types as zvariant::Type>::signature().as_str());
+                s.push_str(<#field_types as #zv::Type>::signature().as_str());
             )*
             s.push_str(")");
 
-            zvariant::Signature::from_string_unchecked(s)
+            #zv::Signature::from_string_unchecked(s)
         }
     }
 }
 
-fn impl_unit_struct(name: Ident, generics: Generics) -> TokenStream {
+fn impl_unit_struct(name: Ident, generics: Generics, zv: &TokenStream) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     quote! {
-        impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
+        impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
             #[inline]
-            fn signature() -> zvariant::Signature<'static> {
-                zvariant::Signature::from_str_unchecked("")
+            fn signature() -> #zv::Signature<'static> {
+                #zv::Signature::from_str_unchecked("")
             }
         }
     }
@@ -74,6 +78,7 @@ fn impl_enum(
     generics: Generics,
     attrs: Vec<Attribute>,
     data: DataEnum,
+    zv: &TokenStream,
 ) -> TokenStream {
     let repr: TokenStream = match attrs.iter().find(|attr| attr.path.is_ident("repr")) {
         Some(repr_attr) => repr_attr
@@ -93,10 +98,10 @@ fn impl_enum(
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     quote! {
-        impl #impl_generics zvariant::Type for #name #ty_generics #where_clause {
+        impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
             #[inline]
-            fn signature() -> zvariant::Signature<'static> {
-                <#repr as zvariant::Type>::signature()
+            fn signature() -> #zv::Signature<'static> {
+                <#repr as #zv::Type>::signature()
             }
         }
     }

@@ -12,16 +12,16 @@ pub fn expand_type_derive(input: DeriveInput) -> TokenStream {
         _ => panic!("Only works with structure"),
     };
 
-    let zv = get_zvariant_crate_ident();
+    let zv = zvariant_path();
     let generics = input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     quote! {
-        impl #impl_generics ::#zv::Type for #name #ty_generics
+        impl #impl_generics #zv::Type for #name #ty_generics
         #where_clause
         {
-            fn signature() -> ::#zv::Signature<'static> {
-                ::#zv::Signature::from_str_unchecked("a{sv}")
+            fn signature() -> #zv::Signature<'static> {
+                #zv::Signature::from_str_unchecked("a{sv}")
             }
         }
     }
@@ -33,7 +33,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> TokenStream {
         _ => panic!("Only works with structure"),
     };
 
-    let zv = get_zvariant_crate_ident();
+    let zv = zvariant_path();
     let mut entries = quote! {};
 
     for f in &data.fields {
@@ -73,17 +73,17 @@ pub fn expand_serialize_derive(input: DeriveInput) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     quote! {
-        impl #impl_generics ::#zv::export::serde::ser::Serialize for #name #ty_generics
+        impl #impl_generics #zv::export::serde::ser::Serialize for #name #ty_generics
         #where_clause
         {
-            fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+            fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
             where
-                S: ::#zv::export::serde::ser::Serializer,
+                S: #zv::export::serde::ser::Serializer,
             {
-                use ::#zv::export::serde::ser::SerializeMap;
+                use #zv::export::serde::ser::SerializeMap;
 
                 // zbus doesn't care about number of entries (it would need bytes instead)
-                let mut map = serializer.serialize_map(None)?;
+                let mut map = serializer.serialize_map(::std::option::Option::None)?;
                 #entries
                 map.end()
             }
@@ -108,7 +108,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
     }
 
     let visitor = format_ident!("{}Visitor", name);
-    let zv = get_zvariant_crate_ident();
+    let zv = zvariant_path();
     let mut fields = Vec::new();
     let mut req_fields = Vec::new();
     let mut dict_names = Vec::new();
@@ -150,10 +150,12 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
     let fallback = if deny_unknown_fields {
         quote! {
             field => {
-                return Err(<M::Error as ::#zv::export::serde::de::Error>::unknown_field(
-                    field,
-                    &[#(#dict_names),*],
-                ));
+                return ::std::result::Result::Err(
+                    <M::Error as #zv::export::serde::de::Error>::unknown_field(
+                        field,
+                        &[#(#dict_names),*],
+                    ),
+                );
             }
         }
     } else {
@@ -181,52 +183,54 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> TokenStream {
     let (impl_generics, _, where_clause) = generics.split_for_impl();
 
     quote! {
-        impl #impl_generics ::#zv::export::serde::de::Deserialize<'de> for #name #ty_generics
+        impl #impl_generics #zv::export::serde::de::Deserialize<'de> for #name #ty_generics
         #where_clause
         {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+            fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
             where
-                D: ::#zv::export::serde::de::Deserializer<'de>,
+                D: #zv::export::serde::de::Deserializer<'de>,
             {
-                struct #visitor #ty_generics(std::marker::PhantomData<#name #ty_generics>);
+                struct #visitor #ty_generics(::std::marker::PhantomData<#name #ty_generics>);
 
-                impl #impl_generics ::#zv::export::serde::de::Visitor<'de> for #visitor #ty_generics {
+                impl #impl_generics #zv::export::serde::de::Visitor<'de> for #visitor #ty_generics {
                     type Value = #name #ty_generics;
 
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                         formatter.write_str("a dictionary")
                     }
 
                     fn visit_map<M>(
                         self,
                         mut access: M,
-                    ) -> std::result::Result<Self::Value, M::Error>
+                    ) -> ::std::result::Result<Self::Value, M::Error>
                     where
-                        M: ::#zv::export::serde::de::MapAccess<'de>,
+                        M: #zv::export::serde::de::MapAccess<'de>,
                     {
-                        #( let mut #fields = Default::default(); )*
+                        #( let mut #fields = ::std::default::Default::default(); )*
 
                         // does not check duplicated fields, since those shouldn't exist in stream
-                        while let Some(key) = access.next_key::<&str>()? {
+                        while let ::std::option::Option::Some(key) = access.next_key::<&str>()? {
                             match key {
                                 #(#entries)*
                             }
                         }
 
-                        #(let #req_fields = if let Some(val) = #req_fields {
+                        #(let #req_fields = if let ::std::option::Option::Some(val) = #req_fields {
                             val
                         } else {
-                            return Err(<M::Error as ::#zv::export::serde::de::Error>::missing_field(
-                                stringify!(#req_fields),
-                            ));
+                            return ::std::result::Result::Err(
+                                <M::Error as #zv::export::serde::de::Error>::missing_field(
+                                    ::std::stringify!(#req_fields),
+                                ),
+                            );
                         };)*
 
-                        Ok(#name { #(#fields),* })
+                        ::std::result::Result::Ok(#name { #(#fields),* })
                     }
                 }
 
 
-                deserializer.deserialize_map(#visitor(std::marker::PhantomData))
+                deserializer.deserialize_map(#visitor(::std::marker::PhantomData))
             }
         }
     }

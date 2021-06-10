@@ -19,7 +19,7 @@ proc-macro = true
 proc-macro2 = "1.0"
 syn = { version = "1.0.18", features = ["extra-traits", "full"] }
 quote = "1.0.3"
-proc-macro-crate = "0.1.4"
+proc-macro-crate = "1.0.0"
 regex = "1.5.4"
 
 [dev-dependencies]

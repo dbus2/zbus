@@ -4,7 +4,7 @@ use futures_util::{
     stream::StreamExt,
 };
 use std::future::ready;
-use zbus::{self, fdo};
+use zbus::fdo;
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]

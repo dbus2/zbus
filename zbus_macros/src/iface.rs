@@ -1,9 +1,9 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{btree_map::Entry, BTreeMap};
 use syn::{
     self, parse_quote, punctuated::Punctuated, AngleBracketedGenericArguments, AttributeArgs,
-    FnArg, Ident, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue,
+    FnArg, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue,
     NestedMeta, PatType, PathArguments, ReturnType, Signature, Token, Type, TypePath,
 };
 
@@ -29,9 +29,9 @@ impl<'a> Property<'a> {
 }
 
 pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
-    let zbus = get_zbus_crate_ident();
+    let zbus = zbus_path();
 
-    let mut properties = HashMap::new();
+    let mut properties = BTreeMap::new();
     let mut set_dispatch = quote!();
     let mut get_dispatch = quote!();
     let mut get_all = quote!();
@@ -71,13 +71,12 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
     }
     let iface_name = iface_name.unwrap_or(format!("org.freedesktop.{}", ty));
 
-    for method in input.items.iter_mut().filter_map(|i| {
-        if let ImplItem::Method(m) = i {
-            Some(m)
-        } else {
-            None
-        }
-    }) {
+    for method in &mut input.items {
+        let mut method = match method {
+            ImplItem::Method(m) => m,
+            _ => continue,
+        };
+
         let Signature {
             ident,
             inputs,
@@ -133,7 +132,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             .collect::<Vec<_>>();
 
         let mut intro_args = quote!();
-        introspect_add_input_args(&mut intro_args, &typed_inputs, is_signal);
+        intro_args.extend(introspect_input_args(&typed_inputs, is_signal));
         let is_result_output = introspect_add_output_args(&mut intro_args, output, &out_args)?;
 
         let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus)?;
@@ -144,8 +143,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             let ret = quote!(r);
 
             quote!(match reply {
-                Ok(r) => c.reply(m, &#ret),
-                Err(e) => ::#zbus::fdo::Error::from(e).reply(c, m),
+                ::std::result::Result::Ok(r) => c.reply(m, &#ret),
+                ::std::result::Result::Err(e) => {
+                    <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m)
+                }
             })
         } else {
             quote!(c.reply(m, &reply))
@@ -168,11 +169,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
         if is_signal {
             introspect.extend(doc_comments);
-            introspect_add_signal(&mut introspect, &member_name, &intro_args);
+            introspect.extend(introspect_signal(&member_name, &intro_args));
 
             method.block = parse_quote!({
-                ::#zbus::ObjectServer::local_node_emit_signal(
-                    None,
+                #zbus::ObjectServer::local_node_emit_signal(
+                    ::std::option::Option::None,
                     #iface_name,
                     #member_name,
                     &(#args),
@@ -186,10 +187,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 let prop_changed_method = quote!(
                     pub fn #prop_changed_method_name(&self) -> #zbus::Result<()> {
                         let mut changed = ::std::collections::HashMap::new();
-                        let value = ::#zbus::Interface::get(self, &#member_name)
-                            .expect(&format!("Property '{}' does not exist", #member_name))?;
+                        let value = #zbus::Interface::get(self, &#member_name)
+                            .expect(&::std::format!("Property '{}' does not exist", #member_name))?;
                         changed.insert(#member_name, &*value);
-                        let properties_iface = ::#zbus::fdo::Properties;
+                        let properties_iface = #zbus::fdo::Properties;
                         properties_iface.properties_changed(
                             &#iface_name,
                             &changed,
@@ -208,19 +209,23 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 let set_call = if is_result_output {
                     quote!(self.#ident(val))
                 } else {
-                    quote!(Ok(self.#ident(val)))
+                    quote!(::std::result::Result::Ok(self.#ident(val)))
                 };
                 let q = quote!(
                     #member_name => {
-                        let val = match value.try_into() {
-                            Ok(val) => val,
-                            Err(e) => return Some(Err(::#zbus::MessageError::Variant(e).into())),
+                        let val = match ::std::convert::TryInto::try_into(value) {
+                            ::std::result::Result::Ok(val) => val,
+                            ::std::result::Result::Err(e) => {
+                                return ::std::option::Option::Some(::std::result::Result::Err(
+                                    ::std::convert::Into::into(#zbus::MessageError::Variant(e)),
+                                ));
+                            }
                         };
                         let result = #set_call.and_then(|set_result| {
                             self.#prop_changed_method_name()?;
-                            Ok(set_result)
+                            ::std::result::Result::Ok(set_result)
                         });
-                        Some(result)
+                        ::std::option::Option::Some(result)
                     }
                 );
                 set_dispatch.extend(q);
@@ -230,28 +235,38 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
                 let q = quote!(
                     #member_name => {
-                        Some(Ok(::#zbus::export::zvariant::Value::from(self.#ident()).into()))
-                    },
+                        ::std::option::Option::Some(::std::result::Result::Ok(
+                            ::std::convert::Into::into(
+                                <#zbus::export::zvariant::Value as ::std::convert::From<_>>::from(
+                                    self.#ident(),
+                                ),
+                            ),
+                        ))
+                    }
                 );
                 get_dispatch.extend(q);
 
                 let q = quote!(
                     props.insert(
-                        #member_name.to_string(),
-                        ::#zbus::export::zvariant::Value::from(self.#ident()).into(),
+                        ::std::string::ToString::to_string(#member_name),
+                        ::std::convert::Into::into(
+                            <#zbus::export::zvariant::Value as ::std::convert::From<_>>::from(
+                                self.#ident(),
+                            ),
+                        ),
                     );
                 );
                 get_all.extend(q)
             }
         } else {
             introspect.extend(doc_comments);
-            introspect_add_method(&mut introspect, &member_name, &intro_args);
+            introspect.extend(introspect_method(&member_name, &intro_args));
 
             let m = quote!(
                 #member_name => {
                     #args_from_msg
                     let reply = self.#ident(#args);
-                    Some(#reply)
+                    ::std::option::Option::Some(#reply)
                 },
             );
 
@@ -263,7 +278,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         }
     }
 
-    introspect_add_properties(&mut introspect, properties);
+    introspect.extend(introspect_properties(properties));
 
     let self_ty = &input.self_ty;
     let generics = &input.generics;
@@ -278,7 +293,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             #generated_signals
         }
 
-        impl #generics ::#zbus::Interface for #self_ty
+        impl #generics #zbus::Interface for #self_ty
         #where_clause
         {
             fn name() -> &'static str {
@@ -288,20 +303,23 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             fn get(
                 &self,
                 property_name: &str,
-            ) -> Option<::#zbus::fdo::Result<::#zbus::export::zvariant::OwnedValue>> {
+            ) -> ::std::option::Option<#zbus::fdo::Result<#zbus::export::zvariant::OwnedValue>> {
                 match property_name {
                     #get_dispatch
-                    _ => None,
+                    _ => ::std::option::Option::None,
                 }
             }
 
             fn get_all(
                 &self,
-            ) -> std::collections::HashMap<String, ::#zbus::export::zvariant::OwnedValue> {
-                let mut props: std::collections::HashMap<
-                    String,
-                    ::#zbus::export::zvariant::OwnedValue,
-                > = std::collections::HashMap::new();
+            ) -> ::std::collections::HashMap<
+                ::std::string::String,
+                #zbus::export::zvariant::OwnedValue,
+            > {
+                let mut props: ::std::collections::HashMap<
+                    ::std::string::String,
+                    #zbus::export::zvariant::OwnedValue,
+                > = ::std::collections::HashMap::new();
                 #get_all
                 props
             }
@@ -309,55 +327,53 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             fn set(
                 &mut self,
                 property_name: &str,
-                value: &::#zbus::export::zvariant::Value,
-            ) -> Option<::#zbus::fdo::Result<()>> {
-                use std::convert::TryInto;
-
+                value: &#zbus::export::zvariant::Value,
+            ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
                 match property_name {
                     #set_dispatch
-                    _ => None,
+                    _ => ::std::option::Option::None,
                 }
             }
 
             fn call(
                 &self,
-                c: &::#zbus::Connection,
-                m: &::#zbus::Message,
+                c: &#zbus::Connection,
+                m: &#zbus::Message,
                 name: &str,
-            ) -> std::option::Option<::#zbus::Result<u32>> {
+            ) -> ::std::option::Option<#zbus::Result<u32>> {
                 match name {
                     #call_dispatch
-                    _ => None,
+                    _ => ::std::option::Option::None,
                 }
             }
 
             fn call_mut(
                 &mut self,
-                c: &::#zbus::Connection,
-                m: &::#zbus::Message,
+                c: &#zbus::Connection,
+                m: &#zbus::Message,
                 name: &str,
-            ) -> std::option::Option<::#zbus::Result<u32>> {
+            ) -> ::std::option::Option<#zbus::Result<u32>> {
                 match name {
                     #call_mut_dispatch
-                    _ => None,
+                    _ => ::std::option::Option::None,
                 }
             }
 
-            fn introspect_to_writer(&self, writer: &mut dyn std::fmt::Write, level: usize) {
-                writeln!(
+            fn introspect_to_writer(&self, writer: &mut dyn ::std::fmt::Write, level: usize) {
+                ::std::writeln!(
                     writer,
                     r#"{:indent$}<interface name="{}">"#,
                     "",
-                    <Self as ::#zbus::Interface>::name(),
+                    <Self as #zbus::Interface>::name(),
                     indent = level
                 ).unwrap();
                 {
-                    use ::#zbus::export::zvariant::Type;
+                    use #zbus::export::zvariant::Type;
 
                     let level = level + 2;
                     #introspect
                 }
-                writeln!(writer, r#"{:indent$}</interface>"#, "", indent = level).unwrap();
+                ::std::writeln!(writer, r#"{:indent$}</interface>"#, "", indent = level).unwrap();
             }
         }
     })
@@ -365,7 +381,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
 fn get_args_from_inputs(
     inputs: &[&PatType],
-    zbus: &Ident,
+    zbus: &TokenStream,
 ) -> syn::Result<(TokenStream, TokenStream)> {
     if inputs.is_empty() {
         Ok((quote!(), quote!()))
@@ -423,8 +439,12 @@ fn get_args_from_inputs(
 
                 header_arg_decl = Some(quote! {
                     let #header_arg = match m.header() {
-                        Ok(r) => r,
-                        Err(e) => return Some(::#zbus::fdo::Error::from(e).reply(c, m)),
+                        ::std::result::Result::Ok(r) => r,
+                        ::std::result::Result::Err(e) => {
+                            return ::std::option::Option::Some(
+                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
+                            );
+                        }
                     };
                 });
             } else {
@@ -438,8 +458,12 @@ fn get_args_from_inputs(
 
             let (#(#args),*): (#(#tys),*) =
                 match m.body() {
-                    Ok(r) => r,
-                    Err(e) => return Some(::#zbus::fdo::Error::from(e).reply(c, m)),
+                    ::std::result::Result::Ok(r) => r,
+                    ::std::result::Result::Err(e) => {
+                        return ::std::option::Option::Some(
+                            <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
+                        );
+                    }
                 };
         };
 
@@ -458,83 +482,82 @@ fn clean_input_args(inputs: &mut Punctuated<FnArg, Token![,]>) {
     }
 }
 
-fn introspect_add_signal(introspect: &mut TokenStream, name: &str, args: &TokenStream) {
-    let intro = quote!(
-        writeln!(writer, "{:indent$}<signal name=\"{}\">", "", #name, indent = level).unwrap();
+fn introspect_signal(name: &str, args: &TokenStream) -> TokenStream {
+    quote!(
+        ::std::writeln!(writer, "{:indent$}<signal name=\"{}\">", "", #name, indent = level).unwrap();
         {
             let level = level + 2;
             #args
         }
-        writeln!(writer, "{:indent$}</signal>", "", indent = level).unwrap();
-    );
-
-    introspect.extend(intro);
+        ::std::writeln!(writer, "{:indent$}</signal>", "", indent = level).unwrap();
+    )
 }
 
-fn introspect_add_method(introspect: &mut TokenStream, name: &str, args: &TokenStream) {
-    let intro = quote!(
-        writeln!(writer, "{:indent$}<method name=\"{}\">", "", #name, indent = level).unwrap();
+fn introspect_method(name: &str, args: &TokenStream) -> TokenStream {
+    quote!(
+        ::std::writeln!(writer, "{:indent$}<method name=\"{}\">", "", #name, indent = level).unwrap();
         {
             let level = level + 2;
             #args
         }
-        writeln!(writer, "{:indent$}</method>", "", indent = level).unwrap();
-    );
-
-    introspect.extend(intro);
+        ::std::writeln!(writer, "{:indent$}</method>", "", indent = level).unwrap();
+    )
 }
 
-fn introspect_add_input_args(args: &mut TokenStream, inputs: &[&PatType], is_signal: bool) {
-    for PatType { pat, ty, attrs, .. } in inputs {
-        let is_header_arg = attrs.iter().any(|attr| {
-            if !attr.path.is_ident("zbus") {
-                return false;
+fn introspect_input_args<'a>(
+    inputs: &'a [&PatType],
+    is_signal: bool,
+) -> impl Iterator<Item = TokenStream> + 'a {
+    inputs
+        .iter()
+        .filter_map(move |PatType { pat, ty, attrs, .. }| {
+            let is_header_arg = attrs.iter().any(|attr| {
+                if !attr.path.is_ident("zbus") {
+                    return false;
+                }
+
+                let meta = match attr.parse_meta() {
+                    ::std::result::Result::Ok(meta) => meta,
+                    ::std::result::Result::Err(_) => return false,
+                };
+
+                let nested = match meta {
+                    Meta::List(MetaList { nested, .. }) => nested,
+                    _ => return false,
+                };
+
+                let res = nested.iter().any(|nested_meta| {
+                    matches!(
+                        nested_meta,
+                        NestedMeta::Meta(Meta::Path(path)) if path.is_ident("header")
+                    )
+                });
+
+                res
+            });
+            if is_header_arg {
+                return None;
             }
 
-            let meta = match attr.parse_meta() {
-                Ok(meta) => meta,
-                Err(_) => return false,
-            };
-
-            let nested = match meta {
-                Meta::List(MetaList { nested, .. }) => nested,
-                _ => return false,
-            };
-
-            let res = nested.iter().any(|nested_meta| {
-                matches!(
-                    nested_meta,
-                    NestedMeta::Meta(Meta::Path(path)) if path.is_ident("header")
-                )
-            });
-
-            res
-        });
-        if is_header_arg {
-            continue;
-        }
-
-        let arg_name = quote!(#pat).to_string();
-        let dir = if is_signal { "" } else { " direction=\"in\"" };
-        let arg = quote!(
-            writeln!(writer, "{:indent$}<arg name=\"{}\" type=\"{}\"{}/>", "",
-                     #arg_name, <#ty>::signature(), #dir, indent = level).unwrap();
-        );
-        args.extend(arg);
-    }
+            let arg_name = quote!(#pat).to_string();
+            let dir = if is_signal { "" } else { " direction=\"in\"" };
+            Some(quote!(
+                ::std::writeln!(writer, "{:indent$}<arg name=\"{}\" type=\"{}\"{}/>", "",
+                         #arg_name, <#ty>::signature(), #dir, indent = level).unwrap();
+            ))
+        })
 }
 
-fn introspect_add_output_arg(args: &mut TokenStream, ty: &Type, arg_name: Option<&String>) {
+fn introspect_output_arg(ty: &Type, arg_name: Option<&String>) -> TokenStream {
     let arg_name = match arg_name {
         Some(name) => format!("name=\"{}\" ", name),
         None => String::from(""),
     };
 
-    let arg = quote!(
-        writeln!(writer, "{:indent$}<arg {}type=\"{}\" direction=\"out\"/>", "",
+    quote!(
+        ::std::writeln!(writer, "{:indent$}<arg {}type=\"{}\" direction=\"out\"/>", "",
                  #arg_name, <#ty>::signature(), indent = level).unwrap();
-    );
-    args.extend(arg);
+    )
 }
 
 fn get_result_type(p: &TypePath) -> syn::Result<&Type> {
@@ -584,10 +607,10 @@ fn introspect_add_output_args(
             }
             for i in 0..t.elems.len() {
                 let name = arg_names.map(|names| &names[i]);
-                introspect_add_output_arg(args, &t.elems[i], name);
+                args.extend(introspect_output_arg(&t.elems[i], name));
             }
         } else {
-            introspect_add_output_arg(args, ty, None);
+            args.extend(introspect_output_arg(ty, None));
         }
     }
 
@@ -617,11 +640,10 @@ fn get_property_type(output: &ReturnType) -> syn::Result<&Type> {
     }
 }
 
-fn introspect_add_properties(
-    introspect: &mut TokenStream,
-    properties: HashMap<String, Property<'_>>,
-) {
-    for (name, prop) in properties {
+fn introspect_properties(
+    properties: BTreeMap<String, Property<'_>>,
+) -> impl Iterator<Item = TokenStream> + '_ {
+    properties.into_iter().filter_map(|(name, prop)| {
         let access = if prop.read && prop.write {
             "readwrite"
         } else if prop.read {
@@ -630,22 +652,22 @@ fn introspect_add_properties(
             "write"
         } else {
             eprintln!("Property '{}' is not readable nor writable!", name);
-            continue;
+            return None;
         };
         let ty = prop
             .ty
             .expect("Write-only properties aren't supported yet.");
 
-        introspect.extend(prop.doc_comments);
-        let intro = quote!(
-            writeln!(
+        let doc_comments = prop.doc_comments;
+        Some(quote!(
+            #doc_comments
+            ::std::writeln!(
                 writer,
                 "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
                 "", #name, <#ty>::signature(), #access, indent = level,
             ).unwrap();
-        );
-        introspect.extend(intro);
-    }
+        ))
+    })
 }
 
 pub fn to_xml_docs(lines: Vec<String>) -> TokenStream {
@@ -665,17 +687,17 @@ pub fn to_xml_docs(lines: Vec<String>) -> TokenStream {
         return docs;
     }
 
-    docs.extend(quote!(writeln!(writer, "{:indent$}<!--", "", indent = level).unwrap();));
+    docs.extend(quote!(::std::writeln!(writer, "{:indent$}<!--", "", indent = level).unwrap();));
     for line in lines {
         if !line.is_empty() {
             docs.extend(
-                quote!(writeln!(writer, "{:indent$}{}", "", #line, indent = level).unwrap();),
+                quote!(::std::writeln!(writer, "{:indent$}{}", "", #line, indent = level).unwrap();),
             );
         } else {
-            docs.extend(quote!(writeln!(writer, "").unwrap();));
+            docs.extend(quote!(::std::writeln!(writer, "").unwrap();));
         }
     }
-    docs.extend(quote!(writeln!(writer, "{:indent$} -->", "", indent = level).unwrap();));
+    docs.extend(quote!(::std::writeln!(writer, "{:indent$} -->", "", indent = level).unwrap();));
 
     docs
 }
