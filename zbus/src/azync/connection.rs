@@ -716,7 +716,9 @@ impl Connection {
         self.0
             .executor
             .spawn(async move {
-                let _ = conn.unsubscribe_signal_by_id(subscription_id);
+                // FIXME: Ignoring the errors here. We should at least log a message when we've
+                //        logging.
+                let _ = conn.unsubscribe_signal_by_id(subscription_id).await;
             })
             .detach()
     }
