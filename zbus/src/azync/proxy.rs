@@ -295,12 +295,6 @@ impl<'a> Proxy<'a> {
 
     /// Create a stream for signal named `signal_name`.
     ///
-    /// If the associated connection is to a bus, a match rule is added for the signal on the bus
-    /// so that the bus sends us the signals. Since this match rule needs to be removed when you're
-    /// done with the stream, a synchronous D-Bus method call is made in the destructor of the
-    /// stream. If you'd like to avoid this, you must close the stream explicitly, using the
-    /// [`SignalStream::close`] method.
-    ///
     /// # Errors
     ///
     /// Apart from general I/O errors that can result from socket communications, calling this
