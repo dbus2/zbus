@@ -1,9 +1,9 @@
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use regex::Regex;
 use syn::{
-    self, parse_quote, spanned::Spanned, AttributeArgs, FnArg, Ident, ItemTrait, NestedMeta,
-    ReturnType, TraitItemMethod, Type,
+    self, fold::Fold, parse_quote, spanned::Spanned, AttributeArgs, FnArg, Ident, ItemTrait,
+    NestedMeta, ReturnType, TraitItemMethod, Type,
 };
 
 use crate::utils::*;
@@ -258,7 +258,11 @@ fn gen_proxy_method_call(
     let inputs = &m.sig.inputs;
     let mut generics = m.sig.generics.clone();
     let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-    for param in &mut generics.params {
+    for param in generics
+        .params
+        .iter()
+        .filter(|a| matches!(a, syn::GenericParam::Type(_)))
+    {
         let is_input_type = inputs.iter().any(|arg| {
             // FIXME: We want to only require `Serialize` from input types and `DeserializeOwned`
             // from output types but since we don't have type introspection, we employ this
@@ -371,6 +375,20 @@ fn gen_proxy_property(
     }
 }
 
+struct SetLifetimeS;
+
+impl Fold for SetLifetimeS {
+    fn fold_type_reference(&mut self, node: syn::TypeReference) -> syn::TypeReference {
+        let mut t = syn::fold::fold_type_reference(self, node);
+        t.lifetime = Some(syn::Lifetime::new("'s", Span::call_site()));
+        t
+    }
+
+    fn fold_lifetime(&mut self, _node: syn::Lifetime) -> syn::Lifetime {
+        syn::Lifetime::new("'s", Span::call_site())
+    }
+}
+
 fn gen_proxy_signal(
     proxy_name: &Ident,
     signal_name: &str,
@@ -391,29 +409,49 @@ fn gen_proxy_signal(
             _ => None,
         })
         .collect();
+    let input_types_s: Vec<_> = SetLifetimeS
+        .fold_signature(m.sig.clone())
+        .inputs
+        .iter()
+        .filter_map(|arg| match arg {
+            FnArg::Typed(p) => Some(p.ty.clone()),
+            _ => None,
+        })
+        .collect();
     let args: Vec<Ident> = m
         .sig
         .inputs
         .iter()
         .filter_map(|arg| arg_ident(arg).cloned())
         .collect();
+    let args_nth: Vec<Literal> = args
+        .iter()
+        .enumerate()
+        .map(|(i, _)| Literal::usize_unsuffixed(i))
+        .collect();
 
     let (receive_signal, stream_types) = if async_opts.azync {
         let mut generics = m.sig.generics.clone();
         let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-        for param in &mut generics.params {
+        for param in generics
+            .params
+            .iter()
+            .filter(|a| matches!(a, syn::GenericParam::Type(_)))
+        {
             where_clause
                 .predicates
-                .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'__v> + #zbus::export::zvariant::Type));
+                .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'s> + #zbus::export::zvariant::Type));
         }
-        generics.params.push(parse_quote!('__v));
+        generics.params.push(parse_quote!('s));
+        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-        let (_, ty_generics, where_clause) = generics.split_for_impl();
-        let (receiver_name, stream_name, signal_name_ident) = (
+        let (receiver_name, stream_name, signal_args, signal_name_ident) = (
             format_ident!("receive_{}", snake_case_name),
             format_ident!("{}Stream", signal_name),
+            format_ident!("{}Args", signal_name),
             format_ident!("{}", signal_name),
         );
+
         let receive_signal_link =
             "https://docs.rs/zbus/latest/zbus/azync/struct.Proxy.html#method.receive_signal";
         let receive_gen_doc = format!(
@@ -439,7 +477,64 @@ fn gen_proxy_signal(
             [`stream::Stream`]: https://docs.rs/futures/0.3.15/futures/stream/trait.Stream.html",
             signal_name, proxy_name, snake_case_name,
         );
+        let signal_args_gen_doc = format!("`{}` signal arguments.", signal_name);
         let args_struct_gen_doc = format!("A `{}` signal.", signal_name);
+        let args_impl = if args.is_empty() {
+            quote!()
+        } else {
+            quote! {
+                impl #signal_name_ident {
+                    /// Retrieve the signal arguments.
+                    pub fn args#ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
+                        #where_clause
+                    {
+                        self.0.body().map_err(::std::convert::Into::into)
+                    }
+                }
+
+                #[doc = #signal_args_gen_doc]
+                pub struct #signal_args #ty_generics {
+                    phantom: std::marker::PhantomData<&'s ()>,
+                    #(
+                        pub #args: #input_types_s
+                     ),*
+                }
+
+                impl #impl_generics #signal_args #ty_generics
+                    #where_clause
+                {
+                    #(
+                        pub fn #args(&self) -> &#input_types_s {
+                            &self.#args
+                        }
+                     )*
+                }
+
+                impl #impl_generics #zbus::export::zvariant::Type for #signal_args #ty_generics
+                    #where_clause
+                {
+                    fn signature() -> #zbus::export::zvariant::Signature<'static> {
+                        <(#(#input_types,)*)>::signature()
+                    }
+                }
+
+                impl #impl_generics #zbus::export::serde::de::Deserialize<'s> for #signal_args #ty_generics
+                    #where_clause
+                {
+                    fn deserialize<__D>(deserializer: __D) -> std::result::Result<Self, __D::Error>
+                    where
+                        __D: #zbus::export::serde::Deserializer<'s> {
+                        let args: (#(#input_types),*,) =
+                            #zbus::export::serde::de::Deserialize::deserialize(deserializer)?;
+
+                        Ok(Self {
+                            phantom: ::std::marker::PhantomData,
+                            #(#args: args.#args_nth),*
+                        })
+                    }
+                }
+            }
+        };
         let stream_types = quote! {
             #[doc = #stream_gen_doc]
             pub struct #stream_name<'s>(#zbus::azync::SignalStream<'s>);
@@ -475,7 +570,7 @@ fn gen_proxy_signal(
                 }
             }
 
-            impl<'s> ::std::ops::Deref for #stream_name<'s> {
+            impl<'s> std::ops::Deref for #stream_name<'s> {
                 type Target = #zbus::azync::SignalStream<'s>;
 
                 fn deref(&self) -> &Self::Target {
@@ -492,18 +587,7 @@ fn gen_proxy_signal(
             #[doc = #args_struct_gen_doc]
             pub struct #signal_name_ident(::std::sync::Arc<#zbus::Message>);
 
-            impl #signal_name_ident {
-                /// Retrieve the signal arguments.
-                ///
-                /// Instead of providing separate getters for each argument, one method is provided
-                /// to retrieve all the arguments since retrieval requires deserialization of the
-                /// underlying message, which is not a zero-cost operation.
-                pub fn args#ty_generics(&'__v self) -> #zbus::Result<(#(#input_types),*)>
-                #where_clause
-                {
-                    self.0.body().map_err(::std::convert::Into::into)
-                }
-            }
+            #args_impl
         };
 
         (receive_signal, stream_types)
@@ -540,7 +624,11 @@ fn gen_proxy_signal(
     let mut generics = m.sig.generics.clone();
     {
         let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-        for param in &mut generics.params {
+        for param in generics
+            .params
+            .iter()
+            .filter(|a| matches!(a, syn::GenericParam::Type(_)))
+        {
             where_clause
                 .predicates
                 .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + #zbus::export::zvariant::Type));
