@@ -115,7 +115,7 @@ struct ConnectionInner<S> {
     unique_name: OnceCell<String>,
 
     raw_in_conn: Arc<Mutex<RawConnection<Async<S>>>>,
-    raw_out_conn: Mutex<RawConnection<Async<S>>>,
+    raw_out_conn: Arc<sync::Mutex<RawConnection<Async<S>>>>,
     // Serial number for next outgoing message
     serial: AtomicU32,
 
@@ -371,15 +371,9 @@ impl Connection {
     }
 
     /// Get a sink to send out messages.
-    ///
-    /// **Note:** At the moment, a sink requires locking all other outgoing messages on the
-    /// connection. Therefore once you have created a sink for a connection, all sending
-    /// operations will not yield any results until the sink is dropped. However, this is not as
-    /// big an issue since all operations in this API are asynchronous (i-e non-blocking). Moreover,
-    /// this limitation will hopefully be removed in the near future.
-    pub async fn sink(&self) -> MessageSink<'_> {
+    pub async fn sink(&self) -> MessageSink {
         MessageSink {
-            raw_conn: self.0.raw_out_conn.lock().await,
+            raw_conn: self.0.raw_out_conn.clone(),
             cap_unix_fd: self.0.cap_unix_fd,
         }
     }
@@ -784,7 +778,7 @@ impl Connection {
 
         let connection = Self(Arc::new(ConnectionInner {
             raw_in_conn,
-            raw_out_conn: Mutex::new(out_conn),
+            raw_out_conn: Arc::new(sync::Mutex::new(out_conn)),
             error_receiver,
             server_guid: auth.server_guid,
             cap_unix_fd: auth.cap_unix_fd,
@@ -844,21 +838,30 @@ impl Connection {
 /// A [`futures_sink::Sink`] implementation that consumes [`Message`] instances.
 ///
 /// Use [`Connection::sink`] to create an instance of this type.
-pub struct MessageSink<'s> {
-    raw_conn: MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
+///
+/// # Caveats
+///
+/// At the moment, a simultaneous [flush request] from multiple tasks/threads could
+/// potentially create a busy loop, thus wasting CPU time. This limitation may be removed in the
+/// future.
+///
+/// [flush request]: https://docs.rs/futures/0.3.15/futures/sink/trait.SinkExt.html#method.flush
+pub struct MessageSink {
+    raw_conn: Arc<sync::Mutex<DynSocketConnection>>,
     cap_unix_fd: bool,
 }
 
-assert_impl_all!(MessageSink<'_>: Send, Sync, Unpin);
+assert_impl_all!(MessageSink: Send, Sync, Unpin);
 
-impl MessageSink<'_> {
+impl MessageSink {
     fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         loop {
-            match self.raw_conn.try_flush() {
+            let mut raw_conn = self.raw_conn.lock().unwrap();
+            match raw_conn.try_flush() {
                 Ok(()) => return Poll::Ready(Ok(())),
                 Err(e) => {
                     if e.kind() == ErrorKind::WouldBlock {
-                        let poll = self.raw_conn.socket().poll_writable(cx);
+                        let poll = raw_conn.socket().poll_writable(cx);
 
                         match poll {
                             Poll::Pending => return Poll::Pending,
@@ -875,7 +878,7 @@ impl MessageSink<'_> {
     }
 }
 
-impl futures_sink::Sink<Message> for MessageSink<'_> {
+impl futures_sink::Sink<Message> for MessageSink {
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
@@ -888,7 +891,7 @@ impl futures_sink::Sink<Message> for MessageSink<'_> {
             return Err(Error::Unsupported);
         }
 
-        self.get_mut().raw_conn.enqueue_message(msg);
+        self.raw_conn.lock().unwrap().enqueue_message(msg);
 
         Ok(())
     }
@@ -905,7 +908,7 @@ impl futures_sink::Sink<Message> for MessageSink<'_> {
             Poll::Pending => return Poll::Pending,
         }
 
-        Poll::Ready((sink.raw_conn).close())
+        Poll::Ready((sink.raw_conn.lock().unwrap()).close())
     }
 }
 
