@@ -50,7 +50,7 @@ async fn run() -> Result<()> {
         fn set_desktop_id(&mut self, id: &str) -> Result<()>;
 
         #[dbus_proxy(signal)]
-        fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> Result<()>;
+        fn location_updated(&self, old: ObjectPath<'_>, new: ObjectPath<'_>) -> Result<()>;
     }
 
     #[dbus_proxy(
@@ -141,7 +141,7 @@ example again to receive multiple signals on different proxies:
 #         fn set_desktop_id(&mut self, id: &str) -> Result<()>;
 #
 #         #[dbus_proxy(signal)]
-#         fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> Result<()>;
+#         fn location_updated(&self, old: ObjectPath<'_>, new: ObjectPath<'_>) -> Result<()>;
 #     }
 #
 #     #[dbus_proxy(
@@ -257,7 +257,7 @@ streams to see how that works:
 #         fn set_desktop_id(&mut self, id: &str) -> Result<()>;
 #
 #         #[dbus_proxy(signal)]
-#         fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> Result<()>;
+#         fn location_updated(&self, old: ObjectPath<'_>, new: ObjectPath<'_>) -> Result<()>;
 #     }
 #
 #     #[dbus_proxy(
@@ -290,10 +290,10 @@ streams to see how that works:
     futures_util::try_join!(
         async {
             while let Some(signal) = props_changed_stream.next().await {
-                let (iface, changed, _) = signal.args()?;
+                let args = signal.args()?;
 
-                for (name, value) in changed.iter() {
-                    println!("{}.{} changed to `{:?}`", iface, name, value);
+                for (name, value) in args.changed_properties().iter() {
+                    println!("{}.{} changed to `{:?}`", args.interface_name(), name, value);
                 }
             }
 
@@ -301,10 +301,10 @@ streams to see how that works:
         },
         async {
             while let Some(signal) = location_updated_stream.next().await {
-                let (_old, new) = signal.args()?;
+                let args = signal.args()?;
 
                 let location = AsyncLocationProxy::builder(&conn)
-                    .path(new)?
+                    .path(args.new())?
                     .build_async()
                     .await?;
                 println!(

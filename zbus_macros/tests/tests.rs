@@ -72,7 +72,9 @@ fn test_proxy() {
         let left_future = async move {
             // These calls will never happen so just testing the build mostly.
             let signal = stream.next().await.unwrap();
-            assert_eq!(signal.args().unwrap(), (0u8, "whatever"));
+            let args = signal.args::<&str>().unwrap();
+            assert_eq!(*args.arg(), 0u8);
+            assert_eq!(*args.other(), "whatever");
         };
         futures_util::pin_mut!(left_future);
         let right_future = async {

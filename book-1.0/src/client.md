@@ -238,7 +238,7 @@ trait Client {
     fn set_desktop_id(&mut self, id: &str) -> Result<()>;
 
     #[dbus_proxy(signal)]
-    fn location_updated(&self, old: ObjectPath, new: ObjectPath) -> Result<()>;
+    fn location_updated(&self, old: ObjectPath<'_>, new: ObjectPath<'_>) -> Result<()>;
 }
 
 #[dbus_proxy(
