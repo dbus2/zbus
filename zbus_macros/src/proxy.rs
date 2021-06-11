@@ -479,57 +479,65 @@ fn gen_proxy_signal(
         );
         let signal_args_gen_doc = format!("`{}` signal arguments.", signal_name);
         let args_struct_gen_doc = format!("A `{}` signal.", signal_name);
-        let deserialize_args = if args.is_empty() {
+        let args_impl = if args.is_empty() {
             quote!()
         } else {
             quote! {
-                let args: (#(#input_types),*,) = #zbus::export::serde::de::Deserialize::deserialize(deserializer)?;
+                impl #signal_name_ident {
+                    /// Retrieve the signal arguments.
+                    pub fn args#ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
+                        #where_clause
+                    {
+                        self.0.body().map_err(::std::convert::Into::into)
+                    }
+                }
+
+                #[doc = #signal_args_gen_doc]
+                pub struct #signal_args #ty_generics {
+                    phantom: std::marker::PhantomData<&'s ()>,
+                    #(
+                        pub #args: #input_types_s
+                     ),*
+                }
+
+                impl #impl_generics #signal_args #ty_generics
+                    #where_clause
+                {
+                    #(
+                        pub fn #args(&self) -> &#input_types_s {
+                            &self.#args
+                        }
+                     )*
+                }
+
+                impl #impl_generics #zbus::export::zvariant::Type for #signal_args #ty_generics
+                    #where_clause
+                {
+                    fn signature() -> #zbus::export::zvariant::Signature<'static> {
+                        <(#(#input_types,)*)>::signature()
+                    }
+                }
+
+                impl #impl_generics #zbus::export::serde::de::Deserialize<'s> for #signal_args #ty_generics
+                    #where_clause
+                {
+                    fn deserialize<__D>(deserializer: __D) -> std::result::Result<Self, __D::Error>
+                    where
+                        __D: #zbus::export::serde::Deserializer<'s> {
+                        let args: (#(#input_types),*,) =
+                            #zbus::export::serde::de::Deserialize::deserialize(deserializer)?;
+
+                        Ok(Self {
+                            phantom: ::std::marker::PhantomData,
+                            #(#args: args.#args_nth),*
+                        })
+                    }
+                }
             }
         };
         let stream_types = quote! {
             #[doc = #stream_gen_doc]
             pub struct #stream_name<'s>(#zbus::azync::SignalStream<'s>);
-
-            #[doc = #signal_args_gen_doc]
-            pub struct #signal_args #ty_generics {
-                phantom: std::marker::PhantomData<&'s ()>,
-                #(
-                    pub #args: #input_types_s
-                ),*
-            }
-
-            impl #impl_generics #signal_args #ty_generics
-            #where_clause
-            {
-                #(
-                    pub fn #args(&self) -> &#input_types_s {
-                        &self.#args
-                    }
-                )*
-            }
-
-            impl #impl_generics #zbus::export::zvariant::Type for #signal_args #ty_generics
-            #where_clause
-            {
-                fn signature() -> #zbus::export::zvariant::Signature<'static> {
-                    <(#(#input_types,)*)>::signature()
-                }
-            }
-
-            impl #impl_generics #zbus::export::serde::de::Deserialize<'s> for #signal_args #ty_generics
-            #where_clause
-            {
-                fn deserialize<__D>(deserializer: __D) -> std::result::Result<Self, __D::Error>
-                where
-                    __D: #zbus::export::serde::Deserializer<'s> {
-                    #deserialize_args
-
-                    Ok(Self {
-                        phantom: ::std::marker::PhantomData,
-                        #(#args: args.#args_nth),*
-                    })
-                }
-            }
 
             #zbus::export::static_assertions::assert_impl_all!(
                 #stream_name<'_>: ::std::marker::Send, ::std::marker::Unpin
@@ -579,14 +587,7 @@ fn gen_proxy_signal(
             #[doc = #args_struct_gen_doc]
             pub struct #signal_name_ident(::std::sync::Arc<#zbus::Message>);
 
-            impl #signal_name_ident {
-                /// Retrieve the signal arguments.
-                pub fn args#ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
-                #where_clause
-                {
-                    self.0.body().map_err(::std::convert::Into::into)
-                }
-            }
+            #args_impl
         };
 
         (receive_signal, stream_types)
