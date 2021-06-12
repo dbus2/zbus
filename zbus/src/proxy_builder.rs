@@ -56,9 +56,9 @@ impl<'a, T> ProxyBuilder<'a, T> {
     /// Set the proxy path.
     pub fn path<E, P: TryInto<ObjectPath<'a>, Error = E>>(mut self, path: P) -> Result<Self>
     where
-        Error: From<E>,
+        E: Into<Error>,
     {
-        self.path = Some(path.try_into()?);
+        self.path = Some(path.try_into().map_err(Into::into)?);
         Ok(self)
     }
 

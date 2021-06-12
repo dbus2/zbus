@@ -72,7 +72,7 @@ impl<'a> Proxy<'a> {
         interface: &'a str,
     ) -> Result<Self>
     where
-        Error: From<E>,
+        E: Into<Error>,
     {
         let proxy = block_on(azync::Proxy::new(
             conn.inner(),
@@ -96,7 +96,7 @@ impl<'a> Proxy<'a> {
         interface: String,
     ) -> Result<Self>
     where
-        Error: From<E>,
+        E: Into<Error>,
     {
         let proxy = block_on(azync::Proxy::new_owned(
             conn.clone().into_inner(),

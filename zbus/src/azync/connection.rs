@@ -64,11 +64,11 @@ impl<'s> SignalInfo<'s> {
         signal_name: &'s str,
     ) -> Result<Self>
     where
-        Error: From<E>,
+        E: Into<Error>,
     {
         Ok(Self {
             sender,
-            path: path.try_into()?,
+            path: path.try_into().map_err(Into::into)?,
             interface,
             signal_name,
         })
@@ -408,7 +408,7 @@ impl Connection {
     ) -> Result<Arc<Message>>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        MessageError: From<E>,
+        E: Into<MessageError>,
     {
         let stream = self.stream().await;
         let m = Message::method(
@@ -470,7 +470,7 @@ impl Connection {
     ) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        MessageError: From<E>,
+        E: Into<MessageError>,
     {
         let m = Message::signal(
             self.unique_name(),
@@ -639,7 +639,7 @@ impl Connection {
         signal_name: &'s str,
     ) -> Result<u64>
     where
-        Error: From<E>,
+        E: Into<Error>,
     {
         let signal = SignalInfo::new(sender, path, interface, signal_name)?;
         let hash = signal.calc_hash();
