@@ -311,9 +311,14 @@ impl Message {
     ) -> Result<Self, MessageError>
     where
         B: serde::ser::Serialize + Type,
-        MessageError: From<E>,
+        E: Into<MessageError>,
     {
-        let mut b = MessageBuilder::method(sender, path.try_into()?, method_name, body)?;
+        let mut b = MessageBuilder::method(
+            sender,
+            path.try_into().map_err(Into::into)?,
+            method_name,
+            body,
+        )?;
         if let Some(destination) = destination {
             b = b.set_field(MessageField::Destination(destination.into()));
         }
@@ -336,9 +341,15 @@ impl Message {
     ) -> Result<Self, MessageError>
     where
         B: serde::ser::Serialize + Type,
-        MessageError: From<E>,
+        E: Into<MessageError>,
     {
-        let mut b = MessageBuilder::signal(sender, path.try_into()?, iface, signal_name, body)?;
+        let mut b = MessageBuilder::signal(
+            sender,
+            path.try_into().map_err(Into::into)?,
+            iface,
+            signal_name,
+            body,
+        )?;
         if let Some(destination) = destination {
             b = b.set_field(MessageField::Destination(destination.into()));
         }

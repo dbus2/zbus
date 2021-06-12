@@ -333,12 +333,13 @@ impl ObjectServer {
     /// If the interface already exists at this path, returns false.
     ///
     /// [`Interface`]: trait.Interface.html
-    pub fn at<'p, P, I>(&mut self, path: P, iface: I) -> Result<bool>
+    pub fn at<'p, P, I, E>(&mut self, path: P, iface: I) -> Result<bool>
     where
         I: Interface,
-        P: TryInto<ObjectPath<'p>, Error = zvariant::Error>,
+        P: TryInto<ObjectPath<'p>, Error = E>,
+        E: Into<Error>,
     {
-        let path = path.try_into()?;
+        let path = path.try_into().map_err(Into::into)?;
         Ok(self.get_node_mut(&path, true).unwrap().at(I::name(), iface))
     }
 
@@ -348,12 +349,13 @@ impl ObjectServer {
     /// Returns whether the object was destroyed.
     ///
     /// [`Interface`]: trait.Interface.html
-    pub fn remove<'p, I, P>(&mut self, path: P) -> Result<bool>
+    pub fn remove<'p, I, P, E>(&mut self, path: P) -> Result<bool>
     where
         I: Interface,
-        P: TryInto<ObjectPath<'p>, Error = zvariant::Error>,
+        P: TryInto<ObjectPath<'p>, Error = E>,
+        E: Into<Error>,
     {
-        let path = path.try_into()?;
+        let path = path.try_into().map_err(Into::into)?;
         let node = self
             .get_node_mut(&path, false)
             .ok_or(Error::InterfaceNotFound)?;
@@ -382,7 +384,6 @@ impl ObjectServer {
     /// This function is useful to emit signals outside of a dispatched handler:
     /// ```no_run
     ///# use std::error::Error;
-    ///# use std::convert::TryInto;
     ///# use zbus::{Connection, ObjectServer, dbus_interface};
     ///
     ///# struct MyIface;
@@ -862,7 +863,7 @@ mod tests {
                 }
                 NextAction::DestroyObj(key) => {
                     let path = format!("/zbus/test/{}", key);
-                    object_server.remove::<MyIfaceImpl, _>(path).unwrap();
+                    object_server.remove::<MyIfaceImpl, _, _>(path).unwrap();
                 }
             }
         }
