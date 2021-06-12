@@ -155,7 +155,7 @@ impl<'a> Proxy<'a> {
         interface: &'a str,
     ) -> Result<Proxy<'a>>
     where
-        Error: From<E>,
+        E: Into<Error>,
     {
         crate::ProxyBuilder::new_bare(conn)
             .destination(destination)
@@ -174,7 +174,7 @@ impl<'a> Proxy<'a> {
         interface: String,
     ) -> Result<Proxy<'a>>
     where
-        Error: From<E>,
+        E: Into<Error>,
     {
         crate::ProxyBuilder::new_bare(&conn)
             .destination(destination)

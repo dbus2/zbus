@@ -185,7 +185,7 @@ impl Connection {
     ) -> Result<Arc<Message>>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        MessageError: From<E>,
+        E: Into<MessageError>,
     {
         block_on(
             self.inner
@@ -206,7 +206,7 @@ impl Connection {
     ) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        MessageError: From<E>,
+        E: Into<MessageError>,
     {
         block_on(
             self.inner
