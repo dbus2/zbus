@@ -382,7 +382,6 @@ impl ObjectServer {
     /// This function is useful to emit signals outside of a dispatched handler:
     /// ```no_run
     ///# use std::error::Error;
-    ///# use std::convert::TryInto;
     ///# use zbus::{Connection, ObjectServer, dbus_interface};
     ///
     ///# struct MyIface;
