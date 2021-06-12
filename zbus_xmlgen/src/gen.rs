@@ -57,7 +57,7 @@ impl<'i> Display for GenTrait<'i> {
             writeln!(f, "    /// {} property", p.name())?;
 
             if read {
-                let output = to_rust_type(p.ty(), false);
+                let output = to_rust_type(p.ty(), false, false);
                 writeln!(f, "    #[dbus_proxy(property)]")?;
                 writeln!(
                     f,
@@ -68,7 +68,7 @@ impl<'i> Display for GenTrait<'i> {
             }
 
             if write {
-                let input = to_rust_type(p.ty(), true);
+                let input = to_rust_type(p.ty(), true, true);
                 writeln!(f, "    #[dbus_proxy(property)]")?;
                 writeln!(
                     f,
@@ -103,7 +103,7 @@ fn inputs_output_from_args(args: &[&Arg]) -> (String, String) {
     for a in args {
         match a.direction().as_deref() {
             Some("in") => {
-                let ty = to_rust_type(a.ty(), true);
+                let ty = to_rust_type(a.ty(), true, true);
                 let arg = if let Some(name) = a.name() {
                     to_identifier(name)
                 } else {
@@ -112,7 +112,7 @@ fn inputs_output_from_args(args: &[&Arg]) -> (String, String) {
                 inputs.push(format!("{}: {}", arg, ty));
             }
             Some("out") => {
-                let ty = to_rust_type(a.ty(), false);
+                let ty = to_rust_type(a.ty(), false, false);
                 output.push(ty);
             }
             _ => unimplemented!(),
@@ -137,7 +137,7 @@ fn parse_signal_args(args: &[&Arg]) -> String {
     };
 
     for a in args {
-        let ty = to_rust_type(a.ty(), true);
+        let ty = to_rust_type(a.ty(), true, false);
         let arg = if let Some(name) = a.name() {
             to_identifier(name)
         } else {
@@ -149,7 +149,7 @@ fn parse_signal_args(args: &[&Arg]) -> String {
     inputs.join(", ")
 }
 
-fn to_rust_type(ty: &str, input: bool) -> String {
+fn to_rust_type(ty: &str, input: bool, as_ref: bool) -> String {
     // can't haz recursive closure, yet
     fn iter_to_rust_type(
         it: &mut std::iter::Peekable<std::slice::Iter<'_, u8>>,
@@ -239,7 +239,7 @@ fn to_rust_type(ty: &str, input: bool) -> String {
     }
 
     let mut it = ty.as_bytes().iter().peekable();
-    iter_to_rust_type(&mut it, input, input)
+    iter_to_rust_type(&mut it, input, as_ref)
 }
 
 static KWORDS: &[&str] = &[
