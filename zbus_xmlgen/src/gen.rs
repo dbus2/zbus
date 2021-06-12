@@ -167,36 +167,36 @@ fn to_rust_type(ty: &str, input: bool) -> String {
             i64::SIGNATURE_CHAR => "i64".into(),
             u64::SIGNATURE_CHAR => "u64".into(),
             f64::SIGNATURE_CHAR => "f64".into(),
-            Fd::SIGNATURE_CHAR => "zvariant::Fd".into(),
+            Fd::SIGNATURE_CHAR => "zbus::export::zvariant::Fd".into(),
             <&str>::SIGNATURE_CHAR => (if input || as_ref { "&str" } else { "String" }).into(),
             ObjectPath::SIGNATURE_CHAR => (if input {
                 if as_ref {
-                    "&zvariant::ObjectPath<'_>"
+                    "&zbus::export::zvariant::ObjectPath<'_>"
                 } else {
-                    "zvariant::ObjectPath<'_>"
+                    "zbus::export::zvariant::ObjectPath<'_>"
                 }
             } else {
-                "zvariant::OwnedObjectPath"
+                "zbus::export::zvariant::OwnedObjectPath"
             })
             .into(),
             Signature::SIGNATURE_CHAR => (if input {
                 if as_ref {
-                    "&zvariant::Signature<'_>"
+                    "&zbus::export::zvariant::Signature<'_>"
                 } else {
-                    "zvariant::Signature<'_>"
+                    "zbus::export::zvariant::Signature<'_>"
                 }
             } else {
-                "zvariant::OwnedSignature"
+                "zbus::export::zvariant::OwnedSignature"
             })
             .into(),
             VARIANT_SIGNATURE_CHAR => (if input {
                 if as_ref {
-                    "&zvariant::Value<'_>"
+                    "&zbus::export::zvariant::Value<'_>"
                 } else {
-                    "zvariant::Value<'_>"
+                    "zbus::export::zvariant::Value<'_>"
                 }
             } else {
-                "zvariant::OwnedValue"
+                "zbus::export::zvariant::OwnedValue"
             })
             .into(),
             ARRAY_SIGNATURE_CHAR => {
