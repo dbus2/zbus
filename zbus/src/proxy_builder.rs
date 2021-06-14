@@ -14,6 +14,7 @@ pub struct ProxyBuilder<'a, T = ()> {
     path: Option<ObjectPath<'a>>,
     interface: Option<Cow<'a, str>>,
     proxy_type: PhantomData<T>,
+    cache: bool,
 }
 
 impl<'a, T> Clone for ProxyBuilder<'a, T> {
@@ -23,6 +24,7 @@ impl<'a, T> Clone for ProxyBuilder<'a, T> {
             destination: self.destination.clone(),
             path: self.path.clone(),
             interface: self.interface.clone(),
+            cache: self.cache,
             proxy_type: PhantomData,
         }
     }
@@ -41,6 +43,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
             destination: None,
             path: None,
             interface: None,
+            cache: true,
             proxy_type: PhantomData,
         }
     }
@@ -65,6 +68,12 @@ impl<'a, T> ProxyBuilder<'a, T> {
     /// Set the proxy interface.
     pub fn interface<I: Into<Cow<'a, str>>>(mut self, interface: I) -> Self {
         self.interface = Some(interface.into());
+        self
+    }
+
+    /// Set whether to cache properties.
+    pub fn cache_properties(mut self, cache: bool) -> Self {
+        self.cache = cache;
         self
     }
 
@@ -115,6 +124,7 @@ where
             destination: Some(T::DESTINATION.into()),
             path: Some(T::PATH.try_into().expect("invalid default path")),
             interface: Some(T::INTERFACE.into()),
+            cache: true,
             proxy_type: PhantomData,
         }
     }
