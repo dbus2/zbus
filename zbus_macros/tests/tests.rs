@@ -48,7 +48,10 @@ fn test_proxy() {
     }
 
     let connection = zbus::Connection::new_session().unwrap();
-    let proxy = TestProxy::new(&connection).unwrap();
+    let proxy = TestProxy::builder(&connection)
+        .cache_properties(false)
+        .build()
+        .unwrap();
     proxy
         .connect_a_signal(move |_arg, other: String| {
             println!("{}", other);
@@ -58,7 +61,11 @@ fn test_proxy() {
     // Let's also test signal streams.
     let connection = zbus::azync::Connection::from(connection);
     block_on(async move {
-        let proxy = AsyncTestProxy::new(&connection).await.unwrap();
+        let proxy = AsyncTestProxy::builder(&connection)
+            .cache_properties(false)
+            .build_async()
+            .await
+            .unwrap();
         fdo::AsyncDBusProxy::new(&connection)
             .await
             .unwrap()

@@ -732,8 +732,9 @@ mod tests {
         let proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")
             .path("/org/freedesktop/MyService")?
+            // the server isn't yet running
+            .cache_properties(false)
             .build()?;
-
         let props_proxy = zbus::fdo::PropertiesProxy::builder(&conn)
             .destination("org.freedesktop.MyService")
             .path("/org/freedesktop/MyService")?

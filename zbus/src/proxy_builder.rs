@@ -156,7 +156,8 @@ mod tests {
             .destination("org.freedesktop.DBus")
             .path("/some/path")
             .unwrap()
-            .interface("org.freedesktop.Interface");
+            .interface("org.freedesktop.Interface")
+            .cache_properties(false);
         assert!(matches!(
             builder.clone().destination.unwrap(),
             Cow::Borrowed(_)
