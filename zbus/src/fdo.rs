@@ -741,7 +741,7 @@ mod tests {
 
     async fn test_signal_stream() {
         let conn = crate::azync::Connection::new_session().await.unwrap();
-        let proxy = fdo::AsyncDBusProxy::new(&conn).unwrap();
+        let proxy = fdo::AsyncDBusProxy::new(&conn).await.unwrap();
 
         #[cfg(not(feature = "internal-executor"))]
         {

@@ -123,19 +123,22 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
         }
     }
 
-    let (proxy_doc, proxy_struct, connection) = if azync {
+    let AsyncOpts { usage, wait, .. } = async_opts;
+    let (proxy_doc, proxy_struct, connection, build) = if azync {
         let sync_proxy = Ident::new(&format!("{}Proxy", input.ident), Span::call_site());
         let doc = format!("Asynchronous sibling of [`{}`].", sync_proxy);
         let connection = quote! { #zbus::azync::Connection };
         let proxy = quote! { #zbus::azync::Proxy };
+        let build = Ident::new("build_async", Span::call_site());
 
-        (doc, proxy, connection)
+        (doc, proxy, connection, build)
     } else {
         let doc = String::from("");
         let connection = quote! { #zbus::Connection };
         let proxy = quote! { #zbus::Proxy };
+        let build = Ident::new("build", Span::call_site());
 
-        (doc, proxy, connection)
+        (doc, proxy, connection, build)
     };
 
     quote! {
@@ -152,8 +155,8 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
 
         impl<'c> #proxy_name<'c> {
             /// Creates a new proxy with the default service & path.
-            pub fn new(conn: &#connection) -> #zbus::Result<Self> {
-                Self::builder(conn).build()
+            pub #usage fn new(conn: &#connection) -> #zbus::Result<#proxy_name<'c>> {
+                Self::builder(conn).#build()#wait
             }
 
             /// Returns a customizable builder for this proxy.

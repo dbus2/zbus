@@ -96,8 +96,8 @@ mod utils;
 /// assert!(!proxy.disconnect_signal(handler_id)?);
 ///
 /// // Now the same again, but asynchronous.
-/// let proxy = AsyncSomeIfaceProxy::new(&connection.into()).unwrap();
 /// block_on(async move {
+///     let proxy = AsyncSomeIfaceProxy::new(&connection.into()).await.unwrap();
 ///     let _ = proxy.do_this("foo", 32, &Value::new(true)).await;
 ///     let _ = proxy.set_a_property("val").await;
 ///

@@ -64,7 +64,7 @@ async fn run() -> Result<()> {
         fn longitude(&self) -> Result<f64>;
     }
     let conn = Connection::new_system().await?;
-    let manager = AsyncManagerProxy::new(&conn)?;
+    let manager = AsyncManagerProxy::new(&conn).await?;
     let mut client = manager.get_client().await?;
     // Gotta do this, sorry!
     client.set_desktop_id("org.freedesktop.zbus").await?;
@@ -155,7 +155,7 @@ example again to receive multiple signals on different proxies:
 #         fn longitude(&self) -> Result<f64>;
 #     }
 #     let conn = Connection::new_system().await?;
-#     let manager = AsyncManagerProxy::new(&conn)?;
+#     let manager = AsyncManagerProxy::new(&conn).await?;
 #     let mut client = manager.get_client().await?;
 #
 	// Everything else remains the same before this point.
@@ -271,7 +271,7 @@ streams to see how that works:
 #         fn longitude(&self) -> Result<f64>;
 #     }
 #     let conn = Connection::new_system().await?;
-#     let manager = AsyncManagerProxy::new(&conn)?;
+#     let manager = AsyncManagerProxy::new(&conn).await?;
 #     let mut client = manager.get_client().await?;
 #
 #   client.set_desktop_id("org.freedesktop.zbus").await?;

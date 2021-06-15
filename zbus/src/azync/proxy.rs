@@ -506,7 +506,8 @@ impl<'a> Proxy<'a> {
         let unique_name = if destination.starts_with(':') || destination == "org.freedesktop.DBus" {
             destination.to_string()
         } else {
-            fdo::AsyncDBusProxy::new(&self.inner.conn)?
+            fdo::AsyncDBusProxy::new(&self.inner.conn)
+                .await?
                 .get_name_owner(destination)
                 .await?
         };
@@ -596,7 +597,7 @@ mod tests {
         let conn = Connection::new_session().await?;
         let unique_name = conn.unique_name().unwrap();
 
-        let proxy = fdo::AsyncDBusProxy::new(&conn)?;
+        let proxy = fdo::AsyncDBusProxy::new(&conn).await?;
 
         let well_known = "org.freedesktop.zbus.async.ProxySignalStreamTest";
         let owner_changed_stream = proxy
@@ -653,7 +654,7 @@ mod tests {
         let name_acquired_signaled = Arc::new(Mutex::new(false));
         let name_acquired_signaled2 = Arc::new(Mutex::new(false));
 
-        let proxy = fdo::AsyncDBusProxy::new(&conn)?;
+        let proxy = fdo::AsyncDBusProxy::new(&conn).await?;
         let well_known = "org.freedesktop.zbus.async.ProxySignalConnectTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         let name_owner_changed_id = {
