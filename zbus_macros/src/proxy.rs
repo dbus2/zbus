@@ -524,6 +524,18 @@ fn gen_proxy_signal(
                         }
                      )*
                 }
+
+                impl #impl_generics std::fmt::Debug for #signal_args #ty_generics
+                    #where_clause
+                {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        f.debug_struct(#signal_name)
+                        #(
+                         .field(stringify!(#args), &self.#args)
+                        )*
+                         .finish()
+                    }
+                }
             }
         };
         let stream_types = quote! {
