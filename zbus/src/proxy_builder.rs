@@ -1,6 +1,7 @@
 use std::{borrow::Cow, convert::TryInto, marker::PhantomData, sync::Arc};
 
 use async_io::block_on;
+use futures_core::future::BoxFuture;
 use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
@@ -94,7 +95,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
     /// # Panics
     ///
     /// Panics if the builder is lacking the necessary details to build a proxy.
-    pub async fn build_async(self) -> Result<T>
+    pub fn build_async(self) -> BoxFuture<'a, Result<T>>
     where
         T: From<azync::Proxy<'a>>,
     {
@@ -102,11 +103,20 @@ impl<'a, T> ProxyBuilder<'a, T> {
         let destination = self.destination.expect("missing `destination`");
         let path = self.path.expect("missing `path`");
         let interface = self.interface.expect("missing `interface`");
+        let cache = self.cache;
 
-        Ok(azync::Proxy {
+        let proxy = azync::Proxy {
             inner: Arc::new(azync::ProxyInner::new(conn, destination, path, interface)),
-        }
-        .into())
+            properties: Default::default(),
+        };
+
+        Box::pin(async move {
+            if cache {
+                proxy.cache_properties().await?;
+            }
+
+            Ok(proxy.into())
+        })
     }
 }
 

@@ -1,4 +1,6 @@
 use async_lock::Mutex;
+use async_recursion::async_recursion;
+use async_task::Task;
 use futures_core::{future::BoxFuture, stream};
 use futures_util::stream::StreamExt;
 use once_cell::sync::OnceCell;
@@ -6,6 +8,7 @@ use slotmap::{new_key_type, SlotMap};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::Cow,
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     future::ready,
     io::{self, ErrorKind},
@@ -38,8 +41,10 @@ struct SignalHandlerInfo {
 
 // Hold proxy properties related data.
 #[derive(Default, Debug)]
-struct ProxyProperties<'a> {
-    proxy: OnceCell<AsyncPropertiesProxy<'a>>,
+pub(crate) struct ProxyProperties<'a> {
+    pub(crate) proxy: OnceCell<AsyncPropertiesProxy<'a>>,
+    pub(crate) values: Mutex<HashMap<String, OwnedValue>>,
+    task: OnceCell<Task<()>>,
 }
 
 /// The asynchronous sibling of [`crate::Proxy`].
@@ -99,6 +104,10 @@ struct ProxyProperties<'a> {
 #[derive(Clone, Debug)]
 pub struct Proxy<'a> {
     pub(crate) inner: Arc<ProxyInner<'a>>,
+    // Use a 'static as we can't self-reference ProxyInner fields
+    // eventually, we could make destination/path inside an Arc
+    // but then we would have other issues with async 'static closures
+    pub(crate) properties: Arc<ProxyProperties<'static>>,
 }
 
 assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
@@ -110,9 +119,6 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) destination: Cow<'a, str>,
     pub(crate) path: ObjectPath<'a>,
     pub(crate) interface: Cow<'a, str>,
-    // Use a 'static as we can't self-reference ProxyInner fields
-    // eventually, we could make destination/path inside an Arc
-    properties: ProxyProperties<'static>,
     dest_unique_name: OnceCell<String>,
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
@@ -132,7 +138,6 @@ impl<'a> ProxyInner<'a> {
             destination,
             path,
             interface,
-            properties: Default::default(),
             dest_unique_name: OnceCell::new(),
             sig_handlers: Mutex::new(SlotMap::with_key()),
             signal_msg_stream: OnceCell::new(),
@@ -152,25 +157,6 @@ impl<'a> ProxyInner<'a> {
             h.member().ok().flatten()
         } else {
             None
-        }
-    }
-
-    async fn properties_proxy(&self) -> Result<&AsyncPropertiesProxy<'static>> {
-        match self.properties.proxy.get() {
-            Some(proxy) => Ok(proxy),
-            None => {
-                let proxy = AsyncPropertiesProxy::builder(&self.conn)
-                    .destination(self.destination.to_string())
-                    // Safe because already checked earlier
-                    .path(self.path.to_owned())
-                    .unwrap()
-                    .build_async()
-                    .await?;
-                // doesn't matter if another thread sets it before
-                let _ = self.properties.proxy.set(proxy);
-                // but we must have a Ok() here
-                self.properties.proxy.get().ok_or_else(|| panic!())
-            }
         }
     }
 }
@@ -245,6 +231,57 @@ impl<'a> Proxy<'a> {
         proxy.introspect().await
     }
 
+    #[async_recursion]
+    async fn properties_proxy(&self) -> Result<&AsyncPropertiesProxy<'static>> {
+        match self.properties.proxy.get() {
+            Some(proxy) => Ok(proxy),
+            None => {
+                let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
+                    .destination(self.inner.destination.to_string())
+                    // Safe because already checked earlier
+                    .path(self.inner.path.to_owned())
+                    .unwrap()
+                    // does not have properties and do not recurse!
+                    .cache_properties(false)
+                    .build_async()
+                    .await?;
+                // doesn't matter if another thread sets it before
+                let _ = self.properties.proxy.set(proxy);
+                // but we must have a Ok() here
+                self.properties.proxy.get().ok_or_else(|| panic!())
+            }
+        }
+    }
+
+    pub(crate) async fn cache_properties(&self) -> Result<()> {
+        let proxy = self.properties_proxy().await?;
+
+        let mut stream = proxy.receive_properties_changed().await?;
+        let properties = self.properties.clone();
+        let task = self.inner.conn.executor().spawn(async move {
+            while let Some(changed) = stream.next().await {
+                if let Ok(args) = changed.args() {
+                    let mut values = properties.values.lock().await;
+                    for inval in args.invalidated_properties() {
+                        values.remove(*inval);
+                    }
+                    values.extend(
+                        args.changed_properties()
+                            .iter()
+                            .map(|(k, v)| (k.to_string(), v.into())),
+                    );
+                }
+            }
+        });
+        self.properties.task.set(task).unwrap();
+
+        if let Ok(values) = proxy.get_all(&self.inner.interface).await {
+            self.properties.values.lock().await.extend(values);
+        }
+
+        Ok(())
+    }
+
     /// Get the property `property_name`.
     ///
     /// Effectively, call the `Get` method of the `org.freedesktop.DBus.Properties` interface.
@@ -252,8 +289,7 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        self.inner
-            .properties_proxy()
+        self.properties_proxy()
             .await?
             .get(&self.inner.interface, property_name)
             .await?
@@ -268,8 +304,7 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        self.inner
-            .properties_proxy()
+        self.properties_proxy()
             .await?
             .set(&self.inner.interface, property_name, &value.into())
             .await
