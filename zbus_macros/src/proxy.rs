@@ -85,6 +85,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     let default_service = default_service.unwrap_or_else(|| name.clone());
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
+    let mut has_properties = false;
     let async_opts = AsyncOpts::new(azync);
 
     for i in input.items.iter() {
@@ -109,6 +110,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                     })
                 });
             let m = if is_property {
+                has_properties = true;
                 gen_proxy_property(&name, m, &async_opts)
             } else if is_signal {
                 let (method, types) =
@@ -162,6 +164,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             /// Returns a customizable builder for this proxy.
             pub fn builder(conn: &#connection) -> #zbus::ProxyBuilder<'c, Self> {
                 #zbus::ProxyBuilder::new(conn)
+                    .cache_properties(#has_properties)
             }
 
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
