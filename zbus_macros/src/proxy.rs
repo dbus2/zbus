@@ -482,13 +482,25 @@ fn gen_proxy_signal(
         let args_impl = if args.is_empty() {
             quote!()
         } else {
+            let arg_fields_init = if args.len() == 1 {
+                quote! { #(#args)*: args }
+            } else {
+                quote! { #(#args: args.#args_nth),* }
+            };
             quote! {
                 impl #signal_name_ident {
                     /// Retrieve the signal arguments.
                     pub fn args#ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
                         #where_clause
                     {
-                        self.0.body().map_err(::std::convert::Into::into)
+                        self.0.body::<(#(#input_types),*)>()
+                            .map_err(::std::convert::Into::into)
+                            .map(|args| {
+                                #signal_args {
+                                    phantom: ::std::marker::PhantomData,
+                                    #arg_fields_init
+                                }
+                            })
                     }
                 }
 
@@ -508,30 +520,6 @@ fn gen_proxy_signal(
                             &self.#args
                         }
                      )*
-                }
-
-                impl #impl_generics #zbus::export::zvariant::Type for #signal_args #ty_generics
-                    #where_clause
-                {
-                    fn signature() -> #zbus::export::zvariant::Signature<'static> {
-                        <(#(#input_types,)*)>::signature()
-                    }
-                }
-
-                impl #impl_generics #zbus::export::serde::de::Deserialize<'s> for #signal_args #ty_generics
-                    #where_clause
-                {
-                    fn deserialize<__D>(deserializer: __D) -> std::result::Result<Self, __D::Error>
-                    where
-                        __D: #zbus::export::serde::Deserializer<'s> {
-                        let args: (#(#input_types),*,) =
-                            #zbus::export::serde::de::Deserialize::deserialize(deserializer)?;
-
-                        Ok(Self {
-                            phantom: ::std::marker::PhantomData,
-                            #(#args: args.#args_nth),*
-                        })
-                    }
                 }
             }
         };
