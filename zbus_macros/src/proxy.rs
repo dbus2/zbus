@@ -482,18 +482,23 @@ fn gen_proxy_signal(
         let args_impl = if args.is_empty() {
             quote!()
         } else {
+            let arg_fields_init = if args.len() == 1 {
+                quote! { #(#args)*: args }
+            } else {
+                quote! { #(#args: args.#args_nth),* }
+            };
             quote! {
                 impl #signal_name_ident {
                     /// Retrieve the signal arguments.
                     pub fn args#ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
                         #where_clause
                     {
-                        self.0.body::<(#(#input_types),*,)>()
+                        self.0.body::<(#(#input_types),*)>()
                             .map_err(::std::convert::Into::into)
                             .map(|args| {
                                 #signal_args {
                                     phantom: ::std::marker::PhantomData,
-                                    #(#args: args.#args_nth),*
+                                    #arg_fields_init
                                 }
                             })
                     }
