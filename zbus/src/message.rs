@@ -513,20 +513,22 @@ impl Message {
     where
         B: serde::de::Deserialize<'d> + Type,
     {
-        let b_sig = B::signature();
-        let sig = match self.body_signature() {
+        let expected_sig = B::signature();
+        let actual_sig = match self.body_signature() {
             Ok(sig) => sig,
             Err(MessageError::NoBodySignature) => Signature::from_str_unchecked(""),
             Err(e) => return Err(e),
         };
 
         let c = zvariant::STRUCT_SIG_START_CHAR;
-        let b_sig = if b_sig.len() >= 2 && b_sig.starts_with(c) && !sig.starts_with(c) {
-            &b_sig[1..b_sig.len() - 1]
-        } else {
-            &b_sig
-        };
-        if b_sig != sig.as_str() {
+        let signature =
+            if expected_sig.len() >= 2 && expected_sig.starts_with(c) && !actual_sig.starts_with(c)
+            {
+                &expected_sig[1..expected_sig.len() - 1]
+            } else {
+                &expected_sig
+            };
+        if signature != actual_sig.as_str() {
             return Err(MessageError::UnmatchedBodySignature);
         }
 
