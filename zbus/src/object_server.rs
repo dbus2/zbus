@@ -405,13 +405,14 @@ impl ObjectServer {
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn with<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
+    pub fn with<'p, P, F, I, E>(&self, path: P, func: F) -> Result<()>
     where
         F: Fn(&I) -> Result<()>,
         I: Interface,
-        P: TryInto<ObjectPath<'p>, Error = zvariant::Error>,
+        P: TryInto<ObjectPath<'p>, Error = E>,
+        E: Into<Error>,
     {
-        let path = path.try_into()?;
+        let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
         LOCAL_CONNECTION.set(&self.conn, || {
             LOCAL_NODE.set(node, || node.with_iface_func(func))
