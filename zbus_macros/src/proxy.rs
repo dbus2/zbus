@@ -443,7 +443,7 @@ fn gen_proxy_signal(
         {
             where_clause
                 .predicates
-                .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'s> + #zbus::export::zvariant::Type));
+                .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'s> + #zbus::export::zvariant::Type + ::std::fmt::Debug));
         }
         generics.params.push(parse_quote!('s));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -622,7 +622,7 @@ fn gen_proxy_signal(
         {
             where_clause
                 .predicates
-                .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + #zbus::export::zvariant::Type));
+                .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + #zbus::export::zvariant::Type + ::std::fmt::Debug));
         }
         where_clause
             .predicates
