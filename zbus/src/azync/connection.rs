@@ -586,12 +586,11 @@ impl Connection {
         self.0.server_guid.as_str()
     }
 
-    #[cfg(any(doc, not(feature = "internal-executor")))]
     /// The underlying executor.
     ///
-    /// This method is available when built with the default `internal-executor` feature disabled.
-    /// Since zbus will not spawn thread internally to run the executor in this case, you're
-    /// responsible to continuously [tick the executor][tte]. Failure to do so will result in hangs.
+    /// When `internal-executor` feature is disabled, zbus will not spawn thread internally to run
+    /// the executor. You're responsible to continuously [tick the executor][tte]. Failure to do so
+    /// will result in hangs.
     ///
     /// # Examples
     ///
