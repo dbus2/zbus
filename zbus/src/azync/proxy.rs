@@ -1,3 +1,4 @@
+use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_lock::Mutex;
 use async_recursion::async_recursion;
 use async_task::Task;
@@ -39,6 +40,8 @@ struct SignalHandlerInfo {
     handler: SignalHandler,
 }
 
+type PropertyChangedEvent = Arc<(String, Option<OwnedValue>)>;
+
 type PropertyChangedHandler =
     Box<dyn for<'v> FnMut(Option<&'v Value<'_>>) -> BoxFuture<'v, ()> + Send>;
 
@@ -54,7 +57,7 @@ pub(crate) struct PropertyChangedHandlerInfo {
 
 // Hold proxy properties related data.
 #[derive(derivative::Derivative)]
-#[derivative(Debug, Default)]
+#[derivative(Debug)]
 pub(crate) struct ProxyProperties<'a> {
     pub(crate) proxy: OnceCell<AsyncPropertiesProxy<'a>>,
     pub(crate) values: Mutex<HashMap<String, OwnedValue>>,
@@ -62,6 +65,8 @@ pub(crate) struct ProxyProperties<'a> {
     #[derivative(Debug = "ignore")]
     pub(crate) changed_handlers:
         Mutex<SlotMap<PropertyChangedHandlerId, PropertyChangedHandlerInfo>>,
+    broadcaster: Broadcaster<PropertyChangedEvent>,
+    receiver: InactiveReceiver<PropertyChangedEvent>,
 }
 
 /// The asynchronous sibling of [`crate::Proxy`].
@@ -143,10 +148,72 @@ pub(crate) struct ProxyInner<'a> {
     signal_msg_stream: OnceCell<Mutex<MessageStream>>,
 }
 
-impl<'a> ProxyProperties<'a> {
-    async fn changed(&self, property_name: &str, value: Option<&Value<'_>>) {
-        let mut handlers = self.changed_handlers.lock().await;
+pub struct PropertyStream<'a, T> {
+    name: &'a str,
+    stream: stream::BoxStream<'static, PropertyChangedEvent>,
+    phantom: std::marker::PhantomData<T>,
+}
 
+impl<'a, T> stream::Stream for PropertyStream<'a, T>
+where
+    T: TryFrom<zvariant::OwnedValue> + Unpin,
+{
+    type Item = Option<T>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let m = self.get_mut();
+        let (name, stream) = (m.name, m.stream.as_mut());
+        // there must be a way to simplify the following code..
+        let p = stream::Stream::poll_next(stream, cx);
+        match p {
+            Poll::Ready(Some(item)) => {
+                if item.0 == name {
+                    if let Some(Ok(v)) = item.1.clone().map(T::try_from) {
+                        Poll::Ready(Some(Some(v)))
+                    } else {
+                        Poll::Ready(Some(None))
+                    }
+                } else {
+                    Poll::Pending
+                }
+            }
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl<'a> ProxyProperties<'a> {
+    pub(crate) fn new() -> Self {
+        // note: do we need to make this configurable?
+        let (mut sender, receiver) = broadcast(1);
+        sender.set_overflow(true);
+        let receiver = receiver.deactivate();
+
+        Self {
+            proxy: Default::default(),
+            values: Default::default(),
+            task: Default::default(),
+            changed_handlers: Default::default(),
+            broadcaster: sender,
+            receiver,
+        }
+    }
+
+    async fn changed(&self, property_name: &str, value: Option<&Value<'_>>) {
+        if self.broadcaster.receiver_count() > 0 {
+            // Ignore event errors.
+            // TODO: We should still log in case of error when we've logging.
+            let _res = self
+                .broadcaster
+                .broadcast(Arc::new((
+                    property_name.to_string(),
+                    value.map(OwnedValue::from),
+                )))
+                .await;
+        }
+
+        let mut handlers = self.changed_handlers.lock().await;
         for info in handlers
             .values_mut()
             .filter(|info| info.property_name == property_name)
@@ -723,6 +790,18 @@ impl<'a> Proxy<'a> {
             }
         }
     }
+
+    /// Get a stream to receive property changed events.
+    ///
+    /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
+    /// will only receive the last update.
+    pub async fn receive_property_stream<'n, T>(&self, name: &'n str) -> PropertyStream<'n, T> {
+        PropertyStream {
+            name,
+            stream: self.properties.receiver.activate_cloned().boxed(),
+            phantom: std::marker::PhantomData,
+        }
+    }
 }
 
 /// A [`stream::Stream`] implementation that yields signal [messages](`Message`).
@@ -804,6 +883,15 @@ mod tests {
             ready(false)
         });
 
+        let _prop_stream =
+            proxy
+                .receive_property_stream("SomeProp")
+                .await
+                .filter(|v: &Option<u32>| {
+                    dbg!(v);
+                    ready(false)
+                });
+
         let reply = proxy
             .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .await?;
@@ -811,7 +899,7 @@ mod tests {
 
         let (changed_signal, acquired_signal) = futures_util::join!(
             owner_changed_stream.into_future(),
-            name_acquired_stream.into_future()
+            name_acquired_stream.into_future(),
         );
 
         let changed_signal = changed_signal.0.unwrap();

@@ -107,7 +107,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
 
         let proxy = azync::Proxy {
             inner: Arc::new(azync::ProxyInner::new(conn, destination, path, interface)),
-            properties: Default::default(),
+            properties: Arc::new(azync::ProxyProperties::new()),
         };
 
         Box::pin(async move {
