@@ -374,6 +374,26 @@ fn gen_proxy_property(
             ::std::result::Result::Ok(self.0.get_property(#property_name)#wait?)
         };
 
+        let receive = if *azync {
+            let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
+            let receive = format_ident!("receive_{}_changed", method_name);
+            let gen_doc = format!("Create a stream for the `{}` property changes. \
+                                   This is a convenient wrapper around [`zbus::azync::Proxy::receive_property_stream`].",
+                                  property_name);
+            quote! {
+                #[doc = #gen_doc]
+                pub async fn #receive#ty_generics(
+                    &self
+                ) -> #zbus::azync::PropertyStream<'static, #zbus::export::zvariant::OwnedValue>
+                #where_clause
+                {
+                    self.0.receive_property_stream(#property_name).await
+                }
+            }
+        } else {
+            quote! {}
+        };
+
         let connect = format_ident!("connect_{}_changed", method_name);
         let handler = if *azync {
             parse_quote! {
@@ -423,6 +443,8 @@ fn gen_proxy_property(
             {
                 self.0.connect_property_changed(#property_name, handler)#wait
             }
+
+            #receive
         }
     }
 }

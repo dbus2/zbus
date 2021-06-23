@@ -802,5 +802,10 @@ mod tests {
 
         let result = proxy.release_name(well_known).await.unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::NonExistent);
+
+        let _stream = proxy.receive_features_changed().await.filter(|v| {
+            dbg!(v);
+            ready(true)
+        });
     }
 }
