@@ -323,6 +323,42 @@ streams to see how that works:
 # }
 ```
 
+### Watching for properties
+
+Use the property stream API offered by the proxy to be notified of changes. The functions are named
+after the properties `receive_<prop_name>_changed()`. Example:
+
+```rust,no_run
+# use std::error::Error;
+# use zbus::{azync::Connection, dbus_proxy, Result};
+# use futures_util::stream::StreamExt;
+#
+# async_io::block_on(run()).unwrap();
+#
+# async fn run() -> Result<()> {
+#
+    #[dbus_proxy(
+        interface = "org.freedesktop.systemd1.Manager",
+        default_service = "org.freedesktop.systemd1",
+        default_path = "/org/freedesktop/systemd1"
+    )]
+    trait SystemdManager {
+        #[dbus_proxy(property)]
+        fn log_level(&self) -> zbus::Result<String>;
+    }
+
+    let connection = Connection::new_session().await?;
+
+    let proxy = AsyncSystemdManagerProxy::new(&connection).await?;
+    let mut stream = proxy.receive_log_level_changed().await;
+    while let Some(v) = stream.next().await {
+        println!("LogLevel changed: {:?}", v);
+    }
+#
+#   Ok(())
+# }
+```
+
 ## Server
 
 No high-level server-side API are provided yet. Rest assured, it's very high on our priority list.

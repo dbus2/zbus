@@ -203,6 +203,41 @@ Environment variables:
   ...
 ```
 
+#### Watching for changes
+
+By default, the proxy will cache the properties and watch for changes.
+
+To be notified of a property change, you may use the synchronous API with the properties callback.
+The methods are named after the properties names `connect_<prop_name>_changed`, for example:
+
+```rust,no_run
+# use std::error::Error;
+# use zbus::dbus_proxy;
+#
+#[dbus_proxy(
+    interface = "org.freedesktop.systemd1.Manager",
+    default_service = "org.freedesktop.systemd1",
+    default_path = "/org/freedesktop/systemd1"
+)]
+trait SystemdManager {
+    #[dbus_proxy(property)]
+    fn log_level(&self) -> zbus::Result<String>;
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let connection = zbus::Connection::new_session()?;
+
+    let proxy = SystemdManagerProxy::new(&connection)?;
+    proxy.connect_log_level_changed(|v| {
+        println!("LogLevel changed: {:?}", v);
+    });
+
+    Ok(())
+}
+```
+
+(see the next chapter for the async stream API version)
+
 ### Signals
 
 Signals are like methods, except they don't expect a reply. They are typically emitted by services
