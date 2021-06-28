@@ -1,6 +1,7 @@
 use std::{borrow::Cow, convert::TryInto, marker::PhantomData, sync::Arc};
 
 use async_io::block_on;
+use futures_core::future::BoxFuture;
 use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
@@ -14,6 +15,7 @@ pub struct ProxyBuilder<'a, T = ()> {
     path: Option<ObjectPath<'a>>,
     interface: Option<Cow<'a, str>>,
     proxy_type: PhantomData<T>,
+    cache: bool,
 }
 
 impl<'a, T> Clone for ProxyBuilder<'a, T> {
@@ -23,6 +25,7 @@ impl<'a, T> Clone for ProxyBuilder<'a, T> {
             destination: self.destination.clone(),
             path: self.path.clone(),
             interface: self.interface.clone(),
+            cache: self.cache,
             proxy_type: PhantomData,
         }
     }
@@ -41,6 +44,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
             destination: None,
             path: None,
             interface: None,
+            cache: true,
             proxy_type: PhantomData,
         }
     }
@@ -68,6 +72,12 @@ impl<'a, T> ProxyBuilder<'a, T> {
         self
     }
 
+    /// Set whether to cache properties.
+    pub fn cache_properties(mut self, cache: bool) -> Self {
+        self.cache = cache;
+        self
+    }
+
     /// Build a proxy from the builder.
     ///
     /// # Panics
@@ -85,7 +95,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
     /// # Panics
     ///
     /// Panics if the builder is lacking the necessary details to build a proxy.
-    pub async fn build_async(self) -> Result<T>
+    pub fn build_async(self) -> BoxFuture<'a, Result<T>>
     where
         T: From<azync::Proxy<'a>>,
     {
@@ -93,11 +103,20 @@ impl<'a, T> ProxyBuilder<'a, T> {
         let destination = self.destination.expect("missing `destination`");
         let path = self.path.expect("missing `path`");
         let interface = self.interface.expect("missing `interface`");
+        let cache = self.cache;
 
-        Ok(azync::Proxy {
+        let proxy = azync::Proxy {
             inner: Arc::new(azync::ProxyInner::new(conn, destination, path, interface)),
-        }
-        .into())
+            properties: Arc::new(azync::ProxyProperties::new()),
+        };
+
+        Box::pin(async move {
+            if cache {
+                proxy.cache_properties().await?;
+            }
+
+            Ok(proxy.into())
+        })
     }
 }
 
@@ -115,6 +134,7 @@ where
             destination: Some(T::DESTINATION.into()),
             path: Some(T::PATH.try_into().expect("invalid default path")),
             interface: Some(T::INTERFACE.into()),
+            cache: true,
             proxy_type: PhantomData,
         }
     }
@@ -146,7 +166,8 @@ mod tests {
             .destination("org.freedesktop.DBus")
             .path("/some/path")
             .unwrap()
-            .interface("org.freedesktop.Interface");
+            .interface("org.freedesktop.Interface")
+            .cache_properties(false);
         assert!(matches!(
             builder.clone().destination.unwrap(),
             Cow::Borrowed(_)

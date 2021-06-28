@@ -741,7 +741,6 @@ mod tests {
 
     async fn test_signal_stream() {
         let conn = crate::azync::Connection::new_session().await.unwrap();
-        let proxy = fdo::AsyncDBusProxy::new(&conn).unwrap();
 
         #[cfg(not(feature = "internal-executor"))]
         {
@@ -752,6 +751,8 @@ mod tests {
                 }
             });
         }
+
+        let proxy = fdo::AsyncDBusProxy::new(&conn).await.unwrap();
 
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
@@ -801,5 +802,10 @@ mod tests {
 
         let result = proxy.release_name(well_known).await.unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::NonExistent);
+
+        let _stream = proxy.receive_features_changed().await.filter(|v| {
+            dbg!(v);
+            ready(true)
+        });
     }
 }

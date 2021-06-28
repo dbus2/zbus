@@ -85,6 +85,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     let default_service = default_service.unwrap_or_else(|| name.clone());
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
+    let mut has_properties = false;
     let async_opts = AsyncOpts::new(azync);
 
     for i in input.items.iter() {
@@ -109,7 +110,8 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                     })
                 });
             let m = if is_property {
-                gen_proxy_property(&name, m, &async_opts)
+                has_properties = true;
+                gen_proxy_property(&name, &method_name, m, &async_opts)
             } else if is_signal {
                 let (method, types) =
                     gen_proxy_signal(&proxy_name, &name, &method_name, m, &async_opts);
@@ -123,19 +125,22 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
         }
     }
 
-    let (proxy_doc, proxy_struct, connection) = if azync {
+    let AsyncOpts { usage, wait, .. } = async_opts;
+    let (proxy_doc, proxy_struct, connection, build) = if azync {
         let sync_proxy = Ident::new(&format!("{}Proxy", input.ident), Span::call_site());
         let doc = format!("Asynchronous sibling of [`{}`].", sync_proxy);
         let connection = quote! { #zbus::azync::Connection };
         let proxy = quote! { #zbus::azync::Proxy };
+        let build = Ident::new("build_async", Span::call_site());
 
-        (doc, proxy, connection)
+        (doc, proxy, connection, build)
     } else {
         let doc = String::from("");
         let connection = quote! { #zbus::Connection };
         let proxy = quote! { #zbus::Proxy };
+        let build = Ident::new("build", Span::call_site());
 
-        (doc, proxy, connection)
+        (doc, proxy, connection, build)
     };
 
     quote! {
@@ -147,18 +152,19 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
 
         #[doc = #proxy_doc]
         #(#doc)*
-        #[derive(Debug)]
+        #[derive(Clone, Debug)]
         pub struct #proxy_name<'c>(#proxy_struct<'c>);
 
         impl<'c> #proxy_name<'c> {
             /// Creates a new proxy with the default service & path.
-            pub fn new(conn: &#connection) -> #zbus::Result<Self> {
-                Self::builder(conn).build()
+            pub #usage fn new(conn: &#connection) -> #zbus::Result<#proxy_name<'c>> {
+                Self::builder(conn).#build()#wait
             }
 
             /// Returns a customizable builder for this proxy.
             pub fn builder(conn: &#connection) -> #zbus::ProxyBuilder<'c, Self> {
                 #zbus::ProxyBuilder::new(conn)
+                    .cache_properties(#has_properties)
             }
 
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
@@ -339,10 +345,12 @@ fn gen_proxy_method_call(
 
 fn gen_proxy_property(
     property_name: &str,
+    method_name: &str,
     m: &TraitItemMethod,
     async_opts: &AsyncOpts,
 ) -> TokenStream {
-    let AsyncOpts { usage, wait, .. } = async_opts;
+    let AsyncOpts { usage, wait, azync } = async_opts;
+    let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let signature = &m.sig;
     if signature.inputs.len() > 1 {
@@ -365,12 +373,78 @@ fn gen_proxy_property(
         let body = quote_spanned! {body_span =>
             ::std::result::Result::Ok(self.0.get_property(#property_name)#wait?)
         };
+
+        let receive = if *azync {
+            let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
+            let receive = format_ident!("receive_{}_changed", method_name);
+            let gen_doc = format!("Create a stream for the `{}` property changes. \
+                                   This is a convenient wrapper around [`zbus::azync::Proxy::receive_property_stream`].",
+                                  property_name);
+            quote! {
+                #[doc = #gen_doc]
+                pub async fn #receive#ty_generics(
+                    &self
+                ) -> #zbus::azync::PropertyStream<'static, #zbus::export::zvariant::OwnedValue>
+                #where_clause
+                {
+                    self.0.receive_property_stream(#property_name).await
+                }
+            }
+        } else {
+            quote! {}
+        };
+
+        let connect = format_ident!("connect_{}_changed", method_name);
+        let handler = if *azync {
+            parse_quote! {
+                for<'v> __H: FnMut(Option<&'v #zbus::export::zvariant::Value<'_>>) ->
+                    #zbus::export::futures_core::future::BoxFuture<'v, ()> + Send + 'static
+            }
+        } else {
+            parse_quote! { __H: FnMut(Option<&#zbus::export::zvariant::Value<'_>>) + Send + 'static }
+        };
+        let (proxy_method, link) = if *azync {
+            (
+                "zbus::azync::Proxy::connect_property_changed",
+                "https://docs.rs/zbus/latest/zbus/azync/struct.Proxy.html#method.connect_property_changed",
+            )
+        } else {
+            (
+                "zbus::Proxy::connect_property_changed",
+                "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_property_changed",
+            )
+        };
+        let gen_doc = format!(
+            " Connect the handler for the `{}` property. This is a convenient wrapper around [`{}`]({}).",
+            property_name, proxy_method, link,
+        );
+        let mut generics = m.sig.generics.clone();
+        generics.params.push(parse_quote!(__H));
+        {
+            let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
+            where_clause.predicates.push(handler);
+        }
+
+        let (_, ty_generics, where_clause) = generics.split_for_impl();
+
         quote! {
             #(#doc)*
             #[allow(clippy::needless_question_mark)]
             pub #usage #signature {
                 #body
             }
+
+            #[doc = #gen_doc]
+            pub #usage fn #connect#ty_generics(
+                &self,
+                mut handler: __H,
+            ) -> #zbus::Result<#zbus::PropertyChangedHandlerId>
+            #where_clause,
+            {
+                self.0.connect_property_changed(#property_name, handler)#wait
+            }
+
+            #receive
         }
     }
 }
@@ -440,7 +514,7 @@ fn gen_proxy_signal(
         {
             where_clause
                 .predicates
-                .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'s> + #zbus::export::zvariant::Type));
+                .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'s> + #zbus::export::zvariant::Type + ::std::fmt::Debug));
         }
         generics.params.push(parse_quote!('s));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -520,6 +594,18 @@ fn gen_proxy_signal(
                             &self.#args
                         }
                      )*
+                }
+
+                impl #impl_generics std::fmt::Debug for #signal_args #ty_generics
+                    #where_clause
+                {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        f.debug_struct(#signal_name)
+                        #(
+                         .field(stringify!(#args), &self.#args)
+                        )*
+                         .finish()
+                    }
                 }
             }
         };
@@ -619,7 +705,7 @@ fn gen_proxy_signal(
         {
             where_clause
                 .predicates
-                .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + #zbus::export::zvariant::Type));
+                .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + #zbus::export::zvariant::Type + ::std::fmt::Debug));
         }
         where_clause
             .predicates

@@ -8,7 +8,7 @@ use std::{
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
-    azync::{self, SignalHandlerId},
+    azync::{self, PropertyChangedHandlerId, SignalHandlerId},
     Connection, Error, Message, Result,
 };
 
@@ -55,7 +55,7 @@ use crate::fdo;
 /// * prevent auto-launching
 ///
 /// [`dbus_proxy`]: attr.dbus_proxy.html
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Proxy<'a> {
     conn: Connection,
     azync: azync::Proxy<'a>,
@@ -137,7 +137,8 @@ impl<'a> Proxy<'a> {
 
     /// Get the property `property_name`.
     ///
-    /// Effectively, call the `Get` method of the `org.freedesktop.DBus.Properties` interface.
+    /// Get the property value from the cache or call the `Get` method of the
+    /// `org.freedesktop.DBus.Properties` interface.
     pub fn get_property<T>(&self, property_name: &str) -> fdo::Result<T>
     where
         T: TryFrom<OwnedValue>,
@@ -220,6 +221,47 @@ impl<'a> Proxy<'a> {
     /// connection.
     pub fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
         block_on(self.azync.disconnect_signal(handler_id))
+    }
+
+    /// Register a changed handler for the property named `property_name`.
+    ///
+    /// Once a handler is successfully registered, call [`Self::next_signal`] to wait for the next
+    /// signal to arrive and be handled by its registered handler. A unique ID for the handler is
+    /// returned, which can be used to deregister this handler using
+    /// [`Self::disconnect_property_changed`] method.
+    ///
+    /// # Errors
+    ///
+    /// The current implementation requires cached properties. It returns an [`Error::Unsupported`]
+    /// if the proxy isn't setup with cache.
+    pub fn connect_property_changed<H>(
+        &self,
+        property_name: &'static str,
+        mut handler: H,
+    ) -> Result<PropertyChangedHandlerId>
+    where
+        H: FnMut(Option<&Value<'_>>) + Send + 'static,
+    {
+        block_on(
+            self.azync
+                .connect_property_changed(property_name, move |v| {
+                    Box::pin({
+                        handler(v);
+                        ready(())
+                    })
+                }),
+        )
+    }
+
+    /// Deregister the property handler with the ID `handler_id`.
+    ///
+    /// This method returns `Ok(true)` if a handler with the id `handler_id` is found and removed;
+    /// `Ok(false)` otherwise.
+    pub fn disconnect_property_changed(
+        &self,
+        handler_id: PropertyChangedHandlerId,
+    ) -> Result<bool> {
+        block_on(self.azync.disconnect_property_changed(handler_id))
     }
 
     /// Receive and handle the next incoming signal on the associated connection.
@@ -336,6 +378,11 @@ mod tests {
             .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .unwrap();
 
+        let h = proxy
+            .connect_features_changed(|val| {
+                dbg!(val);
+            })
+            .unwrap();
         loop {
             proxy.next_signal().unwrap();
 
@@ -345,5 +392,6 @@ mod tests {
                 break;
             }
         }
+        proxy.disconnect_property_changed(h).unwrap();
     }
 }
