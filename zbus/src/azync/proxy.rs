@@ -1,4 +1,7 @@
+use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_lock::Mutex;
+use async_recursion::async_recursion;
+use async_task::Task;
 use futures_core::{future::BoxFuture, stream};
 use futures_util::stream::StreamExt;
 use once_cell::sync::OnceCell;
@@ -6,6 +9,7 @@ use slotmap::{new_key_type, SlotMap};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::Cow,
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     future::ready,
     io::{self, ErrorKind},
@@ -34,6 +38,35 @@ assert_impl_all!(SignalHandlerId: Send, Sync, Unpin);
 struct SignalHandlerInfo {
     signal_name: &'static str,
     handler: SignalHandler,
+}
+
+type PropertyChangedEvent = Arc<(String, Option<OwnedValue>)>;
+
+type PropertyChangedHandler =
+    Box<dyn for<'v> FnMut(Option<&'v Value<'_>>) -> BoxFuture<'v, ()> + Send>;
+
+new_key_type! {
+    /// The ID for a registered proprety changed handler.
+    pub struct PropertyChangedHandlerId;
+}
+
+pub(crate) struct PropertyChangedHandlerInfo {
+    property_name: &'static str,
+    handler: PropertyChangedHandler,
+}
+
+// Hold proxy properties related data.
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
+pub(crate) struct ProxyProperties<'a> {
+    pub(crate) proxy: OnceCell<AsyncPropertiesProxy<'a>>,
+    pub(crate) values: Mutex<HashMap<String, OwnedValue>>,
+    task: OnceCell<Task<()>>,
+    #[derivative(Debug = "ignore")]
+    pub(crate) changed_handlers:
+        Mutex<SlotMap<PropertyChangedHandlerId, PropertyChangedHandlerInfo>>,
+    broadcaster: Broadcaster<PropertyChangedEvent>,
+    receiver: InactiveReceiver<PropertyChangedEvent>,
 }
 
 /// The asynchronous sibling of [`crate::Proxy`].
@@ -90,9 +123,13 @@ struct SignalHandlerInfo {
 ///
 /// [`futures` crate]: https://crates.io/crates/futures
 /// [`dbus_proxy`]: attr.dbus_proxy.html
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Proxy<'a> {
     pub(crate) inner: Arc<ProxyInner<'a>>,
+    // Use a 'static as we can't self-reference ProxyInner fields
+    // eventually, we could make destination/path inside an Arc
+    // but then we would have other issues with async 'static closures
+    pub(crate) properties: Arc<ProxyProperties<'static>>,
 }
 
 assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
@@ -109,6 +146,81 @@ pub(crate) struct ProxyInner<'a> {
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
     #[derivative(Debug = "ignore")]
     signal_msg_stream: OnceCell<Mutex<MessageStream>>,
+}
+
+pub struct PropertyStream<'a, T> {
+    name: &'a str,
+    stream: stream::BoxStream<'static, PropertyChangedEvent>,
+    phantom: std::marker::PhantomData<T>,
+}
+
+impl<'a, T> stream::Stream for PropertyStream<'a, T>
+where
+    T: TryFrom<zvariant::OwnedValue> + Unpin,
+{
+    type Item = Option<T>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let m = self.get_mut();
+        let (name, stream) = (m.name, m.stream.as_mut());
+        // there must be a way to simplify the following code..
+        let p = stream::Stream::poll_next(stream, cx);
+        match p {
+            Poll::Ready(Some(item)) => {
+                if item.0 == name {
+                    if let Some(Ok(v)) = item.1.clone().map(T::try_from) {
+                        Poll::Ready(Some(Some(v)))
+                    } else {
+                        Poll::Ready(Some(None))
+                    }
+                } else {
+                    Poll::Pending
+                }
+            }
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl<'a> ProxyProperties<'a> {
+    pub(crate) fn new() -> Self {
+        // note: do we need to make this configurable?
+        let (mut sender, receiver) = broadcast(1);
+        sender.set_overflow(true);
+        let receiver = receiver.deactivate();
+
+        Self {
+            proxy: Default::default(),
+            values: Default::default(),
+            task: Default::default(),
+            changed_handlers: Default::default(),
+            broadcaster: sender,
+            receiver,
+        }
+    }
+
+    async fn changed(&self, property_name: &str, value: Option<&Value<'_>>) {
+        if self.broadcaster.receiver_count() > 0 {
+            // Ignore event errors.
+            // TODO: We should still log in case of error when we've logging.
+            let _res = self
+                .broadcaster
+                .broadcast(Arc::new((
+                    property_name.to_string(),
+                    value.map(OwnedValue::from),
+                )))
+                .await;
+        }
+
+        let mut handlers = self.changed_handlers.lock().await;
+        for info in handlers
+            .values_mut()
+            .filter(|info| info.property_name == property_name)
+        {
+            (*info.handler)(value).await;
+        }
+    }
 }
 
 impl<'a> ProxyInner<'a> {
@@ -184,6 +296,58 @@ impl<'a> Proxy<'a> {
             .await
     }
 
+    /// Register a changed handler for the property named `property_name`.
+    ///
+    /// Once a handler is successfully registered, call [`Self::next_signal`] to wait for the next
+    /// signal to arrive and be handled by its registered handler. A unique ID for the handler is
+    /// returned, which can be used to deregister this handler using
+    /// [`Self::disconnect_property_changed`] method.
+    ///
+    /// # Errors
+    ///
+    /// The current implementation requires cached properties. It returns an [`Error::Unsupported`]
+    /// if the proxy isn't setup with cache.
+    pub async fn connect_property_changed<H>(
+        &self,
+        property_name: &'static str,
+        handler: H,
+    ) -> Result<PropertyChangedHandlerId>
+    where
+        for<'v> H: FnMut(Option<&'v Value<'_>>) -> BoxFuture<'v, ()> + Send + 'static,
+    {
+        if !self.has_cached_properties() {
+            return Err(Error::Unsupported);
+        }
+
+        let id = self
+            .properties
+            .changed_handlers
+            .lock()
+            .await
+            .insert(PropertyChangedHandlerInfo {
+                property_name,
+                handler: Box::new(handler),
+            });
+        Ok(id)
+    }
+
+    /// Deregister the property handler with the ID `handler_id`.
+    ///
+    /// This method returns `Ok(true)` if a handler with the id `handler_id` is found and removed;
+    /// `Ok(false)` otherwise.
+    pub async fn disconnect_property_changed(
+        &self,
+        handler_id: PropertyChangedHandlerId,
+    ) -> Result<bool> {
+        Ok(self
+            .properties
+            .changed_handlers
+            .lock()
+            .await
+            .remove(handler_id)
+            .is_some())
+    }
+
     /// Get a reference to the associated connection.
     pub fn connection(&self) -> &Connection {
         &self.inner.conn
@@ -216,23 +380,115 @@ impl<'a> Proxy<'a> {
         proxy.introspect().await
     }
 
+    #[async_recursion]
+    async fn properties_proxy(&self) -> Result<&AsyncPropertiesProxy<'static>> {
+        match self.properties.proxy.get() {
+            Some(proxy) => Ok(proxy),
+            None => {
+                let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
+                    .destination(self.inner.destination.to_string())
+                    // Safe because already checked earlier
+                    .path(self.inner.path.to_owned())
+                    .unwrap()
+                    // does not have properties and do not recurse!
+                    .cache_properties(false)
+                    .build_async()
+                    .await?;
+                // doesn't matter if another thread sets it before
+                let _ = self.properties.proxy.set(proxy);
+                // but we must have a Ok() here
+                self.properties.proxy.get().ok_or_else(|| panic!())
+            }
+        }
+    }
+
+    pub(crate) async fn cache_properties(&self) -> Result<()> {
+        let proxy = self.properties_proxy().await?;
+
+        let mut stream = proxy.receive_properties_changed().await?;
+        let properties = self.properties.clone();
+        let task = self.inner.conn.executor().spawn(async move {
+            while let Some(changed) = stream.next().await {
+                if let Ok(args) = changed.args() {
+                    let mut values = properties.values.lock().await;
+                    for inval in args.invalidated_properties() {
+                        properties.changed(inval, None).await;
+                        values.remove(*inval);
+                    }
+
+                    for (property_name, value) in args
+                        .changed_properties()
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), OwnedValue::from(v)))
+                    {
+                        // we should notify after insert, but this requires extra lookup atm
+                        properties.changed(&property_name, Some(&value)).await;
+                        values.insert(property_name, value);
+                    }
+                }
+            }
+        });
+        self.properties.task.set(task).unwrap();
+
+        if let Ok(values) = proxy.get_all(&self.inner.interface).await {
+            self.properties.values.lock().await.extend(values);
+        }
+
+        Ok(())
+    }
+
+    async fn get_cached_property(&self, property_name: &str) -> Option<OwnedValue> {
+        self.properties
+            .values
+            .lock()
+            .await
+            .get(property_name)
+            .cloned()
+    }
+
+    async fn set_cached_property(&self, property_name: String, value: Option<OwnedValue>) {
+        let mut values = self.properties.values.lock().await;
+        if let Some(value) = value {
+            values.insert(property_name, value);
+        } else {
+            values.remove(&property_name);
+        }
+    }
+
+    async fn get_proxy_property(&self, property_name: &str) -> Result<OwnedValue> {
+        Ok(self
+            .properties_proxy()
+            .await?
+            .get(&self.inner.interface, property_name)
+            .await?)
+    }
+
+    fn has_cached_properties(&self) -> bool {
+        self.properties.task.get().is_some()
+    }
+
     /// Get the property `property_name`.
     ///
-    /// Effectively, call the `Get` method of the `org.freedesktop.DBus.Properties` interface.
+    /// Get the property value from the cache (if caching is enabled on this proxy) or call the
+    /// `Get` method of the `org.freedesktop.DBus.Properties` interface.
     pub async fn get_property<T>(&self, property_name: &str) -> fdo::Result<T>
     where
         T: TryFrom<OwnedValue>,
     {
-        let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
-            .destination(self.inner.destination.as_ref())
-            .path(&self.inner.path)?
-            .build()?;
+        let value = if self.has_cached_properties() {
+            if let Some(value) = self.get_cached_property(property_name).await {
+                value
+            } else {
+                let value = self.get_proxy_property(property_name).await?;
+                self.set_cached_property(property_name.to_string(), Some(value.clone()))
+                    .await;
+                value
+            }
+        } else {
+            self.get_proxy_property(property_name).await?
+        };
 
-        proxy
-            .get(&self.inner.interface, property_name)
-            .await?
-            .try_into()
-            .map_err(|_| Error::InvalidReply.into())
+        value.try_into().map_err(|_| Error::InvalidReply.into())
     }
 
     /// Set the property `property_name`.
@@ -242,12 +498,8 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
-            .destination(self.inner.destination.as_ref())
-            .path(&self.inner.path)?
-            .build()?;
-
-        proxy
+        self.properties_proxy()
+            .await?
             .set(&self.inner.interface, property_name, &value.into())
             .await
     }
@@ -506,7 +758,8 @@ impl<'a> Proxy<'a> {
         let unique_name = if destination.starts_with(':') || destination == "org.freedesktop.DBus" {
             destination.to_string()
         } else {
-            fdo::AsyncDBusProxy::new(&self.inner.conn)?
+            fdo::AsyncDBusProxy::new(&self.inner.conn)
+                .await?
                 .get_name_owner(destination)
                 .await?
         };
@@ -535,6 +788,18 @@ impl<'a> Proxy<'a> {
                     .get()
                     .expect("message stream not set")
             }
+        }
+    }
+
+    /// Get a stream to receive property changed events.
+    ///
+    /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
+    /// will only receive the last update.
+    pub async fn receive_property_stream<'n, T>(&self, name: &'n str) -> PropertyStream<'n, T> {
+        PropertyStream {
+            name,
+            stream: self.properties.receiver.activate_cloned().boxed(),
+            phantom: std::marker::PhantomData,
         }
     }
 }
@@ -596,7 +861,7 @@ mod tests {
         let conn = Connection::new_session().await?;
         let unique_name = conn.unique_name().unwrap();
 
-        let proxy = fdo::AsyncDBusProxy::new(&conn)?;
+        let proxy = fdo::AsyncDBusProxy::new(&conn).await?;
 
         let well_known = "org.freedesktop.zbus.async.ProxySignalStreamTest";
         let owner_changed_stream = proxy
@@ -618,6 +883,15 @@ mod tests {
             ready(false)
         });
 
+        let _prop_stream =
+            proxy
+                .receive_property_stream("SomeProp")
+                .await
+                .filter(|v: &Option<u32>| {
+                    dbg!(v);
+                    ready(false)
+                });
+
         let reply = proxy
             .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
             .await?;
@@ -625,7 +899,7 @@ mod tests {
 
         let (changed_signal, acquired_signal) = futures_util::join!(
             owner_changed_stream.into_future(),
-            name_acquired_stream.into_future()
+            name_acquired_stream.into_future(),
         );
 
         let changed_signal = changed_signal.0.unwrap();
@@ -653,7 +927,7 @@ mod tests {
         let name_acquired_signaled = Arc::new(Mutex::new(false));
         let name_acquired_signaled2 = Arc::new(Mutex::new(false));
 
-        let proxy = fdo::AsyncDBusProxy::new(&conn)?;
+        let proxy = fdo::AsyncDBusProxy::new(&conn).await?;
         let well_known = "org.freedesktop.zbus.async.ProxySignalConnectTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         let name_owner_changed_id = {

@@ -64,7 +64,7 @@ async fn run() -> Result<()> {
         fn longitude(&self) -> Result<f64>;
     }
     let conn = Connection::new_system().await?;
-    let manager = AsyncManagerProxy::new(&conn)?;
+    let manager = AsyncManagerProxy::new(&conn).await?;
     let mut client = manager.get_client().await?;
     // Gotta do this, sorry!
     client.set_desktop_id("org.freedesktop.zbus").await?;
@@ -155,7 +155,7 @@ example again to receive multiple signals on different proxies:
 #         fn longitude(&self) -> Result<f64>;
 #     }
 #     let conn = Connection::new_system().await?;
-#     let manager = AsyncManagerProxy::new(&conn)?;
+#     let manager = AsyncManagerProxy::new(&conn).await?;
 #     let mut client = manager.get_client().await?;
 #
 	// Everything else remains the same before this point.
@@ -271,7 +271,7 @@ streams to see how that works:
 #         fn longitude(&self) -> Result<f64>;
 #     }
 #     let conn = Connection::new_system().await?;
-#     let manager = AsyncManagerProxy::new(&conn)?;
+#     let manager = AsyncManagerProxy::new(&conn).await?;
 #     let mut client = manager.get_client().await?;
 #
 #   client.set_desktop_id("org.freedesktop.zbus").await?;
@@ -318,6 +318,42 @@ streams to see how that works:
             Ok(())
         }
     )?;
+#
+#   Ok(())
+# }
+```
+
+### Watching for properties
+
+Use the property stream API offered by the proxy to be notified of changes. The functions are named
+after the properties `receive_<prop_name>_changed()`. Example:
+
+```rust,no_run
+# use std::error::Error;
+# use zbus::{azync::Connection, dbus_proxy, Result};
+# use futures_util::stream::StreamExt;
+#
+# async_io::block_on(run()).unwrap();
+#
+# async fn run() -> Result<()> {
+#
+    #[dbus_proxy(
+        interface = "org.freedesktop.systemd1.Manager",
+        default_service = "org.freedesktop.systemd1",
+        default_path = "/org/freedesktop/systemd1"
+    )]
+    trait SystemdManager {
+        #[dbus_proxy(property)]
+        fn log_level(&self) -> zbus::Result<String>;
+    }
+
+    let connection = Connection::new_session().await?;
+
+    let proxy = AsyncSystemdManagerProxy::new(&connection).await?;
+    let mut stream = proxy.receive_log_level_changed().await;
+    while let Some(v) = stream.next().await {
+        println!("LogLevel changed: {:?}", v);
+    }
 #
 #   Ok(())
 # }

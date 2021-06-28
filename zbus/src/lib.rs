@@ -192,7 +192,7 @@ pub mod fdo;
 mod raw;
 
 pub mod azync;
-pub use azync::SignalHandlerId;
+pub use azync::{PropertyChangedHandlerId, SignalHandlerId};
 mod handshake;
 
 pub mod xml;
