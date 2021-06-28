@@ -138,7 +138,7 @@ impl<'a> SignalReceiver<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{dbus_interface, dbus_proxy, fdo};
+    use crate::{dbus_interface, dbus_proxy};
     use std::{
         cell::RefCell,
         rc::Rc,
@@ -214,14 +214,9 @@ mod tests {
         }
 
         let conn = Connection::new_session().unwrap();
-        fdo::DBusProxy::new(&conn)
-            .unwrap()
-            .request_name(
-                "org.freedesktop.zbus.MultiSignal",
-                fdo::RequestNameFlags::ReplaceExisting.into(),
-            )
+        let mut object_server = crate::ObjectServer::new(&conn)
+            .request_name("org.freedesktop.zbus.MultiSignal")
             .unwrap();
-        let mut object_server = crate::ObjectServer::new(&conn);
         let times_called = Rc::new(RefCell::new(0));
         let iface = MultiSignal {
             times_called: times_called.clone(),

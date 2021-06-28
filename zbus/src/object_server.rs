@@ -1,7 +1,7 @@
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     convert::TryInto,
     fmt::Write,
     io::{self, ErrorKind},
@@ -10,6 +10,7 @@ use std::{
 };
 
 use async_io::block_on;
+use fdo::DBusProxy;
 use futures_util::StreamExt;
 use scoped_tls::scoped_thread_local;
 use static_assertions::assert_impl_all;
@@ -268,6 +269,7 @@ pub struct ObjectServer {
     root: Node,
     #[derivative(Debug = "ignore")]
     msg_stream: azync::Connection,
+    registered_names: HashSet<String>,
 }
 
 assert_impl_all!(ObjectServer: Unpin);
@@ -279,7 +281,47 @@ impl ObjectServer {
             conn: connection.clone(),
             msg_stream: connection.inner().clone(),
             root: Node::new("/".try_into().expect("zvariant bug")),
+            registered_names: HashSet::new(),
         }
+    }
+
+    /// Register a well-known name for this service on the bus.
+    ///
+    /// You can request multiple names for the same `ObjectServer`. All the names are released
+    /// automatically for you when `ObjectServer` is dropped. Use [`release_name`] for explicitly
+    /// deregistering names registered through this method.
+    ///
+    /// Note that exclusive ownership is requested using [`fdo::RequestNameFlags::ReplaceExisting`].
+    /// If that is not what you want, you should use [`fdo::DBusProxy::request_name`] instead (but
+    /// make sure then that name is requested **after** instantiating the `ObjectServer`).
+    pub fn request_name(mut self, well_known_name: &str) -> Result<Self> {
+        DBusProxy::new(&self.conn)?.request_name(
+            well_known_name,
+            fdo::RequestNameFlags::ReplaceExisting.into(),
+        )?;
+
+        self.registered_names.insert(well_known_name.to_string());
+
+        Ok(self)
+    }
+
+    /// Deregister a previously registered well-known name for this service on the bus.
+    ///
+    /// Use this method to explicitly deregister a well-known name, registered through
+    /// [`request_name`].
+    ///
+    /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
+    /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
+    /// was not previously registered or already deregistered.
+    pub fn release_name(&mut self, well_known_name: &str) -> Result<bool> {
+        if !self.registered_names.remove(well_known_name) {
+            return Ok(false);
+        }
+
+        DBusProxy::new(&self.conn)?
+            .release_name(well_known_name)
+            .map(|_| true)
+            .map_err(Into::into)
     }
 
     // Get the Node at path.
@@ -555,6 +597,17 @@ impl ObjectServer {
     }
 }
 
+impl Drop for ObjectServer {
+    fn drop(&mut self) {
+        // FIXME: Ignoring the errors here and on the method call, they should be logged.
+        if let Ok(proxy) = DBusProxy::new(&self.conn) {
+            for name in &self.registered_names {
+                let _ = proxy.release_name(name);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::blacklisted_name)]
 mod tests {
@@ -572,9 +625,7 @@ mod tests {
     use test_env_log::test;
     use zvariant::derive::Type;
 
-    use crate::{
-        dbus_interface, dbus_proxy, fdo, Connection, MessageHeader, MessageType, ObjectServer,
-    };
+    use crate::{dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer};
 
     #[derive(Deserialize, Serialize, Type)]
     pub struct ArgStructTest {
@@ -815,16 +866,15 @@ mod tests {
         let (tx, rx) = channel::<()>();
 
         let conn = Connection::new_session().unwrap();
-        let mut object_server = ObjectServer::new(&conn);
-        let action = Rc::new(Cell::new(NextAction::Nothing));
-
-        fdo::DBusProxy::new(&conn)
+        let mut object_server = ObjectServer::new(&conn)
+            // primary name
+            .request_name("org.freedesktop.MyService")
             .unwrap()
-            .request_name(
-                "org.freedesktop.MyService",
-                fdo::RequestNameFlags::ReplaceExisting.into(),
-            )
+            .request_name("org.freedesktop.MyService.foo")
+            .unwrap()
+            .request_name("org.freedesktop.MyService.bar")
             .unwrap();
+        let action = Rc::new(Cell::new(NextAction::Nothing));
 
         let child = thread::spawn(move || my_iface_test(tx).expect("child failed"));
         // Wait for the listener to be ready
@@ -871,5 +921,24 @@ mod tests {
 
         let val = child.join().expect("failed to join");
         assert_eq!(val, 2);
+
+        // Release primary name explicitly and let others be released implicitly.
+        assert_eq!(
+            object_server.release_name("org.freedesktop.MyService"),
+            Ok(true)
+        );
+        drop(object_server);
+
+        // Let's ensure all names were released.
+        let proxy = zbus::fdo::DBusProxy::new(&conn).unwrap();
+        assert_eq!(proxy.name_has_owner("org.freedesktop.MyService"), Ok(false));
+        assert_eq!(
+            proxy.name_has_owner("org.freedesktop.MyService.foo"),
+            Ok(false)
+        );
+        assert_eq!(
+            proxy.name_has_owner("org.freedesktop.MyService.bar"),
+            Ok(false)
+        );
     }
 }
