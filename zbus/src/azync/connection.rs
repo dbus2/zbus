@@ -29,6 +29,7 @@ use std::{
 use zvariant::ObjectPath;
 
 use futures_core::{stream, Future};
+use futures_sink::Sink;
 use futures_util::{
     sink::SinkExt,
     stream::{select as stream_select, StreamExt},
@@ -115,7 +116,9 @@ struct ConnectionInner<S> {
     unique_name: OnceCell<String>,
 
     raw_in_conn: Arc<Mutex<RawConnection<Async<S>>>>,
-    raw_out_conn: Arc<sync::Mutex<RawConnection<Async<S>>>>,
+    // FIXME: We really should be using async_lock::Mutex here but `Sink::start_send is not very
+    // async friendly. :(
+    sink: Arc<sync::Mutex<MessageSink>>,
     // Serial number for next outgoing message
     serial: AtomicU32,
 
@@ -209,13 +212,12 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// ### Sending Messages
 ///
 /// For sending messages you can either use [`Connection::send_message`] method or make use of the
-/// [`futures_sink::Sink`] implementation that is returned by [`Connection::sink`] method. For
-/// latter, you might find [`SinkExt`] API very useful. Keep in mind that [`Connection`] will not
-/// manage the serial numbers (cookies) on the messages for you when they are sent through the
-/// [`MessageSink`]. You can manually assign unique serial numbers to them using the
-/// [`Connection::assign_serial_num`] method before sending them off, if needed. Having said that,
-/// [`MessageSink`] is mainly useful for sending out signals, as they do not expect a reply, and
-/// serial numbers are not very useful for signals either for the same reason.
+/// [`Sink`] implementation. For latter, you might find [`SinkExt`] API very useful. Keep in mind
+/// that [`Connection`] will not manage the serial numbers (cookies) on the messages for you when
+/// they are sent through the [`Sink`] implementation. You can manually assign unique serial numbers
+/// to them using the [`Connection::assign_serial_num`] method before sending them off, if needed.
+/// Having said that, the [`Sink`] is mainly useful for sending out signals, as they do not expect
+/// a reply, and serial numbers are not very useful for signals either for the same reason.
 ///
 /// ### Receiving Messages
 ///
@@ -223,6 +225,14 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// [`zbus::Connection::receive_message`] method provided. This is because the `futures` crate
 /// already provides a nice rich API that makes use of the [`stream::Stream`] implementation that is
 /// returned by [`Connection::stream`] method.
+///
+/// # Caveats
+///
+/// At the moment, a simultaneous [flush request] from multiple tasks/threads could
+/// potentially create a busy loop, thus wasting CPU time. This limitation may be removed in the
+/// future.
+///
+/// [flush request]: https://docs.rs/futures/0.3.15/futures/sink/trait.SinkExt.html#method.flush
 ///
 /// ### Examples
 ///
@@ -370,24 +380,17 @@ impl Connection {
         MessageStream { stream }
     }
 
-    /// Get a sink to send out messages.
-    pub async fn sink(&self) -> MessageSink {
-        MessageSink {
-            raw_conn: self.0.raw_out_conn.clone(),
-            cap_unix_fd: self.0.cap_unix_fd,
-        }
-    }
-
     /// Send `msg` to the peer.
     ///
-    /// Unlike [`MessageSink`], this method sets a unique (to this connection) serial number on the
-    /// message before sending it off, for you.
+    /// Unlike our [`Sink`] implementation, this method sets a unique (to this connection) serial
+    /// number on the message before sending it off, for you.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
     pub async fn send_message(&self, mut msg: Message) -> Result<u32> {
         let serial = self.assign_serial_num(&mut msg)?;
 
-        self.sink().await.send(msg).await?;
+        // Clone to get a mutable ref.
+        self.clone().send(msg).await?;
 
         Ok(serial)
     }
@@ -772,6 +775,12 @@ impl Connection {
         let auth = auth.into_inner();
         let out_socket = auth.conn.socket().get_ref().try_clone()?;
         let out_conn = RawConnection::wrap(Async::new(out_socket)?);
+        let cap_unix_fd = auth.cap_unix_fd;
+        let sink = Arc::new(sync::Mutex::new(MessageSink {
+            raw_conn: out_conn,
+            cap_unix_fd,
+        }));
+
         let (mut msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
         msg_sender.set_overflow(true);
         let msg_receiver = msg_receiver.deactivate();
@@ -786,10 +795,10 @@ impl Connection {
 
         let connection = Self(Arc::new(ConnectionInner {
             raw_in_conn,
-            raw_out_conn: Arc::new(sync::Mutex::new(out_conn)),
+            sink,
             error_receiver,
             server_guid: auth.server_guid,
-            cap_unix_fd: auth.cap_unix_fd,
+            cap_unix_fd,
             bus_conn: bus_connection,
             serial: AtomicU32::new(1),
             unique_name: OnceCell::new(),
@@ -843,19 +852,9 @@ impl Connection {
     }
 }
 
-/// A [`futures_sink::Sink`] implementation that consumes [`Message`] instances.
-///
-/// Use [`Connection::sink`] to create an instance of this type.
-///
-/// # Caveats
-///
-/// At the moment, a simultaneous [flush request] from multiple tasks/threads could
-/// potentially create a busy loop, thus wasting CPU time. This limitation may be removed in the
-/// future.
-///
-/// [flush request]: https://docs.rs/futures/0.3.15/futures/sink/trait.SinkExt.html#method.flush
-pub struct MessageSink {
-    raw_conn: Arc<sync::Mutex<DynSocketConnection>>,
+#[derive(Debug)]
+struct MessageSink {
+    raw_conn: DynSocketConnection,
     cap_unix_fd: bool,
 }
 
@@ -864,12 +863,11 @@ assert_impl_all!(MessageSink: Send, Sync, Unpin);
 impl MessageSink {
     fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         loop {
-            let mut raw_conn = self.raw_conn.lock().unwrap();
-            match raw_conn.try_flush() {
+            match self.raw_conn.try_flush() {
                 Ok(()) => return Poll::Ready(Ok(())),
                 Err(e) => {
                     if e.kind() == ErrorKind::WouldBlock {
-                        let poll = raw_conn.socket().poll_writable(cx);
+                        let poll = self.raw_conn.socket().poll_writable(cx);
 
                         match poll {
                             Poll::Pending => return Poll::Pending,
@@ -886,7 +884,7 @@ impl MessageSink {
     }
 }
 
-impl futures_sink::Sink<Message> for MessageSink {
+impl Sink<Message> for MessageSink {
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
@@ -899,7 +897,7 @@ impl futures_sink::Sink<Message> for MessageSink {
             return Err(Error::Unsupported);
         }
 
-        self.raw_conn.lock().unwrap().enqueue_message(msg);
+        self.get_mut().raw_conn.enqueue_message(msg);
 
         Ok(())
     }
@@ -916,7 +914,27 @@ impl futures_sink::Sink<Message> for MessageSink {
             Poll::Pending => return Poll::Pending,
         }
 
-        Poll::Ready((sink.raw_conn.lock().unwrap()).close())
+        Poll::Ready(sink.raw_conn.close())
+    }
+}
+
+impl Sink<Message> for Connection {
+    type Error = Error;
+
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        Pin::new(&mut *self.0.sink.lock().expect("poisoned lock")).poll_ready(cx)
+    }
+
+    fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
+        Pin::new(&mut *self.0.sink.lock().expect("poisoned lock")).start_send(msg)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        Pin::new(&mut *self.0.sink.lock().expect("poisoned lock")).poll_flush(cx)
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        Pin::new(&mut *self.0.sink.lock().expect("poisoned lock")).poll_close(cx)
     }
 }
 
