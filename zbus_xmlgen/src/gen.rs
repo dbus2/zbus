@@ -254,7 +254,7 @@ fn to_identifier(id: &str) -> String {
     if KWORDS.contains(&id) {
         format!("{}_", id)
     } else {
-        id.to_string()
+        id.replace("-", "_")
     }
 }
 
