@@ -305,7 +305,9 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 ///
 /// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
 #[derive(Clone, Debug)]
-pub struct Connection(Arc<ConnectionInner<Box<dyn Socket>>>);
+pub struct Connection {
+    inner: Arc<ConnectionInner<Box<dyn Socket>>>,
+}
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
 
@@ -367,14 +369,14 @@ impl Connection {
     /// Get a stream to receive incoming messages.
     pub async fn stream(&self) -> MessageStream {
         let msg_receiver = self
-            .0
+            .inner
             .msg_receiver
             .read()
             // SAFETY: Not much we can do about a poisoned mutex.
             .expect("poisoned lock")
             .activate_cloned()
             .map(Ok);
-        let error_stream = self.0.error_receiver.clone().map(Err);
+        let error_stream = self.inner.error_receiver.clone().map(Err);
         let stream = stream_select(error_stream, msg_receiver).boxed();
 
         MessageStream { stream }
@@ -519,7 +521,7 @@ impl Connection {
     ///
     /// This will return `false` for p2p connections.
     pub fn is_bus(&self) -> bool {
-        self.0.bus_conn
+        self.inner.bus_conn
     }
 
     /// Assigns a serial number to `msg` that is unique to this connection.
@@ -537,12 +539,12 @@ impl Connection {
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
     pub fn unique_name(&self) -> Option<&str> {
-        self.0.unique_name.get().map(|s| s.as_str())
+        self.inner.unique_name.get().map(|s| s.as_str())
     }
 
     /// Max number of messages to queue.
     pub fn max_queued(&self) -> usize {
-        self.0
+        self.inner
             .msg_receiver
             .read()
             .expect("poisoned lock")
@@ -575,7 +577,7 @@ impl Connection {
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn set_max_queued(self, max: usize) -> Self {
-        self.0
+        self.inner
             .msg_receiver
             .write()
             .expect("poisoned lock")
@@ -586,7 +588,7 @@ impl Connection {
 
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
-        self.0.server_guid.as_str()
+        self.inner.server_guid.as_str()
     }
 
     /// The underlying executor.
@@ -625,12 +627,12 @@ impl Connection {
     ///
     /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
     pub fn executor(&self) -> &Executor<'static> {
-        &self.0.executor
+        &self.inner.executor
     }
 
     /// Get the raw file descriptor of this connection.
     pub async fn as_raw_fd(&self) -> RawFd {
-        (self.0.raw_in_conn.lock().await.socket()).as_raw_fd()
+        (self.inner.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
     pub(crate) async fn subscribe_signal<'s, E>(
@@ -645,7 +647,7 @@ impl Connection {
     {
         let signal = SignalInfo::new(sender, path, interface, signal_name)?;
         let hash = signal.calc_hash();
-        let mut subscriptions = self.0.signal_subscriptions.lock().await;
+        let mut subscriptions = self.inner.signal_subscriptions.lock().await;
         match subscriptions.get_mut(&hash) {
             Some(subscription) => subscription.num_subscribers += 1,
             None => {
@@ -689,7 +691,7 @@ impl Connection {
     }
 
     pub(crate) async fn unsubscribe_signal_by_id(&self, subscription_id: u64) -> Result<bool> {
-        let mut subscriptions = self.0.signal_subscriptions.lock().await;
+        let mut subscriptions = self.inner.signal_subscriptions.lock().await;
         match subscriptions.get_mut(&subscription_id) {
             Some(subscription) => {
                 subscription.num_subscribers -= 1;
@@ -715,7 +717,7 @@ impl Connection {
 
     pub(crate) fn queue_unsubscribe_signal(&self, subscription_id: u64) {
         let conn = self.clone();
-        self.0
+        self.inner
             .executor
             .spawn(async move {
                 // FIXME: Ignoring the errors here. We should at least log a message when we've
@@ -742,7 +744,7 @@ impl Connection {
         let name = {
             use futures_util::future::{select, Either};
 
-            let executor = self.0.executor.clone();
+            let executor = self.inner.executor.clone();
             let ticking_future = async move {
                 // Keep running as long as this task/future is not cancelled.
                 loop {
@@ -759,7 +761,7 @@ impl Connection {
             }
         };
 
-        self.0
+        self.inner
             .unique_name
             .set(name)
             // programmer (probably our) error if this fails.
@@ -793,20 +795,22 @@ impl Connection {
             MessageReceiverTask::new(raw_in_conn.clone(), msg_sender, error_sender)
                 .spawn(&executor);
 
-        let connection = Self(Arc::new(ConnectionInner {
-            raw_in_conn,
-            sink,
-            error_receiver,
-            server_guid: auth.server_guid,
-            cap_unix_fd,
-            bus_conn: bus_connection,
-            serial: AtomicU32::new(1),
-            unique_name: OnceCell::new(),
-            signal_subscriptions: Mutex::new(HashMap::new()),
-            msg_receiver: sync::RwLock::new(msg_receiver),
-            executor: executor.clone(),
-            msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
-        }));
+        let connection = Self {
+            inner: Arc::new(ConnectionInner {
+                raw_in_conn,
+                sink,
+                error_receiver,
+                server_guid: auth.server_guid,
+                cap_unix_fd,
+                bus_conn: bus_connection,
+                serial: AtomicU32::new(1),
+                unique_name: OnceCell::new(),
+                signal_subscriptions: Mutex::new(HashMap::new()),
+                msg_receiver: sync::RwLock::new(msg_receiver),
+                executor: executor.clone(),
+                msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
+            }),
+        };
 
         #[cfg(feature = "internal-executor")]
         std::thread::Builder::new()
@@ -831,7 +835,7 @@ impl Connection {
     }
 
     fn next_serial(&self) -> u32 {
-        self.0.serial.fetch_add(1, SeqCst)
+        self.inner.serial.fetch_add(1, SeqCst)
     }
 
     /// Create a `Connection` to the session/user message bus.
@@ -922,19 +926,19 @@ impl Sink<Message> for Connection {
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        Pin::new(&mut *self.0.sink.lock().expect("poisoned lock")).poll_ready(cx)
+        Pin::new(&mut *self.inner.sink.lock().expect("poisoned lock")).poll_ready(cx)
     }
 
     fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
-        Pin::new(&mut *self.0.sink.lock().expect("poisoned lock")).start_send(msg)
+        Pin::new(&mut *self.inner.sink.lock().expect("poisoned lock")).start_send(msg)
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        Pin::new(&mut *self.0.sink.lock().expect("poisoned lock")).poll_flush(cx)
+        Pin::new(&mut *self.inner.sink.lock().expect("poisoned lock")).poll_flush(cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        Pin::new(&mut *self.0.sink.lock().expect("poisoned lock")).poll_close(cx)
+        Pin::new(&mut *self.inner.sink.lock().expect("poisoned lock")).poll_close(cx)
     }
 }
 
