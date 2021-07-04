@@ -21,7 +21,7 @@ use std::{
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
-    azync::{Connection, MessageStream},
+    azync::Connection,
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
     Error, Message, MessageHeader, MessageType, Result,
 };
@@ -145,7 +145,7 @@ pub(crate) struct ProxyInner<'a> {
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
     #[derivative(Debug = "ignore")]
-    signal_msg_stream: OnceCell<Mutex<MessageStream>>,
+    signal_msg_stream: OnceCell<Mutex<Connection>>,
 }
 
 pub struct PropertyStream<'a, T> {
@@ -575,8 +575,7 @@ impl<'a> Proxy<'a> {
         let stream = self
             .inner
             .conn
-            .stream()
-            .await
+            .clone()
             .filter(move |m| {
                 ready(
                     m.as_ref()
@@ -772,11 +771,11 @@ impl<'a> Proxy<'a> {
         Ok(self.inner.dest_unique_name.get().unwrap())
     }
 
-    async fn msg_stream(&self) -> &Mutex<MessageStream> {
+    async fn msg_stream(&self) -> &Mutex<Connection> {
         match self.inner.signal_msg_stream.get() {
             Some(stream) => stream,
             None => {
-                let stream = self.inner.conn.stream().await;
+                let stream = self.inner.conn.clone();
                 self.inner
                     .signal_msg_stream
                     .set(Mutex::new(stream))

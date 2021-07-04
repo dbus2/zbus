@@ -1,4 +1,4 @@
-use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
+use async_broadcast::{broadcast, Receiver as BroadcastReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
 #[cfg(feature = "internal-executor")]
@@ -31,8 +31,9 @@ use zvariant::ObjectPath;
 use futures_core::{stream, Future};
 use futures_sink::Sink;
 use futures_util::{
+    future::{select, Either},
     sink::SinkExt,
-    stream::{select as stream_select, StreamExt},
+    stream::StreamExt,
 };
 
 use crate::{
@@ -128,12 +129,6 @@ struct ConnectionInner<S> {
     // Message receiver task
     msg_receiver_task: sync::Mutex<Option<Task<()>>>,
 
-    // We're using sync Mutex here as we don't intend to keep it locked while awaiting.
-    msg_receiver: sync::RwLock<InactiveReceiver<Arc<Message>>>,
-
-    // Receiver side of the error channel
-    error_receiver: Receiver<Error>,
-
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 }
 
@@ -223,8 +218,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 ///
 /// Unlike [`zbus::Connection`], there is no direct async equivalent of
 /// [`zbus::Connection::receive_message`] method provided. This is because the `futures` crate
-/// already provides a nice rich API that makes use of the [`stream::Stream`] implementation that is
-/// returned by [`Connection::stream`] method.
+/// already provides a nice rich API that makes use of the [`stream::Stream`] implementation.
 ///
 /// # Caveats
 ///
@@ -283,7 +277,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 ///     )
 ///     .await?;
 ///
-/// while let Some(msg) = connection.stream().await.try_next().await? {
+/// while let Some(msg) = connection.try_next().await? {
 ///     println!("Got message: {}", msg);
 /// }
 ///
@@ -307,6 +301,11 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 #[derive(Clone, Debug)]
 pub struct Connection {
     inner: Arc<ConnectionInner<Box<dyn Socket>>>,
+
+    msg_receiver: BroadcastReceiver<Arc<Message>>,
+
+    // Receiver side of the error channel
+    error_receiver: Receiver<Error>,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
@@ -366,22 +365,6 @@ impl Connection {
         Self::new(auth, false).await
     }
 
-    /// Get a stream to receive incoming messages.
-    pub async fn stream(&self) -> MessageStream {
-        let msg_receiver = self
-            .inner
-            .msg_receiver
-            .read()
-            // SAFETY: Not much we can do about a poisoned mutex.
-            .expect("poisoned lock")
-            .activate_cloned()
-            .map(Ok);
-        let error_stream = self.inner.error_receiver.clone().map(Err);
-        let stream = stream_select(error_stream, msg_receiver).boxed();
-
-        MessageStream { stream }
-    }
-
     /// Send `msg` to the peer.
     ///
     /// Unlike our [`Sink`] implementation, this method sets a unique (to this connection) serial
@@ -415,7 +398,7 @@ impl Connection {
         B: serde::ser::Serialize + zvariant::Type,
         E: Into<MessageError>,
     {
-        let stream = self.stream().await;
+        let stream = self.clone();
         let m = Message::method(
             self.unique_name(),
             destination,
@@ -544,11 +527,7 @@ impl Connection {
 
     /// Max number of messages to queue.
     pub fn max_queued(&self) -> usize {
-        self.inner
-            .msg_receiver
-            .read()
-            .expect("poisoned lock")
-            .capacity()
+        self.msg_receiver.capacity()
     }
 
     /// Set the max number of messages to queue.
@@ -576,12 +555,8 @@ impl Connection {
     /// // Do something useful with `conn`..
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn set_max_queued(self, max: usize) -> Self {
-        self.inner
-            .msg_receiver
-            .write()
-            .expect("poisoned lock")
-            .set_capacity(max);
+    pub fn set_max_queued(mut self, max: usize) -> Self {
+        self.msg_receiver.set_capacity(max);
 
         self
     }
@@ -742,8 +717,6 @@ impl Connection {
         // ourselves in parallel to making the method call.
         #[cfg(not(feature = "internal-executor"))]
         let name = {
-            use futures_util::future::{select, Either};
-
             let executor = self.inner.executor.clone();
             let ticking_future = async move {
                 // Keep running as long as this task/future is not cancelled.
@@ -785,7 +758,6 @@ impl Connection {
 
         let (mut msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
         msg_sender.set_overflow(true);
-        let msg_receiver = msg_receiver.deactivate();
         let (error_sender, error_receiver) = bounded(1);
         let executor = Arc::new(Executor::new());
         let raw_in_conn = Arc::new(Mutex::new(auth.conn));
@@ -796,17 +768,17 @@ impl Connection {
                 .spawn(&executor);
 
         let connection = Self {
+            error_receiver,
+            msg_receiver,
             inner: Arc::new(ConnectionInner {
                 raw_in_conn,
                 sink,
-                error_receiver,
                 server_guid: auth.server_guid,
                 cap_unix_fd,
                 bus_conn: bus_connection,
                 serial: AtomicU32::new(1),
                 unique_name: OnceCell::new(),
                 signal_subscriptions: Mutex::new(HashMap::new()),
-                msg_receiver: sync::RwLock::new(msg_receiver),
                 executor: executor.clone(),
                 msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
             }),
@@ -942,20 +914,19 @@ impl Sink<Message> for Connection {
     }
 }
 
-/// A [`stream::Stream`] implementation that yields [`Message`] items.
-///
-/// Use [`Connection::stream`] to create an instance of this type.
-pub struct MessageStream {
-    stream: stream::BoxStream<'static, Result<Arc<Message>>>,
-}
-
-assert_impl_all!(MessageStream: Send, Unpin);
-
-impl stream::Stream for MessageStream {
+impl stream::Stream for Connection {
     type Item = Result<Arc<Message>>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        stream::Stream::poll_next(self.get_mut().stream.as_mut(), cx)
+        let stream = self.get_mut();
+        let msg_fut = stream.msg_receiver.next();
+        let err_fut = stream.error_receiver.next();
+        let mut select_fut = select(msg_fut, err_fut);
+
+        match futures_core::ready!(Pin::new(&mut select_fut).poll(cx)) {
+            Either::Left((msg, _)) => Poll::Ready(msg.map(Ok)),
+            Either::Right((error, _)) => Poll::Ready(error.map(Err)),
+        }
     }
 }
 
@@ -1016,13 +987,11 @@ mod tests {
         let server = Connection::new_unix_server(p0, &guid);
         let client = Connection::new_unix_client(p1, false);
 
-        let (client_conn, server_conn) = futures_util::try_join!(client, server)?;
-        let mut client_stream = client_conn.stream().await;
-        let mut server_stream = server_conn.stream().await;
+        let (mut client_conn, mut server_conn) = futures_util::try_join!(client, server)?;
 
         let server_future = async {
             let mut method: Option<Arc<Message>> = None;
-            while let Some(m) = server_stream.try_next().await? {
+            while let Some(m) = server_conn.try_next().await? {
                 if m.to_string() == "Method call Test" {
                     method.replace(m);
 
@@ -1044,7 +1013,7 @@ mod tests {
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
             // Check we didn't miss the signal that was sent during the call.
-            let m = client_stream.try_next().await?.unwrap();
+            let m = client_conn.try_next().await?.unwrap();
             assert_eq!(m.to_string(), "Signal ASignalForYou");
             reply.body::<String>().map_err(|e| e.into())
         };
