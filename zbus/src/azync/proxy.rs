@@ -21,7 +21,7 @@ use std::{
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
-    azync::{Connection, MessageStream},
+    azync::Connection,
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
     Error, Message, MessageHeader, MessageType, Result,
 };
@@ -145,7 +145,7 @@ pub(crate) struct ProxyInner<'a> {
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
     #[derivative(Debug = "ignore")]
-    signal_msg_stream: OnceCell<Mutex<MessageStream>>,
+    signal_msg_stream: OnceCell<Mutex<Connection>>,
 }
 
 pub struct PropertyStream<'a, T> {
@@ -164,9 +164,8 @@ where
         let m = self.get_mut();
         let (name, stream) = (m.name, m.stream.as_mut());
         // there must be a way to simplify the following code..
-        let p = stream::Stream::poll_next(stream, cx);
-        match p {
-            Poll::Ready(Some(item)) => {
+        match futures_core::ready!(stream::Stream::poll_next(stream, cx)) {
+            Some(item) => {
                 if item.0 == name {
                     if let Some(Ok(v)) = item.1.clone().map(T::try_from) {
                         Poll::Ready(Some(Some(v)))
@@ -177,8 +176,7 @@ where
                     Poll::Pending
                 }
             }
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending,
+            None => Poll::Ready(None),
         }
     }
 }
@@ -575,8 +573,7 @@ impl<'a> Proxy<'a> {
         let stream = self
             .inner
             .conn
-            .stream()
-            .await
+            .clone()
             .filter(move |m| {
                 ready(
                     m.as_ref()
@@ -772,11 +769,11 @@ impl<'a> Proxy<'a> {
         Ok(self.inner.dest_unique_name.get().unwrap())
     }
 
-    async fn msg_stream(&self) -> &Mutex<MessageStream> {
+    async fn msg_stream(&self) -> &Mutex<Connection> {
         match self.inner.signal_msg_stream.get() {
             Some(stream) => stream,
             None => {
-                let stream = self.inner.conn.stream().await;
+                let stream = self.inner.conn.clone();
                 self.inner
                     .signal_msg_stream
                     .set(Mutex::new(stream))
