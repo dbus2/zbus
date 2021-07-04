@@ -164,9 +164,8 @@ where
         let m = self.get_mut();
         let (name, stream) = (m.name, m.stream.as_mut());
         // there must be a way to simplify the following code..
-        let p = stream::Stream::poll_next(stream, cx);
-        match p {
-            Poll::Ready(Some(item)) => {
+        match futures_core::ready!(stream::Stream::poll_next(stream, cx)) {
+            Some(item) => {
                 if item.0 == name {
                     if let Some(Ok(v)) = item.1.clone().map(T::try_from) {
                         Poll::Ready(Some(Some(v)))
@@ -177,8 +176,7 @@ where
                     Poll::Pending
                 }
             }
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending,
+            None => Poll::Ready(None),
         }
     }
 }

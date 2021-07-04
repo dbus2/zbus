@@ -182,13 +182,10 @@ impl Connection<Async<Box<dyn Socket>>> {
                 Ok(()) => return Poll::Ready(Ok(())),
                 Err(e) => {
                     if e.kind() == ErrorKind::WouldBlock {
-                        let poll = self.socket().poll_writable(cx);
-
-                        match poll {
-                            Poll::Pending => return Poll::Pending,
+                        match futures_core::ready!(self.socket().poll_writable(cx)) {
                             // Guess socket became ready already so let's try it again.
-                            Poll::Ready(Ok(_)) => continue,
-                            Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
+                            Ok(_) => continue,
+                            Err(e) => return Poll::Ready(Err(e.into())),
                         }
                     } else {
                         return Poll::Ready(Err(crate::Error::Io(e)));

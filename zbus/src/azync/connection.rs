@@ -28,7 +28,7 @@ use std::{
 };
 use zvariant::ObjectPath;
 
-use futures_core::{stream, Future};
+use futures_core::{ready, stream, Future};
 use futures_sink::Sink;
 use futures_util::{
     future::{select, Either},
@@ -857,10 +857,9 @@ impl Sink<Message> for Connection {
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         let mut raw_out_conn = self.inner.raw_out_conn.lock().expect("poisened lock");
-        match raw_out_conn.flush(cx) {
-            Poll::Ready(Ok(_)) => (),
-            Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
-            Poll::Pending => return Poll::Pending,
+        match ready!(raw_out_conn.flush(cx)) {
+            Ok(_) => (),
+            Err(e) => return Poll::Ready(Err(e)),
         }
 
         Poll::Ready(raw_out_conn.close())
@@ -876,7 +875,7 @@ impl stream::Stream for Connection {
         let err_fut = stream.error_receiver.next();
         let mut select_fut = select(msg_fut, err_fut);
 
-        match futures_core::ready!(Pin::new(&mut select_fut).poll(cx)) {
+        match ready!(Pin::new(&mut select_fut).poll(cx)) {
             Either::Left((msg, _)) => Poll::Ready(msg.map(Ok)),
             Either::Right((error, _)) => Poll::Ready(error.map(Err)),
         }
@@ -896,13 +895,10 @@ impl<'r, 's> Future for ReceiveMessage<'r, 's> {
         loop {
             match stream.raw_conn.try_receive_message() {
                 Err(Error::Io(e)) if e.kind() == ErrorKind::WouldBlock => {
-                    let poll = stream.raw_conn.socket().poll_readable(cx);
-
-                    match poll {
-                        Poll::Pending => return Poll::Pending,
+                    match ready!(stream.raw_conn.socket().poll_readable(cx)) {
                         // Guess socket became ready already so let's try it again.
-                        Poll::Ready(Ok(_)) => continue,
-                        Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
+                        Ok(_) => continue,
+                        Err(e) => return Poll::Ready(Err(e.into())),
                     }
                 }
                 m => return Poll::Ready(m),

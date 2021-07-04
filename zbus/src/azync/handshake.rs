@@ -1,4 +1,5 @@
 use async_io::Async;
+use futures_core::ready;
 
 use std::{
     fmt::Debug,
@@ -119,16 +120,15 @@ where
                 }
                 Err(Error::Io(e)) => {
                     if e.kind() == std::io::ErrorKind::WouldBlock {
-                        let poll = match handshake.next_io_operation() {
-                            IoOperation::Read => handshake.socket().poll_readable(cx),
-                            IoOperation::Write => handshake.socket().poll_writable(cx),
+                        let res = match handshake.next_io_operation() {
+                            IoOperation::Read => ready!(handshake.socket().poll_readable(cx)),
+                            IoOperation::Write => ready!(handshake.socket().poll_writable(cx)),
                             IoOperation::None => panic!("Invalid handshake state"),
                         };
-                        match poll {
-                            Poll::Pending => return Poll::Pending,
+                        match res {
                             // Guess socket became ready already so let's try it again.
-                            Poll::Ready(Ok(_)) => continue,
-                            Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
+                            Ok(_) => continue,
+                            Err(e) => return Poll::Ready(Err(e.into())),
                         }
                     } else {
                         return Poll::Ready(Err(Error::Io(e)));
