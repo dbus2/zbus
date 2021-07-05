@@ -91,13 +91,14 @@ need, but it is also easy to get it wrong. Fortunately, zbus has a simpler solut
 One can write an `impl` with a set of methods and let the `dbus_interface` procedural macro write
 the D-Bus details for us. It will dispatch all the incoming method calls to their respective
 handlers, and implicilty handle introspection requests. It also has support for properties and
-signal emission.
+signal emission. It even makes it easier to register a [well-known name](#taking-a-service-name) for
+your service.
 
 Let see how to use it:
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{dbus_interface, fdo};
+# use zbus::{dbus_interface, fdo, ObjectServer, Connection};
 #
 struct Greeter {
     name: String
@@ -131,13 +132,9 @@ impl Greeter {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::new_session()?;
-#     fdo::DBusProxy::new(&connection)?.request_name(
-#         "org.zbus.MyGreeter",
-#         fdo::RequestNameFlags::ReplaceExisting.into(),
-#     )?;
-
-    let mut object_server = zbus::ObjectServer::new(&connection);
+    let connection = Connection::new_session()?;
+    let mut object_server = ObjectServer::new(&connection)
+        .request_name("org.zbus.MyGreeter")?;
     let greeter = Greeter { name: "GreeterName".to_string() };
     object_server.at("/org/zbus/MyGreeter", greeter)?;
     loop {
