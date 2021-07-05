@@ -1,4 +1,4 @@
-use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
+use async_broadcast::{broadcast, Receiver as BroadcastReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
 #[cfg(feature = "internal-executor")]
@@ -28,10 +28,12 @@ use std::{
 };
 use zvariant::ObjectPath;
 
-use futures_core::{stream, Future};
+use futures_core::{ready, stream, Future};
+use futures_sink::Sink;
 use futures_util::{
+    future::{select, Either},
     sink::SinkExt,
-    stream::{select as stream_select, StreamExt},
+    stream::StreamExt,
 };
 
 use crate::{
@@ -115,7 +117,9 @@ struct ConnectionInner<S> {
     unique_name: OnceCell<String>,
 
     raw_in_conn: Arc<Mutex<RawConnection<Async<S>>>>,
-    raw_out_conn: Arc<sync::Mutex<RawConnection<Async<S>>>>,
+    // FIXME: We really should be using async_lock::Mutex here but `Sink::start_send is not very
+    // async friendly. :(
+    raw_out_conn: Arc<sync::Mutex<DynSocketConnection>>,
     // Serial number for next outgoing message
     serial: AtomicU32,
 
@@ -124,12 +128,6 @@ struct ConnectionInner<S> {
 
     // Message receiver task
     msg_receiver_task: sync::Mutex<Option<Task<()>>>,
-
-    // We're using sync Mutex here as we don't intend to keep it locked while awaiting.
-    msg_receiver: sync::RwLock<InactiveReceiver<Arc<Message>>>,
-
-    // Receiver side of the error channel
-    error_receiver: Receiver<Error>,
 
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 }
@@ -209,20 +207,26 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// ### Sending Messages
 ///
 /// For sending messages you can either use [`Connection::send_message`] method or make use of the
-/// [`futures_sink::Sink`] implementation that is returned by [`Connection::sink`] method. For
-/// latter, you might find [`SinkExt`] API very useful. Keep in mind that [`Connection`] will not
-/// manage the serial numbers (cookies) on the messages for you when they are sent through the
-/// [`MessageSink`]. You can manually assign unique serial numbers to them using the
-/// [`Connection::assign_serial_num`] method before sending them off, if needed. Having said that,
-/// [`MessageSink`] is mainly useful for sending out signals, as they do not expect a reply, and
-/// serial numbers are not very useful for signals either for the same reason.
+/// [`Sink`] implementation. For latter, you might find [`SinkExt`] API very useful. Keep in mind
+/// that [`Connection`] will not manage the serial numbers (cookies) on the messages for you when
+/// they are sent through the [`Sink`] implementation. You can manually assign unique serial numbers
+/// to them using the [`Connection::assign_serial_num`] method before sending them off, if needed.
+/// Having said that, the [`Sink`] is mainly useful for sending out signals, as they do not expect
+/// a reply, and serial numbers are not very useful for signals either for the same reason.
 ///
 /// ### Receiving Messages
 ///
 /// Unlike [`zbus::Connection`], there is no direct async equivalent of
 /// [`zbus::Connection::receive_message`] method provided. This is because the `futures` crate
-/// already provides a nice rich API that makes use of the [`stream::Stream`] implementation that is
-/// returned by [`Connection::stream`] method.
+/// already provides a nice rich API that makes use of the [`stream::Stream`] implementation.
+///
+/// # Caveats
+///
+/// At the moment, a simultaneous [flush request] from multiple tasks/threads could
+/// potentially create a busy loop, thus wasting CPU time. This limitation may be removed in the
+/// future.
+///
+/// [flush request]: https://docs.rs/futures/0.3.15/futures/sink/trait.SinkExt.html#method.flush
 ///
 /// ### Examples
 ///
@@ -273,7 +277,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 ///     )
 ///     .await?;
 ///
-/// while let Some(msg) = connection.stream().await.try_next().await? {
+/// while let Some(msg) = connection.try_next().await? {
 ///     println!("Got message: {}", msg);
 /// }
 ///
@@ -295,7 +299,14 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 ///
 /// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
 #[derive(Clone, Debug)]
-pub struct Connection(Arc<ConnectionInner<Box<dyn Socket>>>);
+pub struct Connection {
+    inner: Arc<ConnectionInner<Box<dyn Socket>>>,
+
+    msg_receiver: BroadcastReceiver<Arc<Message>>,
+
+    // Receiver side of the error channel
+    error_receiver: Receiver<Error>,
+}
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
 
@@ -354,40 +365,17 @@ impl Connection {
         Self::new(auth, false).await
     }
 
-    /// Get a stream to receive incoming messages.
-    pub async fn stream(&self) -> MessageStream {
-        let msg_receiver = self
-            .0
-            .msg_receiver
-            .read()
-            // SAFETY: Not much we can do about a poisoned mutex.
-            .expect("poisoned lock")
-            .activate_cloned()
-            .map(Ok);
-        let error_stream = self.0.error_receiver.clone().map(Err);
-        let stream = stream_select(error_stream, msg_receiver).boxed();
-
-        MessageStream { stream }
-    }
-
-    /// Get a sink to send out messages.
-    pub async fn sink(&self) -> MessageSink {
-        MessageSink {
-            raw_conn: self.0.raw_out_conn.clone(),
-            cap_unix_fd: self.0.cap_unix_fd,
-        }
-    }
-
     /// Send `msg` to the peer.
     ///
-    /// Unlike [`MessageSink`], this method sets a unique (to this connection) serial number on the
-    /// message before sending it off, for you.
+    /// Unlike our [`Sink`] implementation, this method sets a unique (to this connection) serial
+    /// number on the message before sending it off, for you.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
     pub async fn send_message(&self, mut msg: Message) -> Result<u32> {
         let serial = self.assign_serial_num(&mut msg)?;
 
-        self.sink().await.send(msg).await?;
+        // Clone to get a mutable ref.
+        self.clone().send(msg).await?;
 
         Ok(serial)
     }
@@ -410,7 +398,7 @@ impl Connection {
         B: serde::ser::Serialize + zvariant::Type,
         E: Into<MessageError>,
     {
-        let stream = self.stream().await;
+        let stream = self.clone();
         let m = Message::method(
             self.unique_name(),
             destination,
@@ -516,7 +504,7 @@ impl Connection {
     ///
     /// This will return `false` for p2p connections.
     pub fn is_bus(&self) -> bool {
-        self.0.bus_conn
+        self.inner.bus_conn
     }
 
     /// Assigns a serial number to `msg` that is unique to this connection.
@@ -534,16 +522,12 @@ impl Connection {
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
     pub fn unique_name(&self) -> Option<&str> {
-        self.0.unique_name.get().map(|s| s.as_str())
+        self.inner.unique_name.get().map(|s| s.as_str())
     }
 
     /// Max number of messages to queue.
     pub fn max_queued(&self) -> usize {
-        self.0
-            .msg_receiver
-            .read()
-            .expect("poisoned lock")
-            .capacity()
+        self.msg_receiver.capacity()
     }
 
     /// Set the max number of messages to queue.
@@ -571,19 +555,15 @@ impl Connection {
     /// // Do something useful with `conn`..
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn set_max_queued(self, max: usize) -> Self {
-        self.0
-            .msg_receiver
-            .write()
-            .expect("poisoned lock")
-            .set_capacity(max);
+    pub fn set_max_queued(mut self, max: usize) -> Self {
+        self.msg_receiver.set_capacity(max);
 
         self
     }
 
     /// The server's GUID.
     pub fn server_guid(&self) -> &str {
-        self.0.server_guid.as_str()
+        self.inner.server_guid.as_str()
     }
 
     /// The underlying executor.
@@ -622,12 +602,12 @@ impl Connection {
     ///
     /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
     pub fn executor(&self) -> &Executor<'static> {
-        &self.0.executor
+        &self.inner.executor
     }
 
     /// Get the raw file descriptor of this connection.
     pub async fn as_raw_fd(&self) -> RawFd {
-        (self.0.raw_in_conn.lock().await.socket()).as_raw_fd()
+        (self.inner.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
     pub(crate) async fn subscribe_signal<'s, E>(
@@ -642,7 +622,7 @@ impl Connection {
     {
         let signal = SignalInfo::new(sender, path, interface, signal_name)?;
         let hash = signal.calc_hash();
-        let mut subscriptions = self.0.signal_subscriptions.lock().await;
+        let mut subscriptions = self.inner.signal_subscriptions.lock().await;
         match subscriptions.get_mut(&hash) {
             Some(subscription) => subscription.num_subscribers += 1,
             None => {
@@ -686,7 +666,7 @@ impl Connection {
     }
 
     pub(crate) async fn unsubscribe_signal_by_id(&self, subscription_id: u64) -> Result<bool> {
-        let mut subscriptions = self.0.signal_subscriptions.lock().await;
+        let mut subscriptions = self.inner.signal_subscriptions.lock().await;
         match subscriptions.get_mut(&subscription_id) {
             Some(subscription) => {
                 subscription.num_subscribers -= 1;
@@ -712,7 +692,7 @@ impl Connection {
 
     pub(crate) fn queue_unsubscribe_signal(&self, subscription_id: u64) {
         let conn = self.clone();
-        self.0
+        self.inner
             .executor
             .spawn(async move {
                 // FIXME: Ignoring the errors here. We should at least log a message when we've
@@ -737,9 +717,7 @@ impl Connection {
         // ourselves in parallel to making the method call.
         #[cfg(not(feature = "internal-executor"))]
         let name = {
-            use futures_util::future::{select, Either};
-
-            let executor = self.0.executor.clone();
+            let executor = self.inner.executor.clone();
             let ticking_future = async move {
                 // Keep running as long as this task/future is not cancelled.
                 loop {
@@ -756,7 +734,7 @@ impl Connection {
             }
         };
 
-        self.0
+        self.inner
             .unique_name
             .set(name)
             // programmer (probably our) error if this fails.
@@ -772,9 +750,11 @@ impl Connection {
         let auth = auth.into_inner();
         let out_socket = auth.conn.socket().get_ref().try_clone()?;
         let out_conn = RawConnection::wrap(Async::new(out_socket)?);
+        let cap_unix_fd = auth.cap_unix_fd;
+        let raw_out_conn = Arc::new(sync::Mutex::new(out_conn));
+
         let (mut msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
         msg_sender.set_overflow(true);
-        let msg_receiver = msg_receiver.deactivate();
         let (error_sender, error_receiver) = bounded(1);
         let executor = Arc::new(Executor::new());
         let raw_in_conn = Arc::new(Mutex::new(auth.conn));
@@ -784,20 +764,22 @@ impl Connection {
             MessageReceiverTask::new(raw_in_conn.clone(), msg_sender, error_sender)
                 .spawn(&executor);
 
-        let connection = Self(Arc::new(ConnectionInner {
-            raw_in_conn,
-            raw_out_conn: Arc::new(sync::Mutex::new(out_conn)),
+        let connection = Self {
             error_receiver,
-            server_guid: auth.server_guid,
-            cap_unix_fd: auth.cap_unix_fd,
-            bus_conn: bus_connection,
-            serial: AtomicU32::new(1),
-            unique_name: OnceCell::new(),
-            signal_subscriptions: Mutex::new(HashMap::new()),
-            msg_receiver: sync::RwLock::new(msg_receiver),
-            executor: executor.clone(),
-            msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
-        }));
+            msg_receiver,
+            inner: Arc::new(ConnectionInner {
+                raw_in_conn,
+                raw_out_conn,
+                server_guid: auth.server_guid,
+                cap_unix_fd,
+                bus_conn: bus_connection,
+                serial: AtomicU32::new(1),
+                unique_name: OnceCell::new(),
+                signal_subscriptions: Mutex::new(HashMap::new()),
+                executor: executor.clone(),
+                msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
+            }),
+        };
 
         #[cfg(feature = "internal-executor")]
         std::thread::Builder::new()
@@ -822,7 +804,7 @@ impl Connection {
     }
 
     fn next_serial(&self) -> u32 {
-        self.0.serial.fetch_add(1, SeqCst)
+        self.inner.serial.fetch_add(1, SeqCst)
     }
 
     /// Create a `Connection` to the session/user message bus.
@@ -843,50 +825,7 @@ impl Connection {
     }
 }
 
-/// A [`futures_sink::Sink`] implementation that consumes [`Message`] instances.
-///
-/// Use [`Connection::sink`] to create an instance of this type.
-///
-/// # Caveats
-///
-/// At the moment, a simultaneous [flush request] from multiple tasks/threads could
-/// potentially create a busy loop, thus wasting CPU time. This limitation may be removed in the
-/// future.
-///
-/// [flush request]: https://docs.rs/futures/0.3.15/futures/sink/trait.SinkExt.html#method.flush
-pub struct MessageSink {
-    raw_conn: Arc<sync::Mutex<DynSocketConnection>>,
-    cap_unix_fd: bool,
-}
-
-assert_impl_all!(MessageSink: Send, Sync, Unpin);
-
-impl MessageSink {
-    fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        loop {
-            let mut raw_conn = self.raw_conn.lock().unwrap();
-            match raw_conn.try_flush() {
-                Ok(()) => return Poll::Ready(Ok(())),
-                Err(e) => {
-                    if e.kind() == ErrorKind::WouldBlock {
-                        let poll = raw_conn.socket().poll_writable(cx);
-
-                        match poll {
-                            Poll::Pending => return Poll::Pending,
-                            // Guess socket became ready already so let's try it again.
-                            Poll::Ready(Ok(_)) => continue,
-                            Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
-                        }
-                    } else {
-                        return Poll::Ready(Err(Error::Io(e)));
-                    }
-                }
-            }
-        }
-    }
-}
-
-impl futures_sink::Sink<Message> for MessageSink {
+impl Sink<Message> for Connection {
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
@@ -895,45 +834,51 @@ impl futures_sink::Sink<Message> for MessageSink {
     }
 
     fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
-        if !msg.fds().is_empty() && !self.cap_unix_fd {
+        if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);
         }
 
-        self.raw_conn.lock().unwrap().enqueue_message(msg);
+        self.inner
+            .raw_out_conn
+            .lock()
+            .expect("poisened lock")
+            .enqueue_message(msg);
 
         Ok(())
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        self.get_mut().flush(cx)
+        self.inner
+            .raw_out_conn
+            .lock()
+            .expect("poisened lock")
+            .flush(cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        let sink = self.get_mut();
-        match sink.flush(cx) {
-            Poll::Ready(Ok(_)) => (),
-            Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
-            Poll::Pending => return Poll::Pending,
+        let mut raw_out_conn = self.inner.raw_out_conn.lock().expect("poisened lock");
+        match ready!(raw_out_conn.flush(cx)) {
+            Ok(_) => (),
+            Err(e) => return Poll::Ready(Err(e)),
         }
 
-        Poll::Ready((sink.raw_conn.lock().unwrap()).close())
+        Poll::Ready(raw_out_conn.close())
     }
 }
 
-/// A [`stream::Stream`] implementation that yields [`Message`] items.
-///
-/// Use [`Connection::stream`] to create an instance of this type.
-pub struct MessageStream {
-    stream: stream::BoxStream<'static, Result<Arc<Message>>>,
-}
-
-assert_impl_all!(MessageStream: Send, Unpin);
-
-impl stream::Stream for MessageStream {
+impl stream::Stream for Connection {
     type Item = Result<Arc<Message>>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        stream::Stream::poll_next(self.get_mut().stream.as_mut(), cx)
+        let stream = self.get_mut();
+        let msg_fut = stream.msg_receiver.next();
+        let err_fut = stream.error_receiver.next();
+        let mut select_fut = select(msg_fut, err_fut);
+
+        match ready!(Pin::new(&mut select_fut).poll(cx)) {
+            Either::Left((msg, _)) => Poll::Ready(msg.map(Ok)),
+            Either::Right((error, _)) => Poll::Ready(error.map(Err)),
+        }
     }
 }
 
@@ -950,13 +895,10 @@ impl<'r, 's> Future for ReceiveMessage<'r, 's> {
         loop {
             match stream.raw_conn.try_receive_message() {
                 Err(Error::Io(e)) if e.kind() == ErrorKind::WouldBlock => {
-                    let poll = stream.raw_conn.socket().poll_readable(cx);
-
-                    match poll {
-                        Poll::Pending => return Poll::Pending,
+                    match ready!(stream.raw_conn.socket().poll_readable(cx)) {
                         // Guess socket became ready already so let's try it again.
-                        Poll::Ready(Ok(_)) => continue,
-                        Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
+                        Ok(_) => continue,
+                        Err(e) => return Poll::Ready(Err(e.into())),
                     }
                 }
                 m => return Poll::Ready(m),
@@ -994,13 +936,11 @@ mod tests {
         let server = Connection::new_unix_server(p0, &guid);
         let client = Connection::new_unix_client(p1, false);
 
-        let (client_conn, server_conn) = futures_util::try_join!(client, server)?;
-        let mut client_stream = client_conn.stream().await;
-        let mut server_stream = server_conn.stream().await;
+        let (mut client_conn, mut server_conn) = futures_util::try_join!(client, server)?;
 
         let server_future = async {
             let mut method: Option<Arc<Message>> = None;
-            while let Some(m) = server_stream.try_next().await? {
+            while let Some(m) = server_conn.try_next().await? {
                 if m.to_string() == "Method call Test" {
                     method.replace(m);
 
@@ -1022,7 +962,7 @@ mod tests {
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
             // Check we didn't miss the signal that was sent during the call.
-            let m = client_stream.try_next().await?.unwrap();
+            let m = client_conn.try_next().await?.unwrap();
             assert_eq!(m.to_string(), "Signal ASignalForYou");
             reply.body::<String>().map_err(|e| e.into())
         };

@@ -16,8 +16,7 @@ use static_assertions::assert_impl_all;
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
-    azync::MessageStream,
-    fdo,
+    azync, fdo,
     fdo::{Introspectable, Peer, Properties},
     Connection, Error, Message, MessageHeader, MessageType, Result,
 };
@@ -268,7 +267,7 @@ pub struct ObjectServer {
     conn: Connection,
     root: Node,
     #[derivative(Debug = "ignore")]
-    msg_stream: MessageStream,
+    msg_stream: azync::Connection,
 }
 
 assert_impl_all!(ObjectServer: Unpin);
@@ -278,7 +277,7 @@ impl ObjectServer {
     pub fn new(connection: &Connection) -> Self {
         Self {
             conn: connection.clone(),
-            msg_stream: block_on(connection.inner().stream()),
+            msg_stream: connection.inner().clone(),
             root: Node::new("/".try_into().expect("zvariant bug")),
         }
     }

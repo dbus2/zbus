@@ -1,4 +1,10 @@
-use std::{collections::VecDeque, io};
+use std::{
+    collections::VecDeque,
+    io::{self, ErrorKind},
+    task::{Context, Poll},
+};
+
+use async_io::Async;
 
 use crate::{message::Message, message_header::MIN_MESSAGE_SIZE, raw::Socket, OwnedFd};
 
@@ -165,6 +171,28 @@ impl<S: Socket> Connection<S> {
     /// corrupt the internal state of this wrapper.
     pub fn socket(&self) -> &S {
         &self.socket
+    }
+}
+
+impl Connection<Async<Box<dyn Socket>>> {
+    /// Same as `try_flush` above, except it wraps the method for use in [`std::future::Future`] impls.
+    pub(crate) fn flush(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
+        loop {
+            match self.try_flush() {
+                Ok(()) => return Poll::Ready(Ok(())),
+                Err(e) => {
+                    if e.kind() == ErrorKind::WouldBlock {
+                        match futures_core::ready!(self.socket().poll_writable(cx)) {
+                            // Guess socket became ready already so let's try it again.
+                            Ok(_) => continue,
+                            Err(e) => return Poll::Ready(Err(e.into())),
+                        }
+                    } else {
+                        return Poll::Ready(Err(crate::Error::Io(e)));
+                    }
+                }
+            }
+        }
     }
 }
 
