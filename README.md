@@ -90,7 +90,7 @@ A simple service that politely greets whoever calls its `SayHello` method:
 
 ```rust,no_run
 use std::error::Error;
-use zbus::{dbus_interface, fdo};
+use zbus::{dbus_interface, fdo, ObjectServer, Connection};
 
 struct Greeter {
     count: u64
@@ -105,13 +105,9 @@ impl Greeter {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::new_session()?;
-    fdo::DBusProxy::new(&connection)?.request_name(
-        "org.zbus.MyGreeter",
-        fdo::RequestNameFlags::ReplaceExisting.into(),
-    )?;
-
-    let mut object_server = zbus::ObjectServer::new(&connection);
+    let connection = Connection::new_session()?;
+    let mut object_server = ObjectServer::new(&connection)
+        .request_name("org.zbus.MyGreeter")?;
     let mut greeter = Greeter { count: 0 };
     object_server.at("/org/zbus/MyGreeter", greeter)?;
     loop {
