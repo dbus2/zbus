@@ -10,7 +10,7 @@ use std::{
 };
 
 use async_io::block_on;
-use fdo::DBusProxy;
+use fdo::{DBusProxy, RequestNameFlags};
 use futures_util::StreamExt;
 use scoped_tls::scoped_thread_local;
 use static_assertions::assert_impl_all;
@@ -291,13 +291,15 @@ impl ObjectServer {
     /// automatically for you when `ObjectServer` is dropped. Use [`ObjectServer::release_name`] for
     /// explicitly deregistering names registered through this method.
     ///
-    /// Note that exclusive ownership is requested using [`fdo::RequestNameFlags::ReplaceExisting`].
-    /// If that is not what you want, you should use [`fdo::DBusProxy::request_name`] instead (but
-    /// make sure then that name is requested **after** instantiating the `ObjectServer`).
+    /// Note that exclusive ownership without queueing is requested (using
+    /// [`fdo::RequestNameFlags::ReplaceExisting`] and [`fdo::RequestNameFlags::DoNotQueue`] flags)
+    /// since that is the most typical case. If that is not what you want, you should use
+    /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
+    /// **after** instantiating the `ObjectServer`).
     pub fn request_name(mut self, well_known_name: &str) -> Result<Self> {
         DBusProxy::new(&self.conn)?.request_name(
             well_known_name,
-            fdo::RequestNameFlags::ReplaceExisting.into(),
+            RequestNameFlags::ReplaceExisting | RequestNameFlags::DoNotQueue,
         )?;
 
         self.registered_names.insert(well_known_name.to_string());
