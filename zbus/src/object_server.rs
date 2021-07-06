@@ -288,8 +288,8 @@ impl ObjectServer {
     /// Register a well-known name for this service on the bus.
     ///
     /// You can request multiple names for the same `ObjectServer`. All the names are released
-    /// automatically for you when `ObjectServer` is dropped. Use [`release_name`] for explicitly
-    /// deregistering names registered through this method.
+    /// automatically for you when `ObjectServer` is dropped. Use [`ObjectServer::release_name`] for
+    /// explicitly deregistering names registered through this method.
     ///
     /// Note that exclusive ownership is requested using [`fdo::RequestNameFlags::ReplaceExisting`].
     /// If that is not what you want, you should use [`fdo::DBusProxy::request_name`] instead (but
@@ -308,7 +308,7 @@ impl ObjectServer {
     /// Deregister a previously registered well-known name for this service on the bus.
     ///
     /// Use this method to explicitly deregister a well-known name, registered through
-    /// [`request_name`].
+    /// [`ObjectServer::request_name`].
     ///
     /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
     /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
