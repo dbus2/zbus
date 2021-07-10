@@ -194,6 +194,9 @@ pub use unique_name::*;
 mod well_known_name;
 pub use well_known_name::*;
 
+mod interface_name;
+pub use interface_name::*;
+
 mod object_server;
 pub use object_server::*;
 
