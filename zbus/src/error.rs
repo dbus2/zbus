@@ -37,6 +37,9 @@ pub enum Error {
     #[cfg(feature = "xml")]
     /// An XML error
     SerdeXml(serde_xml_rs::Error),
+    /// Invalid bus name. The strings describe why the bus name is neither a valid unique nor
+    /// well-known name, respectively.
+    InvalidBusName(String, String),
     /// Invalid well-known bus name.
     InvalidWellKnownName(String),
     /// Invalid unique bus name.
@@ -70,6 +73,7 @@ impl error::Error for Error {
             Error::FDO(e) => Some(e),
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => Some(e),
+            Error::InvalidBusName(_, _) => None,
             Error::InvalidWellKnownName(_) => None,
             Error::InvalidUniqueName(_) => None,
         }
@@ -97,6 +101,13 @@ impl fmt::Display for Error {
             Error::FDO(e) => write!(f, "{}", e),
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => write!(f, "XML error: {}", e),
+            Error::InvalidBusName(unique_err, well_known_err) => {
+                write!(
+                    f,
+                    "Neither a valid unique ({}) nor a well-known ({}) bus name",
+                    unique_err, well_known_err
+                )
+            }
             Error::InvalidWellKnownName(s) => write!(f, "Invalid well-known bus name: {}", s),
             Error::InvalidUniqueName(s) => write!(f, "Invalid unique bus name: {}", s),
         }
