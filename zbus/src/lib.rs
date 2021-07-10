@@ -185,6 +185,9 @@ pub use owned_fd::*;
 
 mod utils;
 
+mod well_known_name;
+pub use well_known_name::*;
+
 mod object_server;
 pub use object_server::*;
 
