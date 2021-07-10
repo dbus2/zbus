@@ -193,6 +193,7 @@ array_impls! {
 ////////////////////////////////////////////////////////////////////////////////
 
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, HashMap},
     hash::{BuildHasher, Hash},
 };
@@ -215,6 +216,16 @@ macro_rules! map_impl {
 
 map_impl!(BTreeMap<K: Ord, V>);
 map_impl!(HashMap<K: Eq + Hash, V, H: BuildHasher>);
+
+impl<T> Type for Cow<'_, T>
+where
+    T: ?Sized + Type + ToOwned,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        T::signature()
+    }
+}
 
 // BitFlags
 #[cfg(feature = "enumflags2")]
