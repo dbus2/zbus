@@ -185,6 +185,9 @@ pub use owned_fd::*;
 
 mod utils;
 
+mod unique_name;
+pub use unique_name::*;
+
 mod well_known_name;
 pub use well_known_name::*;
 
