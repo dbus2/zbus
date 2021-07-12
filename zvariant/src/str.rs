@@ -15,7 +15,7 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 /// [`Value`]: enum.Value.html#variant.Str
 /// [`&str`]: https://doc.rust-lang.org/std/str/index.html
 /// [`String`]: https://doc.rust-lang.org/std/string/struct.String.html
-#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
 #[serde(rename(serialize = "zvariant::Str", deserialize = "zvariant::Str"))]
 pub struct Str<'a>(#[serde(borrow)] Cow<'a, str>);
 
