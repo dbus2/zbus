@@ -27,7 +27,11 @@
 //! use zbus::dbus_proxy;
 //! use zvariant::Value;
 //!
-//! #[dbus_proxy]
+//! #[dbus_proxy(
+//!     interface = "org.freedesktop.Notifications",
+//!     default_service = "org.freedesktop.Notifications",
+//!     default_path = "/org/freedesktop/Notifications"
+//! )]
 //! trait Notifications {
 //!     fn notify(
 //!         &self,
@@ -45,6 +49,7 @@
 //! fn main() -> Result<(), Box<dyn Error>> {
 //!     let connection = zbus::Connection::new_session()?;
 //!
+//!     // The Proxy is created by `#[dbus_proxy]` and implements the trait
 //!     let proxy = NotificationsProxy::new(&connection)?;
 //!     let reply = proxy.notify(
 //!         "my-app",
