@@ -8,7 +8,7 @@ use std::{
 };
 use zvariant::{
     derive::{OwnedValue, Value},
-    Str,
+    NoneValue, Str,
 };
 
 /// String that identifies a [unique bus name][ubn].
@@ -192,6 +192,14 @@ fn ensure_correct_unique_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+impl<'name> NoneValue for UniqueName<'name> {
+    type NoneType = &'name str;
+
+    fn null_value() -> Self::NoneType {
+        <&str>::default()
+    }
+}
+
 /// Owned sibling of [`UniqueName`].
 #[derive(Clone, Debug, PartialEq, Serialize, Type, Value, OwnedValue)]
 pub struct OwnedUniqueName(#[serde(borrow)] UniqueName<'static>);
@@ -259,5 +267,13 @@ impl<'de> Deserialize<'de> for OwnedUniqueName {
 impl PartialEq<&str> for OwnedUniqueName {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+impl NoneValue for OwnedUniqueName {
+    type NoneType = <UniqueName<'static> as NoneValue>::NoneType;
+
+    fn null_value() -> Self::NoneType {
+        UniqueName::null_value()
     }
 }
