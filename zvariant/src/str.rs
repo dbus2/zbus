@@ -29,8 +29,12 @@ impl<'a> Str<'a> {
 
     /// Creates an owned clone of `self`.
     pub fn to_owned(&self) -> Str<'static> {
-        let s = self.0.clone().into_owned();
-        Str(Cow::Owned(s))
+        self.clone().into_owned()
+    }
+
+    /// Creates an owned clone of `self`.
+    pub fn into_owned(self) -> Str<'static> {
+        Str(Cow::Owned(String::from(self.as_str())))
     }
 }
 
