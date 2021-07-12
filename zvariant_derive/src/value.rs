@@ -132,7 +132,7 @@ fn impl_struct(
                     #into_value_where_clause
                 {
                     #[inline]
-                    fn from(s: #name) -> Self {
+                    fn from(s: #name #ty_generics) -> Self {
                         s.0.into()
                     }
                 }
