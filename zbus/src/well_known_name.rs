@@ -8,7 +8,7 @@ use std::{
 };
 use zvariant::{
     derive::{OwnedValue, Value},
-    Str,
+    NoneValue, Str,
 };
 
 /// String that identifies a [well-known bus name][wbn].
@@ -196,6 +196,14 @@ fn ensure_correct_well_known_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+impl<'name> NoneValue for WellKnownName<'name> {
+    type NoneType = &'name str;
+
+    fn null_value() -> Self::NoneType {
+        <&str>::default()
+    }
+}
+
 /// Owned sibling of [`WellKnownName`].
 #[derive(Clone, Debug, PartialEq, Serialize, Type, Value, OwnedValue)]
 pub struct OwnedWellKnownName(#[serde(borrow)] WellKnownName<'static>);
@@ -263,5 +271,13 @@ impl<'de> Deserialize<'de> for OwnedWellKnownName {
 impl PartialEq<&str> for OwnedWellKnownName {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+impl NoneValue for OwnedWellKnownName {
+    type NoneType = <WellKnownName<'static> as NoneValue>::NoneType;
+
+    fn null_value() -> Self::NoneType {
+        WellKnownName::null_value()
     }
 }
