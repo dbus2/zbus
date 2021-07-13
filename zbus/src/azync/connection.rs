@@ -40,7 +40,7 @@ use crate::{
     azync::Authenticated,
     fdo,
     raw::{Connection as RawConnection, Socket},
-    Error, Guid, Message, MessageError, MessageType, Result,
+    Error, Guid, Message, MessageType, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -404,7 +404,7 @@ impl Connection {
     ) -> Result<Arc<Message>>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<MessageError>,
+        E: Into<Error>,
     {
         let stream = self.clone();
         let m = Message::method(
@@ -466,7 +466,7 @@ impl Connection {
     ) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<MessageError>,
+        E: Into<Error>,
     {
         let m = Message::signal(
             self.unique_name(),

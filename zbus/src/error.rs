@@ -2,7 +2,7 @@ use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, sync::Arc};
 use zvariant::Error as VariantError;
 
-use crate::{fdo, Message, MessageError, MessageType};
+use crate::{fdo, Message, MessageType};
 
 /// The error type for `zbus`.
 ///
@@ -16,10 +16,16 @@ pub enum Error {
     Address(String),
     /// An I/O error.
     Io(io::Error),
-    /// Message parsing error.
-    Message(MessageError),
+    /// Insufficient data provided to create a valid D-Bus message.
+    InsufficientData,
+    /// Invalid message field.
+    InvalidField,
+    /// Data too large.
+    ExcessData,
     /// A [zvariant](../zvariant/index.html) error.
     Variant(VariantError),
+    /// Endian signature invalid or doesn't match expectation.
+    IncorrectEndian,
     /// Initial handshake error.
     Handshake(String),
     /// Unexpected or incorrect reply.
@@ -28,6 +34,8 @@ pub enum Error {
     // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds anything more than a
     // string description.
     MethodError(String, Option<String>, Arc<Message>),
+    /// A required field is missing in the message headers.
+    MissingField,
     /// Invalid D-Bus GUID.
     InvalidGUID,
     /// Unsupported function, or support currently lacking.
@@ -44,6 +52,10 @@ pub enum Error {
     InvalidWellKnownName(String),
     /// Invalid unique bus name.
     InvalidUniqueName(String),
+    /// Missing body signature in the message.
+    NoBodySignature,
+    /// Unmatching/bad body signature in the message.
+    UnmatchedBodySignature,
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -63,8 +75,10 @@ impl error::Error for Error {
             Error::InterfaceNotFound => None,
             Error::Address(_) => None,
             Error::Io(e) => Some(e),
+            Error::ExcessData => None,
             Error::Handshake(_) => None,
-            Error::Message(e) => Some(e),
+            Error::InsufficientData => None,
+            Error::IncorrectEndian => None,
             Error::Variant(e) => Some(e),
             Error::InvalidReply => None,
             Error::MethodError(_, _, _) => None,
@@ -76,6 +90,10 @@ impl error::Error for Error {
             Error::InvalidBusName(_, _) => None,
             Error::InvalidWellKnownName(_) => None,
             Error::InvalidUniqueName(_) => None,
+            Error::NoBodySignature => None,
+            Error::InvalidField => None,
+            Error::MissingField => None,
+            Error::UnmatchedBodySignature => None,
         }
     }
 }
@@ -85,11 +103,18 @@ impl fmt::Display for Error {
         match self {
             Error::InterfaceNotFound => write!(f, "Interface not found"),
             Error::Address(e) => write!(f, "address error: {}", e),
+            Error::ExcessData => write!(f, "excess data"),
             Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::Handshake(e) => write!(f, "D-Bus handshake failed: {}", e),
-            Error::Message(e) => write!(f, "Message creation error: {}", e),
+            Error::InsufficientData => write!(
+                f,
+                "Insufficient data provided to create a valid D-Bus message"
+            ),
+            Error::IncorrectEndian => write!(f, "incorrect endian"),
+            Error::InvalidField => write!(f, "invalid message field"),
             Error::Variant(e) => write!(f, "{}", e),
             Error::InvalidReply => write!(f, "Invalid D-Bus method reply"),
+            Error::MissingField => write!(f, "A required field is missing from message headers"),
             Error::MethodError(name, detail, _reply) => write!(
                 f,
                 "{}: {}",
@@ -110,6 +135,8 @@ impl fmt::Display for Error {
             }
             Error::InvalidWellKnownName(s) => write!(f, "Invalid well-known bus name: {}", s),
             Error::InvalidUniqueName(s) => write!(f, "Invalid unique bus name: {}", s),
+            Error::NoBodySignature => write!(f, "missing body signature in the message"),
+            Error::UnmatchedBodySignature => write!(f, "unmatched body signature"),
         }
     }
 }
@@ -125,12 +152,6 @@ impl From<nix::Error> for Error {
         val.as_errno()
             .map(|errno| io::Error::from_raw_os_error(errno as i32).into())
             .unwrap_or_else(|| io::Error::new(io::ErrorKind::Other, val).into())
-    }
-}
-
-impl From<MessageError> for Error {
-    fn from(val: MessageError) -> Self {
-        Error::Message(val)
     }
 }
 
@@ -176,7 +197,7 @@ impl From<Arc<Message>> for Error {
         let header = match message.header() {
             Ok(header) => header,
             Err(e) => {
-                return Error::Message(e);
+                return e;
             }
         };
         if header.primary().msg_type() != MessageType::Error {

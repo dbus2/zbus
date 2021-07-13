@@ -46,7 +46,7 @@ impl<'key> TryFrom<&'key MessageHeader<'key>> for ProxyKey<'key> {
                 destination: Cow::from(destination),
                 path,
             }),
-            (_, _, _) => Err(Error::Message(crate::MessageError::MissingField)),
+            (_, _, _) => Err(Error::MissingField),
         }
     }
 }

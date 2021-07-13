@@ -8,7 +8,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
 use zvariant::{derive::Type, ObjectPath, Signature};
 
-use crate::{MessageError, MessageField, MessageFieldCode, MessageFields};
+use crate::{Error, MessageField, MessageFieldCode, MessageFields};
 
 pub(crate) const PRIMARY_HEADER_SIZE: usize = 12;
 pub(crate) const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
@@ -28,13 +28,13 @@ assert_impl_all!(EndianSig: Send, Sync, Unpin);
 
 // Such a shame I've to do this manually
 impl TryFrom<u8> for EndianSig {
-    type Error = MessageError;
+    type Error = Error;
 
-    fn try_from(val: u8) -> Result<EndianSig, MessageError> {
+    fn try_from(val: u8) -> Result<EndianSig, Error> {
         match val {
             b'B' => Ok(EndianSig::Big),
             b'l' => Ok(EndianSig::Little),
-            _ => Err(MessageError::IncorrectEndian),
+            _ => Err(Error::IncorrectEndian),
         }
     }
 }
@@ -263,7 +263,7 @@ macro_rules! get_field {
         #[allow(clippy::redundant_closure_call)]
         match $self.fields().get_field(MessageFieldCode::$kind) {
             Some(MessageField::$kind(value)) => Ok(Some($closure(value))),
-            Some(_) => Err(MessageError::InvalidField),
+            Some(_) => Err(Error::InvalidField),
             None => Ok(None),
         }
     };
@@ -322,52 +322,52 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// The message type
-    pub fn message_type(&self) -> Result<MessageType, MessageError> {
+    pub fn message_type(&self) -> Result<MessageType, Error> {
         Ok(self.primary().msg_type())
     }
 
     /// The object to send a call to, or the object a signal is emitted from.
-    pub fn path<'s>(&'s self) -> Result<Option<&ObjectPath<'m>>, MessageError> {
+    pub fn path<'s>(&'s self) -> Result<Option<&ObjectPath<'m>>, Error> {
         get_field!(self, Path)
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
-    pub fn interface<'s>(&'s self) -> Result<Option<&'s str>, MessageError> {
+    pub fn interface<'s>(&'s self) -> Result<Option<&'s str>, Error> {
         get_field_str!(self, Interface)
     }
 
     /// The member, either the method name or signal name.
-    pub fn member<'s>(&'s self) -> Result<Option<&'s str>, MessageError> {
+    pub fn member<'s>(&'s self) -> Result<Option<&'s str>, Error> {
         get_field_str!(self, Member)
     }
 
     /// The name of the error that occurred, for errors.
-    pub fn error_name<'s>(&'s self) -> Result<Option<&'s str>, MessageError> {
+    pub fn error_name<'s>(&'s self) -> Result<Option<&'s str>, Error> {
         get_field_str!(self, ErrorName)
     }
 
     /// The serial number of the message this message is a reply to.
-    pub fn reply_serial(&self) -> Result<Option<u32>, MessageError> {
+    pub fn reply_serial(&self) -> Result<Option<u32>, Error> {
         get_field_u32!(self, ReplySerial)
     }
 
     /// The name of the connection this message is intended for.
-    pub fn destination<'s>(&'s self) -> Result<Option<&'s str>, MessageError> {
+    pub fn destination<'s>(&'s self) -> Result<Option<&'s str>, Error> {
         get_field_str!(self, Destination)
     }
 
     /// Unique name of the sending connection.
-    pub fn sender<'s>(&'s self) -> Result<Option<&'s str>, MessageError> {
+    pub fn sender<'s>(&'s self) -> Result<Option<&'s str>, Error> {
         get_field_str!(self, Sender)
     }
 
     /// The signature of the message body.
-    pub fn signature(&self) -> Result<Option<&Signature<'m>>, MessageError> {
+    pub fn signature(&self) -> Result<Option<&Signature<'m>>, Error> {
         get_field!(self, Signature)
     }
 
     /// The number of Unix file descriptors that accompany the message.
-    pub fn unix_fds(&self) -> Result<Option<u32>, MessageError> {
+    pub fn unix_fds(&self) -> Result<Option<u32>, Error> {
         get_field_u32!(self, UnixFDs)
     }
 }

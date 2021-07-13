@@ -1,18 +1,18 @@
 use std::{
-    convert::{Infallible, TryFrom, TryInto},
-    error, fmt,
-    io::{Cursor, Error as IOError},
+    convert::{TryFrom, TryInto},
+    fmt,
+    io::Cursor,
     os::unix::io::{AsRawFd, IntoRawFd, RawFd},
     sync::{Arc, RwLock},
 };
 
 use static_assertions::assert_impl_all;
-use zvariant::{EncodingContext, Error as VariantError, ObjectPath, Signature, Type};
+use zvariant::{EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
-    owned_fd::OwnedFd, utils::padding_for_8_bytes, EndianSig, MessageField, MessageFieldCode,
-    MessageFields, MessageHeader, MessagePrimaryHeader, MessageType, MIN_MESSAGE_SIZE,
-    NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE,
+    owned_fd::OwnedFd, utils::padding_for_8_bytes, EndianSig, Error, MessageField,
+    MessageFieldCode, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType, Result,
+    MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE,
 };
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
@@ -22,93 +22,6 @@ macro_rules! dbus_context {
     ($n_bytes_before: expr) => {
         EncodingContext::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
     };
-}
-
-/// Error type returned by [`Message`] methods.
-///
-/// [`Message`]: struct.Message.html
-#[derive(Debug)]
-pub enum MessageError {
-    /// Insufficient data provided.
-    InsufficientData,
-    /// Data too large.
-    ExcessData,
-    /// Endian signature invalid or doesn't match expectation.
-    IncorrectEndian,
-    /// An I/O error.
-    Io(IOError),
-    /// Missing body signature.
-    NoBodySignature,
-    /// Unmatching/bad body signature.
-    UnmatchedBodySignature,
-    /// Invalid message field.
-    InvalidField,
-    /// Data serializing/deserializing error.
-    Variant(VariantError),
-    /// A required field is missing in the headers.
-    MissingField,
-}
-
-assert_impl_all!(MessageError: Send, Sync, Unpin);
-
-impl PartialEq for MessageError {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::InsufficientData, Self::InsufficientData) => true,
-            (Self::ExcessData, Self::ExcessData) => true,
-            (Self::IncorrectEndian, Self::IncorrectEndian) => true,
-            // Io is false
-            (Self::NoBodySignature, Self::NoBodySignature) => true,
-            (Self::UnmatchedBodySignature, Self::UnmatchedBodySignature) => true,
-            (Self::InvalidField, Self::InvalidField) => true,
-            (Self::Variant(s), Self::Variant(o)) => s == o,
-            (_, _) => false,
-        }
-    }
-}
-
-impl error::Error for MessageError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            MessageError::Io(e) => Some(e),
-            MessageError::Variant(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl fmt::Display for MessageError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            MessageError::InsufficientData => write!(f, "insufficient data"),
-            MessageError::Io(e) => e.fmt(f),
-            MessageError::ExcessData => write!(f, "excess data"),
-            MessageError::IncorrectEndian => write!(f, "incorrect endian"),
-            MessageError::InvalidField => write!(f, "invalid message field"),
-            MessageError::NoBodySignature => write!(f, "missing body signature"),
-            MessageError::UnmatchedBodySignature => write!(f, "unmatched body signature"),
-            MessageError::Variant(e) => write!(f, "{}", e),
-            MessageError::MissingField => write!(f, "A required field is missing"),
-        }
-    }
-}
-
-impl From<VariantError> for MessageError {
-    fn from(val: VariantError) -> MessageError {
-        MessageError::Variant(val)
-    }
-}
-
-impl From<IOError> for MessageError {
-    fn from(val: IOError) -> MessageError {
-        MessageError::Io(val)
-    }
-}
-
-impl From<Infallible> for MessageError {
-    fn from(i: Infallible) -> Self {
-        match i {}
-    }
 }
 
 #[derive(Debug)]
@@ -124,10 +37,10 @@ impl<'a, B> MessageBuilder<'a, B>
 where
     B: serde::ser::Serialize + Type,
 {
-    fn new(ty: MessageType, sender: Option<&'a str>, body: &'a B) -> Result<Self, MessageError> {
+    fn new(ty: MessageType, sender: Option<&'a str>, body: &'a B) -> Result<Self> {
         let ctxt = dbus_context!(0);
         let (body_len, fds_len) = zvariant::serialized_size_fds(ctxt, body)?;
-        let body_len = u32::try_from(body_len).map_err(|_| MessageError::ExcessData)?;
+        let body_len = u32::try_from(body_len).map_err(|_| Error::ExcessData)?;
 
         let mut fields = MessageFields::new();
 
@@ -156,7 +69,7 @@ where
         })
     }
 
-    fn build(self) -> Result<Message, MessageError> {
+    fn build(self) -> Result<Message> {
         let MessageBuilder {
             ty,
             body,
@@ -166,10 +79,7 @@ where
         } = self;
 
         if let Some(reply_to) = reply_to.as_ref() {
-            let serial = reply_to
-                .primary()
-                .serial_num()
-                .ok_or(MessageError::MissingField)?;
+            let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
             fields.add(MessageField::ReplySerial(*serial));
 
             if let Some(sender) = reply_to.sender()? {
@@ -196,7 +106,7 @@ where
         })
     }
 
-    fn set_reply_to(mut self, reply_to: &'a Message) -> Result<Self, MessageError> {
+    fn set_reply_to(mut self, reply_to: &'a Message) -> Result<Self> {
         self.reply_to = Some(reply_to.header()?);
         Ok(self)
     }
@@ -206,11 +116,7 @@ where
         self
     }
 
-    fn reply(
-        sender: Option<&'a str>,
-        reply_to: &'a Message,
-        body: &'a B,
-    ) -> Result<Self, MessageError> {
+    fn reply(sender: Option<&'a str>, reply_to: &'a Message, body: &'a B) -> Result<Self> {
         Self::new(MessageType::MethodReturn, sender, body)?.set_reply_to(reply_to)
     }
 
@@ -219,7 +125,7 @@ where
         reply_to: &'a Message,
         error_name: &'a str,
         body: &'a B,
-    ) -> Result<Self, MessageError> {
+    ) -> Result<Self> {
         Ok(Self::new(MessageType::Error, sender, body)?
             .set_reply_to(reply_to)?
             .set_field(MessageField::ErrorName(error_name.into())))
@@ -230,7 +136,7 @@ where
         path: ObjectPath<'a>,
         method_name: &'a str,
         body: &'a B,
-    ) -> Result<Self, MessageError> {
+    ) -> Result<Self> {
         Ok(Self::new(MessageType::MethodCall, sender, body)?
             .set_field(MessageField::Path(path))
             .set_field(MessageField::Member(method_name.into())))
@@ -242,7 +148,7 @@ where
         iface: &'a str,
         signal_name: &'a str,
         body: &'a B,
-    ) -> Result<Self, MessageError> {
+    ) -> Result<Self> {
         Ok(Self::new(MessageType::Signal, sender, body)?
             .set_field(MessageField::Path(path))
             .set_field(MessageField::Interface(iface.into()))
@@ -303,10 +209,10 @@ impl Message {
         iface: Option<&str>,
         method_name: &str,
         body: &B,
-    ) -> Result<Self, MessageError>
+    ) -> Result<Self>
     where
         B: serde::ser::Serialize + Type,
-        E: Into<MessageError>,
+        E: Into<Error>,
     {
         let mut b = MessageBuilder::method(
             sender,
@@ -333,10 +239,10 @@ impl Message {
         iface: &str,
         signal_name: &str,
         body: &B,
-    ) -> Result<Self, MessageError>
+    ) -> Result<Self>
     where
         B: serde::ser::Serialize + Type,
-        E: Into<MessageError>,
+        E: Into<Error>,
     {
         let mut b = MessageBuilder::signal(
             sender,
@@ -354,11 +260,7 @@ impl Message {
     /// Create a message of type [`MessageType::MethodReturn`].
     ///
     /// [`MessageType::MethodReturn`]: enum.MessageType.html#variant.MethodReturn
-    pub fn method_reply<B>(
-        sender: Option<&str>,
-        call: &Self,
-        body: &B,
-    ) -> Result<Self, MessageError>
+    pub fn method_reply<B>(sender: Option<&str>, call: &Self, body: &B) -> Result<Self>
     where
         B: serde::ser::Serialize + Type,
     {
@@ -368,29 +270,23 @@ impl Message {
     /// Create a message of type [`MessageType::MethodError`].
     ///
     /// [`MessageType::MethodError`]: enum.MessageType.html#variant.MethodError
-    pub fn method_error<B>(
-        sender: Option<&str>,
-        call: &Self,
-        name: &str,
-        body: &B,
-    ) -> Result<Self, MessageError>
+    pub fn method_error<B>(sender: Option<&str>, call: &Self, name: &str, body: &B) -> Result<Self>
     where
         B: serde::ser::Serialize + Type,
     {
         MessageBuilder::error(sender, call, name, body)?.build()
     }
 
-    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if bytes.len() < MIN_MESSAGE_SIZE {
-            return Err(MessageError::InsufficientData);
+            return Err(Error::InsufficientData);
         }
 
         if EndianSig::try_from(bytes[0])? != NATIVE_ENDIAN_SIG {
-            return Err(MessageError::IncorrectEndian);
+            return Err(Error::IncorrectEndian);
         }
 
-        let primary_header =
-            zvariant::from_slice(bytes, dbus_context!(0)).map_err(MessageError::from)?;
+        let primary_header = zvariant::from_slice(bytes, dbus_context!(0)).map_err(Error::from)?;
         let bytes = bytes.to_vec();
         let fds = Arc::new(RwLock::new(Fds::Raw(vec![])));
         Ok(Self {
@@ -400,9 +296,9 @@ impl Message {
         })
     }
 
-    pub(crate) fn add_bytes(&mut self, bytes: &[u8]) -> Result<(), MessageError> {
+    pub(crate) fn add_bytes(&mut self, bytes: &[u8]) -> Result<()> {
         if bytes.len() > self.bytes_to_completion()? {
-            return Err(MessageError::ExcessData);
+            return Err(Error::ExcessData);
         }
 
         self.bytes.extend(bytes);
@@ -428,7 +324,7 @@ impl Message {
         }
     }
 
-    pub(crate) fn bytes_to_completion(&self) -> Result<usize, MessageError> {
+    pub(crate) fn bytes_to_completion(&self) -> Result<usize> {
         let header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         let body_padding = padding_for_8_bytes(header_len);
         let body_len = self.primary_header().body_len();
@@ -443,15 +339,15 @@ impl Message {
     /// syntax), D-Bus does not. Since this method gives you the signature expected on the wire by
     /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
     /// multiple arguments.
-    pub fn body_signature(&self) -> Result<Signature<'_>, MessageError> {
+    pub fn body_signature(&self) -> Result<Signature<'_>> {
         match self
             .header()?
             .into_fields()
             .into_field(MessageFieldCode::Signature)
-            .ok_or(MessageError::NoBodySignature)?
+            .ok_or(Error::NoBodySignature)?
         {
             MessageField::Signature(signature) => Ok(signature),
-            _ => Err(MessageError::InvalidField),
+            _ => Err(Error::InvalidField),
         }
     }
 
@@ -459,37 +355,36 @@ impl Message {
         &self.primary_header
     }
 
-    pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
+    pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<()>
     where
-        F: FnMut(&mut MessagePrimaryHeader) -> Result<(), MessageError>,
+        F: FnMut(&mut MessagePrimaryHeader) -> Result<()>,
     {
         modifier(&mut self.primary_header)?;
 
         let mut cursor = Cursor::new(&mut self.bytes);
         zvariant::to_writer(&mut cursor, dbus_context!(0), &self.primary_header)
             .map(|_| ())
-            .map_err(MessageError::from)
+            .map_err(Error::from)
     }
 
     /// Deserialize the header.
-    pub fn header(&self) -> Result<MessageHeader<'_>, MessageError> {
-        zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
+    pub fn header(&self) -> Result<MessageHeader<'_>> {
+        zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(Error::from)
     }
 
     /// Deserialize the fields.
-    pub fn fields(&self) -> Result<MessageFields<'_>, MessageError> {
+    pub fn fields(&self) -> Result<MessageFields<'_>> {
         let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
-        zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt)
-            .map_err(MessageError::from)
+        zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
     }
 
     /// Deserialize the body (without checking signature matching).
-    pub fn body_unchecked<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
+    pub fn body_unchecked<'d, 'm: 'd, B>(&'m self) -> Result<B>
     where
         B: serde::de::Deserialize<'d> + Type,
     {
         if self.bytes_to_completion()? != 0 {
-            return Err(MessageError::InsufficientData);
+            return Err(Error::InsufficientData);
         }
 
         let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
@@ -500,18 +395,18 @@ impl Message {
             Some(&self.fds()),
             dbus_context!(0),
         )
-        .map_err(MessageError::from)
+        .map_err(Error::from)
     }
 
     /// Check the signature and deserialize the body.
-    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
+    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B>
     where
         B: serde::de::Deserialize<'d> + Type,
     {
         let mut expected_sig = B::signature();
         let actual_sig = match self.body_signature() {
             Ok(sig) => sig,
-            Err(MessageError::NoBodySignature) => Signature::from_str_unchecked(""),
+            Err(Error::NoBodySignature) => Signature::from_str_unchecked(""),
             Err(e) => return Err(e),
         };
 
@@ -525,7 +420,7 @@ impl Message {
             expected_sig = expected_sig.slice(1..expected_sig.len() - 1);
         }
         if expected_sig != actual_sig.as_str() {
-            return Err(MessageError::UnmatchedBodySignature);
+            return Err(Error::UnmatchedBodySignature);
         }
 
         self.body_unchecked()
@@ -543,10 +438,10 @@ impl Message {
         &self.bytes
     }
 
-    fn fields_len(&self) -> Result<usize, MessageError> {
+    fn fields_len(&self) -> Result<usize> {
         zvariant::from_slice(&self.bytes[FIELDS_LEN_START_OFFSET..], dbus_context!(0))
             .map(|v: u32| v as usize)
-            .map_err(MessageError::from)
+            .map_err(Error::from)
     }
 }
 
@@ -640,7 +535,9 @@ impl fmt::Display for Message {
 
 #[cfg(test)]
 mod tests {
-    use super::{Fds, Message, MessageError};
+    use crate::Error;
+
+    use super::{Fds, Message};
     use std::os::unix::io::AsRawFd;
     use test_env_log::test;
     use zvariant::Fd;
@@ -660,8 +557,8 @@ mod tests {
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
         assert_eq!(*m.fds.read().unwrap(), Fds::Raw(vec![stdout.as_raw_fd()]));
 
-        let body: Result<u32, MessageError> = m.body();
-        assert_eq!(body.unwrap_err(), MessageError::UnmatchedBodySignature);
+        let body: Result<u32, Error> = m.body();
+        assert_eq!(body.unwrap_err(), Error::UnmatchedBodySignature);
 
         assert_eq!(m.to_string(), "Method call do from :1.72");
         let r = Message::method_reply(None, &m, &("all fine!")).unwrap();

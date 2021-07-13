@@ -13,7 +13,7 @@ use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, Error, Guid, Message, MessageError, Result};
+use crate::{azync, Error, Guid, Message, Result};
 
 /// A D-Bus connection.
 ///
@@ -182,7 +182,7 @@ impl Connection {
     ) -> Result<Arc<Message>>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<MessageError>,
+        E: Into<Error>,
     {
         block_on(
             self.inner
@@ -203,7 +203,7 @@ impl Connection {
     ) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<MessageError>,
+        E: Into<Error>,
     {
         block_on(
             self.inner

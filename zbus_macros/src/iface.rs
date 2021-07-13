@@ -217,7 +217,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                             ::std::result::Result::Ok(val) => val,
                             ::std::result::Result::Err(e) => {
                                 return ::std::option::Option::Some(::std::result::Result::Err(
-                                    ::std::convert::Into::into(#zbus::MessageError::Variant(e)),
+                                    ::std::convert::Into::into(#zbus::Error::Variant(e)),
                                 ));
                             }
                         };
