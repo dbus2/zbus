@@ -49,7 +49,11 @@ use std::error::Error;
 use zbus::dbus_proxy;
 use zvariant::Value;
 
-#[dbus_proxy]
+#[dbus_proxy(
+    interface = "org.freedesktop.Notifications",
+    default_service = "org.freedesktop.Notifications",
+    default_path = "/org/freedesktop/Notifications"
+)]
 trait Notifications {
     fn notify(
         &self,
@@ -67,6 +71,7 @@ trait Notifications {
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = zbus::Connection::new_session()?;
 
+    // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
     let proxy = NotificationsProxy::new(&connection)?;
     let reply = proxy.notify(
         "my-app",
