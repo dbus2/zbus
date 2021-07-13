@@ -7,7 +7,7 @@ use core::{
 use crate::{Error, Result, UniqueName, WellKnownName};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
-use zvariant::{derive::Type, OwnedValue, Str, Type, Value};
+use zvariant::{derive::Type, NoneValue, OwnedValue, Str, Type, Value};
 
 /// String that identifies a [bus name].
 ///
@@ -103,6 +103,14 @@ impl PartialEq<str> for BusName<'_> {
 impl PartialEq<&str> for BusName<'_> {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+impl<'name> NoneValue for BusName<'name> {
+    type NoneType = &'name str;
+
+    fn null_value() -> Self::NoneType {
+        <&str>::default()
     }
 }
 
@@ -298,5 +306,13 @@ impl<'de> Deserialize<'de> for OwnedBusName {
 impl PartialEq<&str> for OwnedBusName {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+impl NoneValue for OwnedBusName {
+    type NoneType = <BusName<'static> as NoneValue>::NoneType;
+
+    fn null_value() -> Self::NoneType {
+        BusName::null_value()
     }
 }
