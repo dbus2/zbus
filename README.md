@@ -71,7 +71,7 @@ trait Notifications {
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = zbus::Connection::new_session()?;
 
-    // The Proxy is created by `#[dbus_proxy]` and implements the trait
+    // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
     let proxy = NotificationsProxy::new(&connection)?;
     let reply = proxy.notify(
         "my-app",
