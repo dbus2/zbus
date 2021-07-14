@@ -19,8 +19,8 @@ use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 use crate::{
     azync, fdo,
     fdo::{Introspectable, Peer, Properties},
-    BusName, Connection, Error, InterfaceName, Message, MessageHeader, MessageType, Result,
-    WellKnownName,
+    BusName, Connection, Error, InterfaceName, MemberName, Message, MessageHeader, MessageType,
+    Result, WellKnownName,
 };
 
 scoped_thread_local!(pub(crate) static LOCAL_NODE: Node);
@@ -48,14 +48,19 @@ pub trait Interface: Any {
     fn set(&mut self, property_name: &str, value: &Value<'_>) -> Option<fdo::Result<()>>;
 
     /// Call a `&self` method. Returns `None` if the method doesn't exist.
-    fn call(&self, connection: &Connection, msg: &Message, name: &str) -> Option<Result<u32>>;
+    fn call(
+        &self,
+        connection: &Connection,
+        msg: &Message,
+        name: MemberName<'_>,
+    ) -> Option<Result<u32>>;
 
     /// Call a `&mut self` method. Returns `None` if the method doesn't exist.
     fn call_mut(
         &mut self,
         connection: &Connection,
         msg: &Message,
-        name: &str,
+        name: MemberName<'_>,
     ) -> Option<Result<u32>>;
 
     /// Write introspection XML to the writer, with the given indentation level.
@@ -187,18 +192,20 @@ impl Node {
         xml
     }
 
-    fn emit_signal<'d, 'i, D, I, DE, IE, B>(
+    fn emit_signal<'d, 'i, 'm, D, I, M, DE, IE, ME, B>(
         &self,
         dest: Option<D>,
         interface_name: I,
-        signal_name: &str,
+        signal_name: M,
         body: &B,
     ) -> Result<()>
     where
         D: TryInto<BusName<'d>, Error = DE>,
         I: TryInto<InterfaceName<'i>, Error = IE>,
+        M: TryInto<MemberName<'m>, Error = ME>,
         DE: Into<Error>,
         IE: Into<Error>,
+        ME: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
     {
         if !LOCAL_CONNECTION.is_set() {
@@ -494,17 +501,19 @@ impl ObjectServer {
     /// to bring a node into the current context.
     ///
     /// [`dbus_interface`]: attr.dbus_interface.html
-    pub fn local_node_emit_signal<'d, 'i, D, I, DE, IE, B>(
+    pub fn local_node_emit_signal<'d, 'i, 'm, D, I, M, DE, IE, ME, B>(
         destination: Option<D>,
         interface_name: I,
-        signal_name: &str,
+        signal_name: M,
         body: &B,
     ) -> Result<()>
     where
         D: TryInto<BusName<'d>, Error = DE>,
         I: TryInto<InterfaceName<'i>, Error = IE>,
+        M: TryInto<MemberName<'m>, Error = ME>,
         DE: Into<Error>,
         IE: Into<Error>,
+        ME: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
     {
         if !LOCAL_NODE.is_set() {
@@ -549,8 +558,8 @@ impl ObjectServer {
 
         LOCAL_CONNECTION.set(&conn, || {
             LOCAL_NODE.set(node, || {
-                let res = iface.borrow().call(&conn, msg, member);
-                res.or_else(|| iface.borrow_mut().call_mut(&conn, msg, member))
+                let res = iface.borrow().call(&conn, msg, member.clone());
+                res.or_else(|| iface.borrow_mut().call_mut(&conn, msg, member.clone()))
                     .ok_or_else(|| {
                         fdo::Error::UnknownMethod(format!("Unknown method '{}'", member))
                     })
@@ -727,7 +736,7 @@ mod tests {
 
         fn test_header(&self, #[zbus(header)] header: MessageHeader<'_>) {
             assert_eq!(header.message_type().unwrap(), MessageType::MethodCall);
-            assert_eq!(header.member().unwrap(), Some("TestHeader"));
+            assert_eq!(header.member().unwrap().unwrap(), "TestHeader");
         }
 
         fn test_error(&self) -> zbus::fdo::Result<()> {

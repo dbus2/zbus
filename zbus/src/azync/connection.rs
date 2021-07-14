@@ -40,7 +40,7 @@ use crate::{
     azync::Authenticated,
     fdo,
     raw::{Connection as RawConnection, Socket},
-    BusName, Error, Guid, InterfaceName, Message, MessageType, OwnedUniqueName, Result,
+    BusName, Error, Guid, InterfaceName, MemberName, Message, MessageType, OwnedUniqueName, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -55,26 +55,27 @@ struct SignalInfo<'s, 'p, 'i, 'sig> {
     sender: BusName<'s>,
     path: ObjectPath<'p>,
     interface: InterfaceName<'i>,
-    signal_name: &'sig str,
+    signal_name: MemberName<'sig>,
 }
 
 impl<'s, 'p, 'i, 'sig> SignalInfo<'s, 'p, 'i, 'sig> {
-    fn new<SE, PE, IE>(
+    fn new<SE, PE, IE, ME>(
         sender: impl TryInto<BusName<'s>, Error = SE>,
         path: impl TryInto<ObjectPath<'p>, Error = PE>,
         interface: impl TryInto<InterfaceName<'i>, Error = IE>,
-        signal_name: &'sig str,
+        signal_name: impl TryInto<MemberName<'sig>, Error = ME>,
     ) -> Result<Self>
     where
         SE: Into<Error>,
         PE: Into<Error>,
         IE: Into<Error>,
+        ME: Into<Error>,
     {
         Ok(Self {
             sender: sender.try_into().map_err(Into::into)?,
             path: path.try_into().map_err(Into::into)?,
             interface: interface.try_into().map_err(Into::into)?,
-            signal_name,
+            signal_name: signal_name.try_into().map_err(Into::into)?,
         })
     }
 
@@ -94,7 +95,7 @@ impl<'s, 'p, 'i, 'sig> SignalInfo<'s, 'p, 'i, 'sig> {
         self.sender == FDO_DBUS_SERVICE
             && self.interface == FDO_DBUS_INTERFACE
             && self.path.as_str() == FDO_DBUS_PATH
-            && FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS.contains(&self.signal_name)
+            && FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS.contains(&&*self.signal_name)
     }
 
     fn calc_hash(&self) -> u64 {
@@ -396,12 +397,12 @@ impl Connection {
     ///
     /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
     /// error replies are returned as [`Error::MethodError`].
-    pub async fn call_method<DE, PE, IE, B>(
+    pub async fn call_method<DE, PE, IE, ME, B>(
         &self,
         destination: Option<impl TryInto<BusName<'_>, Error = DE>>,
         path: impl TryInto<ObjectPath<'_>, Error = PE>,
         interface: Option<impl TryInto<InterfaceName<'_>, Error = IE>>,
-        method_name: &str,
+        method_name: impl TryInto<MemberName<'_>, Error = ME>,
         body: &B,
     ) -> Result<Arc<Message>>
     where
@@ -409,6 +410,7 @@ impl Connection {
         DE: Into<Error>,
         PE: Into<Error>,
         IE: Into<Error>,
+        ME: Into<Error>,
     {
         let stream = self.clone();
         let m = Message::method(
@@ -460,12 +462,12 @@ impl Connection {
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub async fn emit_signal<DE, PE, IE, B>(
+    pub async fn emit_signal<DE, PE, IE, ME, B>(
         &self,
         destination: Option<impl TryInto<BusName<'_>, Error = DE>>,
         path: impl TryInto<ObjectPath<'_>, Error = PE>,
         interface: impl TryInto<InterfaceName<'_>, Error = IE>,
-        signal_name: &str,
+        signal_name: impl TryInto<MemberName<'_>, Error = ME>,
         body: &B,
     ) -> Result<()>
     where
@@ -473,6 +475,7 @@ impl Connection {
         DE: Into<Error>,
         PE: Into<Error>,
         IE: Into<Error>,
+        ME: Into<Error>,
     {
         let m = Message::signal(
             self.unique_name(),
@@ -624,17 +627,18 @@ impl Connection {
         (self.inner.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
-    pub(crate) async fn subscribe_signal<SE, PE, IE>(
+    pub(crate) async fn subscribe_signal<SE, PE, IE, ME>(
         &self,
         sender: impl TryInto<BusName<'_>, Error = SE>,
         path: impl TryInto<ObjectPath<'_>, Error = PE>,
         interface: impl TryInto<InterfaceName<'_>, Error = IE>,
-        signal_name: &str,
+        signal_name: impl TryInto<MemberName<'_>, Error = ME>,
     ) -> Result<u64>
     where
         SE: Into<Error>,
         PE: Into<Error>,
         IE: Into<Error>,
+        ME: Into<Error>,
     {
         let signal = SignalInfo::new(sender, path, interface, signal_name)?;
         let hash = signal.calc_hash();
@@ -665,17 +669,18 @@ impl Connection {
         Ok(hash)
     }
 
-    pub(crate) async fn unsubscribe_signal<SE, PE, IE>(
+    pub(crate) async fn unsubscribe_signal<SE, PE, IE, ME>(
         &self,
         sender: impl TryInto<BusName<'_>, Error = SE>,
         path: impl TryInto<ObjectPath<'_>, Error = PE>,
         interface: impl TryInto<InterfaceName<'_>, Error = IE>,
-        signal_name: &str,
+        signal_name: impl TryInto<MemberName<'_>, Error = ME>,
     ) -> Result<bool>
     where
         SE: Into<Error>,
         PE: Into<Error>,
         IE: Into<Error>,
+        ME: Into<Error>,
     {
         let signal = SignalInfo::new(
             sender.try_into().map_err(Into::into)?,

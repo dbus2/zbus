@@ -22,7 +22,8 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 use crate::{
     azync::Connection,
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
-    BusName, Error, InterfaceName, Message, MessageHeader, MessageType, OwnedUniqueName, Result,
+    BusName, Error, InterfaceName, MemberName, Message, MessageHeader, MessageType,
+    OwnedUniqueName, Result,
 };
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
@@ -35,7 +36,7 @@ new_key_type! {
 assert_impl_all!(SignalHandlerId: Send, Sync, Unpin);
 
 struct SignalHandlerInfo {
-    signal_name: &'static str,
+    signal_name: MemberName<'static>,
     handler: SignalHandler,
 }
 
@@ -239,7 +240,11 @@ impl<'a> ProxyInner<'a> {
     }
 
     // panic if dest_unique_name has not been resolved before
-    fn matching_signal<'m>(&self, msg: &'m Message, h: &'m MessageHeader<'m>) -> Option<&'m str> {
+    fn matching_signal<'m>(
+        &self,
+        msg: &'m Message,
+        h: &'m MessageHeader<'m>,
+    ) -> Option<&'m MemberName<'m>> {
         if msg.primary_header().msg_type() != MessageType::Signal {
             return None;
         }
@@ -514,9 +519,14 @@ impl<'a> Proxy<'a> {
     /// allocation/copying, by deserializing the reply to an unowned type).
     ///
     /// [`call`]: struct.Proxy.html#method.call
-    pub async fn call_method<B>(&self, method_name: &str, body: &B) -> Result<Arc<Message>>
+    pub async fn call_method<B, E>(
+        &self,
+        method_name: impl TryInto<MemberName<'_>, Error = E>,
+        body: &B,
+    ) -> Result<Arc<Message>>
     where
         B: serde::ser::Serialize + zvariant::Type,
+        E: Into<Error>,
     {
         self.inner
             .conn
@@ -535,10 +545,15 @@ impl<'a> Proxy<'a> {
     /// Use [`call_method`] instead if you need to deserialize the reply manually/separately.
     ///
     /// [`call_method`]: struct.Proxy.html#method.call_method
-    pub async fn call<B, R>(&self, method_name: &str, body: &B) -> Result<R>
+    pub async fn call<B, R, E>(
+        &self,
+        method_name: impl TryInto<MemberName<'_>, Error = E>,
+        body: &B,
+    ) -> Result<R>
     where
         B: serde::ser::Serialize + zvariant::Type,
         R: serde::de::DeserializeOwned + zvariant::Type,
+        E: Into<Error>,
     {
         let reply = self.call_method(method_name, body).await?;
         // Since we don't keep the reply msg around and user still might use the FDs after this
@@ -555,7 +570,14 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub async fn receive_signal(&self, signal_name: &'static str) -> Result<SignalStream<'a>> {
+    pub async fn receive_signal<E>(
+        &self,
+        signal_name: impl TryInto<MemberName<'static>, Error = E>,
+    ) -> Result<SignalStream<'a>>
+    where
+        E: Into<Error>,
+    {
+        let signal_name = signal_name.try_into().map_err(Into::into)?;
         let subscription_id = if self.inner.conn.is_bus() {
             let id = self
                 .inner
@@ -564,7 +586,7 @@ impl<'a> Proxy<'a> {
                     self.destination(),
                     self.path().clone(),
                     self.interface(),
-                    signal_name,
+                    signal_name.clone(),
                 )
                 .await?;
 
@@ -585,7 +607,7 @@ impl<'a> Proxy<'a> {
                         .ok()
                         .and_then(|m| {
                             m.header()
-                                .map(|h| proxy.matching_signal(m, &h) == Some(signal_name))
+                                .map(|h| proxy.matching_signal(m, &h) == Some(&signal_name))
                                 .ok()
                         })
                         .unwrap_or(false),
@@ -613,24 +635,26 @@ impl<'a> Proxy<'a> {
     /// This method can fail if addition of the relevant match rule on the bus fails. You can
     /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
     /// connection.
-    pub async fn connect_signal<H>(
+    pub async fn connect_signal<H, E>(
         &self,
-        signal_name: &'static str,
+        signal_name: impl TryInto<MemberName<'static>, Error = E>,
         handler: H,
     ) -> fdo::Result<SignalHandlerId>
     where
         for<'msg> H: FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send + 'static,
+        E: Into<Error>,
     {
         // Ensure the stream.
         self.msg_stream().await;
 
+        let signal_name = signal_name.try_into().map_err(Into::into)?;
         let id = self
             .inner
             .sig_handlers
             .lock()
             .await
             .insert(SignalHandlerInfo {
-                signal_name,
+                signal_name: signal_name.clone(),
                 handler: Box::new(handler),
             });
 
@@ -733,7 +757,7 @@ impl<'a> Proxy<'a> {
         let mut handled = false;
         for info in handlers
             .values_mut()
-            .filter(|info| info.signal_name == signal_name)
+            .filter(|info| info.signal_name == *signal_name)
         {
             (*info.handler)(msg).await?;
             handled = true;

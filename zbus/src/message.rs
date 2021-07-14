@@ -11,7 +11,7 @@ use zvariant::{EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
     owned_fd::OwnedFd, utils::padding_for_8_bytes, BusName, EndianSig, Error, InterfaceName,
-    MessageField, MessageFieldCode, MessageFields, MessageHeader, MessagePrimaryHeader,
+    MemberName, MessageField, MessageFieldCode, MessageFields, MessageHeader, MessagePrimaryHeader,
     MessageType, Result, UniqueName, MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE,
 };
 
@@ -134,25 +134,25 @@ where
     fn method(
         sender: Option<UniqueName<'a>>,
         path: ObjectPath<'a>,
-        method_name: &'a str,
+        method_name: MemberName<'a>,
         body: &'a B,
     ) -> Result<Self> {
         Ok(Self::new(MessageType::MethodCall, sender, body)?
             .set_field(MessageField::Path(path))
-            .set_field(MessageField::Member(method_name.into())))
+            .set_field(MessageField::Member(method_name)))
     }
 
     fn signal(
         sender: Option<UniqueName<'a>>,
         path: ObjectPath<'a>,
         iface: InterfaceName<'a>,
-        signal_name: &'a str,
+        signal_name: MemberName<'a>,
         body: &'a B,
     ) -> Result<Self> {
         Ok(Self::new(MessageType::Signal, sender, body)?
             .set_field(MessageField::Path(path))
             .set_field(MessageField::Interface(iface))
-            .set_field(MessageField::Member(signal_name.into())))
+            .set_field(MessageField::Member(signal_name)))
     }
 }
 
@@ -202,12 +202,12 @@ impl Message {
     /// Create a message of type [`MessageType::MethodCall`].
     ///
     /// [`MessageType::MethodCall`]: enum.MessageType.html#variant.MethodCall
-    pub fn method<'s, 'd, 'p, 'i, SE, DE, PE, IE, B>(
+    pub fn method<'s, 'd, 'p, 'i, 'm, SE, DE, PE, IE, ME, B>(
         sender: Option<impl TryInto<UniqueName<'s>, Error = SE>>,
         destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
         path: impl TryInto<ObjectPath<'p>, Error = PE>,
         iface: Option<impl TryInto<InterfaceName<'i>, Error = IE>>,
-        method_name: &str,
+        method_name: impl TryInto<MemberName<'m>, Error = ME>,
         body: &B,
     ) -> Result<Self>
     where
@@ -216,6 +216,7 @@ impl Message {
         DE: Into<Error>,
         PE: Into<Error>,
         IE: Into<Error>,
+        ME: Into<Error>,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -224,7 +225,7 @@ impl Message {
         let mut b = MessageBuilder::method(
             sender,
             path.try_into().map_err(Into::into)?,
-            method_name,
+            method_name.try_into().map_err(Into::into)?,
             body,
         )?;
         if let Some(destination) = destination {
@@ -243,12 +244,12 @@ impl Message {
     /// Create a message of type [`MessageType::Signal`].
     ///
     /// [`MessageType::Signal`]: enum.MessageType.html#variant.Signal
-    pub fn signal<'s, 'd, 'p, 'i, SE, DE, PE, IE, B>(
+    pub fn signal<'s, 'd, 'p, 'i, 'm, SE, DE, PE, IE, ME, B>(
         sender: Option<impl TryInto<UniqueName<'s>, Error = SE>>,
         destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
         path: impl TryInto<ObjectPath<'p>, Error = PE>,
         iface: impl TryInto<InterfaceName<'i>, Error = IE>,
-        signal_name: &str,
+        signal_name: impl TryInto<MemberName<'m>, Error = ME>,
         body: &B,
     ) -> Result<Self>
     where
@@ -257,6 +258,7 @@ impl Message {
         DE: Into<Error>,
         PE: Into<Error>,
         IE: Into<Error>,
+        ME: Into<Error>,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -266,7 +268,7 @@ impl Message {
             sender,
             path.try_into().map_err(Into::into)?,
             iface.try_into().map_err(Into::into)?,
-            signal_name,
+            signal_name.try_into().map_err(Into::into)?,
             body,
         )?;
         if let Some(destination) = destination {

@@ -717,7 +717,7 @@ mod tests {
             while let Ok(msg) = conn_clone.receive_message() {
                 let hdr = msg.header().unwrap();
 
-                if hdr.member().unwrap() == Some("ZBusIssue122") {
+                if hdr.member().unwrap().map(|m| m.as_str()) == Some("ZBusIssue122") {
                     break;
                 }
             }

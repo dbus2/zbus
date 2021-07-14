@@ -9,7 +9,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
     azync::{self, PropertyChangedHandlerId, SignalHandlerId},
-    BusName, Connection, Error, InterfaceName, Message, OwnedUniqueName, Result,
+    BusName, Connection, Error, InterfaceName, MemberName, Message, OwnedUniqueName, Result,
 };
 
 use crate::fdo;
@@ -167,9 +167,14 @@ impl<'a> Proxy<'a> {
     /// allocation/copying, by deserializing the reply to an unowned type).
     ///
     /// [`call`]: struct.Proxy.html#method.call
-    pub fn call_method<B>(&self, method_name: &str, body: &B) -> Result<Arc<Message>>
+    pub fn call_method<'m, B, E>(
+        &self,
+        method_name: impl TryInto<MemberName<'m>, Error = E>,
+        body: &B,
+    ) -> Result<Arc<Message>>
     where
         B: serde::ser::Serialize + zvariant::Type,
+        E: Into<Error>,
     {
         block_on(self.azync.call_method(method_name, body))
     }
@@ -179,10 +184,15 @@ impl<'a> Proxy<'a> {
     /// Use [`call_method`] instead if you need to deserialize the reply manually/separately.
     ///
     /// [`call_method`]: struct.Proxy.html#method.call_method
-    pub fn call<B, R>(&self, method_name: &str, body: &B) -> Result<R>
+    pub fn call<'m, B, R, E>(
+        &self,
+        method_name: impl TryInto<MemberName<'m>, Error = E>,
+        body: &B,
+    ) -> Result<R>
     where
         B: serde::ser::Serialize + zvariant::Type,
         R: serde::de::DeserializeOwned + zvariant::Type,
+        E: Into<Error>,
     {
         block_on(self.azync.call(method_name, body))
     }
@@ -199,13 +209,14 @@ impl<'a> Proxy<'a> {
     /// This method can fail if addition of the relevant match rule on the bus fails. You can
     /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
     /// connection.
-    pub fn connect_signal<H>(
+    pub fn connect_signal<H, E>(
         &self,
-        signal_name: &'static str,
+        signal_name: impl TryInto<MemberName<'static>, Error = E>,
         mut handler: H,
     ) -> fdo::Result<SignalHandlerId>
     where
         H: FnMut(&Message) -> Result<()> + Send + 'static,
+        E: Into<Error>,
     {
         block_on(
             self.azync

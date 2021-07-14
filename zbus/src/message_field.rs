@@ -9,7 +9,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
 use zvariant::{derive::Type, ObjectPath, Signature, Str, Type, Value};
 
-use crate::{BusName, InterfaceName, UniqueName};
+use crate::{BusName, InterfaceName, MemberName, UniqueName};
 
 /// The message field code.
 ///
@@ -102,7 +102,7 @@ pub enum MessageField<'f> {
     /// The interface to invoke a method call on, or that a signal is emitted from.
     Interface(InterfaceName<'f>),
     /// The member, either the method name or signal name.
-    Member(Str<'f>),
+    Member(MemberName<'f>),
     /// The name of the error that occurred, for errors
     ErrorName(Str<'f>),
     /// The serial number of the message this message is a reply to.
@@ -164,7 +164,7 @@ impl<'de: 'f, 'f> Deserialize<'de> for MessageField<'f> {
                 MessageField::Interface(InterfaceName::try_from(value).map_err(D::Error::custom)?)
             }
             MessageFieldCode::Member => {
-                MessageField::Member(Str::try_from(value).map_err(D::Error::custom)?)
+                MessageField::Member(MemberName::try_from(value).map_err(D::Error::custom)?)
             }
             MessageFieldCode::ErrorName => MessageField::ErrorName(
                 Str::try_from(value)

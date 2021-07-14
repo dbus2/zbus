@@ -217,7 +217,7 @@ fn test_interface() {
         let c = zbus::Connection::new_session().unwrap();
         let m = zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
             .unwrap();
-        let _ = t.call(&c, &m, "StrU32").unwrap();
+        let _ = t.call(&c, &m, "StrU32".try_into().unwrap()).unwrap();
         t.signal(23, "ergo sum").unwrap();
     }
 }

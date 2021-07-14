@@ -9,7 +9,8 @@ use static_assertions::assert_impl_all;
 use zvariant::{derive::Type, ObjectPath, Signature};
 
 use crate::{
-    BusName, Error, InterfaceName, MessageField, MessageFieldCode, MessageFields, UniqueName,
+    BusName, Error, InterfaceName, MemberName, MessageField, MessageFieldCode, MessageFields,
+    UniqueName,
 };
 
 pub(crate) const PRIMARY_HEADER_SIZE: usize = 12;
@@ -339,8 +340,8 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// The member, either the method name or signal name.
-    pub fn member<'s>(&'s self) -> Result<Option<&'s str>, Error> {
-        get_field_str!(self, Member)
+    pub fn member<'s>(&'s self) -> Result<Option<&MemberName<'m>>, Error> {
+        get_field!(self, Member)
     }
 
     /// The name of the error that occurred, for errors.
@@ -377,8 +378,8 @@ impl<'m> MessageHeader<'m> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        InterfaceName, MessageField, MessageFields, MessageHeader, MessagePrimaryHeader,
-        MessageType,
+        InterfaceName, MemberName, MessageField, MessageFields, MessageHeader,
+        MessagePrimaryHeader, MessageType,
     };
 
     use std::{
@@ -393,17 +394,18 @@ mod tests {
     fn header() -> Result<(), Box<dyn Error>> {
         let path = ObjectPath::try_from("/some/path")?;
         let iface = InterfaceName::try_from("some.interface")?;
+        let member = MemberName::try_from("Member")?;
         let mut f = MessageFields::new();
         f.add(MessageField::Path(path.clone()));
         f.add(MessageField::Interface(iface.clone()));
-        f.add(MessageField::Member("Member".into()));
+        f.add(MessageField::Member(member.clone()));
         f.add(MessageField::Sender(":1.84".try_into()?));
         let h = MessageHeader::new(MessagePrimaryHeader::new(MessageType::Signal, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::Signal);
         assert_eq!(h.path()?, Some(&path));
         assert_eq!(h.interface()?, Some(&iface));
-        assert_eq!(h.member()?, Some("Member"));
+        assert_eq!(h.member()?, Some(&member));
         assert_eq!(h.error_name()?, None);
         assert_eq!(h.destination()?, None);
         assert_eq!(h.reply_serial()?, None);

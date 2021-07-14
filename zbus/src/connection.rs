@@ -13,7 +13,9 @@ use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, BusName, Error, Guid, InterfaceName, Message, OwnedUniqueName, Result};
+use crate::{
+    azync, BusName, Error, Guid, InterfaceName, MemberName, Message, OwnedUniqueName, Result,
+};
 
 /// A D-Bus connection.
 ///
@@ -172,12 +174,12 @@ impl Connection {
     ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     /// [`MethodError`]: enum.Error.html#variant.MethodError
-    pub fn call_method<'d, 'p, 'i, DE, PE, IE, B>(
+    pub fn call_method<'d, 'p, 'i, 'm, DE, PE, IE, ME, B>(
         &self,
         destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
         path: impl TryInto<ObjectPath<'p>, Error = PE>,
         iface: Option<impl TryInto<InterfaceName<'i>, Error = IE>>,
-        method_name: &str,
+        method_name: impl TryInto<MemberName<'m>, Error = ME>,
         body: &B,
     ) -> Result<Arc<Message>>
     where
@@ -185,6 +187,7 @@ impl Connection {
         DE: Into<Error>,
         PE: Into<Error>,
         IE: Into<Error>,
+        ME: Into<Error>,
     {
         block_on(
             self.inner
@@ -195,12 +198,12 @@ impl Connection {
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub fn emit_signal<'d, 'p, 'i, DE, PE, IE, B>(
+    pub fn emit_signal<'d, 'p, 'i, 'm, DE, PE, IE, ME, B>(
         &self,
         destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
         path: impl TryInto<ObjectPath<'p>, Error = PE>,
         iface: impl TryInto<InterfaceName<'i>, Error = IE>,
-        signal_name: &str,
+        signal_name: impl TryInto<MemberName<'m>, Error = ME>,
         body: &B,
     ) -> Result<()>
     where
@@ -208,6 +211,7 @@ impl Connection {
         DE: Into<Error>,
         PE: Into<Error>,
         IE: Into<Error>,
+        ME: Into<Error>,
     {
         block_on(
             self.inner

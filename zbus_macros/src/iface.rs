@@ -339,9 +339,9 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &self,
                 c: &#zbus::Connection,
                 m: &#zbus::Message,
-                name: &str,
+                name: #zbus::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
-                match name {
+                match name.as_str() {
                     #call_dispatch
                     _ => ::std::option::Option::None,
                 }
@@ -351,9 +351,9 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &mut self,
                 c: &#zbus::Connection,
                 m: &#zbus::Message,
-                name: &str,
+                name: #zbus::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
-                match name {
+                match name.as_str() {
                     #call_mut_dispatch
                     _ => ::std::option::Option::None,
                 }
