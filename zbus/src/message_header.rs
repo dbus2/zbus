@@ -8,7 +8,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
 use zvariant::{derive::Type, ObjectPath, Signature};
 
-use crate::{Error, MessageField, MessageFieldCode, MessageFields};
+use crate::{BusName, Error, MessageField, MessageFieldCode, MessageFields, UniqueName};
 
 pub(crate) const PRIMARY_HEADER_SIZE: usize = 12;
 pub(crate) const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
@@ -352,13 +352,13 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// The name of the connection this message is intended for.
-    pub fn destination<'s>(&'s self) -> Result<Option<&'s str>, Error> {
-        get_field_str!(self, Destination)
+    pub fn destination<'s>(&'s self) -> Result<Option<&BusName<'m>>, Error> {
+        get_field!(self, Destination)
     }
 
     /// Unique name of the sending connection.
-    pub fn sender<'s>(&'s self) -> Result<Option<&'s str>, Error> {
-        get_field_str!(self, Sender)
+    pub fn sender<'s>(&'s self) -> Result<Option<&UniqueName<'s>>, Error> {
+        get_field!(self, Sender)
     }
 
     /// The signature of the message body.
@@ -376,7 +376,11 @@ impl<'m> MessageHeader<'m> {
 mod tests {
     use crate::{MessageField, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType};
 
-    use std::{convert::TryFrom, error::Error, result::Result};
+    use std::{
+        convert::{TryFrom, TryInto},
+        error::Error,
+        result::Result,
+    };
     use test_env_log::test;
     use zvariant::{ObjectPath, Signature};
 
@@ -387,7 +391,7 @@ mod tests {
         f.add(MessageField::Path(path.clone()));
         f.add(MessageField::Interface("some.interface".into()));
         f.add(MessageField::Member("Member".into()));
-        f.add(MessageField::Sender(":1.84".into()));
+        f.add(MessageField::Sender(":1.84".try_into()?));
         let h = MessageHeader::new(MessagePrimaryHeader::new(MessageType::Signal, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::Signal);
@@ -397,13 +401,13 @@ mod tests {
         assert_eq!(h.error_name()?, None);
         assert_eq!(h.destination()?, None);
         assert_eq!(h.reply_serial()?, None);
-        assert_eq!(h.sender()?, Some(":1.84"));
+        assert_eq!(h.sender()?.unwrap(), ":1.84");
         assert_eq!(h.signature()?, None);
         assert_eq!(h.unix_fds()?, None);
 
         let mut f = MessageFields::new();
         f.add(MessageField::ErrorName("org.zbus.Error".into()));
-        f.add(MessageField::Destination(":1.11".into()));
+        f.add(MessageField::Destination(":1.11".try_into()?));
         f.add(MessageField::ReplySerial(88));
         f.add(MessageField::Signature(Signature::from_str_unchecked(
             "say",
@@ -416,7 +420,7 @@ mod tests {
         assert_eq!(h.interface()?, None);
         assert_eq!(h.member()?, None);
         assert_eq!(h.error_name()?, Some("org.zbus.Error"));
-        assert_eq!(h.destination()?, Some(":1.11"));
+        assert_eq!(h.destination()?.unwrap(), ":1.11");
         assert_eq!(h.reply_serial()?, Some(88));
         assert_eq!(h.sender()?, None);
         assert_eq!(h.signature()?, Some(&Signature::from_str_unchecked("say")));

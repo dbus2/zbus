@@ -9,7 +9,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
     azync::{self, PropertyChangedHandlerId, SignalHandlerId},
-    Connection, Error, Message, Result,
+    BusName, Connection, Error, Message, OwnedUniqueName, Result,
 };
 
 use crate::fdo;
@@ -65,14 +65,15 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
-    pub fn new<E>(
+    pub fn new<DE, PE>(
         conn: &Connection,
-        destination: &'a str,
-        path: impl TryInto<ObjectPath<'a>, Error = E>,
+        destination: impl TryInto<BusName<'a>, Error = DE>,
+        path: impl TryInto<ObjectPath<'a>, Error = PE>,
         interface: &'a str,
     ) -> Result<Self>
     where
-        E: Into<Error>,
+        DE: Into<Error>,
+        PE: Into<Error>,
     {
         let proxy = block_on(azync::Proxy::new(
             conn.inner(),
@@ -89,14 +90,15 @@ impl<'a> Proxy<'a> {
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
     /// passed arguments.
-    pub fn new_owned<E>(
+    pub fn new_owned<DE, PE>(
         conn: Connection,
-        destination: String,
-        path: impl TryInto<ObjectPath<'static>, Error = E>,
+        destination: impl TryInto<BusName<'static>, Error = DE>,
+        path: impl TryInto<ObjectPath<'static>, Error = PE>,
         interface: String,
     ) -> Result<Self>
     where
-        E: Into<Error>,
+        DE: Into<Error>,
+        PE: Into<Error>,
     {
         let proxy = block_on(azync::Proxy::new_owned(
             conn.clone().into_inner(),
@@ -114,7 +116,7 @@ impl<'a> Proxy<'a> {
     }
 
     /// Get a reference to the destination service name.
-    pub fn destination(&self) -> &str {
+    pub fn destination(&self) -> &BusName<'_> {
         self.azync.destination()
     }
 
@@ -303,7 +305,7 @@ impl<'a> Proxy<'a> {
         self.azync
     }
 
-    pub(crate) fn destination_unique_name(&self) -> Result<&str> {
+    pub(crate) fn destination_unique_name(&self) -> Result<&OwnedUniqueName> {
         block_on(self.azync.destination_unique_name())
     }
 }
@@ -325,10 +327,13 @@ impl<'a> From<azync::Proxy<'a>> for Proxy<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::{BusName, UniqueName};
+
     use super::*;
     use ntest::timeout;
     use std::sync::atomic::{AtomicBool, Ordering};
     use test_env_log::test;
+    use zvariant::Optional;
 
     #[test]
     #[timeout(15000)]
@@ -346,12 +351,16 @@ mod tests {
             let signaled = owner_change_signaled.clone();
             proxy
                 .connect_signal("NameOwnerChanged", move |m| {
-                    let (name, _, new_owner) = m.body::<(&str, &str, &str)>()?;
+                    let (name, _, new_owner) = m.body::<(
+                        BusName<'_>,
+                        Optional<UniqueName<'_>>,
+                        Optional<UniqueName<'_>>,
+                    )>()?;
                     if name != well_known {
                         // Meant for the other testcase then
                         return Ok(());
                     }
-                    assert_eq!(new_owner, unique_name);
+                    assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
                     signaled.store(true, Ordering::Release);
 
                     Ok(())
@@ -375,7 +384,10 @@ mod tests {
 
         fdo::DBusProxy::new(&conn)
             .unwrap()
-            .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+            .request_name(
+                well_known.try_into().unwrap(),
+                fdo::RequestNameFlags::ReplaceExisting.into(),
+            )
             .unwrap();
 
         let h = proxy

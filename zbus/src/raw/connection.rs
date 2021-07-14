@@ -143,7 +143,7 @@ impl<S: Socket> Connection<S> {
                     }
                     Err(e) => {
                         // the message is invalid, return the error
-                        return Err(e.into());
+                        return Err(e);
                     }
                 }
             }
@@ -210,7 +210,15 @@ mod tests {
         let mut conn0 = Connection::wrap(p0);
         let mut conn1 = Connection::wrap(p1);
 
-        let msg = Message::method(None, None, "/", Some("org.zbus.p2p"), "Test", &()).unwrap();
+        let msg = Message::method(
+            None::<()>,
+            None::<()>,
+            "/",
+            Some("org.zbus.p2p"),
+            "Test",
+            &(),
+        )
+        .unwrap();
 
         conn0.enqueue_message(msg);
         conn0.try_flush().unwrap();

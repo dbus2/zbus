@@ -373,7 +373,7 @@ actually getting set:
 let conn_clone = conn.clone();
 client.connect_location_updated(move |_old, new| {
     let location = LocationProxy::builder(&conn_clone)
-        .destination("org.freedesktop.GeoClue2")
+        .destination("org.freedesktop.GeoClue2")?
         .path(new.as_str())?
         .build()
         .unwrap();
@@ -387,7 +387,7 @@ client.connect_location_updated(move |_old, new| {
 }).unwrap();
 
 let props = zbus::fdo::PropertiesProxy::builder(&conn)
-    .destination("org.freedesktop.GeoClue2")
+    .destination("org.freedesktop.GeoClue2").unwrap()
     .path(client.path()).unwrap()
     .build()
     .unwrap();

@@ -173,7 +173,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             method.block = parse_quote!({
                 #zbus::ObjectServer::local_node_emit_signal(
-                    ::std::option::Option::None,
+                    ::std::option::Option::None::<()>,
                     #iface_name,
                     #member_name,
                     &(#args),

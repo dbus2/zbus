@@ -5,13 +5,13 @@ use futures_core::future::BoxFuture;
 use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
-use crate::{azync, Error, Result};
+use crate::{azync, BusName, Error, Result};
 
 /// Builder for proxies.
 #[derive(Debug)]
 pub struct ProxyBuilder<'a, T = ()> {
     conn: azync::Connection,
-    destination: Option<Cow<'a, str>>,
+    destination: Option<BusName<'a>>,
     path: Option<ObjectPath<'a>>,
     interface: Option<Cow<'a, str>>,
     proxy_type: PhantomData<T>,
@@ -52,9 +52,13 @@ impl<'a, T> ProxyBuilder<'a, T> {
 
 impl<'a, T> ProxyBuilder<'a, T> {
     /// Set the proxy destination address.
-    pub fn destination<D: Into<Cow<'a, str>>>(mut self, destination: D) -> Self {
-        self.destination = Some(destination.into());
-        self
+    pub fn destination<E, D>(mut self, destination: D) -> Result<Self>
+    where
+        D: TryInto<BusName<'a>, Error = E>,
+        E: Into<Error>,
+    {
+        self.destination = Some(destination.try_into().map_err(Into::into)?);
+        Ok(self)
     }
 
     /// Set the proxy path.
@@ -131,7 +135,7 @@ where
     {
         Self {
             conn: conn.clone().into(),
-            destination: Some(T::DESTINATION.into()),
+            destination: Some(T::DESTINATION.try_into().expect("invalid bus name")),
             path: Some(T::PATH.try_into().expect("invalid default path")),
             interface: Some(T::INTERFACE.into()),
             cache: true,
@@ -165,16 +169,17 @@ mod tests {
 
         let builder = ProxyBuilder::<azync::Proxy<'_>>::new_bare(&conn)
             .destination("org.freedesktop.DBus")
+            .unwrap()
             .path("/some/path")
             .unwrap()
             .interface("org.freedesktop.Interface")
             .cache_properties(false);
         assert!(matches!(
             builder.clone().destination.unwrap(),
-            Cow::Borrowed(_)
+            BusName::Unique(_),
         ));
         let proxy = builder.build().unwrap();
-        assert!(matches!(proxy.inner.destination, Cow::Borrowed(_)));
+        assert!(matches!(proxy.inner.destination, BusName::Unique(_)));
         assert!(matches!(proxy.inner.interface, Cow::Borrowed(_)));
     }
 }

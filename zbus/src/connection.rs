@@ -13,7 +13,7 @@ use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, Error, Guid, Message, Result};
+use crate::{azync, BusName, Error, Guid, Message, OwnedUniqueName, Result};
 
 /// A D-Bus connection.
 ///
@@ -138,7 +138,7 @@ impl Connection {
     }
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
-    pub fn unique_name(&self) -> Option<&str> {
+    pub fn unique_name(&self) -> Option<&OwnedUniqueName> {
         self.inner.unique_name()
     }
 
@@ -172,17 +172,18 @@ impl Connection {
     ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     /// [`MethodError`]: enum.Error.html#variant.MethodError
-    pub fn call_method<'p, B, E>(
+    pub fn call_method<'d, 'p, DE, PE, B>(
         &self,
-        destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'p>, Error = E>,
+        destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
+        path: impl TryInto<ObjectPath<'p>, Error = PE>,
         iface: Option<&str>,
         method_name: &str,
         body: &B,
     ) -> Result<Arc<Message>>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<Error>,
+        DE: Into<Error>,
+        PE: Into<Error>,
     {
         block_on(
             self.inner
@@ -193,17 +194,18 @@ impl Connection {
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub fn emit_signal<'p, B, E>(
+    pub fn emit_signal<'d, 'p, DE, PE, B>(
         &self,
-        destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'p>, Error = E>,
+        destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
+        path: impl TryInto<ObjectPath<'p>, Error = PE>,
         iface: &str,
         signal_name: &str,
         body: &B,
     ) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<Error>,
+        DE: Into<Error>,
+        PE: Into<Error>,
     {
         block_on(
             self.inner
@@ -283,7 +285,7 @@ mod tests {
         let server_thread = thread::spawn(move || {
             let c = Connection::new_unix_server(p0, &guid).unwrap();
             let reply = c
-                .call_method(None, "/", Some("org.zbus.p2p"), "Test", &())
+                .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
                 .unwrap();
             assert_eq!(reply.to_string(), "Method return");
             let val: String = reply.body().unwrap();

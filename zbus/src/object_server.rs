@@ -19,7 +19,7 @@ use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 use crate::{
     azync, fdo,
     fdo::{Introspectable, Peer, Properties},
-    Connection, Error, Message, MessageHeader, MessageType, Result,
+    BusName, Connection, Error, Message, MessageHeader, MessageType, Result, WellKnownName,
 };
 
 scoped_thread_local!(pub(crate) static LOCAL_NODE: Node);
@@ -183,14 +183,16 @@ impl Node {
         xml
     }
 
-    fn emit_signal<B>(
+    fn emit_signal<'d, D, E, B>(
         &self,
-        dest: Option<&str>,
+        dest: Option<D>,
         iface: &str,
         signal_name: &str,
         body: &B,
     ) -> Result<()>
     where
+        D: TryInto<BusName<'d>, Error = E>,
+        E: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
     {
         if !LOCAL_CONNECTION.is_set() {
@@ -269,7 +271,7 @@ pub struct ObjectServer {
     root: Node,
     #[derivative(Debug = "ignore")]
     msg_stream: azync::Connection,
-    registered_names: HashSet<String>,
+    registered_names: HashSet<WellKnownName<'static>>,
 }
 
 assert_impl_all!(ObjectServer: Unpin);
@@ -296,13 +298,18 @@ impl ObjectServer {
     /// since that is the most typical case. If that is not what you want, you should use
     /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
     /// **after** instantiating the `ObjectServer`).
-    pub fn request_name(mut self, well_known_name: &str) -> Result<Self> {
+    pub fn request_name<'w, W, E>(mut self, well_known_name: W) -> Result<Self>
+    where
+        W: TryInto<WellKnownName<'w>, Error = E>,
+        E: Into<Error>,
+    {
+        let well_known_name = well_known_name.try_into().map_err(Into::into)?;
         DBusProxy::new(&self.conn)?.request_name(
-            well_known_name,
+            well_known_name.clone(),
             RequestNameFlags::ReplaceExisting | RequestNameFlags::DoNotQueue,
         )?;
 
-        self.registered_names.insert(well_known_name.to_string());
+        self.registered_names.insert(well_known_name.to_owned());
 
         Ok(self)
     }
@@ -315,8 +322,14 @@ impl ObjectServer {
     /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
     /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
     /// was not previously registered or already deregistered.
-    pub fn release_name(&mut self, well_known_name: &str) -> Result<bool> {
-        if !self.registered_names.remove(well_known_name) {
+    pub fn release_name<'w, W, E>(&mut self, well_known_name: W) -> Result<bool>
+    where
+        W: TryInto<WellKnownName<'w>, Error = E>,
+        E: Into<Error>,
+    {
+        let well_known_name: WellKnownName<'w> = well_known_name.try_into().map_err(Into::into)?;
+        // FIXME: Should be possible to avoid cloning/allocation here.
+        if !self.registered_names.remove(&well_known_name.to_owned()) {
             return Ok(false);
         }
 
@@ -474,13 +487,15 @@ impl ObjectServer {
     /// to bring a node into the current context.
     ///
     /// [`dbus_interface`]: attr.dbus_interface.html
-    pub fn local_node_emit_signal<B>(
-        destination: Option<&str>,
+    pub fn local_node_emit_signal<'d, D, E, B>(
+        destination: Option<D>,
         iface: &str,
         signal_name: &str,
         body: &B,
     ) -> Result<()>
     where
+        D: TryInto<BusName<'d>, Error = E>,
+        E: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
     {
         if !LOCAL_NODE.is_set() {
@@ -604,7 +619,7 @@ impl Drop for ObjectServer {
         // FIXME: Ignoring the errors here and on the method call, they should be logged.
         if let Ok(proxy) = DBusProxy::new(&self.conn) {
             for name in &self.registered_names {
-                let _ = proxy.release_name(name);
+                let _ = proxy.release_name(name.clone());
             }
         }
     }
@@ -616,6 +631,7 @@ mod tests {
     use std::{
         cell::Cell,
         collections::HashMap,
+        convert::TryInto,
         error::Error,
         rc::Rc,
         sync::mpsc::{channel, Sender},
@@ -782,13 +798,13 @@ mod tests {
     fn my_iface_test(tx: Sender<()>) -> std::result::Result<u32, Box<dyn Error>> {
         let conn = Connection::new_session()?;
         let proxy = MyIfaceProxy::builder(&conn)
-            .destination("org.freedesktop.MyService")
+            .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
             // the server isn't yet running
             .cache_properties(false)
             .build()?;
         let props_proxy = zbus::fdo::PropertiesProxy::builder(&conn)
-            .destination("org.freedesktop.MyService")
+            .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
             .build()?;
 
@@ -850,7 +866,7 @@ mod tests {
 
         proxy.create_obj("MyObj")?;
         let my_obj_proxy = MyIfaceProxy::builder(&conn)
-            .destination("org.freedesktop.MyService")
+            .destination("org.freedesktop.MyService")?
             .path("/zbus/test/MyObj")?
             .build()?;
         my_obj_proxy.ping()?;
@@ -933,13 +949,16 @@ mod tests {
 
         // Let's ensure all names were released.
         let proxy = zbus::fdo::DBusProxy::new(&conn).unwrap();
-        assert_eq!(proxy.name_has_owner("org.freedesktop.MyService"), Ok(false));
         assert_eq!(
-            proxy.name_has_owner("org.freedesktop.MyService.foo"),
+            proxy.name_has_owner("org.freedesktop.MyService".try_into().unwrap()),
             Ok(false)
         );
         assert_eq!(
-            proxy.name_has_owner("org.freedesktop.MyService.bar"),
+            proxy.name_has_owner("org.freedesktop.MyService.foo".try_into().unwrap()),
+            Ok(false)
+        );
+        assert_eq!(
+            proxy.name_has_owner("org.freedesktop.MyService.bar".try_into().unwrap()),
             Ok(false)
         );
     }

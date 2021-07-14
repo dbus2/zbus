@@ -23,7 +23,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 use crate::{
     azync::Connection,
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
-    Error, Message, MessageHeader, MessageType, Result,
+    BusName, Error, Message, MessageHeader, MessageType, OwnedUniqueName, Result,
 };
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
@@ -138,10 +138,10 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 #[derivative(Debug)]
 pub(crate) struct ProxyInner<'a> {
     pub(crate) conn: Connection,
-    pub(crate) destination: Cow<'a, str>,
+    pub(crate) destination: BusName<'a>,
     pub(crate) path: ObjectPath<'a>,
     pub(crate) interface: Cow<'a, str>,
-    dest_unique_name: OnceCell<String>,
+    dest_unique_name: OnceCell<OwnedUniqueName>,
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
     #[derivative(Debug = "ignore")]
@@ -224,7 +224,7 @@ impl<'a> ProxyProperties<'a> {
 impl<'a> ProxyInner<'a> {
     pub(crate) fn new(
         conn: Connection,
-        destination: Cow<'a, str>,
+        destination: BusName<'a>,
         path: ObjectPath<'a>,
         interface: Cow<'a, str>,
     ) -> Self {
@@ -258,17 +258,18 @@ impl<'a> ProxyInner<'a> {
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
-    pub async fn new<E>(
+    pub async fn new<DE, PE>(
         conn: &Connection,
-        destination: &'a str,
-        path: impl TryInto<ObjectPath<'a>, Error = E>,
+        destination: impl TryInto<BusName<'a>, Error = DE>,
+        path: impl TryInto<ObjectPath<'a>, Error = PE>,
         interface: &'a str,
     ) -> Result<Proxy<'a>>
     where
-        E: Into<Error>,
+        DE: Into<Error>,
+        PE: Into<Error>,
     {
         crate::ProxyBuilder::new_bare(conn)
-            .destination(destination)
+            .destination(destination)?
             .path(path)?
             .interface(interface)
             .build_async()
@@ -277,17 +278,18 @@ impl<'a> Proxy<'a> {
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
     /// passed arguments.
-    pub async fn new_owned<E>(
+    pub async fn new_owned<DE, PE>(
         conn: Connection,
-        destination: String,
-        path: impl TryInto<ObjectPath<'static>, Error = E>,
+        destination: impl TryInto<BusName<'static>, Error = DE>,
+        path: impl TryInto<ObjectPath<'static>, Error = PE>,
         interface: String,
     ) -> Result<Proxy<'a>>
     where
-        E: Into<Error>,
+        DE: Into<Error>,
+        PE: Into<Error>,
     {
         crate::ProxyBuilder::new_bare(&conn)
-            .destination(destination)
+            .destination(destination)?
             .path(path)?
             .interface(interface)
             .build_async()
@@ -352,7 +354,7 @@ impl<'a> Proxy<'a> {
     }
 
     /// Get a reference to the destination service name.
-    pub fn destination(&self) -> &str {
+    pub fn destination(&self) -> &BusName<'_> {
         &self.inner.destination
     }
 
@@ -371,7 +373,7 @@ impl<'a> Proxy<'a> {
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
         let proxy = AsyncIntrospectableProxy::builder(&self.inner.conn)
-            .destination(self.inner.destination.as_ref())
+            .destination(&self.inner.destination)?
             .path(&self.inner.path)?
             .build()?;
 
@@ -384,7 +386,9 @@ impl<'a> Proxy<'a> {
             Some(proxy) => Ok(proxy),
             None => {
                 let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
+                    // Safe because already checked earlier
                     .destination(self.inner.destination.to_string())
+                    .unwrap()
                     // Safe because already checked earlier
                     .path(self.inner.path.to_owned())
                     .unwrap()
@@ -745,20 +749,21 @@ impl<'a> Proxy<'a> {
     /// the message. While in most cases this will not be a problem, it becomes a problem if you
     /// need to communicate with multiple services exposing the same interface, over the same
     /// connection. Hence the need for this method.
-    pub(crate) async fn destination_unique_name(&self) -> Result<&str> {
+    pub(crate) async fn destination_unique_name(&self) -> Result<&OwnedUniqueName> {
         if let Some(name) = self.inner.dest_unique_name.get() {
             // Already resolved the name.
             return Ok(name);
         }
 
         let destination = &self.inner.destination;
-        let unique_name = if destination.starts_with(':') || destination == "org.freedesktop.DBus" {
-            destination.to_string()
-        } else {
-            fdo::AsyncDBusProxy::new(&self.inner.conn)
-                .await?
-                .get_name_owner(destination)
-                .await?
+        let unique_name = match destination {
+            BusName::Unique(name) => name.to_owned().into(),
+            BusName::WellKnown(_) => {
+                fdo::AsyncDBusProxy::new(&self.inner.conn)
+                    .await?
+                    .get_name_owner(destination.clone())
+                    .await?
+            }
         };
         self.inner
             .dest_unique_name
@@ -839,12 +844,15 @@ impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::UniqueName;
+
     use super::*;
     use async_io::block_on;
     use futures_util::future::FutureExt;
     use ntest::timeout;
     use std::{future::ready, sync::Arc};
     use test_env_log::test;
+    use zvariant::Optional;
 
     #[test]
     #[timeout(15000)]
@@ -865,15 +873,22 @@ mod tests {
             .receive_signal("NameOwnerChanged")
             .await?
             .filter(|msg| {
-                if let Ok((name, _, new_owner)) = msg.body::<(&str, &str, &str)>() {
-                    return ready(new_owner == unique_name && name == well_known);
+                if let Ok((name, _, new_owner)) = msg.body::<(
+                    BusName<'_>,
+                    Optional<UniqueName<'_>>,
+                    Optional<UniqueName<'_>>,
+                )>() {
+                    ready(match &*new_owner {
+                        Some(new_owner) => *new_owner == *unique_name && name == well_known,
+                        None => false,
+                    })
+                } else {
+                    ready(false)
                 }
-
-                ready(false)
             });
 
         let name_acquired_stream = proxy.receive_signal("NameAcquired").await?.filter(|msg| {
-            if let Ok(name) = msg.body::<&str>() {
+            if let Ok(name) = msg.body::<BusName<'_>>() {
                 return ready(name == well_known);
             }
 
@@ -890,7 +905,10 @@ mod tests {
                 });
 
         let reply = proxy
-            .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+            .request_name(
+                well_known.try_into()?,
+                fdo::RequestNameFlags::ReplaceExisting.into(),
+            )
             .await?;
         assert_eq!(reply, fdo::RequestNameReply::PrimaryOwner);
 
@@ -900,9 +918,15 @@ mod tests {
         );
 
         let changed_signal = changed_signal.0.unwrap();
-        let (acquired_name, _, new_owner) = changed_signal.body::<(&str, &str, &str)>().unwrap();
+        let (acquired_name, _, new_owner) = changed_signal
+            .body::<(
+                BusName<'_>,
+                Optional<UniqueName<'_>>,
+                Optional<UniqueName<'_>>,
+            )>()
+            .unwrap();
         assert_eq!(acquired_name, well_known);
-        assert_eq!(new_owner, unique_name);
+        assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
 
         let acquired_signal = acquired_signal.0.unwrap();
         assert_eq!(acquired_signal.body::<&str>().unwrap(), well_known);
@@ -926,7 +950,7 @@ mod tests {
 
         let proxy = fdo::AsyncDBusProxy::new(&conn).await?;
         let well_known = "org.freedesktop.zbus.async.ProxySignalConnectTest";
-        let unique_name = conn.unique_name().unwrap().to_string();
+        let unique_name = conn.unique_name().unwrap().clone();
         let name_owner_changed_id = {
             let signaled = owner_change_signaled.clone();
 
@@ -936,12 +960,16 @@ mod tests {
                     let unique_name = unique_name.clone();
 
                     async move {
-                        let (name, _, new_owner) = m.body::<(&str, &str, &str)>()?;
+                        let (name, _, new_owner) = m.body::<(
+                            BusName<'_>,
+                            Optional<UniqueName<'_>>,
+                            Optional<UniqueName<'_>>,
+                        )>()?;
                         if name != well_known {
                             // Meant for the other testcase then
                             return Ok(());
                         }
-                        assert_eq!(new_owner, unique_name);
+                        assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
                         *signaled.lock().await = true;
 
                         Ok(())
@@ -991,7 +1019,10 @@ mod tests {
         };
 
         fdo::DBusProxy::new(&crate::Connection::from(conn))?
-            .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+            .request_name(
+                well_known.try_into()?,
+                fdo::RequestNameFlags::ReplaceExisting.into(),
+            )
             .unwrap();
 
         loop {

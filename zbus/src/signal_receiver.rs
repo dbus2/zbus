@@ -1,4 +1,4 @@
-use crate::{Connection, Error, MessageHeader, Proxy, Result};
+use crate::{Connection, Error, MessageHeader, Proxy, Result, UniqueName};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::Cow,
@@ -11,7 +11,7 @@ use zvariant::ObjectPath;
 #[derive(Hash, Eq, PartialEq)]
 struct ProxyKey<'key> {
     interface: Cow<'key, str>,
-    destination: Cow<'key, str>,
+    destination: UniqueName<'key>,
     path: ObjectPath<'key>,
 }
 
@@ -26,12 +26,11 @@ where
             path: proxy.path().to_owned(),
             // SAFETY: we ensure proxy's name is resolved before creating a key for it, in
             // `SignalReceiver::receive_for` method.
-            destination: Cow::from(
-                proxy
-                    .destination_unique_name()
-                    .expect("Destination unique name")
-                    .to_owned(),
-            ),
+            destination: proxy
+                .destination_unique_name()
+                .expect("Destination unique name")
+                .clone()
+                .into(),
         }
     }
 }
@@ -40,10 +39,14 @@ impl<'key> TryFrom<&'key MessageHeader<'key>> for ProxyKey<'key> {
     type Error = Error;
 
     fn try_from(hdr: &'key MessageHeader<'key>) -> Result<Self> {
-        match (hdr.interface()?, hdr.path()?.cloned(), hdr.sender()?) {
+        match (
+            hdr.interface()?,
+            hdr.path()?.cloned(),
+            hdr.sender()?.cloned(),
+        ) {
             (Some(interface), Some(path), Some(destination)) => Ok(ProxyKey {
                 interface: Cow::from(interface),
-                destination: Cow::from(destination),
+                destination,
                 path,
             }),
             (_, _, _) => Err(Error::MissingField),
@@ -158,20 +161,23 @@ mod tests {
         let mut receiver = SignalReceiver::new(conn.clone());
 
         let proxy1 = MultiSignalProxy::builder(&conn)
-            .destination("org.freedesktop.zbus.MultiSignal")
+            .destination("org.freedesktop.zbus.MultiSignal")?
             .path("/org/freedesktop/zbus/MultiSignal/1")?
             .build()?;
         let proxy1_str = Arc::new(Mutex::new(None));
         let clone = proxy1_str.clone();
+        println!("1");
         proxy1.connect_some_signal(move |s| {
             *clone.lock().unwrap() = Some(s.to_string());
 
             Ok(())
         })?;
+        println!("2");
         receiver.receive_for(&proxy1)?;
 
+        println!("3");
         let proxy2 = MultiSignalProxy::builder(&conn)
-            .destination("org.freedesktop.zbus.MultiSignal")
+            .destination("org.freedesktop.zbus.MultiSignal")?
             .path("/org/freedesktop/zbus/MultiSignal/2")?
             .build()?;
         let proxy2_str = Arc::new(Mutex::new(None));

@@ -9,6 +9,8 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
 use zvariant::{derive::Type, ObjectPath, Signature, Str, Type, Value};
 
+use crate::{BusName, UniqueName};
+
 /// The message field code.
 ///
 /// Every [`MessageField`] has an associated code. This is mostly an internal D-Bus protocol detail
@@ -106,9 +108,9 @@ pub enum MessageField<'f> {
     /// The serial number of the message this message is a reply to.
     ReplySerial(u32),
     /// The name of the connection this message is intended for.
-    Destination(Str<'f>),
+    Destination(BusName<'f>),
     /// Unique name of the sending connection.
-    Sender(Str<'f>),
+    Sender(UniqueName<'f>),
     /// The signature of the message body.
     Signature(Signature<'f>),
     /// The number of Unix file descriptors that accompany the message.
@@ -173,12 +175,12 @@ impl<'de: 'f, 'f> Deserialize<'de> for MessageField<'f> {
                 MessageField::ReplySerial(u32::try_from(value).map_err(D::Error::custom)?)
             }
             MessageFieldCode::Destination => MessageField::Destination(
-                Str::try_from(value)
+                BusName::try_from(value)
                     .map(Into::into)
                     .map_err(D::Error::custom)?,
             ),
             MessageFieldCode::Sender => MessageField::Sender(
-                Str::try_from(value)
+                UniqueName::try_from(value)
                     .map(Into::into)
                     .map_err(D::Error::custom)?,
             ),

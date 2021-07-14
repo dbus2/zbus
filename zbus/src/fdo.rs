@@ -8,9 +8,12 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
 use std::collections::HashMap;
-use zvariant::{derive::Type, ObjectPath, OwnedObjectPath, OwnedValue, Value};
+use zvariant::{derive::Type, ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value};
 
-use crate::{dbus_interface, dbus_proxy, object_server::LOCAL_NODE, DBusError};
+use crate::{
+    dbus_interface, dbus_proxy, object_server::LOCAL_NODE, BusName, DBusError, OwnedBusName,
+    OwnedUniqueName, UniqueName, WellKnownName,
+};
 
 /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
@@ -327,45 +330,48 @@ trait DBus {
     fn add_match(&self, rule: &str) -> Result<()>;
 
     /// Returns auditing data used by Solaris ADT, in an unspecified binary format.
-    fn get_adt_audit_session_data(&self, bus_name: &str) -> Result<Vec<u8>>;
+    fn get_adt_audit_session_data(&self, bus_name: BusName<'_>) -> Result<Vec<u8>>;
 
     /// Returns as many credentials as possible for the process connected to the server.
-    fn get_connection_credentials(&self, bus_name: &str) -> Result<HashMap<String, OwnedValue>>;
+    fn get_connection_credentials(
+        &self,
+        bus_name: BusName<'_>,
+    ) -> Result<HashMap<String, OwnedValue>>;
 
     /// Returns the security context used by SELinux, in an unspecified format.
     #[dbus_proxy(name = "GetConnectionSELinuxSecurityContext")]
-    fn get_connection_selinux_security_context(&self, bus_name: &str) -> Result<Vec<u8>>;
+    fn get_connection_selinux_security_context(&self, bus_name: BusName<'_>) -> Result<Vec<u8>>;
 
     /// Returns the Unix process ID of the process connected to the server.
     #[dbus_proxy(name = "GetConnectionUnixProcessID")]
-    fn get_connection_unix_process_id(&self, bus_name: &str) -> Result<u32>;
+    fn get_connection_unix_process_id(&self, bus_name: BusName<'_>) -> Result<u32>;
 
     /// Returns the Unix user ID of the process connected to the server.
-    fn get_connection_unix_user(&self, bus_name: &str) -> Result<u32>;
+    fn get_connection_unix_user(&self, bus_name: BusName<'_>) -> Result<u32>;
 
     /// Gets the unique ID of the bus.
     fn get_id(&self) -> Result<String>;
 
     /// Returns the unique connection name of the primary owner of the name given.
-    fn get_name_owner(&self, name: &str) -> Result<String>;
+    fn get_name_owner(&self, name: BusName<'_>) -> Result<OwnedUniqueName>;
 
     /// Returns the unique name assigned to the connection.
-    fn hello(&self) -> Result<String>;
+    fn hello(&self) -> Result<OwnedUniqueName>;
 
     /// Returns a list of all names that can be activated on the bus.
-    fn list_activatable_names(&self) -> Result<Vec<String>>;
+    fn list_activatable_names(&self) -> Result<Vec<OwnedBusName>>;
 
     /// Returns a list of all currently-owned names on the bus.
-    fn list_names(&self) -> Result<Vec<String>>;
+    fn list_names(&self) -> Result<Vec<OwnedBusName>>;
 
     /// List the connections currently queued for a bus name.
-    fn list_queued_owners(&self, name: &str) -> Result<Vec<String>>;
+    fn list_queued_owners(&self, name: WellKnownName<'_>) -> Result<Vec<OwnedUniqueName>>;
 
     /// Checks if the specified name exists (currently has an owner).
-    fn name_has_owner(&self, name: &str) -> Result<bool>;
+    fn name_has_owner(&self, name: BusName<'_>) -> Result<bool>;
 
     /// Ask the message bus to release the method caller's claim to the given name.
-    fn release_name(&self, name: &str) -> Result<ReleaseNameReply>;
+    fn release_name(&self, name: WellKnownName<'_>) -> Result<ReleaseNameReply>;
 
     /// Reload server configuration.
     fn reload_config(&self) -> Result<()>;
@@ -376,13 +382,13 @@ trait DBus {
     /// Ask the message bus to assign the given name to the method caller.
     fn request_name(
         &self,
-        name: &str,
+        name: WellKnownName<'_>,
         flags: BitFlags<RequestNameFlags>,
     ) -> Result<RequestNameReply>;
 
     /// Tries to launch the executable associated with a name (service
     /// activation), as an explicit request.
-    fn start_service_by_name(&self, name: &str, flags: u32) -> Result<u32>;
+    fn start_service_by_name(&self, name: WellKnownName<'_>, flags: u32) -> Result<u32>;
 
     /// This method adds to or modifies that environment when activating services.
     fn update_activation_environment(&self, environment: HashMap<&str, &str>) -> Result<()>;
@@ -391,15 +397,20 @@ trait DBus {
     /// changed. It's also the signal to use to detect the appearance
     /// of new names on the bus.
     #[dbus_proxy(signal)]
-    fn name_owner_changed(&self, name: &str, old_owner: &str, new_owner: &str);
+    fn name_owner_changed(
+        &self,
+        name: BusName<'_>,
+        old_owner: Optional<UniqueName<'_>>,
+        new_owner: Optional<UniqueName<'_>>,
+    );
 
     /// This signal is sent to a specific application when it loses ownership of a name.
     #[dbus_proxy(signal)]
-    fn name_lost(&self, name: &str);
+    fn name_lost(&self, name: BusName<'_>);
 
     /// This signal is sent to a specific application when it gains ownership of a name.
     #[dbus_proxy(signal)]
-    fn name_acquired(&self, name: &str);
+    fn name_acquired(&self, name: BusName<'_>);
 
     /// This property lists abstract “features” provided by the message bus, and can be used by
     /// clients to detect the capabilities of the message bus with which they are communicating.
@@ -602,7 +613,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod tests {
-    use crate::{fdo, Error, Message};
+    use crate::{fdo, Error, Message, WellKnownName};
     use futures_util::StreamExt;
     use ntest::timeout;
     use std::{
@@ -618,9 +629,9 @@ mod tests {
 
     #[test]
     fn error_from_zerror() {
-        let m = Message::method(Some(":1.2"), None, "/", None, "foo", &()).unwrap();
+        let m = Message::method(Some(":1.2"), None::<()>, "/", None, "foo", &()).unwrap();
         let m = Message::method_error(
-            None,
+            None::<()>,
             &m,
             "org.freedesktop.DBus.Error.TimedOut",
             &("so long"),
@@ -643,7 +654,7 @@ mod tests {
         let proxy = fdo::DBusProxy::new(&conn).unwrap();
 
         let well_known = "org.freedesktop.zbus.FdoSignalConnectTest";
-        let unique_name = conn.unique_name().unwrap().to_string();
+        let unique_name = conn.unique_name().unwrap().clone();
         {
             let signaled = owner_change_signaled.clone();
             proxy
@@ -652,7 +663,7 @@ mod tests {
                         // Meant for the other testcase then
                         return Ok(());
                     }
-                    assert_eq!(new_owner, unique_name);
+                    assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
                     signaled.store(true, Ordering::Release);
 
                     Ok(())
@@ -674,8 +685,12 @@ mod tests {
                 .unwrap();
         }
 
+        let well_known: WellKnownName<'static> = well_known.try_into().unwrap();
         proxy
-            .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+            .request_name(
+                well_known.clone(),
+                fdo::RequestNameFlags::ReplaceExisting.into(),
+            )
             .unwrap();
 
         loop {
@@ -688,7 +703,7 @@ mod tests {
             }
         }
 
-        let result = proxy.release_name(well_known).unwrap();
+        let result = proxy.release_name(well_known.clone()).unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::Released);
 
         let result = proxy.release_name(well_known).unwrap();
@@ -728,7 +743,7 @@ mod tests {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let well_known = "org.freedesktop.zbus.FdoSignalStreamTest";
-        let unique_name = conn.unique_name().unwrap().to_string();
+        let unique_name = conn.unique_name().unwrap();
         let owner_change_stream =
             proxy
                 .receive_name_owner_changed()
@@ -741,7 +756,7 @@ mod tests {
                         // Meant for the other testcase then
                         return ready(false);
                     }
-                    assert_eq!(args.new_owner(), &unique_name);
+                    assert_eq!(*args.new_owner().as_ref().unwrap(), *unique_name);
 
                     ready(true)
                 });
@@ -758,17 +773,29 @@ mod tests {
             });
         let mut stream = owner_change_stream.zip(name_acquired_stream);
 
+        let well_known: WellKnownName<'static> = well_known.try_into().unwrap();
         proxy
-            .request_name(well_known, fdo::RequestNameFlags::ReplaceExisting.into())
+            .request_name(
+                well_known.clone(),
+                fdo::RequestNameFlags::ReplaceExisting.into(),
+            )
             .await
             .unwrap();
 
         let (name_owner_changed, name_acquired) = stream.next().await.unwrap();
         assert_eq!(name_owner_changed.args().unwrap().name(), &well_known);
-        assert_eq!(name_owner_changed.args().unwrap().new_owner(), &unique_name);
+        assert_eq!(
+            *name_owner_changed
+                .args()
+                .unwrap()
+                .new_owner()
+                .as_ref()
+                .unwrap(),
+            *unique_name
+        );
         assert_eq!(name_acquired.args().unwrap().name(), &well_known);
 
-        let result = proxy.release_name(well_known).await.unwrap();
+        let result = proxy.release_name(well_known.clone()).await.unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::Released);
 
         let result = proxy.release_name(well_known).await.unwrap();

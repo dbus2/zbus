@@ -240,13 +240,13 @@ mod tests {
     use crate::{
         azync,
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, Message, MessageFlags, Result,
+        Connection, Message, MessageFlags, Result, UniqueName,
     };
 
     #[test]
     fn msg() {
         let mut m = Message::method(
-            None,
+            None::<()>,
             Some("org.freedesktop.DBus"),
             "/org/freedesktop/DBus",
             Some("org.freedesktop.DBus.Peer"),
@@ -421,8 +421,8 @@ mod tests {
             .map(|s| s == <&str>::signature())
             .unwrap());
         assert_eq!(
-            Some(reply.body::<&str>().unwrap()),
-            connection.unique_name()
+            reply.body::<UniqueName<'_>>().unwrap(),
+            *connection.unique_name().unwrap(),
         );
 
         let reply = connection
@@ -523,8 +523,8 @@ mod tests {
             .map(|s| s == <&str>::signature())
             .unwrap());
         assert_eq!(
-            Some(reply.body::<&str>().unwrap()),
-            connection.unique_name()
+            reply.body::<UniqueName<'_>>().unwrap(),
+            *connection.unique_name().unwrap(),
         );
 
         let reply = connection
@@ -562,9 +562,10 @@ mod tests {
 
         // Send a message as client before service starts to process messages
         let client_conn = Connection::new_session().unwrap();
+        let destination = conn.unique_name().map(UniqueName::<'_>::from);
         let msg = Message::method(
-            None,
-            conn.unique_name(),
+            None::<()>,
+            destination,
             "/org/freedesktop/Issue68",
             Some("org.freedesktop.Issue68"),
             "Ping",
@@ -596,7 +597,7 @@ mod tests {
         use std::{cell::RefCell, convert::TryFrom, rc::Rc};
         use zvariant::{ObjectPath, Value};
         let conn = Connection::new_session().unwrap();
-        let service_name = conn.unique_name().unwrap().to_string();
+        let service_name = conn.unique_name().unwrap().clone();
         let mut object_server = super::ObjectServer::new(&conn);
 
         struct Secret(Rc<RefCell<bool>>);
@@ -635,7 +636,8 @@ mod tests {
             }
 
             let proxy = SecretProxy::builder(&conn)
-                .destination(&service_name)
+                .destination(UniqueName::from(service_name))
+                .unwrap()
                 .path("/org/freedesktop/secrets")
                 .unwrap()
                 .build()
@@ -725,9 +727,10 @@ mod tests {
         // when we send a message.
         std::thread::sleep(std::time::Duration::from_millis(100));
 
+        let destination = conn.unique_name().map(UniqueName::<'_>::from);
         let msg = Message::method(
-            None,
-            conn.unique_name(),
+            None::<()>,
+            destination,
             "/does/not/matter",
             None,
             "ZBusIssue122",
