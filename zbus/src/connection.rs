@@ -13,7 +13,7 @@ use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, BusName, Error, Guid, Message, OwnedUniqueName, Result};
+use crate::{azync, BusName, Error, Guid, InterfaceName, Message, OwnedUniqueName, Result};
 
 /// A D-Bus connection.
 ///
@@ -172,11 +172,11 @@ impl Connection {
     ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     /// [`MethodError`]: enum.Error.html#variant.MethodError
-    pub fn call_method<'d, 'p, DE, PE, B>(
+    pub fn call_method<'d, 'p, 'i, DE, PE, IE, B>(
         &self,
         destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
         path: impl TryInto<ObjectPath<'p>, Error = PE>,
-        iface: Option<&str>,
+        iface: Option<impl TryInto<InterfaceName<'i>, Error = IE>>,
         method_name: &str,
         body: &B,
     ) -> Result<Arc<Message>>
@@ -184,6 +184,7 @@ impl Connection {
         B: serde::ser::Serialize + zvariant::Type,
         DE: Into<Error>,
         PE: Into<Error>,
+        IE: Into<Error>,
     {
         block_on(
             self.inner
@@ -194,11 +195,11 @@ impl Connection {
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub fn emit_signal<'d, 'p, DE, PE, B>(
+    pub fn emit_signal<'d, 'p, 'i, DE, PE, IE, B>(
         &self,
         destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
         path: impl TryInto<ObjectPath<'p>, Error = PE>,
-        iface: &str,
+        iface: impl TryInto<InterfaceName<'i>, Error = IE>,
         signal_name: &str,
         body: &B,
     ) -> Result<()>
@@ -206,6 +207,7 @@ impl Connection {
         B: serde::ser::Serialize + zvariant::Type,
         DE: Into<Error>,
         PE: Into<Error>,
+        IE: Into<Error>,
     {
         block_on(
             self.inner

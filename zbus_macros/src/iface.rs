@@ -192,7 +192,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         changed.insert(#member_name, &*value);
                         let properties_iface = #zbus::fdo::Properties;
                         properties_iface.properties_changed(
-                            &#iface_name,
+                            #zbus::InterfaceName::from_str_unchecked(#iface_name),
                             &changed,
                             &[],
                         )
@@ -296,8 +296,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         impl #generics #zbus::Interface for #self_ty
         #where_clause
         {
-            fn name() -> &'static str {
-                #iface_name
+            fn name() -> #zbus::InterfaceName<'static> {
+                #zbus::InterfaceName::from_str_unchecked(#iface_name)
             }
 
             fn get(

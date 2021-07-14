@@ -1,7 +1,6 @@
-use crate::{Connection, Error, MessageHeader, Proxy, Result, UniqueName};
+use crate::{Connection, Error, InterfaceName, MessageHeader, Proxy, Result, UniqueName};
 use static_assertions::assert_impl_all;
 use std::{
-    borrow::Cow,
     collections::HashMap,
     convert::{AsRef, TryFrom},
     sync::Arc,
@@ -10,7 +9,7 @@ use zvariant::ObjectPath;
 
 #[derive(Hash, Eq, PartialEq)]
 struct ProxyKey<'key> {
-    interface: Cow<'key, str>,
+    interface: InterfaceName<'key>,
     destination: UniqueName<'key>,
     path: ObjectPath<'key>,
 }
@@ -22,7 +21,7 @@ where
     fn from(proxy: &P) -> Self {
         let proxy = proxy.as_ref();
         ProxyKey {
-            interface: Cow::from(proxy.interface().to_owned()),
+            interface: proxy.interface().to_owned(),
             path: proxy.path().to_owned(),
             // SAFETY: we ensure proxy's name is resolved before creating a key for it, in
             // `SignalReceiver::receive_for` method.
@@ -40,12 +39,12 @@ impl<'key> TryFrom<&'key MessageHeader<'key>> for ProxyKey<'key> {
 
     fn try_from(hdr: &'key MessageHeader<'key>) -> Result<Self> {
         match (
-            hdr.interface()?,
+            hdr.interface()?.cloned(),
             hdr.path()?.cloned(),
             hdr.sender()?.cloned(),
         ) {
             (Some(interface), Some(path), Some(destination)) => Ok(ProxyKey {
-                interface: Cow::from(interface),
+                interface,
                 destination,
                 path,
             }),

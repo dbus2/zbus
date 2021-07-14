@@ -8,7 +8,6 @@ use once_cell::sync::OnceCell;
 use slotmap::{new_key_type, SlotMap};
 use static_assertions::assert_impl_all;
 use std::{
-    borrow::Cow,
     collections::HashMap,
     convert::{TryFrom, TryInto},
     future::ready,
@@ -23,7 +22,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 use crate::{
     azync::Connection,
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
-    BusName, Error, Message, MessageHeader, MessageType, OwnedUniqueName, Result,
+    BusName, Error, InterfaceName, Message, MessageHeader, MessageType, OwnedUniqueName, Result,
 };
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
@@ -140,7 +139,7 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) conn: Connection,
     pub(crate) destination: BusName<'a>,
     pub(crate) path: ObjectPath<'a>,
-    pub(crate) interface: Cow<'a, str>,
+    pub(crate) interface: InterfaceName<'a>,
     dest_unique_name: OnceCell<OwnedUniqueName>,
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
@@ -226,7 +225,7 @@ impl<'a> ProxyInner<'a> {
         conn: Connection,
         destination: BusName<'a>,
         path: ObjectPath<'a>,
-        interface: Cow<'a, str>,
+        interface: InterfaceName<'a>,
     ) -> Self {
         Self {
             conn,
@@ -258,40 +257,42 @@ impl<'a> ProxyInner<'a> {
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
-    pub async fn new<DE, PE>(
+    pub async fn new<DE, PE, IE>(
         conn: &Connection,
         destination: impl TryInto<BusName<'a>, Error = DE>,
         path: impl TryInto<ObjectPath<'a>, Error = PE>,
-        interface: &'a str,
+        interface: impl TryInto<InterfaceName<'a>, Error = IE>,
     ) -> Result<Proxy<'a>>
     where
         DE: Into<Error>,
         PE: Into<Error>,
+        IE: Into<Error>,
     {
         crate::ProxyBuilder::new_bare(conn)
             .destination(destination)?
             .path(path)?
-            .interface(interface)
+            .interface(interface)?
             .build_async()
             .await
     }
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
     /// passed arguments.
-    pub async fn new_owned<DE, PE>(
+    pub async fn new_owned<DE, PE, IE>(
         conn: Connection,
         destination: impl TryInto<BusName<'static>, Error = DE>,
         path: impl TryInto<ObjectPath<'static>, Error = PE>,
-        interface: String,
+        interface: impl TryInto<InterfaceName<'static>, Error = IE>,
     ) -> Result<Proxy<'a>>
     where
         DE: Into<Error>,
         PE: Into<Error>,
+        IE: Into<Error>,
     {
         crate::ProxyBuilder::new_bare(&conn)
             .destination(destination)?
             .path(path)?
-            .interface(interface)
+            .interface(interface)?
             .build_async()
             .await
     }
@@ -364,7 +365,7 @@ impl<'a> Proxy<'a> {
     }
 
     /// Get a reference to the interface.
-    pub fn interface(&self) -> &str {
+    pub fn interface(&self) -> &InterfaceName<'_> {
         &self.inner.interface
     }
 
@@ -432,7 +433,7 @@ impl<'a> Proxy<'a> {
         });
         self.properties.task.set(task).unwrap();
 
-        if let Ok(values) = proxy.get_all(&self.inner.interface).await {
+        if let Ok(values) = proxy.get_all(self.inner.interface.clone()).await {
             self.properties.values.lock().await.extend(values);
         }
 
@@ -461,7 +462,7 @@ impl<'a> Proxy<'a> {
         Ok(self
             .properties_proxy()
             .await?
-            .get(&self.inner.interface, property_name)
+            .get(self.inner.interface.clone(), property_name)
             .await?)
     }
 
@@ -502,7 +503,7 @@ impl<'a> Proxy<'a> {
     {
         self.properties_proxy()
             .await?
-            .set(&self.inner.interface, property_name, &value.into())
+            .set(self.inner.interface.clone(), property_name, &value.into())
             .await
     }
 

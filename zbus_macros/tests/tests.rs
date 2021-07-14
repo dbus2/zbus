@@ -215,7 +215,8 @@ fn test_interface() {
     if false {
         // check compilation
         let c = zbus::Connection::new_session().unwrap();
-        let m = zbus::Message::method(None::<()>, None::<()>, "/", None, "StrU32", &(42,)).unwrap();
+        let m = zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
+            .unwrap();
         let _ = t.call(&c, &m, "StrU32").unwrap();
         t.signal(23, "ergo sum").unwrap();
     }

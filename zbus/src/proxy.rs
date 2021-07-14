@@ -9,7 +9,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
     azync::{self, PropertyChangedHandlerId, SignalHandlerId},
-    BusName, Connection, Error, Message, OwnedUniqueName, Result,
+    BusName, Connection, Error, InterfaceName, Message, OwnedUniqueName, Result,
 };
 
 use crate::fdo;
@@ -65,15 +65,16 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
-    pub fn new<DE, PE>(
+    pub fn new<DE, PE, IE>(
         conn: &Connection,
         destination: impl TryInto<BusName<'a>, Error = DE>,
         path: impl TryInto<ObjectPath<'a>, Error = PE>,
-        interface: &'a str,
+        interface: impl TryInto<InterfaceName<'a>, Error = IE>,
     ) -> Result<Self>
     where
         DE: Into<Error>,
         PE: Into<Error>,
+        IE: Into<Error>,
     {
         let proxy = block_on(azync::Proxy::new(
             conn.inner(),
@@ -90,15 +91,16 @@ impl<'a> Proxy<'a> {
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
     /// passed arguments.
-    pub fn new_owned<DE, PE>(
+    pub fn new_owned<DE, PE, IE>(
         conn: Connection,
         destination: impl TryInto<BusName<'static>, Error = DE>,
         path: impl TryInto<ObjectPath<'static>, Error = PE>,
-        interface: String,
+        interface: impl TryInto<InterfaceName<'static>, Error = IE>,
     ) -> Result<Self>
     where
         DE: Into<Error>,
         PE: Into<Error>,
+        IE: Into<Error>,
     {
         let proxy = block_on(azync::Proxy::new_owned(
             conn.clone().into_inner(),
@@ -126,7 +128,7 @@ impl<'a> Proxy<'a> {
     }
 
     /// Get a reference to the interface.
-    pub fn interface(&self) -> &str {
+    pub fn interface(&self) -> &InterfaceName<'_> {
         self.azync.interface()
     }
 

@@ -735,7 +735,7 @@ mod tests {
             None::<()>,
             destination,
             "/does/not/matter",
-            None,
+            None::<()>,
             "ZBusIssue122",
             &(),
         )

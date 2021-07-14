@@ -1,11 +1,11 @@
-use std::{borrow::Cow, convert::TryInto, marker::PhantomData, sync::Arc};
+use std::{convert::TryInto, marker::PhantomData, sync::Arc};
 
 use async_io::block_on;
 use futures_core::future::BoxFuture;
 use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
-use crate::{azync, BusName, Error, Result};
+use crate::{azync, BusName, Error, InterfaceName, Result};
 
 /// Builder for proxies.
 #[derive(Debug)]
@@ -13,7 +13,7 @@ pub struct ProxyBuilder<'a, T = ()> {
     conn: azync::Connection,
     destination: Option<BusName<'a>>,
     path: Option<ObjectPath<'a>>,
-    interface: Option<Cow<'a, str>>,
+    interface: Option<InterfaceName<'a>>,
     proxy_type: PhantomData<T>,
     cache: bool,
 }
@@ -71,9 +71,15 @@ impl<'a, T> ProxyBuilder<'a, T> {
     }
 
     /// Set the proxy interface.
-    pub fn interface<I: Into<Cow<'a, str>>>(mut self, interface: I) -> Self {
-        self.interface = Some(interface.into());
-        self
+    pub fn interface<E, I: TryInto<InterfaceName<'a>, Error = E>>(
+        mut self,
+        interface: I,
+    ) -> Result<Self>
+    where
+        E: Into<Error>,
+    {
+        self.interface = Some(interface.try_into().map_err(Into::into)?);
+        Ok(self)
     }
 
     /// Set whether to cache properties.
@@ -137,7 +143,7 @@ where
             conn: conn.clone().into(),
             destination: Some(T::DESTINATION.try_into().expect("invalid bus name")),
             path: Some(T::PATH.try_into().expect("invalid default path")),
-            interface: Some(T::INTERFACE.into()),
+            interface: Some(T::INTERFACE.try_into().expect("invalid interface name")),
             cache: true,
             proxy_type: PhantomData,
         }
@@ -173,6 +179,7 @@ mod tests {
             .path("/some/path")
             .unwrap()
             .interface("org.freedesktop.Interface")
+            .unwrap()
             .cache_properties(false);
         assert!(matches!(
             builder.clone().destination.unwrap(),
@@ -180,6 +187,5 @@ mod tests {
         ));
         let proxy = builder.build().unwrap();
         assert!(matches!(proxy.inner.destination, BusName::Unique(_)));
-        assert!(matches!(proxy.inner.interface, Cow::Borrowed(_)));
     }
 }

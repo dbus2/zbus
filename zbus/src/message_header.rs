@@ -8,7 +8,9 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
 use zvariant::{derive::Type, ObjectPath, Signature};
 
-use crate::{BusName, Error, MessageField, MessageFieldCode, MessageFields, UniqueName};
+use crate::{
+    BusName, Error, InterfaceName, MessageField, MessageFieldCode, MessageFields, UniqueName,
+};
 
 pub(crate) const PRIMARY_HEADER_SIZE: usize = 12;
 pub(crate) const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
@@ -332,8 +334,8 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
-    pub fn interface<'s>(&'s self) -> Result<Option<&'s str>, Error> {
-        get_field_str!(self, Interface)
+    pub fn interface<'s>(&'s self) -> Result<Option<&InterfaceName<'m>>, Error> {
+        get_field!(self, Interface)
     }
 
     /// The member, either the method name or signal name.
@@ -374,7 +376,10 @@ impl<'m> MessageHeader<'m> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{MessageField, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType};
+    use crate::{
+        InterfaceName, MessageField, MessageFields, MessageHeader, MessagePrimaryHeader,
+        MessageType,
+    };
 
     use std::{
         convert::{TryFrom, TryInto},
@@ -387,16 +392,17 @@ mod tests {
     #[test]
     fn header() -> Result<(), Box<dyn Error>> {
         let path = ObjectPath::try_from("/some/path")?;
+        let iface = InterfaceName::try_from("some.interface")?;
         let mut f = MessageFields::new();
         f.add(MessageField::Path(path.clone()));
-        f.add(MessageField::Interface("some.interface".into()));
+        f.add(MessageField::Interface(iface.clone()));
         f.add(MessageField::Member("Member".into()));
         f.add(MessageField::Sender(":1.84".try_into()?));
         let h = MessageHeader::new(MessagePrimaryHeader::new(MessageType::Signal, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::Signal);
         assert_eq!(h.path()?, Some(&path));
-        assert_eq!(h.interface()?, Some("some.interface"));
+        assert_eq!(h.interface()?, Some(&iface));
         assert_eq!(h.member()?, Some("Member"));
         assert_eq!(h.error_name()?, None);
         assert_eq!(h.destination()?, None);
