@@ -154,6 +154,9 @@ fn ensure_correct_unique_name(name: &str) -> Result<()> {
             name,
             name.len(),
         )));
+    } else if name == "org.freedesktop.DBus" {
+        // Bus itself uses its well-known name as its unique name.
+        return Ok(());
     }
 
     // SAFETY: Just checked above that we've at least 1 character.
