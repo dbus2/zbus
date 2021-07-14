@@ -43,7 +43,7 @@ use zvariant::{derive::Type, NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [bus name]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum BusName<'name> {
     #[serde(borrow)]
@@ -211,7 +211,7 @@ impl From<BusName<'static>> for OwnedValue {
 }
 
 /// Owned sibling of [`BusName`].
-#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type)]
 pub struct OwnedBusName(#[serde(borrow)] BusName<'static>);
 
 impl OwnedBusName {
