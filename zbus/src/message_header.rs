@@ -9,8 +9,8 @@ use static_assertions::assert_impl_all;
 use zvariant::{derive::Type, ObjectPath, Signature};
 
 use crate::{
-    BusName, Error, InterfaceName, MemberName, MessageField, MessageFieldCode, MessageFields,
-    UniqueName,
+    BusName, Error, ErrorName, InterfaceName, MemberName, MessageField, MessageFieldCode,
+    MessageFields, UniqueName,
 };
 
 pub(crate) const PRIMARY_HEADER_SIZE: usize = 12;
@@ -272,12 +272,6 @@ macro_rules! get_field {
     };
 }
 
-macro_rules! get_field_str {
-    ($self:ident, $kind:ident) => {
-        get_field!($self, $kind, (|v: &'s zvariant::Str<'m>| v.as_str()))
-    };
-}
-
 macro_rules! get_field_u32 {
     ($self:ident, $kind:ident) => {
         get_field!($self, $kind, (|v: &u32| *v))
@@ -345,8 +339,8 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// The name of the error that occurred, for errors.
-    pub fn error_name<'s>(&'s self) -> Result<Option<&'s str>, Error> {
-        get_field_str!(self, ErrorName)
+    pub fn error_name<'s>(&'s self) -> Result<Option<&ErrorName<'m>>, Error> {
+        get_field!(self, ErrorName)
     }
 
     /// The serial number of the message this message is a reply to.
@@ -414,7 +408,7 @@ mod tests {
         assert_eq!(h.unix_fds()?, None);
 
         let mut f = MessageFields::new();
-        f.add(MessageField::ErrorName("org.zbus.Error".into()));
+        f.add(MessageField::ErrorName("org.zbus.Error".try_into()?));
         f.add(MessageField::Destination(":1.11".try_into()?));
         f.add(MessageField::ReplySerial(88));
         f.add(MessageField::Signature(Signature::from_str_unchecked(
@@ -427,7 +421,7 @@ mod tests {
         assert_eq!(h.path()?, None);
         assert_eq!(h.interface()?, None);
         assert_eq!(h.member()?, None);
-        assert_eq!(h.error_name()?, Some("org.zbus.Error"));
+        assert_eq!(h.error_name()?.unwrap(), "org.zbus.Error");
         assert_eq!(h.destination()?.unwrap(), ":1.11");
         assert_eq!(h.reply_serial()?, Some(88));
         assert_eq!(h.sender()?, None);

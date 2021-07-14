@@ -2,7 +2,7 @@ use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, sync::Arc};
 use zvariant::Error as VariantError;
 
-use crate::{fdo, Message, MessageType};
+use crate::{fdo, Message, MessageType, OwnedErrorName};
 
 /// The error type for `zbus`.
 ///
@@ -33,7 +33,7 @@ pub enum Error {
     /// A D-Bus method error reply.
     // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds anything more than a
     // string description.
-    MethodError(String, Option<String>, Arc<Message>),
+    MethodError(OwnedErrorName, Option<String>, Arc<Message>),
     /// A required field is missing in the message headers.
     MissingField,
     /// Invalid D-Bus GUID.
@@ -147,7 +147,7 @@ impl fmt::Display for Error {
             Error::MethodError(name, detail, _reply) => write!(
                 f,
                 "{}: {}",
-                name,
+                **name,
                 detail.as_ref().map(|s| s.as_str()).unwrap_or("no details")
             ),
             Error::InvalidGUID => write!(f, "Invalid GUID"),
@@ -236,7 +236,7 @@ impl From<Arc<Message>> for Error {
         }
 
         if let Ok(Some(name)) = header.error_name() {
-            let name = String::from(name);
+            let name = name.to_owned().into();
             match message.body_unchecked::<&str>() {
                 Ok(detail) => Error::MethodError(name, Some(String::from(detail)), message),
                 Err(_) => Error::MethodError(name, None, message),

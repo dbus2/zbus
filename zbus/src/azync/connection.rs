@@ -40,7 +40,8 @@ use crate::{
     azync::Authenticated,
     fdo,
     raw::{Connection as RawConnection, Socket},
-    BusName, Error, Guid, InterfaceName, MemberName, Message, MessageType, OwnedUniqueName, Result,
+    BusName, Error, ErrorName, Guid, InterfaceName, MemberName, Message, MessageType,
+    OwnedUniqueName, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -509,9 +510,15 @@ impl Connection {
     /// with the given `error_name` and `body`.
     ///
     /// Returns the message serial number.
-    pub async fn reply_error<B>(&self, call: &Message, error_name: &str, body: &B) -> Result<u32>
+    pub async fn reply_error<E, B>(
+        &self,
+        call: &Message,
+        error_name: impl TryInto<ErrorName<'_>, Error = E>,
+        body: &B,
+    ) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
+        E: Into<Error>,
     {
         let m = Message::method_error(self.unique_name(), call, error_name, body)?;
         self.send_message(m).await

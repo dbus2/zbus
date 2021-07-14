@@ -14,7 +14,8 @@ use zvariant::ObjectPath;
 use async_io::block_on;
 
 use crate::{
-    azync, BusName, Error, Guid, InterfaceName, MemberName, Message, OwnedUniqueName, Result,
+    azync, BusName, Error, ErrorName, Guid, InterfaceName, MemberName, Message, OwnedUniqueName,
+    Result,
 };
 
 /// A D-Bus connection.
@@ -238,9 +239,15 @@ impl Connection {
     /// with the given `error_name` and `body`.
     ///
     /// Returns the message serial number.
-    pub fn reply_error<B>(&self, call: &Message, error_name: &str, body: &B) -> Result<u32>
+    pub fn reply_error<'e, E, B>(
+        &self,
+        call: &Message,
+        error_name: impl TryInto<ErrorName<'e>, Error = E>,
+        body: &B,
+    ) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
+        E: Into<Error>,
     {
         block_on(self.inner.reply_error(call, error_name, body))
     }
