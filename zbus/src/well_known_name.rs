@@ -100,6 +100,12 @@ impl<'a> PartialEq<&str> for WellKnownName<'a> {
     }
 }
 
+impl PartialEq<OwnedWellKnownName> for WellKnownName<'_> {
+    fn eq(&self, other: &OwnedWellKnownName) -> bool {
+        *self == other.0
+    }
+}
+
 impl<'de: 'name, 'name> Deserialize<'de> for WellKnownName<'name> {
     fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
@@ -196,6 +202,22 @@ fn ensure_correct_well_known_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+/// This never succeeds but is provided so it's easier to pass `Option::None` values for API
+/// requiring `Option<TryInto<impl BusName>>`, since type inference won't work here.
+impl TryFrom<()> for WellKnownName<'_> {
+    type Error = Error;
+
+    fn try_from(_value: ()) -> Result<Self> {
+        unreachable!("Conversion from `()` is not meant to actually work");
+    }
+}
+
+impl<'name> From<&WellKnownName<'name>> for WellKnownName<'name> {
+    fn from(name: &WellKnownName<'name>) -> Self {
+        name.clone()
+    }
+}
+
 impl<'name> NoneValue for WellKnownName<'name> {
     type NoneType = &'name str;
 
@@ -271,6 +293,12 @@ impl<'de> Deserialize<'de> for OwnedWellKnownName {
 impl PartialEq<&str> for OwnedWellKnownName {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+impl PartialEq<WellKnownName<'_>> for OwnedWellKnownName {
+    fn eq(&self, other: &WellKnownName<'_>) -> bool {
+        self.0 == *other
     }
 }
 
