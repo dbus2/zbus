@@ -36,7 +36,7 @@ use zvariant::{
 /// ```
 ///
 /// [wbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
-#[derive(Clone, Debug, PartialEq, Serialize, Type, Value, OwnedValue)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
 pub struct WellKnownName<'name>(Str<'name>);
 
 assert_impl_all!(WellKnownName<'_>: Send, Sync, Unpin);
@@ -205,7 +205,7 @@ impl<'name> NoneValue for WellKnownName<'name> {
 }
 
 /// Owned sibling of [`WellKnownName`].
-#[derive(Clone, Debug, PartialEq, Serialize, Type, Value, OwnedValue)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
 pub struct OwnedWellKnownName(#[serde(borrow)] WellKnownName<'static>);
 
 assert_impl_all!(OwnedWellKnownName: Send, Sync, Unpin);
