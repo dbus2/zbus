@@ -99,6 +99,12 @@ impl PartialEq<&str> for UniqueName<'_> {
     }
 }
 
+impl PartialEq<OwnedUniqueName> for UniqueName<'_> {
+    fn eq(&self, other: &OwnedUniqueName) -> bool {
+        *self == other.0
+    }
+}
+
 impl<'de: 'name, 'name> Deserialize<'de> for UniqueName<'name> {
     fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
@@ -192,6 +198,22 @@ fn ensure_correct_unique_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+/// This never succeeds but is provided so it's easier to pass `Option::None` values for API
+/// requiring `Option<TryInto<impl BusName>>`, since type inference won't work here.
+impl TryFrom<()> for UniqueName<'_> {
+    type Error = Error;
+
+    fn try_from(_value: ()) -> Result<Self> {
+        unreachable!("Conversion from `()` is not meant to actually work");
+    }
+}
+
+impl<'name> From<&UniqueName<'name>> for UniqueName<'name> {
+    fn from(name: &UniqueName<'name>) -> Self {
+        name.clone()
+    }
+}
+
 impl<'name> NoneValue for UniqueName<'name> {
     type NoneType = &'name str;
 
@@ -267,6 +289,12 @@ impl<'de> Deserialize<'de> for OwnedUniqueName {
 impl PartialEq<&str> for OwnedUniqueName {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+impl PartialEq<UniqueName<'_>> for OwnedUniqueName {
+    fn eq(&self, other: &UniqueName<'_>) -> bool {
+        self.0 == *other
     }
 }
 
