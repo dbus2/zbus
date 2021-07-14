@@ -258,6 +258,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(1000)]
     fn basic_connection() {
         let connection = crate::Connection::new_session()
             .map_err(|e| {
@@ -282,6 +283,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(1000)]
     fn basic_connection_async() {
         async_io::block_on(test_basic_connection()).unwrap();
     }
@@ -308,6 +310,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(1000)]
     fn fdpass_systemd() {
         let connection = crate::Connection::new_system().unwrap();
 
@@ -334,6 +337,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(1000)]
     fn freedesktop_api() {
         let connection = crate::Connection::new_session()
             .map_err(|e| {
@@ -433,6 +437,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(1000)]
     fn freedesktop_api_async() {
         async_io::block_on(test_freedesktop_api()).unwrap();
     }
@@ -675,6 +680,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(1000)]
     #[allow(clippy::mutex_atomic)]
     fn issue_122() {
         let conn = Connection::new_session().unwrap();
