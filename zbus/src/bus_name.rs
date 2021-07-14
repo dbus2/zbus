@@ -106,6 +106,30 @@ impl PartialEq<&str> for BusName<'_> {
     }
 }
 
+impl PartialEq<OwnedBusName> for BusName<'_> {
+    fn eq(&self, other: &OwnedBusName) -> bool {
+        *self == other.0
+    }
+}
+
+impl PartialEq<UniqueName<'_>> for BusName<'_> {
+    fn eq(&self, other: &UniqueName<'_>) -> bool {
+        match self {
+            Self::Unique(name) => *name == *other,
+            Self::WellKnown(_) => false,
+        }
+    }
+}
+
+impl PartialEq<WellKnownName<'_>> for BusName<'_> {
+    fn eq(&self, other: &WellKnownName<'_>) -> bool {
+        match self {
+            Self::Unique(_) => false,
+            Self::WellKnown(name) => *name == *other,
+        }
+    }
+}
+
 impl<'name> NoneValue for BusName<'name> {
     type NoneType = &'name str;
 
@@ -129,6 +153,18 @@ impl<'de: 'name, 'name> Deserialize<'de> for BusName<'name> {
 impl Type for BusName<'_> {
     fn signature() -> zvariant::Signature<'static> {
         <&str>::signature()
+    }
+}
+
+impl<'name> From<UniqueName<'name>> for BusName<'name> {
+    fn from(name: UniqueName<'name>) -> Self {
+        BusName::Unique(name)
+    }
+}
+
+impl<'name> From<WellKnownName<'name>> for BusName<'name> {
+    fn from(name: WellKnownName<'name>) -> Self {
+        BusName::WellKnown(name)
     }
 }
 
@@ -178,12 +214,28 @@ impl<'s> TryFrom<Value<'s>> for BusName<'s> {
     }
 }
 
+/// This never succeeds but is provided so it's easier to pass `Option::None` values for API
+/// requiring `Option<TryInto<impl BusName>>`, since type inference won't work here.
+impl TryFrom<()> for BusName<'_> {
+    type Error = Error;
+
+    fn try_from(_value: ()) -> Result<Self> {
+        unreachable!("Conversion from `()` is not meant to actually work.");
+    }
+}
+
 impl<'s> From<BusName<'s>> for Value<'s> {
     fn from(name: BusName<'s>) -> Self {
         match name {
             BusName::Unique(name) => name.into(),
             BusName::WellKnown(name) => name.into(),
         }
+    }
+}
+
+impl<'name> From<&BusName<'name>> for BusName<'name> {
+    fn from(name: &BusName<'name>) -> Self {
+        name.clone()
     }
 }
 
@@ -306,6 +358,12 @@ impl<'de> Deserialize<'de> for OwnedBusName {
 impl PartialEq<&str> for OwnedBusName {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
+    }
+}
+
+impl PartialEq<BusName<'_>> for OwnedBusName {
+    fn eq(&self, other: &BusName<'_>) -> bool {
+        self.0 == *other
     }
 }
 
