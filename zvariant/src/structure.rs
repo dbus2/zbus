@@ -43,6 +43,23 @@ impl<'a> StructureBuilder<'a> {
         self
     }
 
+    /// Append `field` to `self`.
+    ///
+    /// Identical to `add_field`, except it makes changes in-place.
+    pub fn push_field<T>(&mut self, field: T)
+    where
+        T: DynamicType + Into<Value<'a>>,
+    {
+        self.push_value(Value::new(field))
+    }
+
+    /// Append `field` to `self`.
+    ///
+    /// Identical to `append_field`, except it makes changes in-place.
+    pub fn push_value<'e: 'a>(&mut self, field: Value<'e>) {
+        self.0.push(field)
+    }
+
     /// Build the `Structure`.
     ///
     /// [`Structure`]: struct.Structure.html
