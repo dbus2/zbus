@@ -8,7 +8,7 @@ use std::{
 
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{EncodingContext, ObjectPath, Signature, Type};
+use zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
     owned_fd::OwnedFd, utils::padding_for_8_bytes, EndianSig, Error, MessageField,
@@ -36,7 +36,7 @@ struct MessageBuilder<'a, B> {
 
 impl<'a, B> MessageBuilder<'a, B>
 where
-    B: serde::ser::Serialize + Type,
+    B: serde::ser::Serialize + DynamicType,
 {
     fn new(ty: MessageType, sender: Option<UniqueName<'a>>, body: &'a B) -> Result<Self> {
         let ctxt = dbus_context!(0);
@@ -45,7 +45,7 @@ where
 
         let mut fields = MessageFields::new();
 
-        let mut signature = B::signature();
+        let mut signature = body.dynamic_signature();
         if !signature.is_empty() {
             if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
                 // Remove leading and trailing STRUCT delimiters
@@ -222,7 +222,7 @@ impl Message {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + Type,
+        B: serde::ser::Serialize + DynamicType,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -269,7 +269,7 @@ impl Message {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + Type,
+        B: serde::ser::Serialize + DynamicType,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -297,7 +297,7 @@ impl Message {
     where
         S: TryInto<UniqueName<'s>>,
         S::Error: Into<Error>,
-        B: serde::ser::Serialize + Type,
+        B: serde::ser::Serialize + DynamicType,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -320,7 +320,7 @@ impl Message {
         S::Error: Into<Error>,
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
-        B: serde::ser::Serialize + Type,
+        B: serde::ser::Serialize + DynamicType,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
