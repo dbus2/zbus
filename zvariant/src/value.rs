@@ -13,8 +13,8 @@ use static_assertions::assert_impl_all;
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
 use crate::{
-    signature_parser::SignatureParser, utils::*, Array, Basic, Dict, Fd, ObjectPath, OwnedValue,
-    Signature, Str, Structure, StructureBuilder, Type,
+    signature_parser::SignatureParser, utils::*, Array, Basic, Dict, DynamicType, Fd, ObjectPath,
+    OwnedValue, Signature, Str, Structure, StructureBuilder, Type,
 };
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
@@ -146,10 +146,10 @@ impl<'a> Value<'a> {
     /// [`Into`]: https://doc.rust-lang.org/std/convert/trait.Into.html
     pub fn new<T>(value: T) -> Self
     where
-        T: Into<Self> + Type,
+        T: Into<Self> + DynamicType,
     {
         // With specialization, we wouldn't have this
-        if T::signature() == VARIANT_SIGNATURE_STR {
+        if value.dynamic_signature() == VARIANT_SIGNATURE_STR {
             Self::Value(Box::new(value.into()))
         } else {
             value.into()

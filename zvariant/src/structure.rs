@@ -1,7 +1,7 @@
 use serde::ser::{Serialize, SerializeTupleStruct, Serializer};
 use static_assertions::assert_impl_all;
 
-use crate::{OwnedValue, Signature, Type, Value};
+use crate::{DynamicType, OwnedValue, Signature, Type, Value};
 
 /// Use this to efficiently build a [`Structure`].
 ///
@@ -25,7 +25,7 @@ impl<'a> StructureBuilder<'a> {
     /// structure.
     pub fn add_field<T>(self, field: T) -> Self
     where
-        T: Type + Into<Value<'a>>,
+        T: DynamicType + Into<Value<'a>>,
     {
         self.append_field(Value::new(field))
     }
@@ -178,7 +178,7 @@ macro_rules! tuple_impls {
         $(
             impl<'a, $($name),+> From<($($name),+,)> for Structure<'a>
             where
-                $($name: Type + Into<Value<'a>>,)+
+                $($name: DynamicType + Into<Value<'a>>,)+
             {
                 #[inline]
                 fn from(value: ($($name),+,)) -> Self {
