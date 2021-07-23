@@ -51,6 +51,7 @@ where
     where
         T: ?Sized + Serialize,
     {
+        log::trace!("Serializing variant with signature: {}", signature);
         let sig_parser = SignatureParser::new(signature);
         let bytes_written = self.0.bytes_written;
         let mut fds = vec![];
@@ -560,7 +561,8 @@ where
         self.seq_serializer.serialize_key(&name)?;
 
         // Get value signature
-        let item_signature = sig_parser.next_signature()?.clone();
+        let item_signature = sig_parser.parse_next_signature()?.clone();
+        log::trace!("Item signature is: {}", item_signature);
 
         // Serialize value (T) as variant with signature item_signature
 
