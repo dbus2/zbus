@@ -150,17 +150,20 @@ where
             self.0.value_sign = Some(signature_string!(v));
         }
 
-        match c {
+        let v = match c {
             ObjectPath::SIGNATURE_CHAR | <&str>::SIGNATURE_CHAR => {
                 self.0
                     .add_padding(<&str>::alignment(EncodingFormat::DBus))?;
                 self.0
                     .write_u32::<B>(usize_to_u32(v.len()))
                     .map_err(Error::Io)?;
+                v.to_string()
             }
             Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
-                // XXX Replace <> with 'a{sv}' respecting nesting
+                let sig = Signature::from_str_unchecked(v);
+                let v = sig.remove_serialize_dict_annotations().as_str().to_string();
                 self.0.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
+                v
             }
             _ => {
                 let expected = format!(
@@ -175,7 +178,7 @@ where
                     &expected.as_str(),
                 ));
             }
-        }
+        };
 
         self.0.sig_parser.skip_char()?;
         self.0.write_all(v.as_bytes()).map_err(Error::Io)?;

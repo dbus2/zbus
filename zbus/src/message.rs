@@ -138,6 +138,7 @@ where
 
         let mut signature = B::signature();
         if !signature.is_empty() {
+            signature = signature.remove_serialize_dict_annotations();
             if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
                 // Remove leading and trailing STRUCT delimiters
                 signature = signature.slice(1..signature.len() - 1);
