@@ -33,6 +33,8 @@ where
         assert_eq!(ctxt.format(), EncodingFormat::DBus);
 
         let sig_parser = SignatureParser::new(signature.clone());
+        log::trace!("Creating serializer");
+        sig_parser.log_current();
         Self(crate::SerializerCommon {
             ctxt,
             sig_parser,
@@ -269,6 +271,8 @@ where
     }
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
+        log::trace!("serialize_struct");
+        self.0.sig_parser.log_current();
         let c = self.0.sig_parser.next_char();
         let end_parens;
         if c == VARIANT_SIGNATURE_CHAR {
@@ -295,10 +299,10 @@ where
             }
         }
 
-        Ok(StructSerializer {
+        Ok(StructSerializer::Default(DefaultStructSerializer {
             ser: self,
             end_parens,
-        })
+        }))
     }
 
     fn serialize_struct_variant(
@@ -386,12 +390,38 @@ where
 }
 
 #[doc(hidden)]
-pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
+pub enum StructSerializer<'ser, 'sig, 'b, B, W> {
+    Default(DefaultStructSerializer<'ser, 'sig, 'b, B, W>),
+}
+
+#[doc(hidden)]
+pub struct DefaultStructSerializer<'ser, 'sig, 'b, B, W> {
     ser: &'b mut Serializer<'ser, 'sig, B, W>,
     end_parens: bool,
 }
 
 impl<'ser, 'sig, 'b, B, W> StructSerializer<'ser, 'sig, 'b, B, W>
+where
+    B: byteorder::ByteOrder,
+    W: Write + Seek,
+{
+    fn serialize_struct_element<T>(&mut self, name: Option<&'static str>, value: &T) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        match self {
+            StructSerializer::Default(ref mut dss) => dss.serialize_struct_element::<T>(name, value),
+        }
+    }
+
+    fn end_struct(self) -> Result<()> {
+        match self {
+            StructSerializer::Default(dss) => dss.end_struct(),
+        }
+    }
+}
+
+impl<'ser, 'sig, 'b, B, W> DefaultStructSerializer<'ser, 'sig, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
