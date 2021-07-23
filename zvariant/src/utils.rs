@@ -41,6 +41,12 @@ pub const MAYBE_SIGNATURE_CHAR: char = 'm';
 #[cfg(feature = "gvariant")]
 pub const MAYBE_SIGNATURE_STR: &str = "m";
 
+// XXX: Document. Feature-gate.
+pub const SERIALIZE_DICT_SIG_START_CHAR: char = '<';
+pub const SERIALIZE_DICT_SIG_START_STR: &str = "<";
+pub const SERIALIZE_DICT_SIG_END_CHAR: char = '>';
+pub const SERIALIZE_DICT_SIG_END_STR: &str = ">";
+
 pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
     let len_rounded_up = value.wrapping_add(align).wrapping_sub(1) & !align.wrapping_sub(1);
 
