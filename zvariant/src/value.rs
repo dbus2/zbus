@@ -432,17 +432,13 @@ impl<'de> Visitor<'de> for ValueVisitor {
     }
 }
 
-struct ValueSeed<'de, T> {
-    signature: Signature<'de>,
-    phantom: PhantomData<T>,
+pub(crate) struct SignatureSeed<'de> {
+    pub signature: Signature<'de>,
 }
 
-impl<'de, T> ValueSeed<'de, T>
-where
-    T: Deserialize<'de>,
-{
+impl<'de> SignatureSeed<'de> {
     #[inline]
-    fn visit_array<V>(self, mut visitor: V) -> Result<Value<'de>, V::Error>
+    pub(crate) fn visit_array<V>(self, mut visitor: V) -> Result<Array<'de>, V::Error>
     where
         V: SeqAccess<'de>,
     {
@@ -457,11 +453,11 @@ where
             array.append(elem).map_err(Error::custom)?;
         }
 
-        Ok(Value::Array(array))
+        Ok(array)
     }
 
     #[inline]
-    fn visit_struct<V>(self, mut visitor: V) -> Result<Value<'de>, V::Error>
+    pub(crate) fn visit_struct<V>(self, mut visitor: V) -> Result<Structure<'de>, V::Error>
     where
         V: SeqAccess<'de>,
     {
@@ -482,9 +478,45 @@ where
                 builder = builder.append_field(field);
             }
         }
-        let structure = builder.build_with_signature(self.signature);
+        Ok(builder.build_with_signature(self.signature))
+    }
+}
 
-        Ok(Value::Structure(structure))
+impl<'de, T> From<ValueSeed<'de, T>> for SignatureSeed<'de> {
+    fn from(seed: ValueSeed<'de, T>) -> Self {
+        SignatureSeed {
+            signature: seed.signature,
+        }
+    }
+}
+
+struct ValueSeed<'de, T> {
+    signature: Signature<'de>,
+    phantom: PhantomData<T>,
+}
+
+impl<'de, T> ValueSeed<'de, T>
+where
+    T: Deserialize<'de>,
+{
+    #[inline]
+    fn visit_array<V>(self, visitor: V) -> Result<Value<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        SignatureSeed::from(self)
+            .visit_array(visitor)
+            .map(Value::Array)
+    }
+
+    #[inline]
+    fn visit_struct<V>(self, visitor: V) -> Result<Value<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        SignatureSeed::from(self)
+            .visit_struct(visitor)
+            .map(Value::Structure)
     }
 
     #[inline]
