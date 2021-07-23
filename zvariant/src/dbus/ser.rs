@@ -274,23 +274,27 @@ where
         log::trace!("serialize_struct");
         self.0.sig_parser.log_current();
         let c = self.0.sig_parser.next_char();
-        if c == VARIANT_SIGNATURE_CHAR {
-            self.0.add_padding(VARIANT_ALIGNMENT_DBUS)?;
-            Ok(StructSerializer::Variant(VariantStructSerializer {
-                ser: self,
-            }))
-        } else {
-            let signature = self.0.sig_parser.next_signature()?;
-            let alignment = alignment_for_signature(&signature, EncodingFormat::DBus);
-            self.0.add_padding(alignment)?;
+        log::trace!("Got signature char: {}", c);
+        match c {
+            VARIANT_SIGNATURE_CHAR  => {
+                self.0.add_padding(VARIANT_ALIGNMENT_DBUS)?;
+                Ok(StructSerializer::Variant(VariantStructSerializer {
+                    ser: self,
+                }))
+            },
+            STRUCT_SIG_START_CHAR | DICT_ENTRY_SIG_START_CHAR => {
+                let signature = self.0.sig_parser.next_signature()?;
+                let alignment = alignment_for_signature(&signature, EncodingFormat::DBus);
+                self.0.add_padding(alignment)?;
 
-            self.0.sig_parser.skip_char()?;
+                self.0.sig_parser.skip_char()?;
 
-            if c == STRUCT_SIG_START_CHAR || c == DICT_ENTRY_SIG_START_CHAR {
                 Ok(StructSerializer::Default(DefaultStructSerializer {
                     ser: self,
                 }))
-            } else {
+            },
+            _ => {
+                log::error!("Do not recognize signature char: {}", c);
                 let expected = format!(
                     "`{}` or `{}`",
                     STRUCT_SIG_START_STR, DICT_ENTRY_SIG_START_STR,
@@ -299,9 +303,8 @@ where
                     serde::de::Unexpected::Char(c),
                     &expected.as_str(),
                 ))
-            }
+            },
         }
-
     }
 
     fn serialize_struct_variant(

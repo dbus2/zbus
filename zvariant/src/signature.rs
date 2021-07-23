@@ -3,6 +3,7 @@ use core::{
     fmt::{self, Debug, Display, Formatter},
     str,
 };
+use regex::Regex;
 use serde::{
     de::{Deserialize, Deserializer, Visitor},
     ser::{Serialize, Serializer},
@@ -312,7 +313,14 @@ impl<'a> Serialize for Signature<'a> {
     where
         S: Serializer,
     {
-        serializer.serialize_str(self.as_str())
+        let sig = self.as_str();
+        let new_sig = loop {
+            let re = Regex::new("<[^<]*>").expect("regex compilation");
+            let new_sig = re.replace_all(&sig, "a{sv}");
+            if new_sig == sig { break new_sig.to_string() };
+        };
+        log::trace!("Serializing signature: '{}' as: '{}'", sig, new_sig);
+        serializer.serialize_str(&new_sig)
     }
 }
 
