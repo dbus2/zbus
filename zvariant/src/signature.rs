@@ -143,13 +143,19 @@ impl<'a> Signature<'a> {
 
     /// Creates an owned clone of `self`.
     pub fn to_owned(&self) -> Signature<'static> {
-        let bytes = self.as_bytes().to_vec();
-        let end = bytes.len();
+        match &self.bytes {
+            Bytes::Borrowed(_) => {
+                let bytes = Bytes::owned(self.as_bytes().to_vec());
+                let pos = 0;
+                let end = bytes.len();
 
-        Signature {
-            bytes: Bytes::owned(bytes),
-            pos: 0,
-            end,
+                Signature { bytes, pos, end }
+            }
+            Bytes::Owned(owned) => Signature {
+                bytes: Bytes::Owned(owned.clone()),
+                pos: self.pos,
+                end: self.end,
+            },
         }
     }
 
