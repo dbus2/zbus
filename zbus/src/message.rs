@@ -515,6 +515,7 @@ impl Message {
         B: serde::de::Deserialize<'d> + Type,
     {
         let expected_sig = B::signature();
+        let expected_sig = expected_sig.remove_serialize_dict_annotations();
         let actual_sig = match self.body_signature() {
             Ok(sig) => sig,
             Err(MessageError::NoBodySignature) => Signature::from_str_unchecked(""),
