@@ -624,7 +624,6 @@ impl From<zbus::MessageError> for Error {
             zbus::MessageError::MissingField => {
                 Self::InconsistentMessage("Required message field missing".to_string())
             }
-            zbus::MessageError::Infallible => Self::ZBus(zbus::Error::Infallible),
         }
     }
 }
