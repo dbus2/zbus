@@ -34,8 +34,6 @@ where
         assert_eq!(ctxt.format(), EncodingFormat::DBus);
 
         let sig_parser = SignatureParser::new(signature.clone());
-        log::trace!("Creating serializer");
-        sig_parser.log_current();
         Self(crate::SerializerCommon {
             ctxt,
             sig_parser,
@@ -51,7 +49,6 @@ where
     where
         T: ?Sized + Serialize,
     {
-        log::trace!("Serializing variant with signature: {}", signature);
         let sig_parser = SignatureParser::new(signature);
         let bytes_written = self.0.bytes_written;
         let mut fds = vec![];
@@ -299,10 +296,7 @@ where
     }
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-        log::trace!("serialize_struct");
-        self.0.sig_parser.log_current();
         let c = self.0.sig_parser.next_char();
-        log::trace!("Got signature char: {}", c);
         match c {
             VARIANT_SIGNATURE_CHAR  => {
                 self.0.add_padding(VARIANT_ALIGNMENT_DBUS)?;
@@ -348,7 +342,6 @@ where
                 }))
             },
             _ => {
-                log::error!("Do not recognize signature char: {}", c);
                 let expected = format!(
                     "`{}` or `{}`",
                     STRUCT_SIG_START_STR, DICT_ENTRY_SIG_START_STR,
@@ -565,7 +558,6 @@ where
 
         // Get value signature
         let item_signature = sig_parser.parse_next_signature()?.clone();
-        log::trace!("Item signature is: {}", item_signature);
 
         // Serialize value (T) as variant with signature item_signature
 
