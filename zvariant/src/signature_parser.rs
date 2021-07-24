@@ -42,7 +42,6 @@ impl<'s> SignatureParser<'s> {
         // length.
         // FIXME: Probably best/safer if this method returned Option<char>
         let res = char::from(self.signature.as_bytes()[self.pos]);
-        log::trace!("next_char: {}", res);
         res
     }
 
