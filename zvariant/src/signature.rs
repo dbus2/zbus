@@ -23,6 +23,7 @@ use crate::{signature_parser::SignatureParser, Basic, EncodingFormat, Error, Res
 #[derive(PartialEq, Eq, Hash, Clone)]
 enum Bytes<'b> {
     Borrowed(&'b [u8]),
+    Static(&'static [u8]),
     Owned(Arc<[u8]>),
 }
 
@@ -42,6 +43,7 @@ impl<'b> std::ops::Deref for Bytes<'b> {
     fn deref(&self) -> &[u8] {
         match self {
             Bytes::Borrowed(borrowed) => borrowed,
+            Bytes::Static(borrowed) => borrowed,
             Bytes::Owned(owned) => owned,
         }
     }
@@ -114,9 +116,23 @@ impl<'a> Signature<'a> {
         }
     }
 
+    /// Same as `from_bytes_unchecked`, except it takes a static reference.
+    pub fn from_static_bytes_unchecked(bytes: &'static [u8]) -> Self {
+        Self {
+            bytes: Bytes::Static(bytes),
+            pos: 0,
+            end: bytes.len(),
+        }
+    }
+
     /// Same as `from_bytes_unchecked`, except it takes a string reference.
     pub fn from_str_unchecked<'s: 'a>(signature: &'s str) -> Self {
         Self::from_bytes_unchecked(signature.as_bytes())
+    }
+
+    /// Same as `from_str_unchecked`, except it takes a static string reference.
+    pub fn from_static_str_unchecked(signature: &'static str) -> Self {
+        Self::from_static_bytes_unchecked(signature.as_bytes())
     }
 
     /// Same as `from_str_unchecked`, except it takes an owned `String`.
@@ -151,6 +167,11 @@ impl<'a> Signature<'a> {
 
                 Signature { bytes, pos, end }
             }
+            Bytes::Static(b) => Signature {
+                bytes: Bytes::Static(b),
+                pos: self.pos,
+                end: self.end,
+            },
             Bytes::Owned(owned) => Signature {
                 bytes: Bytes::Owned(owned.clone()),
                 pos: self.pos,
@@ -236,7 +257,7 @@ impl<'a> Basic for Signature<'a> {
 
 impl<'a> Type for Signature<'a> {
     fn signature() -> Signature<'static> {
-        Signature::from_str_unchecked(Self::SIGNATURE_STR)
+        Signature::from_static_str_unchecked(Self::SIGNATURE_STR)
     }
 }
 
