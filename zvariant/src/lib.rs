@@ -1699,4 +1699,86 @@ mod tests {
         let _: Summary<'_> = from_slice(&encoded, ctxt).unwrap();
         // If we're able to deserialize all the data successfully, don't bother checking the summary data.
     }
+
+    #[test]
+    fn struct_serialize() {
+        #[derive(Serialize, Deserialize, Type)]
+        pub struct StructSerialize {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        let ctxt = Context::<LE>::new_dbus(0);
+        let a = StructSerialize {
+            a: "Hi".to_owned(),
+            b: 0.2,
+            c: ("Hello".to_owned(), 8.3),
+        };
+
+        let bytes = to_bytes(ctxt, &a).expect("serializing StructSerialize");
+        let good_bytes = [2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 201u8, 63u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8, 108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 32u8, 64u8,];
+        assert_eq!(bytes, good_bytes, "Mismatch of struct serialization with expected");
+    }
+
+    #[test]
+    fn struct_serialize_dict() {
+        use zvariant::to_bytes;
+
+        #[derive(SerializeDict, DeserializeDict, TypeDict)]
+        pub struct StructSerializeDict {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        let ctxt = Context::<LE>::new_dbus(0);
+        let a = StructSerializeDict {
+            a: "Hi".to_owned(),
+            b: 0.2,
+            c: ("Hello".to_owned(), 8.3),
+        };
+
+        let bytes = to_bytes(ctxt, &a).expect("serializing StructSerializeDict");
+        let good_bytes = [88u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 97u8, 0u8, 1u8, 115u8, 0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 98u8, 0u8, 1u8, 100u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 201u8, 63u8, 1u8, 0u8, 0u8, 0u8, 99u8, 0u8, 4u8, 40u8, 115u8, 100u8, 41u8, 0u8, 0u8, 0u8, 0u8, 0u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8, 108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 32u8, 64u8,];
+        assert_eq!(bytes, good_bytes, "Mismatch of struct serialization with expected");
+    }
+
+    #[test]
+    fn struct_serialize_dict_new() {
+        use zvariant::to_bytes;
+
+        #[derive(Serialize, Deserialize)]
+        pub struct StructSerializeNewDict {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        impl Type for StructSerializeNewDict {
+            fn signature() -> Signature<'static> {
+                Signature::from_str_unchecked("<sd(sd)>")
+            }
+        }
+
+        let ctxt = Context::<LE>::new_dbus(0);
+        let b = StructSerializeNewDict {
+            a: "Hi".to_owned(),
+            b: 0.2,
+            c: ("Hello".to_owned(), 8.3),
+        };
+
+        let bytes = to_bytes(ctxt, &b).expect("serializing StructSerializeNewDict");
+        let good_bytes = [88u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 97u8, 0u8, 1u8, 115u8, 0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 98u8, 0u8, 1u8, 100u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 201u8, 63u8, 1u8, 0u8, 0u8, 0u8, 99u8, 0u8, 4u8, 40u8, 115u8, 100u8, 41u8, 0u8, 0u8, 0u8, 0u8, 0u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8, 108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 32u8, 64u8,];
+        assert_eq!(bytes, good_bytes, "Mismatch of struct serialization with expected");
+        let signature = StructSerializeNewDict::signature().remove_serialize_dict_annotations();
+        assert_eq!(signature.as_str(), "a{sv}", "Signature not properly de-annotated")
+    }
+
+    #[test]
+    fn signature_remove_annotations() {
+        let signature = Signature::from_str_unchecked("<<a{sv}>(ss)>(s<>)");
+        let signature = signature.remove_serialize_dict_annotations();
+        assert_eq!(signature.as_str(), "a{sv}(sa{sv})");
+    }
 }
