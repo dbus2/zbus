@@ -1,7 +1,11 @@
+use serde::de::{DeserializeSeed, Deserializer, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeTupleStruct, Serializer};
 use static_assertions::assert_impl_all;
+use std::convert::TryInto;
 
-use crate::{DynamicType, OwnedValue, Signature, Type, Value};
+use crate::signature_parser::SignatureParser;
+use crate::value::SignatureSeed;
+use crate::{DynamicDeserialize, DynamicType, OwnedValue, Signature, Type, Value};
 
 /// Use this to efficiently build a [`Structure`].
 ///
@@ -57,6 +61,68 @@ impl<'a> StructureBuilder<'a> {
             fields: self.0,
             signature,
         }
+    }
+}
+
+/// Use this to deserialize a [`Structure`].
+///
+/// [`Structure`]: struct.Structure.html
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructureSeed<'a>(Signature<'a>);
+
+assert_impl_all!(StructureSeed<'_>: Send, Sync, Unpin);
+
+impl<'a> StructureSeed<'a> {
+    /// Create a new `StructureSeed`
+    ///
+    /// The given signature must be a valid structure signature.
+    pub fn new_unchecked(signature: Signature<'a>) -> Self {
+        StructureSeed(signature)
+    }
+}
+
+impl<'a> std::convert::TryFrom<Signature<'a>> for StructureSeed<'a> {
+    type Error = zvariant::Error;
+
+    fn try_from(signature: Signature<'a>) -> Result<Self, zvariant::Error> {
+        if signature.starts_with(zvariant::STRUCT_SIG_START_CHAR) {
+            Ok(StructureSeed(signature))
+        } else {
+            Err(zvariant::Error::IncorrectType)
+        }
+    }
+}
+
+impl<'de> DeserializeSeed<'de> for StructureSeed<'de> {
+    type Value = Structure<'de>;
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_seq(StructureVisitor { signature: self.0 })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct StructureVisitor<'a> {
+    signature: Signature<'a>,
+}
+
+impl<'de> Visitor<'de> for StructureVisitor<'de> {
+    type Value = Structure<'de>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a Structure value")
+    }
+
+    fn visit_seq<V>(self, visitor: V) -> Result<Structure<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        SignatureSeed {
+            signature: self.signature,
+        }
+        .visit_struct(visitor)
     }
 }
 
@@ -156,6 +222,44 @@ impl<'a> Default for Structure<'a> {
             fields: vec![],
             signature,
         }
+    }
+}
+
+impl<'a> DynamicType for Structure<'a> {
+    fn dynamic_signature(&self) -> Signature<'_> {
+        self.signature.clone()
+    }
+}
+
+impl<'a> DynamicType for StructureSeed<'a> {
+    fn dynamic_signature(&self) -> Signature<'_> {
+        self.0.clone()
+    }
+}
+
+impl<'a> DynamicDeserialize<'a> for Structure<'a> {
+    type Deserializer = StructureSeed<'a>;
+
+    fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
+    where
+        S: TryInto<Signature<'a>>,
+        S::Error: Into<zvariant::Error>,
+    {
+        let mut signature = signature.try_into().map_err(Into::into)?;
+        if !signature.starts_with(zvariant::STRUCT_SIG_START_CHAR) {
+            // This is certainly not a valid struct signature
+            signature = format!("({})", signature).try_into()?;
+            return signature.try_into();
+        }
+
+        // The signature might be something like "(i)u(i)" - we need to parse it to check.
+        let mut parser = SignatureParser::new(signature.clone());
+        parser.parse_next_signature()?;
+        if !parser.done() {
+            // more than one element - we must wrap it
+            signature = format!("({})", signature).try_into()?;
+        }
+        signature.try_into()
     }
 }
 
