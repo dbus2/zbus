@@ -1776,6 +1776,34 @@ mod tests {
     }
 
     #[test]
+    fn struct_serde_dict_new() {
+        use zvariant::to_bytes;
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        pub struct StructSerializeNewDict {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        impl Type for StructSerializeNewDict {
+            fn signature() -> Signature<'static> {
+                Signature::from_str_unchecked("<sd(sd)>")
+            }
+        }
+
+        let ctxt = Context::<LE>::new_dbus(0);
+        let b = StructSerializeNewDict {
+            a: "Hi".to_owned(),
+            b: 0.2,
+            c: ("Hello".to_owned(), 8.3),
+        };
+        let bytes = to_bytes(ctxt, &b).expect("serializing StructSerializeNewDict");
+        let b2 = from_slice(&bytes, ctxt).expect("deserializing StructSerialize");
+        assert_eq!(b, b2, "Serializing and deserializing StructSerializeNewDict fails");
+    }
+
+    #[test]
     fn signature_remove_annotations() {
         let signature = Signature::from_str_unchecked("<<a{sv}>(ss)>(s<>)");
         let signature = signature.remove_serialize_dict_annotations();

@@ -263,7 +263,7 @@ where
             ARRAY_SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
                 let next_signature_char = self.0.sig_parser.next_char();
-                let array_de = ArrayDeserializer::new(self)?;
+                let array_de = ArrayDeserializer::new(self, None)?;
 
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
                     visitor.visit_map(ArrayMapDeserializer(array_de))
@@ -279,6 +279,11 @@ where
                 self.0.sig_parser.skip_char()?;
 
                 visitor.visit_seq(StructureDeserializer { de: self })
+            }
+            SERIALIZE_DICT_SIG_START_CHAR => {
+                self.0.sig_parser.skip_char()?;
+                let array_de = ArrayDeserializer::new(self, Some(Signature::from_str_unchecked("{sv}")))?;
+                visitor.visit_seq(ValueDictionaryDeserializer(array_de))
             }
             c => Err(de::Error::invalid_type(
                 de::Unexpected::Char(c),
@@ -336,11 +341,15 @@ impl<'d, 'de, 'sig, 'f, B> ArrayDeserializer<'d, 'de, 'sig, 'f, B>
 where
     B: byteorder::ByteOrder,
 {
-    fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>) -> Result<Self> {
+    fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>, sig: Option<Signature<'sig>>) -> Result<Self> {
         de.0.parse_padding(ARRAY_ALIGNMENT_DBUS)?;
 
         let len = B::read_u32(de.0.next_slice(4)?) as usize;
-        let element_signature = de.0.sig_parser.next_signature()?;
+        let element_signature = if let Some(sig) = sig {
+            sig
+        } else {
+            de.0.sig_parser.next_signature()?
+        };
         let element_alignment = alignment_for_signature(&element_signature, EncodingFormat::DBus);
         let mut element_signature_len = element_signature.len();
 
@@ -426,9 +435,43 @@ where
     }
 
     de.0.sig_parser.skip_char()?;
-    let ad = ArrayDeserializer::new(de)?;
+    let ad = ArrayDeserializer::new(de, None)?;
     let len = ad.len;
     de.0.next_slice(len)
+}
+
+struct ValueDictionaryDeserializer<'d, 'de, 'sig, 'f, B>(ArrayDeserializer<'d, 'de, 'sig, 'f, B>);
+
+impl<'d, 'de, 'sig, 'f, B> SeqAccess<'de> for ValueDictionaryDeserializer<'d, 'de, 'sig, 'f, B>
+where
+    B: byteorder::ByteOrder,
+{
+    type Error = Error;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        // Grab and discard string
+        // XXX use compile-time constant for "s"
+        let string_sig_parser = SignatureParser::new(Signature::from_bytes_unchecked(b"s"));
+        let _: Option<String> = self.0.next_element(PhantomData, string_sig_parser)?;
+
+        // Grab and discard variant signature
+        // XXX use compile-time constant for "g"
+        let variant_sig_parser = SignatureParser::new(Signature::from_bytes_unchecked(b"g")); 
+        let _: String = self.0.next(PhantomData, variant_sig_parser)?;
+
+        // This is the money element
+        let next_sig = self.0.de.0.sig_parser.parse_next_signature()?.to_owned();
+        let sig_parser = SignatureParser::new(next_sig);
+
+        if self.0.de.0.sig_parser.next_char() == SERIALIZE_DICT_SIG_END_CHAR {
+            // Last one in <ABC>, so skip also the >. We'll stop getting called.
+            self.0.de.0.sig_parser.skip_char()?;
+        }
+        self.0.next(seed, sig_parser).map(Some)
+    }
 }
 
 struct ArraySeqDeserializer<'d, 'de, 'sig, 'f, B>(ArrayDeserializer<'d, 'de, 'sig, 'f, B>);

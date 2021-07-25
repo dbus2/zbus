@@ -33,10 +33,6 @@ impl<'s> SignatureParser<'s> {
         self.signature.slice(self.pos..self.end)
     }
 
-    pub fn log_current(&self) {
-        log::trace!("current signature: {}", from_utf8(&self.signature.as_bytes()[self.pos..self.end]).expect("signature should be valid utf8"));
-    }
-
     pub fn next_char(&self) -> char {
         // SAFETY: Other methods that increment `self.pos` must ensure we don't go beyond signature
         // length.
