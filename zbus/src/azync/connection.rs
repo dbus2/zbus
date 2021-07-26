@@ -214,11 +214,20 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// Having said that, the [`Sink`] is mainly useful for sending out signals, as they do not expect
 /// a reply, and serial numbers are not very useful for signals either for the same reason.
 ///
+/// Since you do not need exclusive access to a `zbus::Connection` to send messages on the bus,
+/// [`Sink`] is also implemented on `&Connection`.
+///
 /// ### Receiving Messages
 ///
 /// Unlike [`zbus::Connection`], there is no direct async equivalent of
 /// [`zbus::Connection::receive_message`] method provided. This is because the `futures` crate
 /// already provides a nice rich API that makes use of the [`stream::Stream`] implementation.
+///
+/// Each `Connection` instance maintains its own queue of incoming messages (storing the last
+/// `max_queued()` messages), so you can filter the stream for messages you care about and discard
+/// the rest.  To avoid having multiple receivers filtering the same queue, `Stream` is only
+/// available with an exclusive (mutable) reference to a `Connection`; clone the `Connection` to
+/// get a new queue to use the `Stream`.
 ///
 /// # Caveats
 ///
@@ -374,8 +383,7 @@ impl Connection {
     pub async fn send_message(&self, mut msg: Message) -> Result<u32> {
         let serial = self.assign_serial_num(&mut msg)?;
 
-        // Clone to get a mutable ref.
-        self.clone().send(msg).await?;
+        (&*self).send(msg).await?;
 
         Ok(serial)
     }
@@ -826,6 +834,26 @@ impl Connection {
 }
 
 impl Sink<Message> for Connection {
+    type Error = Error;
+
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        Pin::new(&mut &*self).poll_ready(cx)
+    }
+
+    fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
+        Pin::new(&mut &*self).start_send(msg)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        Pin::new(&mut &*self).poll_flush(cx)
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        Pin::new(&mut &*self).poll_close(cx)
+    }
+}
+
+impl<'a> Sink<Message> for &'a Connection {
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
