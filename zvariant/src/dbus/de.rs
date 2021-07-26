@@ -181,13 +181,16 @@ where
     where
         V: Visitor<'de>,
     {
+        log::trace!("deserialize_str");
         let len = match self.0.sig_parser.next_char() {
             Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
+                log::trace!("signature or variant");
                 let len_slice = self.0.next_slice(1)?;
 
                 len_slice[0] as usize
             }
             <&str>::SIGNATURE_CHAR | ObjectPath::SIGNATURE_CHAR => {
+                log::trace!("string or object path");
                 let alignment = u32::alignment(EncodingFormat::DBus);
                 self.0.parse_padding(alignment)?;
                 let len_slice = self.0.next_slice(alignment)?;
@@ -218,6 +221,8 @@ where
         self.0.pos += 1; // skip trailing null byte
         let s = str::from_utf8(slice).map_err(Error::Utf8)?;
         self.0.sig_parser.skip_char()?;
+
+        log::trace!("Parsed str: {}", s);
 
         visitor.visit_borrowed_str(s)
     }
@@ -254,13 +259,16 @@ where
     where
         V: Visitor<'de>,
     {
+        log::trace!("deserialize_seq");
         match self.0.sig_parser.next_char() {
             VARIANT_SIGNATURE_CHAR => {
+                log::trace!("variant");
                 let value_de = ValueDeserializer::new(self);
 
                 visitor.visit_seq(value_de)
             }
             ARRAY_SIGNATURE_CHAR => {
+                log::trace!("array");
                 self.0.sig_parser.skip_char()?;
                 let next_signature_char = self.0.sig_parser.next_char();
                 let array_de = ArrayDeserializer::new(self, None)?;
@@ -272,6 +280,7 @@ where
                 }
             }
             STRUCT_SIG_START_CHAR => {
+                log::trace!("struct sig");
                 let signature = self.0.sig_parser.next_signature()?;
                 let alignment = alignment_for_signature(&signature, EncodingFormat::DBus);
                 self.0.parse_padding(alignment)?;
@@ -281,6 +290,7 @@ where
                 visitor.visit_seq(StructureDeserializer { de: self })
             }
             SERIALIZE_DICT_SIG_START_CHAR => {
+                log::trace!("serialize dict");
                 self.0.sig_parser.skip_char()?;
                 let array_de = ArrayDeserializer::new(self, Some(Signature::from_str_unchecked("{sv}")))?;
                 visitor.visit_seq(ValueDictionaryDeserializer(array_de))
@@ -454,13 +464,17 @@ where
     {
         // Grab and discard string
         // XXX use compile-time constant for "s"
+        log::trace!("signature");
         let string_sig_parser = SignatureParser::new(Signature::from_bytes_unchecked(b"s"));
-        let _: Option<String> = self.0.next_element(PhantomData, string_sig_parser)?;
+        let val: Option<String> = self.0.next_element(PhantomData, string_sig_parser)?;
+        log::trace!("{:?}", val);
 
         // Grab and discard variant signature
         // XXX use compile-time constant for "g"
+        log::trace!("string");
         let variant_sig_parser = SignatureParser::new(Signature::from_bytes_unchecked(b"g")); 
-        let _: String = self.0.next(PhantomData, variant_sig_parser)?;
+        let val: String = self.0.next(PhantomData, variant_sig_parser)?;
+        log::trace!("{:?}", val);
 
         // This is the money element
         let next_sig = self.0.de.0.sig_parser.parse_next_signature()?.to_owned();

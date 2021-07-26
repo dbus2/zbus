@@ -1830,11 +1830,17 @@ mod tests {
             pub c: (String, f64),
         }
 
-        #[derive(SerializeDict, DeserializeDict, PartialEq, Debug, TypeDict)]
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
         pub struct Middle {
             pub a: String,
             pub b: Inner,
             pub c: i32,
+        }
+
+        impl Type for Middle {
+            fn signature() -> Signature<'static> {
+                Signature::from_str_unchecked("<s<sd(sd)>i>")
+            }
         }
 
         #[derive(SerializeDict, DeserializeDict, PartialEq, Debug, TypeDict)]
@@ -1852,7 +1858,7 @@ mod tests {
 
         impl Type for Outer {
             fn signature() -> Signature<'static> {
-                Signature::from_str_unchecked("<a{sv}d>")
+                Signature::from_str_unchecked("<<s<sd(sd)>(sd)>d>")
             }
         }
 
@@ -1898,6 +1904,9 @@ mod tests {
         info!("ser middle clone");
         let bytes2 = to_bytes(ctxt, &middle_clone).expect("ser of middle clone");
         assert_eq!(bytes, bytes2, "serializing new way and old way do not match for inner");
+        info!("de middle clone");
+        let middle_clone2 = from_slice(&bytes, ctxt).expect("de of middle clone");
+        assert_eq!(middle_clone, middle_clone2, "Can't even do it the old way anymore");
         info!("de");
         let middle2 = from_slice(&bytes, ctxt).expect("de of middle");
         assert_eq!(middle, middle2, "Serializing and deserializing nested structures fails");
