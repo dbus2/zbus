@@ -299,12 +299,12 @@ where
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
         let c = self.0.sig_parser.next_char();
         match c {
-            VARIANT_SIGNATURE_CHAR  => {
+            VARIANT_SIGNATURE_CHAR => {
                 self.0.add_padding(VARIANT_ALIGNMENT_DBUS)?;
                 Ok(StructSerializer::Variant(VariantStructSerializer {
                     ser: self,
                 }))
-            },
+            }
             STRUCT_SIG_START_CHAR | DICT_ENTRY_SIG_START_CHAR => {
                 let signature = self.0.sig_parser.next_signature()?;
                 let alignment = alignment_for_signature(&signature, EncodingFormat::DBus);
@@ -315,7 +315,7 @@ where
                 Ok(StructSerializer::Default(DefaultStructSerializer {
                     ser: self,
                 }))
-            },
+            }
             SERIALIZE_DICT_SIG_START_CHAR => {
                 // This is going to be a map, signature 'a{sv}'
                 // The signatures of the actual elements will be stored in the signature
@@ -324,7 +324,8 @@ where
                 self.0.write_u32::<B>(0_u32).map_err(Error::Io)?;
                 let element_signature = signature_string!("{sv}");
                 let element_signature_len = element_signature.len();
-                let element_alignment = alignment_for_signature(&element_signature, self.0.ctxt.format());
+                let element_alignment =
+                    alignment_for_signature(&element_signature, self.0.ctxt.format());
 
                 // D-Bus expects us to add padding for the first element even when there is no first
                 // element (i-e empty array) so we add padding already.
@@ -341,7 +342,7 @@ where
                     },
                     count: 0,
                 }))
-            },
+            }
             _ => {
                 let expected = format!(
                     "`{}` or `{}`",
@@ -351,7 +352,7 @@ where
                     serde::de::Unexpected::Char(c),
                     &expected.as_str(),
                 ))
-            },
+            }
         }
     }
 
@@ -456,9 +457,15 @@ where
         T: ?Sized + Serialize,
     {
         match self {
-            StructSerializer::Default(ref mut dss) => dss.serialize_struct_element::<T>(name, value),
-            StructSerializer::Variant(ref mut vss) => vss.serialize_struct_element::<T>(name, value),
-            StructSerializer::VariantDict(ref mut vdss) => vdss.serialize_struct_element::<T>(name, value),
+            StructSerializer::Default(ref mut dss) => {
+                dss.serialize_struct_element::<T>(name, value)
+            }
+            StructSerializer::Variant(ref mut vss) => {
+                vss.serialize_struct_element::<T>(name, value)
+            }
+            StructSerializer::VariantDict(ref mut vdss) => {
+                vdss.serialize_struct_element::<T>(name, value)
+            }
         }
     }
 
@@ -549,7 +556,9 @@ where
     where
         T: ?Sized + Serialize,
     {
-        let name = name.map(|x| x.to_string()).unwrap_or_else(|| format!("{}", self.count));
+        let name = name
+            .map(|x| x.to_string())
+            .unwrap_or_else(|| format!("{}", self.count));
         self.count += 1;
 
         let mut sig_parser = SignatureParser::new(signature_string!("{sv}"));
@@ -566,7 +575,9 @@ where
         self.seq_serializer.ser.0.sig_parser.skip_chars(2)?;
         item_signature.serialize(&mut *self.seq_serializer.ser)?;
 
-        self.seq_serializer.ser.serialize_variant_body(item_signature, value)?;
+        self.seq_serializer
+            .ser
+            .serialize_variant_body(item_signature, value)?;
 
         // Restore original signature
         swap(&mut self.seq_serializer.ser.0.sig_parser, &mut sig_parser);

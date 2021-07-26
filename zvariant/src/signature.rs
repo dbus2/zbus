@@ -1,3 +1,4 @@
+use crate::utils::{SERIALIZE_DICT_SIG_END_CHAR, SERIALIZE_DICT_SIG_START_CHAR};
 use core::{
     convert::TryFrom,
     fmt::{self, Debug, Display, Formatter},
@@ -12,7 +13,6 @@ use std::{
     ops::{Bound, RangeBounds},
     sync::Arc,
 };
-use crate::utils::{SERIALIZE_DICT_SIG_START_CHAR, SERIALIZE_DICT_SIG_END_CHAR};
 
 use crate::{signature_parser::SignatureParser, Basic, EncodingFormat, Error, Result, Type};
 
@@ -219,7 +219,7 @@ impl<'a> Signature<'a> {
                         res.push(b's');
                         res.push(b'v');
                         res.push(b'}');
-                    },
+                    }
                     _ => {
                         res.push(c);
                     }
@@ -228,10 +228,10 @@ impl<'a> Signature<'a> {
                 match c.into() {
                     SERIALIZE_DICT_SIG_END_CHAR => {
                         depth -= 1;
-                    },
+                    }
                     SERIALIZE_DICT_SIG_START_CHAR => {
                         depth += 1;
-                    },
+                    }
                     _ => (),
                 }
             }

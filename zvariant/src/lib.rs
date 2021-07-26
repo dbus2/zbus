@@ -218,8 +218,8 @@ mod tests {
         convert::{TryFrom, TryInto},
     };
 
-    use test_env_log::test;
     use log::info;
+    use test_env_log::test;
 
     #[cfg(feature = "arrayvec")]
     use arrayvec::{ArrayString, ArrayVec};
@@ -1720,8 +1720,15 @@ mod tests {
         };
 
         let bytes = to_bytes(ctxt, &a).expect("serializing StructSerialize");
-        let good_bytes = [2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 201u8, 63u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8, 108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 32u8, 64u8,];
-        assert_eq!(bytes, good_bytes, "Mismatch of struct serialization with expected");
+        let good_bytes = [
+            2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8,
+            201u8, 63u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8, 108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8,
+            0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 32u8, 64u8,
+        ];
+        assert_eq!(
+            bytes, good_bytes,
+            "Mismatch of struct serialization with expected"
+        );
     }
 
     #[test]
@@ -1743,8 +1750,19 @@ mod tests {
         };
 
         let bytes = to_bytes(ctxt, &a).expect("serializing StructSerializeDict");
-        let good_bytes = [88u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 97u8, 0u8, 1u8, 115u8, 0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 98u8, 0u8, 1u8, 100u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 201u8, 63u8, 1u8, 0u8, 0u8, 0u8, 99u8, 0u8, 4u8, 40u8, 115u8, 100u8, 41u8, 0u8, 0u8, 0u8, 0u8, 0u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8, 108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 32u8, 64u8,];
-        assert_eq!(bytes, good_bytes, "Mismatch of struct serialization with expected");
+        let good_bytes = [
+            88u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 97u8, 0u8, 1u8, 115u8,
+            0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8,
+            0u8, 0u8, 0u8, 98u8, 0u8, 1u8, 100u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8,
+            153u8, 153u8, 153u8, 153u8, 153u8, 201u8, 63u8, 1u8, 0u8, 0u8, 0u8, 99u8, 0u8, 4u8,
+            40u8, 115u8, 100u8, 41u8, 0u8, 0u8, 0u8, 0u8, 0u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8,
+            108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8,
+            153u8, 153u8, 32u8, 64u8,
+        ];
+        assert_eq!(
+            bytes, good_bytes,
+            "Mismatch of struct serialization with expected"
+        );
     }
 
     #[test]
@@ -1772,10 +1790,25 @@ mod tests {
         };
 
         let bytes = to_bytes(ctxt, &b).expect("serializing StructSerializeNewDict");
-        let good_bytes = [88u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 97u8, 0u8, 1u8, 115u8, 0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 98u8, 0u8, 1u8, 100u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 201u8, 63u8, 1u8, 0u8, 0u8, 0u8, 99u8, 0u8, 4u8, 40u8, 115u8, 100u8, 41u8, 0u8, 0u8, 0u8, 0u8, 0u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8, 108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 32u8, 64u8,];
-        assert_eq!(bytes, good_bytes, "Mismatch of struct serialization with expected");
+        let good_bytes = [
+            88u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 97u8, 0u8, 1u8, 115u8,
+            0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8,
+            0u8, 0u8, 0u8, 98u8, 0u8, 1u8, 100u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8,
+            153u8, 153u8, 153u8, 153u8, 153u8, 201u8, 63u8, 1u8, 0u8, 0u8, 0u8, 99u8, 0u8, 4u8,
+            40u8, 115u8, 100u8, 41u8, 0u8, 0u8, 0u8, 0u8, 0u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8,
+            108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8,
+            153u8, 153u8, 32u8, 64u8,
+        ];
+        assert_eq!(
+            bytes, good_bytes,
+            "Mismatch of struct serialization with expected"
+        );
         let signature = StructSerializeNewDict::signature().remove_serialize_dict_annotations();
-        assert_eq!(signature.as_str(), "a{sv}", "Signature not properly de-annotated")
+        assert_eq!(
+            signature.as_str(),
+            "a{sv}",
+            "Signature not properly de-annotated"
+        )
     }
 
     #[test]
@@ -1803,7 +1836,10 @@ mod tests {
         };
         let bytes = to_bytes(ctxt, &b).expect("serializing StructSerializeNewDict");
         let b2 = from_slice(&bytes, ctxt).expect("deserializing StructSerialize");
-        assert_eq!(b, b2, "Serializing and deserializing StructSerializeNewDict fails");
+        assert_eq!(
+            b, b2,
+            "Serializing and deserializing StructSerializeNewDict fails"
+        );
     }
 
     #[test]
@@ -1880,10 +1916,16 @@ mod tests {
         let bytes = to_bytes(ctxt, &inner).expect("ser of inner");
         info!("ser inner clone");
         let bytes2 = to_bytes(ctxt, &inner_clone).expect("ser of inner clone");
-        assert_eq!(bytes, bytes2, "serializing new way and old way do not match for inner");
+        assert_eq!(
+            bytes, bytes2,
+            "serializing new way and old way do not match for inner"
+        );
         info!("de");
         let inner2 = from_slice(&bytes, ctxt).expect("de of inner");
-        assert_eq!(inner, inner2, "Serializing and deserializing nested structures fails: inner");
+        assert_eq!(
+            inner, inner2,
+            "Serializing and deserializing nested structures fails: inner"
+        );
 
         let middle = Middle {
             a: "Hi".to_string(),
@@ -1903,18 +1945,24 @@ mod tests {
         let bytes = to_bytes(ctxt, &middle).expect("ser of middle");
         info!("ser middle clone");
         let bytes2 = to_bytes(ctxt, &middle_clone).expect("ser of middle clone");
-        assert_eq!(bytes, bytes2, "serializing new way and old way do not match for inner");
+        assert_eq!(
+            bytes, bytes2,
+            "serializing new way and old way do not match for inner"
+        );
         info!("de middle clone");
         let middle_clone2 = from_slice(&bytes, ctxt).expect("de of middle clone");
-        assert_eq!(middle_clone, middle_clone2, "Can't even do it the old way anymore");
+        assert_eq!(
+            middle_clone, middle_clone2,
+            "Can't even do it the old way anymore"
+        );
         info!("de");
         let middle2 = from_slice(&bytes, ctxt).expect("de of middle");
-        assert_eq!(middle, middle2, "Serializing and deserializing nested structures fails");
+        assert_eq!(
+            middle, middle2,
+            "Serializing and deserializing nested structures fails"
+        );
 
-        let val = Outer {
-            a: middle,
-            b: 3.2,
-        };
+        let val = Outer { a: middle, b: 3.2 };
 
         info!("outer");
         let ctxt = Context::<LE>::new_dbus(0);
@@ -1922,7 +1970,10 @@ mod tests {
         let bytes = to_bytes(ctxt, &val).expect("ser of outer");
         info!("de");
         let val2 = from_slice(&bytes, ctxt).expect("de of outer");
-        assert_eq!(val, val2, "Serializing and deserializing nested structures fails");
+        assert_eq!(
+            val, val2,
+            "Serializing and deserializing nested structures fails"
+        );
     }
 
     #[test]

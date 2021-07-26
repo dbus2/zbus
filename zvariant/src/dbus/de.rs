@@ -292,7 +292,8 @@ where
             SERIALIZE_DICT_SIG_START_CHAR => {
                 log::trace!("serialize dict");
                 self.0.sig_parser.skip_char()?;
-                let array_de = ArrayDeserializer::new(self, Some(Signature::from_str_unchecked("{sv}")))?;
+                let array_de =
+                    ArrayDeserializer::new(self, Some(Signature::from_str_unchecked("{sv}")))?;
                 visitor.visit_seq(ValueDictionaryDeserializer(array_de))
             }
             c => Err(de::Error::invalid_type(
@@ -351,7 +352,10 @@ impl<'d, 'de, 'sig, 'f, B> ArrayDeserializer<'d, 'de, 'sig, 'f, B>
 where
     B: byteorder::ByteOrder,
 {
-    fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>, sig: Option<Signature<'sig>>) -> Result<Self> {
+    fn new(
+        de: &'d mut Deserializer<'de, 'sig, 'f, B>,
+        sig: Option<Signature<'sig>>,
+    ) -> Result<Self> {
         de.0.parse_padding(ARRAY_ALIGNMENT_DBUS)?;
 
         let len = B::read_u32(de.0.next_slice(4)?) as usize;
@@ -472,7 +476,7 @@ where
         // Grab and discard variant signature
         // XXX use compile-time constant for "g"
         log::trace!("string");
-        let variant_sig_parser = SignatureParser::new(Signature::from_bytes_unchecked(b"g")); 
+        let variant_sig_parser = SignatureParser::new(Signature::from_bytes_unchecked(b"g"));
         let val: String = self.0.next(PhantomData, variant_sig_parser)?;
         log::trace!("{:?}", val);
 
