@@ -51,19 +51,19 @@ const FDO_DBUS_PATH: &str = "/org/freedesktop/DBus";
 const FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS: [&str; 2] = ["NameAcquired", "NameLost"];
 
 #[derive(Debug, Hash, Eq, PartialEq)]
-struct SignalInfo<'s> {
+struct SignalInfo<'s, 'p, 'i, 'sig> {
     sender: &'s str,
-    path: ObjectPath<'s>,
-    interface: &'s str,
-    signal_name: &'s str,
+    path: ObjectPath<'p>,
+    interface: &'i str,
+    signal_name: &'sig str,
 }
 
-impl<'s> SignalInfo<'s> {
+impl<'s, 'p, 'i, 'sig> SignalInfo<'s, 'p, 'i, 'sig> {
     fn new<E>(
         sender: &'s str,
-        path: impl TryInto<ObjectPath<'s>, Error = E>,
-        interface: &'s str,
-        signal_name: &'s str,
+        path: impl TryInto<ObjectPath<'p>, Error = E>,
+        interface: &'i str,
+        signal_name: &'sig str,
     ) -> Result<Self>
     where
         E: Into<Error>,
@@ -618,12 +618,12 @@ impl Connection {
         (self.inner.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
-    pub(crate) async fn subscribe_signal<'s, E>(
+    pub(crate) async fn subscribe_signal<E>(
         &self,
-        sender: &'s str,
-        path: impl TryInto<ObjectPath<'s>, Error = E>,
-        interface: &'s str,
-        signal_name: &'s str,
+        sender: &str,
+        path: impl TryInto<ObjectPath<'_>, Error = E>,
+        interface: &str,
+        signal_name: &str,
     ) -> Result<u64>
     where
         E: Into<Error>,
@@ -657,12 +657,12 @@ impl Connection {
         Ok(hash)
     }
 
-    pub(crate) async fn unsubscribe_signal<'s, E>(
+    pub(crate) async fn unsubscribe_signal<E>(
         &self,
-        sender: &'s str,
-        path: impl TryInto<ObjectPath<'s>, Error = E>,
-        interface: &'s str,
-        signal_name: &'s str,
+        sender: &str,
+        path: impl TryInto<ObjectPath<'_>, Error = E>,
+        interface: &str,
+        signal_name: &str,
     ) -> Result<bool>
     where
         Error: From<E>,
