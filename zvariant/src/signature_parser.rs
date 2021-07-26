@@ -1,5 +1,4 @@
 use std::ops::{Bound, RangeBounds};
-use std::str::from_utf8;
 
 use crate::{Basic, Fd, ObjectPath, Result, Signature};
 

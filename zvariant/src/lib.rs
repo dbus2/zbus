@@ -218,6 +218,9 @@ mod tests {
         convert::{TryFrom, TryInto},
     };
 
+    use test_env_log::test;
+    use log::info;
+
     #[cfg(feature = "arrayvec")]
     use arrayvec::{ArrayString, ArrayVec};
     use byteorder::{self, ByteOrder, BE, LE};
@@ -1801,6 +1804,116 @@ mod tests {
         let bytes = to_bytes(ctxt, &b).expect("serializing StructSerializeNewDict");
         let b2 = from_slice(&bytes, ctxt).expect("deserializing StructSerialize");
         assert_eq!(b, b2, "Serializing and deserializing StructSerializeNewDict fails");
+    }
+
+    #[test]
+    pub fn struct_nested_structures() {
+        use zvariant::to_bytes;
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        pub struct Inner {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        impl Type for Inner {
+            fn signature() -> Signature<'static> {
+                Signature::from_str_unchecked("<sd(sd)>")
+            }
+        }
+
+        #[derive(SerializeDict, DeserializeDict, PartialEq, Debug, TypeDict)]
+        pub struct InnerClone {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        #[derive(SerializeDict, DeserializeDict, PartialEq, Debug, TypeDict)]
+        pub struct Middle {
+            pub a: String,
+            pub b: Inner,
+            pub c: i32,
+        }
+
+        #[derive(SerializeDict, DeserializeDict, PartialEq, Debug, TypeDict)]
+        pub struct MiddleClone {
+            pub a: String,
+            pub b: InnerClone,
+            pub c: i32,
+        }
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        pub struct Outer {
+            pub a: Middle,
+            pub b: f64,
+        }
+
+        impl Type for Outer {
+            fn signature() -> Signature<'static> {
+                Signature::from_str_unchecked("<a{sv}d>")
+            }
+        }
+
+        let inner = Inner {
+            a: "Hey".to_string(),
+            b: 3.2,
+            c: ("Hi".to_string(), 0.1),
+        };
+
+        let inner_clone = InnerClone {
+            a: "Hey".to_string(),
+            b: 3.2,
+            c: ("Hi".to_string(), 0.1),
+        };
+
+        info!("inner");
+        let ctxt = Context::<LE>::new_dbus(0);
+        info!("ser inner");
+        let bytes = to_bytes(ctxt, &inner).expect("ser of inner");
+        info!("ser inner clone");
+        let bytes2 = to_bytes(ctxt, &inner_clone).expect("ser of inner clone");
+        assert_eq!(bytes, bytes2, "serializing new way and old way do not match for inner");
+        info!("de");
+        let inner2 = from_slice(&bytes, ctxt).expect("de of inner");
+        assert_eq!(inner, inner2, "Serializing and deserializing nested structures fails: inner");
+
+        let middle = Middle {
+            a: "Hi".to_string(),
+            b: inner2,
+            c: 32,
+        };
+
+        let middle_clone = MiddleClone {
+            a: "Hi".to_string(),
+            b: inner_clone,
+            c: 32,
+        };
+
+        info!("middle");
+        let ctxt = Context::<LE>::new_dbus(0);
+        info!("ser");
+        let bytes = to_bytes(ctxt, &middle).expect("ser of middle");
+        info!("ser middle clone");
+        let bytes2 = to_bytes(ctxt, &middle_clone).expect("ser of middle clone");
+        assert_eq!(bytes, bytes2, "serializing new way and old way do not match for inner");
+        info!("de");
+        let middle2 = from_slice(&bytes, ctxt).expect("de of middle");
+        assert_eq!(middle, middle2, "Serializing and deserializing nested structures fails");
+
+        let val = Outer {
+            a: middle,
+            b: 3.2,
+        };
+
+        info!("outer");
+        let ctxt = Context::<LE>::new_dbus(0);
+        info!("ser");
+        let bytes = to_bytes(ctxt, &val).expect("ser of outer");
+        info!("de");
+        let val2 = from_slice(&bytes, ctxt).expect("de of outer");
+        assert_eq!(val, val2, "Serializing and deserializing nested structures fails");
     }
 
     #[test]
