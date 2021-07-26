@@ -164,7 +164,7 @@ impl fmt::Display for Error {
             }
             Error::InvalidWellKnownName(s) => write!(f, "Invalid well-known bus name: {}", s),
             Error::InvalidUniqueName(s) => write!(f, "Invalid unique bus name: {}", s),
-            Error::InvalidInterfaceName(s) => write!(f, "Invalid interface name: {}", s),
+            Error::InvalidInterfaceName(s) => write!(f, "Invalid interface or error name: {}", s),
             Error::InvalidMemberName(s) => write!(f, "Invalid method or signal name: {}", s),
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
             Error::UnmatchedBodySignature => write!(f, "unmatched body signature"),

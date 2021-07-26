@@ -224,6 +224,13 @@ impl<'name> NoneValue for InterfaceName<'name> {
     }
 }
 
+/// String that identifies an [error name][en] on the bus.
+///
+/// Since error names have same constraints as interface names, this is just an type alias.
+///
+/// [en]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error
+pub type ErrorName<'i> = InterfaceName<'i>;
+
 /// Owned sibling of [`InterfaceName`].
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
 pub struct OwnedInterfaceName(#[serde(borrow)] InterfaceName<'static>);
@@ -307,3 +314,6 @@ impl NoneValue for OwnedInterfaceName {
         InterfaceName::null_value()
     }
 }
+
+/// Owned sibling of [`ErrorName`].
+pub type OwnedErrorName = OwnedInterfaceName;
