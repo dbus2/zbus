@@ -274,7 +274,7 @@ mod tests {
 
     use crate::{Connection, Error, Guid};
     #[test]
-    #[timeout(1000)]
+    #[timeout(15000)]
     fn unix_p2p() {
         let guid = Guid::generate();
 

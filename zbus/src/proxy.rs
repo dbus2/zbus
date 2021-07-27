@@ -331,7 +331,7 @@ mod tests {
     use test_env_log::test;
 
     #[test]
-    #[timeout(1000)]
+    #[timeout(15000)]
     fn signal() {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.

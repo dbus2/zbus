@@ -951,7 +951,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[timeout(1000)]
+    #[timeout(15000)]
     fn unix_p2p() {
         async_io::block_on(test_unix_p2p()).unwrap();
     }
@@ -1002,7 +1002,7 @@ mod tests {
     }
 
     #[test]
-    #[timeout(1000)]
+    #[timeout(15000)]
     fn serial_monotonically_increases() {
         async_io::block_on(test_serial_monotonically_increases());
     }

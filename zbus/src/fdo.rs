@@ -660,7 +660,7 @@ mod tests {
     }
 
     #[test]
-    #[timeout(1000)]
+    #[timeout(15000)]
     fn signal_connect() {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
@@ -724,7 +724,7 @@ mod tests {
     }
 
     #[test]
-    #[timeout(1000)]
+    #[timeout(15000)]
     fn signal_stream() {
         // Multi-threaded scheduler.
         runtime::Runtime::new()

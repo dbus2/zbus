@@ -197,7 +197,7 @@ mod tests {
     }
 
     #[test]
-    #[ntest::timeout(1000)]
+    #[ntest::timeout(15000)]
     fn multiple_proxy_signals() {
         struct MultiSignal {
             times_called: Rc<RefCell<u8>>,

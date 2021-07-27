@@ -847,7 +847,7 @@ mod tests {
     use test_env_log::test;
 
     #[test]
-    #[timeout(1000)]
+    #[timeout(15000)]
     fn signal_stream() {
         block_on(test_signal_stream()).unwrap();
     }
@@ -911,7 +911,7 @@ mod tests {
     }
 
     #[test]
-    #[timeout(1000)]
+    #[timeout(15000)]
     fn signal_connect() {
         block_on(test_signal_connect()).unwrap();
     }

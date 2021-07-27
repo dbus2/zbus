@@ -159,7 +159,7 @@ mod tests {
     use test_env_log::test;
 
     #[test]
-    #[ntest::timeout(1000)]
+    #[ntest::timeout(15000)]
     fn builder() {
         let conn = Connection::new_session().unwrap();
 

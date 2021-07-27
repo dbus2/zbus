@@ -863,7 +863,7 @@ mod tests {
     }
 
     #[test]
-    #[timeout(2000)]
+    #[timeout(15000)]
     fn basic_iface() {
         let (tx, rx) = channel::<()>();
 
