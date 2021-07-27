@@ -93,7 +93,16 @@ mod value;
 #[proc_macro_derive(Type)]
 pub fn type_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
-    r#type::expand_derive(ast).into()
+    r#type::expand_derive(ast, r#type::TypeMode::Typed).into()
+}
+
+/// Derive macro to add [`Type`] implementation for structs serialized as `a{sv}` DBus
+/// type, but `<ABC>` internal signatures. This is a new mechanism that is intended
+/// to be used with standard `Serialize` and `Deserialize` instances.
+#[proc_macro_derive(TypeDictNew)]
+pub fn type_macro_derive_dict_new(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    r#type::expand_derive(ast, r#type::TypeMode::Dict).into()
 }
 
 /// Derive macro to add [`Type`] implementation to structs serialized as `a{sv}` type.

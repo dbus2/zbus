@@ -4,24 +4,30 @@ use syn::{self, Attribute, Data, DataEnum, DeriveInput, Fields, Generics, Ident}
 
 use crate::utils::zvariant_path;
 
-pub fn expand_derive(ast: DeriveInput) -> TokenStream {
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum TypeMode {
+    Typed,
+    Dict,
+}
+
+pub fn expand_derive(ast: DeriveInput, type_mode: TypeMode) -> TokenStream {
     let zv = zvariant_path();
 
     match ast.data {
         Data::Struct(ds) => match ds.fields {
             Fields::Named(_) | Fields::Unnamed(_) => {
-                impl_struct(ast.ident, ast.generics, ds.fields, &zv)
+                impl_struct(ast.ident, ast.generics, ds.fields, &zv, type_mode)
             }
-            Fields::Unit => impl_unit_struct(ast.ident, ast.generics, &zv),
+            Fields::Unit => impl_unit_struct(ast.ident, ast.generics, &zv, type_mode),
         },
         Data::Enum(data) => impl_enum(ast.ident, ast.generics, ast.attrs, data, &zv),
         _ => panic!("Only structures and enums supported at the moment"),
     }
 }
 
-fn impl_struct(name: Ident, generics: Generics, fields: Fields, zv: &TokenStream) -> TokenStream {
+fn impl_struct(name: Ident, generics: Generics, fields: Fields, zv: &TokenStream, type_mode: TypeMode) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    let signature = signature_for_struct(fields, zv);
+    let signature = signature_for_struct(fields, zv, type_mode);
 
     quote! {
         impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
@@ -33,7 +39,7 @@ fn impl_struct(name: Ident, generics: Generics, fields: Fields, zv: &TokenStream
     }
 }
 
-fn signature_for_struct(fields: Fields, zv: &TokenStream) -> TokenStream {
+fn signature_for_struct(fields: Fields, zv: &TokenStream, type_mode: TypeMode) -> TokenStream {
     let field_types = fields.iter().map(|field| field.ty.to_token_stream());
     let new_type = match fields {
         Fields::Named(_) => false,
@@ -48,26 +54,35 @@ fn signature_for_struct(fields: Fields, zv: &TokenStream) -> TokenStream {
              )*
         }
     } else {
+        let (str_open, str_close) = match type_mode {
+            TypeMode::Typed => ("(", ")"),
+            TypeMode::Dict => ("<", ">"),
+        };
         quote! {
-            let mut s = <::std::string::String as ::std::convert::From<_>>::from("(");
+            let mut s = <::std::string::String as ::std::convert::From<_>>::from(#str_open);
             #(
                 s.push_str(<#field_types as #zv::Type>::signature().as_str());
             )*
-            s.push_str(")");
+            s.push_str(#str_close);
 
             #zv::Signature::from_string_unchecked(s)
         }
     }
 }
 
-fn impl_unit_struct(name: Ident, generics: Generics, zv: &TokenStream) -> TokenStream {
+fn impl_unit_struct(name: Ident, generics: Generics, zv: &TokenStream, type_mode: TypeMode) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let s = match type_mode {
+        TypeMode::Typed => "",
+        TypeMode::Dict => "<>",
+    };
 
     quote! {
         impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
             #[inline]
             fn signature() -> #zv::Signature<'static> {
-                #zv::Signature::from_str_unchecked("")
+                #zv::Signature::from_str_unchecked(#s)
             }
         }
     }

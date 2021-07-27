@@ -1846,7 +1846,7 @@ mod tests {
     pub fn struct_nested_structures() {
         use zvariant::to_bytes;
 
-        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        #[derive(Serialize, Deserialize, PartialEq, Debug, TypeDictNew)]
         pub struct Inner {
             pub a: String,
             pub b: f64,
@@ -1866,17 +1866,11 @@ mod tests {
             pub c: (String, f64),
         }
 
-        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        #[derive(Serialize, Deserialize, PartialEq, Debug, TypeDictNew)]
         pub struct Middle {
             pub a: String,
             pub b: Inner,
             pub c: i32,
-        }
-
-        impl Type for Middle {
-            fn signature() -> Signature<'static> {
-                Signature::from_str_unchecked("<s<sd(sd)>i>")
-            }
         }
 
         #[derive(SerializeDict, DeserializeDict, PartialEq, Debug, TypeDict)]
@@ -1886,7 +1880,7 @@ mod tests {
             pub c: i32,
         }
 
-        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        #[derive(Serialize, Deserialize, PartialEq, Debug, TypeDictNew)]
         pub struct Outer {
             pub a: Middle,
             pub b: f64,
