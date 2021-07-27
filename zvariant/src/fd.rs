@@ -40,7 +40,7 @@ impl io::AsRawFd for Fd {
 
 impl Type for Fd {
     fn signature() -> Signature<'static> {
-        Signature::from_str_unchecked(Self::SIGNATURE_STR)
+        Signature::from_static_str_unchecked(Self::SIGNATURE_STR)
     }
 }
 

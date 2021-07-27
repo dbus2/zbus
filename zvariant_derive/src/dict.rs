@@ -21,7 +21,7 @@ pub fn expand_type_derive(input: DeriveInput) -> TokenStream {
         #where_clause
         {
             fn signature() -> #zv::Signature<'static> {
-                #zv::Signature::from_str_unchecked("a{sv}")
+                #zv::Signature::from_static_str_unchecked("a{sv}")
             }
         }
     }

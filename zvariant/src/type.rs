@@ -84,7 +84,7 @@ where
 impl Type for () {
     #[inline]
     fn signature() -> Signature<'static> {
-        Signature::from_str_unchecked("")
+        Signature::from_static_str_unchecked("")
     }
 }
 
@@ -231,14 +231,14 @@ where
 #[cfg(feature = "serde_bytes")]
 impl Type for serde_bytes::Bytes {
     fn signature() -> Signature<'static> {
-        Signature::from_str_unchecked("ay")
+        Signature::from_static_str_unchecked("ay")
     }
 }
 
 #[cfg(feature = "serde_bytes")]
 impl Type for serde_bytes::ByteBuf {
     fn signature() -> Signature<'static> {
-        Signature::from_str_unchecked("ay")
+        Signature::from_static_str_unchecked("ay")
     }
 }
 
