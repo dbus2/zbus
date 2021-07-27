@@ -1,9 +1,6 @@
 use async_io::Async;
 use static_assertions::assert_impl_all;
-use std::{
-    convert::TryInto,
-    os::unix::{io::AsRawFd, net::UnixStream},
-};
+use std::{convert::TryInto, os::unix::net::UnixStream};
 
 use crate::{
     address::{self, Address},
@@ -18,6 +15,7 @@ const DEFAULT_MAX_QUEUED: usize = 64;
 enum Target {
     UnixStream(UnixStream),
     Address(Address),
+    Socket(Box<dyn Socket>),
 }
 
 /// A builder for [`zbus::azync::Connection`].
@@ -58,6 +56,11 @@ impl<'a> ConnectionBuilder<'a> {
     /// Create a builder for connection that will use the given unix stream.
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self::new(Target::UnixStream(stream))
+    }
+
+    /// Create a builder for connection that will use the given socket.
+    pub fn socket<S: Socket + 'static>(socket: S) -> Self {
+        Self::new(Target::Socket(Box::new(socket)))
     }
 
     /// The to-be-created connection will be a peer-to-peer connection.
@@ -115,15 +118,16 @@ impl<'a> ConnectionBuilder<'a> {
     /// result in [`Error::Unsupported`] error.
     pub async fn build(self) -> Result<Connection> {
         let stream = match self.target {
-            Target::UnixStream(stream) => stream,
+            Target::UnixStream(stream) => Box::new(Async::new(stream)?),
             Target::Address(address) => match address.connect().await? {
-                address::Stream::Unix(stream) => stream.into_inner()?,
+                address::Stream::Unix(stream) => Box::new(Async::new(stream.into_inner()?)?),
             },
+            Target::Socket(stream) => stream,
         };
         let auth = match self.guid {
             None => {
                 // SASL Handshake
-                Authenticated::client(Box::new(Async::new(stream)?) as Box<dyn Socket>).await?
+                Authenticated::client(stream).await?
             }
             Some(guid) => {
                 if !self.p2p {
@@ -155,12 +159,7 @@ impl<'a> ConnectionBuilder<'a> {
                     .0
                     .into();
 
-                Authenticated::server(
-                    Box::new(Async::new(stream)?) as Box<dyn Socket>,
-                    guid.clone(),
-                    client_uid,
-                )
-                .await?
+                Authenticated::server(stream, guid.clone(), client_uid).await?
             }
         };
 

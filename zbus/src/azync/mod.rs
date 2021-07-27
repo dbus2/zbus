@@ -12,3 +12,5 @@ mod proxy;
 pub use proxy::*;
 mod proxy_builder;
 pub use proxy_builder::*;
+
+pub use crate::raw::Socket;
