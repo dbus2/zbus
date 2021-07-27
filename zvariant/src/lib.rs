@@ -165,6 +165,9 @@ mod maybe;
 #[cfg(feature = "gvariant")]
 pub use crate::maybe::*;
 
+mod optional;
+pub use crate::optional::*;
+
 mod value;
 pub use value::*;
 

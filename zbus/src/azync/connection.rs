@@ -40,7 +40,8 @@ use crate::{
     azync::Authenticated,
     fdo,
     raw::{Connection as RawConnection, Socket},
-    Error, Guid, Message, MessageError, MessageType, Result,
+    BusName, Error, ErrorName, Guid, InterfaceName, MemberName, Message, MessageType,
+    OwnedUniqueName, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -51,28 +52,30 @@ const FDO_DBUS_PATH: &str = "/org/freedesktop/DBus";
 const FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS: [&str; 2] = ["NameAcquired", "NameLost"];
 
 #[derive(Debug, Hash, Eq, PartialEq)]
-struct SignalInfo<'s> {
-    sender: &'s str,
-    path: ObjectPath<'s>,
-    interface: &'s str,
-    signal_name: &'s str,
+struct SignalInfo<'s, 'p, 'i, 'm> {
+    sender: BusName<'s>,
+    path: ObjectPath<'p>,
+    interface: InterfaceName<'i>,
+    signal_name: MemberName<'m>,
 }
 
-impl<'s> SignalInfo<'s> {
-    fn new<E>(
-        sender: &'s str,
-        path: impl TryInto<ObjectPath<'s>, Error = E>,
-        interface: &'s str,
-        signal_name: &'s str,
-    ) -> Result<Self>
+impl<'s, 'p, 'i, 'm> SignalInfo<'s, 'p, 'i, 'm> {
+    fn new<S, P, I, M>(sender: S, path: P, interface: I, signal_name: M) -> Result<Self>
     where
-        E: Into<Error>,
+        S: TryInto<BusName<'s>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
     {
         Ok(Self {
-            sender,
+            sender: sender.try_into().map_err(Into::into)?,
             path: path.try_into().map_err(Into::into)?,
-            interface,
-            signal_name,
+            interface: interface.try_into().map_err(Into::into)?,
+            signal_name: signal_name.try_into().map_err(Into::into)?,
         })
     }
 
@@ -92,7 +95,7 @@ impl<'s> SignalInfo<'s> {
         self.sender == FDO_DBUS_SERVICE
             && self.interface == FDO_DBUS_INTERFACE
             && self.path.as_str() == FDO_DBUS_PATH
-            && FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS.contains(&self.signal_name)
+            && FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS.contains(&&*self.signal_name)
     }
 
     fn calc_hash(&self) -> u64 {
@@ -114,7 +117,7 @@ struct ConnectionInner<S> {
     server_guid: Guid,
     cap_unix_fd: bool,
     bus_conn: bool,
-    unique_name: OnceCell<String>,
+    unique_name: OnceCell<OwnedUniqueName>,
 
     raw_in_conn: Arc<Mutex<RawConnection<Async<S>>>>,
     // FIXME: We really should be using async_lock::Mutex here but `Sink::start_send is not very
@@ -394,17 +397,24 @@ impl Connection {
     ///
     /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
     /// error replies are returned as [`Error::MethodError`].
-    pub async fn call_method<B, E>(
+    pub async fn call_method<'d, 'p, 'i, 'm, D, P, I, M, B>(
         &self,
-        destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'_>, Error = E>,
-        interface: Option<&str>,
-        method_name: &str,
+        destination: Option<D>,
+        path: P,
+        interface: Option<I>,
+        method_name: M,
         body: &B,
     ) -> Result<Arc<Message>>
     where
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<MessageError>,
     {
         let stream = self.clone();
         let m = Message::method(
@@ -456,17 +466,24 @@ impl Connection {
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub async fn emit_signal<B, E>(
+    pub async fn emit_signal<'d, 'p, 'i, 'm, D, P, I, M, B>(
         &self,
-        destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'_>, Error = E>,
-        interface: &str,
-        signal_name: &str,
+        destination: Option<D>,
+        path: P,
+        interface: I,
+        signal_name: M,
         body: &B,
     ) -> Result<()>
     where
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<MessageError>,
     {
         let m = Message::signal(
             self.unique_name(),
@@ -500,9 +517,16 @@ impl Connection {
     /// with the given `error_name` and `body`.
     ///
     /// Returns the message serial number.
-    pub async fn reply_error<B>(&self, call: &Message, error_name: &str, body: &B) -> Result<u32>
+    pub async fn reply_error<'e, E, B>(
+        &self,
+        call: &Message,
+        error_name: E,
+        body: &B,
+    ) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
+        E: TryInto<ErrorName<'e>>,
+        E::Error: Into<Error>,
     {
         let m = Message::method_error(self.unique_name(), call, error_name, body)?;
         self.send_message(m).await
@@ -529,8 +553,8 @@ impl Connection {
     }
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
-    pub fn unique_name(&self) -> Option<&str> {
-        self.inner.unique_name.get().map(|s| s.as_str())
+    pub fn unique_name(&self) -> Option<&OwnedUniqueName> {
+        self.inner.unique_name.get()
     }
 
     /// Max number of messages to queue.
@@ -618,15 +642,22 @@ impl Connection {
         (self.inner.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
-    pub(crate) async fn subscribe_signal<'s, E>(
+    pub(crate) async fn subscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
         &self,
-        sender: &'s str,
-        path: impl TryInto<ObjectPath<'s>, Error = E>,
-        interface: &'s str,
-        signal_name: &'s str,
+        sender: S,
+        path: P,
+        interface: I,
+        signal_name: M,
     ) -> Result<u64>
     where
-        E: Into<Error>,
+        S: TryInto<BusName<'s>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
     {
         let signal = SignalInfo::new(sender, path, interface, signal_name)?;
         let hash = signal.calc_hash();
@@ -657,17 +688,29 @@ impl Connection {
         Ok(hash)
     }
 
-    pub(crate) async fn unsubscribe_signal<'s, E>(
+    pub(crate) async fn unsubscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
         &self,
-        sender: &'s str,
-        path: impl TryInto<ObjectPath<'s>, Error = E>,
-        interface: &'s str,
-        signal_name: &'s str,
+        sender: S,
+        path: P,
+        interface: I,
+        signal_name: M,
     ) -> Result<bool>
     where
-        Error: From<E>,
+        S: TryInto<BusName<'s>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
     {
-        let signal = SignalInfo::new(sender, path, interface, signal_name)?;
+        let signal = SignalInfo::new(
+            sender.try_into().map_err(Into::into)?,
+            path,
+            interface,
+            signal_name,
+        )?;
         let hash = signal.calc_hash();
 
         self.unsubscribe_signal_by_id(hash).await
@@ -979,14 +1022,14 @@ mod tests {
 
             // Send another message first to check the queueing function on client side.
             server_conn
-                .emit_signal(None, "/", "org.zbus.p2p", "ASignalForYou", &())
+                .emit_signal(None::<()>, "/", "org.zbus.p2p", "ASignalForYou", &())
                 .await?;
             server_conn.reply(&method, &("yay")).await
         };
 
         let client_future = async {
             let reply = client_conn
-                .call_method(None, "/", Some("org.zbus.p2p"), "Test", &())
+                .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
             // Check we didn't miss the signal that was sent during the call.

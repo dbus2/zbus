@@ -14,7 +14,7 @@ our choice. To achieve that, we will we call the [`RequestName`] method on the b
 `zbus::fdo` module:
 
 ```rust,no_run
-use std::error::Error;
+use std::{convert::TryInto, error::Error};
 
 use zbus::Connection;
 use zbus::fdo;
@@ -23,7 +23,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     let connection = Connection::new_session()?;
 
     fdo::DBusProxy::new(&connection)?.request_name(
-        "org.zbus.MyGreeter",
+        "org.zbus.MyGreeter".try_into()?,
         fdo::RequestNameFlags::ReplaceExisting.into(),
     )?;
 
@@ -51,10 +51,11 @@ Let's write a `SayHello` method, that takes a string as argument, and reply with
 by replacing the loop above with this code:
 
 ```rust,no_run
+# use std::convert::TryInto;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
 #    let connection = zbus::Connection::new_session()?;
 #    zbus::fdo::DBusProxy::new(&connection)?.request_name(
-#        "org.zbus.MyGreeter",
+#        "org.zbus.MyGreeter".try_into()?,
 #        zbus::fdo::RequestNameFlags::ReplaceExisting.into(),
 #    )?;
 #

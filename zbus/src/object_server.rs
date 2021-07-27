@@ -19,7 +19,8 @@ use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 use crate::{
     azync, fdo,
     fdo::{Introspectable, Peer, Properties},
-    Connection, Error, Message, MessageHeader, MessageType, Result,
+    BusName, Connection, Error, InterfaceName, MemberName, Message, MessageHeader, MessageType,
+    Result, WellKnownName,
 };
 
 scoped_thread_local!(pub(crate) static LOCAL_NODE: Node);
@@ -33,7 +34,7 @@ scoped_thread_local!(static LOCAL_CONNECTION: Connection);
 /// [`dbus_interface`]: attr.dbus_interface.html
 pub trait Interface: Any {
     /// Return the name of the interface. Ex: "org.foo.MyInterface"
-    fn name() -> &'static str
+    fn name() -> InterfaceName<'static>
     where
         Self: Sized;
 
@@ -47,14 +48,19 @@ pub trait Interface: Any {
     fn set(&mut self, property_name: &str, value: &Value<'_>) -> Option<fdo::Result<()>>;
 
     /// Call a `&self` method. Returns `None` if the method doesn't exist.
-    fn call(&self, connection: &Connection, msg: &Message, name: &str) -> Option<Result<u32>>;
+    fn call(
+        &self,
+        connection: &Connection,
+        msg: &Message,
+        name: MemberName<'_>,
+    ) -> Option<Result<u32>>;
 
     /// Call a `&mut self` method. Returns `None` if the method doesn't exist.
     fn call_mut(
         &mut self,
         connection: &Connection,
         msg: &Message,
-        name: &str,
+        name: MemberName<'_>,
     ) -> Option<Result<u32>>;
 
     /// Write introspection XML to the writer, with the given indentation level.
@@ -79,7 +85,7 @@ pub(crate) struct Node {
     path: OwnedObjectPath,
     children: HashMap<String, Node>,
     #[derivative(Debug = "ignore")]
-    interfaces: HashMap<&'static str, Rc<RefCell<dyn Interface>>>,
+    interfaces: HashMap<InterfaceName<'static>, Rc<RefCell<dyn Interface>>>,
 }
 
 impl Node {
@@ -95,26 +101,29 @@ impl Node {
         node
     }
 
-    pub(crate) fn get_interface(&self, iface: &str) -> Option<Rc<RefCell<dyn Interface>>> {
-        self.interfaces.get(iface).cloned()
+    pub(crate) fn get_interface(
+        &self,
+        interface_name: InterfaceName<'_>,
+    ) -> Option<Rc<RefCell<dyn Interface>>> {
+        self.interfaces.get(&interface_name).cloned()
     }
 
-    fn remove_interface(&mut self, iface: &str) -> bool {
-        self.interfaces.remove(iface).is_some()
+    fn remove_interface(&mut self, interface_name: InterfaceName<'static>) -> bool {
+        self.interfaces.remove(&interface_name).is_some()
     }
 
     fn is_empty(&self) -> bool {
         !self
             .interfaces
             .keys()
-            .any(|&k| k != Peer::name() && k != Introspectable::name() && k != Properties::name())
+            .any(|k| *k != Peer::name() && *k != Introspectable::name() && *k != Properties::name())
     }
 
     fn remove_node(&mut self, node: &str) -> bool {
         self.children.remove(node).is_some()
     }
 
-    fn at<I>(&mut self, name: &'static str, iface: I) -> bool
+    fn at<I>(&mut self, name: InterfaceName<'static>, iface: I) -> bool
     where
         I: Interface,
     {
@@ -133,7 +142,7 @@ impl Node {
     {
         let iface = self
             .interfaces
-            .get(I::name())
+            .get(&I::name())
             .ok_or(Error::InterfaceNotFound)?
             .borrow();
         let iface = iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
@@ -183,21 +192,28 @@ impl Node {
         xml
     }
 
-    fn emit_signal<B>(
+    fn emit_signal<'d, 'i, 'm, D, I, M, DE, IE, ME, B>(
         &self,
-        dest: Option<&str>,
-        iface: &str,
-        signal_name: &str,
+        dest: Option<D>,
+        interface_name: I,
+        signal_name: M,
         body: &B,
     ) -> Result<()>
     where
+        D: TryInto<BusName<'d>, Error = DE>,
+        I: TryInto<InterfaceName<'i>, Error = IE>,
+        M: TryInto<MemberName<'m>, Error = ME>,
+        DE: Into<Error>,
+        IE: Into<Error>,
+        ME: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
     {
         if !LOCAL_CONNECTION.is_set() {
             panic!("emit_signal: Connection TLS not set");
         }
 
-        LOCAL_CONNECTION.with(|conn| conn.emit_signal(dest, &self.path, iface, signal_name, body))
+        LOCAL_CONNECTION
+            .with(|conn| conn.emit_signal(dest, &self.path, interface_name, signal_name, body))
     }
 }
 
@@ -269,7 +285,7 @@ pub struct ObjectServer {
     root: Node,
     #[derivative(Debug = "ignore")]
     msg_stream: azync::Connection,
-    registered_names: HashSet<String>,
+    registered_names: HashSet<WellKnownName<'static>>,
 }
 
 assert_impl_all!(ObjectServer: Unpin);
@@ -296,13 +312,18 @@ impl ObjectServer {
     /// since that is the most typical case. If that is not what you want, you should use
     /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
     /// **after** instantiating the `ObjectServer`).
-    pub fn request_name(mut self, well_known_name: &str) -> Result<Self> {
+    pub fn request_name<'w, W, E>(mut self, well_known_name: W) -> Result<Self>
+    where
+        W: TryInto<WellKnownName<'w>, Error = E>,
+        E: Into<Error>,
+    {
+        let well_known_name = well_known_name.try_into().map_err(Into::into)?;
         DBusProxy::new(&self.conn)?.request_name(
-            well_known_name,
+            well_known_name.clone(),
             RequestNameFlags::ReplaceExisting | RequestNameFlags::DoNotQueue,
         )?;
 
-        self.registered_names.insert(well_known_name.to_string());
+        self.registered_names.insert(well_known_name.to_owned());
 
         Ok(self)
     }
@@ -315,8 +336,14 @@ impl ObjectServer {
     /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
     /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
     /// was not previously registered or already deregistered.
-    pub fn release_name(&mut self, well_known_name: &str) -> Result<bool> {
-        if !self.registered_names.remove(well_known_name) {
+    pub fn release_name<'w, W, E>(&mut self, well_known_name: W) -> Result<bool>
+    where
+        W: TryInto<WellKnownName<'w>, Error = E>,
+        E: Into<Error>,
+    {
+        let well_known_name: WellKnownName<'w> = well_known_name.try_into().map_err(Into::into)?;
+        // FIXME: Should be possible to avoid cloning/allocation here.
+        if !self.registered_names.remove(&well_known_name.to_owned()) {
             return Ok(false);
         }
 
@@ -474,20 +501,26 @@ impl ObjectServer {
     /// to bring a node into the current context.
     ///
     /// [`dbus_interface`]: attr.dbus_interface.html
-    pub fn local_node_emit_signal<B>(
-        destination: Option<&str>,
-        iface: &str,
-        signal_name: &str,
+    pub fn local_node_emit_signal<'d, 'i, 'm, D, I, M, DE, IE, ME, B>(
+        destination: Option<D>,
+        interface_name: I,
+        signal_name: M,
         body: &B,
     ) -> Result<()>
     where
+        D: TryInto<BusName<'d>, Error = DE>,
+        I: TryInto<InterfaceName<'i>, Error = IE>,
+        M: TryInto<MemberName<'m>, Error = ME>,
+        DE: Into<Error>,
+        IE: Into<Error>,
+        ME: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
     {
         if !LOCAL_NODE.is_set() {
             panic!("emit_signal: Node TLS not set");
         }
 
-        LOCAL_NODE.with(|n| n.emit_signal(destination, iface, signal_name, body))
+        LOCAL_NODE.with(|n| n.emit_signal(destination, interface_name, signal_name, body))
     }
 
     fn dispatch_method_call_try(
@@ -519,14 +552,14 @@ impl ObjectServer {
         let node = self
             .get_node_mut(path, false)
             .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
-        let iface = node.get_interface(iface).ok_or_else(|| {
+        let iface = node.get_interface(iface.clone()).ok_or_else(|| {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
         })?;
 
         LOCAL_CONNECTION.set(&conn, || {
             LOCAL_NODE.set(node, || {
-                let res = iface.borrow().call(&conn, msg, member);
-                res.or_else(|| iface.borrow_mut().call_mut(&conn, msg, member))
+                let res = iface.borrow().call(&conn, msg, member.clone());
+                res.or_else(|| iface.borrow_mut().call_mut(&conn, msg, member.clone()))
                     .ok_or_else(|| {
                         fdo::Error::UnknownMethod(format!("Unknown method '{}'", member))
                     })
@@ -604,7 +637,7 @@ impl Drop for ObjectServer {
         // FIXME: Ignoring the errors here and on the method call, they should be logged.
         if let Ok(proxy) = DBusProxy::new(&self.conn) {
             for name in &self.registered_names {
-                let _ = proxy.release_name(name);
+                let _ = proxy.release_name(name.clone());
             }
         }
     }
@@ -616,6 +649,7 @@ mod tests {
     use std::{
         cell::Cell,
         collections::HashMap,
+        convert::TryInto,
         error::Error,
         rc::Rc,
         sync::mpsc::{channel, Sender},
@@ -702,7 +736,7 @@ mod tests {
 
         fn test_header(&self, #[zbus(header)] header: MessageHeader<'_>) {
             assert_eq!(header.message_type().unwrap(), MessageType::MethodCall);
-            assert_eq!(header.member().unwrap(), Some("TestHeader"));
+            assert_eq!(header.member().unwrap().unwrap(), "TestHeader");
         }
 
         fn test_error(&self) -> zbus::fdo::Result<()> {
@@ -782,13 +816,13 @@ mod tests {
     fn my_iface_test(tx: Sender<()>) -> std::result::Result<u32, Box<dyn Error>> {
         let conn = Connection::new_session()?;
         let proxy = MyIfaceProxy::builder(&conn)
-            .destination("org.freedesktop.MyService")
+            .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
             // the server isn't yet running
             .cache_properties(false)
             .build()?;
         let props_proxy = zbus::fdo::PropertiesProxy::builder(&conn)
-            .destination("org.freedesktop.MyService")
+            .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
             .build()?;
 
@@ -850,7 +884,7 @@ mod tests {
 
         proxy.create_obj("MyObj")?;
         let my_obj_proxy = MyIfaceProxy::builder(&conn)
-            .destination("org.freedesktop.MyService")
+            .destination("org.freedesktop.MyService")?
             .path("/zbus/test/MyObj")?
             .build()?;
         my_obj_proxy.ping()?;
@@ -933,13 +967,16 @@ mod tests {
 
         // Let's ensure all names were released.
         let proxy = zbus::fdo::DBusProxy::new(&conn).unwrap();
-        assert_eq!(proxy.name_has_owner("org.freedesktop.MyService"), Ok(false));
         assert_eq!(
-            proxy.name_has_owner("org.freedesktop.MyService.foo"),
+            proxy.name_has_owner("org.freedesktop.MyService".try_into().unwrap()),
             Ok(false)
         );
         assert_eq!(
-            proxy.name_has_owner("org.freedesktop.MyService.bar"),
+            proxy.name_has_owner("org.freedesktop.MyService.foo".try_into().unwrap()),
+            Ok(false)
+        );
+        assert_eq!(
+            proxy.name_has_owner("org.freedesktop.MyService.bar".try_into().unwrap()),
             Ok(false)
         );
     }

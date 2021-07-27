@@ -2,7 +2,7 @@ use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, sync::Arc};
 use zvariant::Error as VariantError;
 
-use crate::{fdo, Message, MessageError, MessageType};
+use crate::{fdo, Message, MessageType, OwnedErrorName};
 
 /// The error type for `zbus`.
 ///
@@ -16,10 +16,16 @@ pub enum Error {
     Address(String),
     /// An I/O error.
     Io(io::Error),
-    /// Message parsing error.
-    Message(MessageError),
+    /// Insufficient data provided to create a valid D-Bus message.
+    InsufficientData,
+    /// Invalid message field.
+    InvalidField,
+    /// Data too large.
+    ExcessData,
     /// A [zvariant](../zvariant/index.html) error.
     Variant(VariantError),
+    /// Endian signature invalid or doesn't match expectation.
+    IncorrectEndian,
     /// Initial handshake error.
     Handshake(String),
     /// Unexpected or incorrect reply.
@@ -27,7 +33,9 @@ pub enum Error {
     /// A D-Bus method error reply.
     // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds anything more than a
     // string description.
-    MethodError(String, Option<String>, Arc<Message>),
+    MethodError(OwnedErrorName, Option<String>, Arc<Message>),
+    /// A required field is missing in the message headers.
+    MissingField,
     /// Invalid D-Bus GUID.
     InvalidGUID,
     /// Unsupported function, or support currently lacking.
@@ -37,15 +45,53 @@ pub enum Error {
     #[cfg(feature = "xml")]
     /// An XML error
     SerdeXml(serde_xml_rs::Error),
+    /// Invalid bus name. The strings describe why the bus name is neither a valid unique nor
+    /// well-known name, respectively.
+    InvalidBusName(String, String),
+    /// Invalid well-known bus name.
+    InvalidWellKnownName(String),
+    /// Invalid unique bus name.
+    InvalidUniqueName(String),
+    /// Invalid interface name.
+    InvalidInterfaceName(String),
+    /// Invalid member (method or signal) name.
+    InvalidMemberName(String),
+    /// Missing body signature in the message.
+    NoBodySignature,
+    /// Unmatching/bad body signature in the message.
+    UnmatchedBodySignature,
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
 
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {
-        match self {
-            Error::Io(_) => false,
-            _ => self == other,
+        match (self, other) {
+            (Self::Address(_), Self::Address(_)) => true,
+            (Self::InsufficientData, Self::InsufficientData) => true,
+            (Self::InterfaceNotFound, Self::InterfaceNotFound) => true,
+            (Self::Handshake(_), Self::Handshake(_)) => true,
+            (Self::InvalidReply, Self::InvalidReply) => true,
+            (Self::ExcessData, Self::ExcessData) => true,
+            (Self::IncorrectEndian, Self::IncorrectEndian) => true,
+            (Self::MethodError(_, _, _), Self::MethodError(_, _, _)) => true,
+            (Self::MissingField, Self::MissingField) => true,
+            (Self::InvalidGUID, Self::InvalidGUID) => true,
+            (Self::Unsupported, Self::Unsupported) => true,
+            (Self::FDO(s), Self::FDO(o)) => s == o,
+            (Self::NoBodySignature, Self::NoBodySignature) => true,
+            (Self::UnmatchedBodySignature, Self::UnmatchedBodySignature) => true,
+            (Self::InvalidField, Self::InvalidField) => true,
+            (Self::InvalidBusName(_, _), Self::InvalidBusName(_, _)) => true,
+            (Self::InvalidWellKnownName(_), Self::InvalidWellKnownName(_)) => true,
+            (Self::InvalidUniqueName(_), Self::InvalidUniqueName(_)) => true,
+            (Self::InvalidInterfaceName(_), Self::InvalidInterfaceName(_)) => true,
+            (Self::InvalidMemberName(_), Self::InvalidMemberName(_)) => true,
+            (Self::Variant(s), Self::Variant(o)) => s == o,
+            (Error::Io(_), Self::Io(_)) => false,
+            #[cfg(feature = "xml")]
+            (Self::SerdeXml(_), Self::SerdeXml(_)) => false,
+            (_, _) => false,
         }
     }
 }
@@ -56,8 +102,10 @@ impl error::Error for Error {
             Error::InterfaceNotFound => None,
             Error::Address(_) => None,
             Error::Io(e) => Some(e),
+            Error::ExcessData => None,
             Error::Handshake(_) => None,
-            Error::Message(e) => Some(e),
+            Error::InsufficientData => None,
+            Error::IncorrectEndian => None,
             Error::Variant(e) => Some(e),
             Error::InvalidReply => None,
             Error::MethodError(_, _, _) => None,
@@ -66,6 +114,15 @@ impl error::Error for Error {
             Error::FDO(e) => Some(e),
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => Some(e),
+            Error::InvalidBusName(_, _) => None,
+            Error::InvalidWellKnownName(_) => None,
+            Error::InvalidUniqueName(_) => None,
+            Error::InvalidInterfaceName(_) => None,
+            Error::InvalidMemberName(_) => None,
+            Error::NoBodySignature => None,
+            Error::InvalidField => None,
+            Error::MissingField => None,
+            Error::UnmatchedBodySignature => None,
         }
     }
 }
@@ -75,15 +132,22 @@ impl fmt::Display for Error {
         match self {
             Error::InterfaceNotFound => write!(f, "Interface not found"),
             Error::Address(e) => write!(f, "address error: {}", e),
+            Error::ExcessData => write!(f, "excess data"),
             Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::Handshake(e) => write!(f, "D-Bus handshake failed: {}", e),
-            Error::Message(e) => write!(f, "Message creation error: {}", e),
+            Error::InsufficientData => write!(
+                f,
+                "Insufficient data provided to create a valid D-Bus message"
+            ),
+            Error::IncorrectEndian => write!(f, "incorrect endian"),
+            Error::InvalidField => write!(f, "invalid message field"),
             Error::Variant(e) => write!(f, "{}", e),
             Error::InvalidReply => write!(f, "Invalid D-Bus method reply"),
+            Error::MissingField => write!(f, "A required field is missing from message headers"),
             Error::MethodError(name, detail, _reply) => write!(
                 f,
                 "{}: {}",
-                name,
+                **name,
                 detail.as_ref().map(|s| s.as_str()).unwrap_or("no details")
             ),
             Error::InvalidGUID => write!(f, "Invalid GUID"),
@@ -91,6 +155,19 @@ impl fmt::Display for Error {
             Error::FDO(e) => write!(f, "{}", e),
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => write!(f, "XML error: {}", e),
+            Error::InvalidBusName(unique_err, well_known_err) => {
+                write!(
+                    f,
+                    "Neither a valid unique ({}) nor a well-known ({}) bus name",
+                    unique_err, well_known_err
+                )
+            }
+            Error::InvalidWellKnownName(s) => write!(f, "Invalid well-known bus name: {}", s),
+            Error::InvalidUniqueName(s) => write!(f, "Invalid unique bus name: {}", s),
+            Error::InvalidInterfaceName(s) => write!(f, "Invalid interface or error name: {}", s),
+            Error::InvalidMemberName(s) => write!(f, "Invalid method or signal name: {}", s),
+            Error::NoBodySignature => write!(f, "missing body signature in the message"),
+            Error::UnmatchedBodySignature => write!(f, "unmatched body signature"),
         }
     }
 }
@@ -106,12 +183,6 @@ impl From<nix::Error> for Error {
         val.as_errno()
             .map(|errno| io::Error::from_raw_os_error(errno as i32).into())
             .unwrap_or_else(|| io::Error::new(io::ErrorKind::Other, val).into())
-    }
-}
-
-impl From<MessageError> for Error {
-    fn from(val: MessageError) -> Self {
-        Error::Message(val)
     }
 }
 
@@ -157,7 +228,7 @@ impl From<Arc<Message>> for Error {
         let header = match message.header() {
             Ok(header) => header,
             Err(e) => {
-                return Error::Message(e);
+                return e;
             }
         };
         if header.primary().msg_type() != MessageType::Error {
@@ -165,7 +236,7 @@ impl From<Arc<Message>> for Error {
         }
 
         if let Ok(Some(name)) = header.error_name() {
-            let name = String::from(name);
+            let name = name.to_owned().into();
             match message.body_unchecked::<&str>() {
                 Ok(detail) => Error::MethodError(name, Some(String::from(detail)), message),
                 Err(_) => Error::MethodError(name, None, message),

@@ -15,7 +15,7 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 /// [`Value`]: enum.Value.html#variant.Str
 /// [`&str`]: https://doc.rust-lang.org/std/str/index.html
 /// [`String`]: https://doc.rust-lang.org/std/string/struct.String.html
-#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
 #[serde(rename(serialize = "zvariant::Str", deserialize = "zvariant::Str"))]
 pub struct Str<'a>(#[serde(borrow)] Cow<'a, str>);
 
@@ -29,8 +29,12 @@ impl<'a> Str<'a> {
 
     /// Creates an owned clone of `self`.
     pub fn to_owned(&self) -> Str<'static> {
-        let s = self.0.clone().into_owned();
-        Str(Cow::Owned(s))
+        self.clone().into_owned()
+    }
+
+    /// Creates an owned clone of `self`.
+    pub fn into_owned(self) -> Str<'static> {
+        Str(Cow::Owned(String::from(self.as_str())))
     }
 }
 

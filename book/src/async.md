@@ -162,7 +162,7 @@ example again to receive multiple signals on different proxies:
     client.set_desktop_id("org.freedesktop.zbus").await?;
 
     let props = zbus::fdo::AsyncPropertiesProxy::builder(&conn)
-        .destination("org.freedesktop.GeoClue2")
+        .destination("org.freedesktop.GeoClue2")?
         .path(client.path())?
         .build_async()
         .await?;
@@ -278,7 +278,7 @@ streams to see how that works:
 #
     // Everything else remains the same before this point.
     let props = zbus::fdo::AsyncPropertiesProxy::builder(&conn)
-        .destination("org.freedesktop.GeoClue2")
+        .destination("org.freedesktop.GeoClue2")?
         .path(client.path())?
         .build_async()
         .await?;
