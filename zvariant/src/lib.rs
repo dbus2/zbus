@@ -198,7 +198,7 @@ mod signature_parser;
 
 // FIXME: Re-export derive macros from the crate root with the next breaking-change release.
 pub mod derive {
-    pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, TypeDict, Value};
+    pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, TypeDict, TypeDictNew, Value};
 }
 
 // Required for the macros to function within this crate.
@@ -231,7 +231,7 @@ mod tests {
     use glib::{Bytes, FromVariant, Variant};
     use serde::{Deserialize, Serialize};
 
-    use zvariant_derive::{DeserializeDict, SerializeDict, Type, TypeDict};
+    use zvariant_derive::{DeserializeDict, SerializeDict, Type, TypeDict, TypeDictNew};
 
     use crate::{
         from_slice, from_slice_fds, from_slice_for_signature, to_bytes, to_bytes_fds,
@@ -1853,12 +1853,6 @@ mod tests {
             pub c: (String, f64),
         }
 
-        impl Type for Inner {
-            fn signature() -> Signature<'static> {
-                Signature::from_str_unchecked("<sd(sd)>")
-            }
-        }
-
         #[derive(SerializeDict, DeserializeDict, PartialEq, Debug, TypeDict)]
         pub struct InnerClone {
             pub a: String,
@@ -1884,12 +1878,6 @@ mod tests {
         pub struct Outer {
             pub a: Middle,
             pub b: f64,
-        }
-
-        impl Type for Outer {
-            fn signature() -> Signature<'static> {
-                Signature::from_str_unchecked("<<s<sd(sd)>(sd)>d>")
-            }
         }
 
         let inner = Inner {
