@@ -3,7 +3,6 @@ use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
 #[cfg(feature = "internal-executor")]
 use async_io::block_on;
-use async_io::Async;
 use async_lock::{Mutex, MutexGuard};
 use async_task::Task;
 use once_cell::sync::OnceCell;
@@ -14,7 +13,7 @@ use std::{
     future::ready,
     hash::{Hash, Hasher},
     io::{self, ErrorKind},
-    os::unix::io::{AsRawFd, RawFd},
+    os::unix::io::RawFd,
     pin::Pin,
     sync::{
         self,
@@ -37,7 +36,7 @@ use futures_util::{
 use crate::{
     azync::{Authenticated, ConnectionBuilder},
     fdo,
-    raw::{Connection as RawConnection, Socket},
+    raw::{AsyncSocket, Connection as RawConnection},
     Error, Guid, Message, MessageType, Result,
 };
 
@@ -116,7 +115,7 @@ struct ConnectionInner<S> {
     bus_conn: bool,
     unique_name: OnceCell<OwnedUniqueName>,
 
-    raw_in_conn: Arc<Mutex<RawConnection<Async<S>>>>,
+    raw_in_conn: Arc<Mutex<RawConnection<S>>>,
     // FIXME: We really should be using async_lock::Mutex here but `Sink::start_send is not very
     // async friendly. :(
     raw_out_conn: Arc<sync::Mutex<DynSocketConnection>>,
@@ -139,7 +138,7 @@ struct ConnectionInner<S> {
 
 #[derive(Debug)]
 struct MessageReceiverTask<S> {
-    raw_in_conn: Arc<Mutex<RawConnection<Async<S>>>>,
+    raw_in_conn: Arc<Mutex<RawConnection<S>>>,
 
     // Message broadcaster.
     msg_sender: Broadcaster<Arc<Message>>,
@@ -148,9 +147,9 @@ struct MessageReceiverTask<S> {
     error_sender: Sender<Error>,
 }
 
-type DynSocketConnection = RawConnection<Async<Box<dyn Socket>>>;
+type DynSocketConnection = RawConnection<Box<dyn AsyncSocket>>;
 
-impl MessageReceiverTask<Box<dyn Socket>> {
+impl MessageReceiverTask<Box<dyn AsyncSocket>> {
     fn new(
         raw_in_conn: Arc<Mutex<DynSocketConnection>>,
         msg_sender: Broadcaster<Arc<Message>>,
@@ -309,7 +308,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
 #[derive(Clone, Debug)]
 pub struct Connection {
-    inner: Arc<ConnectionInner<Box<dyn Socket>>>,
+    inner: Arc<ConnectionInner<Box<dyn AsyncSocket>>>,
 
     msg_receiver: BroadcastReceiver<Arc<Message>>,
 
@@ -712,12 +711,12 @@ impl Connection {
     }
 
     pub(crate) async fn new(
-        auth: Authenticated<Async<Box<dyn Socket>>>,
+        auth: Authenticated<Box<dyn AsyncSocket>>,
         bus_connection: bool,
     ) -> Result<Self> {
         let auth = auth.into_inner();
-        let out_socket = auth.conn.socket().get_ref().try_clone()?;
-        let out_conn = RawConnection::wrap(Async::new(out_socket)?);
+        let out_socket = auth.conn.socket().try_clone()?;
+        let out_conn = RawConnection::wrap(out_socket);
         let cap_unix_fd = auth.cap_unix_fd;
         let raw_out_conn = Arc::new(sync::Mutex::new(out_conn));
 
@@ -864,7 +863,7 @@ impl stream::Stream for Connection {
 }
 
 struct ReceiveMessage<'r, 's> {
-    raw_conn: &'r mut MutexGuard<'s, RawConnection<Async<Box<dyn Socket>>>>,
+    raw_conn: &'r mut MutexGuard<'s, RawConnection<Box<dyn AsyncSocket>>>,
 }
 
 impl<'r, 's> Future for ReceiveMessage<'r, 's> {
@@ -873,18 +872,7 @@ impl<'r, 's> Future for ReceiveMessage<'r, 's> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let stream = self.get_mut();
 
-        loop {
-            match stream.raw_conn.try_receive_message() {
-                Err(Error::Io(e)) if e.kind() == ErrorKind::WouldBlock => {
-                    match ready!(stream.raw_conn.socket().poll_readable(cx)) {
-                        // Guess socket became ready already so let's try it again.
-                        Ok(_) => continue,
-                        Err(e) => return Poll::Ready(Err(e.into())),
-                    }
-                }
-                m => return Poll::Ready(m),
-            }
-        }
+        stream.raw_conn.try_receive_message(cx)
     }
 }
 
