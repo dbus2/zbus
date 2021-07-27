@@ -24,6 +24,7 @@ pub enum Error {
     IncompatibleFormat(crate::Signature<'static>, crate::EncodingFormat),
     /// Only exists to allow `TryFrom<T> for T` conversions. You should never actually be getting
     /// this error from any API.
+    #[deprecated]
     Infallible,
 }
 
@@ -71,14 +72,15 @@ impl fmt::Display for Error {
                 "Type `{}` is not compatible with `{}` format",
                 sig, format,
             ),
+            #[allow(deprecated)]
             Error::Infallible => write!(f, "Infallible conversion failed"),
         }
     }
 }
 
 impl From<Infallible> for Error {
-    fn from(_: Infallible) -> Self {
-        Error::Infallible
+    fn from(i: Infallible) -> Self {
+        match i {}
     }
 }
 

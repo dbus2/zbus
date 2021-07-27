@@ -67,7 +67,7 @@ fn impl_unit_struct(name: Ident, generics: Generics, zv: &TokenStream) -> TokenS
         impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
             #[inline]
             fn signature() -> #zv::Signature<'static> {
-                #zv::Signature::from_str_unchecked("")
+                #zv::Signature::from_static_str_unchecked("")
             }
         }
     }

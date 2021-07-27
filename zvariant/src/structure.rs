@@ -150,7 +150,7 @@ impl<'a> Structure<'a> {
 
 impl<'a> Default for Structure<'a> {
     fn default() -> Self {
-        let signature = Signature::from_str_unchecked("()");
+        let signature = Signature::from_static_str_unchecked("()");
 
         Self {
             fields: vec![],

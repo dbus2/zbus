@@ -39,7 +39,7 @@ macro_rules! impl_type {
     ($for:ty) => {
         impl Type for $for {
             fn signature() -> Signature<'static> {
-                Signature::from_str_unchecked(<$for>::SIGNATURE_STR)
+                Signature::from_static_str_unchecked(<$for>::SIGNATURE_STR)
             }
         }
     };

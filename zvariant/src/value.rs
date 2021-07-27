@@ -199,7 +199,7 @@ impl<'a> Value<'a> {
             Value::Str(_) => <&str>::signature(),
             Value::Signature(_) => Signature::signature(),
             Value::ObjectPath(_) => ObjectPath::signature(),
-            Value::Value(_) => Signature::from_str_unchecked("v"),
+            Value::Value(_) => Signature::from_static_str_unchecked("v"),
 
             // Container types
             Value::Array(value) => value.full_signature().clone(),
@@ -692,6 +692,6 @@ where
 
 impl<'a> Type for Value<'a> {
     fn signature() -> Signature<'static> {
-        Signature::from_str_unchecked(VARIANT_SIGNATURE_STR)
+        Signature::from_static_str_unchecked(VARIANT_SIGNATURE_STR)
     }
 }

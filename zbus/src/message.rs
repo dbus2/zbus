@@ -47,9 +47,6 @@ pub enum MessageError {
     Variant(VariantError),
     /// A required field is missing in the headers.
     MissingField,
-    /// Only exists to allow `TryFrom<T> for T` conversions. You should never actually be getting
-    /// this error from any API.
-    Infallible,
 }
 
 assert_impl_all!(MessageError: Send, Sync, Unpin);
@@ -65,7 +62,6 @@ impl PartialEq for MessageError {
             (Self::UnmatchedBodySignature, Self::UnmatchedBodySignature) => true,
             (Self::InvalidField, Self::InvalidField) => true,
             (Self::Variant(s), Self::Variant(o)) => s == o,
-            (Self::Infallible, Self::Infallible) => true,
             (_, _) => false,
         }
     }
@@ -93,7 +89,6 @@ impl fmt::Display for MessageError {
             MessageError::UnmatchedBodySignature => write!(f, "unmatched body signature"),
             MessageError::Variant(e) => write!(f, "{}", e),
             MessageError::MissingField => write!(f, "A required field is missing"),
-            MessageError::Infallible => write!(f, "Infallible conversion failed"),
         }
     }
 }
@@ -111,8 +106,8 @@ impl From<IOError> for MessageError {
 }
 
 impl From<Infallible> for MessageError {
-    fn from(_: Infallible) -> Self {
-        MessageError::Infallible
+    fn from(i: Infallible) -> Self {
+        match i {}
     }
 }
 

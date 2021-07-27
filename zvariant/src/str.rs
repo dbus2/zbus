@@ -46,7 +46,7 @@ impl<'a> Basic for Str<'a> {
 
 impl<'a> Type for Str<'a> {
     fn signature() -> Signature<'static> {
-        Signature::from_str_unchecked(Self::SIGNATURE_STR)
+        Signature::from_static_str_unchecked(Self::SIGNATURE_STR)
     }
 }
 

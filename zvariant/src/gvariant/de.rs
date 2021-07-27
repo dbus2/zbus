@@ -734,7 +734,7 @@ where
             ValueParseStage::Signature => {
                 self.stage = ValueParseStage::Value;
 
-                let signature = Signature::from_str_unchecked(VARIANT_SIGNATURE_STR);
+                let signature = Signature::from_static_str_unchecked(VARIANT_SIGNATURE_STR);
                 let sig_parser = SignatureParser::new(signature);
 
                 let mut de = Deserializer::<B>(crate::DeserializerCommon {
