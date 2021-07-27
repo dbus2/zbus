@@ -3,8 +3,8 @@ use static_assertions::assert_impl_all;
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 use crate::{
-    Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure, Type,
-    Value,
+    derive::Type, Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str,
+    Structure, Value,
 };
 
 #[cfg(feature = "gvariant")]
@@ -14,7 +14,7 @@ use crate::Maybe;
 // https://gitlab.freedesktop.org/dbus/zbus/-/issues/138
 
 /// Owned [`Value`](enum.Value.html)
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
 pub struct OwnedValue(Value<'static>);
 
 assert_impl_all!(OwnedValue: Send, Sync, Unpin);
@@ -195,12 +195,6 @@ to_value!(Fd);
 impl From<OwnedValue> for Value<'static> {
     fn from(v: OwnedValue) -> Value<'static> {
         v.into_inner()
-    }
-}
-
-impl<'a> Type for OwnedValue {
-    fn signature() -> Signature<'static> {
-        Value::signature()
     }
 }
 

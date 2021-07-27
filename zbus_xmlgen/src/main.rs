@@ -22,6 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let proxy = |conn: zbus::Connection, service, path| -> zbus::fdo::IntrospectableProxy<'_> {
         zbus::ProxyBuilder::new(&conn)
             .destination(service)
+            .expect("invalid destination")
             .path(path)
             .expect("invalid path")
             .build()
@@ -45,7 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 bus.trim_start_matches("--")
             );
 
-            Node::from_str(&proxy(connection, &service, path).introspect()?)?
+            Node::from_str(&proxy(connection, &*service, &*path).introspect()?)?
         }
         Some(address) if address == "--address" => {
             let address = args().nth(2).expect("Missing param for address path");
@@ -56,7 +57,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             input_src = format!("Interface '{}' from service '{}'", path, service);
 
-            Node::from_str(&proxy(connection, &service, path).introspect()?)?
+            Node::from_str(&proxy(connection, &service, &path).introspect()?)?
         }
         Some(path) => {
             input_src = Path::new(&path)

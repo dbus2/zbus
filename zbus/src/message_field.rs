@@ -7,7 +7,9 @@ use serde::{
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use static_assertions::assert_impl_all;
-use zvariant::{derive::Type, ObjectPath, Signature, Str, Type, Value};
+use zvariant::{derive::Type, ObjectPath, Signature, Type, Value};
+
+use crate::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 /// The message field code.
 ///
@@ -98,17 +100,17 @@ pub enum MessageField<'f> {
     /// The object to send a call to, or the object a signal is emitted from.
     Path(ObjectPath<'f>),
     /// The interface to invoke a method call on, or that a signal is emitted from.
-    Interface(Str<'f>),
+    Interface(InterfaceName<'f>),
     /// The member, either the method name or signal name.
-    Member(Str<'f>),
+    Member(MemberName<'f>),
     /// The name of the error that occurred, for errors
-    ErrorName(Str<'f>),
+    ErrorName(ErrorName<'f>),
     /// The serial number of the message this message is a reply to.
     ReplySerial(u32),
     /// The name of the connection this message is intended for.
-    Destination(Str<'f>),
+    Destination(BusName<'f>),
     /// Unique name of the sending connection.
-    Sender(Str<'f>),
+    Sender(UniqueName<'f>),
     /// The signature of the message body.
     Signature(Signature<'f>),
     /// The number of Unix file descriptors that accompany the message.
@@ -159,13 +161,13 @@ impl<'de: 'f, 'f> Deserialize<'de> for MessageField<'f> {
                 MessageField::Path(ObjectPath::try_from(value).map_err(D::Error::custom)?)
             }
             MessageFieldCode::Interface => {
-                MessageField::Interface(Str::try_from(value).map_err(D::Error::custom)?)
+                MessageField::Interface(InterfaceName::try_from(value).map_err(D::Error::custom)?)
             }
             MessageFieldCode::Member => {
-                MessageField::Member(Str::try_from(value).map_err(D::Error::custom)?)
+                MessageField::Member(MemberName::try_from(value).map_err(D::Error::custom)?)
             }
             MessageFieldCode::ErrorName => MessageField::ErrorName(
-                Str::try_from(value)
+                ErrorName::try_from(value)
                     .map(Into::into)
                     .map_err(D::Error::custom)?,
             ),
@@ -173,12 +175,12 @@ impl<'de: 'f, 'f> Deserialize<'de> for MessageField<'f> {
                 MessageField::ReplySerial(u32::try_from(value).map_err(D::Error::custom)?)
             }
             MessageFieldCode::Destination => MessageField::Destination(
-                Str::try_from(value)
+                BusName::try_from(value)
                     .map(Into::into)
                     .map_err(D::Error::custom)?,
             ),
             MessageFieldCode::Sender => MessageField::Sender(
-                Str::try_from(value)
+                UniqueName::try_from(value)
                     .map(Into::into)
                     .map_err(D::Error::custom)?,
             ),

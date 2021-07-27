@@ -1,18 +1,19 @@
 use std::{
-    convert::{Infallible, TryFrom, TryInto},
-    error, fmt,
-    io::{Cursor, Error as IOError},
+    convert::{TryFrom, TryInto},
+    fmt,
+    io::Cursor,
     os::unix::io::{AsRawFd, IntoRawFd, RawFd},
     sync::{Arc, RwLock},
 };
 
 use static_assertions::assert_impl_all;
-use zvariant::{EncodingContext, Error as VariantError, ObjectPath, Signature, Type};
+use zvariant::{EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
-    owned_fd::OwnedFd, utils::padding_for_8_bytes, EndianSig, MessageField, MessageFieldCode,
-    MessageFields, MessageHeader, MessagePrimaryHeader, MessageType, MIN_MESSAGE_SIZE,
-    NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE,
+    owned_fd::OwnedFd, utils::padding_for_8_bytes, BusName, EndianSig, Error, ErrorName,
+    InterfaceName, MemberName, MessageField, MessageFieldCode, MessageFields, MessageHeader,
+    MessagePrimaryHeader, MessageType, Result, UniqueName, MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
+    PRIMARY_HEADER_SIZE,
 };
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
@@ -22,93 +23,6 @@ macro_rules! dbus_context {
     ($n_bytes_before: expr) => {
         EncodingContext::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
     };
-}
-
-/// Error type returned by [`Message`] methods.
-///
-/// [`Message`]: struct.Message.html
-#[derive(Debug)]
-pub enum MessageError {
-    /// Insufficient data provided.
-    InsufficientData,
-    /// Data too large.
-    ExcessData,
-    /// Endian signature invalid or doesn't match expectation.
-    IncorrectEndian,
-    /// An I/O error.
-    Io(IOError),
-    /// Missing body signature.
-    NoBodySignature,
-    /// Unmatching/bad body signature.
-    UnmatchedBodySignature,
-    /// Invalid message field.
-    InvalidField,
-    /// Data serializing/deserializing error.
-    Variant(VariantError),
-    /// A required field is missing in the headers.
-    MissingField,
-}
-
-assert_impl_all!(MessageError: Send, Sync, Unpin);
-
-impl PartialEq for MessageError {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::InsufficientData, Self::InsufficientData) => true,
-            (Self::ExcessData, Self::ExcessData) => true,
-            (Self::IncorrectEndian, Self::IncorrectEndian) => true,
-            // Io is false
-            (Self::NoBodySignature, Self::NoBodySignature) => true,
-            (Self::UnmatchedBodySignature, Self::UnmatchedBodySignature) => true,
-            (Self::InvalidField, Self::InvalidField) => true,
-            (Self::Variant(s), Self::Variant(o)) => s == o,
-            (_, _) => false,
-        }
-    }
-}
-
-impl error::Error for MessageError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            MessageError::Io(e) => Some(e),
-            MessageError::Variant(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl fmt::Display for MessageError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            MessageError::InsufficientData => write!(f, "insufficient data"),
-            MessageError::Io(e) => e.fmt(f),
-            MessageError::ExcessData => write!(f, "excess data"),
-            MessageError::IncorrectEndian => write!(f, "incorrect endian"),
-            MessageError::InvalidField => write!(f, "invalid message field"),
-            MessageError::NoBodySignature => write!(f, "missing body signature"),
-            MessageError::UnmatchedBodySignature => write!(f, "unmatched body signature"),
-            MessageError::Variant(e) => write!(f, "{}", e),
-            MessageError::MissingField => write!(f, "A required field is missing"),
-        }
-    }
-}
-
-impl From<VariantError> for MessageError {
-    fn from(val: VariantError) -> MessageError {
-        MessageError::Variant(val)
-    }
-}
-
-impl From<IOError> for MessageError {
-    fn from(val: IOError) -> MessageError {
-        MessageError::Io(val)
-    }
-}
-
-impl From<Infallible> for MessageError {
-    fn from(i: Infallible) -> Self {
-        match i {}
-    }
 }
 
 #[derive(Debug)]
@@ -124,10 +38,10 @@ impl<'a, B> MessageBuilder<'a, B>
 where
     B: serde::ser::Serialize + Type,
 {
-    fn new(ty: MessageType, sender: Option<&'a str>, body: &'a B) -> Result<Self, MessageError> {
+    fn new(ty: MessageType, sender: Option<UniqueName<'a>>, body: &'a B) -> Result<Self> {
         let ctxt = dbus_context!(0);
         let (body_len, fds_len) = zvariant::serialized_size_fds(ctxt, body)?;
-        let body_len = u32::try_from(body_len).map_err(|_| MessageError::ExcessData)?;
+        let body_len = u32::try_from(body_len).map_err(|_| Error::ExcessData)?;
 
         let mut fields = MessageFields::new();
 
@@ -140,7 +54,7 @@ where
             fields.add(MessageField::Signature(signature));
         }
         if let Some(sender) = sender {
-            fields.add(MessageField::Sender(sender.into()));
+            fields.add(MessageField::Sender(sender));
         }
 
         if fds_len > 0 {
@@ -156,7 +70,7 @@ where
         })
     }
 
-    fn build(self) -> Result<Message, MessageError> {
+    fn build(self) -> Result<Message> {
         let MessageBuilder {
             ty,
             body,
@@ -166,14 +80,11 @@ where
         } = self;
 
         if let Some(reply_to) = reply_to.as_ref() {
-            let serial = reply_to
-                .primary()
-                .serial_num()
-                .ok_or(MessageError::MissingField)?;
+            let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
             fields.add(MessageField::ReplySerial(*serial));
 
             if let Some(sender) = reply_to.sender()? {
-                fields.add(MessageField::Destination(sender.into()));
+                fields.add(MessageField::Destination(BusName::Unique(sender.clone())));
             }
         }
 
@@ -196,7 +107,7 @@ where
         })
     }
 
-    fn set_reply_to(mut self, reply_to: &'a Message) -> Result<Self, MessageError> {
+    fn set_reply_to(mut self, reply_to: &'a Message) -> Result<Self> {
         self.reply_to = Some(reply_to.header()?);
         Ok(self)
     }
@@ -206,47 +117,43 @@ where
         self
     }
 
-    fn reply(
-        sender: Option<&'a str>,
-        reply_to: &'a Message,
-        body: &'a B,
-    ) -> Result<Self, MessageError> {
+    fn reply(sender: Option<UniqueName<'a>>, reply_to: &'a Message, body: &'a B) -> Result<Self> {
         Self::new(MessageType::MethodReturn, sender, body)?.set_reply_to(reply_to)
     }
 
     fn error(
-        sender: Option<&'a str>,
+        sender: Option<UniqueName<'a>>,
         reply_to: &'a Message,
-        error_name: &'a str,
+        error_name: ErrorName<'a>,
         body: &'a B,
-    ) -> Result<Self, MessageError> {
+    ) -> Result<Self> {
         Ok(Self::new(MessageType::Error, sender, body)?
             .set_reply_to(reply_to)?
-            .set_field(MessageField::ErrorName(error_name.into())))
+            .set_field(MessageField::ErrorName(error_name)))
     }
 
     fn method(
-        sender: Option<&'a str>,
+        sender: Option<UniqueName<'a>>,
         path: ObjectPath<'a>,
-        method_name: &'a str,
+        method_name: MemberName<'a>,
         body: &'a B,
-    ) -> Result<Self, MessageError> {
+    ) -> Result<Self> {
         Ok(Self::new(MessageType::MethodCall, sender, body)?
             .set_field(MessageField::Path(path))
-            .set_field(MessageField::Member(method_name.into())))
+            .set_field(MessageField::Member(method_name)))
     }
 
     fn signal(
-        sender: Option<&'a str>,
+        sender: Option<UniqueName<'a>>,
         path: ObjectPath<'a>,
-        iface: &'a str,
-        signal_name: &'a str,
+        iface: InterfaceName<'a>,
+        signal_name: MemberName<'a>,
         body: &'a B,
-    ) -> Result<Self, MessageError> {
+    ) -> Result<Self> {
         Ok(Self::new(MessageType::Signal, sender, body)?
             .set_field(MessageField::Path(path))
-            .set_field(MessageField::Interface(iface.into()))
-            .set_field(MessageField::Member(signal_name.into())))
+            .set_field(MessageField::Interface(iface))
+            .set_field(MessageField::Member(signal_name)))
     }
 }
 
@@ -296,29 +203,46 @@ impl Message {
     /// Create a message of type [`MessageType::MethodCall`].
     ///
     /// [`MessageType::MethodCall`]: enum.MessageType.html#variant.MethodCall
-    pub fn method<'p, B, E>(
-        sender: Option<&str>,
-        destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'p>, Error = E>,
-        iface: Option<&str>,
-        method_name: &str,
+    pub fn method<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
+        sender: Option<S>,
+        destination: Option<D>,
+        path: P,
+        iface: Option<I>,
+        method_name: M,
         body: &B,
-    ) -> Result<Self, MessageError>
+    ) -> Result<Self>
     where
+        S: TryInto<UniqueName<'s>>,
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + Type,
-        E: Into<MessageError>,
     {
+        let sender = match sender {
+            Some(sender) => Some(sender.try_into().map_err(Into::into)?),
+            None => None,
+        };
         let mut b = MessageBuilder::method(
             sender,
             path.try_into().map_err(Into::into)?,
-            method_name,
+            method_name.try_into().map_err(Into::into)?,
             body,
         )?;
         if let Some(destination) = destination {
-            b = b.set_field(MessageField::Destination(destination.into()));
+            b = b.set_field(MessageField::Destination(
+                destination.try_into().map_err(Into::into)?,
+            ));
         }
         if let Some(iface) = iface {
-            b = b.set_field(MessageField::Interface(iface.into()));
+            b = b.set_field(MessageField::Interface(
+                iface.try_into().map_err(Into::into)?,
+            ));
         }
         b.build()
     }
@@ -326,27 +250,42 @@ impl Message {
     /// Create a message of type [`MessageType::Signal`].
     ///
     /// [`MessageType::Signal`]: enum.MessageType.html#variant.Signal
-    pub fn signal<'p, B, E>(
-        sender: Option<&str>,
-        destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'p>, Error = E>,
-        iface: &str,
-        signal_name: &str,
+    pub fn signal<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
+        sender: Option<S>,
+        destination: Option<D>,
+        path: P,
+        iface: I,
+        signal_name: M,
         body: &B,
-    ) -> Result<Self, MessageError>
+    ) -> Result<Self>
     where
+        S: TryInto<UniqueName<'s>>,
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + Type,
-        E: Into<MessageError>,
     {
+        let sender = match sender {
+            Some(sender) => Some(sender.try_into().map_err(Into::into)?),
+            None => None,
+        };
         let mut b = MessageBuilder::signal(
             sender,
             path.try_into().map_err(Into::into)?,
-            iface,
-            signal_name,
+            iface.try_into().map_err(Into::into)?,
+            signal_name.try_into().map_err(Into::into)?,
             body,
         )?;
         if let Some(destination) = destination {
-            b = b.set_field(MessageField::Destination(destination.into()));
+            b = b.set_field(MessageField::Destination(
+                destination.try_into().map_err(Into::into)?,
+            ));
         }
         b.build()
     }
@@ -354,43 +293,53 @@ impl Message {
     /// Create a message of type [`MessageType::MethodReturn`].
     ///
     /// [`MessageType::MethodReturn`]: enum.MessageType.html#variant.MethodReturn
-    pub fn method_reply<B>(
-        sender: Option<&str>,
-        call: &Self,
-        body: &B,
-    ) -> Result<Self, MessageError>
+    pub fn method_reply<'s, S, B>(sender: Option<S>, call: &Self, body: &B) -> Result<Self>
     where
+        S: TryInto<UniqueName<'s>>,
+        S::Error: Into<Error>,
         B: serde::ser::Serialize + Type,
     {
+        let sender = match sender {
+            Some(sender) => Some(sender.try_into().map_err(Into::into)?),
+            None => None,
+        };
         MessageBuilder::reply(sender, call, body)?.build()
     }
 
     /// Create a message of type [`MessageType::MethodError`].
     ///
     /// [`MessageType::MethodError`]: enum.MessageType.html#variant.MethodError
-    pub fn method_error<B>(
-        sender: Option<&str>,
+    pub fn method_error<'s, 'e, S, E, B>(
+        sender: Option<S>,
         call: &Self,
-        name: &str,
+        name: E,
         body: &B,
-    ) -> Result<Self, MessageError>
+    ) -> Result<Self>
     where
+        S: TryInto<UniqueName<'s>>,
+        S::Error: Into<Error>,
+        E: TryInto<ErrorName<'e>>,
+        E::Error: Into<Error>,
         B: serde::ser::Serialize + Type,
     {
+        let sender = match sender {
+            Some(sender) => Some(sender.try_into().map_err(Into::into)?),
+            None => None,
+        };
+        let name = name.try_into().map_err(Into::into)?;
         MessageBuilder::error(sender, call, name, body)?.build()
     }
 
-    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self, MessageError> {
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if bytes.len() < MIN_MESSAGE_SIZE {
-            return Err(MessageError::InsufficientData);
+            return Err(Error::InsufficientData);
         }
 
         if EndianSig::try_from(bytes[0])? != NATIVE_ENDIAN_SIG {
-            return Err(MessageError::IncorrectEndian);
+            return Err(Error::IncorrectEndian);
         }
 
-        let primary_header =
-            zvariant::from_slice(bytes, dbus_context!(0)).map_err(MessageError::from)?;
+        let primary_header = zvariant::from_slice(bytes, dbus_context!(0)).map_err(Error::from)?;
         let bytes = bytes.to_vec();
         let fds = Arc::new(RwLock::new(Fds::Raw(vec![])));
         Ok(Self {
@@ -400,9 +349,9 @@ impl Message {
         })
     }
 
-    pub(crate) fn add_bytes(&mut self, bytes: &[u8]) -> Result<(), MessageError> {
+    pub(crate) fn add_bytes(&mut self, bytes: &[u8]) -> Result<()> {
         if bytes.len() > self.bytes_to_completion()? {
-            return Err(MessageError::ExcessData);
+            return Err(Error::ExcessData);
         }
 
         self.bytes.extend(bytes);
@@ -428,7 +377,7 @@ impl Message {
         }
     }
 
-    pub(crate) fn bytes_to_completion(&self) -> Result<usize, MessageError> {
+    pub(crate) fn bytes_to_completion(&self) -> Result<usize> {
         let header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         let body_padding = padding_for_8_bytes(header_len);
         let body_len = self.primary_header().body_len();
@@ -443,15 +392,15 @@ impl Message {
     /// syntax), D-Bus does not. Since this method gives you the signature expected on the wire by
     /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
     /// multiple arguments.
-    pub fn body_signature(&self) -> Result<Signature<'_>, MessageError> {
+    pub fn body_signature(&self) -> Result<Signature<'_>> {
         match self
             .header()?
             .into_fields()
             .into_field(MessageFieldCode::Signature)
-            .ok_or(MessageError::NoBodySignature)?
+            .ok_or(Error::NoBodySignature)?
         {
             MessageField::Signature(signature) => Ok(signature),
-            _ => Err(MessageError::InvalidField),
+            _ => Err(Error::InvalidField),
         }
     }
 
@@ -459,37 +408,36 @@ impl Message {
         &self.primary_header
     }
 
-    pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<(), MessageError>
+    pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<()>
     where
-        F: FnMut(&mut MessagePrimaryHeader) -> Result<(), MessageError>,
+        F: FnMut(&mut MessagePrimaryHeader) -> Result<()>,
     {
         modifier(&mut self.primary_header)?;
 
         let mut cursor = Cursor::new(&mut self.bytes);
         zvariant::to_writer(&mut cursor, dbus_context!(0), &self.primary_header)
             .map(|_| ())
-            .map_err(MessageError::from)
+            .map_err(Error::from)
     }
 
     /// Deserialize the header.
-    pub fn header(&self) -> Result<MessageHeader<'_>, MessageError> {
-        zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(MessageError::from)
+    pub fn header(&self) -> Result<MessageHeader<'_>> {
+        zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(Error::from)
     }
 
     /// Deserialize the fields.
-    pub fn fields(&self) -> Result<MessageFields<'_>, MessageError> {
+    pub fn fields(&self) -> Result<MessageFields<'_>> {
         let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
-        zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt)
-            .map_err(MessageError::from)
+        zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
     }
 
     /// Deserialize the body (without checking signature matching).
-    pub fn body_unchecked<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
+    pub fn body_unchecked<'d, 'm: 'd, B>(&'m self) -> Result<B>
     where
         B: serde::de::Deserialize<'d> + Type,
     {
         if self.bytes_to_completion()? != 0 {
-            return Err(MessageError::InsufficientData);
+            return Err(Error::InsufficientData);
         }
 
         let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
@@ -500,18 +448,18 @@ impl Message {
             Some(&self.fds()),
             dbus_context!(0),
         )
-        .map_err(MessageError::from)
+        .map_err(Error::from)
     }
 
     /// Check the signature and deserialize the body.
-    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B, MessageError>
+    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B>
     where
         B: serde::de::Deserialize<'d> + Type,
     {
         let mut expected_sig = B::signature();
         let actual_sig = match self.body_signature() {
             Ok(sig) => sig,
-            Err(MessageError::NoBodySignature) => Signature::from_str_unchecked(""),
+            Err(Error::NoBodySignature) => Signature::from_str_unchecked(""),
             Err(e) => return Err(e),
         };
 
@@ -525,7 +473,7 @@ impl Message {
             expected_sig = expected_sig.slice(1..expected_sig.len() - 1);
         }
         if expected_sig != actual_sig.as_str() {
-            return Err(MessageError::UnmatchedBodySignature);
+            return Err(Error::UnmatchedBodySignature);
         }
 
         self.body_unchecked()
@@ -543,10 +491,10 @@ impl Message {
         &self.bytes
     }
 
-    fn fields_len(&self) -> Result<usize, MessageError> {
+    fn fields_len(&self) -> Result<usize> {
         zvariant::from_slice(&self.bytes[FIELDS_LEN_START_OFFSET..], dbus_context!(0))
             .map(|v: u32| v as usize)
-            .map_err(MessageError::from)
+            .map_err(Error::from)
     }
 }
 
@@ -640,7 +588,9 @@ impl fmt::Display for Message {
 
 #[cfg(test)]
 mod tests {
-    use super::{Fds, Message, MessageError};
+    use crate::Error;
+
+    use super::{Fds, Message};
     use std::os::unix::io::AsRawFd;
     use test_env_log::test;
     use zvariant::Fd;
@@ -650,9 +600,9 @@ mod tests {
         let stdout = std::io::stdout();
         let m = Message::method(
             Some(":1.72"),
-            None,
+            None::<()>,
             "/",
-            None,
+            None::<()>,
             "do",
             &(Fd::from(&stdout), "foo"),
         )
@@ -660,14 +610,19 @@ mod tests {
         assert_eq!(m.body_signature().unwrap().to_string(), "hs");
         assert_eq!(*m.fds.read().unwrap(), Fds::Raw(vec![stdout.as_raw_fd()]));
 
-        let body: Result<u32, MessageError> = m.body();
-        assert_eq!(body.unwrap_err(), MessageError::UnmatchedBodySignature);
+        let body: Result<u32, Error> = m.body();
+        assert_eq!(body.unwrap_err(), Error::UnmatchedBodySignature);
 
         assert_eq!(m.to_string(), "Method call do from :1.72");
-        let r = Message::method_reply(None, &m, &("all fine!")).unwrap();
+        let r = Message::method_reply(None::<()>, &m, &("all fine!")).unwrap();
         assert_eq!(r.to_string(), "Method return");
-        let e = Message::method_error(None, &m, "org.freedesktop.zbus.Error", &("kaboom!", 32))
-            .unwrap();
+        let e = Message::method_error(
+            None::<()>,
+            &m,
+            "org.freedesktop.zbus.Error",
+            &("kaboom!", 32),
+        )
+        .unwrap();
         assert_eq!(e.to_string(), "Error org.freedesktop.zbus.Error: kaboom!");
     }
 }

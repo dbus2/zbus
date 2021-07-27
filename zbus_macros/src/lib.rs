@@ -80,7 +80,7 @@ mod utils;
 /// let connection = Connection::new_session()?;
 /// // Use `builder` to override the default arguments, `new` otherwise.
 /// let proxy = SomeIfaceProxy::builder(&connection)
-///                .destination("org.another.Service")
+///                .destination("org.another.Service")?
 ///                .cache_properties(false)
 ///                .build()?;
 /// let _ = proxy.do_this("foo", 32, &Value::new(true));

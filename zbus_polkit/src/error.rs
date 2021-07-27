@@ -14,7 +14,7 @@ pub enum Error {
     ParseInt(std::num::ParseIntError),
 
     /// Could not retrieve/deserialize sender header of the message.
-    BadSender(zbus::MessageError),
+    BadSender(zbus::Error),
 
     /// Missing sender header in the message.
     MissingSender,

@@ -13,7 +13,10 @@ use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, Error, Guid, Message, MessageError, Result};
+use crate::{
+    azync, BusName, Error, ErrorName, Guid, InterfaceName, MemberName, Message, OwnedUniqueName,
+    Result,
+};
 
 /// A D-Bus connection.
 ///
@@ -138,7 +141,7 @@ impl Connection {
     }
 
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
-    pub fn unique_name(&self) -> Option<&str> {
+    pub fn unique_name(&self) -> Option<&OwnedUniqueName> {
         self.inner.unique_name()
     }
 
@@ -172,17 +175,24 @@ impl Connection {
     ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     /// [`MethodError`]: enum.Error.html#variant.MethodError
-    pub fn call_method<'p, B, E>(
+    pub fn call_method<'d, 'p, 'i, 'm, D, P, I, M, B>(
         &self,
-        destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'p>, Error = E>,
-        iface: Option<&str>,
-        method_name: &str,
+        destination: Option<D>,
+        path: P,
+        iface: Option<I>,
+        method_name: M,
         body: &B,
     ) -> Result<Arc<Message>>
     where
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<MessageError>,
     {
         block_on(
             self.inner
@@ -193,17 +203,24 @@ impl Connection {
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub fn emit_signal<'p, B, E>(
+    pub fn emit_signal<'d, 'p, 'i, 'm, D, P, I, M, B>(
         &self,
-        destination: Option<&str>,
-        path: impl TryInto<ObjectPath<'p>, Error = E>,
-        iface: &str,
-        signal_name: &str,
+        destination: Option<D>,
+        path: P,
+        iface: I,
+        signal_name: M,
         body: &B,
     ) -> Result<()>
     where
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<MessageError>,
     {
         block_on(
             self.inner
@@ -230,9 +247,11 @@ impl Connection {
     /// with the given `error_name` and `body`.
     ///
     /// Returns the message serial number.
-    pub fn reply_error<B>(&self, call: &Message, error_name: &str, body: &B) -> Result<u32>
+    pub fn reply_error<'e, E, B>(&self, call: &Message, error_name: E, body: &B) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
+        E: TryInto<ErrorName<'e>>,
+        E::Error: Into<Error>,
     {
         block_on(self.inner.reply_error(call, error_name, body))
     }
@@ -283,7 +302,7 @@ mod tests {
         let server_thread = thread::spawn(move || {
             let c = Connection::new_unix_server(p0, &guid).unwrap();
             let reply = c
-                .call_method(None, "/", Some("org.zbus.p2p"), "Test", &())
+                .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
                 .unwrap();
             assert_eq!(reply.to_string(), "Method return");
             let val: String = reply.body().unwrap();

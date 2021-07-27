@@ -173,7 +173,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             method.block = parse_quote!({
                 #zbus::ObjectServer::local_node_emit_signal(
-                    ::std::option::Option::None,
+                    ::std::option::Option::None::<()>,
                     #iface_name,
                     #member_name,
                     &(#args),
@@ -192,7 +192,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         changed.insert(#member_name, &*value);
                         let properties_iface = #zbus::fdo::Properties;
                         properties_iface.properties_changed(
-                            &#iface_name,
+                            #zbus::InterfaceName::from_str_unchecked(#iface_name),
                             &changed,
                             &[],
                         )
@@ -217,7 +217,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                             ::std::result::Result::Ok(val) => val,
                             ::std::result::Result::Err(e) => {
                                 return ::std::option::Option::Some(::std::result::Result::Err(
-                                    ::std::convert::Into::into(#zbus::MessageError::Variant(e)),
+                                    ::std::convert::Into::into(#zbus::Error::Variant(e)),
                                 ));
                             }
                         };
@@ -296,8 +296,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         impl #generics #zbus::Interface for #self_ty
         #where_clause
         {
-            fn name() -> &'static str {
-                #iface_name
+            fn name() -> #zbus::InterfaceName<'static> {
+                #zbus::InterfaceName::from_str_unchecked(#iface_name)
             }
 
             fn get(
@@ -339,9 +339,9 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &self,
                 c: &#zbus::Connection,
                 m: &#zbus::Message,
-                name: &str,
+                name: #zbus::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
-                match name {
+                match name.as_str() {
                     #call_dispatch
                     _ => ::std::option::Option::None,
                 }
@@ -351,9 +351,9 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &mut self,
                 c: &#zbus::Connection,
                 m: &#zbus::Message,
-                name: &str,
+                name: #zbus::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
-                match name {
+                match name.as_str() {
                     #call_mut_dispatch
                     _ => ::std::option::Option::None,
                 }

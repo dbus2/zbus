@@ -203,7 +203,7 @@ impl Subject {
         let mut subject_details = HashMap::new();
         match message_header.sender() {
             Ok(Some(sender)) => {
-                subject_details.insert("name".to_string(), Value::from(sender).into());
+                subject_details.insert("name".to_string(), Value::from(sender.clone()).into());
             }
             Ok(None) => {
                 return Err(Error::MissingSender);
