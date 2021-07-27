@@ -65,16 +65,19 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
-    pub fn new<DE, PE, IE>(
+    pub fn new<D, P, I>(
         conn: &Connection,
-        destination: impl TryInto<BusName<'a>, Error = DE>,
-        path: impl TryInto<ObjectPath<'a>, Error = PE>,
-        interface: impl TryInto<InterfaceName<'a>, Error = IE>,
-    ) -> Result<Self>
+        destination: D,
+        path: P,
+        interface: I,
+    ) -> Result<Proxy<'a>>
     where
-        DE: Into<Error>,
-        PE: Into<Error>,
-        IE: Into<Error>,
+        D: TryInto<BusName<'a>>,
+        P: TryInto<ObjectPath<'a>>,
+        I: TryInto<InterfaceName<'a>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
     {
         let proxy = block_on(azync::Proxy::new(
             conn.inner(),
@@ -91,16 +94,19 @@ impl<'a> Proxy<'a> {
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
     /// passed arguments.
-    pub fn new_owned<DE, PE, IE>(
+    pub async fn new_owned<D, P, I>(
         conn: Connection,
-        destination: impl TryInto<BusName<'static>, Error = DE>,
-        path: impl TryInto<ObjectPath<'static>, Error = PE>,
-        interface: impl TryInto<InterfaceName<'static>, Error = IE>,
-    ) -> Result<Self>
+        destination: D,
+        path: P,
+        interface: I,
+    ) -> Result<Proxy<'a>>
     where
-        DE: Into<Error>,
-        PE: Into<Error>,
-        IE: Into<Error>,
+        D: TryInto<BusName<'static>>,
+        P: TryInto<ObjectPath<'static>>,
+        I: TryInto<InterfaceName<'static>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
     {
         let proxy = block_on(azync::Proxy::new_owned(
             conn.clone().into_inner(),
@@ -167,14 +173,11 @@ impl<'a> Proxy<'a> {
     /// allocation/copying, by deserializing the reply to an unowned type).
     ///
     /// [`call`]: struct.Proxy.html#method.call
-    pub fn call_method<'m, B, E>(
-        &self,
-        method_name: impl TryInto<MemberName<'m>, Error = E>,
-        body: &B,
-    ) -> Result<Arc<Message>>
+    pub fn call_method<'m, M, B>(&self, method_name: M, body: &B) -> Result<Arc<Message>>
     where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<Error>,
     {
         block_on(self.azync.call_method(method_name, body))
     }
@@ -184,15 +187,12 @@ impl<'a> Proxy<'a> {
     /// Use [`call_method`] instead if you need to deserialize the reply manually/separately.
     ///
     /// [`call_method`]: struct.Proxy.html#method.call_method
-    pub fn call<'m, B, R, E>(
-        &self,
-        method_name: impl TryInto<MemberName<'m>, Error = E>,
-        body: &B,
-    ) -> Result<R>
+    pub fn call<'m, M, B, R>(&self, method_name: M, body: &B) -> Result<R>
     where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
         R: serde::de::DeserializeOwned + zvariant::Type,
-        E: Into<Error>,
     {
         block_on(self.azync.call(method_name, body))
     }
@@ -209,14 +209,15 @@ impl<'a> Proxy<'a> {
     /// This method can fail if addition of the relevant match rule on the bus fails. You can
     /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
     /// connection.
-    pub fn connect_signal<H, E>(
+    pub fn connect_signal<M, H>(
         &self,
-        signal_name: impl TryInto<MemberName<'static>, Error = E>,
+        signal_name: M,
         mut handler: H,
     ) -> fdo::Result<SignalHandlerId>
     where
+        M: TryInto<MemberName<'static>>,
+        M::Error: Into<Error>,
         H: FnMut(&Message) -> Result<()> + Send + 'static,
-        E: Into<Error>,
     {
         block_on(
             self.azync

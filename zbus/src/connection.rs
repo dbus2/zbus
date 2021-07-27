@@ -175,20 +175,24 @@ impl Connection {
     ///
     /// [`receive_message`]: struct.Connection.html#method.receive_message
     /// [`MethodError`]: enum.Error.html#variant.MethodError
-    pub fn call_method<'d, 'p, 'i, 'm, DE, PE, IE, ME, B>(
+    pub fn call_method<'d, 'p, 'i, 'm, D, P, I, M, B>(
         &self,
-        destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
-        path: impl TryInto<ObjectPath<'p>, Error = PE>,
-        iface: Option<impl TryInto<InterfaceName<'i>, Error = IE>>,
-        method_name: impl TryInto<MemberName<'m>, Error = ME>,
+        destination: Option<D>,
+        path: P,
+        iface: Option<I>,
+        method_name: M,
         body: &B,
     ) -> Result<Arc<Message>>
     where
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
-        DE: Into<Error>,
-        PE: Into<Error>,
-        IE: Into<Error>,
-        ME: Into<Error>,
     {
         block_on(
             self.inner
@@ -199,20 +203,24 @@ impl Connection {
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub fn emit_signal<'d, 'p, 'i, 'm, DE, PE, IE, ME, B>(
+    pub fn emit_signal<'d, 'p, 'i, 'm, D, P, I, M, B>(
         &self,
-        destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
-        path: impl TryInto<ObjectPath<'p>, Error = PE>,
-        iface: impl TryInto<InterfaceName<'i>, Error = IE>,
-        signal_name: impl TryInto<MemberName<'m>, Error = ME>,
+        destination: Option<D>,
+        path: P,
+        iface: I,
+        signal_name: M,
         body: &B,
     ) -> Result<()>
     where
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
-        DE: Into<Error>,
-        PE: Into<Error>,
-        IE: Into<Error>,
-        ME: Into<Error>,
     {
         block_on(
             self.inner
@@ -239,15 +247,11 @@ impl Connection {
     /// with the given `error_name` and `body`.
     ///
     /// Returns the message serial number.
-    pub fn reply_error<'e, E, B>(
-        &self,
-        call: &Message,
-        error_name: impl TryInto<ErrorName<'e>, Error = E>,
-        body: &B,
-    ) -> Result<u32>
+    pub fn reply_error<'e, E, B>(&self, call: &Message, error_name: E, body: &B) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<Error>,
+        E: TryInto<ErrorName<'e>>,
+        E::Error: Into<Error>,
     {
         block_on(self.inner.reply_error(call, error_name, body))
     }

@@ -52,25 +52,24 @@ const FDO_DBUS_PATH: &str = "/org/freedesktop/DBus";
 const FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS: [&str; 2] = ["NameAcquired", "NameLost"];
 
 #[derive(Debug, Hash, Eq, PartialEq)]
-struct SignalInfo<'s, 'p, 'i, 'sig> {
+struct SignalInfo<'s, 'p, 'i, 'm> {
     sender: BusName<'s>,
     path: ObjectPath<'p>,
     interface: InterfaceName<'i>,
-    signal_name: MemberName<'sig>,
+    signal_name: MemberName<'m>,
 }
 
-impl<'s, 'p, 'i, 'sig> SignalInfo<'s, 'p, 'i, 'sig> {
-    fn new<SE, PE, IE, ME>(
-        sender: impl TryInto<BusName<'s>, Error = SE>,
-        path: impl TryInto<ObjectPath<'p>, Error = PE>,
-        interface: impl TryInto<InterfaceName<'i>, Error = IE>,
-        signal_name: impl TryInto<MemberName<'sig>, Error = ME>,
-    ) -> Result<Self>
+impl<'s, 'p, 'i, 'm> SignalInfo<'s, 'p, 'i, 'm> {
+    fn new<S, P, I, M>(sender: S, path: P, interface: I, signal_name: M) -> Result<Self>
     where
-        SE: Into<Error>,
-        PE: Into<Error>,
-        IE: Into<Error>,
-        ME: Into<Error>,
+        S: TryInto<BusName<'s>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
     {
         Ok(Self {
             sender: sender.try_into().map_err(Into::into)?,
@@ -398,20 +397,24 @@ impl Connection {
     ///
     /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
     /// error replies are returned as [`Error::MethodError`].
-    pub async fn call_method<DE, PE, IE, ME, B>(
+    pub async fn call_method<'d, 'p, 'i, 'm, D, P, I, M, B>(
         &self,
-        destination: Option<impl TryInto<BusName<'_>, Error = DE>>,
-        path: impl TryInto<ObjectPath<'_>, Error = PE>,
-        interface: Option<impl TryInto<InterfaceName<'_>, Error = IE>>,
-        method_name: impl TryInto<MemberName<'_>, Error = ME>,
+        destination: Option<D>,
+        path: P,
+        interface: Option<I>,
+        method_name: M,
         body: &B,
     ) -> Result<Arc<Message>>
     where
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
-        DE: Into<Error>,
-        PE: Into<Error>,
-        IE: Into<Error>,
-        ME: Into<Error>,
     {
         let stream = self.clone();
         let m = Message::method(
@@ -463,20 +466,24 @@ impl Connection {
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub async fn emit_signal<DE, PE, IE, ME, B>(
+    pub async fn emit_signal<'d, 'p, 'i, 'm, D, P, I, M, B>(
         &self,
-        destination: Option<impl TryInto<BusName<'_>, Error = DE>>,
-        path: impl TryInto<ObjectPath<'_>, Error = PE>,
-        interface: impl TryInto<InterfaceName<'_>, Error = IE>,
-        signal_name: impl TryInto<MemberName<'_>, Error = ME>,
+        destination: Option<D>,
+        path: P,
+        interface: I,
+        signal_name: M,
         body: &B,
     ) -> Result<()>
     where
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::Type,
-        DE: Into<Error>,
-        PE: Into<Error>,
-        IE: Into<Error>,
-        ME: Into<Error>,
     {
         let m = Message::signal(
             self.unique_name(),
@@ -510,15 +517,16 @@ impl Connection {
     /// with the given `error_name` and `body`.
     ///
     /// Returns the message serial number.
-    pub async fn reply_error<E, B>(
+    pub async fn reply_error<'e, E, B>(
         &self,
         call: &Message,
-        error_name: impl TryInto<ErrorName<'_>, Error = E>,
+        error_name: E,
         body: &B,
     ) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::Type,
-        E: Into<Error>,
+        E: TryInto<ErrorName<'e>>,
+        E::Error: Into<Error>,
     {
         let m = Message::method_error(self.unique_name(), call, error_name, body)?;
         self.send_message(m).await
@@ -634,18 +642,22 @@ impl Connection {
         (self.inner.raw_in_conn.lock().await.socket()).as_raw_fd()
     }
 
-    pub(crate) async fn subscribe_signal<SE, PE, IE, ME>(
+    pub(crate) async fn subscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
         &self,
-        sender: impl TryInto<BusName<'_>, Error = SE>,
-        path: impl TryInto<ObjectPath<'_>, Error = PE>,
-        interface: impl TryInto<InterfaceName<'_>, Error = IE>,
-        signal_name: impl TryInto<MemberName<'_>, Error = ME>,
+        sender: S,
+        path: P,
+        interface: I,
+        signal_name: M,
     ) -> Result<u64>
     where
-        SE: Into<Error>,
-        PE: Into<Error>,
-        IE: Into<Error>,
-        ME: Into<Error>,
+        S: TryInto<BusName<'s>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
     {
         let signal = SignalInfo::new(sender, path, interface, signal_name)?;
         let hash = signal.calc_hash();
@@ -676,18 +688,22 @@ impl Connection {
         Ok(hash)
     }
 
-    pub(crate) async fn unsubscribe_signal<SE, PE, IE, ME>(
+    pub(crate) async fn unsubscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
         &self,
-        sender: impl TryInto<BusName<'_>, Error = SE>,
-        path: impl TryInto<ObjectPath<'_>, Error = PE>,
-        interface: impl TryInto<InterfaceName<'_>, Error = IE>,
-        signal_name: impl TryInto<MemberName<'_>, Error = ME>,
+        sender: S,
+        path: P,
+        interface: I,
+        signal_name: M,
     ) -> Result<bool>
     where
-        SE: Into<Error>,
-        PE: Into<Error>,
-        IE: Into<Error>,
-        ME: Into<Error>,
+        S: TryInto<BusName<'s>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
     {
         let signal = SignalInfo::new(
             sender.try_into().map_err(Into::into)?,

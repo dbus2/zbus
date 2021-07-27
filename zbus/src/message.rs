@@ -203,21 +203,26 @@ impl Message {
     /// Create a message of type [`MessageType::MethodCall`].
     ///
     /// [`MessageType::MethodCall`]: enum.MessageType.html#variant.MethodCall
-    pub fn method<'s, 'd, 'p, 'i, 'm, SE, DE, PE, IE, ME, B>(
-        sender: Option<impl TryInto<UniqueName<'s>, Error = SE>>,
-        destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
-        path: impl TryInto<ObjectPath<'p>, Error = PE>,
-        iface: Option<impl TryInto<InterfaceName<'i>, Error = IE>>,
-        method_name: impl TryInto<MemberName<'m>, Error = ME>,
+    pub fn method<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
+        sender: Option<S>,
+        destination: Option<D>,
+        path: P,
+        iface: Option<I>,
+        method_name: M,
         body: &B,
     ) -> Result<Self>
     where
+        S: TryInto<UniqueName<'s>>,
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + Type,
-        SE: Into<Error>,
-        DE: Into<Error>,
-        PE: Into<Error>,
-        IE: Into<Error>,
-        ME: Into<Error>,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -245,21 +250,26 @@ impl Message {
     /// Create a message of type [`MessageType::Signal`].
     ///
     /// [`MessageType::Signal`]: enum.MessageType.html#variant.Signal
-    pub fn signal<'s, 'd, 'p, 'i, 'm, SE, DE, PE, IE, ME, B>(
-        sender: Option<impl TryInto<UniqueName<'s>, Error = SE>>,
-        destination: Option<impl TryInto<BusName<'d>, Error = DE>>,
-        path: impl TryInto<ObjectPath<'p>, Error = PE>,
-        iface: impl TryInto<InterfaceName<'i>, Error = IE>,
-        signal_name: impl TryInto<MemberName<'m>, Error = ME>,
+    pub fn signal<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
+        sender: Option<S>,
+        destination: Option<D>,
+        path: P,
+        iface: I,
+        signal_name: M,
         body: &B,
     ) -> Result<Self>
     where
+        S: TryInto<UniqueName<'s>>,
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + Type,
-        SE: Into<Error>,
-        DE: Into<Error>,
-        PE: Into<Error>,
-        IE: Into<Error>,
-        ME: Into<Error>,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -283,14 +293,11 @@ impl Message {
     /// Create a message of type [`MessageType::MethodReturn`].
     ///
     /// [`MessageType::MethodReturn`]: enum.MessageType.html#variant.MethodReturn
-    pub fn method_reply<'s, E, B>(
-        sender: Option<impl TryInto<UniqueName<'s>, Error = E>>,
-        call: &Self,
-        body: &B,
-    ) -> Result<Self>
+    pub fn method_reply<'s, S, B>(sender: Option<S>, call: &Self, body: &B) -> Result<Self>
     where
+        S: TryInto<UniqueName<'s>>,
+        S::Error: Into<Error>,
         B: serde::ser::Serialize + Type,
-        E: Into<Error>,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -302,16 +309,18 @@ impl Message {
     /// Create a message of type [`MessageType::MethodError`].
     ///
     /// [`MessageType::MethodError`]: enum.MessageType.html#variant.MethodError
-    pub fn method_error<'s, 'n, SE, NE, B>(
-        sender: Option<impl TryInto<UniqueName<'s>, Error = SE>>,
+    pub fn method_error<'s, 'e, S, E, B>(
+        sender: Option<S>,
         call: &Self,
-        name: impl TryInto<ErrorName<'n>, Error = NE>,
+        name: E,
         body: &B,
     ) -> Result<Self>
     where
+        S: TryInto<UniqueName<'s>>,
+        S::Error: Into<Error>,
+        E: TryInto<ErrorName<'e>>,
+        E::Error: Into<Error>,
         B: serde::ser::Serialize + Type,
-        SE: Into<Error>,
-        NE: Into<Error>,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
