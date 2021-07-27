@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let service = args().nth(3).expect("Missing param for service");
             let path = args().nth(4).expect("Missing param for object path");
 
-            let connection = zbus::Connection::new_for_address(&address, true)?;
+            let connection = zbus::ConnectionBuilder::address(&*address)?.build()?;
 
             input_src = format!("Interface '{}' from service '{}'", path, service);
 

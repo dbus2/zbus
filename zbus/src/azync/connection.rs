@@ -14,10 +14,7 @@ use std::{
     future::ready,
     hash::{Hash, Hasher},
     io::{self, ErrorKind},
-    os::unix::{
-        io::{AsRawFd, RawFd},
-        net::UnixStream,
-    },
+    os::unix::io::{AsRawFd, RawFd},
     pin::Pin,
     sync::{
         self,
@@ -38,7 +35,7 @@ use futures_util::{
 };
 
 use crate::{
-    azync::Authenticated,
+    azync::{Authenticated, ConnectionBuilder},
     fdo,
     raw::{Connection as RawConnection, Socket},
     Error, Guid, Message, MessageType, Result,
@@ -323,60 +320,6 @@ pub struct Connection {
 assert_impl_all!(Connection: Send, Sync, Unpin);
 
 impl Connection {
-    /// Create and open a D-Bus connection from a `UnixStream`.
-    ///
-    /// The connection may either be set up for a *bus* connection, or not (for peer-to-peer
-    /// communications).
-    ///
-    /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
-    /// can be sent and received.
-    pub async fn new_unix_client(stream: UnixStream, bus_connection: bool) -> Result<Self> {
-        // SASL Handshake
-        let auth = Authenticated::client(Async::new(Box::new(stream) as Box<dyn Socket>)?).await?;
-
-        Self::new(auth, bus_connection).await
-    }
-
-    /// Create a server `Connection` for the given `UnixStream` and the server `guid`.
-    ///
-    /// The connection will wait for incoming client authentication handshake & negotiation messages,
-    /// for peer-to-peer communications.
-    ///
-    /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
-    /// can be sent and received.
-    pub async fn new_unix_server(stream: UnixStream, guid: &Guid) -> Result<Self> {
-        #[cfg(any(target_os = "android", target_os = "linux"))]
-        let client_uid = {
-            use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
-
-            let creds = getsockopt(stream.as_raw_fd(), PeerCredentials)
-                .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?;
-
-            creds.uid()
-        };
-        #[cfg(any(
-            target_os = "macos",
-            target_os = "ios",
-            target_os = "freebsd",
-            target_os = "dragonfly",
-            target_os = "openbsd",
-            target_os = "netbsd"
-        ))]
-        let client_uid = nix::unistd::getpeereid(stream.as_raw_fd())
-            .map_err(|e| Error::Handshake(format!("Failed to get peer credentials: {}", e)))?
-            .0
-            .into();
-
-        let auth = Authenticated::server(
-            Async::new(Box::new(stream) as Box<dyn Socket>)?,
-            guid.clone(),
-            client_uid,
-        )
-        .await?;
-
-        Self::new(auth, false).await
-    }
-
     /// Send `msg` to the peer.
     ///
     /// Unlike our [`Sink`] implementation, this method sets a unique (to this connection) serial
@@ -563,34 +506,8 @@ impl Connection {
     }
 
     /// Set the max number of messages to queue.
-    ///
-    /// Since typically you'd want to set this at instantiation time, this method takes ownership
-    /// of `self` and returns an owned `Connection` instance so you can use the builder pattern to
-    /// set the value.
-    ///
-    /// # Example
-    ///
-    /// ```
-    ///# use std::error::Error;
-    ///# use zbus::azync::Connection;
-    ///# use async_io::block_on;
-    ///#
-    ///# block_on(async {
-    /// let conn = Connection::new_session()
-    ///     .await?
-    ///     .set_max_queued(30);
-    /// assert_eq!(conn.max_queued(), 30);
-    ///
-    ///#     Ok::<(), zbus::Error>(())
-    ///# });
-    ///#
-    /// // Do something useful with `conn`..
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
-    /// ```
-    pub fn set_max_queued(mut self, max: usize) -> Self {
+    pub fn set_max_queued(&mut self, max: usize) {
         self.msg_receiver.set_capacity(max);
-
-        self
     }
 
     /// The server's GUID.
@@ -794,7 +711,7 @@ impl Connection {
         Ok(())
     }
 
-    async fn new(
+    pub(crate) async fn new(
         auth: Authenticated<Async<Box<dyn Socket>>>,
         bus_connection: bool,
     ) -> Result<Self> {
@@ -860,19 +777,12 @@ impl Connection {
 
     /// Create a `Connection` to the session/user message bus.
     pub async fn new_session() -> Result<Self> {
-        Self::new(Authenticated::session().await?, true).await
+        ConnectionBuilder::session()?.build().await
     }
 
     /// Create a `Connection` to the system-wide message bus.
     pub async fn new_system() -> Result<Self> {
-        Self::new(Authenticated::system().await?, true).await
-    }
-
-    /// Create a `Connection` for the given [D-Bus address].
-    ///
-    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub async fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
-        Self::new(Authenticated::for_address(address).await?, bus_connection).await
+        ConnectionBuilder::system()?.build().await
     }
 }
 
@@ -1004,8 +914,11 @@ mod tests {
 
         let (p0, p1) = UnixStream::pair().unwrap();
 
-        let server = Connection::new_unix_server(p0, &guid);
-        let client = Connection::new_unix_client(p1, false);
+        let server = ConnectionBuilder::unix_stream(p0)
+            .server(&guid)
+            .p2p()
+            .build();
+        let client = ConnectionBuilder::unix_stream(p1).p2p().build();
 
         let (mut client_conn, mut server_conn) = futures_util::try_join!(client, server)?;
 
