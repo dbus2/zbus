@@ -17,13 +17,13 @@ use std::{
     task::{Context, Poll},
 };
 
+use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
     azync::Connection,
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
-    BusName, Error, InterfaceName, MemberName, Message, MessageHeader, MessageType,
-    OwnedUniqueName, Result,
+    Error, Message, MessageHeader, MessageType, Result,
 };
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
@@ -868,7 +868,7 @@ impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::UniqueName;
+    use zbus_names::UniqueName;
 
     use super::*;
     use async_io::block_on;

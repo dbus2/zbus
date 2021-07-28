@@ -185,21 +185,6 @@ pub use owned_fd::*;
 
 mod utils;
 
-mod bus_name;
-pub use bus_name::*;
-
-mod unique_name;
-pub use unique_name::*;
-
-mod well_known_name;
-pub use well_known_name::*;
-
-mod interface_name;
-pub use interface_name::*;
-
-mod member_name;
-pub use member_name::*;
-
 mod object_server;
 pub use object_server::*;
 
@@ -224,6 +209,7 @@ pub mod export {
     pub use futures_core;
     pub use serde;
     pub use static_assertions;
+    pub use zbus_names as names;
     pub use zvariant;
 }
 
@@ -241,12 +227,13 @@ mod tests {
     use ntest::timeout;
     use test_env_log::test;
 
+    use zbus_names::UniqueName;
     use zvariant::{Fd, OwnedObjectPath, OwnedValue, Type};
 
     use crate::{
         azync,
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, Message, MessageFlags, Result, UniqueName,
+        Connection, Message, MessageFlags, Result,
     };
 
     #[test]

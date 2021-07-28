@@ -5,11 +5,12 @@ use std::{
     future::ready,
     sync::Arc,
 };
+use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
     azync::{self, PropertyChangedHandlerId, SignalHandlerId},
-    BusName, Connection, Error, InterfaceName, MemberName, Message, OwnedUniqueName, Result,
+    Connection, Error, Message, Result,
 };
 
 use crate::fdo;
@@ -341,7 +342,7 @@ impl<'a> From<azync::Proxy<'a>> for Proxy<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{BusName, UniqueName};
+    use zbus_names::{BusName, UniqueName};
 
     use super::*;
     use ntest::timeout;

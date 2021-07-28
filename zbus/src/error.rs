@@ -1,8 +1,9 @@
 use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, sync::Arc};
+use zbus_names::{Error as NamesError, OwnedErrorName};
 use zvariant::Error as VariantError;
 
-use crate::{fdo, Message, MessageType, OwnedErrorName};
+use crate::{fdo, Message, MessageType};
 
 /// The error type for `zbus`.
 ///
@@ -24,6 +25,8 @@ pub enum Error {
     ExcessData,
     /// A [zvariant](../zvariant/index.html) error.
     Variant(VariantError),
+    /// A [zbus_names](../zbus_names/index.html) error.
+    Names(NamesError),
     /// Endian signature invalid or doesn't match expectation.
     IncorrectEndian,
     /// Initial handshake error.
@@ -45,18 +48,6 @@ pub enum Error {
     #[cfg(feature = "xml")]
     /// An XML error
     SerdeXml(serde_xml_rs::Error),
-    /// Invalid bus name. The strings describe why the bus name is neither a valid unique nor
-    /// well-known name, respectively.
-    InvalidBusName(String, String),
-    /// Invalid well-known bus name.
-    InvalidWellKnownName(String),
-    /// Invalid unique bus name.
-    InvalidUniqueName(String),
-    /// Invalid interface name.
-    InvalidInterfaceName(String),
-    /// Invalid member (method or signal) name.
-    InvalidMemberName(String),
-    /// Missing body signature in the message.
     NoBodySignature,
     /// Unmatching/bad body signature in the message.
     UnmatchedBodySignature,
@@ -82,12 +73,8 @@ impl PartialEq for Error {
             (Self::NoBodySignature, Self::NoBodySignature) => true,
             (Self::UnmatchedBodySignature, Self::UnmatchedBodySignature) => true,
             (Self::InvalidField, Self::InvalidField) => true,
-            (Self::InvalidBusName(_, _), Self::InvalidBusName(_, _)) => true,
-            (Self::InvalidWellKnownName(_), Self::InvalidWellKnownName(_)) => true,
-            (Self::InvalidUniqueName(_), Self::InvalidUniqueName(_)) => true,
-            (Self::InvalidInterfaceName(_), Self::InvalidInterfaceName(_)) => true,
-            (Self::InvalidMemberName(_), Self::InvalidMemberName(_)) => true,
             (Self::Variant(s), Self::Variant(o)) => s == o,
+            (Self::Names(s), Self::Names(o)) => s == o,
             (Error::Io(_), Self::Io(_)) => false,
             #[cfg(feature = "xml")]
             (Self::SerdeXml(_), Self::SerdeXml(_)) => false,
@@ -107,6 +94,7 @@ impl error::Error for Error {
             Error::InsufficientData => None,
             Error::IncorrectEndian => None,
             Error::Variant(e) => Some(e),
+            Error::Names(e) => Some(e),
             Error::InvalidReply => None,
             Error::MethodError(_, _, _) => None,
             Error::InvalidGUID => None,
@@ -114,11 +102,6 @@ impl error::Error for Error {
             Error::FDO(e) => Some(e),
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => Some(e),
-            Error::InvalidBusName(_, _) => None,
-            Error::InvalidWellKnownName(_) => None,
-            Error::InvalidUniqueName(_) => None,
-            Error::InvalidInterfaceName(_) => None,
-            Error::InvalidMemberName(_) => None,
             Error::NoBodySignature => None,
             Error::InvalidField => None,
             Error::MissingField => None,
@@ -142,6 +125,7 @@ impl fmt::Display for Error {
             Error::IncorrectEndian => write!(f, "incorrect endian"),
             Error::InvalidField => write!(f, "invalid message field"),
             Error::Variant(e) => write!(f, "{}", e),
+            Error::Names(e) => write!(f, "{}", e),
             Error::InvalidReply => write!(f, "Invalid D-Bus method reply"),
             Error::MissingField => write!(f, "A required field is missing from message headers"),
             Error::MethodError(name, detail, _reply) => write!(
@@ -155,17 +139,6 @@ impl fmt::Display for Error {
             Error::FDO(e) => write!(f, "{}", e),
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => write!(f, "XML error: {}", e),
-            Error::InvalidBusName(unique_err, well_known_err) => {
-                write!(
-                    f,
-                    "Neither a valid unique ({}) nor a well-known ({}) bus name",
-                    unique_err, well_known_err
-                )
-            }
-            Error::InvalidWellKnownName(s) => write!(f, "Invalid well-known bus name: {}", s),
-            Error::InvalidUniqueName(s) => write!(f, "Invalid unique bus name: {}", s),
-            Error::InvalidInterfaceName(s) => write!(f, "Invalid interface or error name: {}", s),
-            Error::InvalidMemberName(s) => write!(f, "Invalid method or signal name: {}", s),
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
             Error::UnmatchedBodySignature => write!(f, "unmatched body signature"),
         }
@@ -189,6 +162,15 @@ impl From<nix::Error> for Error {
 impl From<VariantError> for Error {
     fn from(val: VariantError) -> Self {
         Error::Variant(val)
+    }
+}
+
+impl From<NamesError> for Error {
+    fn from(val: NamesError) -> Self {
+        match val {
+            NamesError::Variant(e) => Error::Variant(e),
+            e => Error::Names(e),
+        }
     }
 }
 

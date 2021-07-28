@@ -26,6 +26,7 @@ use std::{
     },
     task::{Context, Poll},
 };
+use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName};
 use zvariant::ObjectPath;
 
 use futures_core::{ready, stream, Future};
@@ -40,8 +41,7 @@ use crate::{
     azync::Authenticated,
     fdo,
     raw::{Connection as RawConnection, Socket},
-    BusName, Error, ErrorName, Guid, InterfaceName, MemberName, Message, MessageType,
-    OwnedUniqueName, Result,
+    Error, Guid, Message, MessageType, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;

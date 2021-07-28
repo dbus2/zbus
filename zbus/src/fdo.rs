@@ -8,12 +8,13 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
 use std::collections::HashMap;
+use zbus_names::{
+    BusName, InterfaceName, OwnedBusName, OwnedInterfaceName, OwnedUniqueName, UniqueName,
+    WellKnownName,
+};
 use zvariant::{derive::Type, ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value};
 
-use crate::{
-    dbus_interface, dbus_proxy, object_server::LOCAL_NODE, BusName, DBusError, InterfaceName,
-    OwnedBusName, OwnedInterfaceName, OwnedUniqueName, UniqueName, WellKnownName,
-};
+use crate::{dbus_interface, dbus_proxy, object_server::LOCAL_NODE, DBusError};
 
 /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
@@ -623,7 +624,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod tests {
-    use crate::{fdo, Error, Message, WellKnownName};
+    use crate::{fdo, Error, Message};
     use futures_util::StreamExt;
     use ntest::timeout;
     use std::{
@@ -636,6 +637,7 @@ mod tests {
     };
     use test_env_log::test;
     use tokio::runtime;
+    use zbus_names::WellKnownName;
 
     #[test]
     fn error_from_zerror() {

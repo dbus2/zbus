@@ -1,4 +1,4 @@
-use crate::{export::zvariant::derive::Type, Error, Result};
+use crate::{Error, Result};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -7,7 +7,7 @@ use std::{
     ops::Deref,
 };
 use zvariant::{
-    derive::{OwnedValue, Value},
+    derive::{OwnedValue, Type, Value},
     NoneValue, Str,
 };
 
@@ -17,7 +17,7 @@ use zvariant::{
 ///
 /// ```
 /// use core::convert::TryFrom;
-/// use zbus::UniqueName;
+/// use zbus_names::UniqueName;
 ///
 /// // Valid unique names.
 /// let name = UniqueName::try_from(":org.gnome.Service-for_you").unwrap();
