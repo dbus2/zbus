@@ -14,13 +14,13 @@ use fdo::{DBusProxy, RequestNameFlags};
 use futures_util::StreamExt;
 use scoped_tls::scoped_thread_local;
 use static_assertions::assert_impl_all;
+use zbus_names::{BusName, InterfaceName, MemberName, WellKnownName};
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
     azync, fdo,
     fdo::{Introspectable, Peer, Properties},
-    BusName, Connection, Error, InterfaceName, MemberName, Message, MessageHeader, MessageType,
-    Result, WellKnownName,
+    Connection, Error, Message, MessageHeader, MessageType, Result,
 };
 
 scoped_thread_local!(pub(crate) static LOCAL_NODE: Node);

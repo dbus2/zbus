@@ -9,14 +9,12 @@ use std::{
     },
     sync::{Arc, Mutex},
 };
+use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName};
 use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{
-    azync, BusName, Error, ErrorName, Guid, InterfaceName, MemberName, Message, OwnedUniqueName,
-    Result,
-};
+use crate::{azync, Error, Guid, Message, Result};
 
 /// A D-Bus connection.
 ///

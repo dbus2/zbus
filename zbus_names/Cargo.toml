@@ -1,0 +1,21 @@
+[package]
+name = "zbus_names"
+version = "1.0.0"
+authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
+edition = "2018"
+
+description = "A collection of D-Bus bus names types"
+repository = "https://gitlab.freedesktop.org/dbus/zbus/"
+keywords = ["D-Bus", "DBus", "IPC"]
+license = "MIT"
+categories = ["os::unix-apis"]
+readme = "../README.md"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+zvariant = { path = "../zvariant", version = "2", default-features = false, features = ["enumflags2"] }
+static_assertions = "1.1.0"
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]

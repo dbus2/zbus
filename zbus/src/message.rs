@@ -7,13 +7,13 @@ use std::{
 };
 
 use static_assertions::assert_impl_all;
+use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
-    owned_fd::OwnedFd, utils::padding_for_8_bytes, BusName, EndianSig, Error, ErrorName,
-    InterfaceName, MemberName, MessageField, MessageFieldCode, MessageFields, MessageHeader,
-    MessagePrimaryHeader, MessageType, Result, UniqueName, MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
-    PRIMARY_HEADER_SIZE,
+    owned_fd::OwnedFd, utils::padding_for_8_bytes, EndianSig, Error, MessageField,
+    MessageFieldCode, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType, Result,
+    MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE,
 };
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
