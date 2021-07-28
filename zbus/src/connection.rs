@@ -24,8 +24,8 @@ use crate::{azync, Error, Message, Result};
 /// it is recommended to wrap the low-level D-Bus messages into Rust functions with the
 /// [`dbus_proxy`] and [`dbus_interface`] macros instead of doing it directly on a `Connection`.
 ///
-/// Typically, a connection is made to the session bus with [`new_session`], or to the system bus
-/// with [`new_system`]. Then the connection is shared with the [`Proxy`] and [`ObjectServer`]
+/// Typically, a connection is made to the session bus with [`session`], or to the system bus
+/// with [`system`]. Then the connection is shared with the [`Proxy`] and [`ObjectServer`]
 /// instances.
 ///
 /// `Connection` implements [`Clone`] and cloning it is a very cheap operation, as the underlying
@@ -39,8 +39,8 @@ use crate::{azync, Error, Message, Result};
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
-/// [`new_system`]: struct.Connection.html#method.new_system
-/// [`new_session`]: struct.Connection.html#method.new_session
+/// [`system`]: struct.Connection.html#method.new_system
+/// [`session`]: struct.Connection.html#method.new_session
 /// [`Proxy`]: struct.Proxy.html
 /// [`ObjectServer`]: struct.ObjectServer.html
 /// [`dbus_proxy`]: attr.dbus_proxy.html
@@ -66,13 +66,13 @@ impl AsRawFd for Connection {
 
 impl Connection {
     /// Create a `Connection` to the session/user message bus.
-    pub fn new_session() -> Result<Self> {
-        block_on(azync::Connection::new_session()).map(Self::from)
+    pub fn session() -> Result<Self> {
+        block_on(azync::Connection::session()).map(Self::from)
     }
 
     /// Create a `Connection` to the system-wide message bus.
-    pub fn new_system() -> Result<Self> {
-        block_on(azync::Connection::new_system()).map(Self::from)
+    pub fn system() -> Result<Self> {
+        block_on(azync::Connection::system()).map(Self::from)
     }
 
     /// Max number of messages to queue.

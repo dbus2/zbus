@@ -62,7 +62,7 @@ use zbus::Connection;
 use zvariant::Value;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::new_session()?;
+    let connection = Connection::session()?;
 
     let m = connection.call_method(
         Some("org.freedesktop.Notifications"),
@@ -113,7 +113,7 @@ trait Notifications {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::new_session()?;
+    let connection = zbus::Connection::session()?;
 
     let proxy = NotificationsProxy::new(&connection)?;
     let reply = proxy.notify("my-app", 0, "dialog-information", "A summary", "Some body",
@@ -171,7 +171,7 @@ trait SystemdManager {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::new_session()?;
+    let connection = zbus::Connection::session()?;
 
     let proxy = SystemdManagerProxy::new(&connection)?;
     println!("Host architecture: {}", proxy.architecture()?);
@@ -225,7 +225,7 @@ trait SystemdManager {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::new_session()?;
+    let connection = zbus::Connection::session()?;
 
     let proxy = SystemdManagerProxy::new(&connection)?;
     proxy.connect_log_level_changed(|v| {
@@ -288,7 +288,7 @@ trait Location {
     #[dbus_proxy(property)]
     fn longitude(&self) -> Result<f64>;
 }
-let conn = Connection::new_system().unwrap();
+let conn = Connection::system().unwrap();
 let manager = ManagerProxy::new(&conn).unwrap();
 let mut client = manager.get_client().unwrap();
 // Gotta do this, sorry!
@@ -362,7 +362,7 @@ actually getting set:
 #     fn longitude(&self) -> Result<f64>;
 # }
 #
-# let conn = Connection::new_system().unwrap();
+# let conn = Connection::system().unwrap();
 # let manager = ManagerProxy::new(&conn).unwrap();
 # let mut client = manager.get_client().unwrap();
 # // Gotta do this, sorry!

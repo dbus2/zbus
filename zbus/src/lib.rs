@@ -47,7 +47,7 @@
 //! }
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
-//!     let connection = zbus::Connection::new_session()?;
+//!     let connection = zbus::Connection::session()?;
 //!
 //!     // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
 //!     let proxy = NotificationsProxy::new(&connection)?;
@@ -88,7 +88,7 @@
 //! }
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
-//!     let connection = Connection::new_session()?;
+//!     let connection = Connection::session()?;
 //!     let mut object_server = ObjectServer::new(&connection)
 //!         .request_name("org.zbus.MyGreeter")?;
 //!     let mut greeter = Greeter { count: 0 };
@@ -266,7 +266,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn basic_connection() {
-        let connection = crate::Connection::new_session()
+        let connection = crate::Connection::session()
             .map_err(|e| {
                 println!("error: {}", e);
 
@@ -295,7 +295,7 @@ mod tests {
     }
 
     async fn test_basic_connection() -> Result<()> {
-        let connection = azync::Connection::new_session().await?;
+        let connection = azync::Connection::session().await?;
 
         match connection
             .call_method(
@@ -318,7 +318,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn fdpass_systemd() {
-        let connection = crate::Connection::new_system().unwrap();
+        let connection = crate::Connection::system().unwrap();
 
         let reply = connection
             .call_method(
@@ -345,7 +345,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn freedesktop_api() {
-        let connection = crate::Connection::new_session()
+        let connection = crate::Connection::session()
             .map_err(|e| {
                 println!("error: {}", e);
 
@@ -449,7 +449,7 @@ mod tests {
     }
 
     async fn test_freedesktop_api() -> Result<()> {
-        let connection = azync::Connection::new_session().await?;
+        let connection = azync::Connection::session().await?;
 
         let reply = connection
             .call_method(
@@ -555,10 +555,10 @@ mod tests {
         // While this is not an exact reproduction of the issue 68, the underlying problem it
         // produces is exactly the same: `Connection::call_method` dropping all incoming messages
         // while waiting for the reply to the method call.
-        let conn = Connection::new_session().unwrap();
+        let conn = Connection::session().unwrap();
 
         // Send a message as client before service starts to process messages
-        let client_conn = Connection::new_session().unwrap();
+        let client_conn = Connection::session().unwrap();
         let destination = conn.unique_name().map(UniqueName::<'_>::from);
         let msg = Message::method(
             None::<()>,
@@ -593,7 +593,7 @@ mod tests {
         // signature we receive on the reply message.
         use std::{cell::RefCell, convert::TryFrom, rc::Rc};
         use zvariant::{ObjectPath, Value};
-        let conn = Connection::new_session().unwrap();
+        let conn = Connection::session().unwrap();
         let service_name = conn.unique_name().unwrap().clone();
         let mut object_server = super::ObjectServer::new(&conn);
 
@@ -622,7 +622,7 @@ mod tests {
             .unwrap();
 
         let child = std::thread::spawn(move || {
-            let conn = Connection::new_session().unwrap();
+            let conn = Connection::session().unwrap();
             #[super::dbus_proxy(interface = "org.freedesktop.Secret.Service")]
             trait Secret {
                 fn open_session(
@@ -691,7 +691,7 @@ mod tests {
     #[timeout(15000)]
     #[allow(clippy::mutex_atomic)]
     fn issue_122() {
-        let conn = Connection::new_session().unwrap();
+        let conn = Connection::session().unwrap();
         let conn_clone = conn.clone();
 
         let pair = Arc::new((Mutex::new(false), Condvar::new()));

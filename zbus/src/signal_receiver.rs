@@ -157,7 +157,7 @@ mod tests {
 
             fn emit_it(&self, arg: &str) -> Result<()>;
         }
-        let conn = Connection::new_session()?;
+        let conn = Connection::session()?;
         let mut receiver = SignalReceiver::new(conn.clone());
 
         let proxy1 = MultiSignalProxy::builder(&conn)
@@ -220,7 +220,7 @@ mod tests {
             }
         }
 
-        let conn = Connection::new_session().unwrap();
+        let conn = Connection::session().unwrap();
         let mut object_server = crate::ObjectServer::new(&conn)
             .request_name("org.freedesktop.zbus.MultiSignal")
             .unwrap();

@@ -69,7 +69,7 @@ trait Notifications {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::new_session()?;
+    let connection = zbus::Connection::session()?;
 
     // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
     let proxy = NotificationsProxy::new(&connection)?;
@@ -110,7 +110,7 @@ impl Greeter {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::new_session()?;
+    let connection = Connection::session()?;
     let mut object_server = ObjectServer::new(&connection)
         .request_name("org.zbus.MyGreeter")?;
     let mut greeter = Greeter { count: 0 };
@@ -286,7 +286,7 @@ for allowing unprivileged processes to speak to privileged processes.
 use zbus::Connection;
 use zbus_polkit::policykit1::*;
 
-let connection = Connection::new_system().unwrap();
+let connection = Connection::system().unwrap();
 let proxy = AuthorityProxy::new(&connection).unwrap();
 let subject = Subject::new_for_owner(std::process::id(), None, None).unwrap();
 let result = proxy.check_authorization(

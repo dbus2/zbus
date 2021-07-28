@@ -32,9 +32,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let node: Node = match args().nth(1) {
         Some(bus) if bus == "--system" || bus == "--session" => {
             let connection = if bus == "--system" {
-                zbus::Connection::new_system()?
+                zbus::Connection::system()?
             } else {
-                zbus::Connection::new_session()?
+                zbus::Connection::session()?
             };
             let service = args().nth(2).expect("Missing param for service");
             let path = args().nth(3).expect("Missing param for object path");

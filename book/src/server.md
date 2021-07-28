@@ -20,7 +20,7 @@ use zbus::Connection;
 use zbus::fdo;
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
-    let connection = Connection::new_session()?;
+    let connection = Connection::session()?;
 
     fdo::DBusProxy::new(&connection)?.request_name(
         "org.zbus.MyGreeter".try_into()?,
@@ -53,7 +53,7 @@ by replacing the loop above with this code:
 ```rust,no_run
 # use std::convert::TryInto;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-#    let connection = zbus::Connection::new_session()?;
+#    let connection = zbus::Connection::session()?;
 #    zbus::fdo::DBusProxy::new(&connection)?.request_name(
 #        "org.zbus.MyGreeter".try_into()?,
 #        zbus::fdo::RequestNameFlags::ReplaceExisting.into(),
@@ -133,7 +133,7 @@ impl Greeter {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::new_session()?;
+    let connection = Connection::session()?;
     let mut object_server = ObjectServer::new(&connection)
         .request_name("org.zbus.MyGreeter")?;
     let greeter = Greeter { name: "GreeterName".to_string() };
@@ -203,7 +203,7 @@ by our interface:
 # }
 #
 # fn main() -> Result<(), Box<dyn Error>> {
-# let connection = zbus::Connection::new_session()?;
+# let connection = zbus::Connection::session()?;
 # let mut object_server = zbus::ObjectServer::new(&connection);
 object_server.with("/org/zbus/MyGreeter", |iface: &Greeter| {
     iface.greeter_name_changed()

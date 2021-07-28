@@ -247,7 +247,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 ///# async_io::block_on(async {
 /// use zbus::azync::Connection;
 ///
-/// let mut connection = Connection::new_session().await?;
+/// let mut connection = Connection::session().await?;
 ///
 /// let reply = connection
 ///     .call_method(
@@ -274,7 +274,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// use futures_util::stream::TryStreamExt;
 /// use zbus::azync::Connection;
 ///
-/// let mut connection = Connection::new_session().await?;
+/// let mut connection = Connection::session().await?;
 ///
 /// connection
 ///     .call_method(
@@ -535,7 +535,7 @@ impl Connection {
     ///        .build()
     ///        .unwrap()
     ///        .block_on(async {
-    ///     let conn = Connection::new_session().await.unwrap();
+    ///     let conn = Connection::session().await.unwrap();
     ///     {
     ///        let conn = conn.clone();
     ///        tokio::task::spawn(async move {
@@ -776,12 +776,12 @@ impl Connection {
     }
 
     /// Create a `Connection` to the session/user message bus.
-    pub async fn new_session() -> Result<Self> {
+    pub async fn session() -> Result<Self> {
         ConnectionBuilder::session()?.build().await
     }
 
     /// Create a `Connection` to the system-wide message bus.
-    pub async fn new_system() -> Result<Self> {
+    pub async fn system() -> Result<Self> {
         ConnectionBuilder::system()?.build().await
     }
 }
@@ -964,7 +964,7 @@ mod tests {
     }
 
     async fn test_serial_monotonically_increases() {
-        let c = Connection::new_session().await.unwrap();
+        let c = Connection::session().await.unwrap();
         let serial = c.next_serial() + 1;
 
         for next in serial..serial + 10 {
