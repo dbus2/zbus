@@ -5,7 +5,7 @@ use std::{collections::HashMap, env, ffi::OsString, os::unix::net::UnixStream, s
 
 /// A bus address
 #[derive(Debug, PartialEq)]
-pub(crate) enum Address {
+pub enum Address {
     /// A path on the filesystem
     Unix(OsString),
 }

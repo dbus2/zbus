@@ -152,6 +152,7 @@ mod error;
 pub use error::*;
 
 mod address;
+pub use address::*;
 
 mod guid;
 pub use guid::*;
