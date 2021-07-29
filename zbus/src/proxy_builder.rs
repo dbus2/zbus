@@ -24,29 +24,28 @@ impl<'a, T> ProxyBuilder<'a, T> {
 
 impl<'a, T> ProxyBuilder<'a, T> {
     /// Set the proxy destination address.
-    pub fn destination<E, D>(self, destination: D) -> Result<Self>
+    pub fn destination<D>(self, destination: D) -> Result<Self>
     where
-        D: TryInto<BusName<'a>, Error = E>,
-        E: Into<Error>,
+        D: TryInto<BusName<'a>>,
+        D::Error: Into<Error>,
     {
         azync::ProxyBuilder::destination(self.0, destination).map(Self)
     }
 
     /// Set the proxy path.
-    pub fn path<E, P: TryInto<ObjectPath<'a>, Error = E>>(self, path: P) -> Result<Self>
+    pub fn path<P>(self, path: P) -> Result<Self>
     where
-        E: Into<Error>,
+        P: TryInto<ObjectPath<'a>>,
+        P::Error: Into<Error>,
     {
         azync::ProxyBuilder::path(self.0, path).map(Self)
     }
 
     /// Set the proxy interface.
-    pub fn interface<E, I: TryInto<InterfaceName<'a>, Error = E>>(
-        self,
-        interface: I,
-    ) -> Result<Self>
+    pub fn interface<I>(self, interface: I) -> Result<Self>
     where
-        E: Into<Error>,
+        I: TryInto<InterfaceName<'a>>,
+        I::Error: Into<Error>,
     {
         azync::ProxyBuilder::interface(self.0, interface).map(Self)
     }

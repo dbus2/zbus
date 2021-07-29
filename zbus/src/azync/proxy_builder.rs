@@ -52,31 +52,30 @@ impl<'a, T> ProxyBuilder<'a, T> {
 
 impl<'a, T> ProxyBuilder<'a, T> {
     /// Set the proxy destination address.
-    pub fn destination<E, D>(mut self, destination: D) -> Result<Self>
+    pub fn destination<D>(mut self, destination: D) -> Result<Self>
     where
-        D: TryInto<BusName<'a>, Error = E>,
-        E: Into<Error>,
+        D: TryInto<BusName<'a>>,
+        D::Error: Into<Error>,
     {
         self.destination = Some(destination.try_into().map_err(Into::into)?);
         Ok(self)
     }
 
     /// Set the proxy path.
-    pub fn path<E, P: TryInto<ObjectPath<'a>, Error = E>>(mut self, path: P) -> Result<Self>
+    pub fn path<P>(mut self, path: P) -> Result<Self>
     where
-        E: Into<Error>,
+        P: TryInto<ObjectPath<'a>>,
+        P::Error: Into<Error>,
     {
         self.path = Some(path.try_into().map_err(Into::into)?);
         Ok(self)
     }
 
     /// Set the proxy interface.
-    pub fn interface<E, I: TryInto<InterfaceName<'a>, Error = E>>(
-        mut self,
-        interface: I,
-    ) -> Result<Self>
+    pub fn interface<I>(mut self, interface: I) -> Result<Self>
     where
-        E: Into<Error>,
+        I: TryInto<InterfaceName<'a>>,
+        I::Error: Into<Error>,
     {
         self.interface = Some(interface.try_into().map_err(Into::into)?);
         Ok(self)
