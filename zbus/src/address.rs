@@ -1,7 +1,10 @@
 use crate::{raw::Socket, Error, Result};
 use async_io::Async;
 use nix::unistd::Uid;
-use std::{collections::HashMap, env, ffi::OsString, os::unix::net::UnixStream, str::FromStr};
+use std::{
+    collections::HashMap, convert::TryFrom, env, ffi::OsString, os::unix::net::UnixStream,
+    str::FromStr,
+};
 
 /// A bus address
 #[derive(Debug, PartialEq)]
@@ -112,6 +115,14 @@ impl FromStr for Address {
                 transport
             ))),
         }
+    }
+}
+
+impl TryFrom<&str> for Address {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Self::from_str(value)
     }
 }
 
