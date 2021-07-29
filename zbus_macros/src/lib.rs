@@ -100,7 +100,7 @@ mod utils;
 /// block_on(async move {
 ///     let proxy = AsyncSomeIfaceProxy::builder(&connection.into())
 ///                    .cache_properties(false)
-///                    .build_async()
+///                    .build()
 ///                    .await
 ///                    .unwrap();
 ///     let _ = proxy.do_this("foo", 32, &Value::new(true)).await;
