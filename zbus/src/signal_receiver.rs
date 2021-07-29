@@ -1,10 +1,11 @@
-use crate::{Connection, Error, InterfaceName, MessageHeader, Proxy, Result, UniqueName};
+use crate::{Connection, Error, MessageHeader, Proxy, Result};
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
     convert::{AsRef, TryFrom},
     sync::Arc,
 };
+use zbus_names::{InterfaceName, UniqueName};
 use zvariant::ObjectPath;
 
 #[derive(Hash, Eq, PartialEq)]

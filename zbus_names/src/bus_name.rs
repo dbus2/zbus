@@ -15,7 +15,7 @@ use zvariant::{derive::Type, NoneValue, OwnedValue, Str, Type, Value};
 ///
 /// ```
 /// use core::convert::TryFrom;
-/// use zbus::BusName;
+/// use zbus_names::BusName;
 ///
 /// // Valid well-known names.
 /// let name = BusName::try_from("org.gnome.Service-for_you").unwrap();

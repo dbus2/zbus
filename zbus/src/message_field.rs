@@ -7,9 +7,8 @@ use serde::{
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use static_assertions::assert_impl_all;
+use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{derive::Type, ObjectPath, Signature, Type, Value};
-
-use crate::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 /// The message field code.
 ///

@@ -192,7 +192,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         changed.insert(#member_name, &*value);
                         let properties_iface = #zbus::fdo::Properties;
                         properties_iface.properties_changed(
-                            #zbus::InterfaceName::from_str_unchecked(#iface_name),
+                            #zbus::export::names::InterfaceName::from_str_unchecked(#iface_name),
                             &changed,
                             &[],
                         )
@@ -296,8 +296,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         impl #generics #zbus::Interface for #self_ty
         #where_clause
         {
-            fn name() -> #zbus::InterfaceName<'static> {
-                #zbus::InterfaceName::from_str_unchecked(#iface_name)
+            fn name() -> #zbus::export::names::InterfaceName<'static> {
+                #zbus::export::names::InterfaceName::from_str_unchecked(#iface_name)
             }
 
             fn get(
@@ -339,7 +339,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &self,
                 c: &#zbus::Connection,
                 m: &#zbus::Message,
-                name: #zbus::MemberName<'_>,
+                name: #zbus::export::names::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
                 match name.as_str() {
                     #call_dispatch
@@ -351,7 +351,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &mut self,
                 c: &#zbus::Connection,
                 m: &#zbus::Message,
-                name: #zbus::MemberName<'_>,
+                name: #zbus::export::names::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
                 match name.as_str() {
                     #call_mut_dispatch

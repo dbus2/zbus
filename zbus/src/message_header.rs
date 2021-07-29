@@ -6,12 +6,10 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use static_assertions::assert_impl_all;
+use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{derive::Type, ObjectPath, Signature};
 
-use crate::{
-    BusName, Error, ErrorName, InterfaceName, MemberName, MessageField, MessageFieldCode,
-    MessageFields, UniqueName,
-};
+use crate::{Error, MessageField, MessageFieldCode, MessageFields};
 
 pub(crate) const PRIMARY_HEADER_SIZE: usize = 12;
 pub(crate) const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
@@ -371,10 +369,7 @@ impl<'m> MessageHeader<'m> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        InterfaceName, MemberName, MessageField, MessageFields, MessageHeader,
-        MessagePrimaryHeader, MessageType,
-    };
+    use crate::{MessageField, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType};
 
     use std::{
         convert::{TryFrom, TryInto},
@@ -382,6 +377,7 @@ mod tests {
         result::Result,
     };
     use test_env_log::test;
+    use zbus_names::{InterfaceName, MemberName};
     use zvariant::{ObjectPath, Signature};
 
     #[test]

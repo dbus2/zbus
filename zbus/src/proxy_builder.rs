@@ -3,9 +3,10 @@ use std::{convert::TryInto, marker::PhantomData, sync::Arc};
 use async_io::block_on;
 use futures_core::future::BoxFuture;
 use static_assertions::assert_impl_all;
+use zbus_names::{BusName, InterfaceName};
 use zvariant::ObjectPath;
 
-use crate::{azync, BusName, Error, InterfaceName, Result};
+use crate::{azync, Error, Result};
 
 /// Builder for proxies.
 #[derive(Debug)]
