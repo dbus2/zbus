@@ -7,6 +7,7 @@ use zvariant::Error as VariantError;
 /// The various errors that can be reported by this crate.
 #[derive(Debug)]
 #[allow(clippy::upper_case_acronyms)]
+#[non_exhaustive]
 pub enum Error {
     Variant(VariantError),
     /// Invalid bus name. The strings describe why the bus name is neither a valid unique nor

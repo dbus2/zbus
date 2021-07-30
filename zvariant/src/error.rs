@@ -4,6 +4,7 @@ use std::{convert::Infallible, error, fmt, result};
 
 /// Error type used by zvariant API.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Generic error. All serde errors gets transformed into this variant.
     Message(String),
