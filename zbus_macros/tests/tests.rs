@@ -47,7 +47,7 @@ fn test_proxy() {
             T: AsRef<str>;
     }
 
-    let connection = zbus::Connection::new_session().unwrap();
+    let connection = zbus::Connection::session().unwrap();
     let proxy = TestProxy::builder(&connection)
         .cache_properties(false)
         .build()
@@ -214,7 +214,7 @@ fn test_interface() {
 
     if false {
         // check compilation
-        let c = zbus::Connection::new_session().unwrap();
+        let c = zbus::Connection::session().unwrap();
         let m = zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
             .unwrap();
         let _ = t.call(&c, &m, "StrU32".try_into().unwrap()).unwrap();

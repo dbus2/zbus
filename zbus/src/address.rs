@@ -1,11 +1,14 @@
-use crate::{raw::Socket, Error, Result};
+use crate::{Error, Result};
 use async_io::Async;
 use nix::unistd::Uid;
-use std::{collections::HashMap, env, ffi::OsString, os::unix::net::UnixStream, str::FromStr};
+use std::{
+    collections::HashMap, convert::TryFrom, env, ffi::OsString, os::unix::net::UnixStream,
+    str::FromStr,
+};
 
 /// A bus address
 #[derive(Debug, PartialEq)]
-pub(crate) enum Address {
+pub enum Address {
     /// A path on the filesystem
     Unix(OsString),
 }
@@ -13,15 +16,6 @@ pub(crate) enum Address {
 #[derive(Debug)]
 pub(crate) enum Stream {
     Unix(Async<UnixStream>),
-}
-
-impl Stream {
-    pub(crate) fn into_boxed(self) -> Result<Async<Box<dyn Socket>>> {
-        match self {
-            // FIXME: easier/more direct way to do this?
-            Stream::Unix(s) => Ok(Async::new(Box::new(s.into_inner()?) as Box<dyn Socket>)?),
-        }
-    }
 }
 
 impl Address {
@@ -112,6 +106,14 @@ impl FromStr for Address {
                 transport
             ))),
         }
+    }
+}
+
+impl TryFrom<&str> for Address {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Self::from_str(value)
     }
 }
 

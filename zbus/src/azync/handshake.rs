@@ -7,12 +7,10 @@ use std::{
     marker::PhantomData,
     ops::Deref,
     pin::Pin,
-    str::FromStr,
     task::{Context, Poll},
 };
 
 use crate::{
-    address::Address,
     guid::Guid,
     handshake::{self, Handshake as SyncHandshake, IoOperation},
     raw::Socket,
@@ -64,25 +62,6 @@ where
             phantom: PhantomData,
         }
         .await
-    }
-}
-
-impl Authenticated<Async<Box<dyn Socket>>> {
-    /// Create a `Authenticated` for the session/user message bus.
-    pub async fn session() -> Result<Self> {
-        Self::client(Address::session()?.connect().await?.into_boxed()?).await
-    }
-
-    /// Create a `Authenticated` for the system-wide message bus.
-    pub async fn system() -> Result<Self> {
-        Self::client(Address::system()?.connect().await?.into_boxed()?).await
-    }
-
-    /// Create a `Authenticated` for the given [D-Bus address].
-    ///
-    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub async fn for_address(address: &str) -> Result<Self> {
-        Self::client(Address::from_str(address)?.connect().await?.into_boxed()?).await
     }
 }
 

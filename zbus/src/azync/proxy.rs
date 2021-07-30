@@ -92,7 +92,7 @@ pub(crate) struct ProxyProperties<'a> {
 /// }
 ///
 /// async fn run() -> Result<(), Box<dyn Error>> {
-///     let connection = Connection::new_session().await?;
+///     let connection = Connection::session().await?;
 ///     let p = Proxy::new(
 ///         &connection,
 ///         "org.freedesktop.DBus",
@@ -887,7 +887,7 @@ mod tests {
     async fn test_signal_stream() -> Result<()> {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
-        let conn = Connection::new_session().await?;
+        let conn = Connection::session().await?;
         let unique_name = conn.unique_name().unwrap();
 
         let proxy = fdo::AsyncDBusProxy::new(&conn).await?;
@@ -967,7 +967,7 @@ mod tests {
     async fn test_signal_connect() -> Result<()> {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
-        let conn = Connection::new_session().await?;
+        let conn = Connection::session().await?;
         let owner_change_signaled = Arc::new(Mutex::new(false));
         let name_acquired_signaled = Arc::new(Mutex::new(false));
         let name_acquired_signaled2 = Arc::new(Mutex::new(false));

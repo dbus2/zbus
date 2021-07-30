@@ -260,7 +260,7 @@ impl Node {
 ///     // how to expose properties & signals as well.
 /// }
 ///
-/// let connection = Connection::new_session()?;
+/// let connection = Connection::session()?;
 /// let mut object_server = ObjectServer::new(&connection);
 /// let quit = Rc::new(RefCell::new(false));
 ///
@@ -463,7 +463,7 @@ impl ObjectServer {
     ///#     fn emit_signal(&self) -> zbus::Result<()>;
     ///# }
     ///#
-    ///# let connection = Connection::new_session()?;
+    ///# let connection = Connection::session()?;
     ///# let mut object_server = ObjectServer::new(&connection);
     ///#
     ///# let path = "/org/zbus/path";
@@ -814,7 +814,7 @@ mod tests {
     }
 
     fn my_iface_test(tx: Sender<()>) -> std::result::Result<u32, Box<dyn Error>> {
-        let conn = Connection::new_session()?;
+        let conn = Connection::session()?;
         let proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
@@ -901,7 +901,7 @@ mod tests {
     fn basic_iface() {
         let (tx, rx) = channel::<()>();
 
-        let conn = Connection::new_session().unwrap();
+        let conn = Connection::session().unwrap();
         let mut object_server = ObjectServer::new(&conn)
             // primary name
             .request_name("org.freedesktop.MyService")

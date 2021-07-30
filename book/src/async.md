@@ -63,7 +63,7 @@ async fn run() -> Result<()> {
         #[dbus_proxy(property)]
         fn longitude(&self) -> Result<f64>;
     }
-    let conn = Connection::new_system().await?;
+    let conn = Connection::system().await?;
     let manager = AsyncManagerProxy::new(&conn).await?;
     let mut client = manager.get_client().await?;
     // Gotta do this, sorry!
@@ -154,7 +154,7 @@ example again to receive multiple signals on different proxies:
 #         #[dbus_proxy(property)]
 #         fn longitude(&self) -> Result<f64>;
 #     }
-#     let conn = Connection::new_system().await?;
+#     let conn = Connection::system().await?;
 #     let manager = AsyncManagerProxy::new(&conn).await?;
 #     let mut client = manager.get_client().await?;
 #
@@ -270,7 +270,7 @@ streams to see how that works:
 #         #[dbus_proxy(property)]
 #         fn longitude(&self) -> Result<f64>;
 #     }
-#     let conn = Connection::new_system().await?;
+#     let conn = Connection::system().await?;
 #     let manager = AsyncManagerProxy::new(&conn).await?;
 #     let mut client = manager.get_client().await?;
 #
@@ -347,7 +347,7 @@ after the properties `receive_<prop_name>_changed()`. Example:
         fn log_level(&self) -> zbus::Result<String>;
     }
 
-    let connection = Connection::new_session().await?;
+    let connection = Connection::session().await?;
 
     let proxy = AsyncSystemdManagerProxy::new(&connection).await?;
     let mut stream = proxy.receive_log_level_changed().await;
