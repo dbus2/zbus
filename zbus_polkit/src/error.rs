@@ -6,6 +6,7 @@ use static_assertions::assert_impl_all;
 ///
 /// The various errors that can be reported by this crate.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// I/O errors.
     Io(std::io::Error),
