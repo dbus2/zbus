@@ -126,21 +126,21 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     }
 
     let AsyncOpts { usage, wait, .. } = async_opts;
-    let (proxy_doc, proxy_struct, connection, build) = if azync {
+    let (proxy_doc, proxy_struct, connection, builder) = if azync {
         let sync_proxy = Ident::new(&format!("{}Proxy", input.ident), Span::call_site());
         let doc = format!("Asynchronous sibling of [`{}`].", sync_proxy);
         let connection = quote! { #zbus::azync::Connection };
         let proxy = quote! { #zbus::azync::Proxy };
-        let build = Ident::new("build_async", Span::call_site());
+        let builder = quote! { #zbus::azync::ProxyBuilder };
 
-        (doc, proxy, connection, build)
+        (doc, proxy, connection, builder)
     } else {
         let doc = String::from("");
         let connection = quote! { #zbus::Connection };
         let proxy = quote! { #zbus::Proxy };
-        let build = Ident::new("build", Span::call_site());
+        let builder = quote! { #zbus::ProxyBuilder };
 
-        (doc, proxy, connection, build)
+        (doc, proxy, connection, builder)
     };
 
     quote! {
@@ -158,13 +158,12 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
         impl<'c> #proxy_name<'c> {
             /// Creates a new proxy with the default service & path.
             pub #usage fn new(conn: &#connection) -> #zbus::Result<#proxy_name<'c>> {
-                Self::builder(conn).#build()#wait
+                Self::builder(conn).build()#wait
             }
 
             /// Returns a customizable builder for this proxy.
-            pub fn builder(conn: &#connection) -> #zbus::ProxyBuilder<'c, Self> {
-                #zbus::ProxyBuilder::new(conn)
-                    .cache_properties(#has_properties)
+            pub fn builder(conn: &#connection) -> #builder<'c, Self> {
+                #builder::new(conn).cache_properties(#has_properties)
             }
 
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
@@ -312,6 +311,7 @@ fn gen_proxy_method_call(
                 #proxy::builder(&self.0.connection())
                     .path(object_path)?
                     .build()
+                    #wait
             }
         }
     } else {

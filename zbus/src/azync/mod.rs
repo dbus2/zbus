@@ -10,3 +10,5 @@ mod connection_builder;
 pub use connection_builder::*;
 mod proxy;
 pub use proxy::*;
+mod proxy_builder;
+pub use proxy_builder::*;

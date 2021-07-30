@@ -21,7 +21,7 @@ use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
-    azync::Connection,
+    azync::{Connection, ProxyBuilder},
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
     Error, Message, MessageHeader, MessageType, Result,
 };
@@ -276,11 +276,11 @@ impl<'a> Proxy<'a> {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
     {
-        crate::ProxyBuilder::new_bare(conn)
+        ProxyBuilder::new_bare(conn)
             .destination(destination)?
             .path(path)?
             .interface(interface)?
-            .build_async()
+            .build()
             .await
     }
 
@@ -300,11 +300,11 @@ impl<'a> Proxy<'a> {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
     {
-        crate::ProxyBuilder::new_bare(&conn)
+        ProxyBuilder::new_bare(&conn)
             .destination(destination)?
             .path(path)?
             .interface(interface)?
-            .build_async()
+            .build()
             .await
     }
 
@@ -387,7 +387,8 @@ impl<'a> Proxy<'a> {
         let proxy = AsyncIntrospectableProxy::builder(&self.inner.conn)
             .destination(&self.inner.destination)?
             .path(&self.inner.path)?
-            .build()?;
+            .build()
+            .await?;
 
         proxy.introspect().await
     }
@@ -406,7 +407,7 @@ impl<'a> Proxy<'a> {
                     .unwrap()
                     // does not have properties and do not recurse!
                     .cache_properties(false)
-                    .build_async()
+                    .build()
                     .await?;
                 // doesn't matter if another thread sets it before
                 let _ = self.properties.proxy.set(proxy);
