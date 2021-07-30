@@ -196,6 +196,8 @@ pub mod export {
     pub use zvariant;
 }
 
+pub use zvariant;
+
 #[cfg(test)]
 mod tests {
     use std::{
