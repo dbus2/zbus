@@ -480,7 +480,7 @@ impl Message {
     {
         let body_sig = match self.body_signature() {
             Ok(sig) => sig,
-            Err(Error::NoBodySignature) => Signature::from_str_unchecked(""),
+            Err(Error::NoBodySignature) => Signature::from_static_str_unchecked(""),
             Err(e) => return Err(e),
         };
 
