@@ -5,14 +5,14 @@ entry point of the zbus API.
 
 ## Connection to the bus
 
-To connect to the session bus (the *per-user* bus), simply call `Connection::new_session()`. It
+To connect to the session bus (the *per-user* bus), simply call `Connection::session()`. It
 returns an instance of the connection (if all went well).
 
 Similarly, to connect to the system bus (to communicate with services such as [NetworkManager],
-[BlueZ] or [PID1]), use `Connection::new_system()`.
+[BlueZ] or [PID1]), use `Connection::system()`.
 
 **Note:** it is common for a D-Bus library to provide a "shared" connection to a bus for a process:
-all `new_session()` share the same underlying connection for example. At the time of this writing,
+all `session()` share the same underlying connection for example. At the time of this writing,
 zbus doesn't do that.
 
 ## Using a custom bus address

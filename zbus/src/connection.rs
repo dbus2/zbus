@@ -3,10 +3,7 @@ use static_assertions::assert_impl_all;
 use std::{
     convert::TryInto,
     io::{self, ErrorKind},
-    os::unix::{
-        io::{AsRawFd, RawFd},
-        net::UnixStream,
-    },
+    os::unix::io::{AsRawFd, RawFd},
     sync::{Arc, Mutex},
 };
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName};
@@ -14,7 +11,7 @@ use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, Error, Guid, Message, Result};
+use crate::{azync, Error, Message, Result};
 
 /// A D-Bus connection.
 ///
@@ -27,8 +24,8 @@ use crate::{azync, Error, Guid, Message, Result};
 /// it is recommended to wrap the low-level D-Bus messages into Rust functions with the
 /// [`dbus_proxy`] and [`dbus_interface`] macros instead of doing it directly on a `Connection`.
 ///
-/// Typically, a connection is made to the session bus with [`new_session`], or to the system bus
-/// with [`new_system`]. Then the connection is shared with the [`Proxy`] and [`ObjectServer`]
+/// Typically, a connection is made to the session bus with [`session`], or to the system bus
+/// with [`system`]. Then the connection is shared with the [`Proxy`] and [`ObjectServer`]
 /// instances.
 ///
 /// `Connection` implements [`Clone`] and cloning it is a very cheap operation, as the underlying
@@ -42,8 +39,8 @@ use crate::{azync, Error, Guid, Message, Result};
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
-/// [`new_system`]: struct.Connection.html#method.new_system
-/// [`new_session`]: struct.Connection.html#method.new_session
+/// [`system`]: struct.Connection.html#method.new_system
+/// [`session`]: struct.Connection.html#method.new_session
 /// [`Proxy`]: struct.Proxy.html
 /// [`ObjectServer`]: struct.ObjectServer.html
 /// [`dbus_proxy`]: attr.dbus_proxy.html
@@ -68,43 +65,14 @@ impl AsRawFd for Connection {
 }
 
 impl Connection {
-    /// Create and open a D-Bus connection from a `UnixStream`.
-    ///
-    /// The connection may either be set up for a *bus* connection, or not (for peer-to-peer
-    /// communications).
-    ///
-    /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
-    /// can be sent and received.
-    pub fn new_unix_client(stream: UnixStream, bus_connection: bool) -> Result<Self> {
-        block_on(azync::Connection::new_unix_client(stream, bus_connection)).map(Self::from)
-    }
-
     /// Create a `Connection` to the session/user message bus.
-    pub fn new_session() -> Result<Self> {
-        block_on(azync::Connection::new_session()).map(Self::from)
+    pub fn session() -> Result<Self> {
+        block_on(azync::Connection::session()).map(Self::from)
     }
 
     /// Create a `Connection` to the system-wide message bus.
-    pub fn new_system() -> Result<Self> {
-        block_on(azync::Connection::new_system()).map(Self::from)
-    }
-
-    /// Create a `Connection` for the given [D-Bus address].
-    ///
-    /// [D-Bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub fn new_for_address(address: &str, bus_connection: bool) -> Result<Self> {
-        block_on(azync::Connection::new_for_address(address, bus_connection)).map(Self::from)
-    }
-
-    /// Create a server `Connection` for the given `UnixStream` and the server `guid`.
-    ///
-    /// The connection will wait for incoming client authentication handshake & negotiation messages,
-    /// for peer-to-peer communications.
-    ///
-    /// Upon successful return, the connection is fully established and negotiated: D-Bus messages
-    /// can be sent and received.
-    pub fn new_unix_server(stream: UnixStream, guid: &Guid) -> Result<Self> {
-        block_on(azync::Connection::new_unix_server(stream, guid)).map(Self::from)
+    pub fn system() -> Result<Self> {
+        block_on(azync::Connection::system()).map(Self::from)
     }
 
     /// Max number of messages to queue.
@@ -113,24 +81,8 @@ impl Connection {
     }
 
     /// Set the max number of messages to queue.
-    ///
-    /// Since typically you'd want to set this at instantiation time, this method takes ownership
-    /// of `self` and returns an owned `Connection` instance so you can use the builder pattern to
-    /// set the value.
-    ///
-    /// # Example
-    ///
-    /// ```
-    ///# use std::error::Error;
-    ///#
-    /// let conn = zbus::Connection::new_session()?.set_max_queued(30);
-    /// assert_eq!(conn.max_queued(), 30);
-    ///
-    /// // Do something useful with `conn`..
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
-    /// ```
-    pub fn set_max_queued(self, max: usize) -> Self {
-        Self::from(self.inner.set_max_queued(max))
+    pub fn set_max_queued(mut self, max: usize) {
+        self.inner.set_max_queued(max)
     }
 
     /// The server's GUID.
@@ -289,7 +241,7 @@ mod tests {
     use std::{os::unix::net::UnixStream, thread};
     use test_env_log::test;
 
-    use crate::{Connection, Error, Guid};
+    use crate::{ConnectionBuilder, Error, Guid};
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
@@ -298,7 +250,11 @@ mod tests {
         let (p0, p1) = UnixStream::pair().unwrap();
 
         let server_thread = thread::spawn(move || {
-            let c = Connection::new_unix_server(p0, &guid).unwrap();
+            let c = ConnectionBuilder::unix_stream(p0)
+                .server(&guid)
+                .p2p()
+                .build()
+                .unwrap();
             let reply = c
                 .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
                 .unwrap();
@@ -307,7 +263,7 @@ mod tests {
             val
         });
 
-        let c = Connection::new_unix_client(p1, false).unwrap();
+        let c = ConnectionBuilder::unix_stream(p1).p2p().build().unwrap();
         let m = c.receive_message().unwrap();
         assert_eq!(m.to_string(), "Method call Test");
         c.reply(&m, &("yay")).unwrap();

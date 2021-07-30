@@ -77,7 +77,7 @@ mod utils;
 /// )]
 /// trait SomeOtherIface {}
 ///
-/// let connection = Connection::new_session()?;
+/// let connection = Connection::session()?;
 /// // Use `builder` to override the default arguments, `new` otherwise.
 /// let proxy = SomeIfaceProxy::builder(&connection)
 ///                .destination("org.another.Service")?

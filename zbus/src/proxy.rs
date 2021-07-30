@@ -27,7 +27,7 @@ use crate::fdo;
 /// use zbus::{Connection, Proxy};
 ///
 /// fn main() -> Result<(), Box<dyn Error>> {
-///     let connection = Connection::new_session()?;
+///     let connection = Connection::session()?;
 ///     let p = Proxy::new(
 ///         &connection,
 ///         "org.freedesktop.DBus",
@@ -355,7 +355,7 @@ mod tests {
     fn signal() {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
-        let conn = Connection::new_session().unwrap();
+        let conn = Connection::session().unwrap();
         let owner_change_signaled = Arc::new(AtomicBool::new(false));
         let name_acquired_signaled = Arc::new(AtomicBool::new(false));
 

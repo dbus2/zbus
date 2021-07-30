@@ -659,7 +659,7 @@ mod tests {
     fn signal_connect() {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
-        let conn = crate::Connection::new_session().unwrap();
+        let conn = crate::Connection::session().unwrap();
         let owner_change_signaled = Arc::new(AtomicBool::new(false));
         let name_acquired_signaled = Arc::new(AtomicBool::new(false));
 
@@ -738,7 +738,7 @@ mod tests {
     }
 
     async fn test_signal_stream() {
-        let conn = crate::azync::Connection::new_session().await.unwrap();
+        let conn = crate::azync::Connection::session().await.unwrap();
 
         #[cfg(not(feature = "internal-executor"))]
         {

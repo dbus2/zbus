@@ -13,7 +13,7 @@
 //! use zbus::Connection;
 //! use zbus_polkit::policykit1::*;
 //!
-//! let c = Connection::new_system().unwrap();
+//! let c = Connection::system().unwrap();
 //! let p = AuthorityProxy::new(&c).unwrap();
 //! let subject = Subject::new_for_owner(std::process::id(), None, None).unwrap();
 //! let result = p.check_authorization(

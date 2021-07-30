@@ -172,7 +172,7 @@ mod tests {
     #[test]
     #[ntest::timeout(15000)]
     fn builder() {
-        let conn = Connection::new_session().unwrap();
+        let conn = Connection::session().unwrap();
 
         let builder = ProxyBuilder::<azync::Proxy<'_>>::new_bare(&conn)
             .destination("org.freedesktop.DBus")
