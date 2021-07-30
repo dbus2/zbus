@@ -217,6 +217,9 @@ pub mod export {
     pub use zvariant;
 }
 
+pub use zbus_names as names;
+pub use zvariant;
+
 #[cfg(test)]
 mod tests {
     use std::{
