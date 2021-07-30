@@ -21,16 +21,6 @@ zbus crate is currently Linux-specific[^otheros].
 
 **Status:** Stable[^stability].
 
-### Dependencies
-
-  * nix
-  * byteorder
-  * serde
-  * serde_repr
-  * enumflags2
-  * derivative
-  * serde-xml-rs (optional)
-
 ### Getting Started
 
 The best way to get started with zbus is the [book](https://dbus.pages.freedesktop.org/zbus/),
@@ -158,13 +148,6 @@ commonly used for efficient storage of arbitrary data and is also supported by t
 
 **Status:** Stable.
 
-### Dependencies
-
-* byteorder
-* serde
-* arrayvec (optional)
-* enumflags2 (optional)
-
 ### Example code
 
 ```rust
@@ -218,12 +201,6 @@ This crate provides a derive macro to easily implement [`Type` trait](https://do
 
 **Status:** Stable.
 
-### Dependencies
-
-* proc-macro2
-* syn
-* quote
-
 ### Example code
 
 ```rust
@@ -274,12 +251,6 @@ for allowing unprivileged processes to speak to privileged processes.
 
 **Status:** Stable.
 
-#### Dependencies
-
-  * serde
-  * serde_repr
-  * enumflags2
-
 #### Example code
 
 ```rust,no_run
@@ -308,12 +279,6 @@ or other service, or using a preexisting XML file for input.
 
 **Status:** Stable.
 
-#### Dependencies
-
-  * zbus
-  * zvariant
-  * snakecase
-
 #### Usage
 
 ```shell
@@ -334,12 +299,6 @@ This is used by `zbus` (and in future by `zbus_macros` as well) crate. Other D-B
 encouraged to use this API in the spirit of cooperation. :)
 
 **Status:** Stable.
-
-### Dependencies
-
-  * serde
-  * zvariant
-  * static_assertions
 
 # Getting Help
 
