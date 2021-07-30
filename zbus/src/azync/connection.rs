@@ -586,7 +586,7 @@ impl Connection {
                 if let Some(match_rule) = &match_rule {
                     fdo::AsyncDBusProxy::builder(self)
                         .cache_properties(false)
-                        .build_async()
+                        .build()
                         .await?
                         .add_match(match_rule)
                         .await?;
@@ -643,7 +643,7 @@ impl Connection {
                     if let Some(match_rule) = &subscription.match_rule {
                         fdo::AsyncDBusProxy::builder(self)
                             .cache_properties(false)
-                            .build_async()
+                            .build()
                             .await?
                             .remove_match(match_rule.as_str())
                             .await?;
@@ -673,7 +673,7 @@ impl Connection {
     async fn hello_bus(&self) -> Result<()> {
         let dbus_proxy = fdo::AsyncDBusProxy::builder(self)
             .cache_properties(false)
-            .build_async()
+            .build()
             .await?;
         let future = dbus_proxy.hello();
 

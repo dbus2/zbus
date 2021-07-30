@@ -95,7 +95,7 @@ impl<'a> Proxy<'a> {
 
     /// Create a new `Proxy` for the given destination/path/interface, taking ownership of all
     /// passed arguments.
-    pub async fn new_owned<D, P, I>(
+    pub fn new_owned<D, P, I>(
         conn: Connection,
         destination: D,
         path: P,

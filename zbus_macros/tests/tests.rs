@@ -63,7 +63,7 @@ fn test_proxy() {
     block_on(async move {
         let proxy = AsyncTestProxy::builder(&connection)
             .cache_properties(false)
-            .build_async()
+            .build()
             .await
             .unwrap();
         fdo::AsyncDBusProxy::new(&connection)
