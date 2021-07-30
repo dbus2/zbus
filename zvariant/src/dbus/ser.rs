@@ -1,9 +1,10 @@
 use byteorder::WriteBytesExt;
-use serde::{ser, ser::SerializeSeq, Serialize};
+use serde::{ser, ser::SerializeMap, ser::SerializeSeq, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
     io::{Seek, Write},
     marker::PhantomData,
+    mem::swap,
     os::unix::io::RawFd,
     str,
 };
@@ -42,6 +43,28 @@ where
             value_sign: None,
             b: PhantomData,
         })
+    }
+
+    fn serialize_variant_body<'a, T>(&mut self, signature: Signature<'a>, value: &T) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        let sig_parser = SignatureParser::new(signature);
+        let bytes_written = self.0.bytes_written;
+        let mut fds = vec![];
+        let mut ser = Serializer(crate::SerializerCommon::<B, W> {
+            ctxt: self.0.ctxt,
+            sig_parser,
+            writer: &mut self.0.writer,
+            fds: &mut fds,
+            bytes_written,
+            value_sign: None,
+            b: PhantomData,
+        });
+        value.serialize(&mut ser)?;
+        self.0.bytes_written = ser.0.bytes_written;
+        self.0.fds.extend(fds.iter());
+        Ok(())
     }
 }
 
@@ -124,16 +147,21 @@ where
             self.0.value_sign = Some(signature_string!(v));
         }
 
-        match c {
+        let v = match c {
             ObjectPath::SIGNATURE_CHAR | <&str>::SIGNATURE_CHAR => {
                 self.0
                     .add_padding(<&str>::alignment(EncodingFormat::DBus))?;
                 self.0
                     .write_u32::<B>(usize_to_u32(v.len()))
                     .map_err(Error::Io)?;
+                v.to_string()
             }
             Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
+                let sig = Signature::from_str_unchecked(v);
+                let v = sig.remove_serialize_dict_annotations().as_str().to_string();
+                log::trace!("writing signature: {}", v);
                 self.0.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
+                v
             }
             _ => {
                 let expected = format!(
@@ -148,7 +176,7 @@ where
                     &expected.as_str(),
                 ));
             }
-        }
+        };
 
         self.0.sig_parser.skip_char()?;
         self.0.write_all(v.as_bytes()).map_err(Error::Io)?;
@@ -160,7 +188,7 @@ where
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
         let seq = self.serialize_seq(Some(v.len()))?;
         seq.ser.0.write(v).map_err(Error::Io)?;
-        seq.end()
+        SerializeSeq::end(seq)
     }
 
     fn serialize_none(self) -> Result<()> {
@@ -270,35 +298,62 @@ where
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
         let c = self.0.sig_parser.next_char();
-        let end_parens;
-        if c == VARIANT_SIGNATURE_CHAR {
-            self.0.add_padding(VARIANT_ALIGNMENT_DBUS)?;
-            end_parens = false;
-        } else {
-            let signature = self.0.sig_parser.next_signature()?;
-            let alignment = alignment_for_signature(&signature, EncodingFormat::DBus);
-            self.0.add_padding(alignment)?;
+        match c {
+            VARIANT_SIGNATURE_CHAR => {
+                self.0.add_padding(VARIANT_ALIGNMENT_DBUS)?;
+                Ok(StructSerializer::Variant(VariantStructSerializer {
+                    ser: self,
+                }))
+            }
+            STRUCT_SIG_START_CHAR | DICT_ENTRY_SIG_START_CHAR => {
+                let signature = self.0.sig_parser.next_signature()?;
+                let alignment = alignment_for_signature(&signature, EncodingFormat::DBus);
+                self.0.add_padding(alignment)?;
 
-            self.0.sig_parser.skip_char()?;
+                self.0.sig_parser.skip_char()?;
 
-            if c == STRUCT_SIG_START_CHAR || c == DICT_ENTRY_SIG_START_CHAR {
-                end_parens = true;
-            } else {
+                Ok(StructSerializer::Default(DefaultStructSerializer {
+                    ser: self,
+                }))
+            }
+            SERIALIZE_DICT_SIG_START_CHAR => {
+                // This is going to be a map, signature 'a{sv}'
+                // The signatures of the actual elements will be stored in the signature
+                self.0.sig_parser.skip_char()?; // Go past the initial '<'
+                self.0.add_padding(ARRAY_ALIGNMENT_DBUS)?;
+                self.0.write_u32::<B>(0_u32).map_err(Error::Io)?;
+                let element_signature = signature_string!("{sv}");
+                let element_signature_len = element_signature.len();
+                let element_alignment =
+                    alignment_for_signature(&element_signature, self.0.ctxt.format());
+
+                // D-Bus expects us to add padding for the first element even when there is no first
+                // element (i-e empty array) so we add padding already.
+                let first_padding = self.0.add_padding(element_alignment)?;
+                let start = self.0.bytes_written;
+
+                Ok(StructSerializer::VariantDict(VariantDictStructSerializer {
+                    seq_serializer: SeqSerializer {
+                        ser: self,
+                        start,
+                        element_alignment,
+                        element_signature_len,
+                        first_padding,
+                    },
+                    count: 0,
+                }))
+            }
+            _ => {
                 let expected = format!(
                     "`{}` or `{}`",
                     STRUCT_SIG_START_STR, DICT_ENTRY_SIG_START_STR,
                 );
-                return Err(serde::de::Error::invalid_type(
+                Err(serde::de::Error::invalid_type(
                     serde::de::Unexpected::Char(c),
                     &expected.as_str(),
-                ));
+                ))
             }
         }
-
-        Ok(StructSerializer {
-            ser: self,
-            end_parens,
-        })
     }
 
     fn serialize_struct_variant(
@@ -386,12 +441,73 @@ where
 }
 
 #[doc(hidden)]
-pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
-    ser: &'b mut Serializer<'ser, 'sig, B, W>,
-    end_parens: bool,
+pub enum StructSerializer<'ser, 'sig, 'b, B, W> {
+    Default(DefaultStructSerializer<'ser, 'sig, 'b, B, W>),
+    Variant(VariantStructSerializer<'ser, 'sig, 'b, B, W>),
+    VariantDict(VariantDictStructSerializer<'ser, 'sig, 'b, B, W>),
 }
 
 impl<'ser, 'sig, 'b, B, W> StructSerializer<'ser, 'sig, 'b, B, W>
+where
+    B: byteorder::ByteOrder,
+    W: Write + Seek,
+{
+    fn serialize_struct_element<T>(&mut self, name: Option<&'static str>, value: &T) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        match self {
+            StructSerializer::Default(ref mut dss) => {
+                dss.serialize_struct_element::<T>(name, value)
+            }
+            StructSerializer::Variant(ref mut vss) => {
+                vss.serialize_struct_element::<T>(name, value)
+            }
+            StructSerializer::VariantDict(ref mut vdss) => {
+                vdss.serialize_struct_element::<T>(name, value)
+            }
+        }
+    }
+
+    fn end_struct(self) -> Result<()> {
+        match self {
+            StructSerializer::Default(dss) => dss.end_struct(),
+            StructSerializer::Variant(vss) => vss.end_struct(),
+            StructSerializer::VariantDict(vdss) => vdss.end_struct(),
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct DefaultStructSerializer<'ser, 'sig, 'b, B, W> {
+    ser: &'b mut Serializer<'ser, 'sig, B, W>,
+}
+
+impl<'ser, 'sig, 'b, B, W> DefaultStructSerializer<'ser, 'sig, 'b, B, W>
+where
+    B: byteorder::ByteOrder,
+    W: Write + Seek,
+{
+    fn serialize_struct_element<T>(&mut self, _name: Option<&'static str>, value: &T) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        value.serialize(&mut *self.ser)
+    }
+
+    fn end_struct(self) -> Result<()> {
+        self.ser.0.sig_parser.skip_char()?;
+
+        Ok(())
+    }
+}
+
+#[doc(hidden)]
+pub struct VariantStructSerializer<'ser, 'sig, 'b, B, W> {
+    ser: &'b mut Serializer<'ser, 'sig, B, W>,
+}
+
+impl<'ser, 'sig, 'b, B, W> VariantStructSerializer<'ser, 'sig, 'b, B, W>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -411,21 +527,7 @@ where
                     .take()
                     .expect("Incorrect Value encoding");
 
-                let sig_parser = SignatureParser::new(signature.clone());
-                let bytes_written = self.ser.0.bytes_written;
-                let mut fds = vec![];
-                let mut ser = Serializer(crate::SerializerCommon::<B, W> {
-                    ctxt: self.ser.0.ctxt,
-                    sig_parser,
-                    writer: &mut self.ser.0.writer,
-                    fds: &mut fds,
-                    bytes_written,
-                    value_sign: None,
-                    b: PhantomData,
-                });
-                value.serialize(&mut ser)?;
-                self.ser.0.bytes_written = ser.0.bytes_written;
-                self.ser.0.fds.extend(fds.iter());
+                self.ser.serialize_variant_body(signature, value)?;
 
                 Ok(())
             }
@@ -434,10 +536,58 @@ where
     }
 
     fn end_struct(self) -> Result<()> {
-        if self.end_parens {
-            self.ser.0.sig_parser.skip_char()?;
-        }
+        Ok(())
+    }
+}
 
+#[doc(hidden)]
+pub struct VariantDictStructSerializer<'ser, 'sig, 'b, B, W> {
+    seq_serializer: SeqSerializer<'ser, 'sig, 'b, B, W>,
+    count: usize,
+}
+
+impl<'ser, 'sig, 'b, B, W> VariantDictStructSerializer<'ser, 'sig, 'b, B, W>
+where
+    B: byteorder::ByteOrder,
+    W: Write + Seek,
+{
+    // XXX Make these into methods of seq serializer
+    fn serialize_struct_element<T>(&mut self, name: Option<&'static str>, value: &T) -> Result<()>
+    where
+        T: ?Sized + Serialize,
+    {
+        let name = name
+            .map(|x| x.to_string())
+            .unwrap_or_else(|| format!("{}", self.count));
+        self.count += 1;
+
+        let mut sig_parser = SignatureParser::new(signature_string!("{sv}"));
+        swap(&mut self.seq_serializer.ser.0.sig_parser, &mut sig_parser);
+
+        self.seq_serializer.serialize_key(&name)?;
+
+        // Get value signature
+        let item_signature = sig_parser.parse_next_signature()?.clone();
+
+        // Serialize value (T) as variant with signature item_signature
+
+        // skip `{` and key char (at 'v')
+        self.seq_serializer.ser.0.sig_parser.skip_chars(2)?;
+        item_signature.serialize(&mut *self.seq_serializer.ser)?;
+
+        self.seq_serializer
+            .ser
+            .serialize_variant_body(item_signature, value)?;
+
+        // Restore original signature
+        swap(&mut self.seq_serializer.ser.0.sig_parser, &mut sig_parser);
+
+        Ok(())
+    }
+
+    fn end_struct(mut self) -> Result<()> {
+        self.seq_serializer.element_signature_len = 1; // closing '>'
+        self.seq_serializer.end_seq()?;
         Ok(())
     }
 }

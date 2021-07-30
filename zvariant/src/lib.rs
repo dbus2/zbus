@@ -221,6 +221,9 @@ mod tests {
         convert::{TryFrom, TryInto},
     };
 
+    use log::info;
+    use test_env_log::test;
+
     #[cfg(feature = "arrayvec")]
     use arrayvec::{ArrayString, ArrayVec};
     use byteorder::{self, ByteOrder, BE, LE};
@@ -1701,5 +1704,285 @@ mod tests {
         let ctxt = Context::<LE>::new_gvariant(0);
         let _: Summary<'_> = from_slice(&encoded, ctxt).unwrap();
         // If we're able to deserialize all the data successfully, don't bother checking the summary data.
+    }
+
+    #[test]
+    fn struct_serialize() {
+        #[derive(Serialize, Deserialize, Type)]
+        pub struct StructSerialize {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        let ctxt = Context::<LE>::new_dbus(0);
+        let a = StructSerialize {
+            a: "Hi".to_owned(),
+            b: 0.2,
+            c: ("Hello".to_owned(), 8.3),
+        };
+
+        let bytes = to_bytes(ctxt, &a).expect("serializing StructSerialize");
+        let good_bytes = [
+            2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8,
+            201u8, 63u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8, 108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8,
+            0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8, 153u8, 153u8, 32u8, 64u8,
+        ];
+        assert_eq!(
+            bytes, good_bytes,
+            "Mismatch of struct serialization with expected"
+        );
+    }
+
+    #[test]
+    fn struct_serialize_dict() {
+        use zvariant::to_bytes;
+
+        #[derive(SerializeDict, DeserializeDict, TypeDict)]
+        pub struct StructSerializeDict {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        let ctxt = Context::<LE>::new_dbus(0);
+        let a = StructSerializeDict {
+            a: "Hi".to_owned(),
+            b: 0.2,
+            c: ("Hello".to_owned(), 8.3),
+        };
+
+        let bytes = to_bytes(ctxt, &a).expect("serializing StructSerializeDict");
+        let good_bytes = [
+            88u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 97u8, 0u8, 1u8, 115u8,
+            0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8,
+            0u8, 0u8, 0u8, 98u8, 0u8, 1u8, 100u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8,
+            153u8, 153u8, 153u8, 153u8, 153u8, 201u8, 63u8, 1u8, 0u8, 0u8, 0u8, 99u8, 0u8, 4u8,
+            40u8, 115u8, 100u8, 41u8, 0u8, 0u8, 0u8, 0u8, 0u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8,
+            108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8,
+            153u8, 153u8, 32u8, 64u8,
+        ];
+        assert_eq!(
+            bytes, good_bytes,
+            "Mismatch of struct serialization with expected"
+        );
+    }
+
+    #[test]
+    fn struct_serialize_dict_new() {
+        use zvariant::to_bytes;
+
+        #[derive(Serialize, Deserialize)]
+        pub struct StructSerializeNewDict {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        impl Type for StructSerializeNewDict {
+            fn signature() -> Signature<'static> {
+                Signature::from_str_unchecked("<sd(sd)>")
+            }
+        }
+
+        let ctxt = Context::<LE>::new_dbus(0);
+        let b = StructSerializeNewDict {
+            a: "Hi".to_owned(),
+            b: 0.2,
+            c: ("Hello".to_owned(), 8.3),
+        };
+
+        let bytes = to_bytes(ctxt, &b).expect("serializing StructSerializeNewDict");
+        let good_bytes = [
+            88u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8, 0u8, 0u8, 0u8, 97u8, 0u8, 1u8, 115u8,
+            0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8, 72u8, 105u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8,
+            0u8, 0u8, 0u8, 98u8, 0u8, 1u8, 100u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8,
+            153u8, 153u8, 153u8, 153u8, 153u8, 201u8, 63u8, 1u8, 0u8, 0u8, 0u8, 99u8, 0u8, 4u8,
+            40u8, 115u8, 100u8, 41u8, 0u8, 0u8, 0u8, 0u8, 0u8, 5u8, 0u8, 0u8, 0u8, 72u8, 101u8,
+            108u8, 108u8, 111u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 154u8, 153u8, 153u8, 153u8,
+            153u8, 153u8, 32u8, 64u8,
+        ];
+        assert_eq!(
+            bytes, good_bytes,
+            "Mismatch of struct serialization with expected"
+        );
+        let signature = StructSerializeNewDict::signature().remove_serialize_dict_annotations();
+        assert_eq!(
+            signature.as_str(),
+            "a{sv}",
+            "Signature not properly de-annotated"
+        )
+    }
+
+    #[test]
+    fn struct_serde_dict_new() {
+        use zvariant::to_bytes;
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        pub struct StructSerializeNewDict {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        impl Type for StructSerializeNewDict {
+            fn signature() -> Signature<'static> {
+                Signature::from_str_unchecked("<sd(sd)>")
+            }
+        }
+
+        let ctxt = Context::<LE>::new_dbus(0);
+        let b = StructSerializeNewDict {
+            a: "Hi".to_owned(),
+            b: 0.2,
+            c: ("Hello".to_owned(), 8.3),
+        };
+        let bytes = to_bytes(ctxt, &b).expect("serializing StructSerializeNewDict");
+        let b2 = from_slice(&bytes, ctxt).expect("deserializing StructSerialize");
+        assert_eq!(
+            b, b2,
+            "Serializing and deserializing StructSerializeNewDict fails"
+        );
+    }
+
+    #[test]
+    pub fn struct_nested_structures() {
+        use zvariant::to_bytes;
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        pub struct Inner {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        impl Type for Inner {
+            fn signature() -> Signature<'static> {
+                Signature::from_str_unchecked("<sd(sd)>")
+            }
+        }
+
+        #[derive(SerializeDict, DeserializeDict, PartialEq, Debug, TypeDict)]
+        pub struct InnerClone {
+            pub a: String,
+            pub b: f64,
+            pub c: (String, f64),
+        }
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        pub struct Middle {
+            pub a: String,
+            pub b: Inner,
+            pub c: i32,
+        }
+
+        impl Type for Middle {
+            fn signature() -> Signature<'static> {
+                Signature::from_str_unchecked("<s<sd(sd)>i>")
+            }
+        }
+
+        #[derive(SerializeDict, DeserializeDict, PartialEq, Debug, TypeDict)]
+        pub struct MiddleClone {
+            pub a: String,
+            pub b: InnerClone,
+            pub c: i32,
+        }
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        pub struct Outer {
+            pub a: Middle,
+            pub b: f64,
+        }
+
+        impl Type for Outer {
+            fn signature() -> Signature<'static> {
+                Signature::from_str_unchecked("<<s<sd(sd)>(sd)>d>")
+            }
+        }
+
+        let inner = Inner {
+            a: "Hey".to_string(),
+            b: 3.2,
+            c: ("Hi".to_string(), 0.1),
+        };
+
+        let inner_clone = InnerClone {
+            a: "Hey".to_string(),
+            b: 3.2,
+            c: ("Hi".to_string(), 0.1),
+        };
+
+        info!("inner");
+        let ctxt = Context::<LE>::new_dbus(0);
+        info!("ser inner");
+        let bytes = to_bytes(ctxt, &inner).expect("ser of inner");
+        info!("ser inner clone");
+        let bytes2 = to_bytes(ctxt, &inner_clone).expect("ser of inner clone");
+        assert_eq!(
+            bytes, bytes2,
+            "serializing new way and old way do not match for inner"
+        );
+        info!("de");
+        let inner2 = from_slice(&bytes, ctxt).expect("de of inner");
+        assert_eq!(
+            inner, inner2,
+            "Serializing and deserializing nested structures fails: inner"
+        );
+
+        let middle = Middle {
+            a: "Hi".to_string(),
+            b: inner2,
+            c: 32,
+        };
+
+        let middle_clone = MiddleClone {
+            a: "Hi".to_string(),
+            b: inner_clone,
+            c: 32,
+        };
+
+        info!("middle");
+        let ctxt = Context::<LE>::new_dbus(0);
+        info!("ser");
+        let bytes = to_bytes(ctxt, &middle).expect("ser of middle");
+        info!("ser middle clone");
+        let bytes2 = to_bytes(ctxt, &middle_clone).expect("ser of middle clone");
+        assert_eq!(
+            bytes, bytes2,
+            "serializing new way and old way do not match for inner"
+        );
+        info!("de middle clone");
+        let middle_clone2 = from_slice(&bytes, ctxt).expect("de of middle clone");
+        assert_eq!(
+            middle_clone, middle_clone2,
+            "Can't even do it the old way anymore"
+        );
+        info!("de");
+        let middle2 = from_slice(&bytes, ctxt).expect("de of middle");
+        assert_eq!(
+            middle, middle2,
+            "Serializing and deserializing nested structures fails"
+        );
+
+        let val = Outer { a: middle, b: 3.2 };
+
+        info!("outer");
+        let ctxt = Context::<LE>::new_dbus(0);
+        info!("ser");
+        let bytes = to_bytes(ctxt, &val).expect("ser of outer");
+        info!("de");
+        let val2 = from_slice(&bytes, ctxt).expect("de of outer");
+        assert_eq!(
+            val, val2,
+            "Serializing and deserializing nested structures fails"
+        );
+    }
+
+    #[test]
+    fn signature_remove_annotations() {
+        let signature = Signature::from_str_unchecked("<<a{sv}>(ss)>(s<>)");
+        let signature = signature.remove_serialize_dict_annotations();
+        assert_eq!(signature.as_str(), "a{sv}(sa{sv})");
     }
 }

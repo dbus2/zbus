@@ -5,8 +5,9 @@ use crate::{Basic, Fd, ObjectPath, Result, Signature};
 #[cfg(feature = "gvariant")]
 use crate::utils::MAYBE_SIGNATURE_CHAR;
 use crate::utils::{
-    ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_STR, STRUCT_SIG_START_CHAR,
-    STRUCT_SIG_START_STR, VARIANT_SIGNATURE_CHAR,
+    ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_START_CHAR, SERIALIZE_DICT_SIG_END_STR,
+    SERIALIZE_DICT_SIG_START_CHAR, SERIALIZE_DICT_SIG_START_STR, STRUCT_SIG_END_STR,
+    STRUCT_SIG_START_CHAR, STRUCT_SIG_START_STR, VARIANT_SIGNATURE_CHAR,
 };
 
 #[derive(Debug, Clone)]
@@ -35,7 +36,8 @@ impl<'s> SignatureParser<'s> {
         // SAFETY: Other methods that increment `self.pos` must ensure we don't go beyond signature
         // length.
         // FIXME: Probably best/safer if this method returned Option<char>
-        char::from(self.signature.as_bytes()[self.pos])
+        let res = char::from(self.signature.as_bytes()[self.pos]);
+        res
     }
 
     #[inline]
@@ -151,6 +153,7 @@ impl<'s> SignatureParser<'s> {
             ARRAY_SIGNATURE_CHAR => self.next_array_signature(),
             STRUCT_SIG_START_CHAR => self.next_structure_signature(),
             DICT_ENTRY_SIG_START_CHAR => self.next_dict_entry_signature(),
+            SERIALIZE_DICT_SIG_START_CHAR => self.next_serialize_dict_signature(),
             #[cfg(feature = "gvariant")]
             MAYBE_SIGNATURE_CHAR => self.next_maybe_signature(),
             c => Err(serde::de::Error::invalid_value(
@@ -202,7 +205,19 @@ impl<'s> SignatureParser<'s> {
         self.next_single_child_type_container_signature(MAYBE_SIGNATURE_CHAR)
     }
 
+    fn next_serialize_dict_signature(&self) -> Result<Signature<'_>> {
+        self.next_bracketed_signature(SERIALIZE_DICT_SIG_START_CHAR, SERIALIZE_DICT_SIG_END_STR)
+    }
+
     fn next_structure_signature(&self) -> Result<Signature<'_>> {
+        self.next_bracketed_signature(STRUCT_SIG_START_CHAR, STRUCT_SIG_END_STR)
+    }
+
+    fn next_bracketed_signature(
+        &self,
+        opening_char: char,
+        ending_str: &'static str,
+    ) -> Result<Signature<'_>> {
         let signature = self.signature();
 
         if signature.len() < 2 {
@@ -218,33 +233,37 @@ impl<'s> SignatureParser<'s> {
             .first()
             .map(|b| *b as char)
             .expect("empty signature");
-        if c != STRUCT_SIG_START_CHAR {
+        if c != opening_char {
             return Err(serde::de::Error::invalid_value(
                 serde::de::Unexpected::Char(c),
-                &crate::STRUCT_SIG_START_STR,
+                &STRUCT_SIG_START_STR,
             ));
         }
 
         let mut open_braces = 1;
         let mut i = 1;
         while i < signature.len() - 1 {
-            if &signature[i..=i] == STRUCT_SIG_END_STR {
+            if &signature[i..=i] == STRUCT_SIG_END_STR
+                || &signature[i..=i] == SERIALIZE_DICT_SIG_END_STR
+            {
                 open_braces -= 1;
 
                 if open_braces == 0 {
                     break;
                 }
-            } else if &signature[i..=i] == STRUCT_SIG_START_STR {
+            } else if &signature[i..=i] == STRUCT_SIG_START_STR
+                || &signature[i..=i] == SERIALIZE_DICT_SIG_START_STR
+            {
                 open_braces += 1;
             }
 
             i += 1;
         }
         let end = &signature[i..=i];
-        if end != STRUCT_SIG_END_STR {
+        if end != ending_str {
             return Err(serde::de::Error::invalid_value(
                 serde::de::Unexpected::Str(end),
-                &crate::STRUCT_SIG_END_STR,
+                &STRUCT_SIG_END_STR,
             ));
         }
 

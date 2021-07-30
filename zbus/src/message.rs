@@ -47,6 +47,7 @@ where
 
         let mut signature = B::signature();
         if !signature.is_empty() {
+            signature = signature.remove_serialize_dict_annotations();
             if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
                 // Remove leading and trailing STRUCT delimiters
                 signature = signature.slice(1..signature.len() - 1);
@@ -456,7 +457,8 @@ impl Message {
     where
         B: serde::de::Deserialize<'d> + Type,
     {
-        let mut expected_sig = B::signature();
+        let expected_sig = B::signature();
+        let mut expected_sig = expected_sig.remove_serialize_dict_annotations();
         let actual_sig = match self.body_signature() {
             Ok(sig) => sig,
             Err(Error::NoBodySignature) => Signature::from_str_unchecked(""),
