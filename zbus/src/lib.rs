@@ -663,13 +663,6 @@ mod tests {
         assert_eq!(val, 2);
     }
 
-    #[test]
-    fn connection_is_send_and_sync() {
-        accept_send_and_sync::<Connection>();
-    }
-
-    fn accept_send_and_sync<C: Send + Sync>() {}
-
     // This one we just want to see if it builds, no need to run it. For details see:
     //
     // https://gitlab.freedesktop.org/dbus/zbus/-/issues/121
