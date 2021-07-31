@@ -512,6 +512,18 @@ impl Message {
         &self.bytes
     }
 
+    /// Get a reference to the byte encoding of the body of the message.
+    pub fn body_as_bytes(&self) -> Result<&[u8]> {
+        if self.bytes_to_completion()? != 0 {
+            return Err(Error::InsufficientData);
+        }
+
+        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
+        header_len = header_len + padding_for_8_bytes(header_len);
+
+        Ok(&self.bytes[header_len..])
+    }
+
     fn fields_len(&self) -> Result<usize> {
         zvariant::from_slice(&self.bytes[FIELDS_LEN_START_OFFSET..], dbus_context!(0))
             .map(|v: u32| v as usize)
