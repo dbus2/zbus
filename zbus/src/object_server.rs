@@ -1,12 +1,10 @@
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
     collections::{hash_map::Entry, HashMap, HashSet},
     convert::TryInto,
     fmt::Write,
     io::{self, ErrorKind},
-    rc::Rc,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 use async_io::block_on;
@@ -85,7 +83,7 @@ pub(crate) struct Node {
     path: OwnedObjectPath,
     children: HashMap<String, Node>,
     #[derivative(Debug = "ignore")]
-    interfaces: HashMap<InterfaceName<'static>, Rc<RefCell<dyn Interface>>>,
+    interfaces: HashMap<InterfaceName<'static>, Arc<RwLock<dyn Interface>>>,
 }
 
 impl Node {
@@ -104,7 +102,7 @@ impl Node {
     pub(crate) fn get_interface(
         &self,
         interface_name: InterfaceName<'_>,
-    ) -> Option<Rc<RefCell<dyn Interface>>> {
+    ) -> Option<Arc<RwLock<dyn Interface>>> {
         self.interfaces.get(&interface_name).cloned()
     }
 
@@ -128,7 +126,7 @@ impl Node {
         I: Interface,
     {
         match self.interfaces.entry(name) {
-            Entry::Vacant(e) => e.insert(Rc::new(RefCell::new(iface))),
+            Entry::Vacant(e) => e.insert(Arc::new(RwLock::new(iface))),
             Entry::Occupied(_) => return false,
         };
 
@@ -144,7 +142,8 @@ impl Node {
             .interfaces
             .get(&I::name())
             .ok_or(Error::InterfaceNotFound)?
-            .borrow();
+            .read()
+            .expect("lock poisoned");
         let iface = iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
         func(iface)
     }
@@ -162,7 +161,10 @@ impl Node {
         }
 
         for iface in self.interfaces.values() {
-            iface.borrow().introspect_to_writer(writer, level + 2);
+            iface
+                .read()
+                .expect("lock poisoned")
+                .introspect_to_writer(writer, level + 2);
         }
 
         for (path, node) in &self.children {
@@ -287,7 +289,7 @@ pub struct ObjectServer {
     registered_names: HashSet<WellKnownName<'static>>,
 }
 
-assert_impl_all!(ObjectServer: Unpin);
+assert_impl_all!(ObjectServer: Send, Sync, Unpin);
 
 impl ObjectServer {
     /// Creates a new D-Bus `ObjectServer` for a given connection.
@@ -557,11 +559,17 @@ impl ObjectServer {
 
         LOCAL_CONNECTION.set(&conn, || {
             LOCAL_NODE.set(node, || {
-                let res = iface.borrow().call(&conn, msg, member.clone());
-                res.or_else(|| iface.borrow_mut().call_mut(&conn, msg, member.clone()))
-                    .ok_or_else(|| {
-                        fdo::Error::UnknownMethod(format!("Unknown method '{}'", member))
-                    })
+                let res = iface
+                    .read()
+                    .expect("lock poisoned")
+                    .call(&conn, msg, member.clone());
+                res.or_else(|| {
+                    iface
+                        .write()
+                        .expect("lock poisoned")
+                        .call_mut(&conn, msg, member.clone())
+                })
+                .ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
             })
         })
     }

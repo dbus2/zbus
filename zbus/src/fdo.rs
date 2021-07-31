@@ -83,7 +83,7 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-            let res = iface.borrow().get(property_name);
+            let res = iface.read().expect("lock poisoned").get(property_name);
             res.ok_or_else(|| {
                 Error::UnknownProperty(format!("Unknown property '{}'", property_name))
             })?
@@ -102,7 +102,10 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-            let res = iface.borrow_mut().set(property_name, &value);
+            let res = iface
+                .write()
+                .expect("lock poisoned")
+                .set(property_name, &value);
             res.ok_or_else(|| {
                 Error::UnknownProperty(format!("Unknown property '{}'", property_name))
             })?
@@ -115,7 +118,7 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-            let res = iface.borrow().get_all();
+            let res = iface.read().expect("lock poisoned").get_all();
             Ok(res)
         })
     }
