@@ -179,13 +179,15 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// * `header` - This marks the method argument to receive the message header associated with the
 /// D-Bus method call being handled.
+/// * `signal_emitter` - This marks the method argument to receive a `zbus::SignalEmitter`
+/// instance, which is needed for emitting signals the easy way.
 ///
 /// # Example
 ///
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_interface;
-/// use zbus::MessageHeader;
+/// use zbus::{MessageHeader, SignalEmitter};
 ///
 /// struct Example {
 ///     some_data: String,
@@ -194,7 +196,13 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[dbus_interface(name = "org.myservice.Example")]
 /// impl Example {
 ///     // "Quit" method. A method may throw errors.
-///     fn quit(&self, #[zbus(header)] hdr: MessageHeader<'_>) -> zbus::fdo::Result<()> {
+///     fn quit(
+///         &self,
+///         #[zbus(header)]
+///         hdr: MessageHeader<'_>,
+///         #[zbus(signal_emitter)]
+///         _emitter: SignalEmitter<'_>,
+///     ) -> zbus::fdo::Result<()> {
 ///         let path = hdr.path()?.unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);
 ///

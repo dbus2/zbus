@@ -387,11 +387,13 @@ fn get_args_from_inputs(
         Ok((quote!(), quote!()))
     } else {
         let mut header_arg_decl = None;
+        let mut emitter_arg_decl = None;
         let mut args = Vec::new();
         let mut tys = Vec::new();
 
         for input in inputs {
             let mut is_header = false;
+            let mut is_emitter = false;
 
             for attr in &input.attrs {
                 if !attr.path.is_ident("zbus") {
@@ -410,9 +412,18 @@ fn get_args_from_inputs(
                 };
 
                 for item in nested {
-                    match item {
-                        NestedMeta::Meta(Meta::Path(p)) if p.is_ident("header") => {
-                            is_header = true;
+                    match &item {
+                        NestedMeta::Meta(Meta::Path(p)) => {
+                            if p.is_ident("header") {
+                                is_header = true;
+                            } else if p.is_ident("signal_emitter") {
+                                is_emitter = true;
+                            } else {
+                                return Err(syn::Error::new_spanned(
+                                    item,
+                                    "Unrecognized zbus attribute",
+                                ));
+                            }
                         }
                         NestedMeta::Meta(_) => {
                             return Err(syn::Error::new_spanned(
@@ -447,6 +458,28 @@ fn get_args_from_inputs(
                         }
                     };
                 });
+            } else if is_emitter {
+                if emitter_arg_decl.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        input,
+                        "There can only be one `signal_emitter` argument",
+                    ));
+                }
+
+                let emitter_arg = &input.pat;
+
+                emitter_arg_decl = Some(quote! {
+                    let #emitter_arg = match m.header().and_then(|h| {
+                        h.path().and_then(|p| #zbus::SignalEmitter::new(&c, p.unwrap()))
+                    }) {
+                        ::std::result::Result::Ok(e) => e,
+                        ::std::result::Result::Err(e) => {
+                            return ::std::option::Option::Some(
+                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
+                            );
+                        }
+                    };
+                });
             } else {
                 args.push(&input.pat);
                 tys.push(&input.ty);
@@ -455,6 +488,8 @@ fn get_args_from_inputs(
 
         let args_from_msg = quote! {
             #header_arg_decl
+
+            #emitter_arg_decl
 
             let (#(#args),*): (#(#tys),*) =
                 match m.body() {
@@ -511,7 +546,7 @@ fn introspect_input_args<'a>(
     inputs
         .iter()
         .filter_map(move |PatType { pat, ty, attrs, .. }| {
-            let is_header_arg = attrs.iter().any(|attr| {
+            let is_special_arg = attrs.iter().any(|attr| {
                 if !attr.path.is_ident("zbus") {
                     return false;
                 }
@@ -529,13 +564,14 @@ fn introspect_input_args<'a>(
                 let res = nested.iter().any(|nested_meta| {
                     matches!(
                         nested_meta,
-                        NestedMeta::Meta(Meta::Path(path)) if path.is_ident("header")
+                        NestedMeta::Meta(Meta::Path(path))
+                        if path.is_ident("header") || path.is_ident("signal_emitter")
                     )
                 });
 
                 res
             });
-            if is_header_arg {
+            if is_special_arg {
                 return None;
             }
 
