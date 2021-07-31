@@ -177,6 +177,8 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The method arguments offers some the following `zbus` attributes:
 ///
+/// * `object_server` - This marks the method argument to receive a reference to the
+/// [`ObjectServer`] this method was called by.
 /// * `header` - This marks the method argument to receive the message header associated with the
 /// D-Bus method call being handled.
 /// * `signal_emitter` - This marks the method argument to receive a `zbus::SignalEmitter`
@@ -187,7 +189,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_interface;
-/// use zbus::{MessageHeader, SignalEmitter};
+/// use zbus::{MessageHeader, ObjectServer, SignalEmitter};
 ///
 /// struct Example {
 ///     some_data: String,
@@ -202,6 +204,8 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///         hdr: MessageHeader<'_>,
 ///         #[zbus(signal_emitter)]
 ///         _emitter: SignalEmitter<'_>,
+///         #[zbus(object_server)]
+///         _server: &ObjectServer,
 ///     ) -> zbus::fdo::Result<()> {
 ///         let path = hdr.path()?.unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);

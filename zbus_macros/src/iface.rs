@@ -401,12 +401,14 @@ fn get_args_from_inputs(
     if inputs.is_empty() {
         Ok((quote!(), quote!()))
     } else {
+        let mut server_arg_decl = None;
         let mut header_arg_decl = None;
         let mut emitter_arg_decl = None;
         let mut args = Vec::new();
         let mut tys = Vec::new();
 
         for input in inputs {
+            let mut is_server = false;
             let mut is_header = false;
             let mut is_emitter = false;
 
@@ -429,7 +431,9 @@ fn get_args_from_inputs(
                 for item in nested {
                     match &item {
                         NestedMeta::Meta(Meta::Path(p)) => {
-                            if p.is_ident("header") {
+                            if p.is_ident("object_server") {
+                                is_server = true;
+                            } else if p.is_ident("header") {
                                 is_header = true;
                             } else if p.is_ident("signal_emitter") {
                                 is_emitter = true;
@@ -453,7 +457,17 @@ fn get_args_from_inputs(
                 }
             }
 
-            if is_header {
+            if is_server {
+                if server_arg_decl.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        input,
+                        "There can only be one object_server argument",
+                    ));
+                }
+
+                let server_arg = &input.pat;
+                server_arg_decl = Some(quote! { let #server_arg = &s; });
+            } else if is_header {
                 if header_arg_decl.is_some() {
                     return Err(syn::Error::new_spanned(
                         input,
@@ -504,6 +518,8 @@ fn get_args_from_inputs(
         }
 
         let args_from_msg = quote! {
+            #server_arg_decl
+
             #header_arg_decl
 
             #emitter_arg_decl
@@ -583,7 +599,7 @@ fn introspect_input_args(
                     matches!(
                         nested_meta,
                         NestedMeta::Meta(Meta::Path(path))
-                        if path.is_ident("header") || path.is_ident("signal_emitter")
+                        if path.is_ident("object_server") || path.is_ident("header") || path.is_ident("signal_emitter")
                     )
                 });
 
