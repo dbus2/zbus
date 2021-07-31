@@ -142,11 +142,7 @@ impl<'a> SignalReceiver<'a> {
 mod tests {
     use super::*;
     use crate::{dbus_interface, dbus_proxy};
-    use std::{
-        cell::RefCell,
-        rc::Rc,
-        sync::{Arc, Mutex},
-    };
+    use std::sync::{Arc, Mutex};
     use test_env_log::test;
 
     fn multiple_signal_iface_test() -> std::result::Result<u32, Box<dyn std::error::Error>> {
@@ -206,7 +202,7 @@ mod tests {
     #[ntest::timeout(15000)]
     fn multiple_proxy_signals() {
         struct MultiSignal {
-            times_called: Rc<RefCell<u8>>,
+            times_called: Arc<Mutex<u8>>,
         }
 
         #[dbus_interface(interface = "org.freedesktop.zbus.MultiSignal")]
@@ -215,7 +211,7 @@ mod tests {
             fn some_signal(&self, sig_arg: &str) -> Result<()>;
 
             fn emit_it(&mut self, arg: &str) -> Result<()> {
-                *self.times_called.borrow_mut() += 1;
+                *self.times_called.lock().unwrap() += 1;
                 self.some_signal(arg)
             }
         }
@@ -224,7 +220,7 @@ mod tests {
         let mut object_server = crate::ObjectServer::new(&conn)
             .request_name("org.freedesktop.zbus.MultiSignal")
             .unwrap();
-        let times_called = Rc::new(RefCell::new(0));
+        let times_called = Arc::new(Mutex::new(0));
         let iface = MultiSignal {
             times_called: times_called.clone(),
         };
@@ -240,7 +236,7 @@ mod tests {
 
         let child = std::thread::spawn(|| multiple_signal_iface_test().unwrap());
 
-        while *times_called.borrow() < 2 {
+        while *times_called.lock().unwrap() < 2 {
             object_server.try_handle_next().unwrap();
         }
 
