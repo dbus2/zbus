@@ -211,9 +211,9 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             }
         }
 
-        impl<'c> #zbus::export::zvariant::Type for #proxy_name<'c> {
-            fn signature() -> #zbus::export::zvariant::Signature<'static> {
-                #zbus::export::zvariant::OwnedObjectPath::signature()
+        impl<'c> #zbus::zvariant::Type for #proxy_name<'c> {
+            fn signature() -> #zbus::zvariant::Signature<'static> {
+                #zbus::zvariant::OwnedObjectPath::signature()
             }
         }
 
@@ -287,7 +287,7 @@ fn gen_proxy_method_call(
             parse_quote!(#zbus::export::serde::de::DeserializeOwned)
         };
         where_clause.predicates.push(parse_quote!(
-            #param: #serde_bound + #zbus::export::zvariant::Type
+            #param: #serde_bound + #zbus::zvariant::Type
         ));
     }
     let (_, ty_generics, where_clause) = generics.split_for_impl();
@@ -302,7 +302,7 @@ fn gen_proxy_method_call(
         quote! {
             #(#doc)*
             pub #usage #signature {
-                let object_path: #zbus::export::zvariant::OwnedObjectPath =
+                let object_path: #zbus::zvariant::OwnedObjectPath =
                     self.0.call(
                         #method_name,
                         &(#(#args),*),
@@ -384,7 +384,7 @@ fn gen_proxy_property(
                 #[doc = #gen_doc]
                 pub async fn #receive#ty_generics(
                     &self
-                ) -> #zbus::azync::PropertyStream<'static, #zbus::export::zvariant::OwnedValue>
+                ) -> #zbus::azync::PropertyStream<'static, #zbus::zvariant::OwnedValue>
                 #where_clause
                 {
                     self.0.receive_property_stream(#property_name).await
@@ -397,11 +397,11 @@ fn gen_proxy_property(
         let connect = format_ident!("connect_{}_changed", method_name);
         let handler = if *azync {
             parse_quote! {
-                for<'v> __H: FnMut(Option<&'v #zbus::export::zvariant::Value<'_>>) ->
+                for<'v> __H: FnMut(Option<&'v #zbus::zvariant::Value<'_>>) ->
                     #zbus::export::futures_core::future::BoxFuture<'v, ()> + Send + 'static
             }
         } else {
-            parse_quote! { __H: FnMut(Option<&#zbus::export::zvariant::Value<'_>>) + Send + 'static }
+            parse_quote! { __H: FnMut(Option<&#zbus::zvariant::Value<'_>>) + Send + 'static }
         };
         let (proxy_method, link) = if *azync {
             (
@@ -514,7 +514,7 @@ fn gen_proxy_signal(
         {
             where_clause
                 .predicates
-                .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'s> + #zbus::export::zvariant::Type + ::std::fmt::Debug));
+                .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'s> + #zbus::zvariant::Type + ::std::fmt::Debug));
         }
         generics.params.push(parse_quote!('s));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -705,7 +705,7 @@ fn gen_proxy_signal(
         {
             where_clause
                 .predicates
-                .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + #zbus::export::zvariant::Type + ::std::fmt::Debug));
+                .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + #zbus::zvariant::Type + ::std::fmt::Debug));
         }
         where_clause
             .predicates

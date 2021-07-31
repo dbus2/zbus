@@ -213,9 +213,10 @@ pub mod export {
     pub use futures_core;
     pub use serde;
     pub use static_assertions;
-    pub use zbus_names as names;
-    pub use zvariant;
 }
+
+pub use zbus_names as names;
+pub use zvariant;
 
 #[cfg(test)]
 mod tests {
