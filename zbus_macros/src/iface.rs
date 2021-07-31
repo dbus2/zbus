@@ -237,7 +237,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     #member_name => {
                         ::std::option::Option::Some(::std::result::Result::Ok(
                             ::std::convert::Into::into(
-                                <#zbus::export::zvariant::Value as ::std::convert::From<_>>::from(
+                                <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
                                     self.#ident(),
                                 ),
                             ),
@@ -250,7 +250,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     props.insert(
                         ::std::string::ToString::to_string(#member_name),
                         ::std::convert::Into::into(
-                            <#zbus::export::zvariant::Value as ::std::convert::From<_>>::from(
+                            <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
                                 self.#ident(),
                             ),
                         ),
@@ -303,7 +303,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             fn get(
                 &self,
                 property_name: &str,
-            ) -> ::std::option::Option<#zbus::fdo::Result<#zbus::export::zvariant::OwnedValue>> {
+            ) -> ::std::option::Option<#zbus::fdo::Result<#zbus::zvariant::OwnedValue>> {
                 match property_name {
                     #get_dispatch
                     _ => ::std::option::Option::None,
@@ -314,11 +314,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &self,
             ) -> ::std::collections::HashMap<
                 ::std::string::String,
-                #zbus::export::zvariant::OwnedValue,
+                #zbus::zvariant::OwnedValue,
             > {
                 let mut props: ::std::collections::HashMap<
                     ::std::string::String,
-                    #zbus::export::zvariant::OwnedValue,
+                    #zbus::zvariant::OwnedValue,
                 > = ::std::collections::HashMap::new();
                 #get_all
                 props
@@ -327,7 +327,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             fn set(
                 &mut self,
                 property_name: &str,
-                value: &#zbus::export::zvariant::Value,
+                value: &#zbus::zvariant::Value,
             ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
                 match property_name {
                     #set_dispatch
@@ -368,7 +368,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     indent = level
                 ).unwrap();
                 {
-                    use #zbus::export::zvariant::Type;
+                    use #zbus::zvariant::Type;
 
                     let level = level + 2;
                     #introspect
