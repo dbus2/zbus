@@ -167,36 +167,36 @@ fn to_rust_type(ty: &str, input: bool, as_ref: bool) -> String {
             i64::SIGNATURE_CHAR => "i64".into(),
             u64::SIGNATURE_CHAR => "u64".into(),
             f64::SIGNATURE_CHAR => "f64".into(),
-            Fd::SIGNATURE_CHAR => "zbus::export::zvariant::Fd".into(),
+            Fd::SIGNATURE_CHAR => "zbus::zvariant::Fd".into(),
             <&str>::SIGNATURE_CHAR => (if input || as_ref { "&str" } else { "String" }).into(),
             ObjectPath::SIGNATURE_CHAR => (if input {
                 if as_ref {
-                    "&zbus::export::zvariant::ObjectPath<'_>"
+                    "&zbus::zvariant::ObjectPath<'_>"
                 } else {
-                    "zbus::export::zvariant::ObjectPath<'_>"
+                    "zbus::zvariant::ObjectPath<'_>"
                 }
             } else {
-                "zbus::export::zvariant::OwnedObjectPath"
+                "zbus::zvariant::OwnedObjectPath"
             })
             .into(),
             Signature::SIGNATURE_CHAR => (if input {
                 if as_ref {
-                    "&zbus::export::zvariant::Signature<'_>"
+                    "&zbus::zvariant::Signature<'_>"
                 } else {
-                    "zbus::export::zvariant::Signature<'_>"
+                    "zbus::zvariant::Signature<'_>"
                 }
             } else {
-                "zbus::export::zvariant::OwnedSignature"
+                "zbus::zvariant::OwnedSignature"
             })
             .into(),
             VARIANT_SIGNATURE_CHAR => (if input {
                 if as_ref {
-                    "&zbus::export::zvariant::Value<'_>"
+                    "&zbus::zvariant::Value<'_>"
                 } else {
-                    "zbus::export::zvariant::Value<'_>"
+                    "zbus::zvariant::Value<'_>"
                 }
             } else {
-                "zbus::export::zvariant::OwnedValue"
+                "zbus::zvariant::OwnedValue"
             })
             .into(),
             ARRAY_SIGNATURE_CHAR => {
