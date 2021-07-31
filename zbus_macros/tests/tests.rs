@@ -115,15 +115,15 @@ fn test_derive_error() {
 fn test_interface() {
     use zbus::Interface;
 
-    struct Test<'a, T> {
-        something: &'a str,
+    struct Test<T> {
+        something: String,
         generic: T,
     }
 
     #[dbus_interface(name = "org.freedesktop.zbus.Test")]
-    impl<T: 'static> Test<'static, T>
+    impl<T: 'static> Test<T>
     where
-        T: serde::ser::Serialize + zvariant::Type,
+        T: serde::ser::Serialize + zvariant::Type + Send + Sync,
     {
         /// Testing `no_arg` documentation is reflected in XML.
         fn no_arg(&self) {
@@ -137,7 +137,7 @@ fn test_interface() {
 
         // TODO: naming output arguments after "RFC: Structural Records #2584"
         fn many_output(&self) -> zbus::fdo::Result<(&T, String)> {
-            Ok((&self.generic, self.something.to_string()))
+            Ok((&self.generic, self.something.clone()))
         }
 
         fn pair_output(&self) -> zbus::fdo::Result<((u32, String),)> {
@@ -203,7 +203,7 @@ fn test_interface() {
 </interface>
 "#;
     let t = Test {
-        something: "somewhere",
+        something: String::from("somewhere"),
         generic: 42u32,
     };
     let mut xml = String::new();

@@ -591,13 +591,16 @@ mod tests {
         // with multiple out arguments, ending up with double parenthesis around the signature of
         // the return type and zbus only removing the outer `()` only and then it not matching the
         // signature we receive on the reply message.
-        use std::{cell::RefCell, convert::TryFrom, rc::Rc};
+        use std::{
+            convert::TryFrom,
+            sync::{Arc, Mutex},
+        };
         use zvariant::{ObjectPath, Value};
         let conn = Connection::session().unwrap();
         let service_name = conn.unique_name().unwrap().clone();
         let mut object_server = super::ObjectServer::new(&conn);
 
-        struct Secret(Rc<RefCell<bool>>);
+        struct Secret(Arc<Mutex<bool>>);
         #[super::dbus_interface(name = "org.freedesktop.Secret.Service")]
         impl Secret {
             fn open_session(
@@ -605,7 +608,7 @@ mod tests {
                 _algorithm: &str,
                 input: Value<'_>,
             ) -> zbus::fdo::Result<(OwnedValue, OwnedObjectPath)> {
-                *self.0.borrow_mut() = true;
+                *self.0.lock().unwrap() = true;
                 Ok((
                     OwnedValue::from(input),
                     ObjectPath::try_from("/org/freedesktop/secrets/Blah")
@@ -615,7 +618,7 @@ mod tests {
             }
         }
 
-        let quit = Rc::new(RefCell::new(false));
+        let quit = Arc::new(Mutex::new(false));
         let secret = Secret(quit.clone());
         object_server
             .at("/org/freedesktop/secrets", secret)
@@ -651,7 +654,7 @@ mod tests {
                 eprintln!("{}", e);
             }
 
-            if *quit.borrow() {
+            if *quit.lock().unwrap() {
                 break;
             }
         }

@@ -32,7 +32,7 @@ scoped_thread_local!(static LOCAL_CONNECTION: Connection);
 /// implements it for you.
 ///
 /// [`dbus_interface`]: attr.dbus_interface.html
-pub trait Interface: Any {
+pub trait Interface: Any + Send + Sync {
     /// Return the name of the interface. Ex: "org.foo.MyInterface"
     fn name() -> InterfaceName<'static>
     where
@@ -232,19 +232,18 @@ impl Node {
 /// ```no_run
 ///# use std::error::Error;
 /// use zbus::{Connection, ObjectServer, dbus_interface};
-/// use std::rc::Rc;
-/// use std::cell::RefCell;
+/// use std::sync::{Arc, Mutex};
 ///
 /// struct Example {
 ///     // Interfaces are owned by the ObjectServer. They can have
 ///     // `&mut self` methods.
 ///     //
 ///     // If you need a shared state, you can use a RefCell for ex:
-///     quit: Rc<RefCell<bool>>,
+///     quit: Arc<Mutex<bool>>,
 /// }
 ///
 /// impl Example {
-///     fn new(quit: Rc<RefCell<bool>>) -> Self {
+///     fn new(quit: Arc<Mutex<bool>>) -> Self {
 ///         Self { quit }
 ///     }
 /// }
@@ -253,7 +252,7 @@ impl Node {
 /// impl Example {
 ///     // This will be the "Quit" D-Bus method.
 ///     fn quit(&self) {
-///         *self.quit.borrow_mut() = true;
+///         *self.quit.lock().unwrap() = true;
 ///     }
 ///
 ///     // See `dbus_interface` documentation to learn
@@ -262,7 +261,7 @@ impl Node {
 ///
 /// let connection = Connection::session()?;
 /// let mut object_server = ObjectServer::new(&connection);
-/// let quit = Rc::new(RefCell::new(false));
+/// let quit = Arc::new(Mutex::new(false));
 ///
 /// let interface = Example::new(quit.clone());
 /// object_server.at("/org/zbus/path", interface)?;
@@ -272,7 +271,7 @@ impl Node {
 ///         eprintln!("{}", err);
 ///     }
 ///
-///     if *quit.borrow() {
+///     if *quit.lock().unwrap() {
 ///         break;
 ///     }
 /// }
@@ -647,12 +646,13 @@ impl Drop for ObjectServer {
 #[allow(clippy::blacklisted_name)]
 mod tests {
     use std::{
-        cell::Cell,
         collections::HashMap,
         convert::TryInto,
         error::Error,
-        rc::Rc,
-        sync::mpsc::{channel, Sender},
+        sync::{
+            mpsc::{channel, Sender},
+            Arc, Mutex,
+        },
         thread,
     };
 
@@ -710,12 +710,12 @@ mod tests {
     }
 
     struct MyIfaceImpl {
-        action: Rc<Cell<NextAction>>,
+        action: Arc<Mutex<NextAction>>,
         count: u32,
     }
 
     impl MyIfaceImpl {
-        fn new(action: Rc<Cell<NextAction>>) -> Self {
+        fn new(action: Arc<Mutex<NextAction>>) -> Self {
             Self { action, count: 0 }
         }
     }
@@ -731,7 +731,7 @@ mod tests {
         }
 
         fn quit(&mut self) {
-            self.action.set(NextAction::Quit);
+            *self.action.lock().unwrap() = NextAction::Quit;
         }
 
         fn test_header(&self, #[zbus(header)] header: MessageHeader<'_>) {
@@ -778,11 +778,11 @@ mod tests {
         }
 
         fn create_obj(&self, key: String) {
-            self.action.set(NextAction::CreateObj(key));
+            *self.action.lock().unwrap() = NextAction::CreateObj(key);
         }
 
         fn destroy_obj(&self, key: String) {
-            self.action.set(NextAction::DestroyObj(key));
+            *self.action.lock().unwrap() = NextAction::DestroyObj(key);
         }
 
         #[dbus_interface(property)]
@@ -910,7 +910,7 @@ mod tests {
             .unwrap()
             .request_name("org.freedesktop.MyService.bar")
             .unwrap();
-        let action = Rc::new(Cell::new(NextAction::Nothing));
+        let action = Arc::new(Mutex::new(NextAction::Nothing));
 
         let child = thread::spawn(move || my_iface_test(tx).expect("child failed"));
         // Wait for the listener to be ready
@@ -939,7 +939,10 @@ mod tests {
                 })
                 .unwrap();
 
-            match action.replace(NextAction::Nothing) {
+            let mut next = action.lock().unwrap();
+            let current_next = next.clone();
+            *next = NextAction::Nothing;
+            match current_next {
                 NextAction::Nothing => (),
                 NextAction::Quit => break,
                 NextAction::CreateObj(key) => {
