@@ -87,6 +87,30 @@ impl<'a, T> ProxyBuilder<'a, T> {
         self
     }
 
+    /// Build a proxy from the builder without making any dbus calls.
+    ///
+    /// Note: this may disable some functionality of the proxy (such as property caching).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the builder is lacking the necessary details to build a proxy.
+    pub fn build_immed(self) -> Result<T>
+    where
+        T: From<Proxy<'a>>,
+    {
+        let conn = self.conn;
+        let destination = self.destination.expect("missing `destination`");
+        let path = self.path.expect("missing `path`");
+        let interface = self.interface.expect("missing `interface`");
+
+        let proxy = Proxy {
+            inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
+            properties: Arc::new(ProxyProperties::new()),
+        };
+
+        Ok(proxy.into())
+    }
+
     /// Build a proxy from the builder.
     ///
     /// # Panics

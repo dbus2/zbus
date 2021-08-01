@@ -1,6 +1,5 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_lock::Mutex;
-use async_recursion::async_recursion;
 use async_task::Task;
 use futures_core::{future::BoxFuture, stream};
 use futures_util::stream::StreamExt;
@@ -393,7 +392,6 @@ impl<'a> Proxy<'a> {
         proxy.introspect().await
     }
 
-    #[async_recursion]
     async fn properties_proxy(&self) -> Result<&AsyncPropertiesProxy<'static>> {
         match self.properties.proxy.get() {
             Some(proxy) => Ok(proxy),
@@ -405,10 +403,8 @@ impl<'a> Proxy<'a> {
                     // Safe because already checked earlier
                     .path(self.inner.path.to_owned())
                     .unwrap()
-                    // does not have properties and do not recurse!
                     .cache_properties(false)
-                    .build()
-                    .await?;
+                    .build_immed()?;
                 // doesn't matter if another thread sets it before
                 let _ = self.properties.proxy.set(proxy);
                 // but we must have a Ok() here
