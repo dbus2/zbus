@@ -1,12 +1,10 @@
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
     collections::{hash_map::Entry, HashMap, HashSet},
     convert::TryInto,
     fmt::Write,
     io::{self, ErrorKind},
-    rc::Rc,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 use async_io::block_on;
@@ -32,7 +30,7 @@ scoped_thread_local!(static LOCAL_CONNECTION: Connection);
 /// implements it for you.
 ///
 /// [`dbus_interface`]: attr.dbus_interface.html
-pub trait Interface: Any {
+pub trait Interface: Any + Send + Sync {
     /// Return the name of the interface. Ex: "org.foo.MyInterface"
     fn name() -> InterfaceName<'static>
     where
@@ -85,7 +83,7 @@ pub(crate) struct Node {
     path: OwnedObjectPath,
     children: HashMap<String, Node>,
     #[derivative(Debug = "ignore")]
-    interfaces: HashMap<InterfaceName<'static>, Rc<RefCell<dyn Interface>>>,
+    interfaces: HashMap<InterfaceName<'static>, Arc<RwLock<dyn Interface>>>,
 }
 
 impl Node {
@@ -104,7 +102,7 @@ impl Node {
     pub(crate) fn get_interface(
         &self,
         interface_name: InterfaceName<'_>,
-    ) -> Option<Rc<RefCell<dyn Interface>>> {
+    ) -> Option<Arc<RwLock<dyn Interface>>> {
         self.interfaces.get(&interface_name).cloned()
     }
 
@@ -128,7 +126,7 @@ impl Node {
         I: Interface,
     {
         match self.interfaces.entry(name) {
-            Entry::Vacant(e) => e.insert(Rc::new(RefCell::new(iface))),
+            Entry::Vacant(e) => e.insert(Arc::new(RwLock::new(iface))),
             Entry::Occupied(_) => return false,
         };
 
@@ -144,7 +142,8 @@ impl Node {
             .interfaces
             .get(&I::name())
             .ok_or(Error::InterfaceNotFound)?
-            .borrow();
+            .read()
+            .expect("lock poisoned");
         let iface = iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
         func(iface)
     }
@@ -162,7 +161,10 @@ impl Node {
         }
 
         for iface in self.interfaces.values() {
-            iface.borrow().introspect_to_writer(writer, level + 2);
+            iface
+                .read()
+                .expect("lock poisoned")
+                .introspect_to_writer(writer, level + 2);
         }
 
         for (path, node) in &self.children {
@@ -232,19 +234,18 @@ impl Node {
 /// ```no_run
 ///# use std::error::Error;
 /// use zbus::{Connection, ObjectServer, dbus_interface};
-/// use std::rc::Rc;
-/// use std::cell::RefCell;
+/// use std::sync::{Arc, Mutex};
 ///
 /// struct Example {
 ///     // Interfaces are owned by the ObjectServer. They can have
 ///     // `&mut self` methods.
 ///     //
 ///     // If you need a shared state, you can use a RefCell for ex:
-///     quit: Rc<RefCell<bool>>,
+///     quit: Arc<Mutex<bool>>,
 /// }
 ///
 /// impl Example {
-///     fn new(quit: Rc<RefCell<bool>>) -> Self {
+///     fn new(quit: Arc<Mutex<bool>>) -> Self {
 ///         Self { quit }
 ///     }
 /// }
@@ -253,7 +254,7 @@ impl Node {
 /// impl Example {
 ///     // This will be the "Quit" D-Bus method.
 ///     fn quit(&self) {
-///         *self.quit.borrow_mut() = true;
+///         *self.quit.lock().unwrap() = true;
 ///     }
 ///
 ///     // See `dbus_interface` documentation to learn
@@ -262,7 +263,7 @@ impl Node {
 ///
 /// let connection = Connection::session()?;
 /// let mut object_server = ObjectServer::new(&connection);
-/// let quit = Rc::new(RefCell::new(false));
+/// let quit = Arc::new(Mutex::new(false));
 ///
 /// let interface = Example::new(quit.clone());
 /// object_server.at("/org/zbus/path", interface)?;
@@ -272,7 +273,7 @@ impl Node {
 ///         eprintln!("{}", err);
 ///     }
 ///
-///     if *quit.borrow() {
+///     if *quit.lock().unwrap() {
 ///         break;
 ///     }
 /// }
@@ -288,7 +289,7 @@ pub struct ObjectServer {
     registered_names: HashSet<WellKnownName<'static>>,
 }
 
-assert_impl_all!(ObjectServer: Unpin);
+assert_impl_all!(ObjectServer: Send, Sync, Unpin);
 
 impl ObjectServer {
     /// Creates a new D-Bus `ObjectServer` for a given connection.
@@ -558,11 +559,17 @@ impl ObjectServer {
 
         LOCAL_CONNECTION.set(&conn, || {
             LOCAL_NODE.set(node, || {
-                let res = iface.borrow().call(&conn, msg, member.clone());
-                res.or_else(|| iface.borrow_mut().call_mut(&conn, msg, member.clone()))
-                    .ok_or_else(|| {
-                        fdo::Error::UnknownMethod(format!("Unknown method '{}'", member))
-                    })
+                let res = iface
+                    .read()
+                    .expect("lock poisoned")
+                    .call(&conn, msg, member.clone());
+                res.or_else(|| {
+                    iface
+                        .write()
+                        .expect("lock poisoned")
+                        .call_mut(&conn, msg, member.clone())
+                })
+                .ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
             })
         })
     }
@@ -647,12 +654,13 @@ impl Drop for ObjectServer {
 #[allow(clippy::blacklisted_name)]
 mod tests {
     use std::{
-        cell::Cell,
         collections::HashMap,
         convert::TryInto,
         error::Error,
-        rc::Rc,
-        sync::mpsc::{channel, Sender},
+        sync::{
+            mpsc::{channel, Sender},
+            Arc, Mutex,
+        },
         thread,
     };
 
@@ -710,12 +718,12 @@ mod tests {
     }
 
     struct MyIfaceImpl {
-        action: Rc<Cell<NextAction>>,
+        action: Arc<Mutex<NextAction>>,
         count: u32,
     }
 
     impl MyIfaceImpl {
-        fn new(action: Rc<Cell<NextAction>>) -> Self {
+        fn new(action: Arc<Mutex<NextAction>>) -> Self {
             Self { action, count: 0 }
         }
     }
@@ -731,7 +739,7 @@ mod tests {
         }
 
         fn quit(&mut self) {
-            self.action.set(NextAction::Quit);
+            *self.action.lock().unwrap() = NextAction::Quit;
         }
 
         fn test_header(&self, #[zbus(header)] header: MessageHeader<'_>) {
@@ -778,11 +786,11 @@ mod tests {
         }
 
         fn create_obj(&self, key: String) {
-            self.action.set(NextAction::CreateObj(key));
+            *self.action.lock().unwrap() = NextAction::CreateObj(key);
         }
 
         fn destroy_obj(&self, key: String) {
-            self.action.set(NextAction::DestroyObj(key));
+            *self.action.lock().unwrap() = NextAction::DestroyObj(key);
         }
 
         #[dbus_interface(property)]
@@ -910,7 +918,7 @@ mod tests {
             .unwrap()
             .request_name("org.freedesktop.MyService.bar")
             .unwrap();
-        let action = Rc::new(Cell::new(NextAction::Nothing));
+        let action = Arc::new(Mutex::new(NextAction::Nothing));
 
         let child = thread::spawn(move || my_iface_test(tx).expect("child failed"));
         // Wait for the listener to be ready
@@ -939,7 +947,10 @@ mod tests {
                 })
                 .unwrap();
 
-            match action.replace(NextAction::Nothing) {
+            let mut next = action.lock().unwrap();
+            let current_next = next.clone();
+            *next = NextAction::Nothing;
+            match current_next {
                 NextAction::Nothing => (),
                 NextAction::Quit => break,
                 NextAction::CreateObj(key) => {
