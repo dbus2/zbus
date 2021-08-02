@@ -1,4 +1,7 @@
 use crate::{utils::*, Signature};
+use serde::de::{Deserialize, DeserializeSeed};
+use std::convert::TryInto;
+use std::marker::PhantomData;
 
 /// Trait implemented by all serializable types.
 ///
@@ -10,8 +13,9 @@ use crate::{utils::*, Signature};
 /// container types, such as, arrays, slices, tuples, [`Vec`] and [`HashMap`]. For easy
 /// implementation for custom types, use `Type` derive macro from [zvariant_derive] crate.
 ///
-/// Please note, that API is [also provided] to serialize and deserialize types that do not
-/// implement this trait but then you have to provide the correct signature yourself.
+/// If your type's signature cannot be determined statically, you should implement the
+/// [DynamicType] trait instead, which is otherwise automatically implemented if you implement this
+/// trait.
 ///
 /// [D-Bus type system]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
 /// [serialization and deserialization]: index.html#functions
@@ -21,7 +25,6 @@ use crate::{utils::*, Signature};
 /// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 /// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
 /// [zvariant_derive]: https://docs.rs/zvariant_derive/2.0.0/zvariant_derive/
-/// [also provided]: fn.to_bytes_for_signature.html
 pub trait Type {
     /// Get the signature for the implementing type.
     ///
@@ -38,6 +41,97 @@ pub trait Type {
     /// assert_eq!(<HashMap<u8, &str>>::signature(), "a{ys}");
     /// ```
     fn signature() -> Signature<'static>;
+}
+
+/// Types with dynamic signatures.
+///
+/// Prefer implementing [Type] if possible, but if the actual signature of your type cannot be
+/// determined until runtime, you can implement this type to support serialization.  You should
+/// also implement [DynamicDeserialize] for deserialization.
+pub trait DynamicType {
+    /// Get the signature for the implementing type.
+    ///
+    /// See [Type::signature] for details.
+    fn dynamic_signature(&self) -> Signature<'_>;
+}
+
+/// Types that deserialize based on dynamic signatures.
+///
+/// Prefer implementing [Type] and [Deserialize] if possible, but if the actual signature of your
+/// type cannot be determined until runtime, you should implement this type to support
+/// deserialization given a signature.
+pub trait DynamicDeserialize<'de>: DynamicType {
+    /// A [DeserializeSeed] implementation for this type.
+    type Deserializer: DeserializeSeed<'de, Value = Self> + DynamicType;
+
+    /// Get a deserializer compatible with this signature.
+    fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
+    where
+        S: TryInto<Signature<'de>>,
+        S::Error: Into<zvariant::Error>;
+}
+
+impl<T> DynamicType for T
+where
+    T: Type + ?Sized,
+{
+    fn dynamic_signature(&self) -> Signature<'_> {
+        <T as Type>::signature()
+    }
+}
+
+impl<T> Type for PhantomData<T>
+where
+    T: Type + ?Sized,
+{
+    fn signature() -> Signature<'static> {
+        T::signature()
+    }
+}
+
+impl<'de, T> DynamicDeserialize<'de> for T
+where
+    T: Type + ?Sized + Deserialize<'de>,
+{
+    type Deserializer = PhantomData<T>;
+
+    fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
+    where
+        S: TryInto<Signature<'de>>,
+        S::Error: Into<zvariant::Error>,
+    {
+        let mut expected = <T as Type>::signature();
+        let original = signature.try_into().map_err(Into::into)?;
+
+        if original == expected {
+            return Ok(PhantomData);
+        }
+
+        let mut signature = original.clone();
+        while expected.len() < signature.len()
+            && signature.starts_with(STRUCT_SIG_START_CHAR)
+            && signature.ends_with(STRUCT_SIG_END_CHAR)
+        {
+            signature = signature.slice(1..signature.len() - 1);
+        }
+
+        while signature.len() < expected.len()
+            && expected.starts_with(STRUCT_SIG_START_CHAR)
+            && expected.ends_with(STRUCT_SIG_END_CHAR)
+        {
+            expected = expected.slice(1..expected.len() - 1);
+        }
+
+        if signature == expected {
+            Ok(PhantomData)
+        } else {
+            let expected = <T as Type>::signature();
+            Err(zvariant::Error::SignatureMismatch(
+                original.to_owned(),
+                format!("`{}`", expected),
+            ))
+        }
+    }
 }
 
 macro_rules! array_type {

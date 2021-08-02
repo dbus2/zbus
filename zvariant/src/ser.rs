@@ -14,7 +14,7 @@ use crate::{
     dbus::{self, Serializer as DBusSerializer},
     signature_parser::SignatureParser,
     utils::*,
-    Basic, EncodingContext, EncodingFormat, Error, Result, Signature, Type,
+    Basic, DynamicType, EncodingContext, EncodingFormat, Error, Result, Signature,
 };
 
 struct NullWriteSeek;
@@ -59,7 +59,7 @@ impl Seek for NullWriteSeek {
 pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<usize>
 where
     B: byteorder::ByteOrder,
-    T: Serialize + Type,
+    T: Serialize + DynamicType,
 {
     let mut null = NullWriteSeek;
 
@@ -75,7 +75,7 @@ pub fn serialized_size_fds<B, T: ?Sized>(
 ) -> Result<(usize, usize)>
 where
     B: byteorder::ByteOrder,
-    T: Serialize + Type,
+    T: Serialize + DynamicType,
 {
     let mut null = NullWriteSeek;
 
@@ -113,9 +113,9 @@ pub fn to_writer<B, W, T: ?Sized>(
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
-    T: Serialize + Type,
+    T: Serialize + DynamicType,
 {
-    let signature = T::signature();
+    let signature = value.dynamic_signature();
 
     to_writer_for_signature(writer, ctxt, &signature, value)
 }
@@ -132,9 +132,9 @@ pub fn to_writer_fds<B, W, T: ?Sized>(
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
-    T: Serialize + Type,
+    T: Serialize + DynamicType,
 {
-    let signature = T::signature();
+    let signature = value.dynamic_signature();
 
     to_writer_fds_for_signature(writer, ctxt, &signature, value)
 }
@@ -153,7 +153,7 @@ where
 pub fn to_bytes<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Vec<u8>>
 where
     B: byteorder::ByteOrder,
-    T: Serialize + Type,
+    T: Serialize + DynamicType,
 {
     let (bytes, fds) = to_bytes_fds(ctxt, value)?;
     if !fds.is_empty() {
@@ -173,7 +173,7 @@ pub fn to_bytes_fds<B, T: ?Sized>(
 ) -> Result<(Vec<u8>, Vec<RawFd>)>
 where
     B: byteorder::ByteOrder,
-    T: Serialize + Type,
+    T: Serialize + DynamicType,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
     let (_, fds) = to_writer_fds(&mut cursor, ctxt, value)?;

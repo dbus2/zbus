@@ -23,6 +23,9 @@ pub enum Error {
     MissingFramingOffset,
     /// The type (signature as first argument) being (de)serialized is not supported by the format.
     IncompatibleFormat(crate::Signature<'static>, crate::EncodingFormat),
+    /// The provided signature (first argument) was not valid for reading as the requested type.
+    /// Details on the expected signatures are in the second argument.
+    SignatureMismatch(crate::Signature<'static>, String),
     /// Only exists to allow `TryFrom<T> for T` conversions. You should never actually be getting
     /// this error from any API.
     #[deprecated]
@@ -72,6 +75,11 @@ impl fmt::Display for Error {
                 f,
                 "Type `{}` is not compatible with `{}` format",
                 sig, format,
+            ),
+            Error::SignatureMismatch(provided, expected) => write!(
+                f,
+                "Signature mismatch: got `{}`, expected {}",
+                provided, expected,
             ),
             #[allow(deprecated)]
             Error::Infallible => write!(f, "Infallible conversion failed"),

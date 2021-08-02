@@ -178,7 +178,7 @@ impl<'a> Proxy<'a> {
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + zvariant::Type,
+        B: serde::ser::Serialize + zvariant::DynamicType,
     {
         block_on(self.azync.call_method(method_name, body))
     }
@@ -192,7 +192,7 @@ impl<'a> Proxy<'a> {
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + zvariant::Type,
+        B: serde::ser::Serialize + zvariant::DynamicType,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
         block_on(self.azync.call(method_name, body))

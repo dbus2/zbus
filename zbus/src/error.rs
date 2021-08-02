@@ -50,8 +50,6 @@ pub enum Error {
     /// An XML error
     SerdeXml(serde_xml_rs::Error),
     NoBodySignature,
-    /// Unmatching/bad body signature in the message.
-    UnmatchedBodySignature,
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -72,7 +70,6 @@ impl PartialEq for Error {
             (Self::Unsupported, Self::Unsupported) => true,
             (Self::FDO(s), Self::FDO(o)) => s == o,
             (Self::NoBodySignature, Self::NoBodySignature) => true,
-            (Self::UnmatchedBodySignature, Self::UnmatchedBodySignature) => true,
             (Self::InvalidField, Self::InvalidField) => true,
             (Self::Variant(s), Self::Variant(o)) => s == o,
             (Self::Names(s), Self::Names(o)) => s == o,
@@ -106,7 +103,6 @@ impl error::Error for Error {
             Error::NoBodySignature => None,
             Error::InvalidField => None,
             Error::MissingField => None,
-            Error::UnmatchedBodySignature => None,
         }
     }
 }
@@ -141,7 +137,6 @@ impl fmt::Display for Error {
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => write!(f, "XML error: {}", e),
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
-            Error::UnmatchedBodySignature => write!(f, "unmatched body signature"),
         }
     }
 }

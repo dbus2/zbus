@@ -1,8 +1,10 @@
+use serde::de::{DeserializeSeed, Deserializer, SeqAccess, Visitor};
 use serde::ser::{Serialize, SerializeSeq, Serializer};
 use static_assertions::assert_impl_all;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
-use crate::{Error, Result, Signature, Type, Value};
+use crate::value::SignatureSeed;
+use crate::{DynamicDeserialize, DynamicType, Error, Result, Signature, Type, Value};
 
 /// A helper type to wrap arrays in a [`Value`].
 ///
@@ -95,6 +97,57 @@ impl<'a> Array<'a> {
     }
 }
 
+/// Use this to deserialize an [Array].
+pub struct ArraySeed<'a> {
+    signature: Signature<'a>,
+}
+
+impl<'a> ArraySeed<'a> {
+    /// Create a new empty `Array`, given the signature of the elements.
+    pub fn new(element_signature: Signature<'_>) -> ArraySeed<'_> {
+        let signature = create_signature(&element_signature);
+        ArraySeed { signature }
+    }
+
+    pub(crate) fn new_full_signature(signature: Signature<'_>) -> ArraySeed<'_> {
+        ArraySeed { signature }
+    }
+}
+
+assert_impl_all!(ArraySeed<'_>: Send, Sync, Unpin);
+
+impl<'a> DynamicType for Array<'a> {
+    fn dynamic_signature(&self) -> Signature<'_> {
+        self.signature.clone()
+    }
+}
+
+impl<'a> DynamicType for ArraySeed<'a> {
+    fn dynamic_signature(&self) -> Signature<'_> {
+        self.signature.clone()
+    }
+}
+
+impl<'a> DynamicDeserialize<'a> for Array<'a> {
+    type Deserializer = ArraySeed<'a>;
+
+    fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
+    where
+        S: TryInto<Signature<'a>>,
+        S::Error: Into<zvariant::Error>,
+    {
+        let signature = signature.try_into().map_err(Into::into)?;
+        if signature.starts_with(zvariant::ARRAY_SIGNATURE_CHAR) {
+            Ok(ArraySeed::new_full_signature(signature))
+        } else {
+            Err(zvariant::Error::SignatureMismatch(
+                signature.to_owned(),
+                "an array signature".to_owned(),
+            ))
+        }
+    }
+}
+
 impl<'a> std::ops::Deref for Array<'a> {
     type Target = [Value<'a>];
 
@@ -179,6 +232,41 @@ impl<'a> Serialize for Array<'a> {
         }
 
         seq.end()
+    }
+}
+
+impl<'de> DeserializeSeed<'de> for ArraySeed<'de> {
+    type Value = Array<'de>;
+    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_seq(ArrayVisitor {
+            signature: self.signature,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ArrayVisitor<'a> {
+    signature: Signature<'a>,
+}
+
+impl<'de> Visitor<'de> for ArrayVisitor<'de> {
+    type Value = Array<'de>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("an Array value")
+    }
+
+    fn visit_seq<V>(self, visitor: V) -> std::result::Result<Array<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        SignatureSeed {
+            signature: self.signature,
+        }
+        .visit_array(visitor)
     }
 }
 

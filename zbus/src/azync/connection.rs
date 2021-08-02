@@ -357,7 +357,7 @@ impl Connection {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + zvariant::Type,
+        B: serde::ser::Serialize + zvariant::DynamicType,
     {
         let stream = self.clone();
         let m = Message::method(
@@ -426,7 +426,7 @@ impl Connection {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + zvariant::Type,
+        B: serde::ser::Serialize + zvariant::DynamicType,
     {
         let m = Message::signal(
             self.unique_name(),
@@ -448,7 +448,7 @@ impl Connection {
     /// Returns the message serial number.
     pub async fn reply<B>(&self, call: &Message, body: &B) -> Result<u32>
     where
-        B: serde::ser::Serialize + zvariant::Type,
+        B: serde::ser::Serialize + zvariant::DynamicType,
     {
         let m = Message::method_reply(self.unique_name(), call, body)?;
         self.send_message(m).await
@@ -467,7 +467,7 @@ impl Connection {
         body: &B,
     ) -> Result<u32>
     where
-        B: serde::ser::Serialize + zvariant::Type,
+        B: serde::ser::Serialize + zvariant::DynamicType,
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {

@@ -3,7 +3,7 @@ use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 use static_assertions::assert_impl_all;
 
-use crate::{Basic, Error, Signature, Type, Value};
+use crate::{Basic, DynamicType, Error, Signature, Type, Value};
 
 /// A helper type to wrap dictionaries in a [`Value`].
 ///
@@ -61,10 +61,10 @@ impl<'k, 'v> Dict<'k, 'v> {
     pub fn add<K, V>(&mut self, key: K, value: V) -> Result<(), Error>
     where
         K: Basic + Into<Value<'k>> + std::hash::Hash + std::cmp::Eq,
-        V: Into<Value<'v>> + Type,
+        V: Into<Value<'v>> + DynamicType,
     {
         check_child_value_signature!(self.key_signature, K::signature(), "key");
-        check_child_value_signature!(self.value_signature, V::signature(), "value");
+        check_child_value_signature!(self.value_signature, value.dynamic_signature(), "value");
 
         self.entries.push(DictEntry {
             key: Value::new(key),
