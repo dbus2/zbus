@@ -1,11 +1,14 @@
-use serde::de::{DeserializeSeed, Deserializer, SeqAccess, Visitor};
-use serde::ser::{Serialize, SerializeTupleStruct, Serializer};
+use serde::{
+    de::{DeserializeSeed, Deserializer, SeqAccess, Visitor},
+    ser::{Serialize, SerializeTupleStruct, Serializer},
+};
 use static_assertions::assert_impl_all;
 use std::convert::TryInto;
 
-use crate::signature_parser::SignatureParser;
-use crate::value::SignatureSeed;
-use crate::{DynamicDeserialize, DynamicType, OwnedValue, Signature, Type, Value};
+use crate::{
+    signature_parser::SignatureParser, value::SignatureSeed, DynamicDeserialize, DynamicType,
+    OwnedValue, Signature, Type, Value,
+};
 
 /// Use this to efficiently build a [`Structure`].
 ///
