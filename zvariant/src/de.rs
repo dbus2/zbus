@@ -10,7 +10,8 @@ use std::{marker::PhantomData, os::unix::io::RawFd, str};
 use crate::gvariant::Deserializer as GVDeserializer;
 use crate::{
     dbus::Deserializer as DBusDeserializer, signature_parser::SignatureParser, utils::*, Basic,
-    EncodingContext, EncodingFormat, Error, Fd, ObjectPath, Result, Signature, Type,
+    DynamicDeserialize, DynamicType, EncodingContext, EncodingFormat, Error, Fd, ObjectPath,
+    Result, Signature, Type,
 };
 
 /// Deserialize `T` from a given slice of bytes, containing file descriptor indices.
@@ -166,6 +167,94 @@ where
     };
 
     T::deserialize(&mut de)
+}
+
+/// Deserialize `T` from a given slice of bytes containing file descriptor indices, with the given
+/// signature.
+///
+/// Please note that actual file descriptors are not part of the encoding and need to be transferred
+/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
+/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
+pub fn from_slice_for_dynamic_signature<'d, B, T>(
+    bytes: &'d [u8],
+    ctxt: EncodingContext<B>,
+    signature: &Signature<'d>,
+) -> Result<T>
+where
+    B: byteorder::ByteOrder,
+    T: DynamicDeserialize<'d>,
+{
+    from_slice_fds_for_dynamic_signature(bytes, None, ctxt, signature)
+}
+
+/// Deserialize `T` from a given slice of bytes containing file descriptor indices, with the given
+/// signature.
+///
+/// Please note that actual file descriptors are not part of the encoding and need to be transferred
+/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
+/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
+pub fn from_slice_fds_for_dynamic_signature<'d, B, T>(
+    bytes: &'d [u8],
+    fds: Option<&[RawFd]>,
+    ctxt: EncodingContext<B>,
+    signature: &Signature<'d>,
+) -> Result<T>
+where
+    B: byteorder::ByteOrder,
+    T: DynamicDeserialize<'d>,
+{
+    let seed = T::deserializer_for_signature(signature)?;
+
+    from_slice_fds_with_seed(bytes, fds, ctxt, seed)
+}
+
+/// Deserialize `T` from a given slice of bytes containing file descriptor indices, using the given
+/// seed.
+///
+/// Please note that actual file descriptors are not part of the encoding and need to be transferred
+/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
+/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
+pub fn from_slice_with_seed<'d, B, S>(
+    bytes: &'d [u8],
+    ctxt: EncodingContext<B>,
+    seed: S,
+) -> Result<S::Value>
+where
+    B: byteorder::ByteOrder,
+    S: DeserializeSeed<'d> + DynamicType,
+{
+    from_slice_fds_with_seed(bytes, None, ctxt, seed)
+}
+
+/// Deserialize `T` from a given slice of bytes containing file descriptor indices, using the given
+/// seed.
+///
+/// Please note that actual file descriptors are not part of the encoding and need to be transferred
+/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
+/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
+pub fn from_slice_fds_with_seed<'d, B, S>(
+    bytes: &'d [u8],
+    fds: Option<&[RawFd]>,
+    ctxt: EncodingContext<B>,
+    seed: S,
+) -> Result<S::Value>
+where
+    B: byteorder::ByteOrder,
+    S: DeserializeSeed<'d> + DynamicType,
+{
+    let signature = S::dynamic_signature(&seed).to_owned();
+
+    let mut de = match ctxt.format() {
+        #[cfg(feature = "gvariant")]
+        EncodingFormat::GVariant => {
+            Deserializer::GVariant(GVDeserializer::new(bytes, fds, &signature, ctxt))
+        }
+        EncodingFormat::DBus => {
+            Deserializer::DBus(DBusDeserializer::new(bytes, fds, &signature, ctxt))
+        }
+    };
+
+    seed.deserialize(&mut de)
 }
 
 /// Our deserialization implementation.

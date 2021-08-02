@@ -208,7 +208,7 @@ impl Node {
         DE: Into<Error>,
         IE: Into<Error>,
         ME: Into<Error>,
-        B: serde::ser::Serialize + zvariant::Type,
+        B: serde::ser::Serialize + zvariant::DynamicType,
     {
         if !LOCAL_CONNECTION.is_set() {
             panic!("emit_signal: Connection TLS not set");
@@ -515,7 +515,7 @@ impl ObjectServer {
         DE: Into<Error>,
         IE: Into<Error>,
         ME: Into<Error>,
-        B: serde::ser::Serialize + zvariant::Type,
+        B: serde::ser::Serialize + zvariant::DynamicType,
     {
         if !LOCAL_NODE.is_set() {
             panic!("emit_signal: Node TLS not set");

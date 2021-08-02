@@ -8,7 +8,7 @@ use std::{
 
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{EncodingContext, ObjectPath, Signature, Type};
+use zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
     owned_fd::OwnedFd, utils::padding_for_8_bytes, EndianSig, Error, MessageField,
@@ -36,7 +36,7 @@ struct MessageBuilder<'a, B> {
 
 impl<'a, B> MessageBuilder<'a, B>
 where
-    B: serde::ser::Serialize + Type,
+    B: serde::ser::Serialize + DynamicType,
 {
     fn new(ty: MessageType, sender: Option<UniqueName<'a>>, body: &'a B) -> Result<Self> {
         let ctxt = dbus_context!(0);
@@ -45,7 +45,7 @@ where
 
         let mut fields = MessageFields::new();
 
-        let mut signature = B::signature();
+        let mut signature = body.dynamic_signature();
         if !signature.is_empty() {
             if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
                 // Remove leading and trailing STRUCT delimiters
@@ -222,7 +222,7 @@ impl Message {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + Type,
+        B: serde::ser::Serialize + DynamicType,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -269,7 +269,7 @@ impl Message {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + Type,
+        B: serde::ser::Serialize + DynamicType,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -297,7 +297,7 @@ impl Message {
     where
         S: TryInto<UniqueName<'s>>,
         S::Error: Into<Error>,
-        B: serde::ser::Serialize + Type,
+        B: serde::ser::Serialize + DynamicType,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -320,7 +320,7 @@ impl Message {
         S::Error: Into<Error>,
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
-        B: serde::ser::Serialize + Type,
+        B: serde::ser::Serialize + DynamicType,
     {
         let sender = match sender {
             Some(sender) => Some(sender.try_into().map_err(Into::into)?),
@@ -451,32 +451,53 @@ impl Message {
         .map_err(Error::from)
     }
 
-    /// Check the signature and deserialize the body.
+    /// Deserialize the body using the contained signature.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use std::convert::TryInto;
+    /// # use zbus::Message;
+    /// # (|| -> zbus::Result<()> {
+    /// let send_body = (7i32, (2i32, "foo"), vec!["bar"]);
+    /// let message = Message::method(None::<&str>, Some("zbus.test"), "/", Some("zbus.test"), "ping", &send_body)?;
+    /// let body : zvariant::Structure = message.body()?;
+    /// let fields = body.fields();
+    /// assert!(matches!(fields[0], zvariant::Value::I32(7)));
+    /// assert!(matches!(fields[1], zvariant::Value::Structure(_)));
+    /// assert!(matches!(fields[2], zvariant::Value::Array(_)));
+    ///
+    /// let reply_msg = Message::method_reply(None::<&str>, &message, &body)?;
+    /// let reply_value : (i32, (i32, &str), Vec<String>) = reply_msg.body()?;
+    ///
+    /// assert_eq!(reply_value.0, 7);
+    /// assert_eq!(reply_value.2.len(), 1);
+    /// # Ok(()) })().unwrap()
+    /// ```
     pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B>
     where
-        B: serde::de::Deserialize<'d> + Type,
+        B: zvariant::DynamicDeserialize<'d>,
     {
-        let mut expected_sig = B::signature();
-        let actual_sig = match self.body_signature() {
+        let body_sig = match self.body_signature() {
             Ok(sig) => sig,
-            Err(Error::NoBodySignature) => Signature::from_str_unchecked(""),
+            Err(Error::NoBodySignature) => Signature::from_static_str_unchecked(""),
             Err(e) => return Err(e),
         };
 
-        let struct_start_char = zvariant::STRUCT_SIG_START_CHAR;
-        let struct_end_char = zvariant::STRUCT_SIG_END_CHAR;
-        // Remove any redundant layers of struct braces.
-        while expected_sig.starts_with(struct_start_char)
-            && expected_sig.ends_with(struct_end_char)
-            && expected_sig.len() > actual_sig.len()
-        {
-            expected_sig = expected_sig.slice(1..expected_sig.len() - 1);
-        }
-        if expected_sig != actual_sig.as_str() {
-            return Err(Error::UnmatchedBodySignature);
+        if self.bytes_to_completion()? != 0 {
+            return Err(Error::InsufficientData);
         }
 
-        self.body_unchecked()
+        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
+        header_len = header_len + padding_for_8_bytes(header_len);
+
+        zvariant::from_slice_fds_for_dynamic_signature(
+            &self.bytes[header_len..],
+            Some(&self.fds()),
+            dbus_context!(0),
+            &body_sig,
+        )
+        .map_err(Error::from)
     }
 
     pub(crate) fn fds(&self) -> Vec<RawFd> {
@@ -489,6 +510,18 @@ impl Message {
     /// Get a reference to the byte encoding of the message.
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
+    }
+
+    /// Get a reference to the byte encoding of the body of the message.
+    pub fn body_as_bytes(&self) -> Result<&[u8]> {
+        if self.bytes_to_completion()? != 0 {
+            return Err(Error::InsufficientData);
+        }
+
+        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
+        header_len = header_len + padding_for_8_bytes(header_len);
+
+        Ok(&self.bytes[header_len..])
     }
 
     fn fields_len(&self) -> Result<usize> {
@@ -611,7 +644,10 @@ mod tests {
         assert_eq!(*m.fds.read().unwrap(), Fds::Raw(vec![stdout.as_raw_fd()]));
 
         let body: Result<u32, Error> = m.body();
-        assert_eq!(body.unwrap_err(), Error::UnmatchedBodySignature);
+        assert!(matches!(
+            body.unwrap_err(),
+            Error::Variant(zvariant::Error::SignatureMismatch { .. })
+        ));
 
         assert_eq!(m.to_string(), "Method call do from :1.72");
         let r = Message::method_reply(None::<()>, &m, &("all fine!")).unwrap();

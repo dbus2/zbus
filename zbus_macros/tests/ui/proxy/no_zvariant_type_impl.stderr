@@ -9,6 +9,7 @@ error[E0277]: the trait bound `Foo: Type` is not satisfied
    | |__^ the trait `Type` is not implemented for `Foo`
    |
    = note: required because of the requirements on the impl of `Type` for `(Foo,)`
+   = note: required because of the requirements on the impl of `DynamicType` for `(Foo,)`
    = note: this error originates in the attribute macro `dbus_proxy` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Foo: Type` is not satisfied

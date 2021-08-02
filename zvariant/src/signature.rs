@@ -261,6 +261,12 @@ impl<'a> Type for Signature<'a> {
     }
 }
 
+impl<'a, 'b> From<&'b Signature<'a>> for Signature<'a> {
+    fn from(signature: &'b Signature<'a>) -> Signature<'a> {
+        signature.clone()
+    }
+}
+
 impl<'a> TryFrom<&'a [u8]> for Signature<'a> {
     type Error = Error;
 

@@ -120,7 +120,7 @@ assert_impl_all!(MessageField<'_>: Send, Sync, Unpin);
 
 impl<'f> Type for MessageField<'f> {
     fn signature() -> Signature<'static> {
-        Signature::from_str_unchecked("(yv)")
+        Signature::from_static_str_unchecked("(yv)")
     }
 }
 

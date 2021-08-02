@@ -530,7 +530,7 @@ impl<'a> Proxy<'a> {
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + zvariant::Type,
+        B: serde::ser::Serialize + zvariant::DynamicType,
     {
         self.inner
             .conn
@@ -553,7 +553,7 @@ impl<'a> Proxy<'a> {
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + zvariant::Type,
+        B: serde::ser::Serialize + zvariant::DynamicType,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
         let reply = self.call_method(method_name, body).await?;
