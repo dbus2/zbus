@@ -1,10 +1,13 @@
-use serde::de::{DeserializeSeed, Deserializer, SeqAccess, Visitor};
-use serde::ser::{Serialize, SerializeSeq, Serializer};
+use serde::{
+    de::{DeserializeSeed, Deserializer, SeqAccess, Visitor},
+    ser::{Serialize, SerializeSeq, Serializer},
+};
 use static_assertions::assert_impl_all;
 use std::convert::{TryFrom, TryInto};
 
-use crate::value::SignatureSeed;
-use crate::{DynamicDeserialize, DynamicType, Error, Result, Signature, Type, Value};
+use crate::{
+    value::SignatureSeed, DynamicDeserialize, DynamicType, Error, Result, Signature, Type, Value,
+};
 
 /// A helper type to wrap arrays in a [`Value`].
 ///

@@ -1,7 +1,6 @@
 use crate::{utils::*, Signature};
 use serde::de::{Deserialize, DeserializeSeed};
-use std::convert::TryInto;
-use std::marker::PhantomData;
+use std::{convert::TryInto, marker::PhantomData};
 
 /// Trait implemented by all serializable types.
 ///
