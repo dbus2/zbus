@@ -162,16 +162,13 @@ mod tests {
             .build()?;
         let proxy1_str = Arc::new(Mutex::new(None));
         let clone = proxy1_str.clone();
-        println!("1");
         proxy1.connect_some_signal(move |s| {
             *clone.lock().unwrap() = Some(s.to_string());
 
             Ok(())
         })?;
-        println!("2");
         receiver.receive_for(&proxy1)?;
 
-        println!("3");
         let proxy2 = MultiSignalProxy::builder(&conn)
             .destination("org.freedesktop.zbus.MultiSignal")?
             .path("/org/freedesktop/zbus/MultiSignal/2")?
