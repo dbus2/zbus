@@ -194,7 +194,7 @@ impl Node {
         xml
     }
 
-    fn emit_signal<'d, 'i, 'm, D, I, M, DE, IE, ME, B>(
+    fn emit_signal<'d, 'i, 'm, D, I, M, B>(
         &self,
         dest: Option<D>,
         interface_name: I,
@@ -202,12 +202,12 @@ impl Node {
         body: &B,
     ) -> Result<()>
     where
-        D: TryInto<BusName<'d>, Error = DE>,
-        I: TryInto<InterfaceName<'i>, Error = IE>,
-        M: TryInto<MemberName<'m>, Error = ME>,
-        DE: Into<Error>,
-        IE: Into<Error>,
-        ME: Into<Error>,
+        D: TryInto<BusName<'d>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
         if !LOCAL_CONNECTION.is_set() {
@@ -313,10 +313,10 @@ impl ObjectServer {
     /// since that is the most typical case. If that is not what you want, you should use
     /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
     /// **after** instantiating the `ObjectServer`).
-    pub fn request_name<'w, W, E>(mut self, well_known_name: W) -> Result<Self>
+    pub fn request_name<'w, W>(mut self, well_known_name: W) -> Result<Self>
     where
-        W: TryInto<WellKnownName<'w>, Error = E>,
-        E: Into<Error>,
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
     {
         let well_known_name = well_known_name.try_into().map_err(Into::into)?;
         DBusProxy::new(&self.conn)?.request_name(
@@ -337,10 +337,10 @@ impl ObjectServer {
     /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
     /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
     /// was not previously registered or already deregistered.
-    pub fn release_name<'w, W, E>(&mut self, well_known_name: W) -> Result<bool>
+    pub fn release_name<'w, W>(&mut self, well_known_name: W) -> Result<bool>
     where
-        W: TryInto<WellKnownName<'w>, Error = E>,
-        E: Into<Error>,
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
     {
         let well_known_name: WellKnownName<'w> = well_known_name.try_into().map_err(Into::into)?;
         // FIXME: Should be possible to avoid cloning/allocation here.
@@ -404,11 +404,11 @@ impl ObjectServer {
     /// If the interface already exists at this path, returns false.
     ///
     /// [`Interface`]: trait.Interface.html
-    pub fn at<'p, P, I, E>(&mut self, path: P, iface: I) -> Result<bool>
+    pub fn at<'p, P, I>(&mut self, path: P, iface: I) -> Result<bool>
     where
         I: Interface,
-        P: TryInto<ObjectPath<'p>, Error = E>,
-        E: Into<Error>,
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
         Ok(self.get_node_mut(&path, true).unwrap().at(I::name(), iface))
@@ -420,11 +420,11 @@ impl ObjectServer {
     /// Returns whether the object was destroyed.
     ///
     /// [`Interface`]: trait.Interface.html
-    pub fn remove<'p, I, P, E>(&mut self, path: P) -> Result<bool>
+    pub fn remove<'p, I, P>(&mut self, path: P) -> Result<bool>
     where
         I: Interface,
-        P: TryInto<ObjectPath<'p>, Error = E>,
-        E: Into<Error>,
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
         let node = self
@@ -476,12 +476,12 @@ impl ObjectServer {
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn with<'p, P, F, I, E>(&self, path: P, func: F) -> Result<()>
+    pub fn with<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
     where
         F: Fn(&I) -> Result<()>,
         I: Interface,
-        P: TryInto<ObjectPath<'p>, Error = E>,
-        E: Into<Error>,
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
@@ -502,19 +502,19 @@ impl ObjectServer {
     /// to bring a node into the current context.
     ///
     /// [`dbus_interface`]: attr.dbus_interface.html
-    pub fn local_node_emit_signal<'d, 'i, 'm, D, I, M, DE, IE, ME, B>(
+    pub fn local_node_emit_signal<'d, 'i, 'm, D, I, M, B>(
         destination: Option<D>,
         interface_name: I,
         signal_name: M,
         body: &B,
     ) -> Result<()>
     where
-        D: TryInto<BusName<'d>, Error = DE>,
-        I: TryInto<InterfaceName<'i>, Error = IE>,
-        M: TryInto<MemberName<'m>, Error = ME>,
-        DE: Into<Error>,
-        IE: Into<Error>,
-        ME: Into<Error>,
+        D: TryInto<BusName<'d>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
         if !LOCAL_NODE.is_set() {
@@ -961,7 +961,7 @@ mod tests {
                 }
                 NextAction::DestroyObj(key) => {
                     let path = format!("/zbus/test/{}", key);
-                    object_server.remove::<MyIfaceImpl, _, _>(path).unwrap();
+                    object_server.remove::<MyIfaceImpl, _>(path).unwrap();
                 }
             }
         }
