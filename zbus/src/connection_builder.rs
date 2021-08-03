@@ -24,10 +24,10 @@ impl<'a> ConnectionBuilder<'a> {
     /// Create a builder for connection that will use the given [D-Bus bus address].
     ///
     /// [D-Bus bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub fn address<A, E>(address: A) -> Result<Self>
+    pub fn address<A>(address: A) -> Result<Self>
     where
-        A: TryInto<Address, Error = E>,
-        E: Into<Error>,
+        A: TryInto<Address>,
+        A::Error: Into<Error>,
     {
         azync::ConnectionBuilder::address(address).map(Self)
     }
