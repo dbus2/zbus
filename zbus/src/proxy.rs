@@ -5,7 +5,7 @@ use std::{
     future::ready,
     sync::Arc,
 };
-use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName};
+use zbus_names::{BusName, InterfaceName, MemberName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
@@ -318,10 +318,6 @@ impl<'a> Proxy<'a> {
     /// Get the underlying async Proxy, consuming `self`.
     pub fn into_inner(self) -> azync::Proxy<'a> {
         self.azync
-    }
-
-    pub(crate) fn destination_unique_name(&self) -> Result<&OwnedUniqueName> {
-        block_on(self.azync.destination_unique_name())
     }
 }
 

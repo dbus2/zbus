@@ -1,4 +1,5 @@
 use crate::{Connection, Error, MessageHeader, Proxy, Result};
+use async_io::block_on;
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
@@ -26,11 +27,19 @@ where
             path: proxy.path().to_owned(),
             // SAFETY: we ensure proxy's name is resolved before creating a key for it, in
             // `SignalReceiver::receive_for` method.
-            destination: proxy
-                .destination_unique_name()
-                .expect("Destination unique name")
-                .clone()
-                .into(),
+            destination: block_on(async {
+                proxy
+                    .inner()
+                    .destination_unique_name()
+                    .await
+                    .expect("Destination unique name")
+                    .lock()
+                    .await
+                    .as_ref()
+                    .expect("Destination unique name")
+                    .clone()
+                    .into()
+            }),
         }
     }
 }
