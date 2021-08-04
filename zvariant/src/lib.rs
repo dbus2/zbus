@@ -181,6 +181,8 @@ pub use error::*;
 mod r#type;
 pub use r#type::*;
 
+pub mod introspect;
+
 mod from_value;
 pub use from_value::*;
 

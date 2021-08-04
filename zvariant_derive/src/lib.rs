@@ -12,6 +12,7 @@ mod dict;
 mod r#type;
 mod utils;
 mod value;
+mod introspect;
 
 /// Derive macro to add [`Type`] implementation to structs and enums.
 ///
@@ -320,4 +321,10 @@ pub fn value_macro_derive(input: TokenStream) -> TokenStream {
 pub fn owned_value_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
     value::expand_derive(ast, value::ValueType::OwnedValue).into()
+}
+
+#[proc_macro_derive(Introspectable)]
+pub fn introspectable_macro_derive(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    introspect::expand_derive(ast).into()
 }

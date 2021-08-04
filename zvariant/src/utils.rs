@@ -41,7 +41,6 @@ pub const MAYBE_SIGNATURE_CHAR: char = 'm';
 #[cfg(feature = "gvariant")]
 pub const MAYBE_SIGNATURE_STR: &str = "m";
 
-// XXX: Document. Feature-gate.
 pub const SERIALIZE_DICT_SIG_START_CHAR: char = '<';
 pub const SERIALIZE_DICT_SIG_START_STR: &str = "<";
 pub const SERIALIZE_DICT_SIG_END_CHAR: char = '>';

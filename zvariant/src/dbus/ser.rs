@@ -159,7 +159,6 @@ where
             Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
                 let sig = Signature::from_str_unchecked(v);
                 let v = sig.remove_serialize_dict_annotations().as_str().to_string();
-                log::trace!("writing signature: {}", v);
                 self.0.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
                 v
             }
@@ -551,7 +550,7 @@ where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
-    // XXX Make these into methods of seq serializer
+    // TODO: Make these into methods of seq serializer
     fn serialize_struct_element<T>(&mut self, name: Option<&'static str>, value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
