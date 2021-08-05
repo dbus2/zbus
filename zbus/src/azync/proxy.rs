@@ -10,7 +10,6 @@ use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
-    future::ready,
     io::{self, ErrorKind},
     pin::Pin,
     sync::Arc,
@@ -141,7 +140,7 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) destination: BusName<'a>,
     pub(crate) path: ObjectPath<'a>,
     pub(crate) interface: InterfaceName<'a>,
-    dest_unique_name: OnceCell<OwnedUniqueName>,
+    dest_unique_name: Mutex<Option<OwnedUniqueName>>,
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
     #[derivative(Debug = "ignore")]
@@ -233,22 +232,19 @@ impl<'a> ProxyInner<'a> {
             destination,
             path,
             interface,
-            dest_unique_name: OnceCell::new(),
+            dest_unique_name: Mutex::new(None),
             sig_handlers: Mutex::new(SlotMap::with_key()),
             signal_msg_stream: OnceCell::new(),
         }
     }
 
     // panic if dest_unique_name has not been resolved before
-    fn matching_signal<'m>(
-        &self,
-        msg: &'m Message,
-        h: &'m MessageHeader<'m>,
-    ) -> Option<&'m MemberName<'m>> {
-        if msg.primary_header().msg_type() != MessageType::Signal {
+    async fn matching_signal<'m>(&self, h: &'m MessageHeader<'m>) -> Option<&'m MemberName<'m>> {
+        if h.primary().msg_type() != MessageType::Signal {
             return None;
         }
-        let uniq = self.dest_unique_name.get().unwrap();
+        let dest_unique_name = self.dest_unique_name.lock().await;
+        let uniq = dest_unique_name.as_ref().unwrap();
         if h.interface() == Ok(Some(&self.interface))
             && h.sender() == Ok(Some(uniq))
             && h.path() == Ok(Some(&self.path))
@@ -601,16 +597,16 @@ impl<'a> Proxy<'a> {
             .conn
             .clone()
             .filter(move |m| {
-                ready(
-                    m.as_ref()
-                        .ok()
-                        .and_then(|m| {
-                            m.header()
-                                .map(|h| proxy.matching_signal(m, &h) == Some(&signal_name))
-                                .ok()
-                        })
-                        .unwrap_or(false),
-                )
+                let msg = m.as_ref().map(|m| m.clone()).ok();
+                let proxy = proxy.clone();
+                let signal_name = signal_name.clone();
+
+                async move {
+                    match msg.as_ref().and_then(|m| m.header().ok()) {
+                        Some(h) => proxy.matching_signal(&h).await == Some(&signal_name),
+                        None => false,
+                    }
+                }
             })
             // Safety: Filter above ensures we only get `Ok(msg)`.
             .map(|msg| msg.unwrap());
@@ -749,7 +745,7 @@ impl<'a> Proxy<'a> {
             Ok(h) => h,
             _ => return Ok(false),
         };
-        let signal_name = match self.inner.matching_signal(msg, &h) {
+        let signal_name = match self.inner.matching_signal(&h).await {
             Some(signal) => signal,
             _ => return Ok(false),
         };
@@ -774,10 +770,11 @@ impl<'a> Proxy<'a> {
     /// the message. While in most cases this will not be a problem, it becomes a problem if you
     /// need to communicate with multiple services exposing the same interface, over the same
     /// connection. Hence the need for this method.
-    pub(crate) async fn destination_unique_name(&self) -> Result<&OwnedUniqueName> {
-        if let Some(name) = self.inner.dest_unique_name.get() {
+    pub(crate) async fn destination_unique_name(&self) -> Result<&Mutex<Option<OwnedUniqueName>>> {
+        let mut dest_unique_name = self.inner.dest_unique_name.lock().await;
+        if dest_unique_name.is_some() {
             // Already resolved the name.
-            return Ok(name);
+            return Ok(&self.inner.dest_unique_name);
         }
 
         let destination = &self.inner.destination;
@@ -790,13 +787,13 @@ impl<'a> Proxy<'a> {
                     .await?
             }
         };
-        self.inner
-            .dest_unique_name
-            .set(unique_name)
-            // programmer (probably our) error if this fails.
-            .expect("Attempted to set dest_unique_name twice");
 
-        Ok(self.inner.dest_unique_name.get().unwrap())
+        if dest_unique_name.replace(unique_name).is_some() {
+            // programmer (probably our) error if this fails.
+            panic!("Attempted to set dest_unique_name twice");
+        }
+
+        Ok(&self.inner.dest_unique_name)
     }
 
     async fn msg_stream(&self) -> &Mutex<Connection> {
