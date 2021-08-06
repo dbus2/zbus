@@ -586,6 +586,11 @@ impl ObjectServer {
             }
         }
     }
+
+    /// Get a reference to the connection `self` is serving objects on.
+    pub fn connection(&self) -> &Connection {
+        &self.conn
+    }
 }
 
 impl Drop for ObjectServer {
