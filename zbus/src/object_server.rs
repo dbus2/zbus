@@ -18,7 +18,7 @@ use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 use crate::{
     azync, fdo,
     fdo::{Introspectable, Peer, Properties},
-    Connection, Error, Message, MessageHeader, MessageType, Result,
+    Connection, Error, Message, MessageHeader, MessageType, Result, SignalEmitter,
 };
 
 scoped_thread_local!(pub(crate) static LOCAL_NODE: Node);
@@ -43,7 +43,12 @@ pub trait Interface: Any + Send + Sync {
     fn get_all(&self) -> HashMap<String, OwnedValue>;
 
     /// Set a property value. Returns `None` if the property doesn't exist.
-    fn set(&mut self, property_name: &str, value: &Value<'_>) -> Option<fdo::Result<()>>;
+    fn set(
+        &mut self,
+        property_name: &str,
+        value: &Value<'_>,
+        emitter: &SignalEmitter<'_>,
+    ) -> Option<fdo::Result<()>>;
 
     /// Call a `&self` method. Returns `None` if the method doesn't exist.
     fn call(

@@ -14,7 +14,7 @@ use zbus_names::{
 };
 use zvariant::{derive::Type, ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value};
 
-use crate::{dbus_interface, dbus_proxy, object_server::LOCAL_NODE, DBusError};
+use crate::{dbus_interface, dbus_proxy, object_server::LOCAL_NODE, DBusError, SignalEmitter};
 
 /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
@@ -96,6 +96,7 @@ impl Properties {
         interface_name: InterfaceName<'_>,
         property_name: &str,
         value: OwnedValue,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> Result<()> {
         LOCAL_NODE.with(|node| {
             let iface = node.get_interface(interface_name.clone()).ok_or_else(|| {
@@ -105,7 +106,7 @@ impl Properties {
             let res = iface
                 .write()
                 .expect("lock poisoned")
-                .set(property_name, &value);
+                .set(property_name, &value, &emitter);
             res.ok_or_else(|| {
                 Error::UnknownProperty(format!("Unknown property '{}'", property_name))
             })?
