@@ -14,7 +14,7 @@ use zbus_names::{
 };
 use zvariant::{derive::Type, ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value};
 
-use crate::{dbus_interface, dbus_proxy, object_server::LOCAL_NODE, DBusError, SignalEmitter};
+use crate::{dbus_interface, dbus_proxy, DBusError, MessageHeader, ObjectServer, SignalEmitter};
 
 /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
@@ -34,8 +34,17 @@ pub(crate) struct Introspectable;
 
 #[dbus_interface(name = "org.freedesktop.DBus.Introspectable")]
 impl Introspectable {
-    fn introspect(&self) -> String {
-        LOCAL_NODE.with(|node| node.introspect())
+    fn introspect(
+        &self,
+        #[zbus(object_server)] server: &ObjectServer,
+        #[zbus(header)] header: MessageHeader<'_>,
+    ) -> Result<String> {
+        let path = header.path()?.ok_or(crate::Error::MissingField)?;
+        let node = server
+            .get_node(path)
+            .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{}'", path)))?;
+
+        Ok(node.introspect())
     }
 }
 
@@ -77,16 +86,27 @@ assert_impl_all!(Properties: Send, Sync, Unpin);
 
 #[dbus_interface(name = "org.freedesktop.DBus.Properties")]
 impl Properties {
-    fn get(&self, interface_name: InterfaceName<'_>, property_name: &str) -> Result<OwnedValue> {
-        LOCAL_NODE.with(|node| {
-            let iface = node.get_interface(interface_name.clone()).ok_or_else(|| {
+    fn get(
+        &self,
+        interface_name: InterfaceName<'_>,
+        property_name: &str,
+        #[zbus(object_server)] server: &ObjectServer,
+        #[zbus(header)] header: MessageHeader<'_>,
+    ) -> Result<OwnedValue> {
+        let path = header.path()?.ok_or(crate::Error::MissingField)?;
+        let iface = server
+            .get_node(path)
+            .and_then(|node| node.get_interface(interface_name.clone()))
+            .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-            let res = iface.read().expect("lock poisoned").get(property_name);
-            res.ok_or_else(|| {
-                Error::UnknownProperty(format!("Unknown property '{}'", property_name))
-            })?
+        let res = iface.read().expect("lock poisoned").get(property_name);
+        res.unwrap_or_else(|| {
+            Err(Error::UnknownProperty(format!(
+                "Unknown property '{}'",
+                property_name
+            )))
         })
     }
 
@@ -96,32 +116,46 @@ impl Properties {
         interface_name: InterfaceName<'_>,
         property_name: &str,
         value: OwnedValue,
+        #[zbus(object_server)] server: &ObjectServer,
+        #[zbus(header)] header: MessageHeader<'_>,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> Result<()> {
-        LOCAL_NODE.with(|node| {
-            let iface = node.get_interface(interface_name.clone()).ok_or_else(|| {
+        let path = header.path()?.ok_or(crate::Error::MissingField)?;
+        let iface = server
+            .get_node(path)
+            .and_then(|node| node.get_interface(interface_name.clone()))
+            .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-            let res = iface
-                .write()
-                .expect("lock poisoned")
-                .set(property_name, &value, &emitter);
-            res.ok_or_else(|| {
-                Error::UnknownProperty(format!("Unknown property '{}'", property_name))
-            })?
+        let res = iface
+            .write()
+            .expect("lock poisoned")
+            .set(property_name, &value, &emitter);
+        res.unwrap_or_else(|| {
+            Err(Error::UnknownProperty(format!(
+                "Unknown property '{}'",
+                property_name
+            )))
         })
     }
 
-    fn get_all(&self, interface_name: InterfaceName<'_>) -> Result<HashMap<String, OwnedValue>> {
-        LOCAL_NODE.with(|node| {
-            let iface = node.get_interface(interface_name.clone()).ok_or_else(|| {
+    fn get_all(
+        &self,
+        interface_name: InterfaceName<'_>,
+        #[zbus(object_server)] server: &ObjectServer,
+        #[zbus(header)] header: MessageHeader<'_>,
+    ) -> Result<HashMap<String, OwnedValue>> {
+        let path = header.path()?.ok_or(crate::Error::MissingField)?;
+        let iface = server
+            .get_node(path)
+            .and_then(|node| node.get_interface(interface_name.clone()))
+            .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-            let res = iface.read().expect("lock poisoned").get_all();
-            Ok(res)
-        })
+        let res = iface.read().expect("lock poisoned").get_all();
+        Ok(res)
     }
 
     /// Emits the `org.freedesktop.DBus.Properties.PropertiesChanged` signal.
