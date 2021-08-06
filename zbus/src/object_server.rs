@@ -12,7 +12,7 @@ use fdo::{DBusProxy, RequestNameFlags};
 use futures_util::StreamExt;
 use scoped_tls::scoped_thread_local;
 use static_assertions::assert_impl_all;
-use zbus_names::{BusName, InterfaceName, MemberName, WellKnownName};
+use zbus_names::{InterfaceName, MemberName, WellKnownName};
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
@@ -197,30 +197,6 @@ impl Node {
         self.introspect_to_writer(&mut xml, 0);
 
         xml
-    }
-
-    fn emit_signal<'d, 'i, 'm, D, I, M, B>(
-        &self,
-        dest: Option<D>,
-        interface_name: I,
-        signal_name: M,
-        body: &B,
-    ) -> Result<()>
-    where
-        D: TryInto<BusName<'d>>,
-        I: TryInto<InterfaceName<'i>>,
-        M: TryInto<MemberName<'m>>,
-        D::Error: Into<Error>,
-        I::Error: Into<Error>,
-        M::Error: Into<Error>,
-        B: serde::ser::Serialize + zvariant::DynamicType,
-    {
-        if !LOCAL_CONNECTION.is_set() {
-            panic!("emit_signal: Connection TLS not set");
-        }
-
-        LOCAL_CONNECTION
-            .with(|conn| conn.emit_signal(dest, &self.path, interface_name, signal_name, body))
     }
 }
 
@@ -495,40 +471,6 @@ impl ObjectServer {
             let emitter = SignalEmitter::new(&self.conn, path).unwrap();
             LOCAL_NODE.set(node, || node.with_iface_func(func, &emitter))
         })
-    }
-
-    /// Emit a signal on the currently dispatched node.
-    ///
-    /// This is an internal helper function to emit a signal on on the current node. You shouldn't
-    /// call this method directly, rather with the derived signal implementation from
-    /// [`dbus_interface`].
-    ///
-    /// # Panics
-    ///
-    /// This method will panic if called from outside of a node context. Use [`ObjectServer::with`]
-    /// to bring a node into the current context.
-    ///
-    /// [`dbus_interface`]: attr.dbus_interface.html
-    pub fn local_node_emit_signal<'d, 'i, 'm, D, I, M, B>(
-        destination: Option<D>,
-        interface_name: I,
-        signal_name: M,
-        body: &B,
-    ) -> Result<()>
-    where
-        D: TryInto<BusName<'d>>,
-        I: TryInto<InterfaceName<'i>>,
-        M: TryInto<MemberName<'m>>,
-        D::Error: Into<Error>,
-        I::Error: Into<Error>,
-        M::Error: Into<Error>,
-        B: serde::ser::Serialize + zvariant::DynamicType,
-    {
-        if !LOCAL_NODE.is_set() {
-            panic!("emit_signal: Node TLS not set");
-        }
-
-        LOCAL_NODE.with(|n| n.emit_signal(destination, interface_name, signal_name, body))
     }
 
     fn dispatch_method_call_try(
