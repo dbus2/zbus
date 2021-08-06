@@ -336,7 +336,7 @@ impl ObjectServer {
     }
 
     // Get the Node at path.
-    fn get_node(&self, path: &ObjectPath<'_>) -> Option<&Node> {
+    pub(crate) fn get_node(&self, path: &ObjectPath<'_>) -> Option<&Node> {
         let mut node = &self.root;
         let mut node_path = String::new();
 
