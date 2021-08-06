@@ -185,7 +185,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             if matches!(p, Entry::Vacant(_)) {
                 let prop_changed_method = quote!(
-                    pub fn #prop_changed_method_name(&self) -> #zbus::Result<()> {
+                    pub fn #prop_changed_method_name(&self, _emitter: &#zbus::SignalEmitter<'_>) -> #zbus::Result<()> {
                         let mut changed = ::std::collections::HashMap::new();
                         let value = #zbus::Interface::get(self, &#member_name)
                             .expect(&::std::format!("Property '{}' does not exist", #member_name))?;
@@ -222,7 +222,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                             }
                         };
                         let result = #set_call.and_then(|set_result| {
-                            self.#prop_changed_method_name()?;
+                            self.#prop_changed_method_name(&emitter)?;
                             ::std::result::Result::Ok(set_result)
                         });
                         ::std::option::Option::Some(result)

@@ -937,9 +937,10 @@ mod tests {
             .unwrap();
 
         object_server
-            .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, _| {
-                iface.count_changed()
-            })
+            .with(
+                "/org/freedesktop/MyService",
+                |iface: &MyIfaceImpl, emitter| iface.count_changed(&emitter),
+            )
             .unwrap();
 
         loop {
