@@ -205,7 +205,7 @@ by our interface:
 # fn main() -> Result<(), Box<dyn Error>> {
 # let connection = zbus::Connection::session()?;
 # let mut object_server = zbus::ObjectServer::new(&connection);
-object_server.with("/org/zbus/MyGreeter", |iface: &Greeter| {
+object_server.with("/org/zbus/MyGreeter", |iface: &Greeter, _| {
     iface.greeter_name_changed()
 })?;
 # Ok(())

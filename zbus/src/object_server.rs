@@ -133,9 +133,9 @@ impl Node {
         true
     }
 
-    fn with_iface_func<F, I>(&self, func: F) -> Result<()>
+    fn with_iface_func<F, I>(&self, func: F, emitter: &SignalEmitter<'_>) -> Result<()>
     where
-        F: Fn(&I) -> Result<()>,
+        F: Fn(&I, &SignalEmitter<'_>) -> Result<()>,
         I: Interface,
     {
         let iface = self
@@ -145,7 +145,7 @@ impl Node {
             .read()
             .expect("lock poisoned");
         let iface = iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
-        func(iface)
+        func(iface, emitter)
     }
 
     fn introspect_to_writer<W: Write>(&self, writer: &mut W, level: usize) {
@@ -469,7 +469,7 @@ impl ObjectServer {
     ///#
     ///# let path = "/org/zbus/path";
     ///# object_server.at(path, MyIface)?;
-    /// object_server.with(path, |iface: &MyIface| {
+    /// object_server.with(path, |iface: &MyIface, _| {
     ///   iface.emit_signal()
     /// })?;
     ///#
@@ -478,7 +478,7 @@ impl ObjectServer {
     /// ```
     pub fn with<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
     where
-        F: Fn(&I) -> Result<()>,
+        F: Fn(&I, &SignalEmitter<'_>) -> Result<()>,
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
@@ -486,7 +486,9 @@ impl ObjectServer {
         let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
         LOCAL_CONNECTION.set(&self.conn, || {
-            LOCAL_NODE.set(node, || node.with_iface_func(func))
+            // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
+            let emitter = SignalEmitter::new(&self.conn, path).unwrap();
+            LOCAL_NODE.set(node, || node.with_iface_func(func, &emitter))
         })
     }
 
@@ -930,7 +932,7 @@ mod tests {
             .unwrap();
 
         object_server
-            .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl| {
+            .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, _| {
                 iface.count_changed()
             })
             .unwrap();
@@ -942,7 +944,7 @@ mod tests {
             }
 
             object_server
-                .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl| {
+                .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, _| {
                     iface.alert_count(51)
                 })
                 .unwrap();
