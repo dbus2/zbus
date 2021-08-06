@@ -219,7 +219,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 ///     // "Notify" signal (note: no implementation body).
 ///     #[dbus_interface(signal)]
-///     fn notify(&self, message: &str) -> zbus::Result<()>;
+///     fn notify(emitter: &SignalEmitter<'_>, message: &str) -> zbus::Result<()>;
 ///
 ///     #[dbus_interface(out_args("answer", "question"))]
 ///     fn meaning_of_life(&self) -> zbus::Result<(i32, String)> {

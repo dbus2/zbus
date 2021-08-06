@@ -99,7 +99,7 @@ Let see how to use it:
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{dbus_interface, fdo, ObjectServer, Connection};
+# use zbus::{dbus_interface, fdo, ObjectServer, Connection, SignalEmitter};
 #
 struct Greeter {
     name: String
@@ -129,7 +129,7 @@ impl Greeter {
 
     /// A signal; the implementation is provided by the macro.
     #[dbus_interface(signal)]
-    fn greeted_everyone(&self) -> zbus::Result<()>;
+    fn greeted_everyone(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

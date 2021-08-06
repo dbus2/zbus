@@ -31,6 +31,7 @@ impl<'a> Property<'a> {
 pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
     let zbus = zbus_path();
 
+    let self_ty = &input.self_ty;
     let mut properties = BTreeMap::new();
     let mut set_dispatch = quote!();
     let mut get_dispatch = quote!();
@@ -115,13 +116,14 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
         let is_mut = if let FnArg::Receiver(r) = inputs.first().expect("not &self method") {
             r.mutability.is_some()
+        } else if is_signal {
+            false
         } else {
             panic!("The method is missing a self receiver");
         };
 
-        let typed_inputs = inputs
+        let mut typed_inputs = inputs
             .iter()
-            .skip(1)
             .filter_map(|i| {
                 if let FnArg::Typed(t) = i {
                     Some(t)
@@ -129,7 +131,19 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     None
                 }
             })
+            .cloned()
             .collect::<Vec<_>>();
+        let emitter_arg = if is_signal {
+            if typed_inputs.is_empty() {
+                return Err(syn::Error::new_spanned(
+                    &inputs,
+                    "Expected a `&zbus::SignalEmitter<'_> argument",
+                ));
+            }
+            Some(typed_inputs.remove(0))
+        } else {
+            None
+        };
 
         let mut intro_args = quote!();
         intro_args.extend(introspect_input_args(&typed_inputs, is_signal));
@@ -170,11 +184,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         if is_signal {
             introspect.extend(doc_comments);
             introspect.extend(introspect_signal(&member_name, &intro_args));
+            let emitter = emitter_arg.unwrap().pat;
 
             method.block = parse_quote!({
-                #zbus::ObjectServer::local_node_emit_signal(
-                    ::std::option::Option::None::<()>,
-                    #iface_name,
+                #emitter.emit::<(), #self_ty, _, _>(
+                    ::std::option::Option::None,
                     #member_name,
                     &(#args),
                 )
@@ -185,13 +199,13 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             if matches!(p, Entry::Vacant(_)) {
                 let prop_changed_method = quote!(
-                    pub fn #prop_changed_method_name(&self, _emitter: &#zbus::SignalEmitter<'_>) -> #zbus::Result<()> {
+                    pub fn #prop_changed_method_name(&self, emitter: &#zbus::SignalEmitter<'_>) -> #zbus::Result<()> {
                         let mut changed = ::std::collections::HashMap::new();
                         let value = #zbus::Interface::get(self, &#member_name)
                             .expect(&::std::format!("Property '{}' does not exist", #member_name))?;
                         changed.insert(#member_name, &*value);
-                        let properties_iface = #zbus::fdo::Properties;
-                        properties_iface.properties_changed(
+                        #zbus::fdo::Properties::properties_changed(
+                            emitter,
                             #zbus::names::InterfaceName::from_str_unchecked(#iface_name),
                             &changed,
                             &[],
@@ -280,7 +294,6 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
     introspect.extend(introspect_properties(properties));
 
-    let self_ty = &input.self_ty;
     let generics = &input.generics;
     let where_clause = &generics.where_clause;
 
@@ -381,7 +394,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 }
 
 fn get_args_from_inputs(
-    inputs: &[&PatType],
+    inputs: &[PatType],
     zbus: &TokenStream,
 ) -> syn::Result<(TokenStream, TokenStream)> {
     if inputs.is_empty() {
@@ -540,10 +553,10 @@ fn introspect_method(name: &str, args: &TokenStream) -> TokenStream {
     )
 }
 
-fn introspect_input_args<'a>(
-    inputs: &'a [&PatType],
+fn introspect_input_args(
+    inputs: &[PatType],
     is_signal: bool,
-) -> impl Iterator<Item = TokenStream> + 'a {
+) -> impl Iterator<Item = TokenStream> + '_ {
     inputs
         .iter()
         .filter_map(move |PatType { pat, ty, attrs, .. }| {

@@ -460,13 +460,13 @@ impl ObjectServer {
     /// This function is useful to emit signals outside of a dispatched handler:
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{Connection, ObjectServer, dbus_interface};
+    ///# use zbus::{Connection, ObjectServer, SignalEmitter, dbus_interface};
     ///
     ///# struct MyIface;
     ///# #[dbus_interface(name = "org.myiface.MyIface")]
     ///# impl MyIface {
     ///#     #[dbus_interface(signal)]
-    ///#     fn emit_signal(&self) -> zbus::Result<()>;
+    ///#     fn emit_signal(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
     ///# }
     ///#
     ///# let connection = Connection::session()?;
@@ -474,8 +474,8 @@ impl ObjectServer {
     ///#
     ///# let path = "/org/zbus/path";
     ///# object_server.at(path, MyIface)?;
-    /// object_server.with(path, |iface: &MyIface, _| {
-    ///   iface.emit_signal()
+    /// object_server.with(path, |_iface: &MyIface, emitter| {
+    ///   MyIface::emit_signal(emitter)
     /// })?;
     ///#
     ///#
@@ -676,7 +676,10 @@ mod tests {
     use test_env_log::test;
     use zvariant::derive::Type;
 
-    use crate::{dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer};
+    use crate::{
+        dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer,
+        SignalEmitter,
+    };
 
     #[derive(Deserialize, Serialize, Type)]
     pub struct ArgStructTest {
@@ -737,10 +740,10 @@ mod tests {
 
     #[dbus_interface(interface = "org.freedesktop.MyIface")]
     impl MyIfaceImpl {
-        fn ping(&mut self) -> u32 {
+        fn ping(&mut self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> u32 {
             self.count += 1;
             if self.count % 3 == 0 {
-                self.alert_count(self.count).expect("Failed to emit signal");
+                MyIfaceImpl::alert_count(&emitter, self.count).expect("Failed to emit signal");
             }
             self.count
         }
@@ -820,7 +823,7 @@ mod tests {
         }
 
         #[dbus_interface(signal)]
-        fn alert_count(&self, val: u32) -> zbus::Result<()>;
+        fn alert_count(emitter: &SignalEmitter<'_>, val: u32) -> zbus::Result<()>;
     }
 
     fn check_hash_map(map: HashMap<String, String>) {
@@ -950,9 +953,10 @@ mod tests {
             }
 
             object_server
-                .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, _| {
-                    iface.alert_count(51)
-                })
+                .with(
+                    "/org/freedesktop/MyService",
+                    |_iface: &MyIfaceImpl, emitter| MyIfaceImpl::alert_count(&emitter, 51),
+                )
                 .unwrap();
 
             let mut next = action.lock().unwrap();

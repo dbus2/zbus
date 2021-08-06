@@ -128,7 +128,7 @@ impl Properties {
     #[dbus_interface(signal)]
     #[rustfmt::skip]
     pub fn properties_changed(
-        &self,
+        emitter: &SignalEmitter<'_>,
         interface_name: InterfaceName<'_>,
         changed_properties: &HashMap<&str, &Value<'_>>,
         invalidated_properties: &[&str],
