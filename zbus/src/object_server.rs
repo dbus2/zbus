@@ -10,7 +10,6 @@ use std::{
 use async_io::block_on;
 use fdo::{DBusProxy, RequestNameFlags};
 use futures_util::StreamExt;
-use scoped_tls::scoped_thread_local;
 use static_assertions::assert_impl_all;
 use zbus_names::{InterfaceName, MemberName, WellKnownName};
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
@@ -20,9 +19,6 @@ use crate::{
     fdo::{Introspectable, Peer, Properties},
     Connection, Error, Message, MessageHeader, MessageType, Result, SignalEmitter,
 };
-
-scoped_thread_local!(pub(crate) static LOCAL_NODE: Node);
-scoped_thread_local!(static LOCAL_CONNECTION: Connection);
 
 /// The trait used to dispatch messages to an interface instance.
 ///
@@ -466,11 +462,10 @@ impl ObjectServer {
     {
         let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
-        LOCAL_CONNECTION.set(&self.conn, || {
-            // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
-            let emitter = SignalEmitter::new(&self.conn, path).unwrap();
-            LOCAL_NODE.set(node, || node.with_iface_func(func, &emitter))
-        })
+        // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
+        let emitter = SignalEmitter::new(&self.conn, path).unwrap();
+
+        node.with_iface_func(func, &emitter)
     }
 
     fn dispatch_method_call_try(
@@ -478,7 +473,6 @@ impl ObjectServer {
         msg_header: &MessageHeader<'_>,
         msg: &Message,
     ) -> fdo::Result<Result<u32>> {
-        let conn = self.conn.clone();
         let path = msg_header
             .path()
             .ok()
@@ -506,21 +500,17 @@ impl ObjectServer {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
         })?;
 
-        LOCAL_CONNECTION.set(&conn, || {
-            LOCAL_NODE.set(node, || {
-                let res = iface
-                    .read()
-                    .expect("lock poisoned")
-                    .call(self, msg, member.clone());
-                res.or_else(|| {
-                    iface
-                        .write()
-                        .expect("lock poisoned")
-                        .call_mut(self, msg, member.clone())
-                })
-                .ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
-            })
+        let res = iface
+            .read()
+            .expect("lock poisoned")
+            .call(self, msg, member.clone());
+        res.or_else(|| {
+            iface
+                .write()
+                .expect("lock poisoned")
+                .call_mut(self, msg, member.clone())
         })
+        .ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
     }
 
     fn dispatch_method_call(
