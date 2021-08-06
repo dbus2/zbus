@@ -53,7 +53,7 @@ pub trait Interface: Any + Send + Sync {
     /// Call a `&self` method. Returns `None` if the method doesn't exist.
     fn call(
         &self,
-        connection: &Connection,
+        server: &ObjectServer,
         msg: &Message,
         name: MemberName<'_>,
     ) -> Option<Result<u32>>;
@@ -61,7 +61,7 @@ pub trait Interface: Any + Send + Sync {
     /// Call a `&mut self` method. Returns `None` if the method doesn't exist.
     fn call_mut(
         &mut self,
-        connection: &Connection,
+        server: &ObjectServer,
         msg: &Message,
         name: MemberName<'_>,
     ) -> Option<Result<u32>>;
@@ -500,7 +500,7 @@ impl ObjectServer {
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
 
         let node = self
-            .get_node_mut(path, false)
+            .get_node(path)
             .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
         let iface = node.get_interface(iface.clone()).ok_or_else(|| {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
@@ -511,12 +511,12 @@ impl ObjectServer {
                 let res = iface
                     .read()
                     .expect("lock poisoned")
-                    .call(&conn, msg, member.clone());
+                    .call(self, msg, member.clone());
                 res.or_else(|| {
                     iface
                         .write()
                         .expect("lock poisoned")
-                        .call_mut(&conn, msg, member.clone())
+                        .call_mut(self, msg, member.clone())
                 })
                 .ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
             })

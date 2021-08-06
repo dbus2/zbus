@@ -215,9 +215,10 @@ fn test_interface() {
     if false {
         // check compilation
         let c = zbus::Connection::session().unwrap();
+        let s = zbus::ObjectServer::new(&c);
         let m = zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
             .unwrap();
-        let _ = t.call(&c, &m, "StrU32".try_into().unwrap()).unwrap();
+        let _ = t.call(&s, &m, "StrU32".try_into().unwrap()).unwrap();
         let emitter = SignalEmitter::new(&c, "/does/not/matter").unwrap();
         Test::<u32>::signal(&emitter, 23, "ergo sum").unwrap();
     }

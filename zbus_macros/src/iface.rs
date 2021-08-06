@@ -157,13 +157,14 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             let ret = quote!(r);
 
             quote!(match reply {
-                ::std::result::Result::Ok(r) => c.reply(m, &#ret),
+                ::std::result::Result::Ok(r) => s.connection().reply(m, &#ret),
                 ::std::result::Result::Err(e) => {
+                    let c = s.connection();
                     <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m)
                 }
             })
         } else {
-            quote!(c.reply(m, &reply))
+            quote!(s.connection().reply(m, &reply))
         };
 
         let member_name = attrs
@@ -351,7 +352,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             fn call(
                 &self,
-                c: &#zbus::Connection,
+                s: &#zbus::ObjectServer,
                 m: &#zbus::Message,
                 name: #zbus::names::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
@@ -363,7 +364,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             fn call_mut(
                 &mut self,
-                c: &#zbus::Connection,
+                s: &#zbus::ObjectServer,
                 m: &#zbus::Message,
                 name: #zbus::names::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
@@ -466,6 +467,7 @@ fn get_args_from_inputs(
                     let #header_arg = match m.header() {
                         ::std::result::Result::Ok(r) => r,
                         ::std::result::Result::Err(e) => {
+                            let c = s.connection();
                             return ::std::option::Option::Some(
                                 <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
                             );
@@ -483,8 +485,9 @@ fn get_args_from_inputs(
                 let emitter_arg = &input.pat;
 
                 emitter_arg_decl = Some(quote! {
+                    let c = s.connection();
                     let #emitter_arg = match m.header().and_then(|h| {
-                        h.path().and_then(|p| #zbus::SignalEmitter::new(&c, p.unwrap()))
+                        h.path().and_then(|p| #zbus::SignalEmitter::new(c, p.unwrap()))
                     }) {
                         ::std::result::Result::Ok(e) => e,
                         ::std::result::Result::Err(e) => {
@@ -509,6 +512,7 @@ fn get_args_from_inputs(
                 match m.body() {
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
+                        let c = s.connection();
                         return ::std::option::Option::Some(
                             <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
                         );
