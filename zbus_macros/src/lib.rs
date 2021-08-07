@@ -203,14 +203,15 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///         #[zbus(header)]
 ///         hdr: MessageHeader<'_>,
 ///         #[zbus(signal_emitter)]
-///         _emitter: SignalEmitter<'_>,
+///         emitter: SignalEmitter<'_>,
 ///         #[zbus(object_server)]
 ///         _server: &ObjectServer,
 ///     ) -> zbus::fdo::Result<()> {
 ///         let path = hdr.path()?.unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);
+///         Example::bye(&emitter, &msg);
 ///
-///         Err(zbus::fdo::Error::Failed(msg))
+///         Ok(())
 ///     }
 ///
 ///     // "TheAnswer" property (note: the "name" attribute), with its associated getter.
@@ -221,9 +222,9 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///         2 * 3 * 7
 ///     }
 ///
-///     // "Notify" signal (note: no implementation body).
+///     // "Bye" signal (note: no implementation body).
 ///     #[dbus_interface(signal)]
-///     fn notify(emitter: &SignalEmitter<'_>, message: &str) -> zbus::Result<()>;
+///     fn bye(emitter: &SignalEmitter<'_>, message: &str) -> zbus::Result<()>;
 ///
 ///     #[dbus_interface(out_args("answer", "question"))]
 ///     fn meaning_of_life(&self) -> zbus::Result<(i32, String)> {
