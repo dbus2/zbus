@@ -287,11 +287,11 @@ impl Node {
 ///     // `&mut self` methods.
 ///     //
 ///     // If you need a shared state, you can use a RefCell for ex:
-///     quit: Arc<Mutex<bool>>,
+///     quit: bool,
 /// }
 ///
 /// impl Example {
-///     fn new(quit: Arc<Mutex<bool>>) -> Self {
+///     fn new(quit: bool) -> Self {
 ///         Self { quit }
 ///     }
 /// }
@@ -299,8 +299,8 @@ impl Node {
 /// #[dbus_interface(name = "org.myiface.Example")]
 /// impl Example {
 ///     // This will be the "Quit" D-Bus method.
-///     fn quit(&self) {
-///         *self.quit.lock().unwrap() = true;
+///     fn quit(&mut self) {
+///         self.quit = true;
 ///     }
 ///
 ///     // See `dbus_interface` documentation to learn
@@ -309,9 +309,8 @@ impl Node {
 ///
 /// let connection = Connection::session()?;
 /// let mut object_server = ObjectServer::new(&connection);
-/// let quit = Arc::new(Mutex::new(false));
 ///
-/// let interface = Example::new(quit.clone());
+/// let interface = Example::new(false);
 /// object_server.at("/org/zbus/path", interface)?;
 ///
 /// loop {
@@ -319,7 +318,7 @@ impl Node {
 ///         eprintln!("{}", err);
 ///     }
 ///
-///     if *quit.lock().unwrap() {
+///     if object_server.get_interface::<_, Example>("/org/zbus/path")?.quit {
 ///         break;
 ///     }
 /// }
