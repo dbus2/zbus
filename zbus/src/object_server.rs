@@ -66,12 +66,24 @@ pub trait Interface: Any + Send + Sync {
     fn introspect_to_writer(&self, writer: &mut dyn Write, level: usize);
 }
 
+// FIXME: Do we really need these unsafe implementations? If so, can't they be implemented w/o
+///       `unsafe` usage?
 impl dyn Interface {
     /// Return Any of self
     fn downcast_ref<T: Any>(&self) -> Option<&T> {
         if <dyn Interface as Any>::type_id(self) == TypeId::of::<T>() {
             // SAFETY: If type ID matches, it means object is of type T
             Some(unsafe { &*(self as *const dyn Interface as *const T) })
+        } else {
+            None
+        }
+    }
+
+    /// Return Any of self
+    fn downcast_mut<T: Any>(&mut self) -> Option<&mut T> {
+        if <dyn Interface as Any>::type_id(self) == TypeId::of::<T>() {
+            // SAFETY: If type ID matches, it means object is of type T
+            Some(unsafe { &mut *(self as *mut dyn Interface as *mut T) })
         } else {
             None
         }
@@ -146,6 +158,21 @@ impl Node {
             .read()
             .expect("lock poisoned");
         let iface = iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
+        func(iface, emitter)
+    }
+
+    fn with_iface_func_mut<F, I>(&self, func: F, emitter: &SignalEmitter<'_>) -> Result<()>
+    where
+        F: Fn(&mut I, &SignalEmitter<'_>) -> Result<()>,
+        I: Interface,
+    {
+        let mut iface = self
+            .interfaces
+            .get(&I::name())
+            .ok_or(Error::InterfaceNotFound)?
+            .write()
+            .expect("lock poisoned");
+        let iface = iface.downcast_mut::<I>().ok_or(Error::InterfaceNotFound)?;
         func(iface, emitter)
     }
 
@@ -426,21 +453,26 @@ impl ObjectServer {
 
     /// Run `func` with the given path & interface.
     ///
-    /// Run the function `func` with the interface at path. If the interface was not found, return
-    /// `Error::InterfaceNotFound`.
+    /// # Errors
     ///
-    /// This function is useful to emit signals outside of a dispatched handler:
+    /// If the interface is not registered at the given path, `Error::InterfaceNotFound` error is
+    /// returned.
+    ///
+    /// # Examples
+    ///
+    /// The typical use of this is to emit signals outside of a dispatched handler:
+    ///
     /// ```no_run
     ///# use std::error::Error;
     ///# use zbus::{Connection, ObjectServer, SignalEmitter, dbus_interface};
-    ///
-    ///# struct MyIface;
-    ///# #[dbus_interface(name = "org.myiface.MyIface")]
-    ///# impl MyIface {
-    ///#     #[dbus_interface(signal)]
-    ///#     fn emit_signal(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
-    ///# }
     ///#
+    /// struct MyIface;
+    /// #[dbus_interface(name = "org.myiface.MyIface")]
+    /// impl MyIface {
+    ///     #[dbus_interface(signal)]
+    ///     fn emit_signal(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+    /// }
+    ///
     ///# let connection = Connection::session()?;
     ///# let mut object_server = ObjectServer::new(&connection);
     ///#
@@ -466,6 +498,56 @@ impl ObjectServer {
         let emitter = SignalEmitter::new(&self.conn, path).unwrap();
 
         node.with_iface_func(func, &emitter)
+    }
+
+    /// Run `func` with the given path & interface.
+    ///
+    /// Same as [`ObjectServer::with`], except `func` gets a mutable reference.
+    ///
+    /// # Examples
+    ///
+    /// The typical use of this is property changes outside of a dispatched handler:
+    ///
+    /// ```no_run
+    ///# use std::error::Error;
+    ///# use zbus::{Connection, ObjectServer, SignalEmitter, dbus_interface};
+    ///#
+    /// struct MyIface(u32);
+    ///
+    /// #[dbus_interface(name = "org.myiface.MyIface")]
+    /// impl MyIface {
+    ///      #[dbus_interface(property)]
+    ///      fn count(&self) -> u32 {
+    ///          self.0
+    ///      }
+    /// }
+    ///
+    ///# let connection = Connection::session()?;
+    ///# let mut object_server = ObjectServer::new(&connection);
+    ///#
+    ///# let path = "/org/zbus/path";
+    ///# object_server.at(path, MyIface(0))?;
+    /// object_server.with_mut(path, |iface: &mut MyIface, emitter| {
+    ///     iface.0 = 42;
+    ///     iface.count_changed(emitter)
+    /// })?;
+    ///#
+    ///#
+    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// ```
+    pub fn with_mut<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
+    where
+        F: Fn(&mut I, &SignalEmitter<'_>) -> Result<()>,
+        I: Interface,
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
+    {
+        let path = path.try_into().map_err(Into::into)?;
+        let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+        // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
+        let emitter = SignalEmitter::new(&self.conn, path).unwrap();
+
+        node.with_iface_func_mut(func, &emitter)
     }
 
     fn dispatch_method_call_try(
