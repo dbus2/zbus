@@ -4,7 +4,9 @@ use std::{
     convert::TryInto,
     fmt::Write,
     io::{self, ErrorKind},
-    sync::{Arc, RwLock},
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+    sync::{Arc, RwLock, RwLockWriteGuard},
 };
 
 use async_io::block_on;
@@ -166,14 +168,54 @@ impl Node {
         F: Fn(&mut I, &SignalEmitter<'_>) -> Result<()>,
         I: Interface,
     {
+        let mut iface = self.get_interface_mut::<I>()?;
+
+        func(&mut *iface, emitter)
+    }
+
+    fn get_interface_mut<I>(&self) -> Result<impl DerefMut<Target = I> + '_>
+    where
+        I: Interface,
+    {
+        struct DownCast<'d, G> {
+            iface: RwLockWriteGuard<'d, dyn Interface>,
+            phantom: PhantomData<G>,
+        }
+
+        impl<G> Deref for DownCast<'_, G>
+        where
+            G: Interface,
+        {
+            type Target = G;
+
+            fn deref(&self) -> &G {
+                self.iface.downcast_ref::<G>().unwrap()
+            }
+        }
+
+        impl<G> DerefMut for DownCast<'_, G>
+        where
+            G: Interface,
+        {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                self.iface.downcast_mut::<G>().unwrap()
+            }
+        }
+
         let mut iface = self
             .interfaces
             .get(&I::name())
             .ok_or(Error::InterfaceNotFound)?
             .write()
             .expect("lock poisoned");
-        let iface = iface.downcast_mut::<I>().ok_or(Error::InterfaceNotFound)?;
-        func(iface, emitter)
+        // Ensure what we return can later be dowcasted safely.
+        iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
+        iface.downcast_mut::<I>().ok_or(Error::InterfaceNotFound)?;
+
+        Ok(DownCast {
+            iface,
+            phantom: PhantomData,
+        })
     }
 
     fn introspect_to_writer<W: Write>(&self, writer: &mut W, level: usize) {
@@ -548,6 +590,60 @@ impl ObjectServer {
         let emitter = SignalEmitter::new(&self.conn, path).unwrap();
 
         node.with_iface_func_mut(func, &emitter)
+    }
+
+    /// Get a reference to the interface at the given path.
+    ///
+    /// **WARNINGS:** Since `self` will not be able to access the interface in question until the
+    /// return value of this method is dropped, it is highly recommended to prefer
+    /// [`ObjectServer::with`] or [`ObjectServer::with_mut`] over this method. They are also more
+    /// convenient to use for emitting signals and changing properties.
+    ///
+    /// # Errors
+    ///
+    /// If the interface is not registered at the given path, `Error::InterfaceNotFound` error is
+    /// returned.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///# use std::error::Error;
+    ///# use zbus::{Connection, ObjectServer, SignalEmitter, dbus_interface};
+    ///
+    /// struct MyIface(u32);
+    ///
+    /// #[dbus_interface(name = "org.myiface.MyIface")]
+    /// impl MyIface {
+    ///    #[dbus_interface(property)]
+    ///    fn count(&self) -> u32 {
+    ///        self.0
+    ///    }
+    /// }
+    /// // Setup connection and object_server etc here and then in another part of the code:
+    ///#
+    ///# let connection = Connection::session()?;
+    ///# let mut object_server = ObjectServer::new(&connection);
+    ///#
+    ///# let path = "/org/zbus/path";
+    ///# object_server.at(path, MyIface(22))?;
+    /// let mut iface = object_server.get_interface::<_, MyIface>(path)?;
+    /// // Note: This will not be needed when using `ObjectServer::with_mut`
+    /// let emitter = SignalEmitter::new(&connection, path)?;
+    /// iface.0 = 42;
+    /// iface.count_changed(&emitter)?;
+    ///#
+    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// ```
+    pub fn get_interface<'p, P, I>(&self, path: P) -> Result<impl DerefMut<Target = I> + '_>
+    where
+        I: Interface,
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
+    {
+        let path = path.try_into().map_err(Into::into)?;
+        let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+
+        node.get_interface_mut()
     }
 
     fn dispatch_method_call_try(
