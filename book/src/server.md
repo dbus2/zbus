@@ -175,7 +175,7 @@ at the time of the this writing (*pre-1.0*), zbus neither provides an event loop
 integration with other event loop implementations. We are evaluating different options to make this
 easier, especially with *async* support.
 
-### Sending signals 
+### Sending signals
 
 Sending signals at an arbitrary point in any time is equally easy with the object server. The 
 `with` method allows you to run any closure for a given interface. Let's emit a signal defined
