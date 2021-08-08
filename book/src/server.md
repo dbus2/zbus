@@ -177,9 +177,24 @@ easier, especially with *async* support.
 
 ### Sending signals
 
-Sending signals at an arbitrary point in any time is equally easy with the object server. The 
-`with` method allows you to run any closure for a given interface. Let's emit a signal defined
-by our interface:
+As you might have noticed in the previous example, the signal methods don't take an `&self` argument
+but rather a `SignalEmitter` reference. This allows you to easily emit signals whether from inside
+or outside of your `dbus_interface` methods' context. To make things easier, `dbus_interface`
+methods can receive a `SignalEmitter` passed to them using the special `zbus(signal_emitter)`
+attribute:
+
+Please refer to [`dbus_interface` documentation][didoc] for an example and list of other special
+attributes you can make use of.
+
+### Notifying property changes
+
+While notification about property changes by the D-Bus peers are taken care of for you by zbus,
+when changing the properties from the service implementation, you'd want to notify the peers about
+that. No worries, we got your covered.
+
+For each property you declare through the `dbus_interface` macro, a `<property_name>_changed` method
+is generated for you that emits the necessary property change signal for you. Here is how we'll use
+it with the previous example code:
 
 ```rust,no_run
 # use std::error::Error;
@@ -205,12 +220,17 @@ by our interface:
 # fn main() -> Result<(), Box<dyn Error>> {
 # let connection = zbus::Connection::session()?;
 # let mut object_server = zbus::ObjectServer::new(&connection);
-object_server.with("/org/zbus/MyGreeter", |iface: &Greeter, emitter| {
-    iface.greeter_name_changed(emitter)
-})?;
+object_server.with_mut(
+    "/org/zbus/MyGreeter",
+    |iface: &mut Greeter, emitter| {
+        iface.name = String::from("👋");
+        iface.greeter_name_changed(emitter)
+    },
+)?;
 # Ok(())
 # }
 ```
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
 [`RequestName`]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-request-name
+[didoc]: https://docs.rs/zbus/2.0.0-beta.6/zbus/attr.dbus_interface.html
