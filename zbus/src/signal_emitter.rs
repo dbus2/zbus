@@ -23,6 +23,16 @@ impl<'s> SignalEmitter<'s> {
             .map_err(Into::into)
     }
 
+    /// Get a reference to the associated connection.
+    pub fn connection(&self) -> &'s Connection {
+        self.conn
+    }
+
+    /// Get a reference to the associated object path.
+    pub fn path(&self) -> &ObjectPath<'s> {
+        &self.path
+    }
+
     #[doc(hidden)]
     pub fn emit<'d, 'i, 'm, D, I, M, B>(
         &self,
