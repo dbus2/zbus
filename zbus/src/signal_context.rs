@@ -1,6 +1,12 @@
 use crate::{zvariant::ObjectPath, Connection, Error, Result};
 use std::convert::TryInto;
 
+/// A signnal emission context.
+///
+/// For signal emission using the high-level API, you'll need instances of this type.
+///
+/// See [`crate::ObjectServer::with`], [`crate::ObjectServer::with_mut`] and
+/// [`crate::dbus_interface`] documentation for details and examples of this type in use.
 #[derive(Clone, Debug)]
 pub struct SignalContext<'s> {
     conn: &'s Connection,
