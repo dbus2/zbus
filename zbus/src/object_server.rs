@@ -4,25 +4,23 @@ use std::{
     convert::TryInto,
     fmt::Write,
     io::{self, ErrorKind},
-    sync::{Arc, RwLock},
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+    sync::{Arc, RwLock, RwLockWriteGuard},
 };
 
 use async_io::block_on;
 use fdo::{DBusProxy, RequestNameFlags};
 use futures_util::StreamExt;
-use scoped_tls::scoped_thread_local;
 use static_assertions::assert_impl_all;
-use zbus_names::{BusName, InterfaceName, MemberName, WellKnownName};
+use zbus_names::{InterfaceName, MemberName, WellKnownName};
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
     azync, fdo,
     fdo::{Introspectable, Peer, Properties},
-    Connection, Error, Message, MessageHeader, MessageType, Result,
+    Connection, Error, Message, MessageHeader, MessageType, Result, SignalContext,
 };
-
-scoped_thread_local!(pub(crate) static LOCAL_NODE: Node);
-scoped_thread_local!(static LOCAL_CONNECTION: Connection);
 
 /// The trait used to dispatch messages to an interface instance.
 ///
@@ -43,12 +41,17 @@ pub trait Interface: Any + Send + Sync {
     fn get_all(&self) -> HashMap<String, OwnedValue>;
 
     /// Set a property value. Returns `None` if the property doesn't exist.
-    fn set(&mut self, property_name: &str, value: &Value<'_>) -> Option<fdo::Result<()>>;
+    fn set(
+        &mut self,
+        property_name: &str,
+        value: &Value<'_>,
+        ctxt: &SignalContext<'_>,
+    ) -> Option<fdo::Result<()>>;
 
     /// Call a `&self` method. Returns `None` if the method doesn't exist.
     fn call(
         &self,
-        connection: &Connection,
+        server: &ObjectServer,
         msg: &Message,
         name: MemberName<'_>,
     ) -> Option<Result<u32>>;
@@ -56,7 +59,7 @@ pub trait Interface: Any + Send + Sync {
     /// Call a `&mut self` method. Returns `None` if the method doesn't exist.
     fn call_mut(
         &mut self,
-        connection: &Connection,
+        server: &ObjectServer,
         msg: &Message,
         name: MemberName<'_>,
     ) -> Option<Result<u32>>;
@@ -65,12 +68,24 @@ pub trait Interface: Any + Send + Sync {
     fn introspect_to_writer(&self, writer: &mut dyn Write, level: usize);
 }
 
+// FIXME: Do we really need these unsafe implementations? If so, can't they be implemented w/o
+///       `unsafe` usage?
 impl dyn Interface {
     /// Return Any of self
     fn downcast_ref<T: Any>(&self) -> Option<&T> {
         if <dyn Interface as Any>::type_id(self) == TypeId::of::<T>() {
             // SAFETY: If type ID matches, it means object is of type T
             Some(unsafe { &*(self as *const dyn Interface as *const T) })
+        } else {
+            None
+        }
+    }
+
+    /// Return Any of self
+    fn downcast_mut<T: Any>(&mut self) -> Option<&mut T> {
+        if <dyn Interface as Any>::type_id(self) == TypeId::of::<T>() {
+            // SAFETY: If type ID matches, it means object is of type T
+            Some(unsafe { &mut *(self as *mut dyn Interface as *mut T) })
         } else {
             None
         }
@@ -133,9 +148,9 @@ impl Node {
         true
     }
 
-    fn with_iface_func<F, I>(&self, func: F) -> Result<()>
+    fn with_iface_func<F, I>(&self, func: F, signal_ctxt: &SignalContext<'_>) -> Result<()>
     where
-        F: Fn(&I) -> Result<()>,
+        F: Fn(&I, &SignalContext<'_>) -> Result<()>,
         I: Interface,
     {
         let iface = self
@@ -145,7 +160,62 @@ impl Node {
             .read()
             .expect("lock poisoned");
         let iface = iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
-        func(iface)
+        func(iface, signal_ctxt)
+    }
+
+    fn with_iface_func_mut<F, I>(&self, func: F, signal_ctxt: &SignalContext<'_>) -> Result<()>
+    where
+        F: Fn(&mut I, &SignalContext<'_>) -> Result<()>,
+        I: Interface,
+    {
+        let mut iface = self.get_interface_mut::<I>()?;
+
+        func(&mut *iface, signal_ctxt)
+    }
+
+    fn get_interface_mut<I>(&self) -> Result<impl DerefMut<Target = I> + '_>
+    where
+        I: Interface,
+    {
+        struct DownCast<'d, G> {
+            iface: RwLockWriteGuard<'d, dyn Interface>,
+            phantom: PhantomData<G>,
+        }
+
+        impl<G> Deref for DownCast<'_, G>
+        where
+            G: Interface,
+        {
+            type Target = G;
+
+            fn deref(&self) -> &G {
+                self.iface.downcast_ref::<G>().unwrap()
+            }
+        }
+
+        impl<G> DerefMut for DownCast<'_, G>
+        where
+            G: Interface,
+        {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                self.iface.downcast_mut::<G>().unwrap()
+            }
+        }
+
+        let mut iface = self
+            .interfaces
+            .get(&I::name())
+            .ok_or(Error::InterfaceNotFound)?
+            .write()
+            .expect("lock poisoned");
+        // Ensure what we return can later be dowcasted safely.
+        iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
+        iface.downcast_mut::<I>().ok_or(Error::InterfaceNotFound)?;
+
+        Ok(DownCast {
+            iface,
+            phantom: PhantomData,
+        })
     }
 
     fn introspect_to_writer<W: Write>(&self, writer: &mut W, level: usize) {
@@ -193,30 +263,6 @@ impl Node {
 
         xml
     }
-
-    fn emit_signal<'d, 'i, 'm, D, I, M, B>(
-        &self,
-        dest: Option<D>,
-        interface_name: I,
-        signal_name: M,
-        body: &B,
-    ) -> Result<()>
-    where
-        D: TryInto<BusName<'d>>,
-        I: TryInto<InterfaceName<'i>>,
-        M: TryInto<MemberName<'m>>,
-        D::Error: Into<Error>,
-        I::Error: Into<Error>,
-        M::Error: Into<Error>,
-        B: serde::ser::Serialize + zvariant::DynamicType,
-    {
-        if !LOCAL_CONNECTION.is_set() {
-            panic!("emit_signal: Connection TLS not set");
-        }
-
-        LOCAL_CONNECTION
-            .with(|conn| conn.emit_signal(dest, &self.path, interface_name, signal_name, body))
-    }
 }
 
 /// An object server, holding server-side D-Bus objects & interfaces.
@@ -241,11 +287,11 @@ impl Node {
 ///     // `&mut self` methods.
 ///     //
 ///     // If you need a shared state, you can use a RefCell for ex:
-///     quit: Arc<Mutex<bool>>,
+///     quit: bool,
 /// }
 ///
 /// impl Example {
-///     fn new(quit: Arc<Mutex<bool>>) -> Self {
+///     fn new(quit: bool) -> Self {
 ///         Self { quit }
 ///     }
 /// }
@@ -253,8 +299,8 @@ impl Node {
 /// #[dbus_interface(name = "org.myiface.Example")]
 /// impl Example {
 ///     // This will be the "Quit" D-Bus method.
-///     fn quit(&self) {
-///         *self.quit.lock().unwrap() = true;
+///     fn quit(&mut self) {
+///         self.quit = true;
 ///     }
 ///
 ///     // See `dbus_interface` documentation to learn
@@ -263,9 +309,8 @@ impl Node {
 ///
 /// let connection = Connection::session()?;
 /// let mut object_server = ObjectServer::new(&connection);
-/// let quit = Arc::new(Mutex::new(false));
 ///
-/// let interface = Example::new(quit.clone());
+/// let interface = Example::new(false);
 /// object_server.at("/org/zbus/path", interface)?;
 ///
 /// loop {
@@ -273,7 +318,7 @@ impl Node {
 ///         eprintln!("{}", err);
 ///     }
 ///
-///     if *quit.lock().unwrap() {
+///     if object_server.get_interface::<_, Example>("/org/zbus/path")?.quit {
 ///         break;
 ///     }
 /// }
@@ -355,7 +400,7 @@ impl ObjectServer {
     }
 
     // Get the Node at path.
-    fn get_node(&self, path: &ObjectPath<'_>) -> Option<&Node> {
+    pub(crate) fn get_node(&self, path: &ObjectPath<'_>) -> Option<&Node> {
         let mut node = &self.root;
         let mut node_path = String::new();
 
@@ -449,28 +494,33 @@ impl ObjectServer {
 
     /// Run `func` with the given path & interface.
     ///
-    /// Run the function `func` with the interface at path. If the interface was not found, return
-    /// `Error::InterfaceNotFound`.
+    /// # Errors
     ///
-    /// This function is useful to emit signals outside of a dispatched handler:
+    /// If the interface is not registered at the given path, `Error::InterfaceNotFound` error is
+    /// returned.
+    ///
+    /// # Examples
+    ///
+    /// The typical use of this is to emit signals outside of a dispatched handler:
+    ///
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{Connection, ObjectServer, dbus_interface};
-    ///
-    ///# struct MyIface;
-    ///# #[dbus_interface(name = "org.myiface.MyIface")]
-    ///# impl MyIface {
-    ///#     #[dbus_interface(signal)]
-    ///#     fn emit_signal(&self) -> zbus::Result<()>;
-    ///# }
+    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
     ///#
+    /// struct MyIface;
+    /// #[dbus_interface(name = "org.myiface.MyIface")]
+    /// impl MyIface {
+    ///     #[dbus_interface(signal)]
+    ///     fn emit_signal(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
+    /// }
+    ///
     ///# let connection = Connection::session()?;
     ///# let mut object_server = ObjectServer::new(&connection);
     ///#
     ///# let path = "/org/zbus/path";
     ///# object_server.at(path, MyIface)?;
-    /// object_server.with(path, |iface: &MyIface| {
-    ///   iface.emit_signal()
+    /// object_server.with(path, |_iface: &MyIface, signal_ctxt| {
+    ///   MyIface::emit_signal(signal_ctxt)
     /// })?;
     ///#
     ///#
@@ -478,50 +528,121 @@ impl ObjectServer {
     /// ```
     pub fn with<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
     where
-        F: Fn(&I) -> Result<()>,
+        F: Fn(&I, &SignalContext<'_>) -> Result<()>,
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
-        LOCAL_CONNECTION.set(&self.conn, || {
-            LOCAL_NODE.set(node, || node.with_iface_func(func))
-        })
+        // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
+        let ctxt = SignalContext::new(&self.conn, path).unwrap();
+
+        node.with_iface_func(func, &ctxt)
     }
 
-    /// Emit a signal on the currently dispatched node.
+    /// Run `func` with the given path & interface.
     ///
-    /// This is an internal helper function to emit a signal on on the current node. You shouldn't
-    /// call this method directly, rather with the derived signal implementation from
-    /// [`dbus_interface`].
+    /// Same as [`ObjectServer::with`], except `func` gets a mutable reference.
     ///
-    /// # Panics
+    /// # Examples
     ///
-    /// This method will panic if called from outside of a node context. Use [`ObjectServer::with`]
-    /// to bring a node into the current context.
+    /// The typical use of this is property changes outside of a dispatched handler:
     ///
-    /// [`dbus_interface`]: attr.dbus_interface.html
-    pub fn local_node_emit_signal<'d, 'i, 'm, D, I, M, B>(
-        destination: Option<D>,
-        interface_name: I,
-        signal_name: M,
-        body: &B,
-    ) -> Result<()>
+    /// ```no_run
+    ///# use std::error::Error;
+    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
+    ///#
+    /// struct MyIface(u32);
+    ///
+    /// #[dbus_interface(name = "org.myiface.MyIface")]
+    /// impl MyIface {
+    ///      #[dbus_interface(property)]
+    ///      fn count(&self) -> u32 {
+    ///          self.0
+    ///      }
+    /// }
+    ///
+    ///# let connection = Connection::session()?;
+    ///# let mut object_server = ObjectServer::new(&connection);
+    ///#
+    ///# let path = "/org/zbus/path";
+    ///# object_server.at(path, MyIface(0))?;
+    /// object_server.with_mut(path, |iface: &mut MyIface, signal_ctxt| {
+    ///     iface.0 = 42;
+    ///     iface.count_changed(signal_ctxt)
+    /// })?;
+    ///#
+    ///#
+    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// ```
+    pub fn with_mut<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
     where
-        D: TryInto<BusName<'d>>,
-        I: TryInto<InterfaceName<'i>>,
-        M: TryInto<MemberName<'m>>,
-        D::Error: Into<Error>,
-        I::Error: Into<Error>,
-        M::Error: Into<Error>,
-        B: serde::ser::Serialize + zvariant::DynamicType,
+        F: Fn(&mut I, &SignalContext<'_>) -> Result<()>,
+        I: Interface,
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
     {
-        if !LOCAL_NODE.is_set() {
-            panic!("emit_signal: Node TLS not set");
-        }
+        let path = path.try_into().map_err(Into::into)?;
+        let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+        // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
+        let ctxt = SignalContext::new(&self.conn, path).unwrap();
 
-        LOCAL_NODE.with(|n| n.emit_signal(destination, interface_name, signal_name, body))
+        node.with_iface_func_mut(func, &ctxt)
+    }
+
+    /// Get a reference to the interface at the given path.
+    ///
+    /// **WARNINGS:** Since `self` will not be able to access the interface in question until the
+    /// return value of this method is dropped, it is highly recommended to prefer
+    /// [`ObjectServer::with`] or [`ObjectServer::with_mut`] over this method. They are also more
+    /// convenient to use for emitting signals and changing properties.
+    ///
+    /// # Errors
+    ///
+    /// If the interface is not registered at the given path, `Error::InterfaceNotFound` error is
+    /// returned.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///# use std::error::Error;
+    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
+    ///
+    /// struct MyIface(u32);
+    ///
+    /// #[dbus_interface(name = "org.myiface.MyIface")]
+    /// impl MyIface {
+    ///    #[dbus_interface(property)]
+    ///    fn count(&self) -> u32 {
+    ///        self.0
+    ///    }
+    /// }
+    /// // Setup connection and object_server etc here and then in another part of the code:
+    ///#
+    ///# let connection = Connection::session()?;
+    ///# let mut object_server = ObjectServer::new(&connection);
+    ///#
+    ///# let path = "/org/zbus/path";
+    ///# object_server.at(path, MyIface(22))?;
+    /// let mut iface = object_server.get_interface::<_, MyIface>(path)?;
+    /// // Note: This will not be needed when using `ObjectServer::with_mut`
+    /// let ctxt = SignalContext::new(&connection, path)?;
+    /// iface.0 = 42;
+    /// iface.count_changed(&ctxt)?;
+    ///#
+    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// ```
+    pub fn get_interface<'p, P, I>(&self, path: P) -> Result<impl DerefMut<Target = I> + '_>
+    where
+        I: Interface,
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
+    {
+        let path = path.try_into().map_err(Into::into)?;
+        let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+
+        node.get_interface_mut()
     }
 
     fn dispatch_method_call_try(
@@ -529,7 +650,6 @@ impl ObjectServer {
         msg_header: &MessageHeader<'_>,
         msg: &Message,
     ) -> fdo::Result<Result<u32>> {
-        let conn = self.conn.clone();
         let path = msg_header
             .path()
             .ok()
@@ -551,27 +671,23 @@ impl ObjectServer {
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
 
         let node = self
-            .get_node_mut(path, false)
+            .get_node(path)
             .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
         let iface = node.get_interface(iface.clone()).ok_or_else(|| {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
         })?;
 
-        LOCAL_CONNECTION.set(&conn, || {
-            LOCAL_NODE.set(node, || {
-                let res = iface
-                    .read()
-                    .expect("lock poisoned")
-                    .call(&conn, msg, member.clone());
-                res.or_else(|| {
-                    iface
-                        .write()
-                        .expect("lock poisoned")
-                        .call_mut(&conn, msg, member.clone())
-                })
-                .ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
-            })
+        let res = iface
+            .read()
+            .expect("lock poisoned")
+            .call(self, msg, member.clone());
+        res.or_else(|| {
+            iface
+                .write()
+                .expect("lock poisoned")
+                .call_mut(self, msg, member.clone())
         })
+        .ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
     }
 
     fn dispatch_method_call(
@@ -637,6 +753,11 @@ impl ObjectServer {
             }
         }
     }
+
+    /// Get a reference to the connection `self` is serving objects on.
+    pub fn connection(&self) -> &Connection {
+        &self.conn
+    }
 }
 
 impl Drop for ObjectServer {
@@ -669,7 +790,10 @@ mod tests {
     use test_env_log::test;
     use zvariant::derive::Type;
 
-    use crate::{dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer};
+    use crate::{
+        dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer,
+        SignalContext,
+    };
 
     #[derive(Deserialize, Serialize, Type)]
     pub struct ArgStructTest {
@@ -730,10 +854,10 @@ mod tests {
 
     #[dbus_interface(interface = "org.freedesktop.MyIface")]
     impl MyIfaceImpl {
-        fn ping(&mut self) -> u32 {
+        fn ping(&mut self, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> u32 {
             self.count += 1;
             if self.count % 3 == 0 {
-                self.alert_count(self.count).expect("Failed to emit signal");
+                MyIfaceImpl::alert_count(&ctxt, self.count).expect("Failed to emit signal");
             }
             self.count
         }
@@ -813,7 +937,7 @@ mod tests {
         }
 
         #[dbus_interface(signal)]
-        fn alert_count(&self, val: u32) -> zbus::Result<()>;
+        fn alert_count(ctxt: &SignalContext<'_>, val: u32) -> zbus::Result<()>;
     }
 
     fn check_hash_map(map: HashMap<String, String>) {
@@ -930,8 +1054,8 @@ mod tests {
             .unwrap();
 
         object_server
-            .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl| {
-                iface.count_changed()
+            .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, ctxt| {
+                iface.count_changed(&ctxt)
             })
             .unwrap();
 
@@ -942,9 +1066,10 @@ mod tests {
             }
 
             object_server
-                .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl| {
-                    iface.alert_count(51)
-                })
+                .with(
+                    "/org/freedesktop/MyService",
+                    |_iface: &MyIfaceImpl, ctxt| MyIfaceImpl::alert_count(&ctxt, 51),
+                )
                 .unwrap();
 
             let mut next = action.lock().unwrap();

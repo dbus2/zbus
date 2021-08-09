@@ -150,7 +150,7 @@ impl<'a> SignalReceiver<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{dbus_interface, dbus_proxy};
+    use crate::{dbus_interface, dbus_proxy, SignalContext};
     use std::sync::{Arc, Mutex};
     use test_env_log::test;
 
@@ -214,11 +214,15 @@ mod tests {
         #[dbus_interface(interface = "org.freedesktop.zbus.MultiSignal")]
         impl MultiSignal {
             #[dbus_interface(signal)]
-            fn some_signal(&self, sig_arg: &str) -> Result<()>;
+            fn some_signal(ctxt: &SignalContext<'_>, sig_arg: &str) -> Result<()>;
 
-            fn emit_it(&mut self, arg: &str) -> Result<()> {
+            fn emit_it(
+                &mut self,
+                arg: &str,
+                #[zbus(signal_context)] ctxt: SignalContext<'_>,
+            ) -> Result<()> {
                 *self.times_called.lock().unwrap() += 1;
-                self.some_signal(arg)
+                Self::some_signal(&ctxt, arg)
             }
         }
 
