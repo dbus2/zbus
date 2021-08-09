@@ -177,15 +177,19 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The method arguments offers some the following `zbus` attributes:
 ///
+/// * `object_server` - This marks the method argument to receive a reference to the
+/// [`ObjectServer`] this method was called by.
 /// * `header` - This marks the method argument to receive the message header associated with the
 /// D-Bus method call being handled.
+/// * `signal_context` - This marks the method argument to receive a `zbus::SignalContext`
+/// instance, which is needed for emitting signals the easy way.
 ///
 /// # Example
 ///
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_interface;
-/// use zbus::MessageHeader;
+/// use zbus::{MessageHeader, ObjectServer, SignalContext};
 ///
 /// struct Example {
 ///     some_data: String,
@@ -194,11 +198,20 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[dbus_interface(name = "org.myservice.Example")]
 /// impl Example {
 ///     // "Quit" method. A method may throw errors.
-///     fn quit(&self, #[zbus(header)] hdr: MessageHeader<'_>) -> zbus::fdo::Result<()> {
+///     fn quit(
+///         &self,
+///         #[zbus(header)]
+///         hdr: MessageHeader<'_>,
+///         #[zbus(signal_context)]
+///         ctxt: SignalContext<'_>,
+///         #[zbus(object_server)]
+///         _server: &ObjectServer,
+///     ) -> zbus::fdo::Result<()> {
 ///         let path = hdr.path()?.unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);
+///         Example::bye(&ctxt, &msg);
 ///
-///         Err(zbus::fdo::Error::Failed(msg))
+///         Ok(())
 ///     }
 ///
 ///     // "TheAnswer" property (note: the "name" attribute), with its associated getter.
@@ -209,9 +222,9 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///         2 * 3 * 7
 ///     }
 ///
-///     // "Notify" signal (note: no implementation body).
+///     // "Bye" signal (note: no implementation body).
 ///     #[dbus_interface(signal)]
-///     fn notify(&self, message: &str) -> zbus::Result<()>;
+///     fn bye(signal_ctxt: &SignalContext<'_>, message: &str) -> zbus::Result<()>;
 ///
 ///     #[dbus_interface(out_args("answer", "question"))]
 ///     fn meaning_of_life(&self) -> zbus::Result<(i32, String)> {

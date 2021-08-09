@@ -31,6 +31,7 @@ impl<'a> Property<'a> {
 pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
     let zbus = zbus_path();
 
+    let self_ty = &input.self_ty;
     let mut properties = BTreeMap::new();
     let mut set_dispatch = quote!();
     let mut get_dispatch = quote!();
@@ -115,13 +116,14 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
         let is_mut = if let FnArg::Receiver(r) = inputs.first().expect("not &self method") {
             r.mutability.is_some()
+        } else if is_signal {
+            false
         } else {
             panic!("The method is missing a self receiver");
         };
 
-        let typed_inputs = inputs
+        let mut typed_inputs = inputs
             .iter()
-            .skip(1)
             .filter_map(|i| {
                 if let FnArg::Typed(t) = i {
                     Some(t)
@@ -129,7 +131,19 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     None
                 }
             })
+            .cloned()
             .collect::<Vec<_>>();
+        let signal_context_arg = if is_signal {
+            if typed_inputs.is_empty() {
+                return Err(syn::Error::new_spanned(
+                    &inputs,
+                    "Expected a `&zbus::SignalContext<'_> argument",
+                ));
+            }
+            Some(typed_inputs.remove(0))
+        } else {
+            None
+        };
 
         let mut intro_args = quote!();
         intro_args.extend(introspect_input_args(&typed_inputs, is_signal));
@@ -143,13 +157,14 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             let ret = quote!(r);
 
             quote!(match reply {
-                ::std::result::Result::Ok(r) => c.reply(m, &#ret),
+                ::std::result::Result::Ok(r) => s.connection().reply(m, &#ret),
                 ::std::result::Result::Err(e) => {
+                    let c = s.connection();
                     <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m)
                 }
             })
         } else {
-            quote!(c.reply(m, &reply))
+            quote!(s.connection().reply(m, &reply))
         };
 
         let member_name = attrs
@@ -170,11 +185,13 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         if is_signal {
             introspect.extend(doc_comments);
             introspect.extend(introspect_signal(&member_name, &intro_args));
+            let signal_context = signal_context_arg.unwrap().pat;
 
             method.block = parse_quote!({
-                #zbus::ObjectServer::local_node_emit_signal(
+                #signal_context.connection().emit_signal(
                     ::std::option::Option::None::<()>,
-                    #iface_name,
+                    #signal_context.path(),
+                    <#self_ty as #zbus::Interface>::name(),
                     #member_name,
                     &(#args),
                 )
@@ -185,13 +202,13 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             if matches!(p, Entry::Vacant(_)) {
                 let prop_changed_method = quote!(
-                    pub fn #prop_changed_method_name(&self) -> #zbus::Result<()> {
+                    pub fn #prop_changed_method_name(&self, signal_context: &#zbus::SignalContext<'_>) -> #zbus::Result<()> {
                         let mut changed = ::std::collections::HashMap::new();
                         let value = #zbus::Interface::get(self, &#member_name)
                             .expect(&::std::format!("Property '{}' does not exist", #member_name))?;
                         changed.insert(#member_name, &*value);
-                        let properties_iface = #zbus::fdo::Properties;
-                        properties_iface.properties_changed(
+                        #zbus::fdo::Properties::properties_changed(
+                            signal_context,
                             #zbus::names::InterfaceName::from_str_unchecked(#iface_name),
                             &changed,
                             &[],
@@ -222,7 +239,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                             }
                         };
                         let result = #set_call.and_then(|set_result| {
-                            self.#prop_changed_method_name()?;
+                            self.#prop_changed_method_name(&signal_context)?;
                             ::std::result::Result::Ok(set_result)
                         });
                         ::std::option::Option::Some(result)
@@ -280,7 +297,6 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
     introspect.extend(introspect_properties(properties));
 
-    let self_ty = &input.self_ty;
     let generics = &input.generics;
     let where_clause = &generics.where_clause;
 
@@ -328,6 +344,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &mut self,
                 property_name: &str,
                 value: &#zbus::zvariant::Value,
+                signal_context: &#zbus::SignalContext<'_>,
             ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
                 match property_name {
                     #set_dispatch
@@ -337,7 +354,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             fn call(
                 &self,
-                c: &#zbus::Connection,
+                s: &#zbus::ObjectServer,
                 m: &#zbus::Message,
                 name: #zbus::names::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
@@ -349,7 +366,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             fn call_mut(
                 &mut self,
-                c: &#zbus::Connection,
+                s: &#zbus::ObjectServer,
                 m: &#zbus::Message,
                 name: #zbus::names::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
@@ -380,18 +397,22 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 }
 
 fn get_args_from_inputs(
-    inputs: &[&PatType],
+    inputs: &[PatType],
     zbus: &TokenStream,
 ) -> syn::Result<(TokenStream, TokenStream)> {
     if inputs.is_empty() {
         Ok((quote!(), quote!()))
     } else {
+        let mut server_arg_decl = None;
         let mut header_arg_decl = None;
+        let mut signal_context_arg_decl = None;
         let mut args = Vec::new();
         let mut tys = Vec::new();
 
         for input in inputs {
+            let mut is_server = false;
             let mut is_header = false;
+            let mut is_signal_context = false;
 
             for attr in &input.attrs {
                 if !attr.path.is_ident("zbus") {
@@ -410,9 +431,20 @@ fn get_args_from_inputs(
                 };
 
                 for item in nested {
-                    match item {
-                        NestedMeta::Meta(Meta::Path(p)) if p.is_ident("header") => {
-                            is_header = true;
+                    match &item {
+                        NestedMeta::Meta(Meta::Path(p)) => {
+                            if p.is_ident("object_server") {
+                                is_server = true;
+                            } else if p.is_ident("header") {
+                                is_header = true;
+                            } else if p.is_ident("signal_context") {
+                                is_signal_context = true;
+                            } else {
+                                return Err(syn::Error::new_spanned(
+                                    item,
+                                    "Unrecognized zbus attribute",
+                                ));
+                            }
                         }
                         NestedMeta::Meta(_) => {
                             return Err(syn::Error::new_spanned(
@@ -427,7 +459,17 @@ fn get_args_from_inputs(
                 }
             }
 
-            if is_header {
+            if is_server {
+                if server_arg_decl.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        input,
+                        "There can only be one object_server argument",
+                    ));
+                }
+
+                let server_arg = &input.pat;
+                server_arg_decl = Some(quote! { let #server_arg = &s; });
+            } else if is_header {
                 if header_arg_decl.is_some() {
                     return Err(syn::Error::new_spanned(
                         input,
@@ -440,6 +482,30 @@ fn get_args_from_inputs(
                 header_arg_decl = Some(quote! {
                     let #header_arg = match m.header() {
                         ::std::result::Result::Ok(r) => r,
+                        ::std::result::Result::Err(e) => {
+                            let c = s.connection();
+                            return ::std::option::Option::Some(
+                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
+                            );
+                        }
+                    };
+                });
+            } else if is_signal_context {
+                if signal_context_arg_decl.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        input,
+                        "There can only be one `signal_context` argument",
+                    ));
+                }
+
+                let signal_context_arg = &input.pat;
+
+                signal_context_arg_decl = Some(quote! {
+                    let c = s.connection();
+                    let #signal_context_arg = match m.header().and_then(|h| {
+                        h.path().and_then(|p| #zbus::SignalContext::new(c, p.unwrap()))
+                    }) {
+                        ::std::result::Result::Ok(e) => e,
                         ::std::result::Result::Err(e) => {
                             return ::std::option::Option::Some(
                                 <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
@@ -454,12 +520,17 @@ fn get_args_from_inputs(
         }
 
         let args_from_msg = quote! {
+            #server_arg_decl
+
             #header_arg_decl
+
+            #signal_context_arg_decl
 
             let (#(#args),*): (#(#tys),*) =
                 match m.body() {
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
+                        let c = s.connection();
                         return ::std::option::Option::Some(
                             <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
                         );
@@ -504,14 +575,14 @@ fn introspect_method(name: &str, args: &TokenStream) -> TokenStream {
     )
 }
 
-fn introspect_input_args<'a>(
-    inputs: &'a [&PatType],
+fn introspect_input_args(
+    inputs: &[PatType],
     is_signal: bool,
-) -> impl Iterator<Item = TokenStream> + 'a {
+) -> impl Iterator<Item = TokenStream> + '_ {
     inputs
         .iter()
         .filter_map(move |PatType { pat, ty, attrs, .. }| {
-            let is_header_arg = attrs.iter().any(|attr| {
+            let is_special_arg = attrs.iter().any(|attr| {
                 if !attr.path.is_ident("zbus") {
                     return false;
                 }
@@ -529,13 +600,14 @@ fn introspect_input_args<'a>(
                 let res = nested.iter().any(|nested_meta| {
                     matches!(
                         nested_meta,
-                        NestedMeta::Meta(Meta::Path(path)) if path.is_ident("header")
+                        NestedMeta::Meta(Meta::Path(path))
+                        if path.is_ident("object_server") || path.is_ident("header") || path.is_ident("signal_context")
                     )
                 });
 
                 res
             });
-            if is_header_arg {
+            if is_special_arg {
                 return None;
             }
 

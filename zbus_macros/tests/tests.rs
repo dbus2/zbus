@@ -4,7 +4,7 @@ use futures_util::{
     stream::StreamExt,
 };
 use std::{convert::TryInto, future::ready};
-use zbus::fdo;
+use zbus::{fdo, SignalContext};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]
@@ -164,7 +164,7 @@ fn test_interface() {
 
         /// Emit a signal.
         #[dbus_interface(signal)]
-        fn signal(&self, arg: u8, other: &str) -> zbus::Result<()>;
+        fn signal(ctxt: &SignalContext, arg: u8, other: &str) -> zbus::Result<()>;
     }
 
     const EXPECTED_XML: &str = r#"<interface name="org.freedesktop.zbus.Test">
@@ -215,9 +215,11 @@ fn test_interface() {
     if false {
         // check compilation
         let c = zbus::Connection::session().unwrap();
+        let s = zbus::ObjectServer::new(&c);
         let m = zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
             .unwrap();
-        let _ = t.call(&c, &m, "StrU32".try_into().unwrap()).unwrap();
-        t.signal(23, "ergo sum").unwrap();
+        let _ = t.call(&s, &m, "StrU32".try_into().unwrap()).unwrap();
+        let ctxt = SignalContext::new(&c, "/does/not/matter").unwrap();
+        Test::<u32>::signal(&ctxt, 23, "ergo sum").unwrap();
     }
 }
