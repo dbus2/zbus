@@ -14,7 +14,7 @@ use zbus_names::{
 };
 use zvariant::{derive::Type, ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value};
 
-use crate::{dbus_interface, dbus_proxy, DBusError, MessageHeader, ObjectServer, SignalEmitter};
+use crate::{dbus_interface, dbus_proxy, DBusError, MessageHeader, ObjectServer, SignalContext};
 
 /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
@@ -118,7 +118,7 @@ impl Properties {
         value: OwnedValue,
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: MessageHeader<'_>,
-        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+        #[zbus(signal_context)] ctxt: SignalContext<'_>,
     ) -> Result<()> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
@@ -131,7 +131,7 @@ impl Properties {
         let res = iface
             .write()
             .expect("lock poisoned")
-            .set(property_name, &value, &emitter);
+            .set(property_name, &value, &ctxt);
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
                 "Unknown property '{}'",
@@ -162,7 +162,7 @@ impl Properties {
     #[dbus_interface(signal)]
     #[rustfmt::skip]
     pub fn properties_changed(
-        emitter: &SignalEmitter<'_>,
+        ctxt: &SignalContext<'_>,
         interface_name: InterfaceName<'_>,
         changed_properties: &HashMap<&str, &Value<'_>>,
         invalidated_properties: &[&str],

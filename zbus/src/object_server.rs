@@ -19,7 +19,7 @@ use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 use crate::{
     azync, fdo,
     fdo::{Introspectable, Peer, Properties},
-    Connection, Error, Message, MessageHeader, MessageType, Result, SignalEmitter,
+    Connection, Error, Message, MessageHeader, MessageType, Result, SignalContext,
 };
 
 /// The trait used to dispatch messages to an interface instance.
@@ -45,7 +45,7 @@ pub trait Interface: Any + Send + Sync {
         &mut self,
         property_name: &str,
         value: &Value<'_>,
-        emitter: &SignalEmitter<'_>,
+        ctxt: &SignalContext<'_>,
     ) -> Option<fdo::Result<()>>;
 
     /// Call a `&self` method. Returns `None` if the method doesn't exist.
@@ -148,9 +148,9 @@ impl Node {
         true
     }
 
-    fn with_iface_func<F, I>(&self, func: F, emitter: &SignalEmitter<'_>) -> Result<()>
+    fn with_iface_func<F, I>(&self, func: F, signal_ctxt: &SignalContext<'_>) -> Result<()>
     where
-        F: Fn(&I, &SignalEmitter<'_>) -> Result<()>,
+        F: Fn(&I, &SignalContext<'_>) -> Result<()>,
         I: Interface,
     {
         let iface = self
@@ -160,17 +160,17 @@ impl Node {
             .read()
             .expect("lock poisoned");
         let iface = iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
-        func(iface, emitter)
+        func(iface, signal_ctxt)
     }
 
-    fn with_iface_func_mut<F, I>(&self, func: F, emitter: &SignalEmitter<'_>) -> Result<()>
+    fn with_iface_func_mut<F, I>(&self, func: F, signal_ctxt: &SignalContext<'_>) -> Result<()>
     where
-        F: Fn(&mut I, &SignalEmitter<'_>) -> Result<()>,
+        F: Fn(&mut I, &SignalContext<'_>) -> Result<()>,
         I: Interface,
     {
         let mut iface = self.get_interface_mut::<I>()?;
 
-        func(&mut *iface, emitter)
+        func(&mut *iface, signal_ctxt)
     }
 
     fn get_interface_mut<I>(&self) -> Result<impl DerefMut<Target = I> + '_>
@@ -505,13 +505,13 @@ impl ObjectServer {
     ///
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{Connection, ObjectServer, SignalEmitter, dbus_interface};
+    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
     ///#
     /// struct MyIface;
     /// #[dbus_interface(name = "org.myiface.MyIface")]
     /// impl MyIface {
     ///     #[dbus_interface(signal)]
-    ///     fn emit_signal(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+    ///     fn emit_signal(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
     /// }
     ///
     ///# let connection = Connection::session()?;
@@ -519,8 +519,8 @@ impl ObjectServer {
     ///#
     ///# let path = "/org/zbus/path";
     ///# object_server.at(path, MyIface)?;
-    /// object_server.with(path, |_iface: &MyIface, emitter| {
-    ///   MyIface::emit_signal(emitter)
+    /// object_server.with(path, |_iface: &MyIface, signal_ctxt| {
+    ///   MyIface::emit_signal(signal_ctxt)
     /// })?;
     ///#
     ///#
@@ -528,7 +528,7 @@ impl ObjectServer {
     /// ```
     pub fn with<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
     where
-        F: Fn(&I, &SignalEmitter<'_>) -> Result<()>,
+        F: Fn(&I, &SignalContext<'_>) -> Result<()>,
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
@@ -536,9 +536,9 @@ impl ObjectServer {
         let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
-        let emitter = SignalEmitter::new(&self.conn, path).unwrap();
+        let ctxt = SignalContext::new(&self.conn, path).unwrap();
 
-        node.with_iface_func(func, &emitter)
+        node.with_iface_func(func, &ctxt)
     }
 
     /// Run `func` with the given path & interface.
@@ -551,7 +551,7 @@ impl ObjectServer {
     ///
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{Connection, ObjectServer, SignalEmitter, dbus_interface};
+    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
     ///#
     /// struct MyIface(u32);
     ///
@@ -568,9 +568,9 @@ impl ObjectServer {
     ///#
     ///# let path = "/org/zbus/path";
     ///# object_server.at(path, MyIface(0))?;
-    /// object_server.with_mut(path, |iface: &mut MyIface, emitter| {
+    /// object_server.with_mut(path, |iface: &mut MyIface, signal_ctxt| {
     ///     iface.0 = 42;
-    ///     iface.count_changed(emitter)
+    ///     iface.count_changed(signal_ctxt)
     /// })?;
     ///#
     ///#
@@ -578,7 +578,7 @@ impl ObjectServer {
     /// ```
     pub fn with_mut<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
     where
-        F: Fn(&mut I, &SignalEmitter<'_>) -> Result<()>,
+        F: Fn(&mut I, &SignalContext<'_>) -> Result<()>,
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
@@ -586,9 +586,9 @@ impl ObjectServer {
         let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
-        let emitter = SignalEmitter::new(&self.conn, path).unwrap();
+        let ctxt = SignalContext::new(&self.conn, path).unwrap();
 
-        node.with_iface_func_mut(func, &emitter)
+        node.with_iface_func_mut(func, &ctxt)
     }
 
     /// Get a reference to the interface at the given path.
@@ -607,7 +607,7 @@ impl ObjectServer {
     ///
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{Connection, ObjectServer, SignalEmitter, dbus_interface};
+    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
     ///
     /// struct MyIface(u32);
     ///
@@ -627,9 +627,9 @@ impl ObjectServer {
     ///# object_server.at(path, MyIface(22))?;
     /// let mut iface = object_server.get_interface::<_, MyIface>(path)?;
     /// // Note: This will not be needed when using `ObjectServer::with_mut`
-    /// let emitter = SignalEmitter::new(&connection, path)?;
+    /// let ctxt = SignalContext::new(&connection, path)?;
     /// iface.0 = 42;
-    /// iface.count_changed(&emitter)?;
+    /// iface.count_changed(&ctxt)?;
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
@@ -792,7 +792,7 @@ mod tests {
 
     use crate::{
         dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer,
-        SignalEmitter,
+        SignalContext,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -854,10 +854,10 @@ mod tests {
 
     #[dbus_interface(interface = "org.freedesktop.MyIface")]
     impl MyIfaceImpl {
-        fn ping(&mut self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> u32 {
+        fn ping(&mut self, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> u32 {
             self.count += 1;
             if self.count % 3 == 0 {
-                MyIfaceImpl::alert_count(&emitter, self.count).expect("Failed to emit signal");
+                MyIfaceImpl::alert_count(&ctxt, self.count).expect("Failed to emit signal");
             }
             self.count
         }
@@ -937,7 +937,7 @@ mod tests {
         }
 
         #[dbus_interface(signal)]
-        fn alert_count(emitter: &SignalEmitter<'_>, val: u32) -> zbus::Result<()>;
+        fn alert_count(ctxt: &SignalContext<'_>, val: u32) -> zbus::Result<()>;
     }
 
     fn check_hash_map(map: HashMap<String, String>) {
@@ -1054,10 +1054,9 @@ mod tests {
             .unwrap();
 
         object_server
-            .with(
-                "/org/freedesktop/MyService",
-                |iface: &MyIfaceImpl, emitter| iface.count_changed(&emitter),
-            )
+            .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, ctxt| {
+                iface.count_changed(&ctxt)
+            })
             .unwrap();
 
         loop {
@@ -1069,7 +1068,7 @@ mod tests {
             object_server
                 .with(
                     "/org/freedesktop/MyService",
-                    |_iface: &MyIfaceImpl, emitter| MyIfaceImpl::alert_count(&emitter, 51),
+                    |_iface: &MyIfaceImpl, ctxt| MyIfaceImpl::alert_count(&ctxt, 51),
                 )
                 .unwrap();
 

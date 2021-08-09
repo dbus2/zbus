@@ -181,7 +181,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [`ObjectServer`] this method was called by.
 /// * `header` - This marks the method argument to receive the message header associated with the
 /// D-Bus method call being handled.
-/// * `signal_emitter` - This marks the method argument to receive a `zbus::SignalEmitter`
+/// * `signal_context` - This marks the method argument to receive a `zbus::SignalContext`
 /// instance, which is needed for emitting signals the easy way.
 ///
 /// # Example
@@ -189,7 +189,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_interface;
-/// use zbus::{MessageHeader, ObjectServer, SignalEmitter};
+/// use zbus::{MessageHeader, ObjectServer, SignalContext};
 ///
 /// struct Example {
 ///     some_data: String,
@@ -202,14 +202,14 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///         &self,
 ///         #[zbus(header)]
 ///         hdr: MessageHeader<'_>,
-///         #[zbus(signal_emitter)]
-///         emitter: SignalEmitter<'_>,
+///         #[zbus(signal_context)]
+///         ctxt: SignalContext<'_>,
 ///         #[zbus(object_server)]
 ///         _server: &ObjectServer,
 ///     ) -> zbus::fdo::Result<()> {
 ///         let path = hdr.path()?.unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);
-///         Example::bye(&emitter, &msg);
+///         Example::bye(&ctxt, &msg);
 ///
 ///         Ok(())
 ///     }
@@ -224,7 +224,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 ///     // "Bye" signal (note: no implementation body).
 ///     #[dbus_interface(signal)]
-///     fn bye(emitter: &SignalEmitter<'_>, message: &str) -> zbus::Result<()>;
+///     fn bye(signal_ctxt: &SignalContext<'_>, message: &str) -> zbus::Result<()>;
 ///
 ///     #[dbus_interface(out_args("answer", "question"))]
 ///     fn meaning_of_life(&self) -> zbus::Result<(i32, String)> {

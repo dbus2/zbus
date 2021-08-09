@@ -133,11 +133,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             })
             .cloned()
             .collect::<Vec<_>>();
-        let emitter_arg = if is_signal {
+        let signal_context_arg = if is_signal {
             if typed_inputs.is_empty() {
                 return Err(syn::Error::new_spanned(
                     &inputs,
-                    "Expected a `&zbus::SignalEmitter<'_> argument",
+                    "Expected a `&zbus::SignalContext<'_> argument",
                 ));
             }
             Some(typed_inputs.remove(0))
@@ -185,10 +185,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         if is_signal {
             introspect.extend(doc_comments);
             introspect.extend(introspect_signal(&member_name, &intro_args));
-            let emitter = emitter_arg.unwrap().pat;
+            let signal_context = signal_context_arg.unwrap().pat;
 
             method.block = parse_quote!({
-                #emitter.emit::<(), #self_ty, _, _>(
+                #signal_context.emit::<(), #self_ty, _, _>(
                     ::std::option::Option::None,
                     #member_name,
                     &(#args),
@@ -200,13 +200,13 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             if matches!(p, Entry::Vacant(_)) {
                 let prop_changed_method = quote!(
-                    pub fn #prop_changed_method_name(&self, emitter: &#zbus::SignalEmitter<'_>) -> #zbus::Result<()> {
+                    pub fn #prop_changed_method_name(&self, signal_context: &#zbus::SignalContext<'_>) -> #zbus::Result<()> {
                         let mut changed = ::std::collections::HashMap::new();
                         let value = #zbus::Interface::get(self, &#member_name)
                             .expect(&::std::format!("Property '{}' does not exist", #member_name))?;
                         changed.insert(#member_name, &*value);
                         #zbus::fdo::Properties::properties_changed(
-                            emitter,
+                            signal_context,
                             #zbus::names::InterfaceName::from_str_unchecked(#iface_name),
                             &changed,
                             &[],
@@ -237,7 +237,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                             }
                         };
                         let result = #set_call.and_then(|set_result| {
-                            self.#prop_changed_method_name(&emitter)?;
+                            self.#prop_changed_method_name(&signal_context)?;
                             ::std::result::Result::Ok(set_result)
                         });
                         ::std::option::Option::Some(result)
@@ -342,7 +342,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &mut self,
                 property_name: &str,
                 value: &#zbus::zvariant::Value,
-                emitter: &#zbus::SignalEmitter<'_>,
+                signal_context: &#zbus::SignalContext<'_>,
             ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
                 match property_name {
                     #set_dispatch
@@ -403,14 +403,14 @@ fn get_args_from_inputs(
     } else {
         let mut server_arg_decl = None;
         let mut header_arg_decl = None;
-        let mut emitter_arg_decl = None;
+        let mut signal_context_arg_decl = None;
         let mut args = Vec::new();
         let mut tys = Vec::new();
 
         for input in inputs {
             let mut is_server = false;
             let mut is_header = false;
-            let mut is_emitter = false;
+            let mut is_signal_context = false;
 
             for attr in &input.attrs {
                 if !attr.path.is_ident("zbus") {
@@ -435,8 +435,8 @@ fn get_args_from_inputs(
                                 is_server = true;
                             } else if p.is_ident("header") {
                                 is_header = true;
-                            } else if p.is_ident("signal_emitter") {
-                                is_emitter = true;
+                            } else if p.is_ident("signal_context") {
+                                is_signal_context = true;
                             } else {
                                 return Err(syn::Error::new_spanned(
                                     item,
@@ -488,20 +488,20 @@ fn get_args_from_inputs(
                         }
                     };
                 });
-            } else if is_emitter {
-                if emitter_arg_decl.is_some() {
+            } else if is_signal_context {
+                if signal_context_arg_decl.is_some() {
                     return Err(syn::Error::new_spanned(
                         input,
-                        "There can only be one `signal_emitter` argument",
+                        "There can only be one `signal_context` argument",
                     ));
                 }
 
-                let emitter_arg = &input.pat;
+                let signal_context_arg = &input.pat;
 
-                emitter_arg_decl = Some(quote! {
+                signal_context_arg_decl = Some(quote! {
                     let c = s.connection();
-                    let #emitter_arg = match m.header().and_then(|h| {
-                        h.path().and_then(|p| #zbus::SignalEmitter::new(c, p.unwrap()))
+                    let #signal_context_arg = match m.header().and_then(|h| {
+                        h.path().and_then(|p| #zbus::SignalContext::new(c, p.unwrap()))
                     }) {
                         ::std::result::Result::Ok(e) => e,
                         ::std::result::Result::Err(e) => {
@@ -522,7 +522,7 @@ fn get_args_from_inputs(
 
             #header_arg_decl
 
-            #emitter_arg_decl
+            #signal_context_arg_decl
 
             let (#(#args),*): (#(#tys),*) =
                 match m.body() {
@@ -599,7 +599,7 @@ fn introspect_input_args(
                     matches!(
                         nested_meta,
                         NestedMeta::Meta(Meta::Path(path))
-                        if path.is_ident("object_server") || path.is_ident("header") || path.is_ident("signal_emitter")
+                        if path.is_ident("object_server") || path.is_ident("header") || path.is_ident("signal_context")
                     )
                 });
 

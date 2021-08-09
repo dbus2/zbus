@@ -99,7 +99,7 @@ Let see how to use it:
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{dbus_interface, fdo, ObjectServer, Connection, SignalEmitter};
+# use zbus::{dbus_interface, fdo, ObjectServer, Connection, SignalContext};
 #
 struct Greeter {
     name: String
@@ -129,7 +129,7 @@ impl Greeter {
 
     /// A signal; the implementation is provided by the macro.
     #[dbus_interface(signal)]
-    fn greeted_everyone(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+    fn greeted_everyone(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -178,9 +178,9 @@ easier, especially with *async* support.
 ### Sending signals
 
 As you might have noticed in the previous example, the signal methods don't take an `&self` argument
-but rather a `SignalEmitter` reference. This allows you to easily emit signals whether from inside
+but rather a `SignalContext` reference. This allows you to easily emit signals whether from inside
 or outside of your `dbus_interface` methods' context. To make things easier, `dbus_interface`
-methods can receive a `SignalEmitter` passed to them using the special `zbus(signal_emitter)`
+methods can receive a `SignalContext` passed to them using the special `zbus(signal_context)`
 attribute:
 
 Please refer to [`dbus_interface` documentation][didoc] for an example and list of other special
@@ -222,9 +222,9 @@ it with the previous example code:
 # let mut object_server = zbus::ObjectServer::new(&connection);
 object_server.with_mut(
     "/org/zbus/MyGreeter",
-    |iface: &mut Greeter, emitter| {
+    |iface: &mut Greeter, signal_ctxt| {
         iface.name = String::from("👋");
-        iface.greeter_name_changed(emitter)
+        iface.greeter_name_changed(signal_ctxt)
     },
 )?;
 # Ok(())

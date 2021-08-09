@@ -6,13 +6,13 @@ use crate::{
 use std::convert::TryInto;
 
 #[derive(Clone, Debug)]
-pub struct SignalEmitter<'s> {
+pub struct SignalContext<'s> {
     conn: &'s Connection,
     path: ObjectPath<'s>,
 }
 
-impl<'s> SignalEmitter<'s> {
-    /// Create a new signal emitter for the given connection and object path.
+impl<'s> SignalContext<'s> {
+    /// Create a new signal context for the given connection and object path.
     pub fn new<P>(conn: &'s Connection, path: P) -> Result<Self>
     where
         P: TryInto<ObjectPath<'s>>,
