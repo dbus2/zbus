@@ -188,8 +188,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             let signal_context = signal_context_arg.unwrap().pat;
 
             method.block = parse_quote!({
-                #signal_context.emit::<(), #self_ty, _, _>(
-                    ::std::option::Option::None,
+                #signal_context.connection().emit_signal(
+                    ::std::option::Option::None::<()>,
+                    #signal_context.path(),
+                    <#self_ty as #zbus::Interface>::name(),
                     #member_name,
                     &(#args),
                 )

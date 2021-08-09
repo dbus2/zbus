@@ -1,8 +1,4 @@
-use crate::{
-    names::{BusName, MemberName},
-    zvariant::ObjectPath,
-    Connection, Error, Interface, Result,
-};
+use crate::{zvariant::ObjectPath, Connection, Error, Result};
 use std::convert::TryInto;
 
 #[derive(Clone, Debug)]
@@ -31,24 +27,5 @@ impl<'s> SignalContext<'s> {
     /// Get a reference to the associated object path.
     pub fn path(&self) -> &ObjectPath<'s> {
         &self.path
-    }
-
-    #[doc(hidden)]
-    pub fn emit<'d, 'i, 'm, D, I, M, B>(
-        &self,
-        dest: Option<D>,
-        signal_name: M,
-        body: &B,
-    ) -> Result<()>
-    where
-        D: TryInto<BusName<'d>>,
-        I: Interface,
-        M: TryInto<MemberName<'m>>,
-        D::Error: Into<Error>,
-        M::Error: Into<Error>,
-        B: serde::ser::Serialize + zvariant::DynamicType,
-    {
-        self.conn
-            .emit_signal(dest, &self.path, I::name(), signal_name, body)
     }
 }
