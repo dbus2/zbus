@@ -318,7 +318,7 @@ build host.
 MIT license [LICENSE-MIT](LICENSE-MIT)
 
 [PolicyKit]: https://gitlab.freedesktop.org/polkit/polkit/
-[iektc]: https://docs.rs/zbus/2.0.0-beta.5/zbus/azync/struct.Connection.html#method.executor
+[iektc]: https://docs.rs/zbus/2.0.0-beta.6/zbus/azync/struct.Connection.html#method.executor
 [dbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names
 
 [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus clients in

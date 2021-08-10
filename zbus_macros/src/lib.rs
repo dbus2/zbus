@@ -125,8 +125,8 @@ mod utils;
 /// [`zbus_polkit`] is a good example of how to bind a real D-Bus API.
 ///
 /// [`zbus_polkit`]: https://docs.rs/zbus_polkit/1.0.0/zbus_polkit/policykit1/index.html
-/// [`zbus::Proxy`]: https://docs.rs/zbus/2.0.0-beta.5/zbus/struct.Proxy.html
-/// [`zbus::azync::Proxy`]: https://docs.rs/zbus/2.0.0-beta.5/zbus/azync/struct.Proxy.html
+/// [`zbus::Proxy`]: https://docs.rs/zbus/2.0.0-beta.6/zbus/struct.Proxy.html
+/// [`zbus::azync::Proxy`]: https://docs.rs/zbus/2.0.0-beta.6/zbus/azync/struct.Proxy.html
 /// [`zbus::SignalReceiver::receive_for`]:
 /// https://docs.rs/zbus/1.5.0/zbus/struct.SignalReceiver.html#method.receive_for
 /// [`ObjectPath`]: https://docs.rs/zvariant/2.5.0/zvariant/struct.ObjectPath.html
