@@ -182,6 +182,7 @@ mod r#type;
 pub use r#type::*;
 
 pub mod introspect;
+mod signature_introspect;
 
 mod from_value;
 pub use from_value::*;
@@ -1965,5 +1966,48 @@ mod tests {
         let signature = Signature::from_str_unchecked("<<a{sv}>(ss)>(s<>)");
         let signature = signature.remove_serialize_dict_annotations();
         assert_eq!(signature.as_str(), "a{sv}(sa{sv})");
+    }
+
+    #[test]
+    fn introspectable_test1() {
+        use crate::introspect::{Introspectable, eq_without_names};
+        use zvariant_derive::Introspectable;
+
+        #[allow(dead_code)]
+        #[derive(Introspectable)]
+        struct Foo {
+            foo: Option<Bar>,
+            bar: Option<i32>,
+            baz: i32,
+        }
+
+        #[allow(dead_code)]
+        #[derive(Introspectable)]
+        struct Foo2 {
+            foo: Option<Bar>,
+            bar: Option<i32>,
+            baz: i32,
+        }
+
+        #[allow(dead_code)]
+        #[derive(Introspectable)]
+        struct Bar {
+            foo: f32,
+            bar: f64,
+            baz: i32,
+            baz2: Baz,
+        }
+
+        #[derive(Introspectable)]
+        struct Baz;
+
+        info!("{:#?}", Foo::introspection_info());
+        assert_eq!(&Foo::introspection_info(), &Foo::introspection_info());
+        assert_ne!(&Foo::introspection_info(), &Foo2::introspection_info());
+        assert_ne!(&Foo::introspection_info(), &Bar::introspection_info());
+        assert!(eq_without_names(&Foo::introspection_info(), &Foo2::introspection_info()));
+        for i in 0..5 {
+            assert_eq!(Foo::introspection_info().member_by_index(i), Foo2::introspection_info().member_by_index(i));
+        }
     }
 }

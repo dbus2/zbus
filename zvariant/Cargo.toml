@@ -42,7 +42,3 @@ bench = false
 [[bench]]
 name = "benchmarks"
 harness = false
-
-[[bin]]
-name = "introspect_demo"
-path = "bin/introspect_demo/main.rs"

@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Formatter};
 use std::iter::{Iterator, IntoIterator};
 
 pub trait Introspectable {
@@ -21,6 +22,11 @@ pub enum PrimaryType {
     Double,
     String,
     Unit,
+    Signature,
+    ObjectPath,
+    Fd,
+    Variant,
+    InvalidSignatureCharacter(char), // XXX
 }
 
 pub type IntrospectionHandle = Box<dyn IntrospectionInfo>;
@@ -41,6 +47,7 @@ impl IntoIterator for IntrospectionHandle {
     }
 }
 
+#[derive(Clone)]
 pub struct IntrospectionIntoIterator {
     which: usize,
     handle: IntrospectionHandle,
@@ -310,3 +317,58 @@ primitive_type!{f64, PrimaryType::Double}
 primitive_type!{&str, PrimaryType::String}
 primitive_type!{String, PrimaryType::String}
 primitive_type!{(), PrimaryType::Unit}
+
+impl PartialEq for IntrospectionHandle {
+    fn eq(&self, other: &Self) -> bool {
+        if self.name() != other.name() { return false; }
+        if self.primary_type() != other.primary_type() { return false; }
+
+        // compare members
+        if !Iterator::eq(self.into_iter(), other.into_iter()) { return false; }
+
+        return true;
+    }
+}
+
+pub fn eq_without_names(a: &IntrospectionHandle, b: &IntrospectionHandle) -> bool {
+    if a.primary_type() != b.primary_type() { return false; }
+
+    for i in 0.. {
+        match (a.member_by_index(i), b.member_by_index(i)) {
+            (Some((_, ref ahdl)), Some((_, ref bhdl))) => {
+                if !eq_without_names(ahdl, bhdl) { return false; }
+            }
+            (None, None) => {
+                break;
+            }
+            _ => {
+                // Member lists were different lengths
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+impl Clone for IntrospectionHandle {
+    fn clone(&self) -> Self {
+        self.copy()
+    }
+}
+
+impl Debug for IntrospectionHandle {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Introspection")
+         .field("name", &self.name())
+         .field("primary_type", &self.primary_type())
+         .field("fields", &self.into_iter())
+         .finish()
+    }
+}
+
+impl Debug for IntrospectionIntoIterator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.clone()).finish()
+    }
+}
