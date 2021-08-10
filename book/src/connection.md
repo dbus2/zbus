@@ -1,3 +1,14 @@
+---
+**Note**
+
+This version of the book is based on zbus 2.0 API, which is currently in beta stages. For using the
+sample code in this book, you'll need to explicitly depend on the
+[latest beta](https://crates.io/crates/zbus/2.0.0-beta.6).
+
+The 1.0 version of this book is available [here](https://dbus.pages.freedesktop.org/zbus/1.0/).
+
+---
+
 # Establishing a connection
 
 The first thing you will have to do is to connect to a D-Bus bus or to a D-Bus peer. This is the
