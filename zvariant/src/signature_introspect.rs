@@ -8,7 +8,14 @@ use crate::utils::{
     ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_START_CHAR, SERIALIZE_DICT_SIG_END_STR,
     SERIALIZE_DICT_SIG_START_CHAR, SERIALIZE_DICT_SIG_START_STR, STRUCT_SIG_END_STR,
     STRUCT_SIG_START_CHAR, STRUCT_SIG_START_STR, VARIANT_SIGNATURE_CHAR,
+    STRUCT_SIG_END_CHAR, SERIALIZE_DICT_SIG_END_CHAR, DICT_ENTRY_SIG_END_CHAR,
 };
+
+impl From<Signature<'static>> for IntrospectionHandle {
+    fn from(sig: Signature<'static>) -> Self {
+        Box::new(SignatureParser::new(sig))
+    }
+}
 
 // All signatures can be converted into `Signature<'static>`
 impl IntrospectionInfo for SignatureParser<'static> {
@@ -71,9 +78,14 @@ impl IntrospectionInfo for SignatureParser<'static> {
             (STRUCT_SIG_START_CHAR | SERIALIZE_DICT_SIG_START_CHAR | DICT_ENTRY_SIG_START_CHAR, n) => {
                 let mut new = self.clone();
                 new.skip_char().ok()?;
-                for i in 0..n  {
+                for _ in 0..n  {
                     new.parse_next_signature().ok()?;
+
+                    if let STRUCT_SIG_END_CHAR | SERIALIZE_DICT_SIG_END_CHAR | DICT_ENTRY_SIG_END_CHAR = new.next_char() {
+                        return None;
+                    }
                 }
+
                 Some(("", Box::new(new)))
             },
             #[cfg(feature = "gvariant")]

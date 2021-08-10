@@ -2010,4 +2010,25 @@ mod tests {
             assert_eq!(Foo::introspection_info().member_by_index(i), Foo2::introspection_info().member_by_index(i));
         }
     }
+
+    #[test]
+    fn introspectable_test2() {
+        use crate::introspect::{Introspectable, IntrospectionHandle, eq_without_names};
+        use zvariant_derive::Introspectable;
+
+        #[allow(dead_code)]
+        #[derive(Type, Introspectable)]
+        struct Bar {
+            foo: f32,
+            bar: f64,
+            baz: i32,
+            baz2: String,
+        }
+
+        let sig_handle: IntrospectionHandle = Bar::signature().into();
+
+        info!("Introspection: {:#?}", Bar::introspection_info());
+        info!("Sig handle: {:#?}", sig_handle);
+        assert!(eq_without_names(&Bar::introspection_info(), &sig_handle));
+    }
 }
