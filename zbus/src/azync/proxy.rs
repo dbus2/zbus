@@ -462,13 +462,25 @@ impl<'a> Proxy<'a> {
         Ok(())
     }
 
-    fn get_cached_property(&self, property_name: &str) -> Option<OwnedValue> {
+    /// Get the cached value of the property `property_name`.
+    ///
+    /// This returns `None` if the property is not in the cache.  This could be because the cache
+    /// was invalidated by an update, because caching was disabled for this property or proxy, or
+    /// because the cache has not yet been populated.  Use `get_property` to fetch the value from
+    /// the peer.
+    pub fn get_cached_property<T>(&self, property_name: &str) -> fdo::Result<Option<T>>
+    where
+        T: TryFrom<OwnedValue>,
+    {
         self.properties
             .values
             .lock()
             .expect("lock poisoned")
             .get(property_name)
             .cloned()
+            .map(T::try_from)
+            .transpose()
+            .map_err(|_| Error::InvalidReply.into())
     }
 
     fn set_cached_property(&self, property_name: String, value: Option<OwnedValue>) {
@@ -501,8 +513,8 @@ impl<'a> Proxy<'a> {
         T: TryFrom<OwnedValue>,
     {
         let value = if self.has_cached_properties() {
-            if let Some(value) = self.get_cached_property(property_name) {
-                value
+            if let Some(value) = self.get_cached_property(property_name)? {
+                return Ok(value);
             } else {
                 let value = self.get_proxy_property(property_name).await?;
                 self.set_cached_property(property_name.to_string(), Some(value.clone()));
