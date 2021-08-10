@@ -1,3 +1,14 @@
+---
+**Note**
+
+This version of the book is based on zbus 2.0 API, which is currently in beta stages. For using the
+sample code in this book, you'll need to explicitly depend on the
+[latest beta](https://crates.io/crates/zbus/2.0.0-beta.6).
+
+The 1.0 version of this book is available [here](https://dbus.pages.freedesktop.org/zbus/1.0/).
+
+---
+
 # Let's Go Asynchronous
 
 Not only does zbus also provides with asynchronous API, most of the synchronous API you saw in
@@ -364,7 +375,7 @@ after the properties `receive_<prop_name>_changed()`. Example:
 No high-level server-side API are provided yet. Rest assured, it's very high on our priority list.
 Stay tuned!
 
-[synchronous `Connection` API]: https://docs.rs/zbus/2.0.0-beta.5/zbus/struct.Connection.html
-[`azync::Connection`]: https://docs.rs/zbus/2.0.0-beta.5/zbus/azync/connection/struct.Connection.html
+[synchronous `Connection` API]: https://docs.rs/zbus/2.0.0-beta.6/zbus/struct.Connection.html
+[`azync::Connection`]: https://docs.rs/zbus/2.0.0-beta.6/zbus/azync/connection/struct.Connection.html
 [`futures::stream::Stream`]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
 [`futures::sink::Sink`]: https://docs.rs/futures/latest/futures/sink/trait.Sink.html
