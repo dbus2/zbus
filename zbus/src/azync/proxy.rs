@@ -462,7 +462,7 @@ impl<'a> Proxy<'a> {
         Ok(())
     }
 
-    async fn get_cached_property(&self, property_name: &str) -> Option<OwnedValue> {
+    fn get_cached_property(&self, property_name: &str) -> Option<OwnedValue> {
         self.properties
             .values
             .lock()
@@ -471,7 +471,7 @@ impl<'a> Proxy<'a> {
             .cloned()
     }
 
-    async fn set_cached_property(&self, property_name: String, value: Option<OwnedValue>) {
+    fn set_cached_property(&self, property_name: String, value: Option<OwnedValue>) {
         let mut values = self.properties.values.lock().expect("lock poisoned");
         if let Some(value) = value {
             values.insert(property_name, value);
@@ -501,12 +501,11 @@ impl<'a> Proxy<'a> {
         T: TryFrom<OwnedValue>,
     {
         let value = if self.has_cached_properties() {
-            if let Some(value) = self.get_cached_property(property_name).await {
+            if let Some(value) = self.get_cached_property(property_name) {
                 value
             } else {
                 let value = self.get_proxy_property(property_name).await?;
-                self.set_cached_property(property_name.to_string(), Some(value.clone()))
-                    .await;
+                self.set_cached_property(property_name.to_string(), Some(value.clone()));
                 value
             }
         } else {
