@@ -677,13 +677,10 @@ impl Connection {
             .await?;
         let future = dbus_proxy.hello();
 
-        #[cfg(feature = "internal-executor")]
-        let name = future.await?;
-
         // With external executor, our executor is only run after the connection construction is
         // completed and this method is (and must) run before that so we need to tick the executor
-        // ourselves in parallel to making the method call.
-        #[cfg(not(feature = "internal-executor"))]
+        // ourselves in parallel to making the method call.  With the internal executor, this is
+        // not needed but harmless.
         let name = {
             let executor = self.inner.executor.clone();
             let ticking_future = async move {
