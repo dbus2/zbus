@@ -12,10 +12,9 @@ categories = ["os::unix-apis"]
 readme = "../README.md"
 
 [features]
-default = ["internal-executor"]
+default = []
 xml = ["serde-xml-rs"]
 gvariant = ["zvariant/gvariant"]
-internal-executor = []
 
 [dependencies]
 byteorder = "1.3.1"

@@ -110,7 +110,7 @@ impl<'a> ConnectionBuilder<'a> {
 
     /// Enable or disable the internal executor thread.
     ///
-    /// The "internal-executor" feature sets the default value of this option to true if enabled.
+    /// The thread is enabled by default.
     ///
     /// See [Connection::executor] for more details.
     pub fn internal_executor(mut self, enabled: bool) -> Self {
@@ -188,10 +188,7 @@ impl<'a> ConnectionBuilder<'a> {
             p2p: false,
             max_queued: None,
             guid: None,
-            #[cfg(feature = "internal-executor")]
             internal_executor: true,
-            #[cfg(not(feature = "internal-executor"))]
-            internal_executor: false,
         }
     }
 }
