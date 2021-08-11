@@ -399,6 +399,12 @@ fn gen_proxy_property(
             quote! {}
         };
 
+        let cached_getter = format_ident!("cached_{}", method_name);
+        let cached_doc = format!(
+            " Get the cached value of the `{}` property, or `None` if the property is not cached.",
+            property_name,
+        );
+
         let connect = format_ident!("connect_{}_changed", method_name);
         let handler = if *azync {
             parse_quote! {
@@ -437,6 +443,14 @@ fn gen_proxy_property(
             #[allow(clippy::needless_question_mark)]
             pub #usage #signature {
                 #body
+            }
+
+            #[doc = #cached_doc]
+            pub fn #cached_getter(&self) -> ::std::result::Result<
+                ::std::option::Option<<#ret_type as #zbus::ResultAdapter>::Ok>,
+                <#ret_type as #zbus::ResultAdapter>::Err>
+            {
+                self.0.get_cached_property(#property_name).map_err(::std::convert::Into::into)
             }
 
             #[doc = #gen_doc]
