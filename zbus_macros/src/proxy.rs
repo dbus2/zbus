@@ -373,6 +373,11 @@ fn gen_proxy_property(
         let body = quote_spanned! {body_span =>
             ::std::result::Result::Ok(self.0.get_property(#property_name)#wait?)
         };
+        let ret_type = if let ReturnType::Type(_, ty) = &signature.output {
+            Some(&*ty)
+        } else {
+            None
+        };
 
         let receive = if *azync {
             let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
@@ -384,7 +389,7 @@ fn gen_proxy_property(
                 #[doc = #gen_doc]
                 pub async fn #receive#ty_generics(
                     &self
-                ) -> #zbus::azync::PropertyStream<'static, #zbus::zvariant::OwnedValue>
+                ) -> #zbus::azync::PropertyStream<'static, <#ret_type as #zbus::ResultAdapter>::Ok>
                 #where_clause
                 {
                     self.0.receive_property_stream(#property_name).await
