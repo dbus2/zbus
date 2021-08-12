@@ -12,7 +12,7 @@ use nix::unistd::Uid;
 
 use crate::{
     guid::Guid,
-    raw::{AsyncSocket, Connection},
+    raw::{Connection, Socket},
     Error, Result,
 };
 
@@ -120,7 +120,7 @@ pub trait Handshake<S> {
         Self: Sized;
 }
 
-impl<S: AsyncSocket> ClientHandshake<S> {
+impl<S: Socket> ClientHandshake<S> {
     /// Start a handshake on this client socket
     pub fn new(socket: S) -> ClientHandshake<S> {
         let mut mechanisms = VecDeque::new();
@@ -315,7 +315,7 @@ impl Cookie {
     }
 }
 
-impl<S: AsyncSocket> Handshake<S> for ClientHandshake<S> {
+impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         use ClientHandshakeStep::*;
         loop {
@@ -444,7 +444,7 @@ pub struct ServerHandshake<S> {
     client_uid: u32,
 }
 
-impl<S: AsyncSocket> ServerHandshake<S> {
+impl<S: Socket> ServerHandshake<S> {
     pub fn new(socket: S, guid: Guid, client_uid: u32) -> ServerHandshake<S> {
         ServerHandshake {
             socket,
@@ -474,7 +474,7 @@ impl<S: AsyncSocket> ServerHandshake<S> {
     }
 }
 
-impl<S: AsyncSocket> Handshake<S> for ServerHandshake<S> {
+impl<S: Socket> Handshake<S> for ServerHandshake<S> {
     fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         loop {
             match self.step {

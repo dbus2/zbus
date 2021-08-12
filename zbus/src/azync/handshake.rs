@@ -12,7 +12,7 @@ use std::{
 use crate::{
     guid::Guid,
     handshake::{self, Handshake as SyncHandshake},
-    raw::AsyncSocket,
+    raw::Socket,
     Result,
 };
 
@@ -39,7 +39,7 @@ impl<S> Deref for Authenticated<S> {
 
 impl<S> Authenticated<S>
 where
-    S: AsyncSocket + Unpin,
+    S: Socket + Unpin,
 {
     /// Create a client-side `Authenticated` for the given `socket`.
     pub async fn client(socket: S) -> Result<Self> {

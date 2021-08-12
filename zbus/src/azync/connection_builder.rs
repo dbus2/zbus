@@ -8,7 +8,7 @@ use std::{
 use crate::{
     address::{self, Address},
     azync::{Authenticated, Connection},
-    raw::AsyncSocket,
+    raw::Socket,
     Error, Guid, Result,
 };
 
@@ -123,7 +123,7 @@ impl<'a> ConnectionBuilder<'a> {
         let auth = match self.guid {
             None => {
                 // SASL Handshake
-                Authenticated::client(Box::new(Async::new(stream)?) as Box<dyn AsyncSocket>).await?
+                Authenticated::client(Box::new(Async::new(stream)?) as Box<dyn Socket>).await?
             }
             Some(guid) => {
                 if !self.p2p {
@@ -156,7 +156,7 @@ impl<'a> ConnectionBuilder<'a> {
                     .into();
 
                 Authenticated::server(
-                    Box::new(Async::new(stream)?) as Box<dyn AsyncSocket>,
+                    Box::new(Async::new(stream)?) as Box<dyn Socket>,
                     guid.clone(),
                     client_uid,
                 )

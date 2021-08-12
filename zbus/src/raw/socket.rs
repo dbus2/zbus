@@ -70,7 +70,7 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
 /// The crate provides an implementation of it for std's [`UnixStream`] on unix platforms.
 /// You will want to implement this trait to integrate zbus with a async-runtime-aware
 /// implementation of the socket, for example.
-pub trait AsyncSocket: std::fmt::Debug + Send + Sync {
+pub trait Socket: std::fmt::Debug + Send + Sync {
     /// Attempt to receive a message from the socket.
     ///
     /// On success, returns the number of bytes read as well as a `Vec` containing
@@ -112,7 +112,7 @@ pub trait AsyncSocket: std::fmt::Debug + Send + Sync {
     ///
     /// This is useful for having two independent handles to the socket, one for writing only and
     /// the other for reading only.
-    fn try_clone(&self) -> io::Result<Box<dyn AsyncSocket>>;
+    fn try_clone(&self) -> io::Result<Box<dyn Socket>>;
 
     /// Return the raw file descriptor backing this transport, if any.
     ///
@@ -120,7 +120,7 @@ pub trait AsyncSocket: std::fmt::Debug + Send + Sync {
     fn as_raw_fd(&self) -> RawFd;
 }
 
-impl AsyncSocket for Box<dyn AsyncSocket> {
+impl Socket for Box<dyn Socket> {
     fn poll_recvmsg(
         &mut self,
         cx: &mut Context<'_>,
@@ -139,7 +139,7 @@ impl AsyncSocket for Box<dyn AsyncSocket> {
     fn close(&self) -> io::Result<()> {
         (&**self).close()
     }
-    fn try_clone(&self) -> io::Result<Box<dyn AsyncSocket>> {
+    fn try_clone(&self) -> io::Result<Box<dyn Socket>> {
         (&**self).try_clone()
     }
     fn as_raw_fd(&self) -> RawFd {
@@ -147,7 +147,7 @@ impl AsyncSocket for Box<dyn AsyncSocket> {
     }
 }
 
-impl AsyncSocket for Async<UnixStream> {
+impl Socket for Async<UnixStream> {
     fn poll_recvmsg(
         &mut self,
         cx: &mut Context<'_>,
@@ -188,7 +188,7 @@ impl AsyncSocket for Async<UnixStream> {
         self.get_ref().shutdown(std::net::Shutdown::Both)
     }
 
-    fn try_clone(&self) -> io::Result<Box<dyn AsyncSocket>> {
+    fn try_clone(&self) -> io::Result<Box<dyn Socket>> {
         Ok(Box::new(Async::new(self.get_ref().try_clone()?)?))
     }
 

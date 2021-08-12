@@ -4,7 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::{message::Message, message_header::MIN_MESSAGE_SIZE, raw::AsyncSocket, OwnedFd};
+use crate::{message::Message, message_header::MIN_MESSAGE_SIZE, raw::Socket, OwnedFd};
 use futures_core::ready;
 
 /// A low-level representation of a D-Bus connection
@@ -27,7 +27,7 @@ pub struct Connection<S> {
     msg_out_buffer: VecDeque<Message>,
 }
 
-impl<S: AsyncSocket> Connection<S> {
+impl<S: Socket> Connection<S> {
     pub(crate) fn wrap(socket: S) -> Connection<S> {
         Connection {
             socket,
@@ -173,7 +173,7 @@ impl<S: AsyncSocket> Connection<S> {
     }
 }
 
-impl Connection<Box<dyn AsyncSocket>> {
+impl Connection<Box<dyn Socket>> {
     /// Same as `try_flush` above, except it wraps the method for use in [`std::future::Future`] impls.
     pub(crate) fn flush(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
         self.try_flush(cx).map_err(Into::into)

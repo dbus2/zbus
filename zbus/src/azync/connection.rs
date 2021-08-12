@@ -36,7 +36,7 @@ use futures_util::{
 use crate::{
     azync::{Authenticated, ConnectionBuilder},
     fdo,
-    raw::{AsyncSocket, Connection as RawConnection},
+    raw::{Connection as RawConnection, Socket},
     Error, Guid, Message, MessageType, Result,
 };
 
@@ -147,9 +147,9 @@ struct MessageReceiverTask<S> {
     error_sender: Sender<Error>,
 }
 
-type DynSocketConnection = RawConnection<Box<dyn AsyncSocket>>;
+type DynSocketConnection = RawConnection<Box<dyn Socket>>;
 
-impl MessageReceiverTask<Box<dyn AsyncSocket>> {
+impl MessageReceiverTask<Box<dyn Socket>> {
     fn new(
         raw_in_conn: Arc<Mutex<DynSocketConnection>>,
         msg_sender: Broadcaster<Arc<Message>>,
@@ -308,7 +308,7 @@ impl MessageReceiverTask<Box<dyn AsyncSocket>> {
 /// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
 #[derive(Clone, Debug)]
 pub struct Connection {
-    inner: Arc<ConnectionInner<Box<dyn AsyncSocket>>>,
+    inner: Arc<ConnectionInner<Box<dyn Socket>>>,
 
     msg_receiver: BroadcastReceiver<Arc<Message>>,
 
@@ -711,7 +711,7 @@ impl Connection {
     }
 
     pub(crate) async fn new(
-        auth: Authenticated<Box<dyn AsyncSocket>>,
+        auth: Authenticated<Box<dyn Socket>>,
         bus_connection: bool,
     ) -> Result<Self> {
         let auth = auth.into_inner();
@@ -863,7 +863,7 @@ impl stream::Stream for Connection {
 }
 
 struct ReceiveMessage<'r, 's> {
-    raw_conn: &'r mut MutexGuard<'s, RawConnection<Box<dyn AsyncSocket>>>,
+    raw_conn: &'r mut MutexGuard<'s, RawConnection<Box<dyn Socket>>>,
 }
 
 impl<'r, 's> Future for ReceiveMessage<'r, 's> {
