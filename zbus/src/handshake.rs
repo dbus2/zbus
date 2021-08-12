@@ -7,12 +7,11 @@ use std::{
     str::FromStr,
 };
 
-use nix::{poll::PollFlags, unistd::Uid};
+use nix::unistd::Uid;
 
 use crate::{
     guid::Guid,
     raw::{Connection, Socket},
-    utils::wait_on,
     Error, Result,
 };
 
@@ -71,14 +70,10 @@ enum Command {
 /// it returns `Ok(())`, at which point you can invoke the [`try_finish`] method to get an [`Authenticated`],
 /// which can be given to [`Connection::new_authenticated`].
 ///
-/// If handling the handshake asynchronously is not necessary, the [`blocking_finish`] method is provided
-/// which blocks until the handshake is completed or an error occurs.
-///
 /// [`advance_handshake`]: struct.ClientHandshake.html#method.advance_handshake
 /// [`try_finish`]: struct.ClientHandshake.html#method.try_finish
 /// [`Authenticated`]: struct.AUthenticated.html
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
-/// [`blocking_finish`]: struct.ClientHandshake.html#method.blocking_finish
 #[derive(Debug)]
 pub struct ClientHandshake<S> {
     socket: S,
@@ -109,12 +104,6 @@ pub struct Authenticated<S> {
 }
 
 pub trait Handshake<S> {
-    /// Block and automatically drive the handshake for this server
-    ///
-    /// This method will block until the handshake is finalized, even if the
-    /// socket is in non-blocking mode.
-    fn blocking_finish(self) -> Result<Authenticated<S>>;
-
     /// The next I/O operation needed for advancing the handshake.
     ///
     /// If [`Handshake::advance_handshake`] returns a `std::io::ErrorKind::WouldBlock` error, you
@@ -340,25 +329,6 @@ impl Cookie {
 }
 
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
-    fn blocking_finish(mut self) -> Result<Authenticated<S>> {
-        loop {
-            match self.advance_handshake() {
-                Ok(()) => return Ok(self.try_finish().unwrap_or_else(|_| unreachable!())),
-                Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    // we raised a WouldBlock error, this means this is a non-blocking socket
-                    // we use poll to wait until the action we need is available
-                    let flags = match self.next_io_operation() {
-                        IoOperation::Write => PollFlags::POLLOUT,
-                        IoOperation::Read => PollFlags::POLLIN,
-                        _ => unreachable!(),
-                    };
-                    wait_on(self.socket.as_raw_fd(), flags)?;
-                }
-                Err(e) => return Err(e),
-            }
-        }
-    }
-
     fn next_io_operation(&self) -> IoOperation {
         use ClientHandshakeStep::*;
         if self.send_buffer.is_empty() {
@@ -489,14 +459,10 @@ enum ServerHandshakeStep {
 /// it returns `Ok(())`, at which point you can invoke the [`try_finish`] method to get an [`Authenticated`],
 /// which can be given to [`Connection::new_authenticated`].
 ///
-/// If handling the handshake asynchronously is not necessary, the [`blocking_finish`] method is provided
-/// which blocks until the handshake is completed or an error occurs.
-///
 /// [`advance_handshake`]: struct.ServerHandshake.html#method.advance_handshake
 /// [`try_finish`]: struct.ServerHandshake.html#method.try_finish
 /// [`Authenticated`]: struct.Authenticated.html
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
-/// [`blocking_finish`]: struct.ServerHandshake.html#method.blocking_finish
 #[derive(Debug)]
 pub struct ServerHandshake<S> {
     socket: S,
@@ -538,29 +504,6 @@ impl<S: Socket> ServerHandshake<S> {
 }
 
 impl<S: Socket> Handshake<S> for ServerHandshake<S> {
-    fn blocking_finish(mut self) -> Result<Authenticated<S>> {
-        loop {
-            match self.advance_handshake() {
-                Ok(()) => return Ok(self.try_finish().unwrap_or_else(|_| unreachable!())),
-                Err(Error::Io(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    // we raised a WouldBlock error, this means this is a non-blocking socket
-                    // we use poll to wait until the action we need is available
-                    let flags = match self.step {
-                        ServerHandshakeStep::SendingAuthError
-                        | ServerHandshakeStep::SendingAuthOK
-                        | ServerHandshakeStep::SendingBeginMessage => PollFlags::POLLOUT,
-                        ServerHandshakeStep::WaitingForNull
-                        | ServerHandshakeStep::WaitingForBegin
-                        | ServerHandshakeStep::WaitingForAuth => PollFlags::POLLIN,
-                        ServerHandshakeStep::Done => unreachable!(),
-                    };
-                    wait_on(self.socket.as_raw_fd(), flags)?;
-                }
-                Err(e) => return Err(e),
-            }
-        }
-    }
-
     fn next_io_operation(&self) -> IoOperation {
         match self.step {
             ServerHandshakeStep::Done => IoOperation::None,
