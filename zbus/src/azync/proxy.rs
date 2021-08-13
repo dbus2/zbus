@@ -3,7 +3,7 @@ use async_lock::Mutex;
 use async_recursion::async_recursion;
 use async_task::Task;
 use futures_core::{future::BoxFuture, stream};
-use futures_util::stream::StreamExt;
+use futures_util::{stream::StreamExt, TryStreamExt};
 use once_cell::sync::OnceCell;
 use slotmap::{new_key_type, SlotMap};
 use static_assertions::assert_impl_all;
@@ -254,21 +254,62 @@ impl<'a> ProxyInner<'a> {
         }
     }
 
-    // panic if dest_unique_name has not been resolved before
-    async fn matching_signal<'m>(&self, h: &'m MessageHeader<'m>) -> Option<&'m MemberName<'m>> {
+    async fn matching_signal<'m>(
+        &self,
+        h: &'m MessageHeader<'m>,
+    ) -> Result<Option<&'m MemberName<'m>>> {
         if h.primary().msg_type() != MessageType::Signal {
-            return None;
+            return Ok(None);
         }
-        let dest_unique_name = self.dest_unique_name.lock().await;
-        let uniq = dest_unique_name.as_ref().unwrap();
+
+        let dest_unique_name = self.destination_unique_name().await?.lock().await;
         if h.interface() == Ok(Some(&self.interface))
-            && h.sender() == Ok(Some(uniq))
+            && h.sender() == Ok(dest_unique_name.as_deref())
             && h.path() == Ok(Some(&self.path))
         {
-            h.member().ok().flatten()
+            Ok(h.member().ok().flatten())
         } else {
-            None
+            Ok(None)
         }
+    }
+
+    /// Resolves the destination name to the associated unique connection name.
+    ///
+    /// Typically you would want to create the [`Proxy`] with the well-known name of the destination
+    /// service but signal messages only specify the unique name of the peer (except for signals
+    /// from `org.freedesktop.DBus` service). This means we have no means to check the sender of
+    /// the message. While in most cases this will not be a problem, it becomes a problem if you
+    /// need to communicate with multiple services exposing the same interface, over the same
+    /// connection. Hence the need for this method.
+    pub(crate) async fn destination_unique_name(&self) -> Result<&Mutex<Option<OwnedUniqueName>>> {
+        let mut dest_unique_name = self.dest_unique_name.lock().await;
+        if dest_unique_name.is_some() {
+            // Already resolved the name.
+            return Ok(&self.dest_unique_name);
+        }
+
+        let destination = &self.destination;
+        let unique_name = match destination {
+            BusName::Unique(name) => name.to_owned().into(),
+            BusName::WellKnown(_) => {
+                match fdo::AsyncDBusProxy::new(&self.conn)
+                    .await?
+                    .get_name_owner(destination.clone())
+                    .await
+                {
+                    // That's ok. We'll try later again.
+                    Err(fdo::Error::NameHasNoOwner(_)) => return Ok(&self.dest_unique_name),
+                    res => res?,
+                }
+            }
+        };
+
+        if dest_unique_name.replace(unique_name).is_some() {
+            // programmer (probably our) error if this fails.
+            panic!("Attempted to set dest_unique_name twice");
+        }
+
+        Ok(&self.dest_unique_name)
     }
 }
 
@@ -615,22 +656,26 @@ impl<'a> Proxy<'a> {
             None
         };
 
-        self.destination_unique_name().await?;
         let proxy = self.inner.clone();
         let stream = self
             .inner
             .conn
             .clone()
-            .filter(move |m| {
-                let msg = m.as_ref().map(|m| m.clone()).ok();
+            .try_filter_map(move |msg| {
                 let proxy = proxy.clone();
                 let signal_name = signal_name.clone();
 
                 async move {
-                    match msg.as_ref().and_then(|m| m.header().ok()) {
-                        Some(h) => proxy.matching_signal(&h).await == Some(&signal_name),
-                        None => false,
-                    }
+                    Ok(match msg.header().ok() {
+                        Some(h) => {
+                            if proxy.matching_signal(&h).await? == Some(&signal_name) {
+                                Some(msg)
+                            } else {
+                                None
+                            }
+                        }
+                        None => None,
+                    })
                 }
             })
             // Safety: Filter above ensures we only get `Ok(msg)`.
@@ -765,12 +810,11 @@ impl<'a> Proxy<'a> {
             return Ok(false);
         }
 
-        self.destination_unique_name().await?;
         let h = match msg.header() {
             Ok(h) => h,
             _ => return Ok(false),
         };
-        let signal_name = match self.inner.matching_signal(&h).await {
+        let signal_name = match self.inner.matching_signal(&h).await? {
             Some(signal) => signal,
             _ => return Ok(false),
         };
@@ -785,40 +829,6 @@ impl<'a> Proxy<'a> {
         }
 
         Ok(handled)
-    }
-
-    /// Resolves the destination name to the associated unique connection name.
-    ///
-    /// Typically you would want to create the [`Proxy`] with the well-known name of the destination
-    /// service but signal messages only specify the unique name of the peer (except for signals
-    /// from `org.freedesktop.DBus` service). This means we have no means to check the sender of
-    /// the message. While in most cases this will not be a problem, it becomes a problem if you
-    /// need to communicate with multiple services exposing the same interface, over the same
-    /// connection. Hence the need for this method.
-    pub(crate) async fn destination_unique_name(&self) -> Result<&Mutex<Option<OwnedUniqueName>>> {
-        let mut dest_unique_name = self.inner.dest_unique_name.lock().await;
-        if dest_unique_name.is_some() {
-            // Already resolved the name.
-            return Ok(&self.inner.dest_unique_name);
-        }
-
-        let destination = &self.inner.destination;
-        let unique_name = match destination {
-            BusName::Unique(name) => name.to_owned().into(),
-            BusName::WellKnown(_) => {
-                fdo::AsyncDBusProxy::new(&self.inner.conn)
-                    .await?
-                    .get_name_owner(destination.clone())
-                    .await?
-            }
-        };
-
-        if dest_unique_name.replace(unique_name).is_some() {
-            // programmer (probably our) error if this fails.
-            panic!("Attempted to set dest_unique_name twice");
-        }
-
-        Ok(&self.inner.dest_unique_name)
     }
 
     async fn msg_stream(&self) -> &Mutex<Connection> {
