@@ -134,7 +134,7 @@ provided. High-level server-side API coming soon.
 zbus is runtime-agnostic and should work out of the box with different Rust async runtimes. However,
 in order to achieve that, zbus spawns a thread per connection to handle various internal tasks. If
 that is something you would like to avoid, you need to:
-  * disable the `internal-executor` feature (which is a default feature).
+  * Use [`ConnectionBuilder`] and disable the `internal_executor` flag.
   * Ensure the [internal executor keeps ticking continuously][iektc].
 
 ## zvariant
@@ -319,6 +319,7 @@ MIT license [LICENSE-MIT](LICENSE-MIT)
 
 [PolicyKit]: https://gitlab.freedesktop.org/polkit/polkit/
 [iektc]: https://docs.rs/zbus/2.0.0-beta.6/zbus/azync/struct.Connection.html#method.executor
+[`ConnectionBuilder`]: https://docs.rs/zbus/2.0.0-beta.6/zbus/struct.ConnectionBuilder.html
 [dbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names
 
 [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus clients in
