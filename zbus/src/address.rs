@@ -35,8 +35,9 @@ impl Address {
         match env::var("DBUS_SESSION_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
             _ => {
-                let uid = Uid::current();
-                let path = format!("unix:path=/run/user/{}/bus", uid);
+                let runtime_dir = env::var("XDG_RUNTIME_DIR")
+                    .unwrap_or_else(|_| format!("/run/user/{}", Uid::current()));
+                let path = format!("unix:path={}/bus", runtime_dir);
 
                 Self::from_str(&path)
             }
