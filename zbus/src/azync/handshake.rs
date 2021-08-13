@@ -1,4 +1,3 @@
-use async_io::Async;
 use futures_core::ready;
 
 use std::{
@@ -12,9 +11,9 @@ use std::{
 
 use crate::{
     guid::Guid,
-    handshake::{self, Handshake as SyncHandshake, IoOperation},
+    handshake::{self, Handshake as SyncHandshake},
     raw::Socket,
-    Error, Result,
+    Result,
 };
 
 /// The asynchronous sibling of [`handshake::Handshake`].
@@ -23,10 +22,7 @@ use crate::{
 /// undefined behaviour.
 pub(crate) struct Authenticated<S>(handshake::Authenticated<S>);
 
-impl<S> Authenticated<S>
-where
-    S: Socket,
-{
+impl<S> Authenticated<S> {
     /// Unwraps the inner [`handshake::Authenticated`].
     pub fn into_inner(self) -> handshake::Authenticated<S> {
         self.0
@@ -41,13 +37,12 @@ impl<S> Deref for Authenticated<S> {
     }
 }
 
-impl<S> Authenticated<Async<S>>
+impl<S> Authenticated<S>
 where
-    S: Debug + Unpin,
-    Async<S>: Socket,
+    S: Socket + Unpin,
 {
     /// Create a client-side `Authenticated` for the given `socket`.
-    pub async fn client(socket: Async<S>) -> Result<Self> {
+    pub async fn client(socket: S) -> Result<Self> {
         Handshake {
             handshake: Some(handshake::ClientHandshake::new(socket)),
             phantom: PhantomData,
@@ -56,7 +51,7 @@ where
     }
 
     /// Create a server-side `Authenticated` for the given `socket`.
-    pub async fn server(socket: Async<S>, guid: Guid, client_uid: u32) -> Result<Self> {
+    pub async fn server(socket: S, guid: Guid, client_uid: u32) -> Result<Self> {
         Handshake {
             handshake: Some(handshake::ServerHandshake::new(socket, guid, client_uid)),
             phantom: PhantomData,
@@ -72,10 +67,10 @@ struct Handshake<H, S> {
 
 impl<H, S> Future for Handshake<H, S>
 where
-    H: SyncHandshake<Async<S>> + Unpin + Debug,
+    H: SyncHandshake<S> + Unpin + Debug,
     S: Unpin,
 {
-    type Output = Result<Authenticated<Async<S>>>;
+    type Output = Result<Authenticated<S>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let self_mut = &mut self.get_mut();
@@ -84,43 +79,23 @@ where
             .as_mut()
             .expect("ClientHandshake::poll() called unexpectedly");
 
-        loop {
-            match handshake.advance_handshake() {
-                Ok(()) => {
-                    let handshake = self_mut
-                        .handshake
-                        .take()
-                        .expect("<Handshake as Future>::poll() called unexpectedly");
-                    let authenticated = handshake
-                        .try_finish()
-                        .expect("Failed to finish a successful handshake");
+        ready!(handshake.advance_handshake(cx))?;
 
-                    return Poll::Ready(Ok(Authenticated(authenticated)));
-                }
-                Err(Error::Io(e)) => {
-                    if e.kind() == std::io::ErrorKind::WouldBlock {
-                        let res = match handshake.next_io_operation() {
-                            IoOperation::Read => ready!(handshake.socket().poll_readable(cx)),
-                            IoOperation::Write => ready!(handshake.socket().poll_writable(cx)),
-                            IoOperation::None => panic!("Invalid handshake state"),
-                        };
-                        match res {
-                            // Guess socket became ready already so let's try it again.
-                            Ok(_) => continue,
-                            Err(e) => return Poll::Ready(Err(e.into())),
-                        }
-                    } else {
-                        return Poll::Ready(Err(Error::Io(e)));
-                    }
-                }
-                Err(e) => return Poll::Ready(Err(e)),
-            }
-        }
+        let handshake = self_mut
+            .handshake
+            .take()
+            .expect("<Handshake as Future>::poll() called unexpectedly");
+        let authenticated = handshake
+            .try_finish()
+            .expect("Failed to finish a successful handshake");
+
+        Poll::Ready(Ok(Authenticated(authenticated)))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use async_io::Async;
     use nix::unistd::Uid;
     use std::os::unix::net::UnixStream;
     use test_env_log::test;
