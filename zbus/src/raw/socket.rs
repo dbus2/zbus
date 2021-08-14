@@ -104,16 +104,6 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
     /// After this call, it is valid for all reading and writing operations to fail.
     fn close(&self) -> io::Result<()>;
 
-    /// Creates a new independently owned handle to the underlying socket.
-    ///
-    /// The returned socket is a reference to the same stream that this object references. Both
-    /// handles will read and write the same stream of data, and options set on one stream will be
-    /// propagated to the other stream.
-    ///
-    /// This is useful for having two independent handles to the socket, one for writing only and
-    /// the other for reading only.
-    fn try_clone(&self) -> io::Result<Box<dyn Socket>>;
-
     /// Return the raw file descriptor backing this transport, if any.
     ///
     /// This is used to back [zbus::azync::Connection::as_raw_fd] and related functions.
@@ -138,9 +128,6 @@ impl Socket for Box<dyn Socket> {
     }
     fn close(&self) -> io::Result<()> {
         (&**self).close()
-    }
-    fn try_clone(&self) -> io::Result<Box<dyn Socket>> {
-        (&**self).try_clone()
     }
     fn as_raw_fd(&self) -> RawFd {
         (&**self).as_raw_fd()
@@ -186,10 +173,6 @@ impl Socket for Async<UnixStream> {
 
     fn close(&self) -> io::Result<()> {
         self.get_ref().shutdown(std::net::Shutdown::Both)
-    }
-
-    fn try_clone(&self) -> io::Result<Box<dyn Socket>> {
-        Ok(Box::new(Async::new(self.get_ref().try_clone()?)?))
     }
 
     fn as_raw_fd(&self) -> RawFd {
