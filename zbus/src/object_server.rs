@@ -28,7 +28,7 @@ use crate::{
 /// implements it for you.
 ///
 /// [`dbus_interface`]: attr.dbus_interface.html
-pub trait Interface: Any + Send + Sync {
+pub trait Interface: Any {
     /// Return the name of the interface. Ex: "org.foo.MyInterface"
     fn name() -> InterfaceName<'static>
     where
@@ -334,7 +334,7 @@ pub struct ObjectServer {
     registered_names: HashSet<WellKnownName<'static>>,
 }
 
-assert_impl_all!(ObjectServer: Send, Sync, Unpin);
+assert_impl_all!(ObjectServer: Unpin);
 
 impl ObjectServer {
     /// Creates a new D-Bus `ObjectServer` for a given connection.
