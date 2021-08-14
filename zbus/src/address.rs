@@ -30,8 +30,8 @@ impl Address {
 
     /// Get the address for session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
     /// variable. If we don't recognize the value (or it's not set) we fall back to
-    /// /run/user/UID/bus
-    pub(crate) fn session() -> Result<Self> {
+    /// $XDG_RUNTIME_DIR/bus
+    pub fn session() -> Result<Self> {
         match env::var("DBUS_SESSION_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
             _ => {
@@ -47,7 +47,7 @@ impl Address {
     /// Get the address for system bus respecting the DBUS_SYSTEM_BUS_ADDRESS environment
     /// variable. If we don't recognize the value (or it's not set) we fall back to
     /// /var/run/dbus/system_bus_socket
-    pub(crate) fn system() -> Result<Self> {
+    pub fn system() -> Result<Self> {
         match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
             _ => Self::from_str("unix:path=/var/run/dbus/system_bus_socket"),
