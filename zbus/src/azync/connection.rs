@@ -1,7 +1,6 @@
 use async_broadcast::{broadcast, Receiver as BroadcastReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
-#[cfg(feature = "internal-executor")]
 use async_io::block_on;
 use async_lock::{Mutex, MutexGuard};
 use async_task::Task;
@@ -516,9 +515,9 @@ impl Connection {
 
     /// The underlying executor.
     ///
-    /// When `internal-executor` feature is disabled, zbus will not spawn thread internally to run
-    /// the executor. You're responsible to continuously [tick the executor][tte]. Failure to do so
-    /// will result in hangs.
+    /// When a connection is built with internal_executor set to false, zbus will not spawn a
+    /// thread to run the executor. You're responsible to continuously [tick the executor][tte].
+    /// Failure to do so will result in hangs.
     ///
     /// # Examples
     ///
@@ -526,15 +525,19 @@ impl Connection {
     /// scheduler:
     ///
     /// ```
-    /// use zbus::azync::Connection;
+    /// use zbus::azync::ConnectionBuilder;
     /// use tokio::runtime;
     ///
-    ///# #[cfg(not(feature = "internal-executor"))]
     /// runtime::Builder::new_current_thread()
     ///        .build()
     ///        .unwrap()
     ///        .block_on(async {
-    ///     let conn = Connection::session().await.unwrap();
+    ///     let conn = ConnectionBuilder::session()
+    ///         .unwrap()
+    ///         .internal_executor(false)
+    ///         .build()
+    ///         .await
+    ///         .unwrap();
     ///     {
     ///        let conn = conn.clone();
     ///        tokio::task::spawn(async move {
@@ -676,13 +679,10 @@ impl Connection {
             .await?;
         let future = dbus_proxy.hello();
 
-        #[cfg(feature = "internal-executor")]
-        let name = future.await?;
-
         // With external executor, our executor is only run after the connection construction is
         // completed and this method is (and must) run before that so we need to tick the executor
-        // ourselves in parallel to making the method call.
-        #[cfg(not(feature = "internal-executor"))]
+        // ourselves in parallel to making the method call.  With the internal executor, this is
+        // not needed but harmless.
         let name = {
             let executor = self.inner.executor.clone();
             let ticking_future = async move {
@@ -713,6 +713,7 @@ impl Connection {
     pub(crate) async fn new(
         auth: Authenticated<Box<dyn Socket>>,
         bus_connection: bool,
+        internal_executor: bool,
     ) -> Result<Self> {
         let auth = auth.into_inner();
         let out_socket = auth.conn.socket().try_clone()?;
@@ -748,17 +749,18 @@ impl Connection {
             }),
         };
 
-        #[cfg(feature = "internal-executor")]
-        std::thread::Builder::new()
-            .name("zbus::azync::Connection::receive_msg".into())
-            .spawn(move || {
-                block_on(async move {
-                    // Run as long as there is a task to run.
-                    while !executor.is_empty() {
-                        executor.tick().await;
-                    }
-                })
-            })?;
+        if internal_executor {
+            std::thread::Builder::new()
+                .name("zbus::azync::Connection executor".into())
+                .spawn(move || {
+                    block_on(async move {
+                        // Run as long as there is a task to run.
+                        while !executor.is_empty() {
+                            executor.tick().await;
+                        }
+                    })
+                })?;
+        }
 
         if !bus_connection {
             return Ok(connection);

@@ -25,6 +25,7 @@ pub struct ConnectionBuilder<'a> {
     max_queued: Option<usize>,
     guid: Option<&'a Guid>,
     p2p: bool,
+    internal_executor: bool,
 }
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -110,6 +111,17 @@ impl<'a> ConnectionBuilder<'a> {
         self
     }
 
+    /// Enable or disable the internal executor thread.
+    ///
+    /// The thread is enabled by default.
+    ///
+    /// See [Connection::executor] for more details.
+    pub fn internal_executor(mut self, enabled: bool) -> Self {
+        self.internal_executor = enabled;
+
+        self
+    }
+
     /// Build the connection, consuming the builder.
     ///
     /// # Errors
@@ -163,7 +175,7 @@ impl<'a> ConnectionBuilder<'a> {
             }
         };
 
-        let mut conn = Connection::new(auth, !self.p2p).await?;
+        let mut conn = Connection::new(auth, !self.p2p, self.internal_executor).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
 
         Ok(conn)
@@ -175,6 +187,7 @@ impl<'a> ConnectionBuilder<'a> {
             p2p: false,
             max_queued: None,
             guid: None,
+            internal_executor: true,
         }
     }
 }

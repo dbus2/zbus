@@ -778,7 +778,6 @@ mod tests {
     async fn test_signal_stream() {
         let conn = crate::azync::Connection::session().await.unwrap();
 
-        #[cfg(not(feature = "internal-executor"))]
         {
             let conn = conn.clone();
             tokio::task::spawn(async move {
