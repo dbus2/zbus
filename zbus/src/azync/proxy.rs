@@ -12,7 +12,7 @@ use std::{
     convert::{TryFrom, TryInto},
     io::{self, ErrorKind},
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Mutex as SyncMutex},
     task::{Context, Poll},
 };
 
@@ -59,7 +59,7 @@ pub(crate) struct PropertyChangedHandlerInfo {
 #[derivative(Debug)]
 pub(crate) struct ProxyProperties<'a> {
     pub(crate) proxy: OnceCell<AsyncPropertiesProxy<'a>>,
-    pub(crate) values: Mutex<HashMap<String, OwnedValue>>,
+    pub(crate) values: SyncMutex<HashMap<String, OwnedValue>>,
     task: OnceCell<Task<()>>,
     #[derivative(Debug = "ignore")]
     pub(crate) changed_handlers:
@@ -194,6 +194,22 @@ impl<'a> ProxyProperties<'a> {
             changed_handlers: Default::default(),
             broadcaster: sender,
             receiver,
+        }
+    }
+
+    fn update_cache(&self, args: &fdo::PropertiesChangedArgs<'_>) {
+        let mut values = self.values.lock().expect("lock poisoned");
+
+        for inval in args.invalidated_properties() {
+            values.remove(*inval);
+        }
+
+        for (property_name, value) in args
+            .changed_properties()
+            .iter()
+            .map(|(k, v)| (k.to_string(), OwnedValue::from(v)))
+        {
+            values.insert(property_name, value);
         }
     }
 
@@ -421,20 +437,14 @@ impl<'a> Proxy<'a> {
         let task = self.inner.conn.executor().spawn(async move {
             while let Some(changed) = stream.next().await {
                 if let Ok(args) = changed.args() {
-                    let mut values = properties.values.lock().await;
+                    properties.update_cache(&args);
+
                     for inval in args.invalidated_properties() {
                         properties.changed(inval, None).await;
-                        values.remove(*inval);
                     }
 
-                    for (property_name, value) in args
-                        .changed_properties()
-                        .iter()
-                        .map(|(k, v)| (k.to_string(), OwnedValue::from(v)))
-                    {
-                        // we should notify after insert, but this requires extra lookup atm
-                        properties.changed(&property_name, Some(&value)).await;
-                        values.insert(property_name, value);
+                    for (property_name, value) in args.changed_properties() {
+                        properties.changed(property_name, Some(value)).await;
                     }
                 }
             }
@@ -442,23 +452,39 @@ impl<'a> Proxy<'a> {
         self.properties.task.set(task).unwrap();
 
         if let Ok(values) = proxy.get_all(self.inner.interface.clone()).await {
-            self.properties.values.lock().await.extend(values);
+            self.properties
+                .values
+                .lock()
+                .expect("lock poisoned")
+                .extend(values);
         }
 
         Ok(())
     }
 
-    async fn get_cached_property(&self, property_name: &str) -> Option<OwnedValue> {
+    /// Get the cached value of the property `property_name`.
+    ///
+    /// This returns `None` if the property is not in the cache.  This could be because the cache
+    /// was invalidated by an update, because caching was disabled for this property or proxy, or
+    /// because the cache has not yet been populated.  Use `get_property` to fetch the value from
+    /// the peer.
+    pub fn get_cached_property<T>(&self, property_name: &str) -> fdo::Result<Option<T>>
+    where
+        T: TryFrom<OwnedValue>,
+    {
         self.properties
             .values
             .lock()
-            .await
+            .expect("lock poisoned")
             .get(property_name)
             .cloned()
+            .map(T::try_from)
+            .transpose()
+            .map_err(|_| Error::InvalidReply.into())
     }
 
-    async fn set_cached_property(&self, property_name: String, value: Option<OwnedValue>) {
-        let mut values = self.properties.values.lock().await;
+    fn set_cached_property(&self, property_name: String, value: Option<OwnedValue>) {
+        let mut values = self.properties.values.lock().expect("lock poisoned");
         if let Some(value) = value {
             values.insert(property_name, value);
         } else {
@@ -487,12 +513,11 @@ impl<'a> Proxy<'a> {
         T: TryFrom<OwnedValue>,
     {
         let value = if self.has_cached_properties() {
-            if let Some(value) = self.get_cached_property(property_name).await {
-                value
+            if let Some(value) = self.get_cached_property(property_name)? {
+                return Ok(value);
             } else {
                 let value = self.get_proxy_property(property_name).await?;
-                self.set_cached_property(property_name.to_string(), Some(value.clone()))
-                    .await;
+                self.set_cached_property(property_name.to_string(), Some(value.clone()));
                 value
             }
         } else {
