@@ -114,10 +114,7 @@ struct ConnectionInner {
     bus_conn: bool,
     unique_name: OnceCell<OwnedUniqueName>,
 
-    raw_in_conn: Arc<sync::Mutex<DynSocketConnection>>,
-    // FIXME: We really should be using async_lock::Mutex here but `Sink::start_send is not very
-    // async friendly. :(
-    raw_out_conn: Arc<sync::Mutex<DynSocketConnection>>,
+    raw_conn: Arc<sync::Mutex<DynSocketConnection>>,
     // Serial number for next outgoing message
     serial: AtomicU32,
 
@@ -137,7 +134,7 @@ struct ConnectionInner {
 
 #[derive(Debug)]
 struct MessageReceiverTask<S> {
-    raw_in_conn: Arc<sync::Mutex<RawConnection<S>>>,
+    raw_conn: Arc<sync::Mutex<RawConnection<S>>>,
 
     // Message broadcaster.
     msg_sender: Broadcaster<Arc<Message>>,
@@ -150,12 +147,12 @@ type DynSocketConnection = RawConnection<Box<dyn Socket>>;
 
 impl MessageReceiverTask<Box<dyn Socket>> {
     fn new(
-        raw_in_conn: Arc<sync::Mutex<DynSocketConnection>>,
+        raw_conn: Arc<sync::Mutex<DynSocketConnection>>,
         msg_sender: Broadcaster<Arc<Message>>,
         error_sender: Sender<Error>,
     ) -> Arc<Self> {
         Arc::new(Self {
-            raw_in_conn,
+            raw_conn,
             msg_sender,
             error_sender,
         })
@@ -176,7 +173,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
             // TODO: We should still log in case of error when we've logging.
 
             let receive_msg = ReceiveMessage {
-                raw_conn: &*self.raw_in_conn,
+                raw_conn: &*self.raw_conn,
             };
             let msg = match receive_msg.await {
                 Ok(msg) => msg,
@@ -556,7 +553,7 @@ impl Connection {
 
     /// Get the raw file descriptor of this connection.
     pub async fn as_raw_fd(&self) -> RawFd {
-        (self.inner.raw_in_conn.lock().expect("poisened lock").socket()).as_raw_fd()
+        (self.inner.raw_conn.lock().expect("poisened lock").socket()).as_raw_fd()
     }
 
     pub(crate) async fn subscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
@@ -714,28 +711,23 @@ impl Connection {
         internal_executor: bool,
     ) -> Result<Self> {
         let auth = auth.into_inner();
-        let out_socket = auth.conn.socket().try_clone()?;
-        let out_conn = RawConnection::wrap(out_socket);
         let cap_unix_fd = auth.cap_unix_fd;
-        let raw_out_conn = Arc::new(sync::Mutex::new(out_conn));
 
         let (mut msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
         msg_sender.set_overflow(true);
         let (error_sender, error_receiver) = bounded(1);
         let executor = Arc::new(Executor::new());
-        let raw_in_conn = Arc::new(sync::Mutex::new(auth.conn));
+        let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
         // Start the message receiver task.
         let msg_receiver_task =
-            MessageReceiverTask::new(raw_in_conn.clone(), msg_sender, error_sender)
-                .spawn(&executor);
+            MessageReceiverTask::new(raw_conn.clone(), msg_sender, error_sender).spawn(&executor);
 
         let connection = Self {
             error_receiver,
             msg_receiver,
             inner: Arc::new(ConnectionInner {
-                raw_in_conn,
-                raw_out_conn,
+                raw_conn,
                 server_guid: auth.server_guid,
                 cap_unix_fd,
                 bus_conn: bus_connection,
@@ -819,7 +811,7 @@ impl<'a> Sink<Message> for &'a Connection {
         }
 
         self.inner
-            .raw_out_conn
+            .raw_conn
             .lock()
             .expect("poisened lock")
             .enqueue_message(msg);
@@ -828,21 +820,17 @@ impl<'a> Sink<Message> for &'a Connection {
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        self.inner
-            .raw_out_conn
-            .lock()
-            .expect("poisened lock")
-            .flush(cx)
+        self.inner.raw_conn.lock().expect("poisened lock").flush(cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        let mut raw_out_conn = self.inner.raw_out_conn.lock().expect("poisened lock");
-        match ready!(raw_out_conn.flush(cx)) {
+        let mut raw_conn = self.inner.raw_conn.lock().expect("poisened lock");
+        match ready!(raw_conn.flush(cx)) {
             Ok(_) => (),
             Err(e) => return Poll::Ready(Err(e)),
         }
 
-        Poll::Ready(raw_out_conn.close())
+        Poll::Ready(raw_conn.close())
     }
 }
 
