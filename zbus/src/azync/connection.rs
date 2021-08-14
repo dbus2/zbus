@@ -108,13 +108,13 @@ struct SignalSubscription {
 }
 
 #[derive(Debug)]
-struct ConnectionInner<S> {
+struct ConnectionInner {
     server_guid: Guid,
     cap_unix_fd: bool,
     bus_conn: bool,
     unique_name: OnceCell<OwnedUniqueName>,
 
-    raw_in_conn: Arc<sync::Mutex<RawConnection<S>>>,
+    raw_in_conn: Arc<sync::Mutex<DynSocketConnection>>,
     // FIXME: We really should be using async_lock::Mutex here but `Sink::start_send is not very
     // async friendly. :(
     raw_out_conn: Arc<sync::Mutex<DynSocketConnection>>,
@@ -305,7 +305,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
 #[derive(Clone, Debug)]
 pub struct Connection {
-    inner: Arc<ConnectionInner<Box<dyn Socket>>>,
+    inner: Arc<ConnectionInner>,
 
     msg_receiver: BroadcastReceiver<Arc<Message>>,
 
