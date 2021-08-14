@@ -146,6 +146,19 @@ impl<'a> Proxy<'a> {
         block_on(self.azync.introspect())
     }
 
+    /// Get the cached value of the property `property_name`.
+    ///
+    /// This returns `None` if the property is not in the cache.  This could be because the cache
+    /// was invalidated by an update, because caching was disabled for this property or proxy, or
+    /// because the cache has not yet been populated.  Use `get_property` to fetch the value from
+    /// the peer.
+    pub fn get_cached_property<T>(&self, property_name: &str) -> fdo::Result<Option<T>>
+    where
+        T: TryFrom<OwnedValue>,
+    {
+        self.azync.get_cached_property(property_name)
+    }
+
     /// Get the property `property_name`.
     ///
     /// Get the property value from the cache or call the `Get` method of the

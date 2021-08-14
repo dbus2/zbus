@@ -373,6 +373,11 @@ fn gen_proxy_property(
         let body = quote_spanned! {body_span =>
             ::std::result::Result::Ok(self.0.get_property(#property_name)#wait?)
         };
+        let ret_type = if let ReturnType::Type(_, ty) = &signature.output {
+            Some(&*ty)
+        } else {
+            None
+        };
 
         let receive = if *azync {
             let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
@@ -384,7 +389,7 @@ fn gen_proxy_property(
                 #[doc = #gen_doc]
                 pub async fn #receive#ty_generics(
                     &self
-                ) -> #zbus::azync::PropertyStream<'static, #zbus::zvariant::OwnedValue>
+                ) -> #zbus::azync::PropertyStream<'static, <#ret_type as #zbus::ResultAdapter>::Ok>
                 #where_clause
                 {
                     self.0.receive_property_stream(#property_name).await
@@ -393,6 +398,12 @@ fn gen_proxy_property(
         } else {
             quote! {}
         };
+
+        let cached_getter = format_ident!("cached_{}", method_name);
+        let cached_doc = format!(
+            " Get the cached value of the `{}` property, or `None` if the property is not cached.",
+            property_name,
+        );
 
         let connect = format_ident!("connect_{}_changed", method_name);
         let handler = if *azync {
@@ -432,6 +443,14 @@ fn gen_proxy_property(
             #[allow(clippy::needless_question_mark)]
             pub #usage #signature {
                 #body
+            }
+
+            #[doc = #cached_doc]
+            pub fn #cached_getter(&self) -> ::std::result::Result<
+                ::std::option::Option<<#ret_type as #zbus::ResultAdapter>::Ok>,
+                <#ret_type as #zbus::ResultAdapter>::Err>
+            {
+                self.0.get_cached_property(#property_name).map_err(::std::convert::Into::into)
             }
 
             #[doc = #gen_doc]

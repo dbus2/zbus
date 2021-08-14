@@ -191,6 +191,7 @@ mod owned_fd;
 pub use owned_fd::*;
 
 mod utils;
+pub use utils::*;
 
 mod object_server;
 pub use object_server::*;
