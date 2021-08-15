@@ -169,7 +169,9 @@ impl Properties {
     ) -> zbus::Result<()>;
 }
 
-type ManagedObjects = HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>;
+/// The type returned by the [`ObjectManagerProxy::get_managed_objects`] and
+/// [`AsyncObjectManagerProxy::get_managed_objects`] methods.
+pub type ManagedObjects = HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>;
 
 /// Proxy for the `org.freedesktop.DBus.ObjectManager` interface.
 ///
