@@ -1,5 +1,5 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
-use async_lock::Mutex;
+use async_lock::{Mutex, RwLock};
 use async_recursion::async_recursion;
 use async_task::Task;
 use futures_core::{future::BoxFuture, stream};
@@ -144,7 +144,7 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) path: ObjectPath<'a>,
     pub(crate) interface: InterfaceName<'a>,
     // Keep it in an Arc so that dest_name_update_task can keep its own ref to it.
-    dest_unique_name: Arc<Mutex<Option<OwnedUniqueName>>>,
+    dest_unique_name: Arc<RwLock<Option<OwnedUniqueName>>>,
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
     #[derivative(Debug = "ignore")]
@@ -253,7 +253,7 @@ impl<'a> ProxyInner<'a> {
             destination,
             path,
             interface,
-            dest_unique_name: Arc::new(Mutex::new(None)),
+            dest_unique_name: Arc::new(RwLock::new(None)),
             sig_handlers: Mutex::new(SlotMap::with_key()),
             signal_msg_stream: OnceCell::new(),
             dest_name_update_task: OnceCell::new(),
@@ -268,7 +268,7 @@ impl<'a> ProxyInner<'a> {
             return Ok(None);
         }
 
-        let dest_unique_name = self.dest_unique_name.lock().await;
+        let dest_unique_name = self.dest_unique_name.read().await;
         if h.interface() == Ok(Some(&self.interface))
             && h.sender() == Ok(dest_unique_name.as_deref())
             && h.path() == Ok(Some(&self.path))
@@ -294,9 +294,8 @@ impl<'a> ProxyInner<'a> {
         let destination = &self.destination;
         match destination {
             BusName::Unique(name) => {
-                let mut dest_unique_name = self.dest_unique_name.lock().await;
-                if dest_unique_name.is_none() {
-                    *dest_unique_name = Some(name.to_owned().into());
+                if self.dest_unique_name.read().await.is_none() {
+                    *self.dest_unique_name.write().await = Some(name.to_owned().into());
                 }
             }
             BusName::WellKnown(well_known_name) => {
@@ -362,7 +361,7 @@ impl<'a> ProxyInner<'a> {
                         )>() {
                             if name == well_known_name {
                                 let unique_name = new_owner.as_ref().map(|n| n.to_owned().into());
-                                *dest_unique_name.lock().await = unique_name;
+                                *dest_unique_name.write().await = unique_name;
                             }
                         }
                     }
@@ -381,7 +380,7 @@ impl<'a> ProxyInner<'a> {
                     res => Some(res?),
                 };
 
-                *self.dest_unique_name.lock().await = unique_name;
+                *self.dest_unique_name.write().await = unique_name;
             }
         }
 
