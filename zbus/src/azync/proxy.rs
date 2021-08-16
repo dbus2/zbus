@@ -16,8 +16,11 @@ use std::{
     task::{Context, Poll},
 };
 
-use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName};
-use zvariant::{ObjectPath, OwnedValue, Value};
+use zbus_names::{
+    BusName, InterfaceName, MemberName, OwnedUniqueName, OwnedWellKnownName, UniqueName,
+    WellKnownName,
+};
+use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     azync::{Connection, ProxyBuilder},
@@ -140,11 +143,13 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) destination: BusName<'a>,
     pub(crate) path: ObjectPath<'a>,
     pub(crate) interface: InterfaceName<'a>,
-    dest_unique_name: Mutex<Option<OwnedUniqueName>>,
+    // Keep it in an Arc so that dest_name_update_task can keep its own ref to it.
+    dest_unique_name: Arc<Mutex<Option<OwnedUniqueName>>>,
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
     #[derivative(Debug = "ignore")]
     signal_msg_stream: OnceCell<Mutex<Connection>>,
+    dest_name_update_task: OnceCell<Task<()>>,
 }
 
 pub struct PropertyStream<'a, T> {
@@ -248,9 +253,10 @@ impl<'a> ProxyInner<'a> {
             destination,
             path,
             interface,
-            dest_unique_name: Mutex::new(None),
+            dest_unique_name: Arc::new(Mutex::new(None)),
             sig_handlers: Mutex::new(SlotMap::with_key()),
             signal_msg_stream: OnceCell::new(),
+            dest_name_update_task: OnceCell::new(),
         }
     }
 
@@ -262,7 +268,7 @@ impl<'a> ProxyInner<'a> {
             return Ok(None);
         }
 
-        let dest_unique_name = self.destination_unique_name().await?.lock().await;
+        let dest_unique_name = self.dest_unique_name.lock().await;
         if h.interface() == Ok(Some(&self.interface))
             && h.sender() == Ok(dest_unique_name.as_deref())
             && h.path() == Ok(Some(&self.path))
@@ -273,7 +279,7 @@ impl<'a> ProxyInner<'a> {
         }
     }
 
-    /// Resolves the destination name to the associated unique connection name.
+    /// Resolves the destination name to the associated unique connection name and watches for any changes.
     ///
     /// Typically you would want to create the [`Proxy`] with the well-known name of the destination
     /// service but signal messages only specify the unique name of the peer (except for signals
@@ -281,35 +287,105 @@ impl<'a> ProxyInner<'a> {
     /// the message. While in most cases this will not be a problem, it becomes a problem if you
     /// need to communicate with multiple services exposing the same interface, over the same
     /// connection. Hence the need for this method.
-    pub(crate) async fn destination_unique_name(&self) -> Result<&Mutex<Option<OwnedUniqueName>>> {
-        let mut dest_unique_name = self.dest_unique_name.lock().await;
-        if dest_unique_name.is_some() {
-            // Already resolved the name.
-            return Ok(&self.dest_unique_name);
-        }
-
+    ///
+    /// This is only called when the user show interest in receiving a signal so that we don't end up
+    /// doing all this needlessly.
+    pub(crate) async fn destination_unique_name(&self) -> Result<()> {
         let destination = &self.destination;
-        let unique_name = match destination {
-            BusName::Unique(name) => name.to_owned().into(),
-            BusName::WellKnown(_) => {
-                match fdo::AsyncDBusProxy::new(&self.conn)
+        match destination {
+            BusName::Unique(name) => {
+                let mut dest_unique_name = self.dest_unique_name.lock().await;
+                if dest_unique_name.is_none() {
+                    *dest_unique_name = Some(name.to_owned().into());
+                }
+            }
+            BusName::WellKnown(well_known_name) => {
+                if self.dest_name_update_task.get().is_some() {
+                    // Already watching over the bus for any name updates so nothing to do here.
+                    return Ok(());
+                }
+
+                let mut conn = self.conn.clone();
+                let dest_unique_name = self.dest_unique_name.clone();
+                let well_known_name = OwnedWellKnownName::from(well_known_name.to_owned());
+                // We've to use low-level API here to avoid infinite cycles. Otherwise, we'll
+                // get a complicated error from MIR, w/ this repeated multiple times:
+                // note: ...which requires building MIR for `azync::proxy::<impl at zbus/src/azync/proxy.rs:338:1: 886:2>::receive_signal`...
+                let subscription_id = conn
+                    .subscribe_signal(
+                        "org.freedesktop.DBus",
+                        "/org/freedesktop/DBus",
+                        "org.freedesktop.DBus",
+                        "NameOwnerChanged",
+                    )
+                    .await?;
+                let task = self.conn.executor().spawn(async move {
+                    struct Subcription<'c> {
+                        id: u64,
+                        conn: &'c mut Connection,
+                    }
+                    impl Drop for Subcription<'_> {
+                        fn drop(&mut self) {
+                            self.conn.queue_unsubscribe_signal(self.id);
+                        }
+                    }
+                    let subscription = Subcription {
+                        id: subscription_id,
+                        conn: &mut conn,
+                    };
+                    while let Some(Ok(msg)) = subscription.conn.next().await {
+                        let header = match msg.header() {
+                            Ok(h) => h,
+                            Err(_) => continue,
+                        };
+                        if header.sender()
+                            != Ok(Some(&UniqueName::from_str_unchecked(
+                                "org.freedesktop.DBus",
+                            )))
+                            || header.path()
+                                != Ok(Some(&ObjectPath::from_str_unchecked(
+                                    "/org/freedesktop/DBus",
+                                )))
+                            || header.interface()
+                                != Ok(Some(&InterfaceName::from_str_unchecked(
+                                    "org.freedesktop.DBus",
+                                )))
+                            || header.member()
+                                != Ok(Some(&MemberName::from_str_unchecked("NameOwnerChanged")))
+                        {
+                            continue;
+                        }
+                        if let Ok((name, _, new_owner)) = msg.body::<(
+                            WellKnownName<'_>,
+                            Optional<UniqueName<'_>>,
+                            Optional<UniqueName<'_>>,
+                        )>() {
+                            if name == well_known_name {
+                                let unique_name = new_owner.as_ref().map(|n| n.to_owned().into());
+                                *dest_unique_name.lock().await = unique_name;
+                            }
+                        }
+                    }
+                });
+                self.dest_name_update_task
+                    .set(task)
+                    .expect("Attempted to set destination update task twice");
+
+                let unique_name = match fdo::AsyncDBusProxy::new(&self.conn)
                     .await?
                     .get_name_owner(destination.clone())
                     .await
                 {
-                    // That's ok. We'll try later again.
-                    Err(fdo::Error::NameHasNoOwner(_)) => return Ok(&self.dest_unique_name),
-                    res => res?,
-                }
-            }
-        };
+                    // That's ok. The destination isn't available right now.
+                    Err(fdo::Error::NameHasNoOwner(_)) => None,
+                    res => Some(res?),
+                };
 
-        if dest_unique_name.replace(unique_name).is_some() {
-            // programmer (probably our) error if this fails.
-            panic!("Attempted to set dest_unique_name twice");
+                *self.dest_unique_name.lock().await = unique_name;
+            }
         }
 
-        Ok(&self.dest_unique_name)
+        Ok(())
     }
 }
 
@@ -638,6 +714,9 @@ impl<'a> Proxy<'a> {
         M: TryInto<MemberName<'static>>,
         M::Error: Into<Error>,
     {
+        // Time to try & resolve the destination name & track changes to it.
+        self.inner.destination_unique_name().await?;
+
         let signal_name = signal_name.try_into().map_err(Into::into)?;
         let subscription_id = if self.inner.conn.is_bus() {
             let id = self
@@ -712,6 +791,9 @@ impl<'a> Proxy<'a> {
     {
         // Ensure the stream.
         self.msg_stream().await;
+
+        // Time to try resolve the destination name & track changes to it.
+        self.inner.destination_unique_name().await?;
 
         let signal_name = signal_name.try_into().map_err(Into::into)?;
         let id = self
