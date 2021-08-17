@@ -200,9 +200,10 @@ mod tests {
                 &mut self,
                 arg: &str,
                 #[zbus(signal_context)] ctxt: SignalContext<'_>,
-            ) -> Result<()> {
+            ) -> crate::fdo::Result<()> {
                 *self.times_called.lock().unwrap() += 1;
-                Self::some_signal(&ctxt, arg)
+                Self::some_signal(&ctxt, arg)?;
+                Ok(())
             }
         }
 

@@ -227,7 +227,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     fn bye(signal_ctxt: &SignalContext<'_>, message: &str) -> zbus::Result<()>;
 ///
 ///     #[dbus_interface(out_args("answer", "question"))]
-///     fn meaning_of_life(&self) -> zbus::Result<(i32, String)> {
+///     fn meaning_of_life(&self) -> zbus::fdo::Result<(i32, String)> {
 ///         Ok((42, String::from("Meaning of life")))
 ///     }
 /// }
