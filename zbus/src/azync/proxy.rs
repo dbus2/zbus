@@ -55,17 +55,22 @@ pub(crate) struct PropertyChangedHandlerInfo {
 }
 
 // Hold proxy properties related data.
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
 pub(crate) struct ProxyProperties<'a> {
     pub(crate) proxy: OnceCell<AsyncPropertiesProxy<'a>>,
     pub(crate) values: SyncMutex<HashMap<String, OwnedValue>>,
     task: OnceCell<Task<()>>,
-    #[derivative(Debug = "ignore")]
     pub(crate) changed_handlers:
         Mutex<SlotMap<PropertyChangedHandlerId, PropertyChangedHandlerInfo>>,
     broadcaster: Broadcaster<PropertyChangedEvent>,
     receiver: InactiveReceiver<PropertyChangedEvent>,
+}
+
+impl<'a> std::fmt::Debug for ProxyProperties<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProxyProperties")
+            .field("values", &self.values)
+            .finish_non_exhaustive()
+    }
 }
 
 /// The asynchronous sibling of [`crate::Proxy`].
@@ -136,6 +141,7 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 pub(crate) struct ProxyInner<'a> {
+    #[derivative(Debug = "ignore")]
     pub(crate) conn: Connection,
     pub(crate) destination: BusName<'a>,
     pub(crate) path: ObjectPath<'a>,
