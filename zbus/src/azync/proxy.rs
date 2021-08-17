@@ -1,6 +1,6 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_io::Timer;
-use async_lock::{Mutex, RwLock};
+use async_lock::Mutex;
 use async_recursion::async_recursion;
 use async_task::Task;
 use event_listener::Event;
@@ -14,7 +14,7 @@ use std::{
     convert::{TryFrom, TryInto},
     io::{self, ErrorKind},
     pin::Pin,
-    sync::{Arc, Mutex as SyncMutex},
+    sync::{Arc, Mutex as SyncMutex, RwLock},
     task::{Context, Poll},
     time::Duration,
 };
@@ -276,7 +276,13 @@ impl<'a> ProxyInner<'a> {
         if h.interface() == Ok(Some(&self.interface)) && h.path() == Ok(Some(&self.path)) {
             for _ in 0..2 {
                 let listener = self.dest_name_update_event.listen();
-                if h.sender() == Ok(self.dest_unique_name.read().await.as_deref()) {
+                if h.sender()
+                    == Ok(self
+                        .dest_unique_name
+                        .read()
+                        .expect("lock poisoned")
+                        .as_deref())
+                {
                     return Ok(h.member().ok().flatten());
                 }
 
@@ -307,8 +313,14 @@ impl<'a> ProxyInner<'a> {
         let destination = &self.destination;
         match destination {
             BusName::Unique(name) => {
-                if self.dest_unique_name.read().await.is_none() {
-                    *self.dest_unique_name.write().await = Some(name.to_owned().into());
+                if self
+                    .dest_unique_name
+                    .read()
+                    .expect("lock poisoned")
+                    .is_none()
+                {
+                    *self.dest_unique_name.write().expect("lock poisoned") =
+                        Some(name.to_owned().into());
                     self.dest_name_update_event.notify(usize::MAX);
                 }
             }
@@ -376,7 +388,7 @@ impl<'a> ProxyInner<'a> {
                         )>() {
                             if name == well_known_name {
                                 let unique_name = new_owner.as_ref().map(|n| n.to_owned().into());
-                                *dest_unique_name.write().await = unique_name;
+                                *dest_unique_name.write().expect("lock poisoned") = unique_name;
                                 dest_name_update_event.notify(usize::MAX);
                             }
                         }
@@ -396,7 +408,7 @@ impl<'a> ProxyInner<'a> {
                     res => Some(res?),
                 };
 
-                *self.dest_unique_name.write().await = unique_name;
+                *self.dest_unique_name.write().expect("lock poisoned") = unique_name;
                 self.dest_name_update_event.notify(usize::MAX);
             }
         }
