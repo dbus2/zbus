@@ -141,6 +141,7 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 pub(crate) struct ProxyInner<'a> {
+    #[derivative(Debug = "ignore")]
     pub(crate) conn: Connection,
     pub(crate) destination: BusName<'a>,
     pub(crate) path: ObjectPath<'a>,
