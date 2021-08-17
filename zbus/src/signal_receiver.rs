@@ -1,18 +1,16 @@
 use crate::{Connection, Error, MessageHeader, Proxy, Result};
-use async_io::block_on;
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
     convert::{AsRef, TryFrom},
     sync::Arc,
 };
-use zbus_names::{InterfaceName, UniqueName};
+use zbus_names::InterfaceName;
 use zvariant::ObjectPath;
 
 #[derive(Hash, Eq, PartialEq)]
 struct ProxyKey<'key> {
     interface: InterfaceName<'key>,
-    destination: UniqueName<'key>,
     path: ObjectPath<'key>,
 }
 
@@ -25,21 +23,6 @@ where
         ProxyKey {
             interface: proxy.interface().to_owned(),
             path: proxy.path().to_owned(),
-            // SAFETY: we ensure proxy's name is resolved before creating a key for it, in
-            // `SignalReceiver::receive_for` method.
-            destination: block_on(async {
-                proxy
-                    .inner()
-                    .destination_unique_name()
-                    .await
-                    .expect("Destination unique name")
-                    .lock()
-                    .await
-                    .as_ref()
-                    .expect("Destination unique name")
-                    .clone()
-                    .into()
-            }),
         }
     }
 }
@@ -48,17 +31,9 @@ impl<'key> TryFrom<&'key MessageHeader<'key>> for ProxyKey<'key> {
     type Error = Error;
 
     fn try_from(hdr: &'key MessageHeader<'key>) -> Result<Self> {
-        match (
-            hdr.interface()?.cloned(),
-            hdr.path()?.cloned(),
-            hdr.sender()?.cloned(),
-        ) {
-            (Some(interface), Some(path), Some(destination)) => Ok(ProxyKey {
-                interface,
-                destination,
-                path,
-            }),
-            (_, _, _) => Err(Error::MissingField),
+        match (hdr.interface()?.cloned(), hdr.path()?.cloned()) {
+            (Some(interface), Some(path)) => Ok(ProxyKey { interface, path }),
+            (_, _) => Err(Error::MissingField),
         }
     }
 }
@@ -68,7 +43,7 @@ impl<'key> TryFrom<&'key MessageHeader<'key>> for ProxyKey<'key> {
 /// Use this to receive signals on a given connection for a bunch of proxies at the same time.
 pub struct SignalReceiver<'a> {
     conn: Connection,
-    proxies: HashMap<ProxyKey<'static>, &'a Proxy<'a>>,
+    proxies: HashMap<ProxyKey<'static>, Vec<&'a Proxy<'a>>>,
 }
 
 assert_impl_all!(SignalReceiver<'_>: Send, Sync, Unpin);
@@ -89,7 +64,7 @@ impl<'a> SignalReceiver<'a> {
 
     /// Get a iterator for all the proxies in this receiver.
     pub fn proxies(&self) -> impl Iterator<Item = &&Proxy<'a>> {
-        self.proxies.values()
+        self.proxies.values().flatten()
     }
 
     /// Watch for signals relevant to the `proxy`.
@@ -106,7 +81,8 @@ impl<'a> SignalReceiver<'a> {
         assert_eq!(proxy.connection().unique_name(), self.conn.unique_name());
 
         let key = ProxyKey::from(proxy);
-        self.proxies.insert(key, proxy);
+        let proxies = self.proxies.entry(key).or_default();
+        proxies.push(proxy);
 
         Ok(())
     }
@@ -138,8 +114,12 @@ impl<'a> SignalReceiver<'a> {
         let hdr = msg.header()?;
 
         if let Ok(key) = ProxyKey::try_from(&hdr) {
-            if let Some(proxy) = self.proxies.get(&key) {
-                return proxy.handle_signal(msg);
+            if let Some(proxies) = self.proxies.get(&key) {
+                for proxy in proxies {
+                    if proxy.handle_signal(msg)? {
+                        return Ok(true);
+                    }
+                }
             }
         }
 

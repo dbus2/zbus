@@ -226,10 +226,14 @@ pub use zvariant;
 mod tests {
     use std::{
         collections::HashMap,
-        convert::TryInto,
+        convert::{TryFrom, TryInto},
         fs::File,
         os::unix::io::{AsRawFd, FromRawFd},
-        sync::{Arc, Condvar, Mutex},
+        sync::{
+            atomic::{AtomicU8, Ordering::SeqCst},
+            mpsc::channel,
+            Arc, Condvar, Mutex,
+        },
     };
 
     use enumflags2::BitFlags;
@@ -242,7 +246,7 @@ mod tests {
     use crate::{
         azync,
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, Message, MessageFlags, Result,
+        Connection, Message, MessageFlags, Result, SignalContext,
     };
 
     #[test]
@@ -596,10 +600,6 @@ mod tests {
         // with multiple out arguments, ending up with double parenthesis around the signature of
         // the return type and zbus only removing the outer `()` only and then it not matching the
         // signature we receive on the reply message.
-        use std::{
-            convert::TryFrom,
-            sync::{Arc, Mutex},
-        };
         use zvariant::{ObjectPath, Value};
         let conn = Connection::session().unwrap();
         let service_name = conn.unique_name().unwrap().clone();
@@ -762,5 +762,79 @@ mod tests {
             #[dbus_proxy(property)]
             fn sessions_struct(&self) -> zbus::Result<DbusPath>;
         }
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn issue173() {
+        // Tests the fix for https://gitlab.freedesktop.org/dbus/zbus/-/issues/173
+        //
+        // The issue is caused by proxy not keeping track of its destination's owner changes
+        // (service restart) and failing to receive signals as a result.
+        let (tx, rx) = channel();
+        let child = std::thread::spawn(move || {
+            let conn = Connection::session().unwrap();
+            #[super::dbus_proxy(
+                interface = "org.freedesktop.zbus.ComeAndGo",
+                default_service = "org.freedesktop.zbus.ComeAndGo",
+                default_path = "/org/freedesktop/zbus/ComeAndGo"
+            )]
+            trait ComeAndGo {
+                #[dbus_proxy(signal)]
+                fn the_signal(&self) -> zbus::Result<()>;
+            }
+
+            let proxy = ComeAndGoProxy::new(&conn).unwrap();
+            let count = Arc::new(AtomicU8::new(0));
+            let count_clone = count.clone();
+            let tx_clone = tx.clone();
+            proxy
+                .connect_the_signal(move || {
+                    count_clone.fetch_add(1, SeqCst);
+                    tx_clone.send(()).unwrap();
+                    Ok(())
+                })
+                .unwrap();
+            tx.send(()).unwrap();
+
+            // We receive two signals, each time from different unique names. W/o the fix for
+            // issue#173, the second iteration hangs on `next_signal` call.
+            while count.load(SeqCst) < 2 {
+                proxy.next_signal().unwrap();
+            }
+        });
+
+        struct ComeAndGo;
+        #[super::dbus_interface(name = "org.freedesktop.zbus.ComeAndGo")]
+        impl ComeAndGo {
+            #[dbus_interface(signal)]
+            fn the_signal(signal_ctxt: &SignalContext<'_>) -> zbus::Result<()>;
+        }
+
+        rx.recv().unwrap();
+        for _ in 0..2 {
+            let conn = Connection::session().unwrap();
+            let mut object_server = super::ObjectServer::new(&conn)
+                .request_name("org.freedesktop.zbus.ComeAndGo")
+                .unwrap();
+
+            object_server
+                .at("/org/freedesktop/zbus/ComeAndGo", ComeAndGo)
+                .unwrap();
+
+            object_server
+                .with("/org/freedesktop/zbus/ComeAndGo", |_: &ComeAndGo, ctxt| {
+                    ComeAndGo::the_signal(ctxt)
+                })
+                .unwrap();
+            rx.recv().unwrap();
+
+            // Now we disconnect (and hence release the name ownership) to use a different
+            // connection (i-e new unique name).
+            drop(object_server);
+            drop(conn);
+        }
+
+        child.join().unwrap();
     }
 }
