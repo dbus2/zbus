@@ -6,14 +6,15 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use enumflags2::BitFlags;
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
     utils::padding_for_8_bytes, EndianSig, Error, MessageField, MessageFieldCode, MessageFields,
-    MessageHeader, MessagePrimaryHeader, MessageType, OwnedFd, Result, MIN_MESSAGE_SIZE,
-    NATIVE_ENDIAN_SIG,
+    MessageFlags, MessageHeader, MessagePrimaryHeader, MessageType, OwnedFd, Result,
+    MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
 };
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
@@ -84,10 +85,20 @@ impl<'a> MessageBuilder<'a> {
             .reply_to(reply_to)
     }
 
-    pub fn with_flag(mut self, flag: zbus::MessageFlags) -> Self {
+    /// Add flags to the message.
+    ///
+    /// See [`MessageFlags`] documentation for the meaning of the flags.
+    ///
+    /// The function will return an error if invalid flags are given for the message type.
+    pub fn with_flag(mut self, flag: MessageFlags) -> Result<Self> {
+        if self.header.message_type()? != MessageType::MethodCall
+            && BitFlags::from_flag(flag).contains(MessageFlags::NoReplyExpected)
+        {
+            return Err(Error::InvalidField);
+        }
         let flags = self.header.primary().flags() | flag;
         self.header.primary_mut().set_flags(flags);
-        self
+        Ok(self)
     }
 
     /// Set the unique name of the sending connection.
