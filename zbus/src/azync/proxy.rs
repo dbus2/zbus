@@ -791,8 +791,7 @@ impl<'a> Proxy<'a> {
                     })
                 }
             })
-            // Safety: Filter above ensures we only get `Ok(msg)`.
-            .map(|msg| msg.unwrap());
+            .filter_map(|msg| async move { msg.ok() });
 
         Ok(SignalStream {
             stream: stream.boxed(),
