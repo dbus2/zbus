@@ -2,7 +2,7 @@ use std::{
     convert::{TryFrom, TryInto},
     fmt,
     io::Cursor,
-    os::unix::io::{AsRawFd, IntoRawFd, RawFd},
+    os::unix::io::{AsRawFd, RawFd},
     sync::{Arc, RwLock},
 };
 
@@ -363,17 +363,23 @@ impl Message {
         *self.fds.write().expect(LOCK_PANIC_MSG) = Fds::Owned(fds);
     }
 
-    /// Disown the associated file descriptors.
+    /// Disown the associated file descriptors from the message.
     ///
-    /// When a message is received over a AF_UNIX socket, it may
-    /// contain associated FDs. To prevent the message from closing
-    /// those FDs on drop, you may remove the ownership thanks to this
-    /// method, after that you are responsible for closing them.
-    pub fn disown_fds(&self) {
+    /// When a message is received over a AF_UNIX socket, it may contain associated FDs. To prevent
+    /// the message from closing those FDs on drop, call this method that returns all the received
+    /// FDs with their ownership.
+    ///
+    /// Note: the message will continue to reference the files, so you must keep them open for as
+    /// long as the message itself.
+    pub fn disown_fds(&self) -> Vec<OwnedFd> {
         let mut fds_lock = self.fds.write().expect(LOCK_PANIC_MSG);
         if let Fds::Owned(ref mut fds) = *fds_lock {
             // From now on, it's the caller responsibility to close the fds
-            *fds_lock = Fds::Raw(fds.drain(..).map(|fd| fd.into_raw_fd()).collect());
+            let fds = std::mem::take(&mut *fds);
+            *fds_lock = Fds::Raw(fds.iter().map(|fd| fd.as_raw_fd()).collect());
+            fds
+        } else {
+            vec![]
         }
     }
 
