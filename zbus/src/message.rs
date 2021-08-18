@@ -109,7 +109,7 @@ impl<'a> MessageBuilder<'a> {
     {
         self.header
             .fields_mut()
-            .add(MessageField::Sender(sender.try_into().map_err(Into::into)?));
+            .replace(MessageField::Sender(sender.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -121,7 +121,7 @@ impl<'a> MessageBuilder<'a> {
     {
         self.header
             .fields_mut()
-            .add(MessageField::Path(path.try_into().map_err(Into::into)?));
+            .replace(MessageField::Path(path.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -131,7 +131,7 @@ impl<'a> MessageBuilder<'a> {
         I: TryInto<InterfaceName<'i>>,
         I::Error: Into<Error>,
     {
-        self.header.fields_mut().add(MessageField::Interface(
+        self.header.fields_mut().replace(MessageField::Interface(
             interface.try_into().map_err(Into::into)?,
         ));
         Ok(self)
@@ -145,7 +145,7 @@ impl<'a> MessageBuilder<'a> {
     {
         self.header
             .fields_mut()
-            .add(MessageField::Member(member.try_into().map_err(Into::into)?));
+            .replace(MessageField::Member(member.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -154,7 +154,7 @@ impl<'a> MessageBuilder<'a> {
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
-        self.header.fields_mut().add(MessageField::ErrorName(
+        self.header.fields_mut().replace(MessageField::ErrorName(
             error.try_into().map_err(Into::into)?,
         ));
         Ok(self)
@@ -166,7 +166,7 @@ impl<'a> MessageBuilder<'a> {
         D: TryInto<BusName<'d>>,
         D::Error: Into<Error>,
     {
-        self.header.fields_mut().add(MessageField::Destination(
+        self.header.fields_mut().replace(MessageField::Destination(
             destination.try_into().map_err(Into::into)?,
         ));
         Ok(self)
@@ -177,12 +177,12 @@ impl<'a> MessageBuilder<'a> {
         let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
         self.header
             .fields_mut()
-            .add(MessageField::ReplySerial(*serial));
+            .replace(MessageField::ReplySerial(*serial));
 
         if let Some(sender) = reply_to.sender()? {
             self.header
                 .fields_mut()
-                .add(MessageField::Destination(BusName::Unique(
+                .replace(MessageField::Destination(BusName::Unique(
                     sender.to_owned(),
                 )));
         }
