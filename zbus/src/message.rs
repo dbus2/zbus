@@ -90,7 +90,7 @@ impl<'a> MessageBuilder<'a> {
     /// See [`MessageFlags`] documentation for the meaning of the flags.
     ///
     /// The function will return an error if invalid flags are given for the message type.
-    pub fn with_flag(mut self, flag: MessageFlags) -> Result<Self> {
+    pub fn with_flags(mut self, flag: MessageFlags) -> Result<Self> {
         if self.header.message_type()? != MessageType::MethodCall
             && BitFlags::from_flag(flag).contains(MessageFlags::NoReplyExpected)
         {
