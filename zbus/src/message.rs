@@ -180,14 +180,10 @@ impl<'a> MessageBuilder<'a> {
             .replace(MessageField::ReplySerial(*serial));
 
         if let Some(sender) = reply_to.sender()? {
-            self.header
-                .fields_mut()
-                .replace(MessageField::Destination(BusName::Unique(
-                    sender.to_owned(),
-                )));
+            self.destination(sender.to_owned())
+        } else {
+            Ok(self)
         }
-
-        Ok(self)
     }
 
     /// Build the [`Message`] with the given body.
