@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error,
+    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error, Fd,
     ObjectPath, Result, Signature,
 };
 
@@ -81,7 +81,7 @@ where
 
     fn serialize_i32(self, v: i32) -> Result<()> {
         match self.0.sig_parser.next_char() {
-            'h' => {
+            Fd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
                 self.0.add_padding(u32::alignment(EncodingFormat::DBus))?;
                 let v = self.0.add_fd(v);
