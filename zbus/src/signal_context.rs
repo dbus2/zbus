@@ -1,7 +1,7 @@
 use crate::{zvariant::ObjectPath, Connection, Error, Result};
 use std::convert::TryInto;
 
-/// A signnal emission context.
+/// A signal emission context.
 ///
 /// For signal emission using the high-level API, you'll need instances of this type.
 ///
