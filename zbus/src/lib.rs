@@ -187,9 +187,6 @@ pub use signal_receiver::*;
 mod signal_context;
 pub use signal_context::*;
 
-mod owned_fd;
-pub use owned_fd::*;
-
 mod utils;
 pub use utils::*;
 
@@ -221,6 +218,8 @@ pub mod export {
 
 pub use zbus_names as names;
 pub use zvariant;
+
+use zvariant::OwnedFd;
 
 #[cfg(test)]
 mod tests {
