@@ -11,9 +11,9 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
-    owned_fd::OwnedFd, utils::padding_for_8_bytes, EndianSig, Error, MessageField,
-    MessageFieldCode, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType, Result,
-    MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE,
+    utils::padding_for_8_bytes, EndianSig, Error, MessageField, MessageFieldCode, MessageFields,
+    MessageHeader, MessagePrimaryHeader, MessageType, OwnedFd, Result, MIN_MESSAGE_SIZE,
+    NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE,
 };
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
