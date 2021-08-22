@@ -307,6 +307,12 @@ impl PartialEq<InterfaceName<'_>> for OwnedInterfaceName {
     }
 }
 
+impl Display for OwnedInterfaceName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        InterfaceName::from(self).fmt(f)
+    }
+}
+
 impl NoneValue for OwnedInterfaceName {
     type NoneType = <InterfaceName<'static> as NoneValue>::NoneType;
 

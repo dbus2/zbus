@@ -278,6 +278,12 @@ impl PartialEq<MemberName<'_>> for OwnedMemberName {
     }
 }
 
+impl Display for OwnedMemberName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        MemberName::from(self).fmt(f)
+    }
+}
+
 impl NoneValue for OwnedMemberName {
     type NoneType = <MemberName<'static> as NoneValue>::NoneType;
 
