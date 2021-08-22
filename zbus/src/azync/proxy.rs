@@ -26,7 +26,7 @@ use zbus_names::{
 use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
-    azync::{Connection, ProxyBuilder},
+    azync::{Connection, MessageStream, ProxyBuilder},
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
     Error, Message, MessageHeader, MessageType, Result,
 };
@@ -157,7 +157,7 @@ pub(crate) struct ProxyInner<'a> {
     #[derivative(Debug = "ignore")]
     sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
     #[derivative(Debug = "ignore")]
-    signal_msg_stream: OnceCell<Mutex<Connection>>,
+    signal_msg_stream: OnceCell<Mutex<MessageStream>>,
     dest_name_update_task: OnceCell<Task<()>>,
     dest_name_update_event: Arc<Event>,
 }
@@ -361,11 +361,12 @@ impl<'a> ProxyInner<'a> {
                             self.conn.queue_unsubscribe_signal(self.id);
                         }
                     }
-                    let subscription = Subcription {
+                    let mut stream = MessageStream::from(conn.clone());
+                    let _subscription = Subcription {
                         id: subscription_id,
                         conn: &mut conn,
                     };
-                    while let Some(Ok(msg)) = subscription.conn.next().await {
+                    while let Some(Ok(msg)) = stream.next().await {
                         let header = match msg.header() {
                             Ok(h) => h,
                             Err(_) => continue,
@@ -770,10 +771,7 @@ impl<'a> Proxy<'a> {
         };
 
         let proxy = self.inner.clone();
-        let stream = self
-            .inner
-            .conn
-            .clone()
+        let stream = MessageStream::from(&self.inner.conn)
             .try_filter_map(move |msg| {
                 let proxy = proxy.clone();
                 let signal_name = signal_name.clone();
@@ -946,11 +944,11 @@ impl<'a> Proxy<'a> {
         Ok(handled)
     }
 
-    async fn msg_stream(&self) -> &Mutex<Connection> {
+    async fn msg_stream(&self) -> &Mutex<MessageStream> {
         match self.inner.signal_msg_stream.get() {
             Some(stream) => stream,
             None => {
-                let stream = self.inner.conn.clone();
+                let stream = self.inner.conn.clone().into();
                 self.inner
                     .signal_msg_stream
                     .set(Mutex::new(stream))

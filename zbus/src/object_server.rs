@@ -17,7 +17,8 @@ use zbus_names::{InterfaceName, MemberName, WellKnownName};
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
-    azync, fdo,
+    azync::MessageStream,
+    fdo,
     fdo::{Introspectable, Peer, Properties},
     Connection, Error, Message, MessageHeader, MessageType, Result, SignalContext,
 };
@@ -330,7 +331,7 @@ pub struct ObjectServer {
     conn: Connection,
     root: Node,
     #[derivative(Debug = "ignore")]
-    msg_stream: azync::Connection,
+    msg_stream: MessageStream,
     registered_names: HashSet<WellKnownName<'static>>,
 }
 
@@ -341,7 +342,7 @@ impl ObjectServer {
     pub fn new(connection: &Connection) -> Self {
         Self {
             conn: connection.clone(),
-            msg_stream: connection.inner().clone(),
+            msg_stream: MessageStream::from(connection.inner().clone()),
             root: Node::new("/".try_into().expect("zvariant bug")),
             registered_names: HashSet::new(),
         }

@@ -1,4 +1,4 @@
-use async_broadcast::{broadcast, Receiver as BroadcastReceiver, Sender as Broadcaster};
+use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
 use async_io::block_on;
@@ -24,16 +24,16 @@ use std::{
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName};
 use zvariant::ObjectPath;
 
-use futures_core::{ready, stream, Future};
+use futures_core::{ready, Future};
 use futures_sink::Sink;
 use futures_util::{
     future::{select, Either},
     sink::SinkExt,
-    stream::StreamExt,
+    StreamExt,
 };
 
 use crate::{
-    azync::{Authenticated, ConnectionBuilder},
+    azync::{Authenticated, ConnectionBuilder, MessageStream},
     fdo,
     raw::{Connection as RawConnection, Socket},
     Error, Guid, Message, MessageType, Result,
@@ -265,9 +265,9 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// ```rust,no_run
 ///# async_io::block_on(async {
 /// use futures_util::stream::TryStreamExt;
-/// use zbus::azync::Connection;
+/// use zbus::azync::{Connection, MessageStream};
 ///
-/// let mut connection = Connection::session().await?;
+/// let connection = Connection::session().await?;
 ///
 /// connection
 ///     .call_method(
@@ -279,7 +279,8 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 ///     )
 ///     .await?;
 ///
-/// while let Some(msg) = connection.try_next().await? {
+/// let mut stream = MessageStream::from(connection);
+/// while let Some(msg) = stream.try_next().await? {
 ///     println!("Got message: {}", msg);
 /// }
 ///
@@ -304,10 +305,10 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 pub struct Connection {
     inner: Arc<ConnectionInner>,
 
-    msg_receiver: BroadcastReceiver<Arc<Message>>,
+    pub(crate) msg_receiver: InactiveReceiver<Arc<Message>>,
 
     // Receiver side of the error channel
-    error_receiver: Receiver<Error>,
+    pub(crate) error_receiver: Receiver<Error>,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
@@ -352,7 +353,7 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let stream = self.clone();
+        let stream = MessageStream::from(self.clone());
         let m = Message::method(
             self.unique_name(),
             destination,
@@ -714,6 +715,7 @@ impl Connection {
         let cap_unix_fd = auth.cap_unix_fd;
 
         let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
+        let msg_receiver = msg_receiver.deactivate();
         let (error_sender, error_receiver) = bounded(1);
         let executor = Arc::new(Executor::new());
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
@@ -833,22 +835,6 @@ impl<'a> Sink<Message> for &'a Connection {
     }
 }
 
-impl stream::Stream for Connection {
-    type Item = Result<Arc<Message>>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let stream = self.get_mut();
-        let msg_fut = stream.msg_receiver.next();
-        let err_fut = stream.error_receiver.next();
-        let mut select_fut = select(msg_fut, err_fut);
-
-        match ready!(Pin::new(&mut select_fut).poll(cx)) {
-            Either::Left((msg, _)) => Poll::Ready(msg.map(Ok)),
-            Either::Right((error, _)) => Poll::Ready(error.map(Err)),
-        }
-    }
-}
-
 struct ReceiveMessage<'r> {
     raw_conn: &'r sync::Mutex<RawConnection<Box<dyn Socket>>>,
 }
@@ -894,11 +880,12 @@ mod tests {
             .build();
         let client = ConnectionBuilder::unix_stream(p1).p2p().build();
 
-        let (mut client_conn, mut server_conn) = futures_util::try_join!(client, server)?;
+        let (client_conn, server_conn) = futures_util::try_join!(client, server)?;
 
         let server_future = async {
             let mut method: Option<Arc<Message>> = None;
-            while let Some(m) = server_conn.try_next().await? {
+            let mut stream = MessageStream::from(&server_conn);
+            while let Some(m) = stream.try_next().await? {
                 if m.to_string() == "Method call Test" {
                     method.replace(m);
 
@@ -915,12 +902,13 @@ mod tests {
         };
 
         let client_future = async {
+            let mut stream = MessageStream::from(&client_conn);
             let reply = client_conn
                 .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
             // Check we didn't miss the signal that was sent during the call.
-            let m = client_conn.try_next().await?.unwrap();
+            let m = stream.try_next().await?.unwrap();
             assert_eq!(m.to_string(), "Signal ASignalForYou");
             reply.body::<String>().map_err(|e| e.into())
         };

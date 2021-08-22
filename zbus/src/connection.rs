@@ -11,7 +11,10 @@ use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, Error, Message, Result};
+use crate::{
+    azync::{self, MessageStream},
+    Error, Message, Result,
+};
 
 /// A D-Bus connection.
 ///
@@ -53,7 +56,7 @@ use crate::{azync, Error, Message, Result};
 pub struct Connection {
     inner: azync::Connection,
     #[derivative(Debug = "ignore")]
-    stream: Arc<Mutex<azync::Connection>>,
+    stream: Arc<Mutex<azync::MessageStream>>,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
@@ -226,7 +229,7 @@ impl Connection {
 
 impl From<azync::Connection> for Connection {
     fn from(conn: azync::Connection) -> Self {
-        let stream = Arc::new(Mutex::new(conn.clone()));
+        let stream = Arc::new(Mutex::new(MessageStream::from(&conn)));
 
         Self {
             inner: conn,
