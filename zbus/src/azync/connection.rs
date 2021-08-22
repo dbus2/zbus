@@ -713,8 +713,7 @@ impl Connection {
         let auth = auth.into_inner();
         let cap_unix_fd = auth.cap_unix_fd;
 
-        let (mut msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
-        msg_sender.set_overflow(true);
+        let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
         let (error_sender, error_receiver) = bounded(1);
         let executor = Arc::new(Executor::new());
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
