@@ -293,6 +293,12 @@ impl Deref for OwnedBusName {
     }
 }
 
+impl Display for OwnedBusName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        BusName::from(self).fmt(f)
+    }
+}
+
 impl From<OwnedBusName> for BusName<'static> {
     fn from(name: OwnedBusName) -> Self {
         name.into_inner()
