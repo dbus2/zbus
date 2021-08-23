@@ -1,4 +1,5 @@
 use std::{
+    io::ErrorKind,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -13,7 +14,7 @@ use futures_util::{
 };
 use static_assertions::assert_impl_all;
 
-use crate::{azync::Connection, Message, Result};
+use crate::{azync::Connection, Error, Message, Result};
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
@@ -45,7 +46,21 @@ impl stream::Stream for MessageStream {
 
         match ready!(Pin::new(&mut select_fut).poll(cx)) {
             Either::Left((msg, _)) => Poll::Ready(msg.map(Ok)),
-            Either::Right((error, _)) => Poll::Ready(error.map(Err)),
+            Either::Right((error, _)) => Poll::Ready(
+                error
+                    .map(|e| match &e {
+                        Error::Io(io_error) => {
+                            let kind = io_error.kind();
+                            if kind == ErrorKind::UnexpectedEof || kind == ErrorKind::BrokenPipe {
+                                None
+                            } else {
+                                Some(Err(e))
+                            }
+                        }
+                        _ => Some(Err(e)),
+                    })
+                    .flatten(),
+            ),
         }
     }
 }
