@@ -4,7 +4,7 @@ use core::{
     ops::Deref,
 };
 
-use crate::{Error, Result, UniqueName, WellKnownName};
+use crate::{Error, OwnedUniqueName, OwnedWellKnownName, Result, UniqueName, WellKnownName};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use zvariant::{derive::Type, NoneValue, OwnedValue, Str, Type, Value};
@@ -262,6 +262,18 @@ impl From<BusName<'static>> for OwnedValue {
     }
 }
 
+impl<'a> From<&'a OwnedUniqueName> for BusName<'a> {
+    fn from(name: &'a OwnedUniqueName) -> Self {
+        BusName::Unique(name.into())
+    }
+}
+
+impl<'a> From<&'a OwnedWellKnownName> for BusName<'a> {
+    fn from(name: &'a OwnedWellKnownName) -> Self {
+        BusName::WellKnown(name.into())
+    }
+}
+
 /// Owned sibling of [`BusName`].
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type)]
 pub struct OwnedBusName(#[serde(borrow)] BusName<'static>);
@@ -278,6 +290,12 @@ impl Deref for OwnedBusName {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl Display for OwnedBusName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        BusName::from(self).fmt(f)
     }
 }
 

@@ -247,6 +247,12 @@ impl Deref for OwnedWellKnownName {
     }
 }
 
+impl Display for OwnedWellKnownName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        WellKnownName::from(self).fmt(f)
+    }
+}
+
 impl From<OwnedWellKnownName> for WellKnownName<'static> {
     fn from(name: OwnedWellKnownName) -> Self {
         name.into_inner()

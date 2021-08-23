@@ -308,3 +308,9 @@ impl NoneValue for OwnedUniqueName {
         UniqueName::null_value()
     }
 }
+
+impl Display for OwnedUniqueName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        UniqueName::from(self).fmt(f)
+    }
+}
