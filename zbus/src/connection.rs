@@ -1,20 +1,15 @@
-use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
 use std::{
     convert::TryInto,
-    io::{self, ErrorKind},
     os::unix::io::{AsRawFd, RawFd},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName};
 use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{
-    azync::{self, MessageStream},
-    Error, Message, Result,
-};
+use crate::{azync, Error, Message, Result};
 
 /// A D-Bus connection.
 ///
@@ -55,8 +50,6 @@ use crate::{
 #[derivative(Debug)]
 pub struct Connection {
     inner: azync::Connection,
-    #[derivative(Debug = "ignore")]
-    stream: Arc<Mutex<azync::MessageStream>>,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
@@ -96,16 +89,6 @@ impl Connection {
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
     pub fn unique_name(&self) -> Option<&OwnedUniqueName> {
         self.inner.unique_name()
-    }
-
-    /// Fetch the next message from the connection.
-    ///
-    /// Read from the connection until a message is received or an error is reached. Return the
-    /// message on success.
-    pub fn receive_message(&self) -> Result<Arc<Message>> {
-        let mut stream = self.stream.lock().expect("lock poisoned");
-        block_on(stream.next())
-            .ok_or_else(|| Error::Io(io::Error::new(ErrorKind::BrokenPipe, "socket closed")))?
     }
 
     /// Send `msg` to the peer.
@@ -229,12 +212,7 @@ impl Connection {
 
 impl From<azync::Connection> for Connection {
     fn from(conn: azync::Connection) -> Self {
-        let stream = Arc::new(Mutex::new(MessageStream::from(&conn)));
-
-        Self {
-            inner: conn,
-            stream,
-        }
+        Self { inner: conn }
     }
 }
 
