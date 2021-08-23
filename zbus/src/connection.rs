@@ -31,9 +31,11 @@ use crate::{azync, Error, Message, Result};
 /// parts of your code. `Connection` also implements [`std::marker::Sync`] and[`std::marker::Send`]
 /// so you can send and share a connection instance across threads as well.
 ///
-/// `Connection` keeps an internal ringbuffer of incoming message. The maximum capacity of this
-/// ringbuffer is configurable through the [`set_max_queued`] method. The default size is 64. When
-/// the buffer is full, messages are dropped to create room, starting from the oldest one.
+/// `Connection` keeps an internal queue of incoming message. The maximum capacity of this queue
+/// is configurable through the [`set_max_queued`] method. The default size is 64. When the queue is
+/// full, no more messages can be received until there is room is created for more. This is why it's
+/// important to ensure that all [`crate::MessageStream`] and [`crate::azync::MessageStream`]
+/// instances are continuously iterated on and polled, respectively.
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal

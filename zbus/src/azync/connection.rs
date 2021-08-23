@@ -195,7 +195,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// The asynchronous sibling of [`zbus::Connection`].
 ///
 /// Most of the API is very similar to [`zbus::Connection`], except it's asynchronous. However,
-/// there are a few differences:
+/// there is one notable difference:
 ///
 /// ### Sending Messages
 ///
@@ -209,18 +209,6 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 ///
 /// Since you do not need exclusive access to a `zbus::Connection` to send messages on the bus,
 /// [`Sink`] is also implemented on `&Connection`.
-///
-/// ### Receiving Messages
-///
-/// Unlike [`zbus::Connection`], there is no direct async equivalent of
-/// [`zbus::Connection::receive_message`] method provided. This is because the `futures` crate
-/// already provides a nice rich API that makes use of the [`stream::Stream`] implementation.
-///
-/// Each `Connection` instance maintains its own queue of incoming messages (storing the last
-/// `max_queued()` messages), so you can filter the stream for messages you care about and discard
-/// the rest.  To avoid having multiple receivers filtering the same queue, `Stream` is only
-/// available with an exclusive (mutable) reference to a `Connection`; clone the `Connection` to
-/// get a new queue to use the `Stream`.
 ///
 /// # Caveats
 ///
