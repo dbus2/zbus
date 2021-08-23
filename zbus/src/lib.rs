@@ -175,6 +175,9 @@ pub use connection::*;
 mod connection_builder;
 pub use connection_builder::*;
 
+mod message_stream;
+pub use message_stream::*;
+
 mod proxy;
 pub use proxy::*;
 
