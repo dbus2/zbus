@@ -9,18 +9,15 @@ use std::{
     sync::{Arc, RwLock, RwLockWriteGuard},
 };
 
-use async_io::block_on;
 use fdo::{DBusProxy, RequestNameFlags};
-use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
 use zbus_names::{InterfaceName, MemberName, WellKnownName};
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
-    azync::MessageStream,
     fdo,
     fdo::{Introspectable, Peer, Properties},
-    Connection, Error, Message, MessageHeader, MessageType, Result, SignalContext,
+    Connection, Error, Message, MessageHeader, MessageStream, MessageType, Result, SignalContext,
 };
 
 /// The trait used to dispatch messages to an interface instance.
@@ -342,7 +339,7 @@ impl ObjectServer {
     pub fn new(connection: &Connection) -> Self {
         Self {
             conn: connection.clone(),
-            msg_stream: MessageStream::from(connection.inner().clone()),
+            msg_stream: MessageStream::from(connection),
             root: Node::new("/".try_into().expect("zvariant bug")),
             registered_names: HashSet::new(),
         }
@@ -735,7 +732,7 @@ impl ObjectServer {
     ///
     /// Returns an error if the message is malformed or an error occurred.
     pub fn try_handle_next(&mut self) -> Result<Option<Arc<Message>>> {
-        match block_on(self.msg_stream.next()) {
+        match self.msg_stream.next() {
             Some(msg) => {
                 let msg = msg?;
 
@@ -793,8 +790,8 @@ mod tests {
     use zvariant::derive::Type;
 
     use crate::{
-        dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer,
-        SignalContext,
+        dbus_interface, dbus_proxy, Connection, MessageHeader, MessageStream, MessageType,
+        ObjectServer, SignalContext,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -1048,6 +1045,7 @@ mod tests {
         let (tx, rx) = channel::<()>();
 
         let conn = Connection::session().unwrap();
+        let stream = MessageStream::from(&conn);
         let mut object_server = ObjectServer::new(&conn)
             // primary name
             .request_name("org.freedesktop.MyService")
@@ -1073,8 +1071,8 @@ mod tests {
             })
             .unwrap();
 
-        loop {
-            let m = conn.receive_message().unwrap();
+        for m in stream {
+            let m = m.unwrap();
             if let Err(e) = object_server.dispatch_message(&m) {
                 eprintln!("{}", e);
             }

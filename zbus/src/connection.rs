@@ -244,7 +244,7 @@ mod tests {
     use std::{os::unix::net::UnixStream, thread};
     use test_env_log::test;
 
-    use crate::{ConnectionBuilder, Error, Guid};
+    use crate::{ConnectionBuilder, Guid, MessageStream};
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
@@ -267,11 +267,12 @@ mod tests {
         });
 
         let c = ConnectionBuilder::unix_stream(p1).p2p().build().unwrap();
-        let m = c.receive_message().unwrap();
+        let mut s = MessageStream::from(&c);
+        let m = s.next().unwrap().unwrap();
         assert_eq!(m.to_string(), "Method call Test");
         c.reply(&m, &("yay")).unwrap();
 
-        while !matches!(c.receive_message(), Err(Error::Io(_))) {}
+        for _ in s {}
 
         let val = server_thread.join().expect("failed to join server thread");
         assert_eq!(val, "yay");

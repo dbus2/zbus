@@ -1,8 +1,9 @@
-use crate::{Connection, Error, MessageHeader, Proxy, Result};
+use crate::{Error, MessageHeader, MessageStream, Proxy, Result};
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
     convert::{AsRef, TryFrom},
+    io::{self, ErrorKind},
     sync::Arc,
 };
 use zbus_names::InterfaceName;
@@ -42,7 +43,7 @@ impl<'key> TryFrom<&'key MessageHeader<'key>> for ProxyKey<'key> {
 ///
 /// Use this to receive signals on a given connection for a bunch of proxies at the same time.
 pub struct SignalReceiver<'a> {
-    conn: Connection,
+    stream: MessageStream,
     proxies: HashMap<ProxyKey<'static>, Vec<&'a Proxy<'a>>>,
 }
 
@@ -50,16 +51,16 @@ assert_impl_all!(SignalReceiver<'_>: Send, Sync, Unpin);
 
 impl<'a> SignalReceiver<'a> {
     /// Create a new `SignalReceiver` instance.
-    pub fn new(conn: Connection) -> Self {
+    pub fn new<S: Into<MessageStream>>(stream: S) -> Self {
         Self {
-            conn,
+            stream: stream.into(),
             proxies: HashMap::new(),
         }
     }
 
-    /// Get a reference to the associated connection.
-    pub fn connection(&self) -> &Connection {
-        &self.conn
+    /// Get a reference to the associated message stream.
+    pub fn stream(&self) -> &MessageStream {
+        &self.stream
     }
 
     /// Get a iterator for all the proxies in this receiver.
@@ -78,7 +79,10 @@ impl<'a> SignalReceiver<'a> {
         P: AsRef<Proxy<'a>>,
     {
         let proxy = proxy.as_ref();
-        assert_eq!(proxy.connection().unique_name(), self.conn.unique_name());
+        assert_eq!(
+            proxy.connection().unique_name(),
+            self.stream.inner().connection().unique_name()
+        );
 
         let key = ProxyKey::from(proxy);
         let proxies = self.proxies.entry(key).or_default();
@@ -94,8 +98,13 @@ impl<'a> SignalReceiver<'a> {
     ///
     /// If the signal message was handled by a handler, `Ok(None)` is returned. Otherwise, the
     /// received message is returned.
-    pub fn next_signal(&self) -> Result<Option<Arc<crate::Message>>> {
-        let msg = self.conn.receive_message()?;
+    pub fn next_signal(&mut self) -> Result<Option<Arc<crate::Message>>> {
+        let msg = self.stream.next().unwrap_or_else(|| {
+            Err(Error::Io(io::Error::new(
+                ErrorKind::BrokenPipe,
+                "socket closed",
+            )))
+        })?;
 
         if self.handle_signal(&msg)? {
             Ok(None)
@@ -130,7 +139,7 @@ impl<'a> SignalReceiver<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{dbus_interface, dbus_proxy, SignalContext};
+    use crate::{dbus_interface, dbus_proxy, Connection, SignalContext};
     use std::sync::{Arc, Mutex};
     use test_env_log::test;
 

@@ -248,7 +248,7 @@ mod tests {
     use crate::{
         azync,
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, Message, MessageFlags, Result, SignalContext,
+        Connection, Message, MessageFlags, MessageStream, Result, SignalContext,
     };
 
     #[test]
@@ -567,6 +567,7 @@ mod tests {
         // produces is exactly the same: `Connection::call_method` dropping all incoming messages
         // while waiting for the reply to the method call.
         let conn = Connection::session().unwrap();
+        let stream = MessageStream::from(&conn);
 
         // Send a message as client before service starts to process messages
         let client_conn = Connection::session().unwrap();
@@ -584,8 +585,8 @@ mod tests {
 
         crate::fdo::DBusProxy::new(&conn).unwrap().get_id().unwrap();
 
-        loop {
-            let msg = conn.receive_message().unwrap();
+        for m in stream {
+            let msg = m.unwrap();
 
             if *msg.primary_header().serial_num().unwrap() == serial {
                 break;
@@ -604,6 +605,7 @@ mod tests {
         // signature we receive on the reply message.
         use zvariant::{ObjectPath, Value};
         let conn = Connection::session().unwrap();
+        let stream = MessageStream::from(&conn);
         let service_name = conn.unique_name().unwrap().clone();
         let mut object_server = super::ObjectServer::new(&conn);
 
@@ -655,8 +657,8 @@ mod tests {
             2u32
         });
 
-        loop {
-            let m = conn.receive_message().unwrap();
+        for m in stream {
+            let m = m.unwrap();
             if let Err(e) = object_server.dispatch_message(&m) {
                 eprintln!("{}", e);
             }
@@ -695,7 +697,7 @@ mod tests {
     #[allow(clippy::mutex_atomic)]
     fn issue_122() {
         let conn = Connection::session().unwrap();
-        let conn_clone = conn.clone();
+        let stream = MessageStream::from(&conn);
 
         let pair = Arc::new((Mutex::new(false), Condvar::new()));
         let pair2 = Arc::clone(&pair);
@@ -708,7 +710,8 @@ mod tests {
                 cvar.notify_one();
             }
 
-            while let Ok(msg) = conn_clone.receive_message() {
+            for m in stream {
+                let msg = m.unwrap();
                 let hdr = msg.header().unwrap();
 
                 if hdr.member().unwrap().map(|m| m.as_str()) == Some("ZBusIssue122") {

@@ -67,8 +67,9 @@ by replacing the loop above with this code:
 #        zbus::fdo::RequestNameFlags::ReplaceExisting.into(),
 #    )?;
 #
-loop {
-    let msg = connection.receive_message()?;
+let mut stream = zbus::MessageStream::from(&connection);
+for msg in stream {
+    let msg = msg?;
     let msg_header = msg.header()?;
     dbg!(&msg);
 
@@ -78,10 +79,14 @@ loop {
             // handle invalid calls, introspection, errors etc
             let arg: &str = msg.body()?;
             connection.reply(&msg, &(format!("Hello {}!", arg)))?;
+
+            break;
         }
         _ => continue,
     }
 }
+
+# Ok(())
 # }
 ```
 
