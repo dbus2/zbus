@@ -183,6 +183,18 @@ at the time of the this writing (*pre-1.0*), zbus neither provides an event loop
 integration with other event loop implementations. We are evaluating different options to make this
 easier, especially with *async* support.
 
+### Method errors
+
+There are two possibilities for the return value for interface methods. The first is for infallible
+method calls, where the return type is a directly serializable value, like the `String` in
+`say_hello()` above.
+
+The second is a result return value, where the `Ok` variant is the serializable value, and the
+error is any error type that has a `reply(&self, &zbus::Connection, &zbus::Message)` method.
+The `zbus::fdo::Error` type implements this method, and should cover most common use cases.
+However, when a custom error type needs to be emitted from the method as an error reply, it
+can be created with `derive(zbus::DBusError)`, and used in the returned `Result<T, E>`.
+
 ### Sending signals
 
 As you might have noticed in the previous example, the signal methods don't take an `&self` argument
