@@ -788,6 +788,7 @@ mod tests {
     use ntest::timeout;
     use serde::{Deserialize, Serialize};
     use test_env_log::test;
+    use zbus::DBusError;
     use zvariant::derive::Type;
 
     use crate::{
@@ -852,6 +853,14 @@ mod tests {
         }
     }
 
+    /// Custom D-Bus error type.
+    #[derive(Debug, DBusError)]
+    #[dbus_error(prefix = "org.freedesktop.MyIface.Error")]
+    enum MyIfaceError {
+        SomethingWentWrong(String),
+        ZBus(zbus::Error),
+    }
+
     #[dbus_interface(interface = "org.freedesktop.MyIface")]
     impl MyIfaceImpl {
         fn ping(&mut self, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> u32 {
@@ -875,11 +884,15 @@ mod tests {
             Err(zbus::fdo::Error::Failed("error raised".to_string()))
         }
 
+        fn test_custom_error(&self) -> Result<(), MyIfaceError> {
+            Err(MyIfaceError::SomethingWentWrong("oops".to_string()))
+        }
+
         fn test_single_struct_arg(
             &self,
             arg: ArgStructTest,
             #[zbus(header)] header: MessageHeader<'_>,
-        ) -> zbus::Result<()> {
+        ) -> zbus::fdo::Result<()> {
             assert_eq!(header.signature()?.unwrap(), "(is)");
             assert_eq!(arg.foo, 1);
             assert_eq!(arg.bar, "TestString");
@@ -889,7 +902,7 @@ mod tests {
 
         // This attribute is a noop but add to ensure user specifying it doesn't break anything.
         #[dbus_interface(struct_return)]
-        fn test_single_struct_ret(&self) -> zbus::Result<ArgStructTest> {
+        fn test_single_struct_ret(&self) -> zbus::fdo::Result<ArgStructTest> {
             Ok(ArgStructTest {
                 foo: 42,
                 bar: String::from("Meaning of life"),
@@ -897,11 +910,11 @@ mod tests {
         }
 
         #[dbus_interface(out_args("foo", "bar"))]
-        fn test_multi_ret(&self) -> zbus::Result<(i32, String)> {
+        fn test_multi_ret(&self) -> zbus::fdo::Result<(i32, String)> {
             Ok((42, String::from("Meaning of life")))
         }
 
-        fn test_hashmap_return(&self) -> zbus::Result<HashMap<String, String>> {
+        fn test_hashmap_return(&self) -> zbus::fdo::Result<HashMap<String, String>> {
             let mut map = HashMap::new();
             map.insert("hi".into(), "hello".into());
             map.insert("bye".into(), "now".into());

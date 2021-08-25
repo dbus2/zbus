@@ -160,7 +160,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 ::std::result::Result::Ok(r) => s.connection().reply(m, &#ret),
                 ::std::result::Result::Err(e) => {
                     let c = s.connection();
-                    <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m)
+                    e.reply(c, m)
                 }
             })
         } else {
