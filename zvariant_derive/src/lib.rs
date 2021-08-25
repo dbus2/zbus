@@ -310,5 +310,5 @@ pub fn value_macro_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(OwnedValue)]
 pub fn owned_value_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
-    value::expand_derive(ast, value::ValueType::OwnedValue).into()
+    TokenStream::new()
 }
