@@ -93,7 +93,8 @@ ov_try_from_ref!(Fd);
 
 impl<'a, T> TryFrom<OwnedValue> for Vec<T>
 where
-    T: TryFrom<Value<'a>, Error = crate::Error>,
+    T: TryFrom<Value<'a>>,
+    T::Error: Into<crate::Error>,
 {
     type Error = crate::Error;
 
@@ -119,23 +120,13 @@ where
     }
 }
 
-impl TryFrom<OwnedValue> for Vec<OwnedValue> {
-    type Error = crate::Error;
-
-    fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
-        if let Value::Array(v) = value.0 {
-            Self::try_from(v)
-        } else {
-            Err(crate::Error::IncorrectType)
-        }
-    }
-}
-
 impl<'k, 'v, K, V, H> TryFrom<OwnedValue> for HashMap<K, V, H>
 where
-    K: crate::Basic + TryFrom<Value<'k>, Error = crate::Error> + std::hash::Hash + std::cmp::Eq,
-    V: TryFrom<Value<'v>, Error = crate::Error>,
+    K: crate::Basic + TryFrom<Value<'k>> + std::hash::Hash + std::cmp::Eq,
+    V: TryFrom<Value<'v>>,
     H: BuildHasher + Default,
+    K::Error: Into<crate::Error>,
+    V::Error: Into<crate::Error>,
 {
     type Error = crate::Error;
 

@@ -88,7 +88,8 @@ value_try_from_ref_clone!(Str, String);
 
 impl<'a, T> TryFrom<Value<'a>> for Vec<T>
 where
-    T: TryFrom<Value<'a>, Error = Error>,
+    T: TryFrom<Value<'a>>,
+    T::Error: Into<crate::Error>,
 {
     type Error = Error;
 
