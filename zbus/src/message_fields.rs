@@ -28,6 +28,18 @@ impl<'m> MessageFields<'m> {
         self.0.push(field);
     }
 
+    /// Replaces a [`MessageField`] from the collection of fields with one with the same code,
+    /// returning the old value if present.
+    ///
+    /// [`MessageField`]: enum.MessageField.html
+    pub fn replace<'f: 'm>(&mut self, field: MessageField<'f>) -> Option<MessageField<'m>> {
+        let code = field.code();
+        if let Some(found) = self.0.iter_mut().find(|f| f.code() == code) {
+            return Some(std::mem::replace(found, field));
+        }
+        self.add(field);
+        None
+    }
     /// Returns a slice with all the [`MessageField`] in the message.
     ///
     /// [`MessageField`]: enum.MessageField.html
@@ -71,5 +83,27 @@ impl<'m> std::ops::Deref for MessageFields<'m> {
 
     fn deref(&self) -> &Self::Target {
         self.get()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MessageField, MessageFields};
+
+    #[test]
+    fn test() {
+        let mut mf = MessageFields::new();
+        assert_eq!(mf.len(), 0);
+        mf.add(MessageField::ReplySerial(42));
+        assert_eq!(mf.len(), 1);
+        mf.add(MessageField::ReplySerial(43));
+        assert_eq!(mf.len(), 2);
+
+        let mut mf = MessageFields::new();
+        assert_eq!(mf.len(), 0);
+        mf.replace(MessageField::ReplySerial(42));
+        assert_eq!(mf.len(), 1);
+        mf.replace(MessageField::ReplySerial(43));
+        assert_eq!(mf.len(), 1);
     }
 }

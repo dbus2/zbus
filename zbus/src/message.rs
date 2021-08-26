@@ -6,14 +6,15 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use enumflags2::BitFlags;
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
     utils::padding_for_8_bytes, EndianSig, Error, MessageField, MessageFieldCode, MessageFields,
-    MessageHeader, MessagePrimaryHeader, MessageType, OwnedFd, Result, MIN_MESSAGE_SIZE,
-    NATIVE_ENDIAN_SIG, PRIMARY_HEADER_SIZE,
+    MessageFlags, MessageHeader, MessagePrimaryHeader, MessageType, OwnedFd, Result,
+    MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
 };
 
 const FIELDS_LEN_START_OFFSET: usize = 12;
@@ -25,25 +26,185 @@ macro_rules! dbus_context {
     };
 }
 
+/// A builder for [`Message`]
 #[derive(Debug)]
-struct MessageBuilder<'a, B> {
-    ty: MessageType,
-    body: &'a B,
-    body_len: u32,
-    reply_to: Option<MessageHeader<'a>>,
-    fields: MessageFields<'a>,
+pub struct MessageBuilder<'a> {
+    header: MessageHeader<'a>,
 }
 
-impl<'a, B> MessageBuilder<'a, B>
-where
-    B: serde::ser::Serialize + DynamicType,
-{
-    fn new(ty: MessageType, sender: Option<UniqueName<'a>>, body: &'a B) -> Result<Self> {
-        let ctxt = dbus_context!(0);
-        let (body_len, fds_len) = zvariant::serialized_size_fds(ctxt, body)?;
-        let body_len = u32::try_from(body_len).map_err(|_| Error::ExcessData)?;
+impl<'a> MessageBuilder<'a> {
+    fn new(ty: MessageType) -> Self {
+        let ph = MessagePrimaryHeader::new(ty, 0);
+        let fields = MessageFields::new();
+        let header = MessageHeader::new(ph, fields);
+        Self { header }
+    }
 
-        let mut fields = MessageFields::new();
+    /// Create a message of type [`MessageType::MethodCall`].
+    pub fn method_call<'p: 'a, 'm: 'a, P, M>(path: P, method_name: M) -> Result<Self>
+    where
+        P: TryInto<ObjectPath<'p>>,
+        M: TryInto<MemberName<'m>>,
+        P::Error: Into<Error>,
+        M::Error: Into<Error>,
+    {
+        Self::new(MessageType::MethodCall)
+            .path(path)?
+            .member(method_name)
+    }
+
+    /// Create a message of type [`MessageType::Signal`].
+    pub fn signal<'p: 'a, 'i: 'a, 'm: 'a, P, I, M>(path: P, interface: I, name: M) -> Result<Self>
+    where
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
+    {
+        Self::new(MessageType::Signal)
+            .path(path)?
+            .interface(interface)?
+            .member(name)
+    }
+
+    /// Create a message of type [`MessageType::MethodReturn`].
+    pub fn method_return(reply_to: &Message) -> Result<Self> {
+        Self::new(MessageType::MethodReturn).reply_to(reply_to)
+    }
+
+    /// Create a message of type [`MessageType::Error`].
+    pub fn error<'e: 'a, E>(reply_to: &Message, name: E) -> Result<Self>
+    where
+        E: TryInto<ErrorName<'e>>,
+        E::Error: Into<Error>,
+    {
+        Self::new(MessageType::Error)
+            .error_name(name)?
+            .reply_to(reply_to)
+    }
+
+    /// Add flags to the message.
+    ///
+    /// See [`MessageFlags`] documentation for the meaning of the flags.
+    ///
+    /// The function will return an error if invalid flags are given for the message type.
+    pub fn with_flags(mut self, flag: MessageFlags) -> Result<Self> {
+        if self.header.message_type()? != MessageType::MethodCall
+            && BitFlags::from_flag(flag).contains(MessageFlags::NoReplyExpected)
+        {
+            return Err(Error::InvalidField);
+        }
+        let flags = self.header.primary().flags() | flag;
+        self.header.primary_mut().set_flags(flags);
+        Ok(self)
+    }
+
+    /// Set the unique name of the sending connection.
+    pub fn sender<'s: 'a, S>(mut self, sender: S) -> Result<Self>
+    where
+        S: TryInto<UniqueName<'s>>,
+        S::Error: Into<Error>,
+    {
+        self.header
+            .fields_mut()
+            .replace(MessageField::Sender(sender.try_into().map_err(Into::into)?));
+        Ok(self)
+    }
+
+    /// Set the object to send a call to, or the object a signal is emitted from.
+    pub fn path<'p: 'a, P>(mut self, path: P) -> Result<Self>
+    where
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
+    {
+        self.header
+            .fields_mut()
+            .replace(MessageField::Path(path.try_into().map_err(Into::into)?));
+        Ok(self)
+    }
+
+    /// Set the interface to invoke a method call on, or that a signal is emitted from.
+    pub fn interface<'i: 'a, I>(mut self, interface: I) -> Result<Self>
+    where
+        I: TryInto<InterfaceName<'i>>,
+        I::Error: Into<Error>,
+    {
+        self.header.fields_mut().replace(MessageField::Interface(
+            interface.try_into().map_err(Into::into)?,
+        ));
+        Ok(self)
+    }
+
+    /// Set the member, either the method name or signal name.
+    pub fn member<'m: 'a, M>(mut self, member: M) -> Result<Self>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+    {
+        self.header
+            .fields_mut()
+            .replace(MessageField::Member(member.try_into().map_err(Into::into)?));
+        Ok(self)
+    }
+
+    fn error_name<'e: 'a, E>(mut self, error: E) -> Result<Self>
+    where
+        E: TryInto<ErrorName<'e>>,
+        E::Error: Into<Error>,
+    {
+        self.header.fields_mut().replace(MessageField::ErrorName(
+            error.try_into().map_err(Into::into)?,
+        ));
+        Ok(self)
+    }
+
+    /// Set the name of the connection this message is intended for.
+    pub fn destination<'d: 'a, D>(mut self, destination: D) -> Result<Self>
+    where
+        D: TryInto<BusName<'d>>,
+        D::Error: Into<Error>,
+    {
+        self.header.fields_mut().replace(MessageField::Destination(
+            destination.try_into().map_err(Into::into)?,
+        ));
+        Ok(self)
+    }
+
+    fn reply_to(mut self, reply_to: &Message) -> Result<Self> {
+        let reply_to = reply_to.header()?;
+        let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
+        self.header
+            .fields_mut()
+            .replace(MessageField::ReplySerial(*serial));
+
+        if let Some(sender) = reply_to.sender()? {
+            self.destination(sender.to_owned())
+        } else {
+            Ok(self)
+        }
+    }
+
+    /// Build the [`Message`] with the given body.
+    ///
+    /// You may pass `()` as the body if the message has no body.
+    ///
+    /// The caller is currently required to ensure that the resulting message contains the headers
+    /// as compliant with the [specification]. Additional checks may be added to this builder over
+    /// time as needed.
+    ///
+    /// [specification]:
+    /// https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-header-fields
+    pub fn build<B>(self, body: &B) -> Result<Message>
+    where
+        B: serde::ser::Serialize + DynamicType,
+    {
+        let ctxt = dbus_context!(0);
+        let mut header = self.header;
+        // Note: this iterates the body twice, but we prefer efficient handling of large messages
+        // to efficient handling of ones that are complex to serialize.
+        let (body_len, fds_len) = zvariant::serialized_size_fds(ctxt, body)?;
 
         let mut signature = body.dynamic_signature();
         if !signature.is_empty() {
@@ -51,53 +212,23 @@ where
                 // Remove leading and trailing STRUCT delimiters
                 signature = signature.slice(1..signature.len() - 1);
             }
-            fields.add(MessageField::Signature(signature));
-        }
-        if let Some(sender) = sender {
-            fields.add(MessageField::Sender(sender));
+            header.fields_mut().add(MessageField::Signature(signature));
         }
 
-        if fds_len > 0 {
-            fields.add(MessageField::UnixFDs(fds_len as u32));
+        let body_len_u32 = body_len.try_into().map_err(|_| Error::ExcessData)?;
+        let fds_len_u32 = fds_len.try_into().map_err(|_| Error::ExcessData)?;
+        header.primary_mut().set_body_len(body_len_u32);
+
+        if fds_len != 0 {
+            header.fields_mut().add(MessageField::UnixFDs(fds_len_u32));
         }
 
-        Ok(Self {
-            ty,
-            body,
-            body_len,
-            fields,
-            reply_to: None,
-        })
-    }
+        let hdr_len = zvariant::serialized_size(ctxt, &header)?;
 
-    fn build(self) -> Result<Message> {
-        let MessageBuilder {
-            ty,
-            body,
-            body_len,
-            mut fields,
-            reply_to,
-        } = self;
-
-        if let Some(reply_to) = reply_to.as_ref() {
-            let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
-            fields.add(MessageField::ReplySerial(*serial));
-
-            if let Some(sender) = reply_to.sender()? {
-                fields.add(MessageField::Destination(BusName::Unique(sender.clone())));
-            }
-        }
-
-        let primary = MessagePrimaryHeader::new(ty, body_len);
-        let header = MessageHeader::new(primary, fields);
-
-        let ctxt = dbus_context!(0);
-        // 1K for all the fields should be enough for most messages?
-        let mut bytes: Vec<u8> =
-            Vec::with_capacity(PRIMARY_HEADER_SIZE + 1024 + (body_len as usize));
+        let mut bytes: Vec<u8> = Vec::with_capacity(hdr_len + body_len);
         let mut cursor = Cursor::new(&mut bytes);
-
         zvariant::to_writer(&mut cursor, ctxt, &header)?;
+
         let (_, fds) = zvariant::to_writer_fds(&mut cursor, ctxt, body)?;
 
         Ok(Message {
@@ -105,55 +236,6 @@ where
             bytes,
             fds: Arc::new(RwLock::new(Fds::Raw(fds))),
         })
-    }
-
-    fn set_reply_to(mut self, reply_to: &'a Message) -> Result<Self> {
-        self.reply_to = Some(reply_to.header()?);
-        Ok(self)
-    }
-
-    fn set_field(mut self, field: MessageField<'a>) -> Self {
-        self.fields.add(field);
-        self
-    }
-
-    fn reply(sender: Option<UniqueName<'a>>, reply_to: &'a Message, body: &'a B) -> Result<Self> {
-        Self::new(MessageType::MethodReturn, sender, body)?.set_reply_to(reply_to)
-    }
-
-    fn error(
-        sender: Option<UniqueName<'a>>,
-        reply_to: &'a Message,
-        error_name: ErrorName<'a>,
-        body: &'a B,
-    ) -> Result<Self> {
-        Ok(Self::new(MessageType::Error, sender, body)?
-            .set_reply_to(reply_to)?
-            .set_field(MessageField::ErrorName(error_name)))
-    }
-
-    fn method(
-        sender: Option<UniqueName<'a>>,
-        path: ObjectPath<'a>,
-        method_name: MemberName<'a>,
-        body: &'a B,
-    ) -> Result<Self> {
-        Ok(Self::new(MessageType::MethodCall, sender, body)?
-            .set_field(MessageField::Path(path))
-            .set_field(MessageField::Member(method_name)))
-    }
-
-    fn signal(
-        sender: Option<UniqueName<'a>>,
-        path: ObjectPath<'a>,
-        iface: InterfaceName<'a>,
-        signal_name: MemberName<'a>,
-        body: &'a B,
-    ) -> Result<Self> {
-        Ok(Self::new(MessageType::Signal, sender, body)?
-            .set_field(MessageField::Path(path))
-            .set_field(MessageField::Interface(iface))
-            .set_field(MessageField::Member(signal_name)))
     }
 }
 
@@ -224,27 +306,18 @@ impl Message {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let sender = match sender {
-            Some(sender) => Some(sender.try_into().map_err(Into::into)?),
-            None => None,
-        };
-        let mut b = MessageBuilder::method(
-            sender,
-            path.try_into().map_err(Into::into)?,
-            method_name.try_into().map_err(Into::into)?,
-            body,
-        )?;
+        let mut b = MessageBuilder::method_call(path, method_name)?;
+
+        if let Some(sender) = sender {
+            b = b.sender(sender)?;
+        }
         if let Some(destination) = destination {
-            b = b.set_field(MessageField::Destination(
-                destination.try_into().map_err(Into::into)?,
-            ));
+            b = b.destination(destination)?;
         }
         if let Some(iface) = iface {
-            b = b.set_field(MessageField::Interface(
-                iface.try_into().map_err(Into::into)?,
-            ));
+            b = b.interface(iface)?;
         }
-        b.build()
+        b.build(body)
     }
 
     /// Create a message of type [`MessageType::Signal`].
@@ -271,23 +344,15 @@ impl Message {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let sender = match sender {
-            Some(sender) => Some(sender.try_into().map_err(Into::into)?),
-            None => None,
-        };
-        let mut b = MessageBuilder::signal(
-            sender,
-            path.try_into().map_err(Into::into)?,
-            iface.try_into().map_err(Into::into)?,
-            signal_name.try_into().map_err(Into::into)?,
-            body,
-        )?;
-        if let Some(destination) = destination {
-            b = b.set_field(MessageField::Destination(
-                destination.try_into().map_err(Into::into)?,
-            ));
+        let mut b = MessageBuilder::signal(path, iface, signal_name)?;
+
+        if let Some(sender) = sender {
+            b = b.sender(sender)?;
         }
-        b.build()
+        if let Some(destination) = destination {
+            b = b.destination(destination)?;
+        }
+        b.build(body)
     }
 
     /// Create a message of type [`MessageType::MethodReturn`].
@@ -299,11 +364,11 @@ impl Message {
         S::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let sender = match sender {
-            Some(sender) => Some(sender.try_into().map_err(Into::into)?),
-            None => None,
-        };
-        MessageBuilder::reply(sender, call, body)?.build()
+        let mut b = MessageBuilder::method_return(call)?;
+        if let Some(sender) = sender {
+            b = b.sender(sender)?;
+        }
+        b.build(body)
     }
 
     /// Create a message of type [`MessageType::MethodError`].
@@ -322,12 +387,11 @@ impl Message {
         E::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let sender = match sender {
-            Some(sender) => Some(sender.try_into().map_err(Into::into)?),
-            None => None,
-        };
-        let name = name.try_into().map_err(Into::into)?;
-        MessageBuilder::error(sender, call, name, body)?.build()
+        let mut b = MessageBuilder::error(call, name)?;
+        if let Some(sender) = sender {
+            b = b.sender(sender)?;
+        }
+        b.build(body)
     }
 
     pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self> {
