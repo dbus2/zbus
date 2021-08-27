@@ -422,6 +422,40 @@ impl<'a> ProxyInner<'a> {
 
         Ok(())
     }
+
+    /// Handle the provided signal message.
+    ///
+    /// Call any handlers registered through the [`Self::connect_signal`] method for the provided
+    /// signal message.
+    ///
+    /// If no errors are encountered, `Ok(true)` is returned if any handlers where found and called for,
+    /// the signal; `Ok(false)` otherwise.
+    pub async fn handle_signal(&self, msg: &Message) -> Result<bool> {
+        let mut handlers = self.sig_handlers.lock().await;
+        if handlers.is_empty() {
+            return Ok(false);
+        }
+
+        let h = match msg.header() {
+            Ok(h) => h,
+            _ => return Ok(false),
+        };
+        let signal_name = match self.matching_signal(&h).await? {
+            Some(signal) => signal,
+            _ => return Ok(false),
+        };
+
+        let mut handled = false;
+        for info in handlers
+            .values_mut()
+            .filter(|info| info.signal_name == *signal_name)
+        {
+            (*info.handler)(msg).await?;
+            handled = true;
+        }
+
+        Ok(handled)
+    }
 }
 
 impl<'a> Proxy<'a> {
@@ -918,30 +952,7 @@ impl<'a> Proxy<'a> {
     /// If no errors are encountered, `Ok(true)` is returned if any handlers where found and called for,
     /// the signal; `Ok(false)` otherwise.
     pub async fn handle_signal(&self, msg: &Message) -> Result<bool> {
-        let mut handlers = self.inner.sig_handlers.lock().await;
-        if handlers.is_empty() {
-            return Ok(false);
-        }
-
-        let h = match msg.header() {
-            Ok(h) => h,
-            _ => return Ok(false),
-        };
-        let signal_name = match self.inner.matching_signal(&h).await? {
-            Some(signal) => signal,
-            _ => return Ok(false),
-        };
-
-        let mut handled = false;
-        for info in handlers
-            .values_mut()
-            .filter(|info| info.signal_name == *signal_name)
-        {
-            (*info.handler)(msg).await?;
-            handled = true;
-        }
-
-        Ok(handled)
+        self.inner.handle_signal(msg).await
     }
 
     async fn msg_stream(&self) -> &Mutex<MessageStream> {
