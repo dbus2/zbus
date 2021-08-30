@@ -91,7 +91,6 @@ mod utils;
 ///     Ok(())
 /// })?;
 ///
-/// // You'll want to make at least a call to `handle_next_signal` before disconnecting the signal.
 /// assert!(proxy.disconnect_signal(handler_id)?);
 /// assert!(!proxy.disconnect_signal(handler_id)?);
 ///
@@ -111,7 +110,6 @@ mod utils;
 ///         async { Ok(()) }.boxed()
 ///     }).await?;
 ///
-///     // You'll want to make at least a call to `handle_next_signal` before disconnecting the signal.
 ///     assert!(proxy.disconnect_signal(handler_id).await?);
 ///     assert!(!proxy.disconnect_signal(handler_id).await?);
 ///

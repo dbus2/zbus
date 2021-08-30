@@ -12,7 +12,6 @@ use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
-    io::{self, ErrorKind},
     pin::Pin,
     sync::{Arc, Mutex as SyncMutex, RwLock},
     task::{Context, Poll},
@@ -155,7 +154,9 @@ pub(crate) struct ProxyInner<'a> {
     // Keep it in an Arc so that dest_name_update_task can keep its own ref to it.
     dest_unique_name: Arc<RwLock<Option<OwnedUniqueName>>>,
     #[derivative(Debug = "ignore")]
-    sig_handlers: Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>,
+    // Keep it in an Arc so that sign_handler_task can keep its own ref to it.
+    sig_handlers: Arc<Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>>,
+    sig_handler_task: OnceCell<Task<()>>,
     #[derivative(Debug = "ignore")]
     signal_msg_stream: OnceCell<Mutex<MessageStream>>,
     dest_name_update_task: OnceCell<Task<()>>,
@@ -264,7 +265,8 @@ impl<'a> ProxyInner<'a> {
             path,
             interface,
             dest_unique_name: Arc::new(RwLock::new(None)),
-            sig_handlers: Mutex::new(SlotMap::with_key()),
+            sig_handlers: Arc::new(Mutex::new(SlotMap::with_key())),
+            sig_handler_task: OnceCell::new(),
             signal_msg_stream: OnceCell::new(),
             dest_name_update_task: OnceCell::new(),
             dest_name_update_event: Arc::new(Event::new()),
@@ -508,10 +510,12 @@ impl<'a> Proxy<'a> {
 
     /// Register a changed handler for the property named `property_name`.
     ///
-    /// Once a handler is successfully registered, call [`Self::next_signal`] to wait for the next
-    /// signal to arrive and be handled by its registered handler. A unique ID for the handler is
-    /// returned, which can be used to deregister this handler using
-    /// [`Self::disconnect_property_changed`] method.
+    /// A unique ID for the handler is returned, which can be used to deregister this handler
+    /// using [`Self::disconnect_property_changed`] method.
+    ///
+    /// *Note:* The signal handler will be called by the executor thread of the [`Connection`].
+    /// See the [`Connection::executor`] documentation for an example of how you can run the
+    /// executor (and in turn all the signal handlers called) in your own thread.
     ///
     /// # Errors
     ///
@@ -834,10 +838,12 @@ impl<'a> Proxy<'a> {
 
     /// Register a handler for signal named `signal_name`.
     ///
-    /// Once a handler is successfully registered, call [`Self::next_signal`] to wait for the next
-    /// signal to arrive and be handled by its registered handler. A unique ID for the handler is
-    /// returned, which can be used to deregister this handler using [`Self::disconnect_signal`]
-    /// method.
+    /// A unique ID for the handler is returned, which can be used to deregister this handler using
+    /// [`Self::disconnect_signal`] method.
+    ///
+    /// *Note:* The signal handler will be called by the executor thread of the [`Connection`].
+    /// See the [`Connection::executor`] documentation for an example of how you can run the
+    /// executor (and in turn all the signal handlers called) in your own thread.
     ///
     /// ### Errors
     ///
@@ -856,6 +862,9 @@ impl<'a> Proxy<'a> {
     {
         // Ensure the stream.
         self.msg_stream().await;
+
+        // Start the dispatch task.
+        self.start_signal_dispatch_task();
 
         // Time to try resolve the destination name & track changes to it.
         self.inner.destination_unique_name().await?;
@@ -974,6 +983,34 @@ impl<'a> Proxy<'a> {
         }
     }
 
+    fn start_signal_dispatch_task(&self) {
+        self.inner.sig_handler_task.get_or_init(|| {
+            let inner = &self.inner;
+            // Clone of inner with 'static lifetime.
+            let inner = ProxyInner {
+                conn: inner.conn.clone(),
+                destination: inner.destination.to_owned(),
+                path: inner.path.to_owned(),
+                interface: inner.interface.to_owned(),
+                dest_unique_name: inner.dest_unique_name.clone(),
+                sig_handlers: inner.sig_handlers.clone(),
+                // We'll not need the next 3 and so these will remain uninitialized.
+                sig_handler_task: OnceCell::new(),
+                signal_msg_stream: OnceCell::new(),
+                dest_name_update_task: OnceCell::new(),
+                // Won't need this either but doesn't hurt keeping the clone around.
+                dest_name_update_event: inner.dest_name_update_event.clone(),
+            };
+            let mut stream = MessageStream::from(self.inner.conn.clone());
+            self.inner.conn.executor().spawn(async move {
+                // TODO: Log errors when we've logging.
+                while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
+                    let _ = inner.handle_signal(&msg).await;
+                }
+            })
+        });
+    }
+
     /// Get a stream to receive property changed events.
     ///
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
@@ -1025,11 +1062,12 @@ impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
 
 #[cfg(test)]
 mod tests {
+    use event_listener::Event;
     use zbus_names::UniqueName;
 
     use super::*;
     use async_io::block_on;
-    use futures_util::future::FutureExt;
+    use futures_util::{future::FutureExt, join};
     use ntest::timeout;
     use std::{future::ready, sync::Arc};
     use test_env_log::test;
@@ -1125,20 +1163,24 @@ mod tests {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = Connection::session().await?;
-        let owner_change_signaled = Arc::new(Mutex::new(false));
-        let name_acquired_signaled = Arc::new(Mutex::new(false));
-        let name_acquired_signaled2 = Arc::new(Mutex::new(false));
+
+        let owner_change_signaled = Arc::new(Event::new());
+        let owner_change_listener = owner_change_signaled.listen();
+
+        let name_acquired_signaled = Arc::new(Event::new());
+        let name_acquired_listener = name_acquired_signaled.listen();
+
+        let name_acquired_signaled2 = Arc::new(Event::new());
+        let name_acquired_listener2 = name_acquired_signaled2.listen();
 
         let proxy = fdo::AsyncDBusProxy::new(&conn).await?;
         let well_known = "org.freedesktop.zbus.async.ProxySignalConnectTest";
         let unique_name = conn.unique_name().unwrap().clone();
         let name_owner_changed_id = {
-            let signaled = owner_change_signaled.clone();
-
             proxy
                 .connect_signal("NameOwnerChanged", move |m| {
-                    let signaled = signaled.clone();
                     let unique_name = unique_name.clone();
+                    let signaled = owner_change_signaled.clone();
 
                     async move {
                         let (name, _, new_owner) = m.body::<(
@@ -1151,7 +1193,7 @@ mod tests {
                             return Ok(());
                         }
                         assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
-                        *signaled.lock().await = true;
+                        signaled.notify(1);
 
                         Ok(())
                     }
@@ -1160,16 +1202,14 @@ mod tests {
                 .await?
         };
         let name_acquired_id = {
-            let signaled = name_acquired_signaled.clone();
             // `NameAcquired` is emitted twice, first when the unique name is assigned on
             // connection and secondly after we ask for a specific name.
             proxy
                 .connect_signal("NameAcquired", move |m| {
-                    let signaled = signaled.clone();
-
+                    let signaled = name_acquired_signaled.clone();
                     async move {
                         if m.body::<&str>()? == well_known {
-                            *signaled.lock().await = true;
+                            signaled.notify(1);
                         }
 
                         Ok(())
@@ -1180,16 +1220,14 @@ mod tests {
         };
         // Test multiple handers for the same signal
         let name_acquired_id2 = {
-            let signaled = name_acquired_signaled2.clone();
             // `NameAcquired` is emitted twice, first when the unique name is assigned on
             // connection and secondly after we ask for a specific name.
             proxy
                 .connect_signal("NameAcquired", move |m| {
-                    let signaled = signaled.clone();
-
+                    let signaled = name_acquired_signaled2.clone();
                     async move {
                         if m.body::<&str>()? == well_known {
-                            *signaled.lock().await = true;
+                            signaled.notify(1);
                         }
 
                         Ok(())
@@ -1206,16 +1244,11 @@ mod tests {
             )
             .unwrap();
 
-        loop {
-            proxy.next_signal().await?;
-
-            if *owner_change_signaled.lock().await
-                && *name_acquired_signaled.lock().await
-                && *name_acquired_signaled2.lock().await
-            {
-                break;
-            }
-        }
+        join!(
+            owner_change_listener,
+            name_acquired_listener,
+            name_acquired_listener2,
+        );
 
         assert!(proxy.disconnect_signal(name_owner_changed_id).await?);
         assert!(!proxy.disconnect_signal(name_owner_changed_id).await?);

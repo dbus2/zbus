@@ -77,10 +77,12 @@ async fn run() -> Result<()> {
     // Gotta do this, sorry!
     client.set_desktop_id("org.freedesktop.zbus").await?;
 
+    let (tx, rx) = std::sync::mpsc::channel();
     client
         .connect_location_updated(move |_old, new| {
             let new = new.to_string();
             let conn = conn.clone();
+            let tx = tx.clone();
 
             async move {
                 let location = AsyncLocationProxy::builder(&conn)
@@ -92,6 +94,7 @@ async fn run() -> Result<()> {
                     location.latitude().await?,
                     location.longitude().await?,
                 );
+                tx.send(()).unwrap();
 
                 Ok(())
             }
@@ -102,7 +105,7 @@ async fn run() -> Result<()> {
     client.start().await?;
 
     // Wait till there is a signal that was handled.
-    while client.next_signal().await?.is_some() {}
+    rx.recv().unwrap();
 
     Ok(())
 }
@@ -110,121 +113,6 @@ async fn run() -> Result<()> {
 
 As you can see, nothing changed in the `dbus_proxy` usage here and the rest largely remained the
 same as well.
-
-### Receiving multiple signals, simultaneously
-
-The asynchronous API also doesn't include an equivalent of
-[`SignalReceiver`](https://docs.rs/zbus/1.5.0/zbus/struct.SignalReceiver.html). This is because
-[`futures`](https://crates.io/crates/futures) crate (and others) already provide a rich API to
-combine asynchronous operations in various ways. Let's see that in action by converting the above
-example again to receive multiple signals on different proxies:
-
-```rust,no_run
-# use futures_util::future::FutureExt;
-# use zbus::{azync::Connection, dbus_proxy, Result};
-# use zvariant::ObjectPath;
-#
-# async_io::block_on(run()).unwrap();
-#
-# async fn run() -> Result<()> {
-#     #[dbus_proxy(
-#         default_service = "org.freedesktop.GeoClue2",
-#         interface = "org.freedesktop.GeoClue2.Manager",
-#         default_path = "/org/freedesktop/GeoClue2/Manager"
-#     )]
-#     trait Manager {
-#         #[dbus_proxy(object = "Client")]
-#         fn get_client(&self);
-#     }
-#
-#     #[dbus_proxy(
-#         default_service = "org.freedesktop.GeoClue2",
-#         interface = "org.freedesktop.GeoClue2.Client"
-#     )]
-#     trait Client {
-#         fn start(&self) -> Result<()>;
-#         fn stop(&self) -> Result<()>;
-#
-#         #[dbus_proxy(property)]
-#         fn set_desktop_id(&mut self, id: &str) -> Result<()>;
-#
-#         #[dbus_proxy(signal)]
-#         fn location_updated(&self, old: ObjectPath<'_>, new: ObjectPath<'_>) -> Result<()>;
-#     }
-#
-#     #[dbus_proxy(
-#         default_service = "org.freedesktop.GeoClue2",
-#         interface = "org.freedesktop.GeoClue2.Location"
-#     )]
-#     trait Location {
-#         #[dbus_proxy(property)]
-#         fn latitude(&self) -> Result<f64>;
-#         #[dbus_proxy(property)]
-#         fn longitude(&self) -> Result<f64>;
-#     }
-#     let conn = Connection::system().await?;
-#     let manager = AsyncManagerProxy::new(&conn).await?;
-#     let mut client = manager.get_client().await?;
-#
-	// Everything else remains the same before this point.
-    client.set_desktop_id("org.freedesktop.zbus").await?;
-
-    let props = zbus::fdo::AsyncPropertiesProxy::builder(&conn)
-        .destination("org.freedesktop.GeoClue2")?
-        .path(client.path())?
-        .build()
-        .await?;
-    props
-        .connect_properties_changed(move |iface, changed, _| {
-            for (name, value) in changed.iter() {
-                println!("{}.{} changed to `{:?}`", iface, name, value);
-            }
-
-            async { Ok(()) }.boxed()
-        })
-        .await?;
-
-    client
-        .connect_location_updated(move |_old, new| {
-            let new = new.to_string();
-            let conn = conn.clone();
-
-            async move {
-                let location = AsyncLocationProxy::builder(&conn)
-                    .path(new)?
-                    .build()
-                    .await?;
-                println!(
-                    "Latitude: {}\nLongitude: {}",
-                    location.latitude().await?,
-                    location.longitude().await?,
-                );
-
-                Ok(())
-            }
-            .boxed()
-        })
-        .await?;
-
-    client.start().await?;
-
-    futures_util::try_join!(
-        async {
-            while props.next_signal().await?.is_some() {}
-
-            Ok::<(),zbus::Error >(())
-        },
-        async {
-            while client.next_signal().await?.is_some() {}
-
-            // No need to specify type of Result each time
-            Ok(())
-        }
-    )?;
-#
-#   Ok(())
-# }
-```
 
 ### Signal Streams: A better way
 

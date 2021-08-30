@@ -231,11 +231,7 @@ mod tests {
         convert::{TryFrom, TryInto},
         fs::File,
         os::unix::io::{AsRawFd, FromRawFd},
-        sync::{
-            atomic::{AtomicU8, Ordering::SeqCst},
-            mpsc::channel,
-            Arc, Condvar, Mutex,
-        },
+        sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
 
     use enumflags2::BitFlags;
@@ -790,22 +786,21 @@ mod tests {
             }
 
             let proxy = ComeAndGoProxy::new(&conn).unwrap();
-            let count = Arc::new(AtomicU8::new(0));
-            let count_clone = count.clone();
             let tx_clone = tx.clone();
+            let (signal_tx, signal_rx) = channel();
             proxy
                 .connect_the_signal(move || {
-                    count_clone.fetch_add(1, SeqCst);
                     tx_clone.send(()).unwrap();
+                    signal_tx.send(()).unwrap();
                     Ok(())
                 })
                 .unwrap();
             tx.send(()).unwrap();
 
             // We receive two signals, each time from different unique names. W/o the fix for
-            // issue#173, the second iteration hangs on `next_signal` call.
-            while count.load(SeqCst) < 2 {
-                proxy.next_signal().unwrap();
+            // issue#173, the second iteration hangs.
+            for _ in 0..2 {
+                signal_rx.recv().unwrap();
             }
         });
 

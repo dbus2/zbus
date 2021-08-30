@@ -783,6 +783,7 @@ mod tests {
         thread,
     };
 
+    use event_listener::Event;
     use ntest::timeout;
     use serde::{Deserialize, Serialize};
     use test_env_log::test;
@@ -969,16 +970,19 @@ mod tests {
             .path("/org/freedesktop/MyService")?
             .build()?;
 
+        let prop_changed = Arc::new(Event::new());
+        let prop_changed_listener = prop_changed.listen();
         props_proxy
-            .connect_properties_changed(|_, changed, _| {
+            .connect_properties_changed(move |_, changed, _| {
                 let (name, _) = changed.iter().next().unwrap();
                 assert_eq!(*name, "Count");
+                prop_changed.notify(1);
                 Ok(())
             })
             .unwrap();
         tx.send(()).unwrap();
 
-        props_proxy.next_signal().unwrap();
+        prop_changed_listener.wait();
 
         proxy.ping()?;
         assert_eq!(proxy.count()?, 1);

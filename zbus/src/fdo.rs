@@ -666,16 +666,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[cfg(test)]
 mod tests {
     use crate::{fdo, Error, Message};
+    use event_listener::Event;
     use futures_util::StreamExt;
     use ntest::timeout;
-    use std::{
-        convert::TryInto,
-        future::ready,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc,
-        },
-    };
+    use std::{convert::TryInto, future::ready, sync::Arc};
     use test_env_log::test;
     use tokio::runtime;
     use zbus_names::WellKnownName;
@@ -701,13 +695,16 @@ mod tests {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = crate::Connection::session().unwrap();
-        let owner_change_signaled = Arc::new(AtomicBool::new(false));
-        let name_acquired_signaled = Arc::new(AtomicBool::new(false));
+
+        let owner_change_signaled = Arc::new(Event::new());
+        let owner_change_listener = owner_change_signaled.listen();
+        let name_acquired_signaled = Arc::new(Event::new());
+        let name_acquired_listener = name_acquired_signaled.listen();
 
         let proxy = fdo::DBusProxy::new(&conn).unwrap();
 
         let well_known = "org.freedesktop.zbus.FdoSignalConnectTest";
-        let unique_name = conn.unique_name().unwrap().clone();
+        let mut unique_name = Some(conn.unique_name().unwrap().clone());
         {
             let signaled = owner_change_signaled.clone();
             proxy
@@ -716,8 +713,10 @@ mod tests {
                         // Meant for the other testcase then
                         return Ok(());
                     }
-                    assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
-                    signaled.store(true, Ordering::Release);
+                    if let Some(unique) = unique_name.take() {
+                        assert_eq!(*new_owner.as_ref().unwrap(), *unique);
+                    }
+                    signaled.notify(1);
 
                     Ok(())
                 })
@@ -730,7 +729,7 @@ mod tests {
             proxy
                 .connect_name_acquired(move |name| {
                     if name == well_known {
-                        signaled.store(true, Ordering::Release);
+                        signaled.notify(1);
                     }
 
                     Ok(())
@@ -746,15 +745,8 @@ mod tests {
             )
             .unwrap();
 
-        loop {
-            proxy.next_signal().unwrap();
-
-            if owner_change_signaled.load(Ordering::Acquire)
-                && name_acquired_signaled.load(Ordering::Acquire)
-            {
-                break;
-            }
-        }
+        owner_change_listener.wait();
+        name_acquired_listener.wait();
 
         let result = proxy.release_name(well_known.clone()).unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::Released);

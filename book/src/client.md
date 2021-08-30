@@ -302,6 +302,7 @@ let mut client = manager.get_client().unwrap();
 // Gotta do this, sorry!
 client.set_desktop_id("org.freedesktop.zbus").unwrap();
 
+let (tx, rx) = std::sync::mpsc::channel();
 client
     .connect_location_updated(move |_old, new| {
         let location = LocationProxy::builder(&conn)
@@ -313,6 +314,7 @@ client
             location.latitude()?,
             location.longitude()?,
         );
+        tx.send(()).unwrap();
 
         Ok(())
     })
@@ -321,106 +323,11 @@ client
 client.start().unwrap();
 
 // Wait till there is a signal that was handled.
-while client.next_signal().unwrap().is_some() {}
+rx.recv().unwrap();
 ```
 
 While the Geoclue's D-Bus API is a bit involved, we still ended-up with a not-so-complicated (~60
-LOC) code for getting our location. As you may've notice, we use a blocking call to wait for a
-signal on one proxy. This works fine but in the real world, you would typically have many proxies
-and you'd want to wait for signals from them all at once. Not to worry, zbus provides a way to wait
-on [multiple proxies at once as well](https://docs.rs/zbus/1.5.0/zbus/struct.SignalReceiver.html).
-
-Let's make use of `SignalReceiver` and `zbus::fdo` API to make sure the client is actually started
-by watching for `Active` property (that we must set to be able to get location from Geoclue)
-actually getting set:
-
-```rust,no_run
-# use zbus::{Connection, dbus_proxy, Result};
-# use zvariant::{ObjectPath, OwnedObjectPath};
-#
-# #[dbus_proxy(
-#     default_service = "org.freedesktop.GeoClue2",
-#     interface = "org.freedesktop.GeoClue2.Manager",
-#     default_path = "/org/freedesktop/GeoClue2/Manager"
-# )]
-# trait Manager {
-#     #[dbus_proxy(object = "Client")]
-#     fn get_client(&self);
-# }
-#
-# #[dbus_proxy(interface = "org.freedesktop.GeoClue2.Client")]
-# trait Client {
-#     fn start(&self) -> Result<()>;
-#
-#     #[dbus_proxy(property)]
-#     fn set_desktop_id(&mut self, id: &str) -> Result<()>;
-#
-#     #[dbus_proxy(signal)]
-#     fn location_updated(&self, old: ObjectPath<'_>, new: ObjectPath<'_>) -> Result<()>;
-# }
-#
-# #[dbus_proxy(
-#     default_service = "org.freedesktop.GeoClue2",
-#     interface = "org.freedesktop.GeoClue2.Location"
-# )]
-# trait Location {
-#     #[dbus_proxy(property)]
-#     fn latitude(&self) -> Result<f64>;
-#     #[dbus_proxy(property)]
-#     fn longitude(&self) -> Result<f64>;
-# }
-#
-# let conn = Connection::system().unwrap();
-# let manager = ManagerProxy::new(&conn).unwrap();
-# let mut client = manager.get_client().unwrap();
-# // Gotta do this, sorry!
-# client.set_desktop_id("org.freedesktop.zbus").unwrap();
-#
-// Everything else remains the same before this point.
-
-let conn_clone = conn.clone();
-client.connect_location_updated(move |_old, new| {
-    let location = LocationProxy::builder(&conn_clone)
-        .destination("org.freedesktop.GeoClue2")?
-        .path(new.as_str())?
-        .build()
-        .unwrap();
-    println!(
-        "Latitude: {}\nLongitude: {}",
-        location.latitude()?,
-        location.longitude()?,
-    );
-
-    Ok(())
-}).unwrap();
-
-let props = zbus::fdo::PropertiesProxy::builder(&conn)
-    .destination("org.freedesktop.GeoClue2").unwrap()
-    .path(client.path()).unwrap()
-    .build()
-    .unwrap();
-props.connect_properties_changed(|iface, changed, _| {
-    for (name, value) in changed.iter() {
-        println!("{}.{} changed to `{:?}`", iface, name, value);
-    }
-
-    Ok(())
-}).unwrap();
-
-let mut receiver = zbus::SignalReceiver::new(conn);
-receiver.receive_for(&client).unwrap();
-receiver.receive_for(&props).unwrap();
-
-client.start().unwrap();
-
-// 3 signals will be emitted, that we handle
-let mut num_handled = 0;
-while num_handled < 3 {
-    if receiver.next_signal().unwrap().is_none() {
-        num_handled += 1;
-    }
-}
-```
+LOC) code for getting our location.
 
 ## Generating the trait from an XML interface
 
