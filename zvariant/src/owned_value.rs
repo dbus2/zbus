@@ -1,129 +1,15 @@
-use serde::{Deserialize, Deserializer, Serialize};
-use static_assertions::assert_impl_all;
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
-use crate::{
-    derive::Type, Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str,
-    Structure, Value,
-};
-
-#[cfg(feature = "gvariant")]
-use crate::Maybe;
-
-// FIXME: Replace with a generic impl<T: TryFrom<Value>> TryFrom<OwnedValue> for T?
-// https://gitlab.freedesktop.org/dbus/zbus/-/issues/138
+use crate::Value;
 
 /// Owned [`Value`](enum.Value.html)
-#[derive(Debug, Clone, PartialEq, Serialize, Type)]
-pub struct OwnedValue(Value<'static>);
-
-assert_impl_all!(OwnedValue: Send, Sync, Unpin);
-
-impl OwnedValue {
-    pub(crate) fn into_inner(self) -> Value<'static> {
-        self.0
-    }
-}
-
-macro_rules! ov_try_from {
-    ($to:ty) => {
-        impl<'a> TryFrom<OwnedValue> for $to {
-            type Error = crate::Error;
-
-            fn try_from(v: OwnedValue) -> Result<Self, Self::Error> {
-                <$to>::try_from(v.0)
-            }
-        }
-    };
-}
-
-macro_rules! ov_try_from_ref {
-    ($to:ty) => {
-        impl<'a> TryFrom<&'a OwnedValue> for $to {
-            type Error = crate::Error;
-
-            fn try_from(v: &'a OwnedValue) -> Result<Self, Self::Error> {
-                <$to>::try_from(&v.0)
-            }
-        }
-    };
-}
-
-ov_try_from!(u8);
-ov_try_from!(bool);
-ov_try_from!(i16);
-ov_try_from!(u16);
-ov_try_from!(i32);
-ov_try_from!(u32);
-ov_try_from!(i64);
-ov_try_from!(u64);
-ov_try_from!(f64);
-ov_try_from!(String);
-ov_try_from!(Signature<'a>);
-ov_try_from!(OwnedSignature);
-ov_try_from!(ObjectPath<'a>);
-ov_try_from!(OwnedObjectPath);
-ov_try_from!(Array<'a>);
-ov_try_from!(Dict<'a, 'a>);
-#[cfg(feature = "gvariant")]
-ov_try_from!(Maybe<'a>);
-ov_try_from!(Str<'a>);
-ov_try_from!(Structure<'a>);
-ov_try_from!(Fd);
-
-ov_try_from_ref!(u8);
-ov_try_from_ref!(bool);
-ov_try_from_ref!(i16);
-ov_try_from_ref!(u16);
-ov_try_from_ref!(i32);
-ov_try_from_ref!(u32);
-ov_try_from_ref!(i64);
-ov_try_from_ref!(u64);
-ov_try_from_ref!(f64);
-ov_try_from_ref!(&'a str);
-ov_try_from_ref!(&'a Signature<'a>);
-ov_try_from_ref!(&'a ObjectPath<'a>);
-ov_try_from_ref!(&'a Array<'a>);
-ov_try_from_ref!(&'a Dict<'a, 'a>);
-ov_try_from_ref!(&'a Str<'a>);
-ov_try_from_ref!(&'a Structure<'a>);
-#[cfg(feature = "gvariant")]
-ov_try_from_ref!(&'a Maybe<'a>);
-ov_try_from_ref!(Fd);
-
-impl<'a, T> TryFrom<OwnedValue> for Vec<T>
-where
-    T: TryFrom<Value<'a>, Error = crate::Error>,
-{
-    type Error = crate::Error;
-
-    fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
-        if let Value::Array(v) = value.0 {
-            Self::try_from(v)
-        } else {
-            Err(crate::Error::IncorrectType)
-        }
-    }
-}
-
-#[cfg(feature = "enumflags2")]
-impl<'a, F> TryFrom<OwnedValue> for enumflags2::BitFlags<F>
-where
-    F: enumflags2::RawBitFlags,
-    F::Type: TryFrom<Value<'a>, Error = crate::Error>,
-{
-    type Error = crate::Error;
-
-    fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
-        Self::try_from(value.0)
-    }
-}
+pub type OwnedValue = Value<'static>;
 
 impl TryFrom<OwnedValue> for Vec<OwnedValue> {
     type Error = crate::Error;
 
     fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
-        if let Value::Array(v) = value.0 {
+        if let Value::Array(v) = value {
             Self::try_from(v)
         } else {
             Err(crate::Error::IncorrectType)
@@ -140,7 +26,7 @@ where
     type Error = crate::Error;
 
     fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
-        if let Value::Dict(v) = value.0 {
+        if let Value::Dict(v) = value {
             Self::try_from(v)
         } else {
             Err(crate::Error::IncorrectType)
@@ -148,64 +34,25 @@ where
     }
 }
 
-// tuple conversions in `structure` module for avoiding code-duplication.
-
+// Without specialization, conflicts with `impl<T> From<T> for T;` from `core`
+/*
 impl<'a> From<Value<'a>> for OwnedValue {
     fn from(v: Value<'a>) -> Self {
         // TODO: add into_owned, avoiding copy if already owned..
-        OwnedValue(v.to_owned())
+        v.to_owned()
     }
 }
+*/
 
 impl<'a> From<&Value<'a>> for OwnedValue {
     fn from(v: &Value<'a>) -> Self {
-        OwnedValue(v.to_owned())
+        v.to_owned()
     }
 }
 
-macro_rules! to_value {
-    ($from:ty) => {
-        impl<'a> From<$from> for OwnedValue {
-            fn from(v: $from) -> Self {
-                OwnedValue::from(<Value<'a>>::from(v))
-            }
-        }
-    };
-}
-
-to_value!(u8);
-to_value!(bool);
-to_value!(i16);
-to_value!(u16);
-to_value!(i32);
-to_value!(u32);
-to_value!(i64);
-to_value!(u64);
-to_value!(f64);
-to_value!(Array<'a>);
-to_value!(Dict<'a, 'a>);
-#[cfg(feature = "gvariant")]
-to_value!(Maybe<'a>);
-to_value!(Str<'a>);
-to_value!(Signature<'a>);
-to_value!(Structure<'a>);
-to_value!(ObjectPath<'a>);
-to_value!(Fd);
-
-impl From<OwnedValue> for Value<'static> {
-    fn from(v: OwnedValue) -> Value<'static> {
-        v.into_inner()
-    }
-}
-
-impl std::ops::Deref for OwnedValue {
-    type Target = Value<'static>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
+// Overlaps with `impl<'de: 'a, 'a> Deserialize<'de> for Value<'a>`
+// But that does not replace this because of the `'de: 'a` bound...
+/*
 impl<'de> Deserialize<'de> for OwnedValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -214,6 +61,7 @@ impl<'de> Deserialize<'de> for OwnedValue {
         Ok(Value::deserialize(deserializer)?.into())
     }
 }
+*/
 
 #[cfg(test)]
 mod tests {

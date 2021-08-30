@@ -7,7 +7,7 @@ use std::convert::TryInto;
 
 use crate::{
     signature_parser::SignatureParser, value::SignatureSeed, DynamicDeserialize, DynamicType,
-    OwnedValue, Signature, Type, Value,
+    Signature, Type, Value,
 };
 
 /// Use this to efficiently build a [`Structure`].
@@ -341,19 +341,6 @@ macro_rules! tuple_impls {
 
                 fn try_from(v: Value<'a>) -> core::result::Result<Self, Self::Error> {
                     Self::try_from(Structure::try_from(v)?)
-                }
-            }
-
-            impl<E, $($name),+> std::convert::TryFrom<OwnedValue> for ($($name),+,)
-            where
-                $($name: std::convert::TryFrom<Value<'static>, Error = E>,)+
-                crate::Error: From<E>,
-
-            {
-                type Error = crate::Error;
-
-                fn try_from(v: OwnedValue) -> core::result::Result<Self, Self::Error> {
-                    Self::try_from(Value::from(v))
                 }
             }
         )+

@@ -7,7 +7,7 @@ use core::{
 use crate::{Error, OwnedUniqueName, OwnedWellKnownName, Result, UniqueName, WellKnownName};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
-use zvariant::{derive::Type, NoneValue, OwnedValue, Str, Type, Value};
+use zvariant::{derive::Type, NoneValue, Str, Type, Value};
 
 /// String that identifies a [bus name].
 ///
@@ -239,29 +239,6 @@ impl<'name> From<&BusName<'name>> for BusName<'name> {
     }
 }
 
-impl TryFrom<OwnedValue> for BusName<'static> {
-    type Error = Error;
-
-    fn try_from(value: OwnedValue) -> Result<Self> {
-        let value = Str::try_from(value)?;
-        Ok(match BusName::try_from(value.as_str())? {
-            BusName::Unique(_) => BusName::Unique(UniqueName::from_string_unchecked(value.into())),
-            BusName::WellKnown(_) => {
-                BusName::WellKnown(WellKnownName::from_string_unchecked(value.into()))
-            }
-        })
-    }
-}
-
-impl From<BusName<'static>> for OwnedValue {
-    fn from(name: BusName<'static>) -> Self {
-        match name {
-            BusName::Unique(name) => name.into(),
-            BusName::WellKnown(name) => name.into(),
-        }
-    }
-}
-
 impl<'a> From<&'a OwnedUniqueName> for BusName<'a> {
     fn from(name: &'a OwnedUniqueName) -> Self {
         BusName::Unique(name.into())
@@ -345,20 +322,6 @@ impl TryFrom<Value<'static>> for OwnedBusName {
 }
 
 impl From<OwnedBusName> for Value<'static> {
-    fn from(name: OwnedBusName) -> Self {
-        name.0.into()
-    }
-}
-
-impl TryFrom<OwnedValue> for OwnedBusName {
-    type Error = Error;
-
-    fn try_from(value: OwnedValue) -> Result<Self> {
-        Ok(Self::from(BusName::try_from(value)?))
-    }
-}
-
-impl From<OwnedBusName> for OwnedValue {
     fn from(name: OwnedBusName) -> Self {
         name.0.into()
     }

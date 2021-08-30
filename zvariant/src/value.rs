@@ -172,7 +172,7 @@ impl<'a> Value<'a> {
             Value::ObjectPath(v) => Value::ObjectPath(v.to_owned()),
             Value::Value(v) => {
                 let o = OwnedValue::from(&**v);
-                Value::Value(Box::new(o.into_inner()))
+                Value::Value(Box::new(o))
             }
 
             Value::Array(v) => Value::Array(v.to_owned()),
