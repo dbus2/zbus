@@ -977,7 +977,6 @@ mod tests {
                 let (name, _) = changed.iter().next().unwrap();
                 assert_eq!(*name, "Count");
                 prop_changed.notify(1);
-                Ok(())
             })
             .unwrap();
         tx.send(()).unwrap();

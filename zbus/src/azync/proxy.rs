@@ -30,7 +30,7 @@ use crate::{
     Error, Message, MessageHeader, MessageType, Result,
 };
 
-type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send>;
+type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, ()> + Send>;
 
 new_key_type! {
     /// The ID for a registered signal handler.
@@ -449,7 +449,7 @@ impl<'a> ProxyInner<'a> {
             .values_mut()
             .filter(|info| info.signal_name == *signal_name)
         {
-            (*info.handler)(msg).await?;
+            (*info.handler)(msg).await;
             handled = true;
         }
 
@@ -855,7 +855,7 @@ impl<'a> Proxy<'a> {
     where
         M: TryInto<MemberName<'static>>,
         M::Error: Into<Error>,
-        for<'msg> H: FnMut(&'msg Message) -> BoxFuture<'msg, Result<()>> + Send + 'static,
+        for<'msg> H: FnMut(&'msg Message) -> BoxFuture<'msg, ()> + Send + 'static,
     {
         // Ensure the stream.
         self.msg_stream().await;
@@ -1144,19 +1144,19 @@ mod tests {
                     let signaled = owner_change_signaled.clone();
 
                     async move {
-                        let (name, _, new_owner) = m.body::<(
-                            BusName<'_>,
-                            Optional<UniqueName<'_>>,
-                            Optional<UniqueName<'_>>,
-                        )>()?;
+                        let (name, _, new_owner) = m
+                            .body::<(
+                                BusName<'_>,
+                                Optional<UniqueName<'_>>,
+                                Optional<UniqueName<'_>>,
+                            )>()
+                            .unwrap();
                         if name != well_known {
                             // Meant for the other testcase then
-                            return Ok(());
+                            return;
                         }
                         assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
                         signaled.notify(1);
-
-                        Ok(())
                     }
                     .boxed()
                 })
@@ -1169,11 +1169,9 @@ mod tests {
                 .connect_signal("NameAcquired", move |m| {
                     let signaled = name_acquired_signaled.clone();
                     async move {
-                        if m.body::<&str>()? == well_known {
+                        if m.body::<&str>().unwrap() == well_known {
                             signaled.notify(1);
                         }
-
-                        Ok(())
                     }
                     .boxed()
                 })
@@ -1187,11 +1185,9 @@ mod tests {
                 .connect_signal("NameAcquired", move |m| {
                     let signaled = name_acquired_signaled2.clone();
                     async move {
-                        if m.body::<&str>()? == well_known {
+                        if m.body::<&str>().unwrap() == well_known {
                             signaled.notify(1);
                         }
-
-                        Ok(())
                     }
                     .boxed()
                 })

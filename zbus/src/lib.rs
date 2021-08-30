@@ -789,7 +789,6 @@ mod tests {
                 .connect_the_signal(move || {
                     tx_clone.send(()).unwrap();
                     signal_tx.send(()).unwrap();
-                    Ok(())
                 })
                 .unwrap();
             tx.send(()).unwrap();

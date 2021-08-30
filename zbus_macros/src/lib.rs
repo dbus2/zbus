@@ -87,8 +87,6 @@ mod utils;
 ///
 /// let handler_id = proxy.connect_some_signal(|s, u| {
 ///     println!("arg1: {}, arg2: {}", s, u);
-///
-///     Ok(())
 /// })?;
 ///
 /// assert!(proxy.disconnect_signal(handler_id)?);
@@ -107,7 +105,7 @@ mod utils;
 ///     let handler_id = proxy.connect_some_signal(|s, u| {
 ///         println!("arg1: {}, arg2: {}", s, u);
 ///
-///         async { Ok(()) }.boxed()
+///         async {}.boxed()
 ///     }).await?;
 ///
 ///     assert!(proxy.disconnect_signal(handler_id).await?);

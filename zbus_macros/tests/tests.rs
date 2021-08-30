@@ -55,7 +55,6 @@ fn test_proxy() {
     proxy
         .connect_a_signal(move |_arg, other: String| {
             println!("{}", other);
-            Ok(())
         })
         .unwrap();
     // Let's also test signal streams.

@@ -711,14 +711,12 @@ mod tests {
                 .connect_name_owner_changed(move |name, _, new_owner| {
                     if name != well_known {
                         // Meant for the other testcase then
-                        return Ok(());
+                        return;
                     }
                     if let Some(unique) = unique_name.take() {
                         assert_eq!(*new_owner.as_ref().unwrap(), *unique);
                     }
                     signaled.notify(1);
-
-                    Ok(())
                 })
                 .unwrap();
         }
@@ -731,8 +729,6 @@ mod tests {
                     if name == well_known {
                         signaled.notify(1);
                     }
-
-                    Ok(())
                 })
                 .unwrap();
         }

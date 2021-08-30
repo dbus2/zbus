@@ -306,17 +306,16 @@ let (tx, rx) = std::sync::mpsc::channel();
 client
     .connect_location_updated(move |_old, new| {
         let location = LocationProxy::builder(&conn)
-            .path(new.as_str())?
+            .path(new.as_str())
+            .unwrap()
             .build()
             .unwrap();
         println!(
             "Latitude: {}\nLongitude: {}",
-            location.latitude()?,
-            location.longitude()?,
+            location.latitude().unwrap(),
+            location.longitude().unwrap(),
         );
         tx.send(()).unwrap();
-
-        Ok(())
     })
     .unwrap();
 

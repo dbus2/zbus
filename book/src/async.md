@@ -86,17 +86,16 @@ async fn run() -> Result<()> {
 
             async move {
                 let location = AsyncLocationProxy::builder(&conn)
-                    .path(new)?
+                    .path(new).unwrap()
                     .build()
-                    .await?;
+                    .await
+                    .unwrap();
                 println!(
                     "Latitude: {}\nLongitude: {}",
-                    location.latitude().await?,
-                    location.longitude().await?,
+                    location.latitude().await.unwrap(),
+                    location.longitude().await.unwrap(),
                 );
                 tx.send(()).unwrap();
-
-                Ok(())
             }
             .boxed()
         })
