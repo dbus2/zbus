@@ -300,24 +300,6 @@ impl<'a> Proxy<'a> {
         block_on(self.azync.disconnect_property_changed(handler_id))
     }
 
-    /// Receive and handle the next incoming signal on the associated connection.
-    ///
-    /// This method will wait for signal messages on the associated connection and call any
-    /// handlers registered through the [`Self::connect_signal`] method. Signal handlers can be
-    /// registered and deregistered from another threads during the call to this method.
-    ///
-    /// If the signal message was handled by a handler, `Ok(None)` is returned. Otherwise, the
-    /// received message is returned.
-    ///
-    /// # Errors
-    ///
-    /// Apart from general I/O errors that can result from socket communications, calling this
-    /// method will also result in an error if the destination service has not yet registered its
-    /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub fn next_signal(&self) -> Result<Option<Arc<Message>>> {
-        block_on(self.azync.next_signal())
-    }
-
     /// Handle the provided signal message.
     ///
     /// Call any handlers registered through the [`Self::connect_signal`] method for the provided

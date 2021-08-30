@@ -928,31 +928,6 @@ impl<'a> Proxy<'a> {
         }
     }
 
-    /// Receive and handle the next incoming signal on the associated connection.
-    ///
-    /// This method will wait for signal messages on the associated connection and call any
-    /// handlers registered through the [`Self::connect_signal`] method.
-    ///
-    /// If the signal message was handled by a handler, `Ok(None)` is returned. Otherwise, the
-    /// received message is returned.
-    ///
-    /// # Errors
-    ///
-    /// This method returns the same errors as [`Self::receive_signal`].
-    pub async fn next_signal(&self) -> Result<Option<Arc<Message>>> {
-        let mut stream = self.msg_stream().await.lock().await;
-        let msg = stream
-            .next()
-            .await
-            .ok_or_else(|| Error::Io(io::Error::new(ErrorKind::BrokenPipe, "socket closed")))??;
-
-        if self.handle_signal(&msg).await? {
-            Ok(None)
-        } else {
-            Ok(Some(msg))
-        }
-    }
-
     /// Handle the provided signal message.
     ///
     /// Call any handlers registered through the [`Self::connect_signal`] method for the provided
