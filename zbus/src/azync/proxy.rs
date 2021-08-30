@@ -85,9 +85,6 @@ impl<'a> std::fmt::Debug for ProxyProperties<'a> {
 /// disconnecting handlers (using [`Proxy::connect_signal`] and [`Proxy::disconnect_signal`] methods),
 /// you can also receive signals through a stream using [`Proxy::receive_signal`] method.
 ///
-/// Another implication of asynchronous API is that we do not need [`crate::SignalReceiver`] here.
-/// The [`futures` crate] provides API to combine futures and streams already.
-///
 /// # Example
 ///
 /// ```
