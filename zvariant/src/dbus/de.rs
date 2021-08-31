@@ -428,6 +428,7 @@ where
     de.0.sig_parser.skip_char()?;
     let ad = ArrayDeserializer::new(de)?;
     let len = ad.len;
+    de.0.sig_parser.skip_char()?;
     de.0.next_slice(len)
 }
 
