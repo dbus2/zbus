@@ -4,7 +4,7 @@ use std::{
     os::unix::io::{AsRawFd, RawFd},
     sync::Arc,
 };
-use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName};
+use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
 use async_io::block_on;
@@ -192,6 +192,41 @@ impl Connection {
         E::Error: Into<Error>,
     {
         block_on(self.inner.reply_error(call, error_name, body))
+    }
+
+    /// Register a well-known name for this service on the bus.
+    ///
+    /// You can request multiple names for the same `ObjectServer`. Use [`Connection::release_name`]
+    /// for deregistering names registered through this method.
+    ///
+    /// Note that exclusive ownership without queueing is requested (using
+    /// [`crate::fdo::RequestNameFlags::ReplaceExisting`] and
+    /// [`crate::fdo::RequestNameFlags::DoNotQueue`] flags) since that is the most typical case. If
+    /// that is not what you want, you should use [`crate::fdo::DBusProxy::request_name`] instead
+    /// (but make sure then that name is requested **after** you've setup your service
+    /// implementation with the `ObjectServer`).
+    pub fn request_name<'w, W>(self, well_known_name: W) -> Result<Self>
+    where
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
+    {
+        block_on(self.inner.request_name(well_known_name)).map(Into::into)
+    }
+
+    /// Deregister a previously registered well-known name for this service on the bus.
+    ///
+    /// Use this method to deregister a well-known name, registered through
+    /// [`Connection::request_name`].
+    ///
+    /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
+    /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
+    /// was not previously registered or already deregistered.
+    pub fn release_name<'w, W>(&self, well_known_name: W) -> Result<bool>
+    where
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
+    {
+        block_on(self.inner.release_name(well_known_name))
     }
 
     /// Checks if `self` is a connection to a message bus.

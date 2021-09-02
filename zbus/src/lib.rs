@@ -88,9 +88,9 @@
 //! }
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
-//!     let connection = Connection::session()?;
-//!     let mut object_server = ObjectServer::new(&connection)
+//!     let connection = Connection::session()?
 //!         .request_name("org.zbus.MyGreeter")?;
+//!     let mut object_server = ObjectServer::new(&connection);
 //!     let mut greeter = Greeter { count: 0 };
 //!     object_server.at("/org/zbus/MyGreeter", greeter)?;
 //!     loop {
@@ -809,10 +809,11 @@ mod tests {
 
         rx.recv().unwrap();
         for _ in 0..2 {
-            let conn = Connection::session().unwrap();
-            let mut object_server = super::ObjectServer::new(&conn)
+            let conn = Connection::session()
+                .unwrap()
                 .request_name("org.freedesktop.zbus.ComeAndGo")
                 .unwrap();
+            let mut object_server = super::ObjectServer::new(&conn);
 
             object_server
                 .at("/org/freedesktop/zbus/ComeAndGo", ComeAndGo)
@@ -825,10 +826,8 @@ mod tests {
                 .unwrap();
             rx.recv().unwrap();
 
-            // Now we disconnect (and hence release the name ownership) to use a different
-            // connection (i-e new unique name).
-            drop(object_server);
-            drop(conn);
+            // Now we release the name ownership to use a different connection (i-e new unique name).
+            conn.release_name("org.freedesktop.zbus.ComeAndGo").unwrap();
         }
 
         child.join().unwrap();

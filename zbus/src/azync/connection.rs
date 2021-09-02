@@ -7,7 +7,7 @@ use async_task::Task;
 use once_cell::sync::OnceCell;
 use static_assertions::assert_impl_all;
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
     convert::TryInto,
     future::ready,
     hash::{Hash, Hasher},
@@ -21,7 +21,7 @@ use std::{
     },
     task::{Context, Poll},
 };
-use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName};
+use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
 use futures_core::{ready, Future};
@@ -113,6 +113,7 @@ struct ConnectionInner {
     cap_unix_fd: bool,
     bus_conn: bool,
     unique_name: OnceCell<OwnedUniqueName>,
+    registered_names: Mutex<HashSet<WellKnownName<'static>>>,
 
     raw_conn: Arc<sync::Mutex<DynSocketConnection>>,
     // Serial number for next outgoing message
@@ -128,7 +129,8 @@ struct ConnectionInner {
 }
 
 // FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
-//        cancel `msg_receiver_task` manually to ensure task is gone before the connection is.
+//        cancel `msg_receiver_task` manually to ensure task is gone before the connection is. Same
+//        goes for the registered well-known names.
 //
 // [`AsyncDrop`]: https://github.com/rust-lang/wg-async-foundations/issues/65
 
@@ -457,6 +459,67 @@ impl Connection {
         self.send_message(m).await
     }
 
+    /// Register a well-known name for this service on the bus.
+    ///
+    /// You can request multiple names for the same `ObjectServer`. Use [`Connection::release_name`]
+    /// for deregistering names registered through this method.
+    ///
+    /// Note that exclusive ownership without queueing is requested (using
+    /// [`fdo::RequestNameFlags::ReplaceExisting`] and [`fdo::RequestNameFlags::DoNotQueue`] flags)
+    /// since that is the most typical case. If that is not what you want, you should use
+    /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
+    /// **after** you've setup your service implementation with the `ObjectServer`).
+    pub async fn request_name<'w, W>(self, well_known_name: W) -> Result<Self>
+    where
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
+    {
+        let well_known_name = well_known_name.try_into().map_err(Into::into)?;
+        let mut names = self.inner.registered_names.lock().await;
+
+        if !names.contains(&well_known_name) {
+            fdo::AsyncDBusProxy::new(&self)
+                .await?
+                .request_name(
+                    well_known_name.clone(),
+                    fdo::RequestNameFlags::ReplaceExisting | fdo::RequestNameFlags::DoNotQueue,
+                )
+                .await?;
+            names.insert(well_known_name.to_owned());
+        }
+
+        drop(names);
+        Ok(self)
+    }
+
+    /// Deregister a previously registered well-known name for this service on the bus.
+    ///
+    /// Use this method to deregister a well-known name, registered through
+    /// [`Connection::request_name`].
+    ///
+    /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
+    /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
+    /// was not previously registered or already deregistered.
+    pub async fn release_name<'w, W>(&self, well_known_name: W) -> Result<bool>
+    where
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
+    {
+        let well_known_name: WellKnownName<'w> = well_known_name.try_into().map_err(Into::into)?;
+        let mut names = self.inner.registered_names.lock().await;
+        // FIXME: Should be possible to avoid cloning/allocation here
+        if !names.remove(&well_known_name.to_owned()) {
+            return Ok(false);
+        }
+
+        fdo::AsyncDBusProxy::new(self)
+            .await?
+            .release_name(well_known_name)
+            .await
+            .map(|_| true)
+            .map_err(Into::into)
+    }
+
     /// Checks if `self` is a connection to a message bus.
     ///
     /// This will return `false` for p2p connections.
@@ -725,6 +788,7 @@ impl Connection {
                 signal_subscriptions: Mutex::new(HashMap::new()),
                 executor: executor.clone(),
                 msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
+                registered_names: Mutex::new(HashSet::new()),
             }),
         };
 

@@ -18,22 +18,16 @@ D-Bus API. However, typically services use a service name (aka *well-known name*
 in this context) can easily discover them.
 
 In this example, that is exactly what we're going to do and request the bus for the service name of
-our choice. To achieve that, we will we call the [`RequestName`] method on the bus, using
-`zbus::fdo` module:
+our choice:
 
 ```rust,no_run
 use std::{convert::TryInto, error::Error};
 
 use zbus::Connection;
-use zbus::fdo;
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
-    let connection = Connection::session()?;
-
-    fdo::DBusProxy::new(&connection)?.request_name(
-        "org.zbus.MyGreeter".try_into()?,
-        fdo::RequestNameFlags::ReplaceExisting.into(),
-    )?;
+    let connection = Connection::session()?
+        .request_name("org.zbus.MyGreeter")?;
 
     loop {}
 }
@@ -61,11 +55,8 @@ by replacing the loop above with this code:
 ```rust,no_run
 # use std::convert::TryInto;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-#    let connection = zbus::Connection::session()?;
-#    zbus::fdo::DBusProxy::new(&connection)?.request_name(
-#        "org.zbus.MyGreeter".try_into()?,
-#        zbus::fdo::RequestNameFlags::ReplaceExisting.into(),
-#    )?;
+#    let connection = zbus::Connection::session()?
+#        .request_name("org.zbus.MyGreeter")?;
 #
 let mut stream = zbus::MessageStream::from(&connection);
 for msg in stream {
@@ -105,8 +96,7 @@ need, but it is also easy to get it wrong. Fortunately, zbus has a simpler solut
 One can write an `impl` with a set of methods and let the `dbus_interface` procedural macro write
 the D-Bus details for us. It will dispatch all the incoming method calls to their respective
 handlers, and implicilty handle introspection requests. It also has support for properties and
-signal emission. It even makes it easier to register a [well-known name](#taking-a-service-name) for
-your service.
+signal emission.
 
 Let see how to use it:
 
@@ -146,9 +136,9 @@ impl Greeter {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::session()?;
-    let mut object_server = ObjectServer::new(&connection)
+    let connection = Connection::session()?
         .request_name("org.zbus.MyGreeter")?;
+    let mut object_server = ObjectServer::new(&connection);
     let greeter = Greeter { name: "GreeterName".to_string() };
     object_server.at("/org/zbus/MyGreeter", greeter)?;
     loop {
@@ -257,5 +247,4 @@ object_server.with_mut(
 ```
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
-[`RequestName`]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-request-name
 [didoc]: https://docs.rs/zbus/2.0.0-beta.6/zbus/attr.dbus_interface.html

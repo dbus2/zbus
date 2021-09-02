@@ -1,6 +1,6 @@
 use std::{
     any::{Any, TypeId},
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     convert::TryInto,
     fmt::Write,
     io::{self, ErrorKind},
@@ -9,9 +9,8 @@ use std::{
     sync::{Arc, RwLock, RwLockWriteGuard},
 };
 
-use fdo::{DBusProxy, RequestNameFlags};
 use static_assertions::assert_impl_all;
-use zbus_names::{InterfaceName, MemberName, WellKnownName};
+use zbus_names::{InterfaceName, MemberName};
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
@@ -329,7 +328,6 @@ pub struct ObjectServer {
     root: Node,
     #[derivative(Debug = "ignore")]
     msg_stream: MessageStream,
-    registered_names: HashSet<WellKnownName<'static>>,
 }
 
 assert_impl_all!(ObjectServer: Send, Sync, Unpin);
@@ -341,60 +339,7 @@ impl ObjectServer {
             conn: connection.clone(),
             msg_stream: MessageStream::from(connection),
             root: Node::new("/".try_into().expect("zvariant bug")),
-            registered_names: HashSet::new(),
         }
-    }
-
-    /// Register a well-known name for this service on the bus.
-    ///
-    /// You can request multiple names for the same `ObjectServer`. All the names are released
-    /// automatically for you when `ObjectServer` is dropped. Use [`ObjectServer::release_name`] for
-    /// explicitly deregistering names registered through this method.
-    ///
-    /// Note that exclusive ownership without queueing is requested (using
-    /// [`fdo::RequestNameFlags::ReplaceExisting`] and [`fdo::RequestNameFlags::DoNotQueue`] flags)
-    /// since that is the most typical case. If that is not what you want, you should use
-    /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
-    /// **after** instantiating the `ObjectServer`).
-    pub fn request_name<'w, W>(mut self, well_known_name: W) -> Result<Self>
-    where
-        W: TryInto<WellKnownName<'w>>,
-        W::Error: Into<Error>,
-    {
-        let well_known_name = well_known_name.try_into().map_err(Into::into)?;
-        DBusProxy::new(&self.conn)?.request_name(
-            well_known_name.clone(),
-            RequestNameFlags::ReplaceExisting | RequestNameFlags::DoNotQueue,
-        )?;
-
-        self.registered_names.insert(well_known_name.to_owned());
-
-        Ok(self)
-    }
-
-    /// Deregister a previously registered well-known name for this service on the bus.
-    ///
-    /// Use this method to explicitly deregister a well-known name, registered through
-    /// [`ObjectServer::request_name`].
-    ///
-    /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
-    /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
-    /// was not previously registered or already deregistered.
-    pub fn release_name<'w, W>(&mut self, well_known_name: W) -> Result<bool>
-    where
-        W: TryInto<WellKnownName<'w>>,
-        W::Error: Into<Error>,
-    {
-        let well_known_name: WellKnownName<'w> = well_known_name.try_into().map_err(Into::into)?;
-        // FIXME: Should be possible to avoid cloning/allocation here.
-        if !self.registered_names.remove(&well_known_name.to_owned()) {
-            return Ok(false);
-        }
-
-        DBusProxy::new(&self.conn)?
-            .release_name(well_known_name)
-            .map(|_| true)
-            .map_err(Into::into)
     }
 
     // Get the Node at path.
@@ -756,17 +701,6 @@ impl ObjectServer {
     }
 }
 
-impl Drop for ObjectServer {
-    fn drop(&mut self) {
-        // FIXME: Ignoring the errors here and on the method call, they should be logged.
-        if let Ok(proxy) = DBusProxy::new(&self.conn) {
-            for name in &self.registered_names {
-                let _ = proxy.release_name(name.clone());
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 #[allow(clippy::blacklisted_name)]
 mod tests {
@@ -1045,9 +979,8 @@ mod tests {
     fn basic_iface() {
         let (tx, rx) = channel::<()>();
 
-        let conn = Connection::session().unwrap();
-        let stream = MessageStream::from(&conn);
-        let mut object_server = ObjectServer::new(&conn)
+        let conn = Connection::session()
+            .unwrap()
             // primary name
             .request_name("org.freedesktop.MyService")
             .unwrap()
@@ -1055,6 +988,8 @@ mod tests {
             .unwrap()
             .request_name("org.freedesktop.MyService.bar")
             .unwrap();
+        let stream = MessageStream::from(&conn);
+        let mut object_server = ObjectServer::new(&conn);
         let action = Arc::new(Mutex::new(NextAction::Nothing));
 
         let child = thread::spawn(move || my_iface_test(tx).expect("child failed"));
@@ -1108,11 +1043,9 @@ mod tests {
         assert_eq!(val, 2);
 
         // Release primary name explicitly and let others be released implicitly.
-        assert_eq!(
-            object_server.release_name("org.freedesktop.MyService"),
-            Ok(true)
-        );
-        drop(object_server);
+        assert_eq!(conn.release_name("org.freedesktop.MyService"), Ok(true));
+        assert_eq!(conn.release_name("org.freedesktop.MyService.foo"), Ok(true));
+        assert_eq!(conn.release_name("org.freedesktop.MyService.bar"), Ok(true));
 
         // Let's ensure all names were released.
         let proxy = zbus::fdo::DBusProxy::new(&conn).unwrap();
