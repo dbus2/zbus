@@ -400,13 +400,11 @@ impl ObjectServer {
     // Get the Node at path.
     pub(crate) fn get_node(&self, path: &ObjectPath<'_>) -> Option<&Node> {
         let mut node = &self.root;
-        let mut node_path = String::new();
 
         for i in path.split('/').skip(1) {
             if i.is_empty() {
                 continue;
             }
-            write!(&mut node_path, "/{}", i).unwrap();
             match node.children.get(i) {
                 Some(n) => node = n,
                 None => return None,
