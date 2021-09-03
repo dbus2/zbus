@@ -49,6 +49,7 @@ pub trait Interface: Any + Send + Sync {
     fn call(
         &self,
         server: &ObjectServer,
+        connection: &Connection,
         msg: &Message,
         name: MemberName<'_>,
     ) -> Option<Result<u32>>;
@@ -57,6 +58,7 @@ pub trait Interface: Any + Send + Sync {
     fn call_mut(
         &mut self,
         server: &ObjectServer,
+        connection: &Connection,
         msg: &Message,
         name: MemberName<'_>,
     ) -> Option<Result<u32>>;
@@ -621,12 +623,12 @@ impl ObjectServer {
         let res = iface
             .read()
             .expect("lock poisoned")
-            .call(self, msg, member.clone());
+            .call(self, &self.conn, msg, member.clone());
         res.or_else(|| {
             iface
                 .write()
                 .expect("lock poisoned")
-                .call_mut(self, msg, member.clone())
+                .call_mut(self, &self.conn, msg, member.clone())
         })
         .ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
     }
