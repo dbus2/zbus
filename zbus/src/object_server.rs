@@ -589,7 +589,7 @@ impl ObjectServer {
     }
 
     fn dispatch_method_call_try(
-        &mut self,
+        &self,
         msg_header: &MessageHeader<'_>,
         msg: &Message,
     ) -> fdo::Result<Result<u32>> {
@@ -634,7 +634,7 @@ impl ObjectServer {
     }
 
     fn dispatch_method_call(
-        &mut self,
+        &self,
         msg_header: &MessageHeader<'_>,
         msg: &Message,
     ) -> Result<u32> {
@@ -656,7 +656,7 @@ impl ObjectServer {
     ///   the caller through the associated server connection.
     ///
     /// Returns an error if the message is malformed, true if it's handled, false otherwise.
-    pub fn dispatch_message(&mut self, msg: &Message) -> Result<bool> {
+    pub fn dispatch_message(&self, msg: &Message) -> Result<bool> {
         let msg_header = msg.header()?;
 
         match msg_header.message_type()? {
