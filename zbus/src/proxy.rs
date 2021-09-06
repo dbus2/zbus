@@ -300,17 +300,6 @@ impl<'a> Proxy<'a> {
         block_on(self.azync.disconnect_property_changed(handler_id))
     }
 
-    /// Handle the provided signal message.
-    ///
-    /// Call any handlers registered through the [`Self::connect_signal`] method for the provided
-    /// signal message.
-    ///
-    /// If no errors are encountered, `Ok(true)` is returned if a handler was found and called for,
-    /// the signal; `Ok(false)` otherwise.
-    pub fn handle_signal(&self, msg: &Message) -> Result<bool> {
-        block_on(self.azync.handle_signal(msg))
-    }
-
     /// Get a reference to the underlying async Proxy.
     pub fn inner(&self) -> &azync::Proxy<'a> {
         &self.azync

@@ -928,17 +928,6 @@ impl<'a> Proxy<'a> {
         }
     }
 
-    /// Handle the provided signal message.
-    ///
-    /// Call any handlers registered through the [`Self::connect_signal`] method for the provided
-    /// signal message.
-    ///
-    /// If no errors are encountered, `Ok(true)` is returned if any handlers where found and called for,
-    /// the signal; `Ok(false)` otherwise.
-    pub async fn handle_signal(&self, msg: &Message) -> Result<bool> {
-        self.inner.handle_signal(msg).await
-    }
-
     async fn msg_stream(&self) -> &Mutex<MessageStream> {
         match self.inner.signal_msg_stream.get() {
             Some(stream) => stream,
