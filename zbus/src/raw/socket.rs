@@ -106,7 +106,7 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
 
     /// Return the raw file descriptor backing this transport, if any.
     ///
-    /// This is used to back [zbus::azync::Connection::as_raw_fd] and related functions.
+    /// This is used to back some internal platform-specific functions.
     fn as_raw_fd(&self) -> RawFd;
 }
 

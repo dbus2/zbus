@@ -2,7 +2,6 @@ use static_assertions::assert_impl_all;
 use std::{
     convert::TryInto,
     ops::{Deref, DerefMut},
-    os::unix::io::{AsRawFd, RawFd},
     sync::Arc,
 };
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
@@ -56,12 +55,6 @@ pub struct Connection {
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
-
-impl AsRawFd for Connection {
-    fn as_raw_fd(&self) -> RawFd {
-        block_on(self.inner.as_raw_fd())
-    }
-}
 
 impl Connection {
     /// Create a `Connection` to the session/user message bus.

@@ -13,7 +13,6 @@ use std::{
     hash::{Hash, Hasher},
     io::{self, ErrorKind},
     ops::{Deref, DerefMut},
-    os::unix::io::RawFd,
     pin::Pin,
     sync::{
         self,
@@ -610,11 +609,6 @@ impl Connection {
     /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
     pub fn executor(&self) -> &Executor<'static> {
         &self.inner.executor
-    }
-
-    /// Get the raw file descriptor of this connection.
-    pub async fn as_raw_fd(&self) -> RawFd {
-        (self.inner.raw_conn.lock().expect("poisened lock").socket()).as_raw_fd()
     }
 
     /// Get a reference to the associated [`ObjectServer`].
