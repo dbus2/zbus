@@ -1,6 +1,7 @@
 use static_assertions::assert_impl_all;
 use std::{
     convert::TryInto,
+    ops::{Deref, DerefMut},
     os::unix::io::{AsRawFd, RawFd},
     sync::Arc,
 };
@@ -9,7 +10,7 @@ use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, Error, Message, Result};
+use crate::{azync, Error, Message, ObjectServer, Result};
 
 /// A D-Bus connection.
 ///
@@ -234,6 +235,25 @@ impl Connection {
     /// This will return `false` for p2p connections.
     pub fn is_bus(&self) -> bool {
         self.inner.is_bus()
+    }
+
+    /// Get a reference to the associated [`ObjectServer`].
+    ///
+    /// The `ObjectServer` is created on-demand.
+    pub fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
+        block_on(self.inner.object_server())
+    }
+
+    /// Get a mutable reference to the associated [`ObjectServer`].
+    ///
+    /// The `ObjectServer` is created on-demand.
+    ///
+    /// # Caveats
+    ///
+    /// The return value of this method should not be kept around for longer than needed. The method
+    /// dispatch machinery of the [`ObjectServer`] will be paused as long as the return value is alive.
+    pub fn object_server_mut(&self) -> impl DerefMut<Target = ObjectServer> + '_ {
+        block_on(self.inner.object_server_mut())
     }
 
     /// Get a reference to the underlying async Connection.

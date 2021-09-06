@@ -84,7 +84,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 A simple service that politely greets whoever calls its `SayHello` method:
 
 ```rust,no_run
-use std::error::Error;
+use std::{
+    error::Error,
+    thread::sleep,
+    time::Duration,
+};
 use zbus::{dbus_interface, fdo, ObjectServer, Connection};
 
 struct Greeter {
@@ -102,14 +106,15 @@ impl Greeter {
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = Connection::session()?
         .request_name("org.zbus.MyGreeter")?;
-    let mut object_server = ObjectServer::new(&connection);
     let mut greeter = Greeter { count: 0 };
-    object_server.at("/org/zbus/MyGreeter", greeter)?;
-    loop {
-        if let Err(err) = object_server.try_handle_next() {
-            eprintln!("{}", err);
-        }
-    }
+    connection
+        .object_server_mut()
+        .at("/org/zbus/MyGreeter", greeter)?;
+
+    // Do other things or go to sleep.
+    sleep(Duration::from_secs(60));
+
+    Ok(())
 }
 ```
 

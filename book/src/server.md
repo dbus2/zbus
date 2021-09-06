@@ -104,14 +104,22 @@ Let see how to use it:
 # use std::error::Error;
 # use zbus::{dbus_interface, fdo, ObjectServer, Connection, SignalContext};
 #
+use event_listener::Event;
+
 struct Greeter {
-    name: String
+    name: String,
+    done: Event,
 }
 
 #[dbus_interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
     fn say_hello(&self, name: &str) -> String {
         format!("Hello {}!", name)
+    }
+
+    // Rude!
+    fn go_away(&self) {
+        self.done.notify(1);
     }
 
     /// A "GreeterName" property.
@@ -138,14 +146,18 @@ impl Greeter {
 fn main() -> Result<(), Box<dyn Error>> {
     let connection = Connection::session()?
         .request_name("org.zbus.MyGreeter")?;
-    let mut object_server = ObjectServer::new(&connection);
-    let greeter = Greeter { name: "GreeterName".to_string() };
-    object_server.at("/org/zbus/MyGreeter", greeter)?;
-    loop {
-        if let Err(err) = object_server.try_handle_next() {
-            eprintln!("{}", err);
-        }
-    }
+    let greeter = Greeter {
+        name: "GreeterName".to_string(),
+        done: event_listener::Event::new(),
+    };
+    let done_listener = greeter.done.listen();
+    connection
+        .object_server_mut()
+        .at("/org/zbus/MyGreeter", greeter)?;
+
+    done_listener.wait();
+
+    Ok(())
 }
 ```
 
@@ -171,12 +183,6 @@ org.zbus.MyGreeter1                 interface -         -            -
 ```
 
 Easy-peasy!
-
-> **Note:** As you must have noticed, your code needed to run a loop to continuously read incoming
-messages (register the associated FD for input in poll/select to avoid blocking). This is because
-at the time of the this writing (*pre-1.0*), zbus neither provides an event loop API, nor any
-integration with other event loop implementations. We are evaluating different options to make this
-easier, especially with *async* support.
 
 ### Method errors
 
@@ -234,7 +240,7 @@ it with the previous example code:
 #
 # fn main() -> Result<(), Box<dyn Error>> {
 # let connection = zbus::Connection::session()?;
-# let mut object_server = zbus::ObjectServer::new(&connection);
+# let mut object_server = connection.object_server_mut();
 object_server.with_mut(
     "/org/zbus/MyGreeter",
     |iface: &mut Greeter, signal_ctxt| {

@@ -2,7 +2,7 @@ use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
 use async_io::block_on;
-use async_lock::Mutex;
+use async_lock::{Mutex, RwLock};
 use async_task::Task;
 use once_cell::sync::OnceCell;
 use static_assertions::assert_impl_all;
@@ -12,6 +12,7 @@ use std::{
     future::ready,
     hash::{Hash, Hasher},
     io::{self, ErrorKind},
+    ops::{Deref, DerefMut},
     os::unix::io::RawFd,
     pin::Pin,
     sync::{
@@ -36,7 +37,7 @@ use crate::{
     azync::{Authenticated, ConnectionBuilder, MessageStream},
     fdo,
     raw::{Connection as RawConnection, Socket},
-    Error, Guid, Message, MessageType, Result,
+    Error, Guid, Message, MessageType, ObjectServer, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -126,6 +127,9 @@ struct ConnectionInner {
     msg_receiver_task: sync::Mutex<Option<Task<()>>>,
 
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
+
+    object_server: OnceCell<RwLock<ObjectServer>>,
+    object_server_dispatch_task: OnceCell<Task<()>>,
 }
 
 // FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
@@ -478,6 +482,11 @@ impl Connection {
         let mut names = self.inner.registered_names.lock().await;
 
         if !names.contains(&well_known_name) {
+            // Ensure ObjectServer and its msg stream exists and reading before registering any
+            // names. Otherwise we get issue#68 (that we warn the user about in the docs of this
+            // method).
+            self.object_server().await;
+
             fdo::AsyncDBusProxy::new(&self)
                 .await?
                 .request_name(
@@ -606,6 +615,57 @@ impl Connection {
     /// Get the raw file descriptor of this connection.
     pub async fn as_raw_fd(&self) -> RawFd {
         (self.inner.raw_conn.lock().expect("poisened lock").socket()).as_raw_fd()
+    }
+
+    /// Get a reference to the associated [`ObjectServer`].
+    ///
+    /// The `ObjectServer` is created on-demand.
+    pub async fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
+        self.inner
+            .object_server
+            .get_or_init(|| self.setup_object_server())
+            .read()
+            .await
+    }
+
+    /// Get a mutable reference to the associated [`ObjectServer`].
+    ///
+    /// The `ObjectServer` is created on-demand.
+    ///
+    /// # Caveats
+    ///
+    /// The return value of this method should not be kept around for longer than needed. The method
+    /// dispatch machinery of the [`ObjectServer`] will be paused as long as the return value is alive.
+    pub async fn object_server_mut(&self) -> impl DerefMut<Target = ObjectServer> + '_ {
+        self.inner
+            .object_server
+            .get_or_init(|| self.setup_object_server())
+            .write()
+            .await
+    }
+
+    fn setup_object_server(&self) -> RwLock<ObjectServer> {
+        let weak_conn = WeakConnection::from(self);
+        let mut stream = MessageStream::from(self.clone());
+        let task = self.inner.executor.spawn(async move {
+            // TODO: Log errors when we've logging.
+            while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
+                match weak_conn.upgrade() {
+                    Some(conn) => {
+                        let server = conn.object_server().await;
+                        let _ = server.dispatch_message(&*msg);
+                    }
+                    // If connection is completely gone, no reason to keep running the task anymore.
+                    None => return,
+                }
+            }
+        });
+        self.inner
+            .object_server_dispatch_task
+            .set(task)
+            .expect("object server task set twice");
+
+        RwLock::new(ObjectServer::new(self))
     }
 
     pub(crate) async fn subscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
@@ -786,6 +846,8 @@ impl Connection {
                 serial: AtomicU32::new(1),
                 unique_name: OnceCell::new(),
                 signal_subscriptions: Mutex::new(HashMap::new()),
+                object_server: OnceCell::new(),
+                object_server_dispatch_task: OnceCell::new(),
                 executor: executor.clone(),
                 msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
                 registered_names: Mutex::new(HashSet::new()),

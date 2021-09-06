@@ -214,7 +214,7 @@ fn test_interface() {
     if false {
         // check compilation
         let c = zbus::Connection::session().unwrap();
-        let s = zbus::ObjectServer::new(&c);
+        let s = c.object_server();
         let m = zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
             .unwrap();
         let _ = t.call(&s, &c, &m, "StrU32".try_into().unwrap()).unwrap();

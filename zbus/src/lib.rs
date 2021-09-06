@@ -72,7 +72,11 @@
 //! A simple service that politely greets whoever calls its `SayHello` method:
 //!
 //! ```rust,no_run
-//! use std::error::Error;
+//! use std::{
+//!     error::Error,
+//!     thread::sleep,
+//!     time::Duration,
+//! };
 //! use zbus::{dbus_interface, fdo, ObjectServer, Connection};
 //!
 //! struct Greeter {
@@ -90,14 +94,15 @@
 //! fn main() -> Result<(), Box<dyn Error>> {
 //!     let connection = Connection::session()?
 //!         .request_name("org.zbus.MyGreeter")?;
-//!     let mut object_server = ObjectServer::new(&connection);
 //!     let mut greeter = Greeter { count: 0 };
-//!     object_server.at("/org/zbus/MyGreeter", greeter)?;
-//!     loop {
-//!         if let Err(err) = object_server.try_handle_next() {
-//!             eprintln!("{}", err);
-//!         }
-//!     }
+//!     connection
+//!         .object_server_mut()
+//!         .at("/org/zbus/MyGreeter", greeter)?;
+//!
+//!    // Do other things or go to sleep.
+//!    sleep(Duration::from_secs(60));
+//!
+//!    Ok(())
 //! }
 //! ```
 //!
@@ -598,11 +603,9 @@ mod tests {
         // signature we receive on the reply message.
         use zvariant::{ObjectPath, Value};
         let conn = Connection::session().unwrap();
-        let stream = MessageStream::from(&conn);
         let service_name = conn.unique_name().unwrap().clone();
-        let mut object_server = super::ObjectServer::new(&conn);
 
-        struct Secret(Arc<Mutex<bool>>);
+        struct Secret;
         #[super::dbus_interface(name = "org.freedesktop.Secret.Service")]
         impl Secret {
             fn open_session(
@@ -610,7 +613,6 @@ mod tests {
                 _algorithm: &str,
                 input: Value<'_>,
             ) -> zbus::fdo::Result<(OwnedValue, OwnedObjectPath)> {
-                *self.0.lock().unwrap() = true;
                 Ok((
                     OwnedValue::from(input),
                     ObjectPath::try_from("/org/freedesktop/secrets/Blah")
@@ -620,9 +622,8 @@ mod tests {
             }
         }
 
-        let quit = Arc::new(Mutex::new(false));
-        let secret = Secret(quit.clone());
-        object_server
+        let secret = Secret;
+        conn.object_server_mut()
             .at("/org/freedesktop/secrets", secret)
             .unwrap();
 
@@ -649,17 +650,6 @@ mod tests {
 
             2u32
         });
-
-        for m in stream {
-            let m = m.unwrap();
-            if let Err(e) = object_server.dispatch_message(&m) {
-                eprintln!("{}", e);
-            }
-
-            if *quit.lock().unwrap() {
-                break;
-            }
-        }
 
         let val = child.join().expect("failed to join");
         assert_eq!(val, 2);
@@ -813,13 +803,12 @@ mod tests {
                 .unwrap()
                 .request_name("org.freedesktop.zbus.ComeAndGo")
                 .unwrap();
-            let mut object_server = super::ObjectServer::new(&conn);
 
-            object_server
+            conn.object_server_mut()
                 .at("/org/freedesktop/zbus/ComeAndGo", ComeAndGo)
                 .unwrap();
 
-            object_server
+            conn.object_server_mut()
                 .with("/org/freedesktop/zbus/ComeAndGo", |_: &ComeAndGo, ctxt| {
                     ComeAndGo::the_signal(ctxt)
                 })

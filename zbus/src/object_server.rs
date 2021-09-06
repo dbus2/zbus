@@ -3,7 +3,6 @@ use std::{
     collections::{hash_map::Entry, HashMap},
     convert::TryInto,
     fmt::Write,
-    io::{self, ErrorKind},
     marker::PhantomData,
     ops::{Deref, DerefMut},
     sync::{Arc, RwLock, RwLockWriteGuard},
@@ -14,9 +13,10 @@ use zbus_names::{InterfaceName, MemberName};
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
+    azync::{self, WeakConnection},
     fdo,
     fdo::{Introspectable, Peer, Properties},
-    Connection, Error, Message, MessageHeader, MessageStream, MessageType, Result, SignalContext,
+    Connection, Error, Message, MessageHeader, MessageType, Result, SignalContext,
 };
 
 /// The trait used to dispatch messages to an interface instance.
@@ -280,18 +280,17 @@ impl Node {
 ///# use std::error::Error;
 /// use zbus::{Connection, ObjectServer, dbus_interface};
 /// use std::sync::{Arc, Mutex};
+/// use event_listener::Event;
 ///
 /// struct Example {
 ///     // Interfaces are owned by the ObjectServer. They can have
 ///     // `&mut self` methods.
-///     //
-///     // If you need a shared state, you can use a RefCell for ex:
-///     quit: bool,
+///     quit_event: Event,
 /// }
 ///
 /// impl Example {
-///     fn new(quit: bool) -> Self {
-///         Self { quit }
+///     fn new(quit_event: Event) -> Self {
+///         Self { quit_event }
 ///     }
 /// }
 ///
@@ -299,7 +298,7 @@ impl Node {
 /// impl Example {
 ///     // This will be the "Quit" D-Bus method.
 ///     fn quit(&mut self) {
-///         self.quit = true;
+///         self.quit_event.notify(1);
 ///     }
 ///
 ///     // See `dbus_interface` documentation to learn
@@ -307,39 +306,30 @@ impl Node {
 /// }
 ///
 /// let connection = Connection::session()?;
-/// let mut object_server = ObjectServer::new(&connection);
 ///
-/// let interface = Example::new(false);
-/// object_server.at("/org/zbus/path", interface)?;
+/// let quit_event = Event::new();
+/// let quit_listener = quit_event.listen();
+/// let interface = Example::new(quit_event);
+/// connection
+///     .object_server_mut()
+///     .at("/org/zbus/path", interface)?;
 ///
-/// loop {
-///     if let Err(err) = object_server.try_handle_next() {
-///         eprintln!("{}", err);
-///     }
-///
-///     if object_server.get_interface::<_, Example>("/org/zbus/path")?.quit {
-///         break;
-///     }
-/// }
+/// quit_listener.wait();
 ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct ObjectServer {
-    conn: Connection,
+    conn: WeakConnection,
     root: Node,
-    #[derivative(Debug = "ignore")]
-    msg_stream: MessageStream,
 }
 
 assert_impl_all!(ObjectServer: Send, Sync, Unpin);
 
 impl ObjectServer {
-    /// Creates a new D-Bus `ObjectServer` for a given connection.
-    pub fn new(connection: &Connection) -> Self {
+    /// Creates a new D-Bus `ObjectServer`.
+    pub(crate) fn new(conn: &azync::Connection) -> Self {
         Self {
-            conn: connection.clone(),
-            msg_stream: MessageStream::from(connection),
+            conn: conn.into(),
             root: Node::new("/".try_into().expect("zvariant bug")),
         }
     }
@@ -458,13 +448,14 @@ impl ObjectServer {
     /// }
     ///
     ///# let connection = Connection::session()?;
-    ///# let mut object_server = ObjectServer::new(&connection);
     ///#
     ///# let path = "/org/zbus/path";
-    ///# object_server.at(path, MyIface)?;
-    /// object_server.with(path, |_iface: &MyIface, signal_ctxt| {
-    ///   MyIface::emit_signal(signal_ctxt)
-    /// })?;
+    ///# connection.object_server_mut().at(path, MyIface)?;
+    /// connection
+    ///     .object_server()
+    ///     .with(path, |_iface: &MyIface, signal_ctxt| {
+    ///         MyIface::emit_signal(signal_ctxt)
+    ///     })?;
     ///#
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
@@ -478,8 +469,9 @@ impl ObjectServer {
     {
         let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+        let conn = self.connection();
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
-        let ctxt = SignalContext::new(&self.conn, path).unwrap();
+        let ctxt = SignalContext::new(&conn, path).unwrap();
 
         node.with_iface_func(func, &ctxt)
     }
@@ -507,14 +499,15 @@ impl ObjectServer {
     /// }
     ///
     ///# let connection = Connection::session()?;
-    ///# let mut object_server = ObjectServer::new(&connection);
     ///#
     ///# let path = "/org/zbus/path";
-    ///# object_server.at(path, MyIface(0))?;
-    /// object_server.with_mut(path, |iface: &mut MyIface, signal_ctxt| {
-    ///     iface.0 = 42;
-    ///     iface.count_changed(signal_ctxt)
-    /// })?;
+    ///# connection.object_server_mut().at(path, MyIface(0))?;
+    /// connection
+    ///     .object_server()
+    ///     .with_mut(path, |iface: &mut MyIface, signal_ctxt| {
+    ///         iface.0 = 42;
+    ///         iface.count_changed(signal_ctxt)
+    ///     })?;
     ///#
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
@@ -528,8 +521,9 @@ impl ObjectServer {
     {
         let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+        let conn = self.connection();
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
-        let ctxt = SignalContext::new(&self.conn, path).unwrap();
+        let ctxt = SignalContext::new(&conn, path).unwrap();
 
         node.with_iface_func_mut(func, &ctxt)
     }
@@ -564,10 +558,10 @@ impl ObjectServer {
     /// // Setup connection and object_server etc here and then in another part of the code:
     ///#
     ///# let connection = Connection::session()?;
-    ///# let mut object_server = ObjectServer::new(&connection);
     ///#
     ///# let path = "/org/zbus/path";
-    ///# object_server.at(path, MyIface(22))?;
+    ///# connection.object_server_mut().at(path, MyIface(22))?;
+    /// let mut object_server = connection.object_server();
     /// let mut iface = object_server.get_interface::<_, MyIface>(path)?;
     /// // Note: This will not be needed when using `ObjectServer::with_mut`
     /// let ctxt = SignalContext::new(&connection, path)?;
@@ -590,6 +584,7 @@ impl ObjectServer {
 
     fn dispatch_method_call_try(
         &self,
+        connection: &Connection,
         msg_header: &MessageHeader<'_>,
         msg: &Message,
     ) -> fdo::Result<Result<u32>> {
@@ -623,23 +618,24 @@ impl ObjectServer {
         let res = iface
             .read()
             .expect("lock poisoned")
-            .call(self, &self.conn, msg, member.clone());
+            .call(self, connection, msg, member.clone());
         res.or_else(|| {
             iface
                 .write()
                 .expect("lock poisoned")
-                .call_mut(self, &self.conn, msg, member.clone())
+                .call_mut(self, connection, msg, member.clone())
         })
         .ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
     }
 
     fn dispatch_method_call(
         &self,
+        connection: &Connection,
         msg_header: &MessageHeader<'_>,
         msg: &Message,
     ) -> Result<u32> {
-        match self.dispatch_method_call_try(msg_header, msg) {
-            Err(e) => e.reply(&self.conn, msg),
+        match self.dispatch_method_call_try(connection, msg_header, msg) {
+            Err(e) => e.reply(connection, msg),
             Ok(r) => r,
         }
     }
@@ -661,40 +657,19 @@ impl ObjectServer {
 
         match msg_header.message_type()? {
             MessageType::MethodCall => {
-                self.dispatch_method_call(&msg_header, msg)?;
+                let conn = self.connection();
+                self.dispatch_method_call(&conn, &msg_header, msg)?;
                 Ok(true)
             }
             _ => Ok(false),
         }
     }
 
-    /// Receive and handle the next message from the associated connection.
-    ///
-    /// This function will read the incoming message from
-    /// [`receive_message()`](Connection::receive_message) of the associated connection and pass it
-    /// to [`dispatch_message()`](Self::dispatch_message). If the message was handled by an an
-    /// interface, it returns `Ok(None)`. If not, it returns the received message.
-    ///
-    /// Returns an error if the message is malformed or an error occurred.
-    pub fn try_handle_next(&mut self) -> Result<Option<Arc<Message>>> {
-        match self.msg_stream.next() {
-            Some(msg) => {
-                let msg = msg?;
-
-                if !self.dispatch_message(&msg)? {
-                    Ok(Some(msg))
-                } else {
-                    Ok(None)
-                }
-            }
-            None => {
-                // If SocketStream gives us None, that means the socket was closed
-                Err(Error::Io(io::Error::new(
-                    ErrorKind::BrokenPipe,
-                    "socket closed",
-                )))
-            }
-        }
+    fn connection(&self) -> Connection {
+        self.conn
+            .upgrade()
+            .expect("ObjectServer can't exist w/o an associated Connection")
+            .into()
     }
 }
 
@@ -706,8 +681,8 @@ mod tests {
         convert::TryInto,
         error::Error,
         sync::{
-            mpsc::{channel, Sender},
-            Arc, Mutex,
+            mpsc::{channel, sync_channel, Sender, SyncSender},
+            Arc,
         },
         thread,
     };
@@ -720,8 +695,7 @@ mod tests {
     use zvariant::derive::Type;
 
     use crate::{
-        dbus_interface, dbus_proxy, Connection, MessageHeader, MessageStream, MessageType,
-        ObjectServer, SignalContext,
+        dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, SignalContext,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -764,20 +738,19 @@ mod tests {
 
     #[derive(Debug, Clone)]
     enum NextAction {
-        Nothing,
         Quit,
         CreateObj(String),
         DestroyObj(String),
     }
 
     struct MyIfaceImpl {
-        action: Arc<Mutex<NextAction>>,
+        next_tx: SyncSender<NextAction>,
         count: u32,
     }
 
     impl MyIfaceImpl {
-        fn new(action: Arc<Mutex<NextAction>>) -> Self {
-            Self { action, count: 0 }
+        fn new(next_tx: SyncSender<NextAction>) -> Self {
+            Self { next_tx, count: 0 }
         }
     }
 
@@ -799,8 +772,8 @@ mod tests {
             self.count
         }
 
-        fn quit(&mut self) {
-            *self.action.lock().unwrap() = NextAction::Quit;
+        fn quit(&self) {
+            self.next_tx.send(NextAction::Quit).unwrap();
         }
 
         fn test_header(&self, #[zbus(header)] header: MessageHeader<'_>) {
@@ -851,11 +824,11 @@ mod tests {
         }
 
         fn create_obj(&self, key: String) {
-            *self.action.lock().unwrap() = NextAction::CreateObj(key);
+            self.next_tx.send(NextAction::CreateObj(key)).unwrap();
         }
 
         fn destroy_obj(&self, key: String) {
-            *self.action.lock().unwrap() = NextAction::DestroyObj(key);
+            self.next_tx.send(NextAction::DestroyObj(key)).unwrap();
         }
 
         #[dbus_interface(property)]
@@ -985,53 +958,45 @@ mod tests {
             .unwrap()
             .request_name("org.freedesktop.MyService.bar")
             .unwrap();
-        let stream = MessageStream::from(&conn);
-        let mut object_server = ObjectServer::new(&conn);
-        let action = Arc::new(Mutex::new(NextAction::Nothing));
 
         let child = thread::spawn(move || my_iface_test(tx).expect("child failed"));
         // Wait for the listener to be ready
         rx.recv().unwrap();
 
-        let iface = MyIfaceImpl::new(action.clone());
-        object_server
-            .at("/org/freedesktop/MyService", iface)
-            .unwrap();
+        let (next_tx, next_rx) = sync_channel(64);
+        let iface = MyIfaceImpl::new(next_tx.clone());
+        {
+            let mut server = conn.object_server_mut();
+            server.at("/org/freedesktop/MyService", iface).unwrap();
 
-        object_server
-            .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, ctxt| {
-                iface.count_changed(&ctxt)
-            })
-            .unwrap();
+            server
+                .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, ctxt| {
+                    iface.count_changed(&ctxt)
+                })
+                .unwrap();
+        }
 
-        for m in stream {
-            let m = m.unwrap();
-            if let Err(e) = object_server.dispatch_message(&m) {
-                eprintln!("{}", e);
-            }
-
-            object_server
+        loop {
+            conn.object_server_mut()
                 .with(
                     "/org/freedesktop/MyService",
                     |_iface: &MyIfaceImpl, ctxt| MyIfaceImpl::alert_count(&ctxt, 51),
                 )
                 .unwrap();
 
-            let mut next = action.lock().unwrap();
-            let current_next = next.clone();
-            *next = NextAction::Nothing;
-            match current_next {
-                NextAction::Nothing => (),
+            match next_rx.recv().unwrap() {
                 NextAction::Quit => break,
                 NextAction::CreateObj(key) => {
                     let path = format!("/zbus/test/{}", key);
-                    object_server
-                        .at(path, MyIfaceImpl::new(action.clone()))
+                    conn.object_server_mut()
+                        .at(path, MyIfaceImpl::new(next_tx.clone()))
                         .unwrap();
                 }
                 NextAction::DestroyObj(key) => {
                     let path = format!("/zbus/test/{}", key);
-                    object_server.remove::<MyIfaceImpl, _>(path).unwrap();
+                    conn.object_server_mut()
+                        .remove::<MyIfaceImpl, _>(path)
+                        .unwrap();
                 }
             }
         }
