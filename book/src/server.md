@@ -168,18 +168,21 @@ This time, we can also introspect the server:
 ```bash
 $ busctl --user introspect org.zbus.MyGreeter /org/zbus/MyGreeter
 NAME                                TYPE      SIGNATURE RESULT/VALUE FLAGS
-org.freedesktop.DBus.Introspectable interface -         -            -
-.Introspect                         method    -         s            -
-org.freedesktop.DBus.Peer           interface -         -            -
-.GetMachineId                       method    -         s            -
-.Ping                               method    -         -            -
-org.freedesktop.DBus.Properties     interface -         -            -
-.Get                                method    ss        v            -
-.GetAll                             method    s         a{sv}        -
-.Set                                method    ssv       -            -
-.PropertiesChanged                  signal    sa{sv}as  -            -
-org.zbus.MyGreeter1                 interface -         -            -
-.SayHello                           method    s         s            -
+org.freedesktop.DBus.Introspectable interface -         -             -
+.Introspect                         method    -         s             -
+org.freedesktop.DBus.Peer           interface -         -             -
+.GetMachineId                       method    -         s             -
+.Ping                               method    -         -             -
+org.freedesktop.DBus.Properties     interface -         -             -
+.Get                                method    ss        v             -
+.GetAll                             method    s         a{sv}         -
+.Set                                method    ssv       -             -
+.PropertiesChanged                  signal    sa{sv}as  -             -
+org.zbus.MyGreeter1                 interface -         -             -
+.GoAway                             method    -         -             -
+.SayHello                           method    s         s             -
+.GreeterName                        property  s         "GreeterName" emits-change writable
+.GreetedEveryone                    signal    -         -             -
 ```
 
 Easy-peasy!
