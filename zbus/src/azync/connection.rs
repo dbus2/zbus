@@ -17,7 +17,7 @@ use std::{
     sync::{
         self,
         atomic::{AtomicU32, Ordering::SeqCst},
-        Arc,
+        Arc, Weak,
     },
     task::{Context, Poll},
 };
@@ -903,6 +903,35 @@ impl<'r> Future for ReceiveMessage<'r> {
 impl From<crate::Connection> for Connection {
     fn from(conn: crate::Connection) -> Self {
         conn.into_inner()
+    }
+}
+
+// Internal API that allows keeping a weak connection ref around.
+#[derive(Debug)]
+pub(crate) struct WeakConnection {
+    inner: Weak<ConnectionInner>,
+    msg_receiver: InactiveReceiver<Arc<Message>>,
+    error_receiver: Receiver<Error>,
+}
+
+impl WeakConnection {
+    /// Upgrade to a Connection.
+    pub fn upgrade(&self) -> Option<Connection> {
+        self.inner.upgrade().map(|inner| Connection {
+            inner,
+            msg_receiver: self.msg_receiver.clone(),
+            error_receiver: self.error_receiver.clone(),
+        })
+    }
+}
+
+impl From<&Connection> for WeakConnection {
+    fn from(conn: &Connection) -> Self {
+        Self {
+            inner: Arc::downgrade(&conn.inner),
+            msg_receiver: conn.msg_receiver.clone(),
+            error_receiver: conn.error_receiver.clone(),
+        }
     }
 }
 
