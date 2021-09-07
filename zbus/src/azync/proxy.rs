@@ -599,7 +599,7 @@ impl<'a> Proxy<'a> {
             None => {
                 let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
                     // Safe because already checked earlier
-                    .destination(self.inner.destination.to_string())
+                    .destination(self.inner.destination.to_owned())
                     .unwrap()
                     // Safe because already checked earlier
                     .path(self.inner.path.to_owned())
