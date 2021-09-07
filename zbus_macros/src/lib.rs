@@ -87,11 +87,8 @@ mod utils;
 ///
 /// let handler_id = proxy.connect_some_signal(|s, u| {
 ///     println!("arg1: {}, arg2: {}", s, u);
-///
-///     Ok(())
 /// })?;
 ///
-/// // You'll want to make at least a call to `handle_next_signal` before disconnecting the signal.
 /// assert!(proxy.disconnect_signal(handler_id)?);
 /// assert!(!proxy.disconnect_signal(handler_id)?);
 ///
@@ -108,10 +105,9 @@ mod utils;
 ///     let handler_id = proxy.connect_some_signal(|s, u| {
 ///         println!("arg1: {}, arg2: {}", s, u);
 ///
-///         async { Ok(()) }.boxed()
+///         async {}.boxed()
 ///     }).await?;
 ///
-///     // You'll want to make at least a call to `handle_next_signal` before disconnecting the signal.
 ///     assert!(proxy.disconnect_signal(handler_id).await?);
 ///     assert!(!proxy.disconnect_signal(handler_id).await?);
 ///

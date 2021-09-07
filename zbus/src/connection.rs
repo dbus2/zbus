@@ -1,17 +1,15 @@
-use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
 use std::{
     convert::TryInto,
-    io::{self, ErrorKind},
-    os::unix::io::{AsRawFd, RawFd},
-    sync::{Arc, Mutex},
+    ops::{Deref, DerefMut},
+    sync::Arc,
 };
-use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName};
+use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, Error, Message, Result};
+use crate::{azync, Error, Message, ObjectServer, Result};
 
 /// A D-Bus connection.
 ///
@@ -33,9 +31,11 @@ use crate::{azync, Error, Message, Result};
 /// parts of your code. `Connection` also implements [`std::marker::Sync`] and[`std::marker::Send`]
 /// so you can send and share a connection instance across threads as well.
 ///
-/// `Connection` keeps an internal ringbuffer of incoming message. The maximum capacity of this
-/// ringbuffer is configurable through the [`set_max_queued`] method. The default size is 64. When
-/// the buffer is full, messages are dropped to create room, starting from the oldest one.
+/// `Connection` keeps an internal queue of incoming message. The maximum capacity of this queue
+/// is configurable through the [`set_max_queued`] method. The default size is 64. When the queue is
+/// full, no more messages can be received until there is room is created for more. This is why it's
+/// important to ensure that all [`crate::MessageStream`] and [`crate::azync::MessageStream`]
+/// instances are continuously iterated on and polled, respectively.
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
@@ -52,17 +52,9 @@ use crate::{azync, Error, Message, Result};
 #[derivative(Debug)]
 pub struct Connection {
     inner: azync::Connection,
-    #[derivative(Debug = "ignore")]
-    stream: Arc<Mutex<azync::Connection>>,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
-
-impl AsRawFd for Connection {
-    fn as_raw_fd(&self) -> RawFd {
-        block_on(self.inner.as_raw_fd())
-    }
-}
 
 impl Connection {
     /// Create a `Connection` to the session/user message bus.
@@ -93,16 +85,6 @@ impl Connection {
     /// The unique name as assigned by the message bus or `None` if not a message bus connection.
     pub fn unique_name(&self) -> Option<&OwnedUniqueName> {
         self.inner.unique_name()
-    }
-
-    /// Fetch the next message from the connection.
-    ///
-    /// Read from the connection until a message is received or an error is reached. Return the
-    /// message on success.
-    pub fn receive_message(&self) -> Result<Arc<Message>> {
-        let mut stream = self.stream.lock().expect("lock poisoned");
-        block_on(stream.next())
-            .ok_or_else(|| Error::Io(io::Error::new(ErrorKind::BrokenPipe, "socket closed")))?
     }
 
     /// Send `msg` to the peer.
@@ -206,11 +188,65 @@ impl Connection {
         block_on(self.inner.reply_error(call, error_name, body))
     }
 
+    /// Register a well-known name for this service on the bus.
+    ///
+    /// You can request multiple names for the same `ObjectServer`. Use [`Connection::release_name`]
+    /// for deregistering names registered through this method.
+    ///
+    /// Note that exclusive ownership without queueing is requested (using
+    /// [`crate::fdo::RequestNameFlags::ReplaceExisting`] and
+    /// [`crate::fdo::RequestNameFlags::DoNotQueue`] flags) since that is the most typical case. If
+    /// that is not what you want, you should use [`crate::fdo::DBusProxy::request_name`] instead
+    /// (but make sure then that name is requested **after** you've setup your service
+    /// implementation with the `ObjectServer`).
+    pub fn request_name<'w, W>(self, well_known_name: W) -> Result<Self>
+    where
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
+    {
+        block_on(self.inner.request_name(well_known_name)).map(Into::into)
+    }
+
+    /// Deregister a previously registered well-known name for this service on the bus.
+    ///
+    /// Use this method to deregister a well-known name, registered through
+    /// [`Connection::request_name`].
+    ///
+    /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
+    /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
+    /// was not previously registered or already deregistered.
+    pub fn release_name<'w, W>(&self, well_known_name: W) -> Result<bool>
+    where
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
+    {
+        block_on(self.inner.release_name(well_known_name))
+    }
+
     /// Checks if `self` is a connection to a message bus.
     ///
     /// This will return `false` for p2p connections.
     pub fn is_bus(&self) -> bool {
         self.inner.is_bus()
+    }
+
+    /// Get a reference to the associated [`ObjectServer`].
+    ///
+    /// The `ObjectServer` is created on-demand.
+    pub fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
+        block_on(self.inner.object_server())
+    }
+
+    /// Get a mutable reference to the associated [`ObjectServer`].
+    ///
+    /// The `ObjectServer` is created on-demand.
+    ///
+    /// # Caveats
+    ///
+    /// The return value of this method should not be kept around for longer than needed. The method
+    /// dispatch machinery of the [`ObjectServer`] will be paused as long as the return value is alive.
+    pub fn object_server_mut(&self) -> impl DerefMut<Target = ObjectServer> + '_ {
+        block_on(self.inner.object_server_mut())
     }
 
     /// Get a reference to the underlying async Connection.
@@ -226,12 +262,7 @@ impl Connection {
 
 impl From<azync::Connection> for Connection {
     fn from(conn: azync::Connection) -> Self {
-        let stream = Arc::new(Mutex::new(conn.clone()));
-
-        Self {
-            inner: conn,
-            stream,
-        }
+        Self { inner: conn }
     }
 }
 
@@ -241,7 +272,7 @@ mod tests {
     use std::{os::unix::net::UnixStream, thread};
     use test_env_log::test;
 
-    use crate::{ConnectionBuilder, Error, Guid};
+    use crate::{ConnectionBuilder, Guid, MessageStream};
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
@@ -264,11 +295,12 @@ mod tests {
         });
 
         let c = ConnectionBuilder::unix_stream(p1).p2p().build().unwrap();
-        let m = c.receive_message().unwrap();
+        let mut s = MessageStream::from(&c);
+        let m = s.next().unwrap().unwrap();
         assert_eq!(m.to_string(), "Method call Test");
         c.reply(&m, &("yay")).unwrap();
 
-        while !matches!(c.receive_message(), Err(Error::Io(_))) {}
+        for _ in s {}
 
         let val = server_thread.join().expect("failed to join server thread");
         assert_eq!(val, "yay");

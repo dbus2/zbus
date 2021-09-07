@@ -72,7 +72,11 @@
 //! A simple service that politely greets whoever calls its `SayHello` method:
 //!
 //! ```rust,no_run
-//! use std::error::Error;
+//! use std::{
+//!     error::Error,
+//!     thread::sleep,
+//!     time::Duration,
+//! };
 //! use zbus::{dbus_interface, fdo, ObjectServer, Connection};
 //!
 //! struct Greeter {
@@ -88,16 +92,17 @@
 //! }
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
-//!     let connection = Connection::session()?;
-//!     let mut object_server = ObjectServer::new(&connection)
+//!     let connection = Connection::session()?
 //!         .request_name("org.zbus.MyGreeter")?;
 //!     let mut greeter = Greeter { count: 0 };
-//!     object_server.at("/org/zbus/MyGreeter", greeter)?;
-//!     loop {
-//!         if let Err(err) = object_server.try_handle_next() {
-//!             eprintln!("{}", err);
-//!         }
-//!     }
+//!     connection
+//!         .object_server_mut()
+//!         .at("/org/zbus/MyGreeter", greeter)?;
+//!
+//!    // Do other things or go to sleep.
+//!    sleep(Duration::from_secs(60));
+//!
+//!    Ok(())
 //! }
 //! ```
 //!
@@ -175,14 +180,14 @@ pub use connection::*;
 mod connection_builder;
 pub use connection_builder::*;
 
+mod message_stream;
+pub use message_stream::*;
+
 mod proxy;
 pub use proxy::*;
 
 mod proxy_builder;
 pub use proxy_builder::*;
-
-mod signal_receiver;
-pub use signal_receiver::*;
 
 mod signal_context;
 pub use signal_context::*;
@@ -228,11 +233,7 @@ mod tests {
         convert::{TryFrom, TryInto},
         fs::File,
         os::unix::io::{AsRawFd, FromRawFd},
-        sync::{
-            atomic::{AtomicU8, Ordering::SeqCst},
-            mpsc::channel,
-            Arc, Condvar, Mutex,
-        },
+        sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
 
     use enumflags2::BitFlags;
@@ -245,7 +246,7 @@ mod tests {
     use crate::{
         azync,
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, Message, MessageFlags, Result, SignalContext,
+        Connection, Message, MessageFlags, MessageStream, Result, SignalContext,
     };
 
     #[test]
@@ -564,6 +565,7 @@ mod tests {
         // produces is exactly the same: `Connection::call_method` dropping all incoming messages
         // while waiting for the reply to the method call.
         let conn = Connection::session().unwrap();
+        let stream = MessageStream::from(&conn);
 
         // Send a message as client before service starts to process messages
         let client_conn = Connection::session().unwrap();
@@ -581,8 +583,8 @@ mod tests {
 
         crate::fdo::DBusProxy::new(&conn).unwrap().get_id().unwrap();
 
-        loop {
-            let msg = conn.receive_message().unwrap();
+        for m in stream {
+            let msg = m.unwrap();
 
             if *msg.primary_header().serial_num().unwrap() == serial {
                 break;
@@ -602,9 +604,8 @@ mod tests {
         use zvariant::{ObjectPath, Value};
         let conn = Connection::session().unwrap();
         let service_name = conn.unique_name().unwrap().clone();
-        let mut object_server = super::ObjectServer::new(&conn);
 
-        struct Secret(Arc<Mutex<bool>>);
+        struct Secret;
         #[super::dbus_interface(name = "org.freedesktop.Secret.Service")]
         impl Secret {
             fn open_session(
@@ -612,7 +613,6 @@ mod tests {
                 _algorithm: &str,
                 input: Value<'_>,
             ) -> zbus::fdo::Result<(OwnedValue, OwnedObjectPath)> {
-                *self.0.lock().unwrap() = true;
                 Ok((
                     OwnedValue::from(input),
                     ObjectPath::try_from("/org/freedesktop/secrets/Blah")
@@ -622,9 +622,8 @@ mod tests {
             }
         }
 
-        let quit = Arc::new(Mutex::new(false));
-        let secret = Secret(quit.clone());
-        object_server
+        let secret = Secret;
+        conn.object_server_mut()
             .at("/org/freedesktop/secrets", secret)
             .unwrap();
 
@@ -651,17 +650,6 @@ mod tests {
 
             2u32
         });
-
-        loop {
-            let m = conn.receive_message().unwrap();
-            if let Err(e) = object_server.dispatch_message(&m) {
-                eprintln!("{}", e);
-            }
-
-            if *quit.lock().unwrap() {
-                break;
-            }
-        }
 
         let val = child.join().expect("failed to join");
         assert_eq!(val, 2);
@@ -692,7 +680,7 @@ mod tests {
     #[allow(clippy::mutex_atomic)]
     fn issue_122() {
         let conn = Connection::session().unwrap();
-        let conn_clone = conn.clone();
+        let stream = MessageStream::from(&conn);
 
         let pair = Arc::new((Mutex::new(false), Condvar::new()));
         let pair2 = Arc::clone(&pair);
@@ -705,7 +693,8 @@ mod tests {
                 cvar.notify_one();
             }
 
-            while let Ok(msg) = conn_clone.receive_message() {
+            for m in stream {
+                let msg = m.unwrap();
                 let hdr = msg.header().unwrap();
 
                 if hdr.member().unwrap().map(|m| m.as_str()) == Some("ZBusIssue122") {
@@ -784,22 +773,20 @@ mod tests {
             }
 
             let proxy = ComeAndGoProxy::new(&conn).unwrap();
-            let count = Arc::new(AtomicU8::new(0));
-            let count_clone = count.clone();
             let tx_clone = tx.clone();
+            let (signal_tx, signal_rx) = channel();
             proxy
                 .connect_the_signal(move || {
-                    count_clone.fetch_add(1, SeqCst);
                     tx_clone.send(()).unwrap();
-                    Ok(())
+                    signal_tx.send(()).unwrap();
                 })
                 .unwrap();
             tx.send(()).unwrap();
 
             // We receive two signals, each time from different unique names. W/o the fix for
-            // issue#173, the second iteration hangs on `next_signal` call.
-            while count.load(SeqCst) < 2 {
-                proxy.next_signal().unwrap();
+            // issue#173, the second iteration hangs.
+            for _ in 0..2 {
+                signal_rx.recv().unwrap();
             }
         });
 
@@ -812,26 +799,24 @@ mod tests {
 
         rx.recv().unwrap();
         for _ in 0..2 {
-            let conn = Connection::session().unwrap();
-            let mut object_server = super::ObjectServer::new(&conn)
+            let conn = Connection::session()
+                .unwrap()
                 .request_name("org.freedesktop.zbus.ComeAndGo")
                 .unwrap();
 
-            object_server
+            conn.object_server_mut()
                 .at("/org/freedesktop/zbus/ComeAndGo", ComeAndGo)
                 .unwrap();
 
-            object_server
+            conn.object_server_mut()
                 .with("/org/freedesktop/zbus/ComeAndGo", |_: &ComeAndGo, ctxt| {
                     ComeAndGo::the_signal(ctxt)
                 })
                 .unwrap();
             rx.recv().unwrap();
 
-            // Now we disconnect (and hence release the name ownership) to use a different
-            // connection (i-e new unique name).
-            drop(object_server);
-            drop(conn);
+            // Now we release the name ownership to use a different connection (i-e new unique name).
+            conn.release_name("org.freedesktop.zbus.ComeAndGo").unwrap();
         }
 
         child.join().unwrap();
