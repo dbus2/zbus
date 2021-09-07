@@ -4,7 +4,7 @@ use crate::{
     Array, Dict, Error, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure,
     Value,
 };
-use std::convert::TryFrom;
+use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 macro_rules! value_try_from {
     ($kind:ident, $to:ty) => {
@@ -88,7 +88,8 @@ value_try_from_ref_clone!(Str, String);
 
 impl<'a, T> TryFrom<Value<'a>> for Vec<T>
 where
-    T: TryFrom<Value<'a>, Error = Error>,
+    T: TryFrom<Value<'a>>,
+    T::Error: Into<crate::Error>,
 {
     type Error = Error;
 
@@ -133,6 +134,25 @@ where
     }
 }
 
+impl<'a, K, V, H> TryFrom<Value<'a>> for HashMap<K, V, H>
+where
+    K: crate::Basic + TryFrom<Value<'a>> + std::hash::Hash + std::cmp::Eq,
+    V: TryFrom<Value<'a>>,
+    H: BuildHasher + Default,
+    K::Error: Into<crate::Error>,
+    V::Error: Into<crate::Error>,
+{
+    type Error = crate::Error;
+
+    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+        if let Value::Dict(v) = value {
+            Self::try_from(v)
+        } else {
+            Err(crate::Error::IncorrectType)
+        }
+    }
+}
+
 // This would be great but somehow it conflicts with some blanket generic implementations from
 // core:
 //
@@ -140,6 +160,5 @@ where
 //
 // TODO: this could be useful
 // impl<'a, 'b, T> TryFrom<&'a Value<'b>> for Vec<T>
-// impl<'a, K, V, H> TryFrom<Value<'a> for HashMap<K, V, H>
 // impl<'a, 'b, K, V, H> TryFrom<&'a Value<'v>> for HashMap<K, V, H>
 // and more..

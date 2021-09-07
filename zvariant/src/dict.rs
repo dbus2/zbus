@@ -157,14 +157,27 @@ where
     K: Basic + TryFrom<Value<'k>> + std::hash::Hash + std::cmp::Eq,
     V: TryFrom<Value<'v>>,
     H: BuildHasher + Default,
+    K::Error: Into<crate::Error>,
+    V::Error: Into<crate::Error>,
 {
     type Error = Error;
 
     fn try_from(v: Dict<'k, 'v>) -> Result<Self, Self::Error> {
         let mut map = HashMap::default();
         for e in v.entries.into_iter() {
-            let key = e.key.downcast().ok_or(Error::IncorrectType)?;
-            let value = e.value.downcast().ok_or(Error::IncorrectType)?;
+            let key = if let Value::Value(v) = e.key {
+                K::try_from(*v)
+            } else {
+                K::try_from(e.key)
+            }
+            .map_err(Into::into)?;
+
+            let value = if let Value::Value(v) = e.value {
+                V::try_from(*v)
+            } else {
+                V::try_from(e.value)
+            }
+            .map_err(Into::into)?;
 
             map.insert(key, value);
         }
