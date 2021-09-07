@@ -157,14 +157,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             let ret = quote!(r);
 
             quote!(match reply {
-                ::std::result::Result::Ok(r) => s.connection().reply(m, &#ret),
-                ::std::result::Result::Err(e) => {
-                    let c = s.connection();
-                    e.reply(c, m)
-                }
+                ::std::result::Result::Ok(r) => c.reply(m, &#ret),
+                ::std::result::Result::Err(e) => e.reply(c, m),
             })
         } else {
-            quote!(s.connection().reply(m, &reply))
+            quote!(c.reply(m, &reply))
         };
 
         let member_name = attrs
@@ -355,6 +352,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             fn call(
                 &self,
                 s: &#zbus::ObjectServer,
+                c: &#zbus::Connection,
                 m: &#zbus::Message,
                 name: #zbus::names::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
@@ -367,6 +365,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             fn call_mut(
                 &mut self,
                 s: &#zbus::ObjectServer,
+                c: &#zbus::Connection,
                 m: &#zbus::Message,
                 name: #zbus::names::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
@@ -404,6 +403,7 @@ fn get_args_from_inputs(
         Ok((quote!(), quote!()))
     } else {
         let mut server_arg_decl = None;
+        let mut conn_arg_decl = None;
         let mut header_arg_decl = None;
         let mut signal_context_arg_decl = None;
         let mut args = Vec::new();
@@ -411,6 +411,7 @@ fn get_args_from_inputs(
 
         for input in inputs {
             let mut is_server = false;
+            let mut is_conn = false;
             let mut is_header = false;
             let mut is_signal_context = false;
 
@@ -435,6 +436,8 @@ fn get_args_from_inputs(
                         NestedMeta::Meta(Meta::Path(p)) => {
                             if p.is_ident("object_server") {
                                 is_server = true;
+                            } else if p.is_ident("connection") {
+                                is_conn = true;
                             } else if p.is_ident("header") {
                                 is_header = true;
                             } else if p.is_ident("signal_context") {
@@ -469,6 +472,16 @@ fn get_args_from_inputs(
 
                 let server_arg = &input.pat;
                 server_arg_decl = Some(quote! { let #server_arg = &s; });
+            } else if is_conn {
+                if conn_arg_decl.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        input,
+                        "There can only be one connection argument",
+                    ));
+                }
+
+                let conn_arg = &input.pat;
+                conn_arg_decl = Some(quote! { let #conn_arg = &c; });
             } else if is_header {
                 if header_arg_decl.is_some() {
                     return Err(syn::Error::new_spanned(
@@ -483,7 +496,6 @@ fn get_args_from_inputs(
                     let #header_arg = match m.header() {
                         ::std::result::Result::Ok(r) => r,
                         ::std::result::Result::Err(e) => {
-                            let c = s.connection();
                             return ::std::option::Option::Some(
                                 <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
                             );
@@ -501,7 +513,6 @@ fn get_args_from_inputs(
                 let signal_context_arg = &input.pat;
 
                 signal_context_arg_decl = Some(quote! {
-                    let c = s.connection();
                     let #signal_context_arg = match m.header().and_then(|h| {
                         h.path().and_then(|p| #zbus::SignalContext::new(c, p.unwrap()))
                     }) {
@@ -522,6 +533,8 @@ fn get_args_from_inputs(
         let args_from_msg = quote! {
             #server_arg_decl
 
+            #conn_arg_decl
+
             #header_arg_decl
 
             #signal_context_arg_decl
@@ -530,7 +543,6 @@ fn get_args_from_inputs(
                 match m.body() {
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
-                        let c = s.connection();
                         return ::std::option::Option::Some(
                             <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
                         );
@@ -601,7 +613,7 @@ fn introspect_input_args(
                     matches!(
                         nested_meta,
                         NestedMeta::Meta(Meta::Path(path))
-                        if path.is_ident("object_server") || path.is_ident("header") || path.is_ident("signal_context")
+                        if path.is_ident("object_server") || path.is_ident("connection") || path.is_ident("header") || path.is_ident("signal_context")
                     )
                 });
 

@@ -1,23 +1,20 @@
 use std::{
     any::{Any, TypeId},
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     convert::TryInto,
     fmt::Write,
-    io::{self, ErrorKind},
     marker::PhantomData,
     ops::{Deref, DerefMut},
     sync::{Arc, RwLock, RwLockWriteGuard},
 };
 
-use async_io::block_on;
-use fdo::{DBusProxy, RequestNameFlags};
-use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
-use zbus_names::{InterfaceName, MemberName, WellKnownName};
+use zbus_names::{InterfaceName, MemberName};
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
-    azync, fdo,
+    azync::{self, WeakConnection},
+    fdo,
     fdo::{Introspectable, Peer, Properties},
     Connection, Error, Message, MessageHeader, MessageType, Result, SignalContext,
 };
@@ -52,6 +49,7 @@ pub trait Interface: Any + Send + Sync {
     fn call(
         &self,
         server: &ObjectServer,
+        connection: &Connection,
         msg: &Message,
         name: MemberName<'_>,
     ) -> Option<Result<u32>>;
@@ -60,6 +58,7 @@ pub trait Interface: Any + Send + Sync {
     fn call_mut(
         &mut self,
         server: &ObjectServer,
+        connection: &Connection,
         msg: &Message,
         name: MemberName<'_>,
     ) -> Option<Result<u32>>;
@@ -281,18 +280,17 @@ impl Node {
 ///# use std::error::Error;
 /// use zbus::{Connection, ObjectServer, dbus_interface};
 /// use std::sync::{Arc, Mutex};
+/// use event_listener::Event;
 ///
 /// struct Example {
 ///     // Interfaces are owned by the ObjectServer. They can have
 ///     // `&mut self` methods.
-///     //
-///     // If you need a shared state, you can use a RefCell for ex:
-///     quit: bool,
+///     quit_event: Event,
 /// }
 ///
 /// impl Example {
-///     fn new(quit: bool) -> Self {
-///         Self { quit }
+///     fn new(quit_event: Event) -> Self {
+///         Self { quit_event }
 ///     }
 /// }
 ///
@@ -300,7 +298,7 @@ impl Node {
 /// impl Example {
 ///     // This will be the "Quit" D-Bus method.
 ///     fn quit(&mut self) {
-///         self.quit = true;
+///         self.quit_event.notify(1);
 ///     }
 ///
 ///     // See `dbus_interface` documentation to learn
@@ -308,107 +306,42 @@ impl Node {
 /// }
 ///
 /// let connection = Connection::session()?;
-/// let mut object_server = ObjectServer::new(&connection);
 ///
-/// let interface = Example::new(false);
-/// object_server.at("/org/zbus/path", interface)?;
+/// let quit_event = Event::new();
+/// let quit_listener = quit_event.listen();
+/// let interface = Example::new(quit_event);
+/// connection
+///     .object_server_mut()
+///     .at("/org/zbus/path", interface)?;
 ///
-/// loop {
-///     if let Err(err) = object_server.try_handle_next() {
-///         eprintln!("{}", err);
-///     }
-///
-///     if object_server.get_interface::<_, Example>("/org/zbus/path")?.quit {
-///         break;
-///     }
-/// }
+/// quit_listener.wait();
 ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct ObjectServer {
-    conn: Connection,
+    conn: WeakConnection,
     root: Node,
-    #[derivative(Debug = "ignore")]
-    msg_stream: azync::Connection,
-    registered_names: HashSet<WellKnownName<'static>>,
 }
 
 assert_impl_all!(ObjectServer: Send, Sync, Unpin);
 
 impl ObjectServer {
-    /// Creates a new D-Bus `ObjectServer` for a given connection.
-    pub fn new(connection: &Connection) -> Self {
+    /// Creates a new D-Bus `ObjectServer`.
+    pub(crate) fn new(conn: &azync::Connection) -> Self {
         Self {
-            conn: connection.clone(),
-            msg_stream: connection.inner().clone(),
+            conn: conn.into(),
             root: Node::new("/".try_into().expect("zvariant bug")),
-            registered_names: HashSet::new(),
         }
-    }
-
-    /// Register a well-known name for this service on the bus.
-    ///
-    /// You can request multiple names for the same `ObjectServer`. All the names are released
-    /// automatically for you when `ObjectServer` is dropped. Use [`ObjectServer::release_name`] for
-    /// explicitly deregistering names registered through this method.
-    ///
-    /// Note that exclusive ownership without queueing is requested (using
-    /// [`fdo::RequestNameFlags::ReplaceExisting`] and [`fdo::RequestNameFlags::DoNotQueue`] flags)
-    /// since that is the most typical case. If that is not what you want, you should use
-    /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
-    /// **after** instantiating the `ObjectServer`).
-    pub fn request_name<'w, W>(mut self, well_known_name: W) -> Result<Self>
-    where
-        W: TryInto<WellKnownName<'w>>,
-        W::Error: Into<Error>,
-    {
-        let well_known_name = well_known_name.try_into().map_err(Into::into)?;
-        DBusProxy::new(&self.conn)?.request_name(
-            well_known_name.clone(),
-            RequestNameFlags::ReplaceExisting | RequestNameFlags::DoNotQueue,
-        )?;
-
-        self.registered_names.insert(well_known_name.to_owned());
-
-        Ok(self)
-    }
-
-    /// Deregister a previously registered well-known name for this service on the bus.
-    ///
-    /// Use this method to explicitly deregister a well-known name, registered through
-    /// [`ObjectServer::request_name`].
-    ///
-    /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
-    /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
-    /// was not previously registered or already deregistered.
-    pub fn release_name<'w, W>(&mut self, well_known_name: W) -> Result<bool>
-    where
-        W: TryInto<WellKnownName<'w>>,
-        W::Error: Into<Error>,
-    {
-        let well_known_name: WellKnownName<'w> = well_known_name.try_into().map_err(Into::into)?;
-        // FIXME: Should be possible to avoid cloning/allocation here.
-        if !self.registered_names.remove(&well_known_name.to_owned()) {
-            return Ok(false);
-        }
-
-        DBusProxy::new(&self.conn)?
-            .release_name(well_known_name)
-            .map(|_| true)
-            .map_err(Into::into)
     }
 
     // Get the Node at path.
     pub(crate) fn get_node(&self, path: &ObjectPath<'_>) -> Option<&Node> {
         let mut node = &self.root;
-        let mut node_path = String::new();
 
         for i in path.split('/').skip(1) {
             if i.is_empty() {
                 continue;
             }
-            write!(&mut node_path, "/{}", i).unwrap();
             match node.children.get(i) {
                 Some(n) => node = n,
                 None => return None,
@@ -515,13 +448,14 @@ impl ObjectServer {
     /// }
     ///
     ///# let connection = Connection::session()?;
-    ///# let mut object_server = ObjectServer::new(&connection);
     ///#
     ///# let path = "/org/zbus/path";
-    ///# object_server.at(path, MyIface)?;
-    /// object_server.with(path, |_iface: &MyIface, signal_ctxt| {
-    ///   MyIface::emit_signal(signal_ctxt)
-    /// })?;
+    ///# connection.object_server_mut().at(path, MyIface)?;
+    /// connection
+    ///     .object_server()
+    ///     .with(path, |_iface: &MyIface, signal_ctxt| {
+    ///         MyIface::emit_signal(signal_ctxt)
+    ///     })?;
     ///#
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
@@ -535,8 +469,9 @@ impl ObjectServer {
     {
         let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+        let conn = self.connection();
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
-        let ctxt = SignalContext::new(&self.conn, path).unwrap();
+        let ctxt = SignalContext::new(&conn, path).unwrap();
 
         node.with_iface_func(func, &ctxt)
     }
@@ -564,14 +499,15 @@ impl ObjectServer {
     /// }
     ///
     ///# let connection = Connection::session()?;
-    ///# let mut object_server = ObjectServer::new(&connection);
     ///#
     ///# let path = "/org/zbus/path";
-    ///# object_server.at(path, MyIface(0))?;
-    /// object_server.with_mut(path, |iface: &mut MyIface, signal_ctxt| {
-    ///     iface.0 = 42;
-    ///     iface.count_changed(signal_ctxt)
-    /// })?;
+    ///# connection.object_server_mut().at(path, MyIface(0))?;
+    /// connection
+    ///     .object_server()
+    ///     .with_mut(path, |iface: &mut MyIface, signal_ctxt| {
+    ///         iface.0 = 42;
+    ///         iface.count_changed(signal_ctxt)
+    ///     })?;
     ///#
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
@@ -585,8 +521,9 @@ impl ObjectServer {
     {
         let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+        let conn = self.connection();
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
-        let ctxt = SignalContext::new(&self.conn, path).unwrap();
+        let ctxt = SignalContext::new(&conn, path).unwrap();
 
         node.with_iface_func_mut(func, &ctxt)
     }
@@ -621,10 +558,10 @@ impl ObjectServer {
     /// // Setup connection and object_server etc here and then in another part of the code:
     ///#
     ///# let connection = Connection::session()?;
-    ///# let mut object_server = ObjectServer::new(&connection);
     ///#
     ///# let path = "/org/zbus/path";
-    ///# object_server.at(path, MyIface(22))?;
+    ///# connection.object_server_mut().at(path, MyIface(22))?;
+    /// let mut object_server = connection.object_server();
     /// let mut iface = object_server.get_interface::<_, MyIface>(path)?;
     /// // Note: This will not be needed when using `ObjectServer::with_mut`
     /// let ctxt = SignalContext::new(&connection, path)?;
@@ -646,7 +583,8 @@ impl ObjectServer {
     }
 
     fn dispatch_method_call_try(
-        &mut self,
+        &self,
+        connection: &Connection,
         msg_header: &MessageHeader<'_>,
         msg: &Message,
     ) -> fdo::Result<Result<u32>> {
@@ -680,23 +618,24 @@ impl ObjectServer {
         let res = iface
             .read()
             .expect("lock poisoned")
-            .call(self, msg, member.clone());
+            .call(self, connection, msg, member.clone());
         res.or_else(|| {
             iface
                 .write()
                 .expect("lock poisoned")
-                .call_mut(self, msg, member.clone())
+                .call_mut(self, connection, msg, member.clone())
         })
         .ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
     }
 
     fn dispatch_method_call(
-        &mut self,
+        &self,
+        connection: &Connection,
         msg_header: &MessageHeader<'_>,
         msg: &Message,
     ) -> Result<u32> {
-        match self.dispatch_method_call_try(msg_header, msg) {
-            Err(e) => e.reply(&self.conn, msg),
+        match self.dispatch_method_call_try(connection, msg_header, msg) {
+            Err(e) => e.reply(connection, msg),
             Ok(r) => r,
         }
     }
@@ -713,61 +652,24 @@ impl ObjectServer {
     ///   the caller through the associated server connection.
     ///
     /// Returns an error if the message is malformed, true if it's handled, false otherwise.
-    pub fn dispatch_message(&mut self, msg: &Message) -> Result<bool> {
+    pub(crate) fn dispatch_message(&self, msg: &Message) -> Result<bool> {
         let msg_header = msg.header()?;
 
         match msg_header.message_type()? {
             MessageType::MethodCall => {
-                self.dispatch_method_call(&msg_header, msg)?;
+                let conn = self.connection();
+                self.dispatch_method_call(&conn, &msg_header, msg)?;
                 Ok(true)
             }
             _ => Ok(false),
         }
     }
 
-    /// Receive and handle the next message from the associated connection.
-    ///
-    /// This function will read the incoming message from
-    /// [`receive_message()`](Connection::receive_message) of the associated connection and pass it
-    /// to [`dispatch_message()`](Self::dispatch_message). If the message was handled by an an
-    /// interface, it returns `Ok(None)`. If not, it returns the received message.
-    ///
-    /// Returns an error if the message is malformed or an error occurred.
-    pub fn try_handle_next(&mut self) -> Result<Option<Arc<Message>>> {
-        match block_on(self.msg_stream.next()) {
-            Some(msg) => {
-                let msg = msg?;
-
-                if !self.dispatch_message(&msg)? {
-                    Ok(Some(msg))
-                } else {
-                    Ok(None)
-                }
-            }
-            None => {
-                // If SocketStream gives us None, that means the socket was closed
-                Err(Error::Io(io::Error::new(
-                    ErrorKind::BrokenPipe,
-                    "socket closed",
-                )))
-            }
-        }
-    }
-
-    /// Get a reference to the connection `self` is serving objects on.
-    pub fn connection(&self) -> &Connection {
-        &self.conn
-    }
-}
-
-impl Drop for ObjectServer {
-    fn drop(&mut self) {
-        // FIXME: Ignoring the errors here and on the method call, they should be logged.
-        if let Ok(proxy) = DBusProxy::new(&self.conn) {
-            for name in &self.registered_names {
-                let _ = proxy.release_name(name.clone());
-            }
-        }
+    fn connection(&self) -> Connection {
+        self.conn
+            .upgrade()
+            .expect("ObjectServer can't exist w/o an associated Connection")
+            .into()
     }
 }
 
@@ -779,12 +681,13 @@ mod tests {
         convert::TryInto,
         error::Error,
         sync::{
-            mpsc::{channel, Sender},
-            Arc, Mutex,
+            mpsc::{channel, sync_channel, Sender, SyncSender},
+            Arc,
         },
         thread,
     };
 
+    use event_listener::Event;
     use ntest::timeout;
     use serde::{Deserialize, Serialize};
     use test_env_log::test;
@@ -792,8 +695,7 @@ mod tests {
     use zvariant::derive::Type;
 
     use crate::{
-        dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, ObjectServer,
-        SignalContext,
+        dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, SignalContext,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -836,20 +738,19 @@ mod tests {
 
     #[derive(Debug, Clone)]
     enum NextAction {
-        Nothing,
         Quit,
         CreateObj(String),
         DestroyObj(String),
     }
 
     struct MyIfaceImpl {
-        action: Arc<Mutex<NextAction>>,
+        next_tx: SyncSender<NextAction>,
         count: u32,
     }
 
     impl MyIfaceImpl {
-        fn new(action: Arc<Mutex<NextAction>>) -> Self {
-            Self { action, count: 0 }
+        fn new(next_tx: SyncSender<NextAction>) -> Self {
+            Self { next_tx, count: 0 }
         }
     }
 
@@ -871,8 +772,8 @@ mod tests {
             self.count
         }
 
-        fn quit(&mut self) {
-            *self.action.lock().unwrap() = NextAction::Quit;
+        fn quit(&self) {
+            self.next_tx.send(NextAction::Quit).unwrap();
         }
 
         fn test_header(&self, #[zbus(header)] header: MessageHeader<'_>) {
@@ -923,11 +824,11 @@ mod tests {
         }
 
         fn create_obj(&self, key: String) {
-            *self.action.lock().unwrap() = NextAction::CreateObj(key);
+            self.next_tx.send(NextAction::CreateObj(key)).unwrap();
         }
 
         fn destroy_obj(&self, key: String) {
-            *self.action.lock().unwrap() = NextAction::DestroyObj(key);
+            self.next_tx.send(NextAction::DestroyObj(key)).unwrap();
         }
 
         #[dbus_interface(property)]
@@ -971,16 +872,18 @@ mod tests {
             .path("/org/freedesktop/MyService")?
             .build()?;
 
+        let prop_changed = Arc::new(Event::new());
+        let prop_changed_listener = prop_changed.listen();
         props_proxy
-            .connect_properties_changed(|_, changed, _| {
+            .connect_properties_changed(move |_, changed, _| {
                 let (name, _) = changed.iter().next().unwrap();
                 assert_eq!(*name, "Count");
-                Ok(())
+                prop_changed.notify(1);
             })
             .unwrap();
         tx.send(()).unwrap();
 
-        props_proxy.next_signal().unwrap();
+        prop_changed_listener.wait();
 
         proxy.ping()?;
         assert_eq!(proxy.count()?, 1);
@@ -1046,8 +949,8 @@ mod tests {
     fn basic_iface() {
         let (tx, rx) = channel::<()>();
 
-        let conn = Connection::session().unwrap();
-        let mut object_server = ObjectServer::new(&conn)
+        let conn = Connection::session()
+            .unwrap()
             // primary name
             .request_name("org.freedesktop.MyService")
             .unwrap()
@@ -1055,51 +958,45 @@ mod tests {
             .unwrap()
             .request_name("org.freedesktop.MyService.bar")
             .unwrap();
-        let action = Arc::new(Mutex::new(NextAction::Nothing));
 
         let child = thread::spawn(move || my_iface_test(tx).expect("child failed"));
         // Wait for the listener to be ready
         rx.recv().unwrap();
 
-        let iface = MyIfaceImpl::new(action.clone());
-        object_server
-            .at("/org/freedesktop/MyService", iface)
-            .unwrap();
+        let (next_tx, next_rx) = sync_channel(64);
+        let iface = MyIfaceImpl::new(next_tx.clone());
+        {
+            let mut server = conn.object_server_mut();
+            server.at("/org/freedesktop/MyService", iface).unwrap();
 
-        object_server
-            .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, ctxt| {
-                iface.count_changed(&ctxt)
-            })
-            .unwrap();
+            server
+                .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, ctxt| {
+                    iface.count_changed(&ctxt)
+                })
+                .unwrap();
+        }
 
         loop {
-            let m = conn.receive_message().unwrap();
-            if let Err(e) = object_server.dispatch_message(&m) {
-                eprintln!("{}", e);
-            }
-
-            object_server
+            conn.object_server_mut()
                 .with(
                     "/org/freedesktop/MyService",
                     |_iface: &MyIfaceImpl, ctxt| MyIfaceImpl::alert_count(&ctxt, 51),
                 )
                 .unwrap();
 
-            let mut next = action.lock().unwrap();
-            let current_next = next.clone();
-            *next = NextAction::Nothing;
-            match current_next {
-                NextAction::Nothing => (),
+            match next_rx.recv().unwrap() {
                 NextAction::Quit => break,
                 NextAction::CreateObj(key) => {
                     let path = format!("/zbus/test/{}", key);
-                    object_server
-                        .at(path, MyIfaceImpl::new(action.clone()))
+                    conn.object_server_mut()
+                        .at(path, MyIfaceImpl::new(next_tx.clone()))
                         .unwrap();
                 }
                 NextAction::DestroyObj(key) => {
                     let path = format!("/zbus/test/{}", key);
-                    object_server.remove::<MyIfaceImpl, _>(path).unwrap();
+                    conn.object_server_mut()
+                        .remove::<MyIfaceImpl, _>(path)
+                        .unwrap();
                 }
             }
         }
@@ -1108,11 +1005,9 @@ mod tests {
         assert_eq!(val, 2);
 
         // Release primary name explicitly and let others be released implicitly.
-        assert_eq!(
-            object_server.release_name("org.freedesktop.MyService"),
-            Ok(true)
-        );
-        drop(object_server);
+        assert_eq!(conn.release_name("org.freedesktop.MyService"), Ok(true));
+        assert_eq!(conn.release_name("org.freedesktop.MyService.foo"), Ok(true));
+        assert_eq!(conn.release_name("org.freedesktop.MyService.bar"), Ok(true));
 
         // Let's ensure all names were released.
         let proxy = zbus::fdo::DBusProxy::new(&conn).unwrap();

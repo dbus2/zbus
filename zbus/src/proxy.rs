@@ -215,10 +215,12 @@ impl<'a> Proxy<'a> {
 
     /// Register a handler for signal named `signal_name`.
     ///
-    /// Once a handler is successfully registered, call [`Self::next_signal`] to wait for the next
-    /// signal to arrive and be handled by its registered handler. A unique ID for the handler is
-    /// returned, which can be used to deregister this handler using [`Self::disconnect_signal`]
-    /// method.
+    /// A unique ID for the handler is returned, which can be used to deregister this handler using
+    /// [`Self::disconnect_signal`] method.
+    ///
+    /// *Note:* The signal handler will be called by the executor thread of the [`Connection`].
+    /// See the [`azync::Connection::executor`] documentation for an example of how you can run the
+    /// executor (and in turn all the signal handlers called) in your own thread.
     ///
     /// ### Errors
     ///
@@ -233,12 +235,15 @@ impl<'a> Proxy<'a> {
     where
         M: TryInto<MemberName<'static>>,
         M::Error: Into<Error>,
-        H: FnMut(&Message) -> Result<()> + Send + 'static,
+        H: FnMut(&Message) + Send + 'static,
     {
-        block_on(
-            self.azync
-                .connect_signal(signal_name, move |msg| Box::pin(ready(handler(msg)))),
-        )
+        block_on(self.azync.connect_signal(signal_name, move |msg| {
+            Box::pin({
+                handler(msg);
+
+                ready(())
+            })
+        }))
     }
 
     /// Deregister the signal handler with the ID `handler_id`.
@@ -257,10 +262,12 @@ impl<'a> Proxy<'a> {
 
     /// Register a changed handler for the property named `property_name`.
     ///
-    /// Once a handler is successfully registered, call [`Self::next_signal`] to wait for the next
-    /// signal to arrive and be handled by its registered handler. A unique ID for the handler is
-    /// returned, which can be used to deregister this handler using
-    /// [`Self::disconnect_property_changed`] method.
+    /// A unique ID for the handler is returned, which can be used to deregister this handler using
+    /// [`Self::disconnect_signal`] method.
+    ///
+    /// *Note:* The signal handler will be called by the executor thread of the [`Connection`].
+    /// See the [`azync::Connection::executor`] documentation for an example of how you can run the
+    /// executor (and in turn all the signal handlers called) in your own thread.
     ///
     /// # Errors
     ///
@@ -296,35 +303,6 @@ impl<'a> Proxy<'a> {
         block_on(self.azync.disconnect_property_changed(handler_id))
     }
 
-    /// Receive and handle the next incoming signal on the associated connection.
-    ///
-    /// This method will wait for signal messages on the associated connection and call any
-    /// handlers registered through the [`Self::connect_signal`] method. Signal handlers can be
-    /// registered and deregistered from another threads during the call to this method.
-    ///
-    /// If the signal message was handled by a handler, `Ok(None)` is returned. Otherwise, the
-    /// received message is returned.
-    ///
-    /// # Errors
-    ///
-    /// Apart from general I/O errors that can result from socket communications, calling this
-    /// method will also result in an error if the destination service has not yet registered its
-    /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub fn next_signal(&self) -> Result<Option<Arc<Message>>> {
-        block_on(self.azync.next_signal())
-    }
-
-    /// Handle the provided signal message.
-    ///
-    /// Call any handlers registered through the [`Self::connect_signal`] method for the provided
-    /// signal message.
-    ///
-    /// If no errors are encountered, `Ok(true)` is returned if a handler was found and called for,
-    /// the signal; `Ok(false)` otherwise.
-    pub fn handle_signal(&self, msg: &Message) -> Result<bool> {
-        block_on(self.azync.handle_signal(msg))
-    }
-
     /// Get a reference to the underlying async Proxy.
     pub fn inner(&self) -> &azync::Proxy<'a> {
         &self.azync
@@ -353,11 +331,11 @@ impl<'a> From<azync::Proxy<'a>> for Proxy<'a> {
 
 #[cfg(test)]
 mod tests {
+    use event_listener::Event;
     use zbus_names::{BusName, UniqueName};
 
     use super::*;
     use ntest::timeout;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use test_env_log::test;
     use zvariant::Optional;
 
@@ -367,8 +345,11 @@ mod tests {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = Connection::session().unwrap();
-        let owner_change_signaled = Arc::new(AtomicBool::new(false));
-        let name_acquired_signaled = Arc::new(AtomicBool::new(false));
+
+        let owner_change_signaled = Arc::new(Event::new());
+        let owner_change_listener = owner_change_signaled.listen();
+        let name_acquired_signaled = Arc::new(Event::new());
+        let name_acquired_listener = name_acquired_signaled.listen();
 
         let proxy = fdo::DBusProxy::new(&conn).unwrap();
         let well_known = "org.freedesktop.zbus.ProxySignalTest";
@@ -377,19 +358,19 @@ mod tests {
             let signaled = owner_change_signaled.clone();
             proxy
                 .connect_signal("NameOwnerChanged", move |m| {
-                    let (name, _, new_owner) = m.body::<(
-                        BusName<'_>,
-                        Optional<UniqueName<'_>>,
-                        Optional<UniqueName<'_>>,
-                    )>()?;
+                    let (name, _, new_owner) = m
+                        .body::<(
+                            BusName<'_>,
+                            Optional<UniqueName<'_>>,
+                            Optional<UniqueName<'_>>,
+                        )>()
+                        .unwrap();
                     if name != well_known {
                         // Meant for the other testcase then
-                        return Ok(());
+                        return;
                     }
                     assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
-                    signaled.store(true, Ordering::Release);
-
-                    Ok(())
+                    signaled.notify(1);
                 })
                 .unwrap();
         }
@@ -399,11 +380,9 @@ mod tests {
             // connection and secondly after we ask for a specific name.
             proxy
                 .connect_signal("NameAcquired", move |m| {
-                    if m.body::<&str>()? == well_known {
-                        signaled.store(true, Ordering::Release);
+                    if m.body::<&str>().unwrap() == well_known {
+                        signaled.notify(1);
                     }
-
-                    Ok(())
                 })
                 .unwrap();
         }
@@ -421,15 +400,10 @@ mod tests {
                 dbg!(val);
             })
             .unwrap();
-        loop {
-            proxy.next_signal().unwrap();
 
-            if owner_change_signaled.load(Ordering::Acquire)
-                && name_acquired_signaled.load(Ordering::Acquire)
-            {
-                break;
-            }
-        }
+        owner_change_listener.wait();
+        name_acquired_listener.wait();
+
         proxy.disconnect_property_changed(h).unwrap();
     }
 }

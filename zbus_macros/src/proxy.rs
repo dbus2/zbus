@@ -692,10 +692,10 @@ fn gen_proxy_signal(
         quote! {
             ::std::ops::FnMut(
                 #(#input_types),*
-            ) -> #zbus::export::futures_core::future::BoxFuture<'static, #zbus::Result<()>>
+            ) -> #zbus::export::futures_core::future::BoxFuture<'static, ()>
         }
     } else {
-        quote! { ::std::ops::FnMut(#(#input_types),*) -> #zbus::Result<()> }
+        quote! { ::std::ops::FnMut(#(#input_types),*) }
     };
 
     let (proxy_method, link) = if *azync {

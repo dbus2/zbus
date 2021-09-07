@@ -18,22 +18,16 @@ D-Bus API. However, typically services use a service name (aka *well-known name*
 in this context) can easily discover them.
 
 In this example, that is exactly what we're going to do and request the bus for the service name of
-our choice. To achieve that, we will we call the [`RequestName`] method on the bus, using
-`zbus::fdo` module:
+our choice:
 
 ```rust,no_run
 use std::{convert::TryInto, error::Error};
 
 use zbus::Connection;
-use zbus::fdo;
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
-    let connection = Connection::session()?;
-
-    fdo::DBusProxy::new(&connection)?.request_name(
-        "org.zbus.MyGreeter".try_into()?,
-        fdo::RequestNameFlags::ReplaceExisting.into(),
-    )?;
+    let connection = Connection::session()?
+        .request_name("org.zbus.MyGreeter")?;
 
     loop {}
 }
@@ -61,14 +55,12 @@ by replacing the loop above with this code:
 ```rust,no_run
 # use std::convert::TryInto;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-#    let connection = zbus::Connection::session()?;
-#    zbus::fdo::DBusProxy::new(&connection)?.request_name(
-#        "org.zbus.MyGreeter".try_into()?,
-#        zbus::fdo::RequestNameFlags::ReplaceExisting.into(),
-#    )?;
+#    let connection = zbus::Connection::session()?
+#        .request_name("org.zbus.MyGreeter")?;
 #
-loop {
-    let msg = connection.receive_message()?;
+let mut stream = zbus::MessageStream::from(&connection);
+for msg in stream {
+    let msg = msg?;
     let msg_header = msg.header()?;
     dbg!(&msg);
 
@@ -78,10 +70,14 @@ loop {
             // handle invalid calls, introspection, errors etc
             let arg: &str = msg.body()?;
             connection.reply(&msg, &(format!("Hello {}!", arg)))?;
+
+            break;
         }
         _ => continue,
     }
 }
+
+# Ok(())
 # }
 ```
 
@@ -100,8 +96,7 @@ need, but it is also easy to get it wrong. Fortunately, zbus has a simpler solut
 One can write an `impl` with a set of methods and let the `dbus_interface` procedural macro write
 the D-Bus details for us. It will dispatch all the incoming method calls to their respective
 handlers, and implicilty handle introspection requests. It also has support for properties and
-signal emission. It even makes it easier to register a [well-known name](#taking-a-service-name) for
-your service.
+signal emission.
 
 Let see how to use it:
 
@@ -109,14 +104,22 @@ Let see how to use it:
 # use std::error::Error;
 # use zbus::{dbus_interface, fdo, ObjectServer, Connection, SignalContext};
 #
+use event_listener::Event;
+
 struct Greeter {
-    name: String
+    name: String,
+    done: Event,
 }
 
 #[dbus_interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
     fn say_hello(&self, name: &str) -> String {
         format!("Hello {}!", name)
+    }
+
+    // Rude!
+    fn go_away(&self) {
+        self.done.notify(1);
     }
 
     /// A "GreeterName" property.
@@ -141,16 +144,20 @@ impl Greeter {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::session()?;
-    let mut object_server = ObjectServer::new(&connection)
+    let connection = Connection::session()?
         .request_name("org.zbus.MyGreeter")?;
-    let greeter = Greeter { name: "GreeterName".to_string() };
-    object_server.at("/org/zbus/MyGreeter", greeter)?;
-    loop {
-        if let Err(err) = object_server.try_handle_next() {
-            eprintln!("{}", err);
-        }
-    }
+    let greeter = Greeter {
+        name: "GreeterName".to_string(),
+        done: event_listener::Event::new(),
+    };
+    let done_listener = greeter.done.listen();
+    connection
+        .object_server_mut()
+        .at("/org/zbus/MyGreeter", greeter)?;
+
+    done_listener.wait();
+
+    Ok(())
 }
 ```
 
@@ -161,27 +168,24 @@ This time, we can also introspect the server:
 ```bash
 $ busctl --user introspect org.zbus.MyGreeter /org/zbus/MyGreeter
 NAME                                TYPE      SIGNATURE RESULT/VALUE FLAGS
-org.freedesktop.DBus.Introspectable interface -         -            -
-.Introspect                         method    -         s            -
-org.freedesktop.DBus.Peer           interface -         -            -
-.GetMachineId                       method    -         s            -
-.Ping                               method    -         -            -
-org.freedesktop.DBus.Properties     interface -         -            -
-.Get                                method    ss        v            -
-.GetAll                             method    s         a{sv}        -
-.Set                                method    ssv       -            -
-.PropertiesChanged                  signal    sa{sv}as  -            -
-org.zbus.MyGreeter1                 interface -         -            -
-.SayHello                           method    s         s            -
+org.freedesktop.DBus.Introspectable interface -         -             -
+.Introspect                         method    -         s             -
+org.freedesktop.DBus.Peer           interface -         -             -
+.GetMachineId                       method    -         s             -
+.Ping                               method    -         -             -
+org.freedesktop.DBus.Properties     interface -         -             -
+.Get                                method    ss        v             -
+.GetAll                             method    s         a{sv}         -
+.Set                                method    ssv       -             -
+.PropertiesChanged                  signal    sa{sv}as  -             -
+org.zbus.MyGreeter1                 interface -         -             -
+.GoAway                             method    -         -             -
+.SayHello                           method    s         s             -
+.GreeterName                        property  s         "GreeterName" emits-change writable
+.GreetedEveryone                    signal    -         -             -
 ```
 
 Easy-peasy!
-
-> **Note:** As you must have noticed, your code needed to run a loop to continuously read incoming
-messages (register the associated FD for input in poll/select to avoid blocking). This is because
-at the time of the this writing (*pre-1.0*), zbus neither provides an event loop API, nor any
-integration with other event loop implementations. We are evaluating different options to make this
-easier, especially with *async* support.
 
 ### Method errors
 
@@ -239,7 +243,7 @@ it with the previous example code:
 #
 # fn main() -> Result<(), Box<dyn Error>> {
 # let connection = zbus::Connection::session()?;
-# let mut object_server = zbus::ObjectServer::new(&connection);
+# let mut object_server = connection.object_server_mut();
 object_server.with_mut(
     "/org/zbus/MyGreeter",
     |iface: &mut Greeter, signal_ctxt| {
@@ -252,5 +256,4 @@ object_server.with_mut(
 ```
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
-[`RequestName`]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-request-name
 [didoc]: https://docs.rs/zbus/2.0.0-beta.6/zbus/attr.dbus_interface.html

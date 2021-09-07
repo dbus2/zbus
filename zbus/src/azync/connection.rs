@@ -1,42 +1,42 @@
-use async_broadcast::{broadcast, Receiver as BroadcastReceiver, Sender as Broadcaster};
+use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
 use async_io::block_on;
-use async_lock::Mutex;
+use async_lock::{Mutex, RwLock};
 use async_task::Task;
 use once_cell::sync::OnceCell;
 use static_assertions::assert_impl_all;
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
     convert::TryInto,
     future::ready,
     hash::{Hash, Hasher},
     io::{self, ErrorKind},
-    os::unix::io::RawFd,
+    ops::{Deref, DerefMut},
     pin::Pin,
     sync::{
         self,
         atomic::{AtomicU32, Ordering::SeqCst},
-        Arc,
+        Arc, Weak,
     },
     task::{Context, Poll},
 };
-use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName};
+use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
-use futures_core::{ready, stream, Future};
+use futures_core::{ready, Future};
 use futures_sink::Sink;
 use futures_util::{
     future::{select, Either},
     sink::SinkExt,
-    stream::StreamExt,
+    StreamExt,
 };
 
 use crate::{
-    azync::{Authenticated, ConnectionBuilder},
+    azync::{Authenticated, ConnectionBuilder, MessageStream},
     fdo,
     raw::{Connection as RawConnection, Socket},
-    Error, Guid, Message, MessageType, Result,
+    Error, Guid, Message, MessageType, ObjectServer, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -113,6 +113,7 @@ struct ConnectionInner {
     cap_unix_fd: bool,
     bus_conn: bool,
     unique_name: OnceCell<OwnedUniqueName>,
+    registered_names: Mutex<HashSet<WellKnownName<'static>>>,
 
     raw_conn: Arc<sync::Mutex<DynSocketConnection>>,
     // Serial number for next outgoing message
@@ -125,10 +126,14 @@ struct ConnectionInner {
     msg_receiver_task: sync::Mutex<Option<Task<()>>>,
 
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
+
+    object_server: OnceCell<RwLock<ObjectServer>>,
+    object_server_dispatch_task: OnceCell<Task<()>>,
 }
 
 // FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
-//        cancel `msg_receiver_task` manually to ensure task is gone before the connection is.
+//        cancel `msg_receiver_task` manually to ensure task is gone before the connection is. Same
+//        goes for the registered well-known names.
 //
 // [`AsyncDrop`]: https://github.com/rust-lang/wg-async-foundations/issues/65
 
@@ -195,7 +200,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// The asynchronous sibling of [`zbus::Connection`].
 ///
 /// Most of the API is very similar to [`zbus::Connection`], except it's asynchronous. However,
-/// there are a few differences:
+/// there is one notable difference:
 ///
 /// ### Sending Messages
 ///
@@ -209,18 +214,6 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 ///
 /// Since you do not need exclusive access to a `zbus::Connection` to send messages on the bus,
 /// [`Sink`] is also implemented on `&Connection`.
-///
-/// ### Receiving Messages
-///
-/// Unlike [`zbus::Connection`], there is no direct async equivalent of
-/// [`zbus::Connection::receive_message`] method provided. This is because the `futures` crate
-/// already provides a nice rich API that makes use of the [`stream::Stream`] implementation.
-///
-/// Each `Connection` instance maintains its own queue of incoming messages (storing the last
-/// `max_queued()` messages), so you can filter the stream for messages you care about and discard
-/// the rest.  To avoid having multiple receivers filtering the same queue, `Stream` is only
-/// available with an exclusive (mutable) reference to a `Connection`; clone the `Connection` to
-/// get a new queue to use the `Stream`.
 ///
 /// # Caveats
 ///
@@ -265,9 +258,9 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// ```rust,no_run
 ///# async_io::block_on(async {
 /// use futures_util::stream::TryStreamExt;
-/// use zbus::azync::Connection;
+/// use zbus::azync::{Connection, MessageStream};
 ///
-/// let mut connection = Connection::session().await?;
+/// let connection = Connection::session().await?;
 ///
 /// connection
 ///     .call_method(
@@ -279,7 +272,8 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 ///     )
 ///     .await?;
 ///
-/// while let Some(msg) = connection.try_next().await? {
+/// let mut stream = MessageStream::from(connection);
+/// while let Some(msg) = stream.try_next().await? {
 ///     println!("Got message: {}", msg);
 /// }
 ///
@@ -304,10 +298,10 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 pub struct Connection {
     inner: Arc<ConnectionInner>,
 
-    msg_receiver: BroadcastReceiver<Arc<Message>>,
+    pub(crate) msg_receiver: InactiveReceiver<Arc<Message>>,
 
     // Receiver side of the error channel
-    error_receiver: Receiver<Error>,
+    pub(crate) error_receiver: Receiver<Error>,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
@@ -352,7 +346,7 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let stream = self.clone();
+        let stream = MessageStream::from(self.clone());
         let m = Message::method(
             self.unique_name(),
             destination,
@@ -468,6 +462,72 @@ impl Connection {
         self.send_message(m).await
     }
 
+    /// Register a well-known name for this service on the bus.
+    ///
+    /// You can request multiple names for the same `ObjectServer`. Use [`Connection::release_name`]
+    /// for deregistering names registered through this method.
+    ///
+    /// Note that exclusive ownership without queueing is requested (using
+    /// [`fdo::RequestNameFlags::ReplaceExisting`] and [`fdo::RequestNameFlags::DoNotQueue`] flags)
+    /// since that is the most typical case. If that is not what you want, you should use
+    /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
+    /// **after** you've setup your service implementation with the `ObjectServer`).
+    pub async fn request_name<'w, W>(self, well_known_name: W) -> Result<Self>
+    where
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
+    {
+        let well_known_name = well_known_name.try_into().map_err(Into::into)?;
+        let mut names = self.inner.registered_names.lock().await;
+
+        if !names.contains(&well_known_name) {
+            // Ensure ObjectServer and its msg stream exists and reading before registering any
+            // names. Otherwise we get issue#68 (that we warn the user about in the docs of this
+            // method).
+            self.object_server().await;
+
+            fdo::AsyncDBusProxy::new(&self)
+                .await?
+                .request_name(
+                    well_known_name.clone(),
+                    fdo::RequestNameFlags::ReplaceExisting | fdo::RequestNameFlags::DoNotQueue,
+                )
+                .await?;
+            names.insert(well_known_name.to_owned());
+        }
+
+        drop(names);
+        Ok(self)
+    }
+
+    /// Deregister a previously registered well-known name for this service on the bus.
+    ///
+    /// Use this method to deregister a well-known name, registered through
+    /// [`Connection::request_name`].
+    ///
+    /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
+    /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
+    /// was not previously registered or already deregistered.
+    pub async fn release_name<'w, W>(&self, well_known_name: W) -> Result<bool>
+    where
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
+    {
+        let well_known_name: WellKnownName<'w> = well_known_name.try_into().map_err(Into::into)?;
+        let mut names = self.inner.registered_names.lock().await;
+        // FIXME: Should be possible to avoid cloning/allocation here
+        if !names.remove(&well_known_name.to_owned()) {
+            return Ok(false);
+        }
+
+        fdo::AsyncDBusProxy::new(self)
+            .await?
+            .release_name(well_known_name)
+            .await
+            .map(|_| true)
+            .map_err(Into::into)
+    }
+
     /// Checks if `self` is a connection to a message bus.
     ///
     /// This will return `false` for p2p connections.
@@ -551,9 +611,55 @@ impl Connection {
         &self.inner.executor
     }
 
-    /// Get the raw file descriptor of this connection.
-    pub async fn as_raw_fd(&self) -> RawFd {
-        (self.inner.raw_conn.lock().expect("poisened lock").socket()).as_raw_fd()
+    /// Get a reference to the associated [`ObjectServer`].
+    ///
+    /// The `ObjectServer` is created on-demand.
+    pub async fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
+        self.inner
+            .object_server
+            .get_or_init(|| self.setup_object_server())
+            .read()
+            .await
+    }
+
+    /// Get a mutable reference to the associated [`ObjectServer`].
+    ///
+    /// The `ObjectServer` is created on-demand.
+    ///
+    /// # Caveats
+    ///
+    /// The return value of this method should not be kept around for longer than needed. The method
+    /// dispatch machinery of the [`ObjectServer`] will be paused as long as the return value is alive.
+    pub async fn object_server_mut(&self) -> impl DerefMut<Target = ObjectServer> + '_ {
+        self.inner
+            .object_server
+            .get_or_init(|| self.setup_object_server())
+            .write()
+            .await
+    }
+
+    fn setup_object_server(&self) -> RwLock<ObjectServer> {
+        let weak_conn = WeakConnection::from(self);
+        let mut stream = MessageStream::from(self.clone());
+        let task = self.inner.executor.spawn(async move {
+            // TODO: Log errors when we've logging.
+            while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
+                match weak_conn.upgrade() {
+                    Some(conn) => {
+                        let server = conn.object_server().await;
+                        let _ = server.dispatch_message(&*msg);
+                    }
+                    // If connection is completely gone, no reason to keep running the task anymore.
+                    None => return,
+                }
+            }
+        });
+        self.inner
+            .object_server_dispatch_task
+            .set(task)
+            .expect("object server task set twice");
+
+        RwLock::new(ObjectServer::new(self))
     }
 
     pub(crate) async fn subscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
@@ -713,8 +819,8 @@ impl Connection {
         let auth = auth.into_inner();
         let cap_unix_fd = auth.cap_unix_fd;
 
-        let (mut msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
-        msg_sender.set_overflow(true);
+        let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
+        let msg_receiver = msg_receiver.deactivate();
         let (error_sender, error_receiver) = bounded(1);
         let executor = Arc::new(Executor::new());
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
@@ -734,8 +840,11 @@ impl Connection {
                 serial: AtomicU32::new(1),
                 unique_name: OnceCell::new(),
                 signal_subscriptions: Mutex::new(HashMap::new()),
+                object_server: OnceCell::new(),
+                object_server_dispatch_task: OnceCell::new(),
                 executor: executor.clone(),
                 msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
+                registered_names: Mutex::new(HashSet::new()),
             }),
         };
 
@@ -834,22 +943,6 @@ impl<'a> Sink<Message> for &'a Connection {
     }
 }
 
-impl stream::Stream for Connection {
-    type Item = Result<Arc<Message>>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let stream = self.get_mut();
-        let msg_fut = stream.msg_receiver.next();
-        let err_fut = stream.error_receiver.next();
-        let mut select_fut = select(msg_fut, err_fut);
-
-        match ready!(Pin::new(&mut select_fut).poll(cx)) {
-            Either::Left((msg, _)) => Poll::Ready(msg.map(Ok)),
-            Either::Right((error, _)) => Poll::Ready(error.map(Err)),
-        }
-    }
-}
-
 struct ReceiveMessage<'r> {
     raw_conn: &'r sync::Mutex<RawConnection<Box<dyn Socket>>>,
 }
@@ -866,6 +959,35 @@ impl<'r> Future for ReceiveMessage<'r> {
 impl From<crate::Connection> for Connection {
     fn from(conn: crate::Connection) -> Self {
         conn.into_inner()
+    }
+}
+
+// Internal API that allows keeping a weak connection ref around.
+#[derive(Debug)]
+pub(crate) struct WeakConnection {
+    inner: Weak<ConnectionInner>,
+    msg_receiver: InactiveReceiver<Arc<Message>>,
+    error_receiver: Receiver<Error>,
+}
+
+impl WeakConnection {
+    /// Upgrade to a Connection.
+    pub fn upgrade(&self) -> Option<Connection> {
+        self.inner.upgrade().map(|inner| Connection {
+            inner,
+            msg_receiver: self.msg_receiver.clone(),
+            error_receiver: self.error_receiver.clone(),
+        })
+    }
+}
+
+impl From<&Connection> for WeakConnection {
+    fn from(conn: &Connection) -> Self {
+        Self {
+            inner: Arc::downgrade(&conn.inner),
+            msg_receiver: conn.msg_receiver.clone(),
+            error_receiver: conn.error_receiver.clone(),
+        }
     }
 }
 
@@ -895,11 +1017,12 @@ mod tests {
             .build();
         let client = ConnectionBuilder::unix_stream(p1).p2p().build();
 
-        let (mut client_conn, mut server_conn) = futures_util::try_join!(client, server)?;
+        let (client_conn, server_conn) = futures_util::try_join!(client, server)?;
 
         let server_future = async {
             let mut method: Option<Arc<Message>> = None;
-            while let Some(m) = server_conn.try_next().await? {
+            let mut stream = MessageStream::from(&server_conn);
+            while let Some(m) = stream.try_next().await? {
                 if m.to_string() == "Method call Test" {
                     method.replace(m);
 
@@ -916,12 +1039,13 @@ mod tests {
         };
 
         let client_future = async {
+            let mut stream = MessageStream::from(&client_conn);
             let reply = client_conn
                 .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
             // Check we didn't miss the signal that was sent during the call.
-            let m = client_conn.try_next().await?.unwrap();
+            let m = stream.try_next().await?.unwrap();
             assert_eq!(m.to_string(), "Signal ASignalForYou");
             reply.body::<String>().map_err(|e| e.into())
         };
