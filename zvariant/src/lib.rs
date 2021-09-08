@@ -1018,6 +1018,23 @@ mod tests {
     }
 
     #[test]
+    fn struct_byte_array() {
+        let ctxt = Context::<LE>::new_dbus(0);
+        let value: (Vec<u8>, HashMap<String, Value<'_>>) = (Vec::new(), HashMap::new());
+        let value = zvariant::to_bytes(ctxt, &value).unwrap();
+        #[cfg(feature = "serde_bytes")]
+        let (bytes, map): (&serde_bytes::Bytes, HashMap<&str, Value<'_>>) =
+            zvariant::from_slice(&value, ctxt)
+                .expect("Could not deserialize serde_bytes::Bytes in struct.");
+        #[cfg(not(feature = "serde_bytes"))]
+        let (bytes, map): (&[u8], HashMap<&str, Value<'_>>) =
+            zvariant::from_slice(&value, ctxt).expect("Could not deserialize u8 slice in struct");
+
+        assert!(bytes.is_empty());
+        assert!(map.is_empty());
+    }
+
+    #[test]
     fn struct_value() {
         // Struct->Value
         let s: Value<'_> = ("a", "b", (1, 2)).into();
@@ -1385,16 +1402,18 @@ mod tests {
         struct AStruct<'s> {
             field1: u16,
             field2: &'s [u8],
-            field3: i64,
+            field3: &'s [u8],
+            field4: i64,
         }
-        assert_eq!(AStruct::signature(), "(qayx)");
+        assert_eq!(AStruct::signature(), "(qayayx)");
         let s = AStruct {
             field1: 0xFF_FF,
             field2: &[77u8; 8],
-            field3: 0xFF_FF_FF_FF_FF_FF,
+            field3: &[77u8; 8],
+            field4: 0xFF_FF_FF_FF_FF_FF,
         };
         let encoded = to_bytes(ctxt, &s).unwrap();
-        assert_eq!(encoded.len(), 24);
+        assert_eq!(encoded.len(), 40);
         let decoded: AStruct<'_> = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(decoded, s);
     }
