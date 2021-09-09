@@ -4,6 +4,7 @@ use async_executor::Executor;
 use async_io::block_on;
 use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_task::Task;
+use event_listener::EventListener;
 use once_cell::sync::OnceCell;
 use static_assertions::assert_impl_all;
 use std::{
@@ -947,6 +948,17 @@ impl Connection {
     /// Create a `Connection` to the system-wide message bus.
     pub async fn system() -> Result<Self> {
         ConnectionBuilder::system()?.build().await
+    }
+
+    /// Returns a listener, notified on various connection activity.
+    ///
+    /// This function is meant for the caller to implement idle or timeout on inactivity.
+    pub fn monitor_activity(&self) -> EventListener {
+        self.inner
+            .raw_conn
+            .lock()
+            .expect("poisoned lock")
+            .monitor_activity()
     }
 }
 
