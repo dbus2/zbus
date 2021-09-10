@@ -53,7 +53,7 @@ trait Notifications {
         summary: &str,
         body: &str,
         actions: &[&str],
-        hints: HashMap<&str, &Value<'_>>,
+        hints: &HashMap<&str, &Value<'_>>,
         expire_timeout: i32,
     ) -> zbus::Result<u32>;
 }
@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "A summary",
         "Some body",
         &[],
-        HashMap::new(),
+        &HashMap::new(),
         5000,
     )?;
     dbg!(reply);
@@ -268,7 +268,7 @@ let subject = Subject::new_for_owner(std::process::id(), None, None).unwrap();
 let result = proxy.check_authorization(
     &subject,
     "org.zbus.BeAwesome",
-    std::collections::HashMap::new(),
+    &std::collections::HashMap::new(),
     CheckAuthorizationFlags::AllowUserInteraction.into(),
     "",
 );
