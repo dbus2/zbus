@@ -354,38 +354,32 @@ mod tests {
         let proxy = fdo::DBusProxy::new(&conn).unwrap();
         let well_known = "org.freedesktop.zbus.ProxySignalTest";
         let unique_name = conn.unique_name().unwrap().to_string();
-        {
-            let signaled = owner_change_signaled.clone();
-            proxy
-                .connect_signal("NameOwnerChanged", move |m| {
-                    let (name, _, new_owner) = m
-                        .body::<(
-                            BusName<'_>,
-                            Optional<UniqueName<'_>>,
-                            Optional<UniqueName<'_>>,
-                        )>()
-                        .unwrap();
-                    if name != well_known {
-                        // Meant for the other testcase then
-                        return;
-                    }
-                    assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
-                    signaled.notify(1);
-                })
-                .unwrap();
-        }
-        {
-            let signaled = name_acquired_signaled.clone();
-            // `NameAcquired` is emitted twice, first when the unique name is assigned on
-            // connection and secondly after we ask for a specific name.
-            proxy
-                .connect_signal("NameAcquired", move |m| {
-                    if m.body::<&str>().unwrap() == well_known {
-                        signaled.notify(1);
-                    }
-                })
-                .unwrap();
-        }
+        proxy
+            .connect_signal("NameOwnerChanged", move |m| {
+                let (name, _, new_owner) = m
+                    .body::<(
+                        BusName<'_>,
+                        Optional<UniqueName<'_>>,
+                        Optional<UniqueName<'_>>,
+                    )>()
+                    .unwrap();
+                if name != well_known {
+                    // Meant for the other testcase then
+                    return;
+                }
+                assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
+                owner_change_signaled.notify(1);
+            })
+            .unwrap();
+        // `NameAcquired` is emitted twice, first when the unique name is assigned on
+        // connection and secondly after we ask for a specific name.
+        proxy
+            .connect_signal("NameAcquired", move |m| {
+                if m.body::<&str>().unwrap() == well_known {
+                    name_acquired_signaled.notify(1);
+                }
+            })
+            .unwrap();
 
         fdo::DBusProxy::new(&conn)
             .unwrap()
