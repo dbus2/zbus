@@ -677,11 +677,11 @@ mod tests {
 
     #[test]
     #[timeout(15000)]
-    #[allow(clippy::mutex_atomic)]
     fn issue_122() {
         let conn = Connection::session().unwrap();
         let stream = MessageStream::from(&conn);
 
+        #[allow(clippy::mutex_atomic)]
         let pair = Arc::new((Mutex::new(false), Condvar::new()));
         let pair2 = Arc::clone(&pair);
 
