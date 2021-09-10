@@ -786,7 +786,7 @@ mod tests {
                 .filter(|signal| {
                     let args = signal.args().unwrap();
 
-                    if args.name() != &well_known {
+                    if args.name() != well_known {
                         // Meant for the other testcase then
                         return ready(false);
                     }
@@ -803,7 +803,7 @@ mod tests {
                 let args = signal.args().unwrap();
                 // `NameAcquired` is emitted twice, first when the unique name is assigned on
                 // connection and secondly after we ask for a specific name.
-                ready(args.name() == &well_known)
+                ready(args.name() == well_known)
             });
         let mut stream = owner_change_stream.zip(name_acquired_stream);
 

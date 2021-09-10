@@ -971,7 +971,7 @@ mod tests {
 
             server
                 .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, ctxt| {
-                    iface.count_changed(&ctxt)
+                    iface.count_changed(ctxt)
                 })
                 .unwrap();
         }
@@ -980,7 +980,7 @@ mod tests {
             conn.object_server_mut()
                 .with(
                     "/org/freedesktop/MyService",
-                    |_iface: &MyIfaceImpl, ctxt| MyIfaceImpl::alert_count(&ctxt, 51),
+                    |_iface: &MyIfaceImpl, ctxt| MyIfaceImpl::alert_count(ctxt, 51),
                 )
                 .unwrap();
 
