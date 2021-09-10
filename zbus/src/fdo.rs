@@ -705,33 +705,27 @@ mod tests {
 
         let well_known = "org.freedesktop.zbus.FdoSignalConnectTest";
         let mut unique_name = Some(conn.unique_name().unwrap().clone());
-        {
-            let signaled = owner_change_signaled.clone();
-            proxy
-                .connect_name_owner_changed(move |name, _, new_owner| {
-                    if name != well_known {
-                        // Meant for the other testcase then
-                        return;
-                    }
-                    if let Some(unique) = unique_name.take() {
-                        assert_eq!(*new_owner.as_ref().unwrap(), *unique);
-                    }
-                    signaled.notify(1);
-                })
-                .unwrap();
-        }
-        {
-            // `NameAcquired` is emitted twice, first when the unique name is assigned on
-            // connection and secondly after we ask for a specific name.
-            let signaled = name_acquired_signaled.clone();
-            proxy
-                .connect_name_acquired(move |name| {
-                    if name == well_known {
-                        signaled.notify(1);
-                    }
-                })
-                .unwrap();
-        }
+        proxy
+            .connect_name_owner_changed(move |name, _, new_owner| {
+                if name != well_known {
+                    // Meant for the other testcase then
+                    return;
+                }
+                if let Some(unique) = unique_name.take() {
+                    assert_eq!(*new_owner.as_ref().unwrap(), *unique);
+                }
+                owner_change_signaled.notify(1);
+            })
+            .unwrap();
+        // `NameAcquired` is emitted twice, first when the unique name is assigned on
+        // connection and secondly after we ask for a specific name.
+        proxy
+            .connect_name_acquired(move |name| {
+                if name == well_known {
+                    name_acquired_signaled.notify(1);
+                }
+            })
+            .unwrap();
 
         let well_known: WellKnownName<'static> = well_known.try_into().unwrap();
         proxy
@@ -792,7 +786,7 @@ mod tests {
                 .filter(|signal| {
                     let args = signal.args().unwrap();
 
-                    if args.name() != &well_known {
+                    if args.name() != well_known {
                         // Meant for the other testcase then
                         return ready(false);
                     }
@@ -809,7 +803,7 @@ mod tests {
                 let args = signal.args().unwrap();
                 // `NameAcquired` is emitted twice, first when the unique name is assigned on
                 // connection and secondly after we ask for a specific name.
-                ready(args.name() == &well_known)
+                ready(args.name() == well_known)
             });
         let mut stream = owner_change_stream.zip(name_acquired_stream);
 

@@ -1159,37 +1159,31 @@ mod tests {
                 })
                 .await?
         };
-        let name_acquired_id = {
-            // `NameAcquired` is emitted twice, first when the unique name is assigned on
-            // connection and secondly after we ask for a specific name.
-            proxy
-                .connect_signal("NameAcquired", move |m| {
-                    let signaled = name_acquired_signaled.clone();
-                    async move {
-                        if m.body::<&str>().unwrap() == well_known {
-                            signaled.notify(1);
-                        }
+        // `NameAcquired` is emitted twice, first when the unique name is assigned on
+        // connection and secondly after we ask for a specific name.
+        let name_acquired_id = proxy
+            .connect_signal("NameAcquired", move |m| {
+                let signaled = name_acquired_signaled.clone();
+                async move {
+                    if m.body::<&str>().unwrap() == well_known {
+                        signaled.notify(1);
                     }
-                    .boxed()
-                })
-                .await?
-        };
+                }
+                .boxed()
+            })
+            .await?;
         // Test multiple handers for the same signal
-        let name_acquired_id2 = {
-            // `NameAcquired` is emitted twice, first when the unique name is assigned on
-            // connection and secondly after we ask for a specific name.
-            proxy
-                .connect_signal("NameAcquired", move |m| {
-                    let signaled = name_acquired_signaled2.clone();
-                    async move {
-                        if m.body::<&str>().unwrap() == well_known {
-                            signaled.notify(1);
-                        }
+        let name_acquired_id2 = proxy
+            .connect_signal("NameAcquired", move |m| {
+                let signaled = name_acquired_signaled2.clone();
+                async move {
+                    if m.body::<&str>().unwrap() == well_known {
+                        signaled.notify(1);
                     }
-                    .boxed()
-                })
-                .await?
-        };
+                }
+                .boxed()
+            })
+            .await?;
 
         fdo::DBusProxy::new(&crate::Connection::from(conn))?
             .request_name(
