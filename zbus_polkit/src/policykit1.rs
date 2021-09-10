@@ -359,7 +359,7 @@ trait Authority {
         &self,
         subject: &Subject,
         action_id: &str,
-        details: std::collections::HashMap<&str, &str>,
+        details: &std::collections::HashMap<&str, &str>,
         flags: BitFlags<CheckAuthorizationFlags>,
         cancellation_id: &str,
     ) -> zbus::Result<AuthorizationResult>;
@@ -406,7 +406,7 @@ trait Authority {
         subject: &Subject,
         locale: &str,
         object_path: &str,
-        options: std::collections::HashMap<&str, zvariant::Value<'_>>,
+        options: &std::collections::HashMap<&str, zvariant::Value<'_>>,
     ) -> zbus::Result<()>;
 
     /// Revokes all temporary authorizations that applies to `id`.
