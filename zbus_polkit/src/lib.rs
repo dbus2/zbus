@@ -19,7 +19,7 @@
 //! let result = p.check_authorization(
 //!     &subject,
 //!     "org.zbus.BeAwesome",
-//!     std::collections::HashMap::new(),
+//!     &std::collections::HashMap::new(),
 //!     CheckAuthorizationFlags::AllowUserInteraction.into(),
 //!     "",
 //! );

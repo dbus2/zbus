@@ -268,7 +268,7 @@ let subject = Subject::new_for_owner(std::process::id(), None, None).unwrap();
 let result = proxy.check_authorization(
     &subject,
     "org.zbus.BeAwesome",
-    std::collections::HashMap::new(),
+    &std::collections::HashMap::new(),
     CheckAuthorizationFlags::AllowUserInteraction.into(),
     "",
 );
