@@ -101,7 +101,7 @@ fn inputs_output_from_args(args: &[&Arg]) -> (String, String) {
     };
 
     for a in args {
-        match a.direction().as_deref() {
+        match a.direction() {
             Some("in") => {
                 let ty = to_rust_type(a.ty(), true, true);
                 let arg = if let Some(name) = a.name() {

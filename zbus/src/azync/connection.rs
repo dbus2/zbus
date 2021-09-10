@@ -1047,7 +1047,7 @@ mod tests {
             // Check we didn't miss the signal that was sent during the call.
             let m = stream.try_next().await?.unwrap();
             assert_eq!(m.to_string(), "Signal ASignalForYou");
-            reply.body::<String>().map_err(|e| e.into())
+            reply.body::<String>()
         };
 
         let (val, _) = futures_util::try_join!(client_future, server_future)?;
