@@ -46,6 +46,7 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
 
     let zbus = zbus_path();
     let mut replies = quote! {};
+    let mut async_replies = quote! {};
     let mut error_names = quote! {};
     let mut error_descriptions = quote! {};
     let mut error_converts = quote! {};
@@ -110,8 +111,11 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
         };
         error_converts.extend(e);
 
-        let r = gen_reply_for_variant(&variant);
+        let r = gen_reply_for_variant(&variant, false);
         replies.extend(r);
+
+        let r = gen_reply_for_variant(&variant, true);
+        async_replies.extend(r);
     }
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -144,6 +148,19 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
                     Self::ZBus(_) => ::std::panic!("Can not reply with ZBus error type"),
                 }
             }
+
+            #vis async fn reply_async(
+                &self,
+                c: &#zbus::azync::Connection,
+                call: &#zbus::Message,
+            ) -> ::std::result::Result<u32, #zbus::Error> {
+                let name = self.name();
+
+                match self {
+                    #async_replies
+                    Self::ZBus(_) => ::std::panic!("Can not reply with ZBus error type"),
+                }
+            }
         }
 
         impl ::std::fmt::Display for #name {
@@ -171,12 +188,17 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
     }
 }
 
-fn gen_reply_for_variant(variant: &Variant) -> TokenStream {
+fn gen_reply_for_variant(variant: &Variant, azync: bool) -> TokenStream {
     let ident = &variant.ident;
+    let wait = if azync {
+        quote! { .await }
+    } else {
+        quote! {}
+    };
     match &variant.fields {
         Fields::Unit => {
             quote! {
-                Self::#ident => c.reply_error(call, name, &()),
+                Self::#ident => c.reply_error(call, name, &())#wait,
             }
         }
         Fields::Unnamed(f) => {
@@ -185,13 +207,13 @@ fn gen_reply_for_variant(variant: &Variant) -> TokenStream {
                 .map(|v| syn::Ident::new(&v, ident.span()))
                 .collect::<Vec<_>>();
             quote! {
-                Self::#ident(#(#fields),*) => c.reply_error(call, name, &(#(#fields),*)),
+                Self::#ident(#(#fields),*) => c.reply_error(call, name, &(#(#fields),*))#wait,
             }
         }
         Fields::Named(f) => {
             let fields = f.named.iter().map(|v| v.ident.as_ref()).collect::<Vec<_>>();
             quote! {
-                Self::#ident { #(#fields),* } => c.reply_error(call, name, &(#(#fields),*)),
+                Self::#ident { #(#fields),* } => c.reply_error(call, name, &(#(#fields),*))#wait,
             }
         }
     }
