@@ -5,6 +5,7 @@ use syn::{
     Meta::{List, NameValue},
     NestedMeta,
     NestedMeta::Meta,
+    Variant,
 };
 
 use crate::utils::*;
@@ -51,7 +52,7 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
 
     for variant in data.variants {
         let attrs = error_parse_item_attributes(&variant.attrs).unwrap();
-        let ident = variant.ident;
+        let ident = &variant.ident;
         let name = attrs
             .iter()
             .find_map(|x| match x {
@@ -109,28 +110,7 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
         };
         error_converts.extend(e);
 
-        let r = match variant.fields {
-            Fields::Unit => {
-                quote! {
-                    Self::#ident => c.reply_error(call, name, &()),
-                }
-            }
-            Fields::Unnamed(f) => {
-                let fields = (0..f.unnamed.len())
-                    .map(|n| format!("f{}", n))
-                    .map(|v| syn::Ident::new(&v, ident.span()))
-                    .collect::<Vec<_>>();
-                quote! {
-                    Self::#ident(#(#fields),*) => c.reply_error(call, name, &(#(#fields),*)),
-                }
-            }
-            Fields::Named(f) => {
-                let fields = f.named.iter().map(|v| v.ident.as_ref()).collect::<Vec<_>>();
-                quote! {
-                    Self::#ident { #(#fields),* } => c.reply_error(call, name, &(#(#fields),*)),
-                }
-            }
-        };
+        let r = gen_reply_for_variant(&variant);
         replies.extend(r);
     }
 
@@ -186,6 +166,32 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
                 } else {
                     Self::ZBus(value)
                 }
+            }
+        }
+    }
+}
+
+fn gen_reply_for_variant(variant: &Variant) -> TokenStream {
+    let ident = &variant.ident;
+    match &variant.fields {
+        Fields::Unit => {
+            quote! {
+                Self::#ident => c.reply_error(call, name, &()),
+            }
+        }
+        Fields::Unnamed(f) => {
+            let fields = (0..f.unnamed.len())
+                .map(|n| format!("f{}", n))
+                .map(|v| syn::Ident::new(&v, ident.span()))
+                .collect::<Vec<_>>();
+            quote! {
+                Self::#ident(#(#fields),*) => c.reply_error(call, name, &(#(#fields),*)),
+            }
+        }
+        Fields::Named(f) => {
+            let fields = f.named.iter().map(|v| v.ident.as_ref()).collect::<Vec<_>>();
+            quote! {
+                Self::#ident { #(#fields),* } => c.reply_error(call, name, &(#(#fields),*)),
             }
         }
     }
