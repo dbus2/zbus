@@ -216,7 +216,9 @@ extern crate self as zbus;
 // Macro support module, not part of the public API.
 #[doc(hidden)]
 pub mod export {
+    pub use async_trait;
     pub use futures_core;
+    pub use futures_util;
     pub use serde;
     pub use static_assertions;
 }
