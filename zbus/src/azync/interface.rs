@@ -9,8 +9,8 @@ use zbus_names::{InterfaceName, MemberName};
 use zvariant::{OwnedValue, Value};
 
 use crate::{
-    azync::{Connection, SignalContext},
-    fdo, Message, ObjectServer, Result,
+    azync::{Connection, ObjectServer, SignalContext},
+    fdo, Message, Result,
 };
 
 /// The trait used to dispatch messages to an interface instance.

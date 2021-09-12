@@ -185,7 +185,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_interface;
-/// use zbus::{MessageHeader, ObjectServer, SignalContext};
+/// use zbus::{azync::{ObjectServer, SignalContext}, MessageHeader};
 ///
 /// struct Example {
 ///     some_data: String,
@@ -194,7 +194,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[dbus_interface(name = "org.myservice.Example")]
 /// impl Example {
 ///     // "Quit" method. A method may throw errors.
-///     fn quit(
+///     async fn quit(
 ///         &self,
 ///         #[zbus(header)]
 ///         hdr: MessageHeader<'_>,
@@ -206,6 +206,8 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///         let path = hdr.path()?.unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);
 ///         Example::bye(&ctxt, &msg);
+///
+///         // Do some asynchronous tasks before quitting..
 ///
 ///         Ok(())
 ///     }
@@ -220,7 +222,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 ///     // "Bye" signal (note: no implementation body).
 ///     #[dbus_interface(signal)]
-///     fn bye(signal_ctxt: &SignalContext<'_>, message: &str) -> zbus::Result<()>;
+///     async fn bye(signal_ctxt: &SignalContext<'_>, message: &str) -> zbus::Result<()>;
 ///
 ///     #[dbus_interface(out_args("answer", "question"))]
 ///     fn meaning_of_life(&self) -> zbus::fdo::Result<(i32, String)> {

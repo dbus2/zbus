@@ -14,7 +14,10 @@ use zbus_names::{
 };
 use zvariant::{derive::Type, ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value};
 
-use crate::{dbus_interface, dbus_proxy, DBusError, MessageHeader, ObjectServer, SignalContext};
+use crate::{
+    azync::{ObjectServer, SignalContext},
+    dbus_interface, dbus_proxy, DBusError, MessageHeader,
+};
 
 /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
@@ -34,7 +37,7 @@ pub(crate) struct Introspectable;
 
 #[dbus_interface(name = "org.freedesktop.DBus.Introspectable")]
 impl Introspectable {
-    fn introspect(
+    async fn introspect(
         &self,
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: MessageHeader<'_>,
@@ -44,7 +47,7 @@ impl Introspectable {
             .get_node(path)
             .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{}'", path)))?;
 
-        Ok(node.introspect())
+        Ok(node.introspect().await)
     }
 }
 
@@ -52,10 +55,14 @@ impl Introspectable {
 #[dbus_proxy(interface = "org.freedesktop.DBus.Properties")]
 trait Properties {
     /// Get a property value.
-    fn get(&self, interface_name: InterfaceName<'_>, property_name: &str) -> Result<OwnedValue>;
+    async fn get(
+        &self,
+        interface_name: InterfaceName<'_>,
+        property_name: &str,
+    ) -> Result<OwnedValue>;
 
     /// Set a property value.
-    fn set(
+    async fn set(
         &self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
@@ -63,10 +70,13 @@ trait Properties {
     ) -> Result<()>;
 
     /// Get all properties.
-    fn get_all(&self, interface_name: InterfaceName<'_>) -> Result<HashMap<String, OwnedValue>>;
+    async fn get_all(
+        &self,
+        interface_name: InterfaceName<'_>,
+    ) -> Result<HashMap<String, OwnedValue>>;
 
     #[dbus_proxy(signal)]
-    fn properties_changed(
+    async fn properties_changed(
         &self,
         interface_name: InterfaceName<'_>,
         changed_properties: HashMap<&str, Value<'_>>,
@@ -86,7 +96,7 @@ assert_impl_all!(Properties: Send, Sync, Unpin);
 
 #[dbus_interface(name = "org.freedesktop.DBus.Properties")]
 impl Properties {
-    fn get(
+    async fn get(
         &self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
@@ -101,7 +111,7 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-        let res = iface.read().expect("lock poisoned").get(property_name);
+        let res = iface.read().await.get(property_name).await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
                 "Unknown property '{}'",
@@ -111,7 +121,7 @@ impl Properties {
     }
 
     // TODO: should be able to take a &Value instead (but obscure deserialize error for now..)
-    fn set(
+    async fn set(
         &mut self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
@@ -128,10 +138,7 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-        let res = iface
-            .write()
-            .expect("lock poisoned")
-            .set(property_name, &value, &ctxt);
+        let res = iface.write().await.set(property_name, &value, &ctxt).await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
                 "Unknown property '{}'",
@@ -140,7 +147,7 @@ impl Properties {
         })
     }
 
-    fn get_all(
+    async fn get_all(
         &self,
         interface_name: InterfaceName<'_>,
         #[zbus(object_server)] server: &ObjectServer,
@@ -154,14 +161,14 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-        let res = iface.read().expect("lock poisoned").get_all();
+        let res = iface.read().await.get_all().await;
         Ok(res)
     }
 
     /// Emits the `org.freedesktop.DBus.Properties.PropertiesChanged` signal.
     #[dbus_interface(signal)]
     #[rustfmt::skip]
-    pub fn properties_changed(
+    pub async fn properties_changed(
         ctxt: &SignalContext<'_>,
         interface_name: InterfaceName<'_>,
         changed_properties: &HashMap<&str, &Value<'_>>,

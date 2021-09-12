@@ -234,7 +234,7 @@ impl Connection {
     ///
     /// The `ObjectServer` is created on-demand.
     pub fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
-        block_on(self.inner.object_server())
+        block_on(self.inner.sync_object_server())
     }
 
     /// Get a mutable reference to the associated [`ObjectServer`].
@@ -246,7 +246,7 @@ impl Connection {
     /// The return value of this method should not be kept around for longer than needed. The method
     /// dispatch machinery of the [`ObjectServer`] will be paused as long as the return value is alive.
     pub fn object_server_mut(&self) -> impl DerefMut<Target = ObjectServer> + '_ {
-        block_on(self.inner.object_server_mut())
+        block_on(self.inner.sync_object_server_mut())
     }
 
     /// Get a reference to the underlying async Connection.

@@ -102,7 +102,7 @@ Let see how to use it:
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{dbus_interface, fdo, ObjectServer, Connection, SignalContext};
+# use zbus::{azync::SignalContext, dbus_interface, fdo, ObjectServer, Connection};
 #
 use event_listener::Event;
 
@@ -113,18 +113,18 @@ struct Greeter {
 
 #[dbus_interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
-    fn say_hello(&self, name: &str) -> String {
+    async fn say_hello(&self, name: &str) -> String {
         format!("Hello {}!", name)
     }
 
     // Rude!
-    fn go_away(&self) {
+    async fn go_away(&self) {
         self.done.notify(1);
     }
 
     /// A "GreeterName" property.
     #[dbus_interface(property)]
-    fn greeter_name(&self) -> &str {
+    async fn greeter_name(&self) -> &str {
         &self.name
     }
 
@@ -134,13 +134,13 @@ impl Greeter {
     /// notify listeners that "GreeterName" was updated. It will be automatically called when
     /// using this setter.
     #[dbus_interface(property)]
-    fn set_greeter_name(&mut self, name: String) {
+    async fn set_greeter_name(&mut self, name: String) {
         self.name = name;
     }
 
     /// A signal; the implementation is provided by the macro.
     #[dbus_interface(signal)]
-    fn greeted_everyone(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
+    async fn greeted_everyone(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -222,6 +222,7 @@ it with the previous example code:
 
 ```rust,no_run
 # use std::error::Error;
+# use async_io::block_on;
 # use zbus::dbus_interface;
 # 
 # struct Greeter {
@@ -231,12 +232,12 @@ it with the previous example code:
 # #[dbus_interface(name = "org.zbus.MyGreeter1")]
 # impl Greeter {
 #     #[dbus_interface(property)]
-#     fn greeter_name(&self) -> &str {
+#     async fn greeter_name(&self) -> &str {
 #         &self.name
 #     }
 # 
 #     #[dbus_interface(property)]
-#     fn set_greeter_name(&mut self, name: String) {
+#     async fn set_greeter_name(&mut self, name: String) {
 #         self.name = name;
 #     }
 # }
@@ -244,13 +245,13 @@ it with the previous example code:
 # fn main() -> Result<(), Box<dyn Error>> {
 # let connection = zbus::Connection::session()?;
 # let mut object_server = connection.object_server_mut();
-use zbus::InterfaceDerefMut;
+use zbus::azync::InterfaceDerefMut;
 
 object_server.with_mut(
     "/org/zbus/MyGreeter",
     |mut iface: InterfaceDerefMut<Greeter>, signal_ctxt| {
         iface.name = String::from("👋");
-        iface.greeter_name_changed(&signal_ctxt)
+        block_on(iface.greeter_name_changed(&signal_ctxt))
     },
 )?;
 # Ok(())

@@ -238,6 +238,7 @@ mod tests {
         sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
 
+    use async_io::block_on;
     use enumflags2::BitFlags;
     use ntest::timeout;
     use test_env_log::test;
@@ -246,9 +247,9 @@ mod tests {
     use zvariant::{Fd, OwnedObjectPath, OwnedValue, Type};
 
     use crate::{
-        azync,
+        azync::{self, InterfaceDeref, SignalContext},
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, InterfaceDeref, Message, MessageFlags, MessageStream, Result, SignalContext,
+        Connection, Message, MessageFlags, MessageStream, Result,
     };
 
     #[test]
@@ -796,7 +797,7 @@ mod tests {
         #[super::dbus_interface(name = "org.freedesktop.zbus.ComeAndGo")]
         impl ComeAndGo {
             #[dbus_interface(signal)]
-            fn the_signal(signal_ctxt: &SignalContext<'_>) -> zbus::Result<()>;
+            async fn the_signal(signal_ctxt: &SignalContext<'_>) -> zbus::Result<()>;
         }
 
         rx.recv().unwrap();
@@ -813,7 +814,7 @@ mod tests {
             conn.object_server_mut()
                 .with(
                     "/org/freedesktop/zbus/ComeAndGo",
-                    |_: InterfaceDeref<'_, ComeAndGo>, ctxt| ComeAndGo::the_signal(&ctxt),
+                    |_: InterfaceDeref<'_, ComeAndGo>, ctxt| block_on(ComeAndGo::the_signal(&ctxt)),
                 )
                 .unwrap();
             rx.recv().unwrap();

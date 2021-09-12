@@ -2,7 +2,7 @@ use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
 use async_io::block_on;
-use async_lock::{Mutex, RwLock};
+use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_task::Task;
 use once_cell::sync::OnceCell;
 use static_assertions::assert_impl_all;
@@ -33,7 +33,7 @@ use futures_util::{
 };
 
 use crate::{
-    azync::{Authenticated, ConnectionBuilder, MessageStream},
+    azync::{self, Authenticated, ConnectionBuilder, MessageStream},
     fdo,
     raw::{Connection as RawConnection, Socket},
     Error, Guid, Message, MessageType, ObjectServer, Result,
@@ -614,7 +614,22 @@ impl Connection {
     /// Get a reference to the associated [`ObjectServer`].
     ///
     /// The `ObjectServer` is created on-demand.
-    pub async fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
+    pub async fn object_server(&self) -> impl Deref<Target = azync::ObjectServer> + '_ {
+        // FIXME: Maybe it makes sense after all to implement Deref<Target= azync::ObjectServer> for
+        // crate::ObjectServer instead of this wrapper?
+        struct Wrapper<'s>(RwLockReadGuard<'s, ObjectServer>);
+        impl Deref for Wrapper<'_> {
+            type Target = azync::ObjectServer;
+
+            fn deref(&self) -> &Self::Target {
+                self.0.inner()
+            }
+        }
+
+        Wrapper(self.sync_object_server().await)
+    }
+
+    pub(crate) async fn sync_object_server(&self) -> RwLockReadGuard<'_, ObjectServer> {
         self.inner
             .object_server
             .get_or_init(|| self.setup_object_server())
@@ -630,7 +645,27 @@ impl Connection {
     ///
     /// The return value of this method should not be kept around for longer than needed. The method
     /// dispatch machinery of the [`ObjectServer`] will be paused as long as the return value is alive.
-    pub async fn object_server_mut(&self) -> impl DerefMut<Target = ObjectServer> + '_ {
+    pub async fn object_server_mut(&self) -> impl DerefMut<Target = azync::ObjectServer> + '_ {
+        // FIXME: Maybe it makes sense after all to implement DerefMut<Target= azync::ObjectServer>
+        // for crate::ObjectServer instead of this wrapper?
+        struct Wrapper<'s>(RwLockWriteGuard<'s, ObjectServer>);
+        impl Deref for Wrapper<'_> {
+            type Target = azync::ObjectServer;
+
+            fn deref(&self) -> &Self::Target {
+                self.0.inner()
+            }
+        }
+        impl DerefMut for Wrapper<'_> {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                self.0.inner_mut()
+            }
+        }
+
+        Wrapper(self.sync_object_server_mut().await)
+    }
+
+    pub(crate) async fn sync_object_server_mut(&self) -> RwLockWriteGuard<'_, ObjectServer> {
         self.inner
             .object_server
             .get_or_init(|| self.setup_object_server())
@@ -647,7 +682,7 @@ impl Connection {
                 match weak_conn.upgrade() {
                     Some(conn) => {
                         let server = conn.object_server().await;
-                        let _ = server.dispatch_message(&*msg);
+                        let _ = server.dispatch_message(&*msg).await;
                     }
                     // If connection is completely gone, no reason to keep running the task anymore.
                     None => return,

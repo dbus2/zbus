@@ -10,6 +10,8 @@ mod connection_builder;
 pub use connection_builder::*;
 mod message_stream;
 pub use message_stream::*;
+mod object_server;
+pub use object_server::*;
 mod proxy;
 pub use proxy::*;
 mod proxy_builder;
