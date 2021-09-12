@@ -16,5 +16,7 @@ mod proxy_builder;
 pub use proxy_builder::*;
 mod signal_context;
 pub use signal_context::*;
+mod interface;
+pub use interface::*;
 
 pub use crate::raw::Socket;
