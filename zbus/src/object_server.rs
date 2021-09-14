@@ -91,6 +91,32 @@ impl dyn Interface {
     }
 }
 
+/// Opaque structure that mutably derefs to an `Interface` type.
+pub struct InterfaceDerefMut<'d, I> {
+    iface: RwLockWriteGuard<'d, dyn Interface>,
+    phantom: PhantomData<I>,
+}
+
+impl<I> Deref for InterfaceDerefMut<'_, I>
+where
+    I: Interface,
+{
+    type Target = I;
+
+    fn deref(&self) -> &I {
+        self.iface.downcast_ref::<I>().unwrap()
+    }
+}
+
+impl<I> DerefMut for InterfaceDerefMut<'_, I>
+where
+    I: Interface,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.iface.downcast_mut::<I>().unwrap()
+    }
+}
+
 #[derive(Default, derivative::Derivative)]
 #[derivative(Debug)]
 pub(crate) struct Node {
@@ -172,35 +198,10 @@ impl Node {
         func(&mut *iface, signal_ctxt)
     }
 
-    fn get_interface_mut<I>(&self) -> Result<impl DerefMut<Target = I> + '_>
+    fn get_interface_mut<I>(&self) -> Result<InterfaceDerefMut<'_, I>>
     where
         I: Interface,
     {
-        struct DownCast<'d, G> {
-            iface: RwLockWriteGuard<'d, dyn Interface>,
-            phantom: PhantomData<G>,
-        }
-
-        impl<G> Deref for DownCast<'_, G>
-        where
-            G: Interface,
-        {
-            type Target = G;
-
-            fn deref(&self) -> &G {
-                self.iface.downcast_ref::<G>().unwrap()
-            }
-        }
-
-        impl<G> DerefMut for DownCast<'_, G>
-        where
-            G: Interface,
-        {
-            fn deref_mut(&mut self) -> &mut Self::Target {
-                self.iface.downcast_mut::<G>().unwrap()
-            }
-        }
-
         let mut iface = self
             .interfaces
             .get(&I::name())
@@ -211,7 +212,7 @@ impl Node {
         iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
         iface.downcast_mut::<I>().ok_or(Error::InterfaceNotFound)?;
 
-        Ok(DownCast {
+        Ok(InterfaceDerefMut {
             iface,
             phantom: PhantomData,
         })
@@ -570,7 +571,7 @@ impl ObjectServer {
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn get_interface<'p, P, I>(&self, path: P) -> Result<impl DerefMut<Target = I> + '_>
+    pub fn get_interface<'p, P, I>(&self, path: P) -> Result<InterfaceDerefMut<'_, I>>
     where
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
