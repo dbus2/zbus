@@ -96,7 +96,7 @@ impl Properties {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
             .get_node(path)
-            .and_then(|node| node.get_interface(interface_name.clone()))
+            .and_then(|node| node.interface_lock(interface_name.clone()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
@@ -123,7 +123,7 @@ impl Properties {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
             .get_node(path)
-            .and_then(|node| node.get_interface(interface_name.clone()))
+            .and_then(|node| node.interface_lock(interface_name.clone()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
@@ -149,7 +149,7 @@ impl Properties {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
             .get_node(path)
-            .and_then(|node| node.get_interface(interface_name.clone()))
+            .and_then(|node| node.interface_lock(interface_name.clone()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;

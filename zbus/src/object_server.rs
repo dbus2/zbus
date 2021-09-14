@@ -139,7 +139,7 @@ impl Node {
         node
     }
 
-    pub(crate) fn get_interface(
+    pub(crate) fn interface_lock(
         &self,
         interface_name: InterfaceName<'_>,
     ) -> Option<Arc<RwLock<dyn Interface>>> {
@@ -612,7 +612,7 @@ impl ObjectServer {
         let node = self
             .get_node(path)
             .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
-        let iface = node.get_interface(iface.clone()).ok_or_else(|| {
+        let iface = node.interface_lock(iface.clone()).ok_or_else(|| {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
         })?;
 
