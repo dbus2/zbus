@@ -244,9 +244,11 @@ it with the previous example code:
 # fn main() -> Result<(), Box<dyn Error>> {
 # let connection = zbus::Connection::session()?;
 # let mut object_server = connection.object_server_mut();
+use zbus::InterfaceDerefMut;
+
 object_server.with_mut(
     "/org/zbus/MyGreeter",
-    |iface: &mut Greeter, signal_ctxt| {
+    |mut iface: InterfaceDerefMut<Greeter>, signal_ctxt| {
         iface.name = String::from("👋");
         iface.greeter_name_changed(signal_ctxt)
     },

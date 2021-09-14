@@ -248,7 +248,7 @@ mod tests {
     use crate::{
         azync,
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, Message, MessageFlags, MessageStream, Result, SignalContext,
+        Connection, InterfaceDeref, Message, MessageFlags, MessageStream, Result, SignalContext,
     };
 
     #[test]
@@ -811,9 +811,10 @@ mod tests {
                 .unwrap();
 
             conn.object_server_mut()
-                .with("/org/freedesktop/zbus/ComeAndGo", |_: &ComeAndGo, ctxt| {
-                    ComeAndGo::the_signal(ctxt)
-                })
+                .with(
+                    "/org/freedesktop/zbus/ComeAndGo",
+                    |_: InterfaceDeref<'_, ComeAndGo>, ctxt| ComeAndGo::the_signal(ctxt),
+                )
                 .unwrap();
             rx.recv().unwrap();
 

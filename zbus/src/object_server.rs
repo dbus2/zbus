@@ -192,22 +192,22 @@ impl Node {
 
     fn with_iface_func<F, I>(&self, func: F, signal_ctxt: &SignalContext<'_>) -> Result<()>
     where
-        F: Fn(&I, &SignalContext<'_>) -> Result<()>,
+        F: Fn(InterfaceDeref<'_, I>, &SignalContext<'_>) -> Result<()>,
         I: Interface,
     {
         let iface = self.get_interface::<I>()?;
 
-        func(&*iface, signal_ctxt)
+        func(iface, signal_ctxt)
     }
 
     fn with_iface_func_mut<F, I>(&self, func: F, signal_ctxt: &SignalContext<'_>) -> Result<()>
     where
-        F: Fn(&mut I, &SignalContext<'_>) -> Result<()>,
+        F: Fn(InterfaceDerefMut<'_, I>, &SignalContext<'_>) -> Result<()>,
         I: Interface,
     {
-        let mut iface = self.get_interface_mut::<I>()?;
+        let iface = self.get_interface_mut::<I>()?;
 
-        func(&mut *iface, signal_ctxt)
+        func(iface, signal_ctxt)
     }
 
     fn get_interface<I>(&self) -> Result<InterfaceDeref<'_, I>>
@@ -470,7 +470,7 @@ impl ObjectServer {
     ///
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
+    ///# use zbus::{Connection, InterfaceDeref, ObjectServer, SignalContext, dbus_interface};
     ///#
     /// struct MyIface;
     /// #[dbus_interface(name = "org.myiface.MyIface")]
@@ -485,7 +485,7 @@ impl ObjectServer {
     ///# connection.object_server_mut().at(path, MyIface)?;
     /// connection
     ///     .object_server()
-    ///     .with(path, |_iface: &MyIface, signal_ctxt| {
+    ///     .with(path, |_iface: InterfaceDeref<'_, MyIface>, signal_ctxt| {
     ///         MyIface::emit_signal(signal_ctxt)
     ///     })?;
     ///#
@@ -494,7 +494,7 @@ impl ObjectServer {
     /// ```
     pub fn with<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
     where
-        F: Fn(&I, &SignalContext<'_>) -> Result<()>,
+        F: Fn(InterfaceDeref<'_, I>, &SignalContext<'_>) -> Result<()>,
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
@@ -518,7 +518,7 @@ impl ObjectServer {
     ///
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
+    ///# use zbus::{Connection, InterfaceDerefMut, ObjectServer, SignalContext, dbus_interface};
     ///#
     /// struct MyIface(u32);
     ///
@@ -536,7 +536,7 @@ impl ObjectServer {
     ///# connection.object_server_mut().at(path, MyIface(0))?;
     /// connection
     ///     .object_server()
-    ///     .with_mut(path, |iface: &mut MyIface, signal_ctxt| {
+    ///     .with_mut(path, |mut iface: InterfaceDerefMut<'_, MyIface>, signal_ctxt| {
     ///         iface.0 = 42;
     ///         iface.count_changed(signal_ctxt)
     ///     })?;
@@ -546,7 +546,7 @@ impl ObjectServer {
     /// ```
     pub fn with_mut<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
     where
-        F: Fn(&mut I, &SignalContext<'_>) -> Result<()>,
+        F: Fn(InterfaceDerefMut<'_, I>, &SignalContext<'_>) -> Result<()>,
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
@@ -740,7 +740,8 @@ mod tests {
     use zvariant::derive::Type;
 
     use crate::{
-        dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, SignalContext,
+        dbus_interface, dbus_proxy, Connection, InterfaceDeref, MessageHeader, MessageType,
+        SignalContext,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -1015,9 +1016,10 @@ mod tests {
             server.at("/org/freedesktop/MyService", iface).unwrap();
 
             server
-                .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, ctxt| {
-                    iface.count_changed(ctxt)
-                })
+                .with(
+                    "/org/freedesktop/MyService",
+                    |iface: InterfaceDeref<'_, MyIfaceImpl>, ctxt| iface.count_changed(ctxt),
+                )
                 .unwrap();
         }
 
@@ -1025,7 +1027,9 @@ mod tests {
             conn.object_server_mut()
                 .with(
                     "/org/freedesktop/MyService",
-                    |_iface: &MyIfaceImpl, ctxt| MyIfaceImpl::alert_count(ctxt, 51),
+                    |_iface: InterfaceDeref<'_, MyIfaceImpl>, ctxt| {
+                        MyIfaceImpl::alert_count(ctxt, 51)
+                    },
                 )
                 .unwrap();
 
