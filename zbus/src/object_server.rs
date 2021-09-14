@@ -190,9 +190,9 @@ impl Node {
         true
     }
 
-    fn with_iface_func<F, I>(&self, func: F, signal_ctxt: &SignalContext<'_>) -> Result<()>
+    fn with_iface_func<F, I>(&self, func: F, signal_ctxt: SignalContext<'_>) -> Result<()>
     where
-        F: Fn(InterfaceDeref<'_, I>, &SignalContext<'_>) -> Result<()>,
+        F: Fn(InterfaceDeref<'_, I>, SignalContext<'_>) -> Result<()>,
         I: Interface,
     {
         let iface = self.get_interface::<I>()?;
@@ -200,9 +200,9 @@ impl Node {
         func(iface, signal_ctxt)
     }
 
-    fn with_iface_func_mut<F, I>(&self, func: F, signal_ctxt: &SignalContext<'_>) -> Result<()>
+    fn with_iface_func_mut<F, I>(&self, func: F, signal_ctxt: SignalContext<'_>) -> Result<()>
     where
-        F: Fn(InterfaceDerefMut<'_, I>, &SignalContext<'_>) -> Result<()>,
+        F: Fn(InterfaceDerefMut<'_, I>, SignalContext<'_>) -> Result<()>,
         I: Interface,
     {
         let iface = self.get_interface_mut::<I>()?;
@@ -486,7 +486,7 @@ impl ObjectServer {
     /// connection
     ///     .object_server()
     ///     .with(path, |_iface: InterfaceDeref<'_, MyIface>, signal_ctxt| {
-    ///         MyIface::emit_signal(signal_ctxt)
+    ///         MyIface::emit_signal(&signal_ctxt)
     ///     })?;
     ///#
     ///#
@@ -494,7 +494,7 @@ impl ObjectServer {
     /// ```
     pub fn with<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
     where
-        F: Fn(InterfaceDeref<'_, I>, &SignalContext<'_>) -> Result<()>,
+        F: Fn(InterfaceDeref<'_, I>, SignalContext<'_>) -> Result<()>,
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
@@ -505,7 +505,7 @@ impl ObjectServer {
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
         let ctxt = SignalContext::new(&conn, path).unwrap();
 
-        node.with_iface_func(func, &ctxt)
+        node.with_iface_func(func, ctxt)
     }
 
     /// Run `func` with the given path & interface.
@@ -538,7 +538,7 @@ impl ObjectServer {
     ///     .object_server()
     ///     .with_mut(path, |mut iface: InterfaceDerefMut<'_, MyIface>, signal_ctxt| {
     ///         iface.0 = 42;
-    ///         iface.count_changed(signal_ctxt)
+    ///         iface.count_changed(&signal_ctxt)
     ///     })?;
     ///#
     ///#
@@ -546,7 +546,7 @@ impl ObjectServer {
     /// ```
     pub fn with_mut<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
     where
-        F: Fn(InterfaceDerefMut<'_, I>, &SignalContext<'_>) -> Result<()>,
+        F: Fn(InterfaceDerefMut<'_, I>, SignalContext<'_>) -> Result<()>,
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
@@ -557,7 +557,7 @@ impl ObjectServer {
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
         let ctxt = SignalContext::new(&conn, path).unwrap();
 
-        node.with_iface_func_mut(func, &ctxt)
+        node.with_iface_func_mut(func, ctxt)
     }
 
     /// Get a reference to the interface at the given path.
@@ -1018,7 +1018,7 @@ mod tests {
             server
                 .with(
                     "/org/freedesktop/MyService",
-                    |iface: InterfaceDeref<'_, MyIfaceImpl>, ctxt| iface.count_changed(ctxt),
+                    |iface: InterfaceDeref<'_, MyIfaceImpl>, ctxt| iface.count_changed(&ctxt),
                 )
                 .unwrap();
         }
@@ -1028,7 +1028,7 @@ mod tests {
                 .with(
                     "/org/freedesktop/MyService",
                     |_iface: InterfaceDeref<'_, MyIfaceImpl>, ctxt| {
-                        MyIfaceImpl::alert_count(ctxt, 51)
+                        MyIfaceImpl::alert_count(&ctxt, 51)
                     },
                 )
                 .unwrap();

@@ -250,7 +250,7 @@ object_server.with_mut(
     "/org/zbus/MyGreeter",
     |mut iface: InterfaceDerefMut<Greeter>, signal_ctxt| {
         iface.name = String::from("👋");
-        iface.greeter_name_changed(signal_ctxt)
+        iface.greeter_name_changed(&signal_ctxt)
     },
 )?;
 # Ok(())

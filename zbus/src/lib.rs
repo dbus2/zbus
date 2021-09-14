@@ -813,7 +813,7 @@ mod tests {
             conn.object_server_mut()
                 .with(
                     "/org/freedesktop/zbus/ComeAndGo",
-                    |_: InterfaceDeref<'_, ComeAndGo>, ctxt| ComeAndGo::the_signal(ctxt),
+                    |_: InterfaceDeref<'_, ComeAndGo>, ctxt| ComeAndGo::the_signal(&ctxt),
                 )
                 .unwrap();
             rx.recv().unwrap();
