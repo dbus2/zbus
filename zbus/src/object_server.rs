@@ -5,7 +5,7 @@ use std::{
     fmt::Write,
     marker::PhantomData,
     ops::{Deref, DerefMut},
-    sync::{Arc, RwLock, RwLockWriteGuard},
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use static_assertions::assert_impl_all;
@@ -88,6 +88,23 @@ impl dyn Interface {
         } else {
             None
         }
+    }
+}
+
+/// Opaque structure that derefs to an `Interface` type.
+pub struct InterfaceDeref<'d, I> {
+    iface: RwLockReadGuard<'d, dyn Interface>,
+    phantom: PhantomData<I>,
+}
+
+impl<I> Deref for InterfaceDeref<'_, I>
+where
+    I: Interface,
+{
+    type Target = I;
+
+    fn deref(&self) -> &I {
+        self.iface.downcast_ref::<I>().unwrap()
     }
 }
 
@@ -178,14 +195,9 @@ impl Node {
         F: Fn(&I, &SignalContext<'_>) -> Result<()>,
         I: Interface,
     {
-        let iface = self
-            .interfaces
-            .get(&I::name())
-            .ok_or(Error::InterfaceNotFound)?
-            .read()
-            .expect("lock poisoned");
-        let iface = iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
-        func(iface, signal_ctxt)
+        let iface = self.get_interface::<I>()?;
+
+        func(&*iface, signal_ctxt)
     }
 
     fn with_iface_func_mut<F, I>(&self, func: F, signal_ctxt: &SignalContext<'_>) -> Result<()>
@@ -196,6 +208,25 @@ impl Node {
         let mut iface = self.get_interface_mut::<I>()?;
 
         func(&mut *iface, signal_ctxt)
+    }
+
+    fn get_interface<I>(&self) -> Result<InterfaceDeref<'_, I>>
+    where
+        I: Interface,
+    {
+        let iface = self
+            .interfaces
+            .get(&I::name())
+            .ok_or(Error::InterfaceNotFound)?
+            .read()
+            .expect("lock poisoned");
+        // Ensure what we return can later be dowcasted safely.
+        iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
+
+        Ok(InterfaceDeref {
+            iface,
+            phantom: PhantomData,
+        })
     }
 
     fn get_interface_mut<I>(&self) -> Result<InterfaceDerefMut<'_, I>>
@@ -530,6 +561,19 @@ impl ObjectServer {
     }
 
     /// Get a reference to the interface at the given path.
+    pub fn get_interface<'p, P, I>(&self, path: P) -> Result<InterfaceDeref<'_, I>>
+    where
+        I: Interface,
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
+    {
+        let path = path.try_into().map_err(Into::into)?;
+        let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+
+        node.get_interface()
+    }
+
+    /// Get a reference to the interface at the given path.
     ///
     /// **WARNINGS:** Since `self` will not be able to access the interface in question until the
     /// return value of this method is dropped, it is highly recommended to prefer
@@ -563,7 +607,7 @@ impl ObjectServer {
     ///# let path = "/org/zbus/path";
     ///# connection.object_server_mut().at(path, MyIface(22))?;
     /// let mut object_server = connection.object_server();
-    /// let mut iface = object_server.get_interface::<_, MyIface>(path)?;
+    /// let mut iface = object_server.get_interface_mut::<_, MyIface>(path)?;
     /// // Note: This will not be needed when using `ObjectServer::with_mut`
     /// let ctxt = SignalContext::new(&connection, path)?;
     /// iface.0 = 42;
@@ -571,7 +615,7 @@ impl ObjectServer {
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn get_interface<'p, P, I>(&self, path: P) -> Result<InterfaceDerefMut<'_, I>>
+    pub fn get_interface_mut<'p, P, I>(&self, path: P) -> Result<InterfaceDerefMut<'_, I>>
     where
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
