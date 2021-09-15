@@ -189,9 +189,6 @@ pub use proxy::*;
 mod proxy_builder;
 pub use proxy_builder::*;
 
-mod signal_context;
-pub use signal_context::*;
-
 mod utils;
 pub use utils::*;
 
