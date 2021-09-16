@@ -1,4 +1,7 @@
-use std::convert::TryInto;
+use std::{
+    convert::TryInto,
+    ops::{Deref, DerefMut},
+};
 
 use async_io::block_on;
 use static_assertions::assert_impl_all;
@@ -284,6 +287,20 @@ impl ObjectServer {
     /// Get the underlying async ObjectServer, consuming `self`.
     pub fn into_inner(self) -> azync::ObjectServer {
         self.azync
+    }
+}
+
+impl Deref for ObjectServer {
+    type Target = azync::ObjectServer;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner()
+    }
+}
+
+impl DerefMut for ObjectServer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner_mut()
     }
 }
 
