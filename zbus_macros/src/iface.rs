@@ -168,7 +168,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             quote!(match reply {
                 ::std::result::Result::Ok(r) => c.reply(m, &#ret).await,
-                ::std::result::Result::Err(e) => e.reply_async(c, m).await,
+                ::std::result::Result::Err(e) => e.reply(c, m).await,
             })
         } else {
             quote!(c.reply(m, &reply).await)
@@ -527,7 +527,7 @@ fn get_args_from_inputs(
                         ::std::result::Result::Ok(r) => r,
                         ::std::result::Result::Err(e) => {
                             return ::std::option::Option::Some(
-                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply_async(c, m).await,
+                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await,
                             );
                         }
                     };
@@ -549,7 +549,7 @@ fn get_args_from_inputs(
                         ::std::result::Result::Ok(e) => e,
                         ::std::result::Result::Err(e) => {
                             return ::std::option::Option::Some(
-                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply_async(c, m).await,
+                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await,
                             );
                         }
                     };
@@ -574,7 +574,7 @@ fn get_args_from_inputs(
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
                         return ::std::option::Option::Some(
-                            <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply_async(c, m).await,
+                            <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await,
                         );
                     }
                 };

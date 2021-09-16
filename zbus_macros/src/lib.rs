@@ -263,7 +263,8 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * `description(&self)` - get the associated error description (the first argument of an error
 ///   message)
 ///
-/// * `reply(&self, &zbus::Connection, &zbus::Message)` - send this error as reply to the message.
+/// * `reply(&self, &zbus::azync::Connection, &zbus::Message)` - send this error as reply to the
+///   message.
 ///
 /// Note: it is recommended that errors take a single argument `String` which describes it in
 /// a human-friendly fashion (support for other arguments is limited or TODO currently).

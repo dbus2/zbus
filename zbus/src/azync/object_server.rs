@@ -640,7 +640,7 @@ impl ObjectServer {
             .dispatch_method_call_try(connection, msg_header, msg)
             .await
         {
-            Err(e) => e.reply_async(connection, msg).await,
+            Err(e) => e.reply(connection, msg).await,
             Ok(r) => r,
         }
     }
