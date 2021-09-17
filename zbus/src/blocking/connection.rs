@@ -11,39 +11,12 @@ use async_io::block_on;
 
 use crate::{blocking::ObjectServer, Error, Message, Result};
 
-/// A D-Bus connection.
+/// A blocking wrapper of [`zbus::blocking::Connection`].
 ///
-/// A connection to a D-Bus bus, or a direct peer.
+/// Most of the API is very similar to [`zbus::blocking::Connection`], except it's blocking. One
+/// notable difference is that there is no equivalent of [`Sink`] implementation provided.
 ///
-/// Once created, the connection is authenticated and negotiated and messages can be sent or
-/// received, such as [method calls] or [signals].
-///
-/// For higher-level message handling (typed functions, introspection, documentation reasons etc),
-/// it is recommended to wrap the low-level D-Bus messages into Rust functions with the
-/// [`dbus_proxy`] and [`dbus_interface`] macros instead of doing it directly on a `Connection`.
-///
-/// Typically, a connection is made to the session bus with [`Connection::session`], or to the
-/// system bus with [`Connection::system`]. Then the connection is shared with the
-/// [`crate::blocking::Proxy`] and [`ObjectServer`] instances.
-///
-/// `Connection` implements [`Clone`] and cloning it is a very cheap operation, as the underlying
-/// data is not cloned. This makes it very convenient to share the connection between different
-/// parts of your code. `Connection` also implements [`std::marker::Sync`] and[`std::marker::Send`]
-/// so you can send and share a connection instance across threads as well.
-///
-/// `Connection` keeps an internal queue of incoming message. The maximum capacity of this queue
-/// is configurable through the [`set_max_queued`] method. The default size is 64. When the queue is
-/// full, no more messages can be received until there is room is created for more. This is why it's
-/// important to ensure that all [`crate::blocking::MessageStream`] and
-/// [`crate::MessageStream`] instances are continuously iterated on and polled, respectively.
-///
-/// [method calls]: blocking/struct.Connection.html#method.call_method
-/// [signals]: blocking/struct.Connection.html#method.emit_signal
-/// [`dbus_proxy`]: attr.dbus_proxy.html
-/// [`dbus_interface`]: attr.dbus_interface.html
-/// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
-/// [file an issue]: https://gitlab.freedesktop.org/dbus/zbus/-/issues/new
-/// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
+/// [`Sink`]: https://docs.rs/futures/0.3.17/futures/sink/trait.Sink.html
 #[derive(derivative::Derivative, Clone)]
 #[derivative(Debug)]
 pub struct Connection {

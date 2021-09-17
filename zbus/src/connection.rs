@@ -197,12 +197,32 @@ impl MessageReceiverTask<Box<dyn Socket>> {
     }
 }
 
-/// The asynchronous sibling of [`zbus::Connection`].
+/// A D-Bus connection.
 ///
-/// Most of the API is very similar to [`zbus::Connection`], except it's asynchronous. However,
-/// there is one notable difference:
+/// A connection to a D-Bus bus, or a direct peer.
 ///
-/// ### Sending Messages
+/// Once created, the connection is authenticated and negotiated and messages can be sent or
+/// received, such as [method calls] or [signals].
+///
+/// For higher-level message handling (typed functions, introspection, documentation reasons etc),
+/// it is recommended to wrap the low-level D-Bus messages into Rust functions with the
+/// [`dbus_proxy`] and [`dbus_interface`] macros instead of doing it directly on a `Connection`.
+///
+/// Typically, a connection is made to the session bus with [`Connection::session`], or to the
+/// system bus with [`Connection::system`]. Then the connection is used with [`crate::Proxy`]
+/// instances or the on-demand [`ObjectServer`] instance that can be accessed through
+/// [`Connection::object_server`] or [`Connection::object_server_mut`].
+///
+/// `Connection` implements [`Clone`] and cloning it is a very cheap operation, as the underlying
+/// data is not cloned. This makes it very convenient to share the connection between different
+/// parts of your code. `Connection` also implements [`std::marker::Sync`] and[`std::marker::Send`]
+/// so you can send and share a connection instance across threads as well.
+///
+/// `Connection` keeps an internal queue of incoming message. The maximum capacity of this queue
+/// is configurable through the [`set_max_queued`] method. The default size is 64. When the queue is
+/// full, no more messages can be received until room is created for more. This is why it's
+/// important to ensure that all [`crate::MessageStream`] and [`crate::blocking::MessageStream`]
+/// instances are continuously polled and iterated on, respectively.
 ///
 /// For sending messages you can either use [`Connection::send_message`] method or make use of the
 /// [`Sink`] implementation. For latter, you might find [`SinkExt`] API very useful. Keep in mind
@@ -222,6 +242,13 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// future.
 ///
 /// [flush request]: https://docs.rs/futures/0.3.15/futures/sink/trait.SinkExt.html#method.flush
+///
+/// [method calls]: struct.Connection.html#method.call_method
+/// [signals]: struct.Connection.html#method.emit_signal
+/// [`dbus_proxy`]: attr.dbus_proxy.html
+/// [`dbus_interface`]: attr.dbus_interface.html
+/// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
+/// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
 ///
 /// ### Examples
 ///
