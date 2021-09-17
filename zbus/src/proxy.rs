@@ -77,12 +77,9 @@ impl<'a> std::fmt::Debug for ProxyProperties<'a> {
     }
 }
 
-/// The asynchronous sibling of [`crate::Proxy`].
+/// A client-side interface proxy.
 ///
-/// This API is mostly the same as [`crate::Proxy`], except it is asynchronous. One of the
-/// implications of asynchronous API is that apart from the signal handling through connecting and
-/// disconnecting handlers (using [`Proxy::connect_signal`] and [`Proxy::disconnect_signal`] methods),
-/// you can also receive signals through a stream using [`Proxy::receive_signal`] method.
+/// A `Proxy` is a helper to interact with an interface on a remote object.
 ///
 /// # Example
 ///

@@ -14,9 +14,11 @@ use crate::{
 
 use crate::fdo;
 
-/// A client-side interface proxy.
+/// A blocking wrapper of [`crate::Proxy`].
 ///
-/// A `Proxy` is a helper to interact with an interface on a remote object.
+/// This API is mostly the same as [`crate::Proxy`], except that all its methods block to
+/// completion. One notable difference is that there is **currently** no blocking equivalent of
+/// [`crate::SignalStream`] API.
 ///
 /// # Example
 ///
