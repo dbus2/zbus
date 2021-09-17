@@ -9,12 +9,7 @@ use zvariant::ObjectPath;
 
 use crate::{Error, Interface, InterfaceDeref, InterfaceDerefMut, Result, SignalContext};
 
-/// An object server, holding server-side D-Bus objects & interfaces.
-///
-/// Object servers hold interfaces on various object paths, and expose them over D-Bus.
-///
-/// All object paths will have the standard interfaces implemented on your behalf, such as
-/// `org.freedesktop.DBus.Introspectable` or `org.freedesktop.DBus.Properties`.
+/// A blocking wrapper of [`crate::ObjectServer`].
 ///
 /// # Example
 ///
