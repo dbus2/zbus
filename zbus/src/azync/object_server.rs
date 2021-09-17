@@ -677,8 +677,8 @@ impl ObjectServer {
     }
 }
 
-impl From<crate::ObjectServer> for ObjectServer {
-    fn from(server: crate::ObjectServer) -> Self {
+impl From<crate::blocking::ObjectServer> for ObjectServer {
+    fn from(server: crate::blocking::ObjectServer) -> Self {
         server.into_inner()
     }
 }
@@ -707,7 +707,8 @@ mod tests {
 
     use crate::{
         azync::{self, InterfaceDeref, SignalContext},
-        dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType,
+        blocking::Connection,
+        dbus_interface, dbus_proxy, MessageHeader, MessageType,
     };
 
     #[derive(Deserialize, Serialize, Type)]

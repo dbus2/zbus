@@ -36,7 +36,7 @@ This code display a notification on your Freedesktop.org-compatible OS:
 use std::collections::HashMap;
 use std::error::Error;
 
-use zbus::dbus_proxy;
+use zbus::{blocking::Connection, dbus_proxy};
 use zvariant::Value;
 
 #[dbus_proxy(
@@ -59,7 +59,7 @@ trait Notifications {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::session()?;
+    let connection = Connection::session()?;
 
     // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
     let proxy = NotificationsProxy::new(&connection)?;
@@ -89,7 +89,7 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use zbus::{dbus_interface, fdo, ObjectServer, Connection};
+use zbus::{blocking::{ObjectServer, Connection}, dbus_interface, fdo};
 
 struct Greeter {
     count: u64
@@ -259,7 +259,7 @@ for allowing unprivileged processes to speak to privileged processes.
 #### Example code
 
 ```rust,no_run
-use zbus::Connection;
+use zbus::blocking::Connection;
 use zbus_polkit::policykit1::*;
 
 let connection = Connection::system().unwrap();

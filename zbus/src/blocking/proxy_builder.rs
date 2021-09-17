@@ -5,7 +5,7 @@ use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::ObjectPath;
 
-use crate::{azync, Connection, Error, Result};
+use crate::{azync, blocking::Connection, Error, Result};
 
 pub use crate::azync::ProxyDefault;
 

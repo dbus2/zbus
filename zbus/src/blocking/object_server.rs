@@ -26,7 +26,7 @@ use crate::{
 ///
 /// ```no_run
 ///# use std::error::Error;
-/// use zbus::{Connection, ObjectServer, dbus_interface};
+/// use zbus::{blocking::{Connection, ObjectServer}, dbus_interface};
 /// use std::sync::{Arc, Mutex};
 /// use event_listener::Event;
 ///
@@ -123,7 +123,11 @@ impl ObjectServer {
     /// ```no_run
     ///# use std::error::Error;
     ///# use async_io::block_on;
-    ///# use zbus::{azync::{InterfaceDeref, SignalContext}, Connection, ObjectServer, dbus_interface};
+    ///# use zbus::{
+    ///#    azync::{InterfaceDeref, SignalContext},
+    ///#    blocking::{Connection, ObjectServer},
+    ///#    dbus_interface,
+    ///# };
     ///#
     /// struct MyIface;
     /// #[dbus_interface(name = "org.myiface.MyIface")]
@@ -171,7 +175,11 @@ impl ObjectServer {
     /// ```no_run
     ///# use std::error::Error;
     ///# use async_io::block_on;
-    ///# use zbus::{azync::{InterfaceDerefMut, SignalContext}, Connection, ObjectServer, dbus_interface};
+    ///# use zbus::{
+    ///#    azync::{InterfaceDerefMut, SignalContext},
+    ///#    blocking::{Connection, ObjectServer},
+    ///#    dbus_interface,
+    ///# };
     ///#
     /// struct MyIface(u32);
     ///
@@ -239,7 +247,7 @@ impl ObjectServer {
     /// ```no_run
     ///# use std::error::Error;
     ///# use async_io::block_on;
-    ///# use zbus::{azync::SignalContext, Connection, ObjectServer, dbus_interface};
+    ///# use zbus::{azync::SignalContext, blocking::{Connection, ObjectServer}, dbus_interface};
     ///
     /// struct MyIface(u32);
     ///

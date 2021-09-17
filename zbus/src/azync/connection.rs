@@ -34,9 +34,10 @@ use futures_util::{
 
 use crate::{
     azync::{self, Authenticated, ConnectionBuilder, MessageStream},
+    blocking::ObjectServer,
     fdo,
     raw::{Connection as RawConnection, Socket},
-    Error, Guid, Message, MessageType, ObjectServer, Result,
+    Error, Guid, Message, MessageType, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -991,8 +992,8 @@ impl<'r> Future for ReceiveMessage<'r> {
     }
 }
 
-impl From<crate::Connection> for Connection {
-    fn from(conn: crate::Connection) -> Self {
+impl From<crate::blocking::Connection> for Connection {
+    fn from(conn: crate::blocking::Connection) -> Self {
         conn.into_inner()
     }
 }

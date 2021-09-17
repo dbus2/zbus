@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_io::block_on;
 
-use crate::{azync, Connection, Message, Result};
+use crate::{azync, blocking::Connection, Message, Result};
 
 /// Synchronous sibling of [`azync::MessageStream`].
 ///

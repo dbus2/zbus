@@ -1012,8 +1012,8 @@ impl std::ops::Drop for SignalStream<'_> {
     }
 }
 
-impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
-    fn from(proxy: crate::Proxy<'a>) -> Self {
+impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
+    fn from(proxy: crate::blocking::Proxy<'a>) -> Self {
         proxy.into_inner()
     }
 }
@@ -1185,7 +1185,7 @@ mod tests {
             })
             .await?;
 
-        fdo::DBusProxy::new(&crate::Connection::from(conn))?
+        fdo::DBusProxy::new(&crate::blocking::Connection::from(conn))?
             .request_name(
                 well_known.try_into()?,
                 fdo::RequestNameFlags::ReplaceExisting.into(),

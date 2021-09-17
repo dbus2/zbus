@@ -23,7 +23,7 @@ our choice:
 ```rust,no_run
 use std::{convert::TryInto, error::Error};
 
-use zbus::Connection;
+use zbus::blocking::Connection;
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     let connection = Connection::session()?
@@ -55,10 +55,10 @@ by replacing the loop above with this code:
 ```rust,no_run
 # use std::convert::TryInto;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-#    let connection = zbus::Connection::session()?
+#    let connection = zbus::blocking::Connection::session()?
 #        .request_name("org.zbus.MyGreeter")?;
 #
-let mut stream = zbus::MessageStream::from(&connection);
+let mut stream = zbus::blocking::MessageStream::from(&connection);
 for msg in stream {
     let msg = msg?;
     let msg_header = msg.header()?;
@@ -102,7 +102,7 @@ Let see how to use it:
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{azync::SignalContext, dbus_interface, fdo, ObjectServer, Connection};
+# use zbus::{azync::SignalContext, blocking::{ObjectServer, Connection}, dbus_interface, fdo};
 #
 use event_listener::Event;
 
@@ -194,8 +194,8 @@ method calls, where the return type is a directly serializable value, like the `
 `say_hello()` above.
 
 The second is a result return value, where the `Ok` variant is the serializable value, and the
-error is any error type that has a `reply(&self, &zbus::Connection, &zbus::Message)` method.
-The `zbus::fdo::Error` type implements this method, and should cover most common use cases.
+error is any error type that has an async `reply(&self, &zbus::azync::Connection, &zbus::Message)`
+method. The `zbus::fdo::Error` type implements this method, and should cover most common use cases.
 However, when a custom error type needs to be emitted from the method as an error reply, it
 can be created with `derive(zbus::DBusError)`, and used in the returned `Result<T, E>`.
 
@@ -243,7 +243,7 @@ it with the previous example code:
 # }
 #
 # fn main() -> Result<(), Box<dyn Error>> {
-# let connection = zbus::Connection::session()?;
+# let connection = zbus::blocking::Connection::session()?;
 # let mut object_server = connection.object_server_mut();
 use zbus::azync::InterfaceDerefMut;
 

@@ -47,7 +47,7 @@ fn test_proxy() {
             T: AsRef<str>;
     }
 
-    let connection = zbus::Connection::session().unwrap();
+    let connection = zbus::blocking::Connection::session().unwrap();
     let proxy = TestProxy::builder(&connection)
         .cache_properties(false)
         .build()

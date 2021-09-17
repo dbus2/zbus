@@ -701,7 +701,7 @@ mod tests {
     fn signal_connect() {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
-        let conn = crate::Connection::session().unwrap();
+        let conn = crate::blocking::Connection::session().unwrap();
 
         let owner_change_signaled = Arc::new(Event::new());
         let owner_change_listener = owner_change_signaled.listen();

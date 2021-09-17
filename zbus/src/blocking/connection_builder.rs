@@ -2,9 +2,9 @@ use async_io::block_on;
 use static_assertions::assert_impl_all;
 use std::{convert::TryInto, os::unix::net::UnixStream};
 
-use crate::{address::Address, azync, Connection, Error, Guid, Result};
+use crate::{address::Address, azync, blocking::Connection, Error, Guid, Result};
 
-/// A builder for [`zbus::Connection`].
+/// A builder for [`zbus::blocking::Connection`].
 #[derive(Debug)]
 pub struct ConnectionBuilder<'a>(azync::ConnectionBuilder<'a>);
 
@@ -58,7 +58,7 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// ```
     ///# use std::error::Error;
-    ///# use zbus::ConnectionBuilder;
+    ///# use zbus::blocking::ConnectionBuilder;
     ///#
     /// let conn = ConnectionBuilder::session()?
     ///     .max_queued(30)

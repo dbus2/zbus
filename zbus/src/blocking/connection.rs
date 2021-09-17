@@ -9,7 +9,7 @@ use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, Error, Message, ObjectServer, Result};
+use crate::{azync, blocking::ObjectServer, Error, Message, Result};
 
 /// A D-Bus connection.
 ///
@@ -22,9 +22,9 @@ use crate::{azync, Error, Message, ObjectServer, Result};
 /// it is recommended to wrap the low-level D-Bus messages into Rust functions with the
 /// [`dbus_proxy`] and [`dbus_interface`] macros instead of doing it directly on a `Connection`.
 ///
-/// Typically, a connection is made to the session bus with [`session`], or to the system bus
-/// with [`system`]. Then the connection is shared with the [`Proxy`] and [`ObjectServer`]
-/// instances.
+/// Typically, a connection is made to the session bus with [`Connection::session`], or to the
+/// system bus with [`Connection::system`]. Then the connection is shared with the
+/// [`crate::blocking::Proxy`] and [`ObjectServer`] instances.
 ///
 /// `Connection` implements [`Clone`] and cloning it is a very cheap operation, as the underlying
 /// data is not cloned. This makes it very convenient to share the connection between different
@@ -34,15 +34,11 @@ use crate::{azync, Error, Message, ObjectServer, Result};
 /// `Connection` keeps an internal queue of incoming message. The maximum capacity of this queue
 /// is configurable through the [`set_max_queued`] method. The default size is 64. When the queue is
 /// full, no more messages can be received until there is room is created for more. This is why it's
-/// important to ensure that all [`crate::MessageStream`] and [`crate::azync::MessageStream`]
-/// instances are continuously iterated on and polled, respectively.
+/// important to ensure that all [`crate::blocking::MessageStream`] and
+/// [`crate::azync::MessageStream`] instances are continuously iterated on and polled, respectively.
 ///
-/// [method calls]: struct.Connection.html#method.call_method
-/// [signals]: struct.Connection.html#method.emit_signal
-/// [`system`]: struct.Connection.html#method.new_system
-/// [`session`]: struct.Connection.html#method.new_session
-/// [`Proxy`]: struct.Proxy.html
-/// [`ObjectServer`]: struct.ObjectServer.html
+/// [method calls]: blocking/struct.Connection.html#method.call_method
+/// [signals]: blocking/struct.Connection.html#method.emit_signal
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 /// [`dbus_interface`]: attr.dbus_interface.html
 /// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
@@ -272,7 +268,10 @@ mod tests {
     use std::{os::unix::net::UnixStream, thread};
     use test_env_log::test;
 
-    use crate::{ConnectionBuilder, Guid, MessageStream};
+    use crate::{
+        blocking::{ConnectionBuilder, MessageStream},
+        Guid,
+    };
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {

@@ -10,7 +10,7 @@
 //! based on [zbus].
 //!
 //! ```no_run
-//! use zbus::Connection;
+//! use zbus::blocking::Connection;
 //! use zbus_polkit::policykit1::*;
 //!
 //! let c = Connection::system().unwrap();

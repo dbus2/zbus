@@ -58,7 +58,7 @@ This command shows us several aspects of the D-Bus communication:
 
 See [`busctl`] man page for more details.
 
-## Low-level call from a `zbus::Connection`
+## Low-level call from a `zbus::blocking::Connection`
 
 zbus `Connection` has a `call_method()` method, which you can use directly:
 
@@ -66,7 +66,7 @@ zbus `Connection` has a `call_method()` method, which you can use directly:
 use std::collections::HashMap;
 use std::error::Error;
 
-use zbus::Connection;
+use zbus::blocking::Connection;
 use zvariant::Value;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -103,7 +103,7 @@ D-Bus calls:
 use std::collections::HashMap;
 use std::error::Error;
 
-use zbus::dbus_proxy;
+use zbus::{blocking::Connection, dbus_proxy};
 use zvariant::Value;
 
 #[dbus_proxy]
@@ -121,7 +121,7 @@ trait Notifications {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::session()?;
+    let connection = Connection::session()?;
 
     let proxy = NotificationsProxy::new(&connection)?;
     let reply = proxy.notify("my-app", 0, "dialog-information", "A summary", "Some body",
@@ -164,7 +164,7 @@ For a more real world example, let's try and read two properties from systemd's 
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::dbus_proxy;
+# use zbus::{blocking::Connection, dbus_proxy};
 #
 #[dbus_proxy(
     interface = "org.freedesktop.systemd1.Manager",
@@ -179,7 +179,7 @@ trait SystemdManager {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::session()?;
+    let connection = Connection::session()?;
 
     let proxy = SystemdManagerProxy::new(&connection)?;
     println!("Host architecture: {}", proxy.architecture()?);
@@ -220,7 +220,7 @@ The methods are named after the properties names `connect_<prop_name>_changed`, 
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::dbus_proxy;
+# use zbus::{blocking::Connection, dbus_proxy};
 #
 #[dbus_proxy(
     interface = "org.freedesktop.systemd1.Manager",
@@ -233,7 +233,7 @@ trait SystemdManager {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::session()?;
+    let connection = Connection::session()?;
 
     let proxy = SystemdManagerProxy::new(&connection)?;
     proxy.connect_log_level_changed(|v| {
@@ -256,7 +256,7 @@ Let's look at this API in action, with an example where we get our location from
 [Geoclue](https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md):
 
 ```rust,no_run
-use zbus::{Connection, dbus_proxy, Result};
+use zbus::{blocking::Connection, dbus_proxy, Result};
 use zvariant::{ObjectPath, OwnedObjectPath};
 
 #[dbus_proxy(

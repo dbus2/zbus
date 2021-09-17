@@ -136,15 +136,15 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
         (doc, proxy, connection, builder)
     } else {
         let doc = String::from("");
-        let connection = quote! { #zbus::Connection };
-        let proxy = quote! { #zbus::Proxy };
-        let builder = quote! { #zbus::ProxyBuilder };
+        let connection = quote! { #zbus::blocking::Connection };
+        let proxy = quote! { #zbus::blocking::Proxy };
+        let builder = quote! { #zbus::blocking::ProxyBuilder };
 
         (doc, proxy, connection, builder)
     };
 
     quote! {
-        impl<'a> #zbus::ProxyDefault for #proxy_name<'a> {
+        impl<'a> #zbus::azync::ProxyDefault for #proxy_name<'a> {
             const INTERFACE: &'static str = #name;
             const DESTINATION: &'static str = #default_service;
             const PATH: &'static str = #default_path;

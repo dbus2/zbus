@@ -6,7 +6,7 @@
 // the brightness by 5%. Pass '-' for decreasing it by 5%.
 
 fn main() {
-    let connection = zbus::Connection::session().unwrap();
+    let connection = zbus::blocking::Connection::session().unwrap();
 
     let method = match std::env::args().nth(1) {
         Some(s) => {

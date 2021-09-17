@@ -10,7 +10,8 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
     azync::{self, PropertyChangedHandlerId, SignalHandlerId},
-    Connection, Error, Message, Result,
+    blocking::Connection,
+    Error, Message, Result,
 };
 
 use crate::fdo;
@@ -24,7 +25,7 @@ use crate::fdo;
 /// ```
 /// use std::result::Result;
 /// use std::error::Error;
-/// use zbus::{Connection, Proxy};
+/// use zbus::blocking::{Connection, Proxy};
 ///
 /// fn main() -> Result<(), Box<dyn Error>> {
 ///     let connection = Connection::session()?;

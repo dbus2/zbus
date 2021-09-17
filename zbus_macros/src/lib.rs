@@ -43,7 +43,7 @@ mod utils;
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_proxy;
-/// use zbus::{Connection, Result, fdo, zvariant::Value};
+/// use zbus::{blocking::Connection, Result, fdo, zvariant::Value};
 /// use futures_util::future::FutureExt;
 /// use async_io::block_on;
 ///

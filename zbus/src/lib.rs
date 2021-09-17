@@ -24,7 +24,7 @@
 //! use std::collections::HashMap;
 //! use std::error::Error;
 //!
-//! use zbus::dbus_proxy;
+//! use zbus::{blocking::Connection, dbus_proxy};
 //! use zvariant::Value;
 //!
 //! #[dbus_proxy(
@@ -47,7 +47,7 @@
 //! }
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
-//!     let connection = zbus::Connection::session()?;
+//!     let connection = Connection::session()?;
 //!
 //!     // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
 //!     let proxy = NotificationsProxy::new(&connection)?;
@@ -77,7 +77,7 @@
 //!     thread::sleep,
 //!     time::Duration,
 //! };
-//! use zbus::{dbus_interface, fdo, ObjectServer, Connection};
+//! use zbus::{blocking::{ObjectServer, Connection}, dbus_interface, fdo};
 //!
 //! struct Greeter {
 //!     count: u64
@@ -174,32 +174,15 @@ pub use message_field::*;
 mod message_fields;
 pub use message_fields::*;
 
-mod connection;
-pub use connection::*;
-
-mod connection_builder;
-pub use connection_builder::*;
-
-mod message_stream;
-pub use message_stream::*;
-
-mod proxy;
-pub use proxy::*;
-
-mod proxy_builder;
-pub use proxy_builder::*;
-
 mod utils;
 pub use utils::*;
-
-mod object_server;
-pub use object_server::*;
 
 pub mod fdo;
 
 mod raw;
 
 pub mod azync;
+pub mod blocking;
 pub use azync::{PropertyChangedHandlerId, SignalHandlerId};
 mod handshake;
 
@@ -245,8 +228,9 @@ mod tests {
 
     use crate::{
         azync::{self, InterfaceDeref, SignalContext},
+        blocking::{self, MessageStream},
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, Message, MessageFlags, MessageStream, Result,
+        Message, MessageFlags, Result,
     };
 
     #[test]
@@ -275,7 +259,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn basic_connection() {
-        let connection = crate::Connection::session()
+        let connection = blocking::Connection::session()
             .map_err(|e| {
                 println!("error: {}", e);
 
@@ -327,7 +311,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn fdpass_systemd() {
-        let connection = crate::Connection::system().unwrap();
+        let connection = blocking::Connection::system().unwrap();
 
         let reply = connection
             .call_method(
@@ -354,7 +338,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn freedesktop_api() {
-        let connection = crate::Connection::session()
+        let connection = blocking::Connection::session()
             .map_err(|e| {
                 println!("error: {}", e);
 
@@ -564,11 +548,11 @@ mod tests {
         // While this is not an exact reproduction of the issue 68, the underlying problem it
         // produces is exactly the same: `Connection::call_method` dropping all incoming messages
         // while waiting for the reply to the method call.
-        let conn = Connection::session().unwrap();
+        let conn = blocking::Connection::session().unwrap();
         let stream = MessageStream::from(&conn);
 
         // Send a message as client before service starts to process messages
-        let client_conn = Connection::session().unwrap();
+        let client_conn = blocking::Connection::session().unwrap();
         let destination = conn.unique_name().map(UniqueName::<'_>::from);
         let msg = Message::method(
             None::<()>,
@@ -602,7 +586,7 @@ mod tests {
         // the return type and zbus only removing the outer `()` only and then it not matching the
         // signature we receive on the reply message.
         use zvariant::{ObjectPath, Value};
-        let conn = Connection::session().unwrap();
+        let conn = blocking::Connection::session().unwrap();
         let service_name = conn.unique_name().unwrap().clone();
 
         struct Secret;
@@ -628,7 +612,7 @@ mod tests {
             .unwrap();
 
         let child = std::thread::spawn(move || {
-            let conn = Connection::session().unwrap();
+            let conn = blocking::Connection::session().unwrap();
             #[super::dbus_proxy(interface = "org.freedesktop.Secret.Service")]
             trait Secret {
                 fn open_session(
@@ -678,7 +662,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn issue_122() {
-        let conn = Connection::session().unwrap();
+        let conn = blocking::Connection::session().unwrap();
         let stream = MessageStream::from(&conn);
 
         #[allow(clippy::mutex_atomic)]
@@ -761,7 +745,7 @@ mod tests {
         // (service restart) and failing to receive signals as a result.
         let (tx, rx) = channel();
         let child = std::thread::spawn(move || {
-            let conn = Connection::session().unwrap();
+            let conn = blocking::Connection::session().unwrap();
             #[super::dbus_proxy(
                 interface = "org.freedesktop.zbus.ComeAndGo",
                 default_service = "org.freedesktop.zbus.ComeAndGo",
@@ -799,7 +783,7 @@ mod tests {
 
         rx.recv().unwrap();
         for _ in 0..2 {
-            let conn = Connection::session()
+            let conn = blocking::Connection::session()
                 .unwrap()
                 .request_name("org.freedesktop.zbus.ComeAndGo")
                 .unwrap();
