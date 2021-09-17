@@ -4,26 +4,26 @@ use std::sync::Arc;
 
 use async_io::block_on;
 
-use crate::{azync, blocking::Connection, Message, Result};
+use crate::{blocking::Connection, Message, Result};
 
-/// Synchronous sibling of [`azync::MessageStream`].
+/// Synchronous sibling of [`crate::MessageStream`].
 ///
-/// Just like [`azync::MessageStream`] must be continuously polled, you must continuously iterate
+/// Just like [`crate::MessageStream`] must be continuously polled, you must continuously iterate
 /// over this type until it's consumed or dropped.
 #[derive(derivative::Derivative, Clone)]
 #[derivative(Debug)]
-pub struct MessageStream(pub(crate) azync::MessageStream);
+pub struct MessageStream(pub(crate) crate::MessageStream);
 
 assert_impl_all!(MessageStream: Send, Sync, Unpin);
 
 impl MessageStream {
     /// Get a reference to the underlying async message stream.
-    pub fn inner(&self) -> &azync::MessageStream {
+    pub fn inner(&self) -> &crate::MessageStream {
         &self.0
     }
 
     /// Get the underlying async message stream, consuming `self`.
-    pub fn into_inner(self) -> azync::MessageStream {
+    pub fn into_inner(self) -> crate::MessageStream {
         self.0
     }
 }
@@ -38,7 +38,7 @@ impl Iterator for MessageStream {
 
 impl From<Connection> for MessageStream {
     fn from(conn: Connection) -> Self {
-        let azync = azync::MessageStream::from(conn.into_inner());
+        let azync = crate::MessageStream::from(conn.into_inner());
 
         Self(azync)
     }

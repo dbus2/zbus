@@ -14,7 +14,7 @@ use futures_util::{
 };
 use static_assertions::assert_impl_all;
 
-use crate::{azync::Connection, Error, Message, Result};
+use crate::{Connection, Error, Message, Result};
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///

@@ -5,20 +5,20 @@ use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::ObjectPath;
 
-use crate::{azync, blocking::Connection, Error, Result};
+use crate::{blocking::Connection, Error, Result};
 
-pub use crate::azync::ProxyDefault;
+pub use crate::ProxyDefault;
 
 /// Builder for proxies.
 #[derive(Debug, Clone)]
-pub struct ProxyBuilder<'a, T = ()>(azync::ProxyBuilder<'a, T>);
+pub struct ProxyBuilder<'a, T = ()>(crate::ProxyBuilder<'a, T>);
 
 assert_impl_all!(ProxyBuilder<'_>: Send, Sync, Unpin);
 
 impl<'a, T> ProxyBuilder<'a, T> {
     /// Create a new [`ProxyBuilder`] for the given connection.
     pub fn new_bare(conn: &Connection) -> Self {
-        Self(azync::ProxyBuilder::new_bare(&conn.clone().into()))
+        Self(crate::ProxyBuilder::new_bare(&conn.clone().into()))
     }
 }
 
@@ -29,7 +29,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
         D: TryInto<BusName<'a>>,
         D::Error: Into<Error>,
     {
-        azync::ProxyBuilder::destination(self.0, destination).map(Self)
+        crate::ProxyBuilder::destination(self.0, destination).map(Self)
     }
 
     /// Set the proxy path.
@@ -38,7 +38,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
         P: TryInto<ObjectPath<'a>>,
         P::Error: Into<Error>,
     {
-        azync::ProxyBuilder::path(self.0, path).map(Self)
+        crate::ProxyBuilder::path(self.0, path).map(Self)
     }
 
     /// Set the proxy interface.
@@ -47,7 +47,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
         I: TryInto<InterfaceName<'a>>,
         I::Error: Into<Error>,
     {
-        azync::ProxyBuilder::interface(self.0, interface).map(Self)
+        crate::ProxyBuilder::interface(self.0, interface).map(Self)
     }
 
     /// Set whether to cache properties.
@@ -62,7 +62,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
     /// Panics if the builder is lacking the necessary details to build a proxy.
     pub fn build(self) -> Result<T>
     where
-        T: From<azync::Proxy<'a>>,
+        T: From<crate::Proxy<'a>>,
     {
         block_on(self.0.build())
     }
@@ -74,6 +74,6 @@ where
 {
     /// Create a new [`ProxyBuilder`] for the given connection.
     pub fn new(conn: &Connection) -> Self {
-        Self(azync::ProxyBuilder::new(&conn.clone().into()))
+        Self(crate::ProxyBuilder::new(&conn.clone().into()))
     }
 }

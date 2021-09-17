@@ -132,9 +132,9 @@
 //!   * Ensure the [internal executor keeps ticking continuously][iektc].
 //!
 //! [book]: https://dbus.pages.freedesktop.org/zbus/
-//! [(not so) low-level]: azync::Connection
+//! [(not so) low-level]: Connection
 //! [high-level client-side proxy]: https://dbus.pages.freedesktop.org/zbus/async.html#client
-//! [iektc]: `azync::Connection::executor`
+//! [iektc]: `Connection::executor`
 //!
 //! [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus
 //!   clients in javascript (running from any browser) do exist though. And zbus may also be
@@ -174,6 +174,25 @@ pub use message_field::*;
 mod message_fields;
 pub use message_fields::*;
 
+mod handshake;
+pub(crate) use handshake::*;
+mod connection;
+pub use connection::*;
+mod connection_builder;
+pub use connection_builder::*;
+mod message_stream;
+pub use message_stream::*;
+mod object_server;
+pub use object_server::*;
+mod proxy;
+pub use proxy::*;
+mod proxy_builder;
+pub use proxy_builder::*;
+mod signal_context;
+pub use signal_context::*;
+mod interface;
+pub use interface::*;
+
 mod utils;
 pub use utils::*;
 
@@ -181,9 +200,7 @@ pub mod fdo;
 
 mod raw;
 
-pub mod azync;
 pub mod blocking;
-pub use azync::{PropertyChangedHandlerId, SignalHandlerId};
 
 pub mod xml;
 
@@ -226,10 +243,9 @@ mod tests {
     use zvariant::{Fd, OwnedObjectPath, OwnedValue, Type};
 
     use crate::{
-        azync::{self, InterfaceDeref, SignalContext},
         blocking::{self, MessageStream},
         fdo::{RequestNameFlags, RequestNameReply},
-        Message, MessageFlags, Result,
+        Connection, InterfaceDeref, Message, MessageFlags, Result, SignalContext,
     };
 
     #[test]
@@ -287,7 +303,7 @@ mod tests {
     }
 
     async fn test_basic_connection() -> Result<()> {
-        let connection = azync::Connection::session().await?;
+        let connection = Connection::session().await?;
 
         match connection
             .call_method(
@@ -441,7 +457,7 @@ mod tests {
     }
 
     async fn test_freedesktop_api() -> Result<()> {
-        let connection = azync::Connection::session().await?;
+        let connection = Connection::session().await?;
 
         let reply = connection
             .call_method(

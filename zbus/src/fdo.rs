@@ -14,10 +14,7 @@ use zbus_names::{
 };
 use zvariant::{derive::Type, ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value};
 
-use crate::{
-    azync::{ObjectServer, SignalContext},
-    dbus_interface, dbus_proxy, DBusError, MessageHeader,
-};
+use crate::{dbus_interface, dbus_proxy, DBusError, MessageHeader, ObjectServer, SignalContext};
 
 /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
@@ -768,7 +765,7 @@ mod tests {
     }
 
     async fn test_signal_stream() {
-        let conn = crate::azync::Connection::session().await.unwrap();
+        let conn = crate::Connection::session().await.unwrap();
 
         {
             let conn = conn.clone();

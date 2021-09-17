@@ -87,7 +87,7 @@ check:
     - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- basic_connection
     # Test external executor (currently only 2 tests can handle it so only run those)
     - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --package zbus --no-default-features fdo::tests::signal_stream
-    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features azync::connection::Connection::executor
+    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
 
 test:
   extends: .debian_img

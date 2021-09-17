@@ -7,10 +7,7 @@ use async_io::block_on;
 use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
-use crate::{
-    azync::{self, Interface, InterfaceDeref, InterfaceDerefMut, SignalContext},
-    Error, Result,
-};
+use crate::{Error, Interface, InterfaceDeref, InterfaceDerefMut, Result, SignalContext};
 
 /// An object server, holding server-side D-Bus objects & interfaces.
 ///
@@ -67,16 +64,16 @@ use crate::{
 /// ```
 #[derive(Debug)]
 pub struct ObjectServer {
-    azync: azync::ObjectServer,
+    azync: crate::ObjectServer,
 }
 
 assert_impl_all!(ObjectServer: Send, Sync, Unpin);
 
 impl ObjectServer {
     /// Creates a new D-Bus `ObjectServer`.
-    pub(crate) fn new(conn: &azync::Connection) -> Self {
+    pub(crate) fn new(conn: &crate::Connection) -> Self {
         Self {
-            azync: azync::ObjectServer::new(conn),
+            azync: crate::ObjectServer::new(conn),
         }
     }
 
@@ -124,7 +121,7 @@ impl ObjectServer {
     ///# use std::error::Error;
     ///# use async_io::block_on;
     ///# use zbus::{
-    ///#    azync::{InterfaceDeref, SignalContext},
+    ///#    InterfaceDeref, SignalContext,
     ///#    blocking::{Connection, ObjectServer},
     ///#    dbus_interface,
     ///# };
@@ -176,7 +173,7 @@ impl ObjectServer {
     ///# use std::error::Error;
     ///# use async_io::block_on;
     ///# use zbus::{
-    ///#    azync::{InterfaceDerefMut, SignalContext},
+    ///#    InterfaceDerefMut, SignalContext,
     ///#    blocking::{Connection, ObjectServer},
     ///#    dbus_interface,
     ///# };
@@ -247,7 +244,7 @@ impl ObjectServer {
     /// ```no_run
     ///# use std::error::Error;
     ///# use async_io::block_on;
-    ///# use zbus::{azync::SignalContext, blocking::{Connection, ObjectServer}, dbus_interface};
+    ///# use zbus::{SignalContext, blocking::{Connection, ObjectServer}, dbus_interface};
     ///
     /// struct MyIface(u32);
     ///
@@ -283,23 +280,23 @@ impl ObjectServer {
     }
 
     /// Get a reference to the underlying async ObjectServer.
-    pub fn inner(&self) -> &azync::ObjectServer {
+    pub fn inner(&self) -> &crate::ObjectServer {
         &self.azync
     }
 
     /// Get a mutable reference to the underlying async ObjectServer.
-    pub fn inner_mut(&mut self) -> &mut azync::ObjectServer {
+    pub fn inner_mut(&mut self) -> &mut crate::ObjectServer {
         &mut self.azync
     }
 
     /// Get the underlying async ObjectServer, consuming `self`.
-    pub fn into_inner(self) -> azync::ObjectServer {
+    pub fn into_inner(self) -> crate::ObjectServer {
         self.azync
     }
 }
 
 impl Deref for ObjectServer {
-    type Target = azync::ObjectServer;
+    type Target = crate::ObjectServer;
 
     fn deref(&self) -> &Self::Target {
         self.inner()
@@ -312,8 +309,8 @@ impl DerefMut for ObjectServer {
     }
 }
 
-impl From<azync::ObjectServer> for ObjectServer {
-    fn from(azync: azync::ObjectServer) -> Self {
+impl From<crate::ObjectServer> for ObjectServer {
+    fn from(azync: crate::ObjectServer) -> Self {
         Self { azync }
     }
 }

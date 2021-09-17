@@ -147,7 +147,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             if typed_inputs.is_empty() {
                 return Err(syn::Error::new_spanned(
                     &inputs,
-                    "Expected a `&zbus::azync::SignalContext<'_> argument",
+                    "Expected a `&zbus::SignalContext<'_> argument",
                 ));
             }
             Some(typed_inputs.remove(0))
@@ -198,7 +198,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 #signal_context.connection().emit_signal(
                     ::std::option::Option::None::<()>,
                     #signal_context.path(),
-                    <#self_ty as #zbus::azync::Interface>::name(),
+                    <#self_ty as #zbus::Interface>::name(),
                     #member_name,
                     &(#args),
                 )
@@ -212,10 +212,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 let prop_changed_method = quote!(
                     pub async fn #prop_changed_method_name(
                         &self,
-                        signal_context: &#zbus::azync::SignalContext<'_>,
+                        signal_context: &#zbus::SignalContext<'_>,
                     ) -> #zbus::Result<()> {
                         let mut changed = ::std::collections::HashMap::new();
-                        let value = #zbus::azync::Interface::get(self, &#member_name)
+                        let value = #zbus::Interface::get(self, &#member_name)
                             .await
                             .expect(&::std::format!("Property '{}' does not exist", #member_name))?;
                         changed.insert(#member_name, &*value);
@@ -336,7 +336,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         }
 
         #[#zbus::export::async_trait::async_trait]
-        impl #generics #zbus::azync::Interface for #self_ty
+        impl #generics #zbus::Interface for #self_ty
         #where_clause
         {
             fn name() -> #zbus::names::InterfaceName<'static> {
@@ -371,7 +371,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &mut self,
                 property_name: &str,
                 value: &#zbus::zvariant::Value<'_>,
-                signal_context: &#zbus::azync::SignalContext<'_>,
+                signal_context: &#zbus::SignalContext<'_>,
             ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
                 match property_name {
                     #set_dispatch
@@ -381,8 +381,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             async fn call(
                 &self,
-                s: &#zbus::azync::ObjectServer,
-                c: &#zbus::azync::Connection,
+                s: &#zbus::ObjectServer,
+                c: &#zbus::Connection,
                 m: &#zbus::Message,
                 name: #zbus::names::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
@@ -394,8 +394,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             async fn call_mut(
                 &mut self,
-                s: &#zbus::azync::ObjectServer,
-                c: &#zbus::azync::Connection,
+                s: &#zbus::ObjectServer,
+                c: &#zbus::Connection,
                 m: &#zbus::Message,
                 name: #zbus::names::MemberName<'_>,
             ) -> ::std::option::Option<#zbus::Result<u32>> {
@@ -410,7 +410,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     writer,
                     r#"{:indent$}<interface name="{}">"#,
                     "",
-                    <Self as #zbus::azync::Interface>::name(),
+                    <Self as #zbus::Interface>::name(),
                     indent = level
                 ).unwrap();
                 {
@@ -544,7 +544,7 @@ fn get_args_from_inputs(
 
                 signal_context_arg_decl = Some(quote! {
                     let #signal_context_arg = match m.header().and_then(|h| {
-                        h.path().and_then(|p| #zbus::azync::SignalContext::new(c, p.unwrap()))
+                        h.path().and_then(|p| #zbus::SignalContext::new(c, p.unwrap()))
                     }) {
                         ::std::result::Result::Ok(e) => e,
                         ::std::result::Result::Err(e) => {

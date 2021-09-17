@@ -9,9 +9,7 @@ use zbus_names::{BusName, InterfaceName, MemberName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
-    azync::{self, PropertyChangedHandlerId, SignalHandlerId},
-    blocking::Connection,
-    Error, Message, Result,
+    blocking::Connection, Error, Message, PropertyChangedHandlerId, Result, SignalHandlerId,
 };
 
 use crate::fdo;
@@ -62,7 +60,7 @@ use crate::fdo;
 pub struct Proxy<'a> {
     #[derivative(Debug = "ignore")]
     conn: Connection,
-    azync: azync::Proxy<'a>,
+    azync: crate::Proxy<'a>,
 }
 
 assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
@@ -83,7 +81,7 @@ impl<'a> Proxy<'a> {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
     {
-        let proxy = block_on(azync::Proxy::new(
+        let proxy = block_on(crate::Proxy::new(
             conn.inner(),
             destination,
             path,
@@ -112,7 +110,7 @@ impl<'a> Proxy<'a> {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
     {
-        let proxy = block_on(azync::Proxy::new_owned(
+        let proxy = block_on(crate::Proxy::new_owned(
             conn.clone().into_inner(),
             destination,
             path,
@@ -220,7 +218,7 @@ impl<'a> Proxy<'a> {
     /// [`Self::disconnect_signal`] method.
     ///
     /// *Note:* The signal handler will be called by the executor thread of the [`Connection`].
-    /// See the [`azync::Connection::executor`] documentation for an example of how you can run the
+    /// See the [`crate::Connection::executor`] documentation for an example of how you can run the
     /// executor (and in turn all the signal handlers called) in your own thread.
     ///
     /// ### Errors
@@ -267,7 +265,7 @@ impl<'a> Proxy<'a> {
     /// [`Self::disconnect_signal`] method.
     ///
     /// *Note:* The signal handler will be called by the executor thread of the [`Connection`].
-    /// See the [`azync::Connection::executor`] documentation for an example of how you can run the
+    /// See the [`crate::Connection::executor`] documentation for an example of how you can run the
     /// executor (and in turn all the signal handlers called) in your own thread.
     ///
     /// # Errors
@@ -305,12 +303,12 @@ impl<'a> Proxy<'a> {
     }
 
     /// Get a reference to the underlying async Proxy.
-    pub fn inner(&self) -> &azync::Proxy<'a> {
+    pub fn inner(&self) -> &crate::Proxy<'a> {
         &self.azync
     }
 
     /// Get the underlying async Proxy, consuming `self`.
-    pub fn into_inner(self) -> azync::Proxy<'a> {
+    pub fn into_inner(self) -> crate::Proxy<'a> {
         self.azync
     }
 }
@@ -321,8 +319,8 @@ impl<'a> std::convert::AsRef<Proxy<'a>> for Proxy<'a> {
     }
 }
 
-impl<'a> From<azync::Proxy<'a>> for Proxy<'a> {
-    fn from(proxy: azync::Proxy<'a>) -> Self {
+impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
+    fn from(proxy: crate::Proxy<'a>) -> Self {
         Self {
             conn: proxy.connection().clone().into(),
             azync: proxy,

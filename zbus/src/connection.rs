@@ -33,11 +33,10 @@ use futures_util::{
 };
 
 use crate::{
-    azync::{self, Authenticated, ConnectionBuilder, MessageStream},
-    blocking::ObjectServer,
-    fdo,
+    blocking, fdo,
     raw::{Connection as RawConnection, Socket},
-    Error, Guid, Message, MessageType, Result,
+    Authenticated, ConnectionBuilder, Error, Guid, Message, MessageStream, MessageType,
+    ObjectServer, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -128,7 +127,7 @@ struct ConnectionInner {
 
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 
-    object_server: OnceCell<RwLock<ObjectServer>>,
+    object_server: OnceCell<RwLock<blocking::ObjectServer>>,
     object_server_dispatch_task: OnceCell<Task<()>>,
 }
 
@@ -232,7 +231,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 ///# use zvariant::Type;
 ///#
 ///# async_io::block_on(async {
-/// use zbus::azync::Connection;
+/// use zbus::Connection;
 ///
 /// let mut connection = Connection::session().await?;
 ///
@@ -259,7 +258,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
 /// ```rust,no_run
 ///# async_io::block_on(async {
 /// use futures_util::stream::TryStreamExt;
-/// use zbus::azync::{Connection, MessageStream};
+/// use zbus::{Connection, MessageStream};
 ///
 /// let connection = Connection::session().await?;
 ///
@@ -581,7 +580,7 @@ impl Connection {
     /// scheduler:
     ///
     /// ```
-    /// use zbus::azync::ConnectionBuilder;
+    /// use zbus::ConnectionBuilder;
     /// use tokio::runtime;
     ///
     /// runtime::Builder::new_current_thread()
@@ -615,12 +614,12 @@ impl Connection {
     /// Get a reference to the associated [`ObjectServer`].
     ///
     /// The `ObjectServer` is created on-demand.
-    pub async fn object_server(&self) -> impl Deref<Target = azync::ObjectServer> + '_ {
-        // FIXME: Maybe it makes sense after all to implement Deref<Target= azync::ObjectServer> for
+    pub async fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
+        // FIXME: Maybe it makes sense after all to implement Deref<Target= ObjectServer> for
         // crate::ObjectServer instead of this wrapper?
-        struct Wrapper<'s>(RwLockReadGuard<'s, ObjectServer>);
+        struct Wrapper<'s>(RwLockReadGuard<'s, blocking::ObjectServer>);
         impl Deref for Wrapper<'_> {
-            type Target = azync::ObjectServer;
+            type Target = ObjectServer;
 
             fn deref(&self) -> &Self::Target {
                 self.0.inner()
@@ -630,7 +629,7 @@ impl Connection {
         Wrapper(self.sync_object_server().await)
     }
 
-    pub(crate) async fn sync_object_server(&self) -> RwLockReadGuard<'_, ObjectServer> {
+    pub(crate) async fn sync_object_server(&self) -> RwLockReadGuard<'_, blocking::ObjectServer> {
         self.inner
             .object_server
             .get_or_init(|| self.setup_object_server())
@@ -646,12 +645,12 @@ impl Connection {
     ///
     /// The return value of this method should not be kept around for longer than needed. The method
     /// dispatch machinery of the [`ObjectServer`] will be paused as long as the return value is alive.
-    pub async fn object_server_mut(&self) -> impl DerefMut<Target = azync::ObjectServer> + '_ {
-        // FIXME: Maybe it makes sense after all to implement DerefMut<Target= azync::ObjectServer>
+    pub async fn object_server_mut(&self) -> impl DerefMut<Target = ObjectServer> + '_ {
+        // FIXME: Maybe it makes sense after all to implement DerefMut<Target= ObjectServer>
         // for crate::ObjectServer instead of this wrapper?
-        struct Wrapper<'s>(RwLockWriteGuard<'s, ObjectServer>);
+        struct Wrapper<'s>(RwLockWriteGuard<'s, blocking::ObjectServer>);
         impl Deref for Wrapper<'_> {
-            type Target = azync::ObjectServer;
+            type Target = ObjectServer;
 
             fn deref(&self) -> &Self::Target {
                 self.0.inner()
@@ -666,7 +665,9 @@ impl Connection {
         Wrapper(self.sync_object_server_mut().await)
     }
 
-    pub(crate) async fn sync_object_server_mut(&self) -> RwLockWriteGuard<'_, ObjectServer> {
+    pub(crate) async fn sync_object_server_mut(
+        &self,
+    ) -> RwLockWriteGuard<'_, blocking::ObjectServer> {
         self.inner
             .object_server
             .get_or_init(|| self.setup_object_server())
@@ -674,7 +675,7 @@ impl Connection {
             .await
     }
 
-    fn setup_object_server(&self) -> RwLock<ObjectServer> {
+    fn setup_object_server(&self) -> RwLock<blocking::ObjectServer> {
         let weak_conn = WeakConnection::from(self);
         let mut stream = MessageStream::from(self.clone());
         let task = self.inner.executor.spawn(async move {
@@ -695,7 +696,7 @@ impl Connection {
             .set(task)
             .expect("object server task set twice");
 
-        RwLock::new(ObjectServer::new(self))
+        RwLock::new(blocking::ObjectServer::new(self))
     }
 
     pub(crate) async fn subscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
@@ -886,7 +887,7 @@ impl Connection {
 
         if internal_executor {
             std::thread::Builder::new()
-                .name("zbus::azync::Connection executor".into())
+                .name("zbus::Connection executor".into())
                 .spawn(move || {
                     block_on(async move {
                         // Run as long as there is a task to run.

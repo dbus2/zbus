@@ -8,10 +8,7 @@ use async_trait::async_trait;
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{OwnedValue, Value};
 
-use crate::{
-    azync::{Connection, ObjectServer, SignalContext},
-    fdo, Message, Result,
-};
+use crate::{fdo, Connection, Message, ObjectServer, Result, SignalContext};
 
 /// The trait used to dispatch messages to an interface instance.
 ///

@@ -14,10 +14,10 @@ use zbus_names::InterfaceName;
 use zvariant::{ObjectPath, OwnedObjectPath};
 
 use crate::{
-    azync::{self, Connection, Interface, SignalContext, WeakConnection},
     fdo,
     fdo::{Introspectable, Peer, Properties},
-    Error, Message, MessageHeader, MessageType, Result,
+    Connection, Error, Interface, Message, MessageHeader, MessageType, Result, SignalContext,
+    WeakConnection,
 };
 
 /// Opaque structure that derefs to an `Interface` type.
@@ -247,7 +247,7 @@ impl Node {
 ///
 /// ```no_run
 ///# use std::error::Error;
-/// use zbus::{azync::{Connection, ObjectServer}, dbus_interface};
+/// use zbus::{Connection, ObjectServer, dbus_interface};
 /// use std::sync::{Arc, Mutex};
 /// use event_listener::Event;
 ///# use async_io::block_on;
@@ -301,7 +301,7 @@ assert_impl_all!(ObjectServer: Send, Sync, Unpin);
 
 impl ObjectServer {
     /// Creates a new D-Bus `ObjectServer`.
-    pub(crate) fn new(conn: &azync::Connection) -> Self {
+    pub(crate) fn new(conn: &Connection) -> Self {
         Self {
             conn: conn.into(),
             root: Node::new("/".try_into().expect("zvariant bug")),
@@ -408,7 +408,7 @@ impl ObjectServer {
     ///
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{azync::{Connection, InterfaceDeref, ObjectServer, SignalContext}, dbus_interface};
+    ///# use zbus::{Connection, InterfaceDeref, ObjectServer, SignalContext, dbus_interface};
     ///# use async_io::block_on;
     ///#
     /// struct MyIface;
@@ -462,7 +462,7 @@ impl ObjectServer {
     ///
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{azync::{Connection, InterfaceDerefMut, ObjectServer, SignalContext}, dbus_interface};
+    ///# use zbus::{Connection, InterfaceDerefMut, ObjectServer, SignalContext, dbus_interface};
     ///# use async_io::block_on;
     ///#
     /// struct MyIface(u32);
@@ -540,7 +540,7 @@ impl ObjectServer {
     /// ```no_run
     ///# use std::error::Error;
     ///# use async_io::block_on;
-    ///# use zbus::{azync::{Connection, ObjectServer, SignalContext}, dbus_interface};
+    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
     ///
     /// struct MyIface(u32);
     ///
@@ -706,9 +706,8 @@ mod tests {
     use zvariant::derive::Type;
 
     use crate::{
-        azync::{self, InterfaceDeref, SignalContext},
-        blocking::Connection,
-        dbus_interface, dbus_proxy, MessageHeader, MessageType,
+        blocking, dbus_interface, dbus_proxy, Connection, InterfaceDeref, MessageHeader,
+        MessageType, SignalContext,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -875,7 +874,7 @@ mod tests {
     }
 
     fn my_iface_test(tx: Sender<()>) -> std::result::Result<u32, Box<dyn Error>> {
-        let conn = Connection::session()?;
+        let conn = blocking::Connection::session()?;
         let proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
@@ -968,7 +967,7 @@ mod tests {
     async fn basic_iface_() {
         let (tx, rx) = channel::<()>();
 
-        let conn = azync::Connection::session()
+        let conn = Connection::session()
             .await
             .unwrap()
             // primary name

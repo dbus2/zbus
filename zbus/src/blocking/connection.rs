@@ -9,7 +9,7 @@ use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{azync, blocking::ObjectServer, Error, Message, Result};
+use crate::{blocking::ObjectServer, Error, Message, Result};
 
 /// A D-Bus connection.
 ///
@@ -35,7 +35,7 @@ use crate::{azync, blocking::ObjectServer, Error, Message, Result};
 /// is configurable through the [`set_max_queued`] method. The default size is 64. When the queue is
 /// full, no more messages can be received until there is room is created for more. This is why it's
 /// important to ensure that all [`crate::blocking::MessageStream`] and
-/// [`crate::azync::MessageStream`] instances are continuously iterated on and polled, respectively.
+/// [`crate::MessageStream`] instances are continuously iterated on and polled, respectively.
 ///
 /// [method calls]: blocking/struct.Connection.html#method.call_method
 /// [signals]: blocking/struct.Connection.html#method.emit_signal
@@ -47,7 +47,7 @@ use crate::{azync, blocking::ObjectServer, Error, Message, Result};
 #[derive(derivative::Derivative, Clone)]
 #[derivative(Debug)]
 pub struct Connection {
-    inner: azync::Connection,
+    inner: crate::Connection,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
@@ -55,12 +55,12 @@ assert_impl_all!(Connection: Send, Sync, Unpin);
 impl Connection {
     /// Create a `Connection` to the session/user message bus.
     pub fn session() -> Result<Self> {
-        block_on(azync::Connection::session()).map(Self::from)
+        block_on(crate::Connection::session()).map(Self::from)
     }
 
     /// Create a `Connection` to the system-wide message bus.
     pub fn system() -> Result<Self> {
-        block_on(azync::Connection::system()).map(Self::from)
+        block_on(crate::Connection::system()).map(Self::from)
     }
 
     /// Max number of messages to queue.
@@ -246,18 +246,18 @@ impl Connection {
     }
 
     /// Get a reference to the underlying async Connection.
-    pub fn inner(&self) -> &azync::Connection {
+    pub fn inner(&self) -> &crate::Connection {
         &self.inner
     }
 
     /// Get the underlying async Connection, consuming `self`.
-    pub fn into_inner(self) -> azync::Connection {
+    pub fn into_inner(self) -> crate::Connection {
         self.inner
     }
 }
 
-impl From<azync::Connection> for Connection {
-    fn from(conn: azync::Connection) -> Self {
+impl From<crate::Connection> for Connection {
+    fn from(conn: crate::Connection) -> Self {
         Self { inner: conn }
     }
 }

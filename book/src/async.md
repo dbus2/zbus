@@ -15,7 +15,7 @@ samples, asynchronous.
 
 ## Establishing a connection
 
-The only difference to that of [synchronous `Connection` API] is that you use [`azync::Connection`]
+The only difference to that of [synchronous `Connection` API] is that you use [`Connection`]
 type instead. This type's API is almost identical to that of `Connection`, except its asynchronous.
 Moreover, it also provides a [`futures::stream::Stream`] and [`futures::sink::Sink`] implementations
 to conveniently receive and send messages, respectively for the times when low-level API is more
@@ -23,14 +23,14 @@ appropriate for your use case.
 
 ## Client
 
-Similar to `Connection`, you use `azync::Proxy` type. Its constructors require `azync::Connection`
-instead of `Connection`. Moreover, `dbus_proxy` macro generates an `azync::Proxy` wrapper for you
+Similar to `Connection`, you use `Proxy` type. Its constructors require `Connection`
+instead of `Connection`. Moreover, `dbus_proxy` macro generates an `Proxy` wrapper for you
 as well. Let's convert the last example in the previous chapter, to use the asynchronous connection
 and proxy:
 
 ```rust,no_run
 use futures_util::future::FutureExt;
-use zbus::{azync::Connection, dbus_proxy, Result};
+use zbus::{Connection, dbus_proxy, Result};
 use zvariant::ObjectPath;
 
 # async_io::block_on(run()).unwrap();
@@ -124,7 +124,7 @@ streams to see how that works:
     // Instead of `futures_util::future::FutureExt`
     use futures_util::stream::StreamExt;
 
-# use zbus::{azync::Connection, dbus_proxy, Result};
+# use zbus::{Connection, dbus_proxy, Result};
 # use zvariant::ObjectPath;
 #
 # async_io::block_on(run()).unwrap();
@@ -225,7 +225,7 @@ after the properties `receive_<prop_name>_changed()`. Example:
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{azync::Connection, dbus_proxy, Result};
+# use zbus::{Connection, dbus_proxy, Result};
 # use futures_util::stream::StreamExt;
 #
 # async_io::block_on(run()).unwrap();
@@ -260,6 +260,6 @@ No high-level server-side API are provided yet. Rest assured, it's very high on 
 Stay tuned!
 
 [synchronous `Connection` API]: https://docs.rs/zbus/2.0.0-beta.6/zbus/blocking/struct.Connection.html
-[`azync::Connection`]: https://docs.rs/zbus/2.0.0-beta.6/zbus/azync/connection/struct.Connection.html
+[`Connection`]: https://docs.rs/zbus/2.0.0-beta.6/zbus/connection/struct.Connection.html
 [`futures::stream::Stream`]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
 [`futures::sink::Sink`]: https://docs.rs/futures/latest/futures/sink/trait.Sink.html

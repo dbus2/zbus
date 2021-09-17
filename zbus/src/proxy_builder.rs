@@ -5,10 +5,7 @@ use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::ObjectPath;
 
-use crate::{
-    azync::{Connection, Proxy, ProxyInner, ProxyProperties},
-    Error, Result,
-};
+use crate::{Connection, Error, Proxy, ProxyInner, ProxyProperties, Result};
 
 /// Builder for proxies.
 #[derive(Debug)]

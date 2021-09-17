@@ -25,9 +25,8 @@ use zbus_names::{
 use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
-    azync::{Connection, MessageStream, ProxyBuilder},
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
-    Error, Message, MessageHeader, MessageType, Result,
+    Connection, Error, Message, MessageHeader, MessageStream, MessageType, ProxyBuilder, Result,
 };
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, ()> + Send>;
@@ -91,7 +90,7 @@ impl<'a> std::fmt::Debug for ProxyProperties<'a> {
 /// use std::result::Result;
 /// use std::error::Error;
 /// use async_io::block_on;
-/// use zbus::azync::{Connection, Proxy};
+/// use zbus::{Connection, Proxy};
 ///
 /// fn main() -> Result<(), Box<dyn Error>> {
 ///     block_on(run())
@@ -341,7 +340,7 @@ impl<'a> ProxyInner<'a> {
                 let well_known_name = OwnedWellKnownName::from(well_known_name.to_owned());
                 // We've to use low-level API here to avoid infinite cycles. Otherwise, we'll
                 // get a complicated error from MIR, w/ this repeated multiple times:
-                // note: ...which requires building MIR for `azync::proxy::<impl at zbus/src/azync/proxy.rs:338:1: 886:2>::receive_signal`...
+                // note: ...which requires building MIR for `proxy::<impl at zbus/src/azync/proxy.rs:338:1: 886:2>::receive_signal`...
                 let subscription_id = conn
                     .subscribe_signal(
                         "org.freedesktop.DBus",

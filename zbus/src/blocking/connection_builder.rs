@@ -2,23 +2,23 @@ use async_io::block_on;
 use static_assertions::assert_impl_all;
 use std::{convert::TryInto, os::unix::net::UnixStream};
 
-use crate::{address::Address, azync, blocking::Connection, Error, Guid, Result};
+use crate::{address::Address, blocking::Connection, Error, Guid, Result};
 
 /// A builder for [`zbus::blocking::Connection`].
 #[derive(Debug)]
-pub struct ConnectionBuilder<'a>(azync::ConnectionBuilder<'a>);
+pub struct ConnectionBuilder<'a>(crate::ConnectionBuilder<'a>);
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
 
 impl<'a> ConnectionBuilder<'a> {
     /// Create a builder for the session/user message bus connection.
     pub fn session() -> Result<Self> {
-        azync::ConnectionBuilder::session().map(Self)
+        crate::ConnectionBuilder::session().map(Self)
     }
 
     /// Create a builder for the system-wide message bus connection.
     pub fn system() -> Result<Self> {
-        azync::ConnectionBuilder::system().map(Self)
+        crate::ConnectionBuilder::system().map(Self)
     }
 
     /// Create a builder for connection that will use the given [D-Bus bus address].
@@ -29,12 +29,12 @@ impl<'a> ConnectionBuilder<'a> {
         A: TryInto<Address>,
         A::Error: Into<Error>,
     {
-        azync::ConnectionBuilder::address(address).map(Self)
+        crate::ConnectionBuilder::address(address).map(Self)
     }
 
     /// Create a builder for connection that will use the given unix stream.
     pub fn unix_stream(stream: UnixStream) -> Self {
-        Self(azync::ConnectionBuilder::unix_stream(stream))
+        Self(crate::ConnectionBuilder::unix_stream(stream))
     }
 
     /// The to-be-created connection will be a peer-to-peer connection.

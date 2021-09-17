@@ -4,7 +4,7 @@ use futures_util::{
     stream::StreamExt,
 };
 use std::{convert::TryInto, future::ready};
-use zbus::{azync::SignalContext, fdo};
+use zbus::{fdo, SignalContext};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]
@@ -58,7 +58,7 @@ fn test_proxy() {
         })
         .unwrap();
     // Let's also test signal streams.
-    let connection = zbus::azync::Connection::from(connection);
+    let connection = zbus::Connection::from(connection);
     block_on(async move {
         let proxy = AsyncTestProxy::builder(&connection)
             .cache_properties(false)
@@ -112,7 +112,7 @@ fn test_derive_error() {
 
 #[test]
 fn test_interface() {
-    use zbus::azync::Interface;
+    use zbus::Interface;
 
     struct Test<T> {
         something: String,
@@ -214,7 +214,7 @@ fn test_interface() {
     if false {
         block_on(async {
             // check compilation
-            let c = zbus::azync::Connection::session().await.unwrap();
+            let c = zbus::Connection::session().await.unwrap();
             let s = c.object_server().await;
             let m =
                 zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))

@@ -4,9 +4,8 @@ use std::{convert::TryInto, os::unix::net::UnixStream};
 
 use crate::{
     address::{self, Address},
-    azync::{Authenticated, Connection},
     raw::Socket,
-    Error, Guid, Result,
+    Authenticated, Connection, Error, Guid, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -18,7 +17,7 @@ enum Target {
     Socket(Box<dyn Socket>),
 }
 
-/// A builder for [`zbus::azync::Connection`].
+/// A builder for [`zbus::Connection`].
 #[derive(Debug)]
 pub struct ConnectionBuilder<'a> {
     target: Target,
@@ -89,7 +88,7 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// ```
     ///# use std::error::Error;
-    ///# use zbus::azync::ConnectionBuilder;
+    ///# use zbus::ConnectionBuilder;
     ///# use async_io::block_on;
     ///#
     ///# block_on(async {
