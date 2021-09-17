@@ -11,26 +11,25 @@ use std::{
 
 use crate::{
     guid::Guid,
-    handshake::{self, Handshake as SyncHandshake},
-    raw::Socket,
+    raw::{self, Handshake as SyncHandshake, Socket},
     Result,
 };
 
-/// The asynchronous sibling of [`handshake::Handshake`].
+/// The asynchronous authentication implementation based on non-blocking [`raw::Handshake`].
 ///
 /// The underlying socket is in nonblocking mode. Enabling blocking mode on it, will lead to
 /// undefined behaviour.
-pub(crate) struct Authenticated<S>(handshake::Authenticated<S>);
+pub(crate) struct Authenticated<S>(raw::Authenticated<S>);
 
 impl<S> Authenticated<S> {
-    /// Unwraps the inner [`handshake::Authenticated`].
-    pub fn into_inner(self) -> handshake::Authenticated<S> {
+    /// Unwraps the inner [`raw::Authenticated`].
+    pub fn into_inner(self) -> raw::Authenticated<S> {
         self.0
     }
 }
 
 impl<S> Deref for Authenticated<S> {
-    type Target = handshake::Authenticated<S>;
+    type Target = raw::Authenticated<S>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -44,7 +43,7 @@ where
     /// Create a client-side `Authenticated` for the given `socket`.
     pub async fn client(socket: S) -> Result<Self> {
         Handshake {
-            handshake: Some(handshake::ClientHandshake::new(socket)),
+            handshake: Some(raw::ClientHandshake::new(socket)),
             phantom: PhantomData,
         }
         .await
@@ -53,7 +52,7 @@ where
     /// Create a server-side `Authenticated` for the given `socket`.
     pub async fn server(socket: S, guid: Guid, client_uid: u32) -> Result<Self> {
         Handshake {
-            handshake: Some(handshake::ServerHandshake::new(socket, guid, client_uid)),
+            handshake: Some(raw::ServerHandshake::new(socket, guid, client_uid)),
             phantom: PhantomData,
         }
         .await

@@ -184,7 +184,6 @@ mod raw;
 pub mod azync;
 pub mod blocking;
 pub use azync::{PropertyChangedHandlerId, SignalHandlerId};
-mod handshake;
 
 pub mod xml;
 
