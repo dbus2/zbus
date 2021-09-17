@@ -6,7 +6,7 @@ use async_io::block_on;
 
 use crate::{blocking::Connection, Message, Result};
 
-/// Synchronous sibling of [`crate::MessageStream`].
+/// A blocking wrapper of [`crate::MessageStream`].
 ///
 /// Just like [`crate::MessageStream`] must be continuously polled, you must continuously iterate
 /// over this type until it's consumed or dropped.
