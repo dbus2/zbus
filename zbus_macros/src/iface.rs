@@ -400,7 +400,6 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             #generated_signals
         }
 
-        #[#zbus::export::async_trait::async_trait]
         impl #generics #zbus::Interface for #self_ty
         #where_clause
         {
@@ -422,18 +421,21 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 }
             }
 
-            async fn get_all(
-                &self,
-            ) -> ::std::collections::HashMap<
-                ::std::string::String,
-                #zbus::zvariant::OwnedValue,
-            > {
-                let mut props: ::std::collections::HashMap<
-                    ::std::string::String,
-                    #zbus::zvariant::OwnedValue,
-                > = ::std::collections::HashMap::new();
-                #get_all
-                props
+            fn get_all<'call>(
+                &'call self,
+                server: &'call #zbus::ObjectServer,
+                connection: &'call #zbus::Connection,
+                msg: &'call #zbus::Message,
+                allow_blocking: bool,
+            ) -> #zbus::DispatchResult<'call> {
+                #zbus::DispatchResult::Async(::std::boxed::Box::pin(async move {
+                    let mut props: ::std::collections::HashMap<
+                        ::std::string::String,
+                        #zbus::zvariant::OwnedValue,
+                    > = ::std::collections::HashMap::new();
+                    #get_all
+                    connection.reply(msg, &props).await
+                }))
             }
 
             fn set<'call>(

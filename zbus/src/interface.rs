@@ -1,15 +1,13 @@
 use std::{
     any::{Any, TypeId},
-    collections::HashMap,
     fmt::Write,
     future::Future,
     pin::Pin,
 };
 
 use async_io::block_on;
-use async_trait::async_trait;
 use zbus_names::{InterfaceName, MemberName};
-use zvariant::{DynamicType, OwnedValue, Value};
+use zvariant::{DynamicType, Value};
 
 use crate::{Connection, Message, ObjectServer, Result, SignalContext};
 
@@ -71,7 +69,6 @@ impl<'a> DispatchResult<'a> {
 /// implements it for you.
 ///
 /// [`dbus_interface`]: attr.dbus_interface.html
-#[async_trait]
 pub trait Interface: Any + Send + Sync {
     /// Return the name of the interface. Ex: "org.foo.MyInterface"
     fn name() -> InterfaceName<'static>
@@ -89,7 +86,13 @@ pub trait Interface: Any + Send + Sync {
     ) -> DispatchResult<'call>;
 
     /// Return all the properties.
-    async fn get_all(&self) -> HashMap<String, OwnedValue>;
+    fn get_all<'call>(
+        &'call self,
+        server: &'call ObjectServer,
+        connection: &'call Connection,
+        msg: &'call Message,
+        allow_blocking: bool,
+    ) -> DispatchResult<'call>;
 
     /// Set a property value.
     #[allow(clippy::too_many_arguments)]
