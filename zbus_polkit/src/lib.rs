@@ -10,19 +10,24 @@
 //! based on [zbus].
 //!
 //! ```no_run
-//! use zbus::blocking::Connection;
+//! use zbus::Connection;
 //! use zbus_polkit::policykit1::*;
 //!
-//! let c = Connection::system().unwrap();
-//! let p = AuthorityProxy::new(&c).unwrap();
-//! let subject = Subject::new_for_owner(std::process::id(), None, None).unwrap();
-//! let result = p.check_authorization(
-//!     &subject,
-//!     "org.zbus.BeAwesome",
-//!     &std::collections::HashMap::new(),
-//!     CheckAuthorizationFlags::AllowUserInteraction.into(),
-//!     "",
-//! );
+//! #[async_std::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let connection = Connection::system().await?;
+//!     let proxy = AsyncAuthorityProxy::new(&connection).await?;
+//!     let subject = Subject::new_for_owner(std::process::id(), None, None)?;
+//!     let result = proxy.check_authorization(
+//!         &subject,
+//!         "org.zbus.BeAwesome",
+//!         &std::collections::HashMap::new(),
+//!         CheckAuthorizationFlags::AllowUserInteraction.into(),
+//!         "",
+//!     ).await?;
+//!
+//!     Ok(())
+//! }
 //! ```
 //!
 //! [PolicyKit]: https://gitlab.freedesktop.org/polkit/polkit/

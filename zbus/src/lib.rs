@@ -21,10 +21,9 @@
 //! This code display a notification on your Freedesktop.org-compatible OS:
 //!
 //! ```rust,no_run
-//! use std::collections::HashMap;
-//! use std::error::Error;
+//! use std::{collections::HashMap, error::Error};
 //!
-//! use zbus::{blocking::Connection, dbus_proxy};
+//! use zbus::{Connection, dbus_proxy};
 //! use zvariant::Value;
 //!
 //! #[dbus_proxy(
@@ -41,16 +40,17 @@
 //!         summary: &str,
 //!         body: &str,
 //!         actions: &[&str],
-//!         hints: HashMap<&str, &Value<'_>>,
+//!         hints: &HashMap<&str, &Value<'_>>,
 //!         expire_timeout: i32,
 //!     ) -> zbus::Result<u32>;
 //! }
 //!
-//! fn main() -> Result<(), Box<dyn Error>> {
-//!     let connection = Connection::session()?;
+//! #[async_std::main]
+//! async fn main() -> Result<(), Box<dyn Error>> {
+//!     let connection = Connection::session().await?;
 //!
 //!     // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
-//!     let proxy = NotificationsProxy::new(&connection)?;
+//!     let proxy = AsyncNotificationsProxy::new(&connection).await?;
 //!     let reply = proxy.notify(
 //!         "my-app",
 //!         0,
@@ -58,9 +58,9 @@
 //!         "A summary",
 //!         "Some body",
 //!         &[],
-//!         HashMap::new(),
+//!         &HashMap::new(),
 //!         5000,
-//!     )?;
+//!     ).await?;
 //!     dbg!(reply);
 //!
 //!     Ok(())
@@ -77,32 +77,37 @@
 //!     thread::sleep,
 //!     time::Duration,
 //! };
-//! use zbus::{blocking::{ObjectServer, Connection}, dbus_interface, fdo};
+//! use zbus::{ObjectServer, Connection, dbus_interface, fdo};
 //!
 //! struct Greeter {
 //!     count: u64
-//! };
+//! }
 //!
 //! #[dbus_interface(name = "org.zbus.MyGreeter1")]
 //! impl Greeter {
+//!     // Can be `async` as well.
 //!     fn say_hello(&mut self, name: &str) -> String {
 //!         self.count += 1;
 //!         format!("Hello {}! I have been called: {}", name, self.count)
 //!     }
 //! }
 //!
-//! fn main() -> Result<(), Box<dyn Error>> {
-//!     let connection = Connection::session()?
-//!         .request_name("org.zbus.MyGreeter")?;
+//! #[async_std::main]
+//! async fn main() -> Result<(), Box<dyn Error>> {
+//!     let connection = Connection::session()
+//!         .await?
+//!         .request_name("org.zbus.MyGreeter")
+//!         .await?;
 //!     let mut greeter = Greeter { count: 0 };
 //!     connection
 //!         .object_server_mut()
+//!         .await
 //!         .at("/org/zbus/MyGreeter", greeter)?;
 //!
-//!    // Do other things or go to sleep.
-//!    sleep(Duration::from_secs(60));
+//!     // Do other things or go to sleep.
+//!     sleep(Duration::from_secs(60));
 //!
-//!    Ok(())
+//!     Ok(())
 //! }
 //! ```
 //!
@@ -118,10 +123,10 @@
 //! $
 //! ```
 //!
-//! #### Asynchronous API
+//! ### Blocking API
 //!
-//! Runtime-agnostic async/await-compatible API for both [(not so) low-level] message handling and
-//! [high-level client-side proxy] is also provided. High-level server-side API coming soon.
+//! While zbus is primarily asynchronous (since 2.0), [blocking wrappers][bw] are provided for
+//! convenience.
 //!
 //! ### Compatibility with async runtimes
 //!
@@ -132,8 +137,7 @@
 //!   * Ensure the [internal executor keeps ticking continuously][iektc].
 //!
 //! [book]: https://dbus.pages.freedesktop.org/zbus/
-//! [(not so) low-level]: Connection
-//! [high-level client-side proxy]: https://dbus.pages.freedesktop.org/zbus/async.html#client
+//! [bw]: https://docs.rs/zbus/2.0.0-beta.7/zbus/blocking/index.html
 //! [iektc]: `Connection::executor`
 //!
 //! [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus
