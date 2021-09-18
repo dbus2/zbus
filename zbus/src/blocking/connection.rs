@@ -9,7 +9,7 @@ use zvariant::ObjectPath;
 
 use async_io::block_on;
 
-use crate::{blocking::ObjectServer, Error, Message, Result};
+use crate::{blocking::ObjectServer, DBusError, Error, Message, Result};
 
 /// A blocking wrapper of [`zbus::blocking::Connection`].
 ///
@@ -155,6 +155,20 @@ impl Connection {
         E::Error: Into<Error>,
     {
         block_on(self.inner.reply_error(call, error_name, body))
+    }
+
+    /// Reply to a method call with an error.
+    ///
+    /// Given an existing method call message header, send an error reply back to the caller
+    /// using one of the standard interface reply types.
+    ///
+    /// Returns the message serial number.
+    pub fn reply_dbus_error(
+        &self,
+        call: &zbus::MessageHeader<'_>,
+        err: impl DBusError,
+    ) -> Result<u32> {
+        block_on(self.inner.reply_dbus_error(call, err))
     }
 
     /// Register a well-known name for this service on the bus.
