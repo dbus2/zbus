@@ -301,15 +301,21 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             introspect.extend(doc_comments);
             introspect.extend(introspect_method(&member_name, &intro_args));
 
-            let m = quote!(
+            let m = quote! {
                 #member_name => {
-                    #args_from_msg
-                    let reply = self.#ident(#args)#method_await;
-                    ::std::option::Option::Some(#reply)
+                    let future = async move {
+                        #args_from_msg
+                        let reply = self.#ident(#args)#method_await;
+                        #reply
+                    };
+                    #zbus::DispatchResult::Async(::std::boxed::Box::pin(future))
                 },
-            );
+            };
 
             if is_mut {
+                call_dispatch.extend(quote! {
+                    #member_name => #zbus::DispatchResult::RequiresMut,
+                });
                 call_mut_dispatch.extend(m);
             } else {
                 call_dispatch.extend(m);
@@ -375,29 +381,29 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 }
             }
 
-            async fn call(
-                &self,
-                s: &#zbus::ObjectServer,
-                c: &#zbus::Connection,
-                m: &#zbus::Message,
-                name: #zbus::names::MemberName<'_>,
-            ) -> ::std::option::Option<#zbus::Result<u32>> {
+            fn call<'call>(
+                &'call self,
+                s: &'call #zbus::ObjectServer,
+                c: &'call #zbus::Connection,
+                m: &'call #zbus::Message,
+                name: #zbus::names::MemberName<'call>,
+            ) -> #zbus::DispatchResult<'call> {
                 match name.as_str() {
                     #call_dispatch
-                    _ => ::std::option::Option::None,
+                    _ => #zbus::DispatchResult::MethodNotFound,
                 }
             }
 
-            async fn call_mut(
-                &mut self,
-                s: &#zbus::ObjectServer,
-                c: &#zbus::Connection,
-                m: &#zbus::Message,
-                name: #zbus::names::MemberName<'_>,
-            ) -> ::std::option::Option<#zbus::Result<u32>> {
+            fn call_mut<'call>(
+                &'call mut self,
+                s: &'call #zbus::ObjectServer,
+                c: &'call #zbus::Connection,
+                m: &'call #zbus::Message,
+                name: #zbus::names::MemberName<'call>,
+            ) -> #zbus::DispatchResult<'call> {
                 match name.as_str() {
                     #call_mut_dispatch
-                    _ => ::std::option::Option::None,
+                    _ => #zbus::DispatchResult::MethodNotFound,
                 }
             }
 
@@ -522,9 +528,7 @@ fn get_args_from_inputs(
                     let #header_arg = match m.header() {
                         ::std::result::Result::Ok(r) => r,
                         ::std::result::Result::Err(e) => {
-                            return ::std::option::Option::Some(
-                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await,
-                            );
+                            return <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await;
                         }
                     };
                 });
@@ -544,9 +548,7 @@ fn get_args_from_inputs(
                     }) {
                         ::std::result::Result::Ok(e) => e,
                         ::std::result::Result::Err(e) => {
-                            return ::std::option::Option::Some(
-                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await,
-                            );
+                            return <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await;
                         }
                     };
                 });
@@ -569,9 +571,7 @@ fn get_args_from_inputs(
                 match m.body() {
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
-                        return ::std::option::Option::Some(
-                            <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await,
-                        );
+                        return <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await;
                     }
                 };
         };

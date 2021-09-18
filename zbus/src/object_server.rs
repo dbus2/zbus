@@ -16,8 +16,8 @@ use zvariant::{ObjectPath, OwnedObjectPath};
 use crate::{
     fdo,
     fdo::{Introspectable, Peer, Properties},
-    Connection, Error, Interface, Message, MessageHeader, MessageType, Result, SignalContext,
-    WeakConnection,
+    Connection, DispatchResult, Error, Interface, Message, MessageHeader, MessageType, Result,
+    SignalContext, WeakConnection,
 };
 
 /// Opaque structure that derefs to an `Interface` type.
@@ -615,19 +615,32 @@ impl ObjectServer {
         })?;
 
         let read_lock = iface.read().await;
-        let res = match read_lock.call(self, connection, msg, member.clone()).await {
-            Some(ret) => Some(ret),
-            None => {
-                drop(read_lock);
-                iface
-                    .write()
-                    .await
-                    .call_mut(self, connection, msg, member.clone())
-                    .await
+        match read_lock.call(self, connection, msg, member.clone()) {
+            DispatchResult::MethodNotFound => {
+                return Err(fdo::Error::UnknownMethod(format!(
+                    "Unknown method '{}'",
+                    member
+                )));
             }
-        };
-
-        res.ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
+            DispatchResult::Async(f) => {
+                return Ok(f.await);
+            }
+            DispatchResult::RequiresMut => {}
+        }
+        drop(read_lock);
+        let mut write_lock = iface.write().await;
+        match write_lock.call_mut(self, connection, msg, member.clone()) {
+            DispatchResult::MethodNotFound => {}
+            DispatchResult::RequiresMut => {}
+            DispatchResult::Async(f) => {
+                return Ok(f.await);
+            }
+        }
+        drop(write_lock);
+        Err(fdo::Error::UnknownMethod(format!(
+            "Unknown method '{}'",
+            member
+        )))
     }
 
     async fn dispatch_method_call(
