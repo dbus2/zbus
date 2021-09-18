@@ -219,7 +219,7 @@ fn test_interface() {
             let m =
                 zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
                     .unwrap();
-            let _ = block_on(t.call(&s, &c, &m, "StrU32".try_into().unwrap())).unwrap();
+            let _ = t.call(&s, &c, &m, "StrU32".try_into().unwrap());
             let ctxt = SignalContext::new(&c, "/does/not/matter").unwrap();
             block_on(Test::<u32>::signal(&ctxt, 23, "ergo sum")).unwrap();
         });
