@@ -733,13 +733,17 @@ impl Connection {
             self.inner.executor.spawn(async move {
                 // TODO: Log errors when we've logging.
                 while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
-                    match weak_conn.upgrade() {
-                        Some(conn) => {
-                            let server = conn.object_server().await;
-                            let _ = server.dispatch_message(&*msg).await;
-                        }
+                    if let Some(conn) = weak_conn.upgrade() {
+                        let executor = conn.inner.executor.clone();
+                        executor
+                            .spawn(async move {
+                                let server = conn.object_server().await;
+                                let _ = server.dispatch_message(&msg).await;
+                            })
+                            .detach();
+                    } else {
                         // If connection is completely gone, no reason to keep running the task anymore.
-                        None => return,
+                        break;
                     }
                 }
             })
