@@ -725,8 +725,13 @@ impl Connection {
             while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
                 match weak_conn.upgrade() {
                     Some(conn) => {
-                        let server = conn.object_server().await;
-                        let _ = server.dispatch_message(&msg).await;
+                        let executor = conn.inner.executor.clone();
+                        executor
+                            .spawn(async move {
+                                let server = conn.object_server().await;
+                                let _ = server.dispatch_message(&msg).await;
+                            })
+                            .detach();
                     }
                     // If connection is completely gone, no reason to keep running the task anymore.
                     None => return,
