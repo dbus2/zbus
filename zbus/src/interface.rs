@@ -78,8 +78,15 @@ pub trait Interface: Any + Send + Sync {
     where
         Self: Sized;
 
-    /// Get a property value. Returns `None` if the property doesn't exist.
-    async fn get(&self, property_name: &str) -> Option<fdo::Result<OwnedValue>>;
+    /// Get a property value.
+    fn get<'call>(
+        &'call self,
+        server: &'call ObjectServer,
+        connection: &'call Connection,
+        msg: &'call Message,
+        property_name: &'call str,
+        allow_blocking: bool,
+    ) -> DispatchResult<'call>;
 
     /// Return all the properties.
     async fn get_all(&self) -> HashMap<String, OwnedValue>;

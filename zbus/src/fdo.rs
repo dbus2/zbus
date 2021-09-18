@@ -3,6 +3,7 @@
 //! The D-Bus specification defines the message bus messages and some standard interfaces that may
 //! be useful across various D-Bus applications. This module provides their proxy.
 
+use async_io::block_on;
 use enumflags2::BitFlags;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -14,7 +15,10 @@ use zbus_names::{
 };
 use zvariant::{derive::Type, ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value};
 
-use crate::{dbus_interface, dbus_proxy, DBusError, MessageHeader, ObjectServer, SignalContext};
+use crate::{
+    dbus_interface, dbus_proxy, DBusError, DispatchResult, MessageHeader, ObjectServer,
+    SignalContext,
+};
 
 /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
 #[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
@@ -93,27 +97,70 @@ assert_impl_all!(Properties: Send, Sync, Unpin);
 
 #[dbus_interface(name = "org.freedesktop.DBus.Properties")]
 impl Properties {
-    async fn get(
+    #[dbus_interface(raw_return("v"))]
+    fn get<'c>(
         &self,
         interface_name: InterfaceName<'_>,
-        property_name: &str,
-        #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
-    ) -> Result<OwnedValue> {
-        let path = header.path()?.ok_or(crate::Error::MissingField)?;
-        let iface = server
-            .get_node(path)
-            .and_then(|node| node.interface_lock(interface_name.clone()))
-            .ok_or_else(|| {
-                Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
-            })?;
+        property_name: String,
+        #[zbus(object_server)] server: &'c ObjectServer,
+        #[zbus(connection)] conn: &'c zbus::Connection,
+        #[zbus(message)] msg: &'c zbus::Message,
+        #[zbus(allow_blocking)] allow_blocking: bool,
+    ) -> DispatchResult<'c> {
+        (move || -> Result<DispatchResult<'c>> {
+            let header = msg.header()?;
+            let path = header.path()?.ok_or(crate::Error::MissingField)?;
+            let iface = server
+                .get_node(path)
+                .and_then(|node| node.interface_lock(interface_name.clone()))
+                .ok_or_else(|| {
+                    Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
+                })?;
 
-        let res = iface.read().await.get(property_name).await;
-        res.unwrap_or_else(|| {
-            Err(Error::UnknownProperty(format!(
-                "Unknown property '{}'",
-                property_name
-            )))
+            if allow_blocking {
+                Ok(DispatchResult::Blocking(Box::new(
+                    move || match block_on(iface.read()).get(
+                        server,
+                        conn,
+                        msg,
+                        &property_name,
+                        allow_blocking,
+                    ) {
+                        DispatchResult::Async(f) => block_on(f),
+                        DispatchResult::Blocking(f) => f(),
+                        _ => block_on(conn.reply_dbus_error(
+                            &header,
+                            Error::UnknownProperty(format!("Unknown property '{}'", property_name)),
+                        )),
+                    },
+                )))
+            } else {
+                Ok(DispatchResult::Async(Box::pin(async move {
+                    match iface
+                        .read()
+                        .await
+                        .get(server, conn, msg, &property_name, allow_blocking)
+                    {
+                        DispatchResult::Async(f) => f.await,
+                        _ => {
+                            conn.reply_dbus_error(
+                                &header,
+                                Error::UnknownProperty(format!(
+                                    "Unknown property '{}'",
+                                    property_name
+                                )),
+                            )
+                            .await
+                        }
+                    }
+                })))
+            }
+        })()
+        .unwrap_or_else(move |e| {
+            DispatchResult::Async(Box::pin(async move {
+                let header = msg.header().unwrap();
+                conn.reply_dbus_error(&header, e).await
+            }))
         })
     }
 

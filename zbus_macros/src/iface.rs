@@ -294,13 +294,12 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
                 let q = quote!(
                     #member_name => {
-                        ::std::option::Option::Some(::std::result::Result::Ok(
-                            ::std::convert::Into::into(
-                                <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
-                                    self.#ident()#method_await,
-                                ),
-                            ),
-                        ))
+                        #zbus::DispatchResult::Async(::std::boxed::Box::pin(async move {
+                            let value = <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
+                                self.#ident()#method_await,
+                            );
+                            connection.reply(msg, &value).await
+                        }))
                     }
                 );
                 get_dispatch.extend(q);
@@ -405,13 +404,17 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 #zbus::names::InterfaceName::from_str_unchecked(#iface_name)
             }
 
-            async fn get(
-                &self,
-                property_name: &str,
-            ) -> ::std::option::Option<#zbus::fdo::Result<#zbus::zvariant::OwnedValue>> {
+            fn get<'call>(
+                &'call self,
+                server: &'call #zbus::ObjectServer,
+                connection: &'call #zbus::Connection,
+                msg: &'call #zbus::Message,
+                property_name: &'call str,
+                allow_blocking: bool,
+            ) -> #zbus::DispatchResult<'call> {
                 match property_name {
                     #get_dispatch
-                    _ => ::std::option::Option::None,
+                    _ => #zbus::DispatchResult::MethodNotFound,
                 }
             }
 
