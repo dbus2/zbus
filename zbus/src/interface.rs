@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{DynamicType, OwnedValue, Value};
 
-use crate::{fdo, Connection, Message, ObjectServer, Result, SignalContext};
+use crate::{Connection, Message, ObjectServer, Result, SignalContext};
 
 /// A helper type returned by [`Interface`] callbacks.
 pub enum DispatchResult<'a> {
@@ -91,13 +91,18 @@ pub trait Interface: Any + Send + Sync {
     /// Return all the properties.
     async fn get_all(&self) -> HashMap<String, OwnedValue>;
 
-    /// Set a property value. Returns `None` if the property doesn't exist.
-    async fn set(
-        &mut self,
-        property_name: &str,
-        value: &Value<'_>,
-        ctxt: &SignalContext<'_>,
-    ) -> Option<fdo::Result<()>>;
+    /// Set a property value.
+    #[allow(clippy::too_many_arguments)]
+    fn set<'call>(
+        &'call mut self,
+        server: &'call ObjectServer,
+        connection: &'call Connection,
+        msg: &'call Message,
+        property_name: &'call str,
+        value: &'call Value<'_>,
+        ctxt: &'call SignalContext<'_>,
+        allow_blocking: bool,
+    ) -> DispatchResult<'call>;
 
     /// Call a `&self` method.
     fn call<'call>(

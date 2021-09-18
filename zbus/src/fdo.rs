@@ -164,30 +164,79 @@ impl Properties {
         })
     }
 
-    // TODO: should be able to take a &Value instead (but obscure deserialize error for now..)
-    async fn set(
-        &mut self,
+    #[dbus_interface(raw_return)]
+    #[allow(clippy::too_many_arguments)]
+    fn set<'c>(
+        &self,
         interface_name: InterfaceName<'_>,
-        property_name: &str,
+        property_name: String,
         value: OwnedValue,
-        #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
-        #[zbus(signal_context)] ctxt: SignalContext<'_>,
-    ) -> Result<()> {
-        let path = header.path()?.ok_or(crate::Error::MissingField)?;
-        let iface = server
-            .get_node(path)
-            .and_then(|node| node.interface_lock(interface_name.clone()))
-            .ok_or_else(|| {
-                Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
-            })?;
+        #[zbus(object_server)] server: &'c ObjectServer,
+        #[zbus(connection)] conn: &'c zbus::Connection,
+        #[zbus(message)] msg: &'c zbus::Message,
+        #[zbus(allow_blocking)] allow_blocking: bool,
+        #[zbus(header)] header: MessageHeader<'c>,
+        #[zbus(signal_context)] ctxt: SignalContext<'c>,
+    ) -> DispatchResult<'c> {
+        (move || -> Result<DispatchResult<'c>> {
+            let path = header.path()?.ok_or(crate::Error::MissingField)?;
+            let iface = server
+                .get_node(path)
+                .and_then(|node| node.interface_lock(interface_name.clone()))
+                .ok_or_else(|| {
+                    Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
+                })?;
 
-        let res = iface.write().await.set(property_name, &value, &ctxt).await;
-        res.unwrap_or_else(|| {
-            Err(Error::UnknownProperty(format!(
-                "Unknown property '{}'",
-                property_name
-            )))
+            if allow_blocking {
+                Ok(DispatchResult::Blocking(Box::new(
+                    move || match block_on(iface.write()).set(
+                        server,
+                        conn,
+                        msg,
+                        &property_name,
+                        &value,
+                        &ctxt,
+                        allow_blocking,
+                    ) {
+                        DispatchResult::Async(f) => block_on(f),
+                        DispatchResult::Blocking(f) => f(),
+                        _ => block_on(conn.reply_dbus_error(
+                            &header,
+                            Error::UnknownProperty(format!("Unknown property '{}'", property_name)),
+                        )),
+                    },
+                )))
+            } else {
+                Ok(DispatchResult::Async(Box::pin(async move {
+                    match iface.write().await.set(
+                        server,
+                        conn,
+                        msg,
+                        &property_name,
+                        &value,
+                        &ctxt,
+                        allow_blocking,
+                    ) {
+                        DispatchResult::Async(f) => f.await,
+                        _ => {
+                            conn.reply_dbus_error(
+                                &header,
+                                Error::UnknownProperty(format!(
+                                    "Unknown property '{}'",
+                                    property_name
+                                )),
+                            )
+                            .await
+                        }
+                    }
+                })))
+            }
+        })()
+        .unwrap_or_else(move |e| {
+            DispatchResult::Async(Box::pin(async move {
+                let header = msg.header().unwrap();
+                conn.reply_dbus_error(&header, e).await
+            }))
         })
     }
 

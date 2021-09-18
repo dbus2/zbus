@@ -266,25 +266,29 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 };
                 let q = quote!(
                     #member_name => {
-                        let val = match ::std::convert::TryInto::try_into(value) {
-                            ::std::result::Result::Ok(val) => val,
-                            ::std::result::Result::Err(e) => {
-                                return ::std::option::Option::Some(::std::result::Result::Err(
-                                    ::std::convert::Into::into(#zbus::Error::Variant(e)),
-                                ));
+                        #zbus::DispatchResult::Async(::std::boxed::Box::pin(async move {
+                            let val = match ::std::convert::TryInto::try_into(value) {
+                                ::std::result::Result::Ok(val) => val,
+                                ::std::result::Result::Err(e) => {
+                                    let e: #zbus::zvariant::Error = e;
+                                    let e = #zbus::fdo::Error::InvalidArgs(format!("{}", e));
+                                    return connection.reply_dbus_error(&msg.header()?, e).await;
+                                }
+                            };
+                            match #set_call {
+                                ::std::result::Result::Ok(()) => {
+                                    let result = connection.reply(msg, &()).await?;
+                                    self
+                                        .#prop_changed_method_name(&signal_context)
+                                        .await?;
+                                    ::std::result::Result::Ok(result)
+                                }
+                                ::std::result::Result::Err(e) => {
+                                    let e: #zbus::fdo::Error = e;
+                                    connection.reply_dbus_error(&msg.header()?, e).await
+                                }
                             }
-                        };
-                        let result = match #set_call {
-                            ::std::result::Result::Ok(set_result) => {
-                                self
-                                    .#prop_changed_method_name(&signal_context)
-                                    .await
-                                    .map(|_| set_result)
-                                    .map_err(Into::into)
-                            }
-                            e => e,
-                        };
-                        ::std::option::Option::Some(result)
+                        }))
                     }
                 );
                 set_dispatch.extend(q);
@@ -432,15 +436,19 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 props
             }
 
-            async fn set(
-                &mut self,
-                property_name: &str,
-                value: &#zbus::zvariant::Value<'_>,
-                signal_context: &#zbus::SignalContext<'_>,
-            ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
+            fn set<'call>(
+                &'call mut self,
+                server: &'call #zbus::ObjectServer,
+                connection: &'call #zbus::Connection,
+                msg: &'call #zbus::Message,
+                property_name: &'call str,
+                value: &'call #zbus::zvariant::Value<'_>,
+                signal_context: &'call #zbus::SignalContext<'_>,
+                allow_blocking: bool,
+            ) -> #zbus::DispatchResult<'call> {
                 match property_name {
                     #set_dispatch
-                    _ => ::std::option::Option::None,
+                    _ => #zbus::DispatchResult::MethodNotFound,
                 }
             }
 
