@@ -109,6 +109,20 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         let is_blocking = attrs.iter().any(|x| x.is_blocking());
         let is_property = attrs.iter().any(|x| x.is_property());
         let is_signal = attrs.iter().any(|x| x.is_signal());
+        let in_args = attrs
+            .iter()
+            .filter_map(|x| match x {
+                ItemAttribute::InArgs(a) => Some(a),
+                _ => None,
+            })
+            .next();
+        let raw_args = attrs
+            .iter()
+            .filter_map(|x| match x {
+                ItemAttribute::RawArgs(r) => Some(r),
+                _ => None,
+            })
+            .next();
         let raw_return = attrs
             .iter()
             .filter_map(|x| match x {
@@ -125,6 +139,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         assert!((is_async as u8) + (is_blocking as u8) + (is_raw_ret as u8) < 2);
 
         let has_inputs = inputs.len() > 1;
+        assert!(in_args.is_none() || raw_args.is_some());
 
         let is_mut = if let FnArg::Receiver(r) = inputs.first().expect("not &self method") {
             r.mutability.is_some()
@@ -171,7 +186,29 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         };
 
         let mut intro_args = quote!();
-        intro_args.extend(introspect_input_args(&typed_inputs, is_signal));
+        if let Some(arg_types) = raw_args {
+            if let Some(arg_names) = in_args {
+                assert_eq!(arg_types.len(), arg_names.len());
+                for (ty, name) in arg_types.iter().zip(arg_names) {
+                    let attrs = format!("name=\"{}\" type=\"{}\"", name, ty);
+                    intro_args.extend(quote!(
+                        ::std::writeln!(writer, "{:indent$}<arg type=\"{}\" direction=\"in\"/>", "",
+                                 #attrs, indent = level).unwrap();
+                    ));
+                }
+            } else {
+                for ty in arg_types {
+                    let attrs = format!("type=\"{}\"", ty);
+                    intro_args.extend(quote!(
+                        ::std::writeln!(writer, "{:indent$}<arg {} direction=\"in\"/>", "",
+                                 #attrs, indent = level).unwrap();
+                    ));
+                }
+            }
+        } else {
+            intro_args.extend(introspect_input_args(&typed_inputs, is_signal));
+        }
+
         let is_result_output = match raw_return {
             Some(arg_types) => {
                 if let Some(arg_names) = out_args {
@@ -197,7 +234,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             None => introspect_add_output_args(&mut intro_args, output, &out_args)?,
         };
 
-        let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus)?;
+        let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus, raw_args.is_none())?;
 
         clean_input_args(inputs);
 
@@ -505,6 +542,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 fn get_args_from_inputs(
     inputs: &[PatType],
     zbus: &TokenStream,
+    parse_body: bool,
 ) -> syn::Result<(TokenStream, TokenStream)> {
     if inputs.is_empty() {
         Ok((quote!(), quote!()))
@@ -650,13 +688,18 @@ fn get_args_from_inputs(
                 decls.extend(quote! {
                     let #pat = m;
                 });
+            } else if !parse_body {
+                return Err(syn::Error::new_spanned(
+                    input,
+                    "Non-zbus arguments not allowed with raw_args",
+                ));
             } else {
                 args.push(&input.pat);
                 tys.push(&input.ty);
             }
         }
 
-        let args_from_msg = quote! {
+        let mut args_from_msg = quote! {
             #server_arg_decl
 
             #conn_arg_decl
@@ -666,15 +709,19 @@ fn get_args_from_inputs(
             #signal_context_arg_decl
 
             #decls
-
-            let (#(#args),*): (#(#tys),*) =
-                match m.body() {
-                    ::std::result::Result::Ok(r) => r,
-                    ::std::result::Result::Err(e) => {
-                        return #reply_error;
-                    }
-                };
         };
+
+        if parse_body {
+            args_from_msg.extend(quote! {
+                let (#(#args),*): (#(#tys),*) =
+                    match m.body() {
+                        ::std::result::Result::Ok(r) => r,
+                        ::std::result::Result::Err(e) => {
+                            return #reply_error;
+                        }
+                    };
+            });
+        }
 
         let all_args = inputs.iter().map(|t| &t.pat);
         let all_args = quote! { #(#all_args,)* };

@@ -152,6 +152,14 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   You can call a signal method from a an interface method, or from an [`ObjectServer::with`]
 ///   function.
 ///
+/// * `raw_args` - Note: this is an advanced API that is not normally needed.  This method will
+///   parse the incoming call message itself, extracting the arguments from the body.  This
+///   attribute takes a list of the dbus argument type strings for use in allowing the method to be
+///   introspected; consider using `in_args`.
+///
+/// * `in_args` - A list of names for the arguments whose types were defined in `raw_args`.  This
+///   is only allowed if you also use `raw_args`.
+///
 /// * `struct_return` - This attribute is depcrecated and a noop. If you want to return a single
 ///   structure from a method, simply declare it to return a named structure or a tuple with a
 ///   tuple as the only field.
