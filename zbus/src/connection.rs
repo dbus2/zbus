@@ -726,7 +726,7 @@ impl Connection {
                 match weak_conn.upgrade() {
                     Some(conn) => {
                         let server = conn.object_server().await;
-                        let _ = server.dispatch_message(&*msg).await;
+                        let _ = server.dispatch_message(&msg).await;
                     }
                     // If connection is completely gone, no reason to keep running the task anymore.
                     None => return,

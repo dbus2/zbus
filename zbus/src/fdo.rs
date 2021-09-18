@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
 use std::collections::HashMap;
+use std::sync::Arc;
 use zbus_names::{
     BusName, InterfaceName, OwnedBusName, OwnedInterfaceName, OwnedUniqueName, UniqueName,
     WellKnownName,
@@ -104,7 +105,7 @@ impl Properties {
         property_name: String,
         #[zbus(object_server)] server: &'c ObjectServer,
         #[zbus(connection)] conn: &'c zbus::Connection,
-        #[zbus(message)] msg: &'c zbus::Message,
+        #[zbus(message)] msg: &'c Arc<zbus::Message>,
         #[zbus(allow_blocking)] allow_blocking: bool,
     ) -> DispatchResult<'c> {
         (move || -> Result<DispatchResult<'c>> {
@@ -173,7 +174,7 @@ impl Properties {
         value: OwnedValue,
         #[zbus(object_server)] server: &'c ObjectServer,
         #[zbus(connection)] conn: &'c zbus::Connection,
-        #[zbus(message)] msg: &'c zbus::Message,
+        #[zbus(message)] msg: &'c Arc<zbus::Message>,
         #[zbus(allow_blocking)] allow_blocking: bool,
         #[zbus(header)] header: MessageHeader<'c>,
         #[zbus(signal_context)] ctxt: SignalContext<'c>,
@@ -246,7 +247,7 @@ impl Properties {
         interface_name: InterfaceName<'_>,
         #[zbus(object_server)] server: &'c ObjectServer,
         #[zbus(connection)] conn: &'c zbus::Connection,
-        #[zbus(message)] msg: &'c zbus::Message,
+        #[zbus(message)] msg: &'c Arc<zbus::Message>,
         #[zbus(allow_blocking)] allow_blocking: bool,
         #[zbus(header)] header: MessageHeader<'c>,
     ) -> DispatchResult<'c> {

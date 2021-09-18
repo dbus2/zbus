@@ -226,9 +226,10 @@ fn test_interface() {
             // check compilation
             let c = zbus::Connection::session().await.unwrap();
             let s = c.object_server().await;
-            let m =
+            let m = std::sync::Arc::new(
                 zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
-                    .unwrap();
+                    .unwrap(),
+            );
             match t.call(&s, &c, &m, "StrU32".try_into().unwrap(), false) {
                 zbus::DispatchResult::Async(f) => {
                     block_on(f).unwrap();

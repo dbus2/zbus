@@ -448,7 +448,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &'call self,
                 server: &'call #zbus::ObjectServer,
                 connection: &'call #zbus::Connection,
-                msg: &'call #zbus::Message,
+                msg: &'call ::std::sync::Arc<#zbus::Message>,
                 property_name: &'call str,
                 allow_blocking: bool,
             ) -> #zbus::DispatchResult<'call> {
@@ -462,7 +462,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &'call self,
                 server: &'call #zbus::ObjectServer,
                 connection: &'call #zbus::Connection,
-                msg: &'call #zbus::Message,
+                msg: &'call ::std::sync::Arc<#zbus::Message>,
                 allow_blocking: bool,
             ) -> #zbus::DispatchResult<'call> {
                 #zbus::DispatchResult::Async(::std::boxed::Box::pin(async move {
@@ -479,7 +479,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &'call mut self,
                 server: &'call #zbus::ObjectServer,
                 connection: &'call #zbus::Connection,
-                msg: &'call #zbus::Message,
+                msg: &'call ::std::sync::Arc<#zbus::Message>,
                 property_name: &'call str,
                 value: &'call #zbus::zvariant::Value<'_>,
                 signal_context: &'call #zbus::SignalContext<'_>,
@@ -495,7 +495,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &'call self,
                 s: &'call #zbus::ObjectServer,
                 c: &'call #zbus::Connection,
-                m: &'call #zbus::Message,
+                m: &'call ::std::sync::Arc<#zbus::Message>,
                 name: #zbus::names::MemberName<'call>,
                 allow_blocking: bool,
             ) -> #zbus::DispatchResult<'call> {
@@ -509,7 +509,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &'call mut self,
                 s: &'call #zbus::ObjectServer,
                 c: &'call #zbus::Connection,
-                m: &'call #zbus::Message,
+                m: &'call ::std::sync::Arc<#zbus::Message>,
                 name: #zbus::names::MemberName<'call>,
                 allow_blocking: bool,
             ) -> #zbus::DispatchResult<'call> {

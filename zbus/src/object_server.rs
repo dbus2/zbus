@@ -620,7 +620,7 @@ impl ObjectServer {
         &self,
         connection: &Connection,
         msg_header: &MessageHeader<'_>,
-        msg: &Message,
+        msg: &Arc<Message>,
     ) -> fdo::Result<Result<u32>> {
         let (iface, member) = self.iface_for_msg(msg_header)?;
 
@@ -663,7 +663,7 @@ impl ObjectServer {
         &self,
         connection: &Connection,
         msg_header: &MessageHeader<'_>,
-        msg: &Message,
+        msg: &Arc<Message>,
     ) -> fdo::Result<Result<u32>> {
         let (iface, member) = self.iface_for_msg(msg_header)?;
 
@@ -706,7 +706,7 @@ impl ObjectServer {
         &self,
         connection: &Connection,
         msg_header: &MessageHeader<'_>,
-        msg: &Message,
+        msg: &Arc<Message>,
     ) -> Result<u32> {
         match self
             .dispatch_method_call_try(connection, msg_header, msg)
@@ -721,7 +721,7 @@ impl ObjectServer {
         &self,
         connection: &Connection,
         msg_header: &MessageHeader<'_>,
-        msg: &Message,
+        msg: &Arc<Message>,
     ) -> Result<u32> {
         match self.dispatch_method_call_sync_try(connection, msg_header, msg) {
             Err(e) => block_on(e.reply(connection, msg)),
@@ -741,7 +741,7 @@ impl ObjectServer {
     ///   the caller through the associated server connection.
     ///
     /// Returns an error if the message is malformed, true if it's handled, false otherwise.
-    pub(crate) async fn dispatch_message(&self, msg: &Message) -> Result<bool> {
+    pub(crate) async fn dispatch_message(&self, msg: &Arc<Message>) -> Result<bool> {
         let msg_header = msg.header()?;
 
         match msg_header.message_type()? {
@@ -754,7 +754,7 @@ impl ObjectServer {
         }
     }
 
-    pub(crate) fn dispatch_sync(&self, msg: &Message) -> Result<()> {
+    pub(crate) fn dispatch_sync(&self, msg: &Arc<Message>) -> Result<()> {
         let msg_header = msg.header()?;
 
         match msg_header.message_type()? {

@@ -3,6 +3,7 @@ use std::{
     fmt::Write,
     future::Future,
     pin::Pin,
+    sync::Arc,
 };
 
 use async_io::block_on;
@@ -80,7 +81,7 @@ pub trait Interface: Any + Send + Sync {
         &'call self,
         server: &'call ObjectServer,
         connection: &'call Connection,
-        msg: &'call Message,
+        msg: &'call Arc<Message>,
         property_name: &'call str,
         allow_blocking: bool,
     ) -> DispatchResult<'call>;
@@ -90,7 +91,7 @@ pub trait Interface: Any + Send + Sync {
         &'call self,
         server: &'call ObjectServer,
         connection: &'call Connection,
-        msg: &'call Message,
+        msg: &'call Arc<Message>,
         allow_blocking: bool,
     ) -> DispatchResult<'call>;
 
@@ -100,7 +101,7 @@ pub trait Interface: Any + Send + Sync {
         &'call mut self,
         server: &'call ObjectServer,
         connection: &'call Connection,
-        msg: &'call Message,
+        msg: &'call Arc<Message>,
         property_name: &'call str,
         value: &'call Value<'_>,
         ctxt: &'call SignalContext<'_>,
@@ -112,7 +113,7 @@ pub trait Interface: Any + Send + Sync {
         &'call self,
         server: &'call ObjectServer,
         connection: &'call Connection,
-        msg: &'call Message,
+        msg: &'call Arc<Message>,
         name: MemberName<'call>,
         allow_blocking: bool,
     ) -> DispatchResult<'call>;
@@ -122,7 +123,7 @@ pub trait Interface: Any + Send + Sync {
         &'call mut self,
         server: &'call ObjectServer,
         connection: &'call Connection,
-        msg: &'call Message,
+        msg: &'call Arc<Message>,
         name: MemberName<'call>,
         allow_blocking: bool,
     ) -> DispatchResult<'call>;
