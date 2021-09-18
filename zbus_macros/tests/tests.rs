@@ -134,6 +134,12 @@ fn test_interface() {
                 .map_err(|e| zbus::fdo::Error::Failed(format!("Invalid val: {}", e)))
         }
 
+        #[dbus_interface(blocking)]
+        fn str_i32(&self, val: &str) -> zbus::fdo::Result<i32> {
+            val.parse()
+                .map_err(|e| zbus::fdo::Error::Failed(format!("Invalid val: {}", e)))
+        }
+
         // TODO: naming output arguments after "RFC: Structural Records #2584"
         fn many_output(&self) -> zbus::fdo::Result<(&T, String)> {
             Ok((&self.generic, self.something.clone()))
@@ -175,6 +181,10 @@ fn test_interface() {
   <method name="StrU32">
     <arg name="val" type="s" direction="in"/>
     <arg type="u" direction="out"/>
+  </method>
+  <method name="StrI32">
+    <arg name="val" type="s" direction="in"/>
+    <arg type="i" direction="out"/>
   </method>
   <method name="ManyOutput">
     <arg type="u" direction="out"/>
@@ -219,7 +229,18 @@ fn test_interface() {
             let m =
                 zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
                     .unwrap();
-            let _ = block_on(t.call(&s, &c, &m, "StrU32".try_into().unwrap())).unwrap();
+            match t.call(&s, &c, &m, "StrU32".try_into().unwrap(), false) {
+                zbus::DispatchResult::Async(f) => {
+                    block_on(f).unwrap();
+                }
+                _ => unreachable!(),
+            }
+            match t.call(&s, &c, &m, "StrI32".try_into().unwrap(), true) {
+                zbus::DispatchResult::Blocking(f) => {
+                    f().unwrap();
+                }
+                _ => unreachable!(),
+            }
             let ctxt = SignalContext::new(&c, "/does/not/matter").unwrap();
             block_on(Test::<u32>::signal(&ctxt, 23, "ergo sum")).unwrap();
         });
