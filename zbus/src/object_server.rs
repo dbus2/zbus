@@ -615,7 +615,7 @@ impl ObjectServer {
         })?;
 
         let read_lock = iface.read().await;
-        match read_lock.call(self, connection, msg, member.clone()) {
+        match read_lock.call(self, connection, msg, member.clone(), false) {
             DispatchResult::MethodNotFound => {
                 return Err(fdo::Error::UnknownMethod(format!(
                     "Unknown method '{}'",
@@ -625,15 +625,21 @@ impl ObjectServer {
             DispatchResult::Async(f) => {
                 return Ok(f.await);
             }
+            DispatchResult::Blocking(_) => {
+                return Ok(Err(Error::Unsupported));
+            }
             DispatchResult::RequiresMut => {}
         }
         drop(read_lock);
         let mut write_lock = iface.write().await;
-        match write_lock.call_mut(self, connection, msg, member.clone()) {
+        match write_lock.call_mut(self, connection, msg, member.clone(), false) {
             DispatchResult::MethodNotFound => {}
             DispatchResult::RequiresMut => {}
             DispatchResult::Async(f) => {
                 return Ok(f.await);
+            }
+            DispatchResult::Blocking(_) => {
+                return Ok(Err(Error::Unsupported));
             }
         }
         drop(write_lock);

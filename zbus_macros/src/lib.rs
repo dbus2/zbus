@@ -164,6 +164,8 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * `out_args` - When returning multiple values from a method, naming the out arguments become
 ///   important. You can use `out_args` for specifying names for your out arguments.
 ///
+/// * `blocking` - Allow use of the blocking APIs in this call.
+///
 /// Note: a `<property_name_in_snake_case>_changed` method is generated for each property: this
 /// method emits the "PropertiesChanged" signal for the associated property. The setter (if it
 /// exists) will automatically call this method.

@@ -6,6 +6,7 @@ use std::{
     pin::Pin,
 };
 
+use async_io::block_on;
 use async_trait::async_trait;
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{DynamicType, OwnedValue, Value};
@@ -24,6 +25,10 @@ pub enum DispatchResult<'a> {
 
     /// The method was found and will be completed by running this Future
     Async(Pin<Box<dyn Future<Output = Result<u32>> + Send + 'a>>),
+
+    /// The method was found and will be completed by running this closure, which may call blocking
+    /// APIs.
+    Blocking(Box<dyn FnOnce() -> Result<u32> + Send + 'a>),
 }
 
 impl<'a> DispatchResult<'a> {
@@ -39,6 +44,22 @@ impl<'a> DispatchResult<'a> {
             match f.await {
                 Ok(r) => conn.reply(msg, &r).await,
                 Err(e) => conn.reply_dbus_error(&hdr, e).await,
+            }
+        }))
+    }
+
+    /// Helper for creating the Blocking variant
+    pub fn new_blocking<F, T, E>(conn: &'a Connection, msg: &'a Message, f: F) -> Self
+    where
+        F: FnOnce() -> ::std::result::Result<T, E> + Send + 'a,
+        T: serde::Serialize + DynamicType + Send + Sync,
+        E: zbus::DBusError + Send,
+    {
+        DispatchResult::Blocking(Box::new(move || {
+            let hdr = msg.header()?;
+            match f() {
+                Ok(r) => block_on(conn.reply(msg, &r)),
+                Err(e) => block_on(conn.reply_dbus_error(&hdr, e)),
             }
         }))
     }
@@ -71,22 +92,24 @@ pub trait Interface: Any + Send + Sync {
         ctxt: &SignalContext<'_>,
     ) -> Option<fdo::Result<()>>;
 
-    /// Call a `&self` method. Returns `None` if the method doesn't exist.
+    /// Call a `&self` method.
     fn call<'call>(
         &'call self,
         server: &'call ObjectServer,
         connection: &'call Connection,
         msg: &'call Message,
         name: MemberName<'call>,
+        allow_blocking: bool,
     ) -> DispatchResult<'call>;
 
-    /// Call a `&mut self` method. Returns `None` if the method doesn't exist.
+    /// Call a `&mut self` method.
     fn call_mut<'call>(
         &'call mut self,
         server: &'call ObjectServer,
         connection: &'call Connection,
         msg: &'call Message,
         name: MemberName<'call>,
+        allow_blocking: bool,
     ) -> DispatchResult<'call>;
 
     /// Write introspection XML to the writer, with the given indentation level.

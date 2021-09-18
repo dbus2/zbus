@@ -106,12 +106,14 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             .collect();
 
         let doc_comments = to_xml_docs(docs);
+        let is_blocking = attrs.iter().any(|x| x.is_blocking());
         let is_property = attrs.iter().any(|x| x.is_property());
         let is_signal = attrs.iter().any(|x| x.is_signal());
         let out_args = attrs.iter().find(|x| x.is_out_args()).map(|x| match x {
             ItemAttribute::OutArgs(a) => a,
             _ => unreachable!(),
         });
+        assert!(!(is_async && is_blocking));
         assert!(!is_property || !is_signal);
 
         let has_inputs = inputs.len() > 1;
@@ -130,6 +132,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             quote! { .await }
         } else {
             quote! {}
+        };
+        let reply_await = if is_blocking {
+            quote! {}
+        } else {
+            quote! { .await }
         };
 
         let mut typed_inputs = inputs
@@ -159,7 +166,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         intro_args.extend(introspect_input_args(&typed_inputs, is_signal));
         let is_result_output = introspect_add_output_args(&mut intro_args, output, &out_args)?;
 
-        let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus)?;
+        let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus, is_blocking)?;
 
         clean_input_args(inputs);
 
@@ -167,11 +174,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             let ret = quote!(r);
 
             quote!(match reply {
-                ::std::result::Result::Ok(r) => c.reply(m, &#ret).await,
-                ::std::result::Result::Err(e) => e.reply(c, m).await,
+                ::std::result::Result::Ok(r) => c.reply(m, &#ret)#reply_await,
+                ::std::result::Result::Err(e) => c.reply_dbus_error(&m.header()?, e)#reply_await,
             })
         } else {
-            quote!(c.reply(m, &reply).await)
+            quote!(c.reply(m, &reply)#reply_await)
         };
 
         let member_name = attrs
@@ -301,15 +308,30 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             introspect.extend(doc_comments);
             introspect.extend(introspect_method(&member_name, &intro_args));
 
-            let m = quote! {
-                #member_name => {
-                    let future = async move {
-                        #args_from_msg
-                        let reply = self.#ident(#args)#method_await;
-                        #reply
-                    };
-                    #zbus::DispatchResult::Async(::std::boxed::Box::pin(future))
-                },
+            let m = if is_blocking {
+                quote! {
+                    #member_name if allow_blocking => {
+                        let closure = move || {
+                            let c : #zbus::blocking::Connection = c.clone().into();
+                            let c = &c;
+                            #args_from_msg
+                            let reply = self.#ident(#args);
+                            #reply
+                        };
+                        #zbus::DispatchResult::Blocking(::std::boxed::Box::new(closure))
+                    },
+                }
+            } else {
+                quote! {
+                    #member_name => {
+                        let future = async move {
+                            #args_from_msg
+                            let reply = self.#ident(#args)#method_await;
+                            #reply
+                        };
+                        #zbus::DispatchResult::Async(::std::boxed::Box::pin(future))
+                    },
+                }
             };
 
             if is_mut {
@@ -387,6 +409,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 c: &'call #zbus::Connection,
                 m: &'call #zbus::Message,
                 name: #zbus::names::MemberName<'call>,
+                allow_blocking: bool,
             ) -> #zbus::DispatchResult<'call> {
                 match name.as_str() {
                     #call_dispatch
@@ -400,6 +423,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 c: &'call #zbus::Connection,
                 m: &'call #zbus::Message,
                 name: #zbus::names::MemberName<'call>,
+                allow_blocking: bool,
             ) -> #zbus::DispatchResult<'call> {
                 match name.as_str() {
                     #call_mut_dispatch
@@ -430,6 +454,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 fn get_args_from_inputs(
     inputs: &[PatType],
     zbus: &TokenStream,
+    is_blocking: bool,
 ) -> syn::Result<(TokenStream, TokenStream)> {
     if inputs.is_empty() {
         Ok((quote!(), quote!()))
@@ -440,6 +465,16 @@ fn get_args_from_inputs(
         let mut signal_context_arg_decl = None;
         let mut args = Vec::new();
         let mut tys = Vec::new();
+
+        let reply_error = if is_blocking {
+            quote! {
+                c.reply_dbus_error(&m.header()?, <#zbus::fdo::Error as ::std::convert::From<_>>::from(e))
+            }
+        } else {
+            quote! {
+                c.reply_dbus_error(&m.header()?, <#zbus::fdo::Error as ::std::convert::From<_>>::from(e)).await
+            }
+        };
 
         for input in inputs {
             let mut is_server = false;
@@ -528,7 +563,7 @@ fn get_args_from_inputs(
                     let #header_arg = match m.header() {
                         ::std::result::Result::Ok(r) => r,
                         ::std::result::Result::Err(e) => {
-                            return <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await;
+                            return #reply_error;
                         }
                     };
                 });
@@ -548,7 +583,7 @@ fn get_args_from_inputs(
                     }) {
                         ::std::result::Result::Ok(e) => e,
                         ::std::result::Result::Err(e) => {
-                            return <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await;
+                            return #reply_error;
                         }
                     };
                 });
@@ -571,7 +606,7 @@ fn get_args_from_inputs(
                 match m.body() {
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
-                        return <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await;
+                        return #reply_error;
                     }
                 };
         };
