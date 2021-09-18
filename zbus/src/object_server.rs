@@ -1,3 +1,4 @@
+use async_io::block_on;
 use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -10,7 +11,7 @@ use std::{
 };
 
 use static_assertions::assert_impl_all;
-use zbus_names::InterfaceName;
+use zbus_names::{InterfaceName, MemberName};
 use zvariant::{ObjectPath, OwnedObjectPath};
 
 use crate::{
@@ -581,12 +582,10 @@ impl ObjectServer {
         node.get_interface_mut().await
     }
 
-    async fn dispatch_method_call_try(
+    fn iface_for_msg<'h>(
         &self,
-        connection: &Connection,
-        msg_header: &MessageHeader<'_>,
-        msg: &Message,
-    ) -> fdo::Result<Result<u32>> {
+        msg_header: &MessageHeader<'h>,
+    ) -> fdo::Result<(Arc<RwLock<dyn Interface>>, MemberName<'h>)> {
         let path = msg_header
             .path()
             .ok()
@@ -613,6 +612,17 @@ impl ObjectServer {
         let iface = node.interface_lock(iface.clone()).ok_or_else(|| {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
         })?;
+
+        Ok((iface, member.clone()))
+    }
+
+    async fn dispatch_method_call_try(
+        &self,
+        connection: &Connection,
+        msg_header: &MessageHeader<'_>,
+        msg: &Message,
+    ) -> fdo::Result<Result<u32>> {
+        let (iface, member) = self.iface_for_msg(msg_header)?;
 
         let read_lock = iface.read().await;
         match read_lock.call(self, connection, msg, member.clone(), false) {
@@ -649,6 +659,49 @@ impl ObjectServer {
         )))
     }
 
+    fn dispatch_method_call_sync_try(
+        &self,
+        connection: &Connection,
+        msg_header: &MessageHeader<'_>,
+        msg: &Message,
+    ) -> fdo::Result<Result<u32>> {
+        let (iface, member) = self.iface_for_msg(msg_header)?;
+
+        let read_lock = block_on(iface.read());
+        match read_lock.call(self, connection, msg, member.clone(), true) {
+            DispatchResult::MethodNotFound => {
+                return Err(fdo::Error::UnknownMethod(format!(
+                    "Unknown method '{}'",
+                    member
+                )));
+            }
+            DispatchResult::Async(f) => {
+                return Ok(block_on(f));
+            }
+            DispatchResult::Blocking(f) => {
+                return Ok(f());
+            }
+            DispatchResult::RequiresMut => {}
+        }
+        drop(read_lock);
+        let mut write_lock = block_on(iface.write());
+        match write_lock.call_mut(self, connection, msg, member.clone(), true) {
+            DispatchResult::MethodNotFound => {}
+            DispatchResult::RequiresMut => {}
+            DispatchResult::Async(f) => {
+                return Ok(block_on(f));
+            }
+            DispatchResult::Blocking(f) => {
+                return Ok(f());
+            }
+        }
+        drop(write_lock);
+        Err(fdo::Error::UnknownMethod(format!(
+            "Unknown method '{}'",
+            member
+        )))
+    }
+
     async fn dispatch_method_call(
         &self,
         connection: &Connection,
@@ -660,6 +713,18 @@ impl ObjectServer {
             .await
         {
             Err(e) => e.reply(connection, msg).await,
+            Ok(r) => r,
+        }
+    }
+
+    fn dispatch_method_call_sync(
+        &self,
+        connection: &Connection,
+        msg_header: &MessageHeader<'_>,
+        msg: &Message,
+    ) -> Result<u32> {
+        match self.dispatch_method_call_sync_try(connection, msg_header, msg) {
+            Err(e) => block_on(e.reply(connection, msg)),
             Ok(r) => r,
         }
     }
@@ -686,6 +751,19 @@ impl ObjectServer {
                 Ok(true)
             }
             _ => Ok(false),
+        }
+    }
+
+    pub(crate) fn dispatch_sync(&self, msg: &Message) -> Result<()> {
+        let msg_header = msg.header()?;
+
+        match msg_header.message_type()? {
+            MessageType::MethodCall => {
+                let conn = self.connection();
+                self.dispatch_method_call_sync(&conn, &msg_header, msg)?;
+                Ok(())
+            }
+            _ => Ok(()),
         }
     }
 

@@ -736,9 +736,21 @@ impl Connection {
         self.inner
             .object_server_dispatch_task
             .set(task)
-            .expect("object server task set twice");
+            .expect("Object server task already created");
 
         RwLock::new(blocking::ObjectServer::new(self))
+    }
+
+    pub(crate) fn setup_object_server_task(&self, task: Task<()>) {
+        self.inner
+            .object_server_dispatch_task
+            .set(task)
+            .expect("Object server task already created");
+
+        self.inner
+            .object_server
+            .set(RwLock::new(blocking::ObjectServer::new(self)))
+            .expect("Object server already created");
     }
 
     pub(crate) async fn subscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(

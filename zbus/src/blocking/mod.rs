@@ -8,10 +8,10 @@
 //! # Caveats
 //!
 //! Since methods provided by these types run their own little runtime (`block_on`), you must not
-//! call by them from async contexts because of the infamous [async sandwich footgun][asf]. This is
-//! is an especially important fact to keep in mind for [`crate::dbus_interface`]. While
-//! `dbus_interface` allows non-async methods for convenience, these methods are called from an
-//! async context.
+//! call by them from async contexts because of the infamous [async sandwich footgun][asf]. For
+//! [`crate::dbus_interface`], this means you may only use the blocking API in methods annotated
+//! with `#[dbus_interface(blocking)]`, which requires you to enable [the blocking object server
+//! thread][zbus::ConnectionBuilder::blocking_object_server].
 //!
 //! [asf]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
 
