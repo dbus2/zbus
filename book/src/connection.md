@@ -14,10 +14,13 @@ entry point of the zbus API.
 ## Connection to the bus
 
 To connect to the session bus (the *per-user* bus), simply call `Connection::session()`. It
-returns an instance of the connection (if all went well).
+returns an instance of the connection (if all went well). Similarly, to connect to the system bus
+(to communicate with services such as [NetworkManager], [BlueZ] or [PID1]), use
+`Connection::system()`.
 
-Similarly, to connect to the system bus (to communicate with services such as [NetworkManager],
-[BlueZ] or [PID1]), use `Connection::system()`.
+Moreover, it also implements [`futures::sink::Sink`] and can be converted to a [`MessageStream`]
+that implements [`futures::stream::Stream`], which can be used to conveniently send and receive
+messages, for the times when low-level API is more appropriate for your use case.
 
 **Note:** it is common for a D-Bus library to provide a "shared" connection to a bus for a process:
 all `session()` share the same underlying connection for example. At the time of this writing,
@@ -46,5 +49,8 @@ See the `unix_p2p` test in the [zbus source code] for a simple example.
 [BlueZ]: https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc
 [PID1]: https://www.freedesktop.org/wiki/Software/systemd/dbus/
 [zbus source code]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/zbus/src/connection.rs
+[`futures::stream::Stream`]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
+[`futures::sink::Sink`]: https://docs.rs/futures/latest/futures/sink/trait.Sink.html
+[`MessageStream`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.MessageStream.html
 
 [^bus-less] Unless you implemented them, none of the bus methods will exist.

@@ -1,15 +1,201 @@
+use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
+use async_channel::{bounded, Receiver, Sender};
+use async_executor::Executor;
+use async_io::block_on;
+use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use async_task::Task;
+use once_cell::sync::OnceCell;
 use static_assertions::assert_impl_all;
 use std::{
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
     convert::TryInto,
+    future::ready,
+    hash::{Hash, Hasher},
+    io::{self, ErrorKind},
     ops::{Deref, DerefMut},
-    sync::Arc,
+    pin::Pin,
+    sync::{
+        self,
+        atomic::{AtomicU32, Ordering::SeqCst},
+        Arc, Weak,
+    },
+    task::{Context, Poll},
 };
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
-use async_io::block_on;
+use futures_core::{ready, Future};
+use futures_sink::Sink;
+use futures_util::{
+    future::{select, Either},
+    sink::SinkExt,
+    StreamExt,
+};
 
-use crate::{azync, Error, Message, ObjectServer, Result};
+use crate::{
+    blocking, fdo,
+    raw::{Connection as RawConnection, Socket},
+    Authenticated, ConnectionBuilder, Error, Guid, Message, MessageStream, MessageType,
+    ObjectServer, Result,
+};
+
+const DEFAULT_MAX_QUEUED: usize = 64;
+
+const FDO_DBUS_SERVICE: &str = "org.freedesktop.DBus";
+const FDO_DBUS_INTERFACE: &str = "org.freedesktop.DBus";
+const FDO_DBUS_PATH: &str = "/org/freedesktop/DBus";
+const FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS: [&str; 2] = ["NameAcquired", "NameLost"];
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+struct SignalInfo<'s, 'p, 'i, 'm> {
+    sender: BusName<'s>,
+    path: ObjectPath<'p>,
+    interface: InterfaceName<'i>,
+    signal_name: MemberName<'m>,
+}
+
+impl<'s, 'p, 'i, 'm> SignalInfo<'s, 'p, 'i, 'm> {
+    fn new<S, P, I, M>(sender: S, path: P, interface: I, signal_name: M) -> Result<Self>
+    where
+        S: TryInto<BusName<'s>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
+    {
+        Ok(Self {
+            sender: sender.try_into().map_err(Into::into)?,
+            path: path.try_into().map_err(Into::into)?,
+            interface: interface.try_into().map_err(Into::into)?,
+            signal_name: signal_name.try_into().map_err(Into::into)?,
+        })
+    }
+
+    fn create_match_rule(&self) -> Option<String> {
+        if self.match_rule_excempt() {
+            return None;
+        }
+
+        // FIXME: Use the API to create this once we've it (issue#69).
+        Some(format!(
+            "type='signal',sender='{}',path_namespace='{}',interface='{}',member='{}'",
+            self.sender, self.path, self.interface, self.signal_name,
+        ))
+    }
+
+    fn match_rule_excempt(&self) -> bool {
+        self.sender == FDO_DBUS_SERVICE
+            && self.interface == FDO_DBUS_INTERFACE
+            && self.path.as_str() == FDO_DBUS_PATH
+            && FDO_DBUS_MATCH_RULE_EXCEMPT_SIGNALS.contains(&&*self.signal_name)
+    }
+
+    fn calc_hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+
+        hasher.finish()
+    }
+}
+
+#[derive(Debug)]
+struct SignalSubscription {
+    num_subscribers: usize,
+    match_rule: Option<String>,
+}
+
+#[derive(Debug)]
+struct ConnectionInner {
+    server_guid: Guid,
+    cap_unix_fd: bool,
+    bus_conn: bool,
+    unique_name: OnceCell<OwnedUniqueName>,
+    registered_names: Mutex<HashSet<WellKnownName<'static>>>,
+
+    raw_conn: Arc<sync::Mutex<DynSocketConnection>>,
+    // Serial number for next outgoing message
+    serial: AtomicU32,
+
+    // Our executor
+    executor: Arc<Executor<'static>>,
+
+    // Message receiver task
+    msg_receiver_task: sync::Mutex<Option<Task<()>>>,
+
+    signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
+
+    object_server: OnceCell<RwLock<blocking::ObjectServer>>,
+    object_server_dispatch_task: OnceCell<Task<()>>,
+}
+
+// FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
+//        cancel `msg_receiver_task` manually to ensure task is gone before the connection is. Same
+//        goes for the registered well-known names.
+//
+// [`AsyncDrop`]: https://github.com/rust-lang/wg-async-foundations/issues/65
+
+#[derive(Debug)]
+struct MessageReceiverTask<S> {
+    raw_conn: Arc<sync::Mutex<RawConnection<S>>>,
+
+    // Message broadcaster.
+    msg_sender: Broadcaster<Arc<Message>>,
+
+    // Sender side of the error channel
+    error_sender: Sender<Error>,
+}
+
+type DynSocketConnection = RawConnection<Box<dyn Socket>>;
+
+impl MessageReceiverTask<Box<dyn Socket>> {
+    fn new(
+        raw_conn: Arc<sync::Mutex<DynSocketConnection>>,
+        msg_sender: Broadcaster<Arc<Message>>,
+        error_sender: Sender<Error>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            raw_conn,
+            msg_sender,
+            error_sender,
+        })
+    }
+
+    fn spawn(self: Arc<Self>, executor: &Executor<'_>) -> Task<()> {
+        executor.spawn(async move {
+            self.receive_msg().await;
+        })
+    }
+
+    // Keep receiving messages and put them on the queue.
+    async fn receive_msg(self: Arc<Self>) {
+        loop {
+            // Ignore errors from sending to msg or error channels. The only reason these calls
+            // fail is when the channel is closed and that will only happen when `Connection` is
+            // being dropped.
+            // TODO: We should still log in case of error when we've logging.
+
+            let receive_msg = ReceiveMessage {
+                raw_conn: &*self.raw_conn,
+            };
+            let msg = match receive_msg.await {
+                Ok(msg) => msg,
+                Err(e) => {
+                    // Ignoring errors. See comment above.
+                    let _ = self.error_sender.send(e).await;
+
+                    continue;
+                }
+            };
+
+            let msg = Arc::new(msg);
+            // Ignoring errors. See comment above.
+            let _ = self.msg_sender.broadcast(msg.clone()).await;
+        }
+    }
+}
 
 /// A D-Bus connection.
 ///
@@ -22,9 +208,10 @@ use crate::{azync, Error, Message, ObjectServer, Result};
 /// it is recommended to wrap the low-level D-Bus messages into Rust functions with the
 /// [`dbus_proxy`] and [`dbus_interface`] macros instead of doing it directly on a `Connection`.
 ///
-/// Typically, a connection is made to the session bus with [`session`], or to the system bus
-/// with [`system`]. Then the connection is shared with the [`Proxy`] and [`ObjectServer`]
-/// instances.
+/// Typically, a connection is made to the session bus with [`Connection::session`], or to the
+/// system bus with [`Connection::system`]. Then the connection is used with [`crate::Proxy`]
+/// instances or the on-demand [`ObjectServer`] instance that can be accessed through
+/// [`Connection::object_server`] or [`Connection::object_server_mut`].
 ///
 /// `Connection` implements [`Clone`] and cloning it is a very cheap operation, as the underlying
 /// data is not cloned. This makes it very convenient to share the connection between different
@@ -33,85 +220,145 @@ use crate::{azync, Error, Message, ObjectServer, Result};
 ///
 /// `Connection` keeps an internal queue of incoming message. The maximum capacity of this queue
 /// is configurable through the [`set_max_queued`] method. The default size is 64. When the queue is
-/// full, no more messages can be received until there is room is created for more. This is why it's
-/// important to ensure that all [`crate::MessageStream`] and [`crate::azync::MessageStream`]
-/// instances are continuously iterated on and polled, respectively.
+/// full, no more messages can be received until room is created for more. This is why it's
+/// important to ensure that all [`crate::MessageStream`] and [`crate::blocking::MessageStream`]
+/// instances are continuously polled and iterated on, respectively.
+///
+/// For sending messages you can either use [`Connection::send_message`] method or make use of the
+/// [`Sink`] implementation. For latter, you might find [`SinkExt`] API very useful. Keep in mind
+/// that [`Connection`] will not manage the serial numbers (cookies) on the messages for you when
+/// they are sent through the [`Sink`] implementation. You can manually assign unique serial numbers
+/// to them using the [`Connection::assign_serial_num`] method before sending them off, if needed.
+/// Having said that, the [`Sink`] is mainly useful for sending out signals, as they do not expect
+/// a reply, and serial numbers are not very useful for signals either for the same reason.
+///
+/// Since you do not need exclusive access to a `zbus::Connection` to send messages on the bus,
+/// [`Sink`] is also implemented on `&Connection`.
+///
+/// # Caveats
+///
+/// At the moment, a simultaneous [flush request] from multiple tasks/threads could
+/// potentially create a busy loop, thus wasting CPU time. This limitation may be removed in the
+/// future.
+///
+/// [flush request]: https://docs.rs/futures/0.3.15/futures/sink/trait.SinkExt.html#method.flush
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
-/// [`system`]: struct.Connection.html#method.new_system
-/// [`session`]: struct.Connection.html#method.new_session
-/// [`Proxy`]: struct.Proxy.html
-/// [`ObjectServer`]: struct.ObjectServer.html
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 /// [`dbus_interface`]: attr.dbus_interface.html
 /// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
-/// [file an issue]: https://gitlab.freedesktop.org/dbus/zbus/-/issues/new
 /// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
-#[derive(derivative::Derivative, Clone)]
-#[derivative(Debug)]
+///
+/// ### Examples
+///
+/// #### Get the session bus ID
+///
+/// ```
+///# use zvariant::Type;
+///#
+///# async_io::block_on(async {
+/// use zbus::Connection;
+///
+/// let mut connection = Connection::session().await?;
+///
+/// let reply = connection
+///     .call_method(
+///         Some("org.freedesktop.DBus"),
+///         "/org/freedesktop/DBus",
+///         Some("org.freedesktop.DBus"),
+///         "GetId",
+///         &(),
+///     )
+///     .await?;
+///
+/// let id: &str = reply.body()?;
+/// println!("Unique ID of the bus: {}", id);
+///# Ok::<(), zbus::Error>(())
+///# });
+/// ```
+///
+/// #### Monitoring all messages
+///
+/// Let's eavesdrop on the session bus 😈 using the [Monitor] interface:
+///
+/// ```rust,no_run
+///# async_io::block_on(async {
+/// use futures_util::stream::TryStreamExt;
+/// use zbus::{Connection, MessageStream};
+///
+/// let connection = Connection::session().await?;
+///
+/// connection
+///     .call_method(
+///         Some("org.freedesktop.DBus"),
+///         "/org/freedesktop/DBus",
+///         Some("org.freedesktop.DBus.Monitoring"),
+///         "BecomeMonitor",
+///         &(&[] as &[&str], 0u32),
+///     )
+///     .await?;
+///
+/// let mut stream = MessageStream::from(connection);
+/// while let Some(msg) = stream.try_next().await? {
+///     println!("Got message: {}", msg);
+/// }
+///
+///# Ok::<(), zbus::Error>(())
+///# });
+/// ```
+///
+/// This should print something like:
+///
+/// ```console
+/// Got message: Signal NameAcquired from org.freedesktop.DBus
+/// Got message: Signal NameLost from org.freedesktop.DBus
+/// Got message: Method call GetConnectionUnixProcessID from :1.1324
+/// Got message: Error org.freedesktop.DBus.Error.NameHasNoOwner:
+///              Could not get PID of name ':1.1332': no such name from org.freedesktop.DBus
+/// Got message: Method call AddMatch from :1.918
+/// Got message: Method return from org.freedesktop.DBus
+/// ```
+///
+/// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
+#[derive(Clone, Debug)]
 pub struct Connection {
-    inner: azync::Connection,
+    inner: Arc<ConnectionInner>,
+
+    pub(crate) msg_receiver: InactiveReceiver<Arc<Message>>,
+
+    // Receiver side of the error channel
+    pub(crate) error_receiver: Receiver<Error>,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
 
 impl Connection {
-    /// Create a `Connection` to the session/user message bus.
-    pub fn session() -> Result<Self> {
-        block_on(azync::Connection::session()).map(Self::from)
-    }
-
-    /// Create a `Connection` to the system-wide message bus.
-    pub fn system() -> Result<Self> {
-        block_on(azync::Connection::system()).map(Self::from)
-    }
-
-    /// Max number of messages to queue.
-    pub fn max_queued(&self) -> usize {
-        self.inner.max_queued()
-    }
-
-    /// Set the max number of messages to queue.
-    pub fn set_max_queued(mut self, max: usize) {
-        self.inner.set_max_queued(max)
-    }
-
-    /// The server's GUID.
-    pub fn server_guid(&self) -> &str {
-        self.inner.server_guid()
-    }
-
-    /// The unique name as assigned by the message bus or `None` if not a message bus connection.
-    pub fn unique_name(&self) -> Option<&OwnedUniqueName> {
-        self.inner.unique_name()
-    }
-
     /// Send `msg` to the peer.
     ///
-    /// The connection sets a unique serial number on the message before sending it off.
+    /// Unlike our [`Sink`] implementation, this method sets a unique (to this connection) serial
+    /// number on the message before sending it off, for you.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
-    pub fn send_message(&self, msg: Message) -> Result<u32> {
-        block_on(self.inner.send_message(msg))
+    pub async fn send_message(&self, mut msg: Message) -> Result<u32> {
+        let serial = self.assign_serial_num(&mut msg)?;
+
+        (&*self).send(msg).await?;
+
+        Ok(serial)
     }
 
     /// Send a method call.
     ///
-    /// Create a method-call message, send it over the connection, then wait for the reply. Incoming
-    /// messages are received through [`receive_message`] until the matching method reply (error or
-    /// return) is received.
+    /// Create a method-call message, send it over the connection, then wait for the reply.
     ///
     /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
-    /// error replies are returned as [`MethodError`].
-    ///
-    /// [`receive_message`]: struct.Connection.html#method.receive_message
-    /// [`MethodError`]: enum.Error.html#variant.MethodError
-    pub fn call_method<'d, 'p, 'i, 'm, D, P, I, M, B>(
+    /// error replies are returned as [`Error::MethodError`].
+    pub async fn call_method<'d, 'p, 'i, 'm, D, P, I, M, B>(
         &self,
         destination: Option<D>,
         path: P,
-        iface: Option<I>,
+        interface: Option<I>,
         method_name: M,
         body: &B,
     ) -> Result<Arc<Message>>
@@ -126,20 +373,61 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        block_on(
-            self.inner
-                .call_method(destination, path, iface, method_name, body),
-        )
+        let stream = MessageStream::from(self.clone());
+        let m = Message::method(
+            self.unique_name(),
+            destination,
+            path,
+            interface,
+            method_name,
+            body,
+        )?;
+        let serial = self.send_message(m).await?;
+        match stream
+            .filter(move |m| {
+                ready(
+                    m.as_ref()
+                        .map(|m| {
+                            matches!(
+                                m.primary_header().msg_type(),
+                                MessageType::Error | MessageType::MethodReturn
+                            ) && m.header().and_then(|h| h.reply_serial()) == Ok(Some(serial))
+                        })
+                        .unwrap_or(false),
+                )
+            })
+            .next()
+            .await
+        {
+            Some(msg) => match msg {
+                Ok(m) => {
+                    match m.header()?.message_type()? {
+                        MessageType::Error => Err(m.into()),
+                        MessageType::MethodReturn => Ok(m),
+                        // We already established the msg type in `filter` above.
+                        _ => unreachable!(),
+                    }
+                }
+                Err(e) => Err(e),
+            },
+            None => {
+                // If SocketStream gives us None, that means the socket was closed
+                Err(crate::Error::Io(io::Error::new(
+                    ErrorKind::BrokenPipe,
+                    "socket closed",
+                )))
+            }
+        }
     }
 
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.
-    pub fn emit_signal<'d, 'p, 'i, 'm, D, P, I, M, B>(
+    pub async fn emit_signal<'d, 'p, 'i, 'm, D, P, I, M, B>(
         &self,
         destination: Option<D>,
         path: P,
-        iface: I,
+        interface: I,
         signal_name: M,
         body: &B,
     ) -> Result<()>
@@ -154,10 +442,16 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        block_on(
-            self.inner
-                .emit_signal(destination, path, iface, signal_name, body),
-        )
+        let m = Message::signal(
+            self.unique_name(),
+            destination,
+            path,
+            interface,
+            signal_name,
+            body,
+        )?;
+
+        self.send_message(m).await.map(|_| ())
     }
 
     /// Reply to a message.
@@ -166,11 +460,12 @@ impl Connection {
     /// given `body`.
     ///
     /// Returns the message serial number.
-    pub fn reply<B>(&self, call: &Message, body: &B) -> Result<u32>
+    pub async fn reply<B>(&self, call: &Message, body: &B) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        block_on(self.inner.reply(call, body))
+        let m = Message::method_reply(self.unique_name(), call, body)?;
+        self.send_message(m).await
     }
 
     /// Reply an error to a message.
@@ -179,13 +474,19 @@ impl Connection {
     /// with the given `error_name` and `body`.
     ///
     /// Returns the message serial number.
-    pub fn reply_error<'e, E, B>(&self, call: &Message, error_name: E, body: &B) -> Result<u32>
+    pub async fn reply_error<'e, E, B>(
+        &self,
+        call: &Message,
+        error_name: E,
+        body: &B,
+    ) -> Result<u32>
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
-        block_on(self.inner.reply_error(call, error_name, body))
+        let m = Message::method_error(self.unique_name(), call, error_name, body)?;
+        self.send_message(m).await
     }
 
     /// Register a well-known name for this service on the bus.
@@ -194,17 +495,36 @@ impl Connection {
     /// for deregistering names registered through this method.
     ///
     /// Note that exclusive ownership without queueing is requested (using
-    /// [`crate::fdo::RequestNameFlags::ReplaceExisting`] and
-    /// [`crate::fdo::RequestNameFlags::DoNotQueue`] flags) since that is the most typical case. If
-    /// that is not what you want, you should use [`crate::fdo::DBusProxy::request_name`] instead
-    /// (but make sure then that name is requested **after** you've setup your service
-    /// implementation with the `ObjectServer`).
-    pub fn request_name<'w, W>(self, well_known_name: W) -> Result<Self>
+    /// [`fdo::RequestNameFlags::ReplaceExisting`] and [`fdo::RequestNameFlags::DoNotQueue`] flags)
+    /// since that is the most typical case. If that is not what you want, you should use
+    /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
+    /// **after** you've setup your service implementation with the `ObjectServer`).
+    pub async fn request_name<'w, W>(self, well_known_name: W) -> Result<Self>
     where
         W: TryInto<WellKnownName<'w>>,
         W::Error: Into<Error>,
     {
-        block_on(self.inner.request_name(well_known_name)).map(Into::into)
+        let well_known_name = well_known_name.try_into().map_err(Into::into)?;
+        let mut names = self.inner.registered_names.lock().await;
+
+        if !names.contains(&well_known_name) {
+            // Ensure ObjectServer and its msg stream exists and reading before registering any
+            // names. Otherwise we get issue#68 (that we warn the user about in the docs of this
+            // method).
+            self.object_server().await;
+
+            fdo::AsyncDBusProxy::new(&self)
+                .await?
+                .request_name(
+                    well_known_name.clone(),
+                    fdo::RequestNameFlags::ReplaceExisting | fdo::RequestNameFlags::DoNotQueue,
+                )
+                .await?;
+            names.insert(well_known_name.to_owned());
+        }
+
+        drop(names);
+        Ok(self)
     }
 
     /// Deregister a previously registered well-known name for this service on the bus.
@@ -215,26 +535,133 @@ impl Connection {
     /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
     /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
     /// was not previously registered or already deregistered.
-    pub fn release_name<'w, W>(&self, well_known_name: W) -> Result<bool>
+    pub async fn release_name<'w, W>(&self, well_known_name: W) -> Result<bool>
     where
         W: TryInto<WellKnownName<'w>>,
         W::Error: Into<Error>,
     {
-        block_on(self.inner.release_name(well_known_name))
+        let well_known_name: WellKnownName<'w> = well_known_name.try_into().map_err(Into::into)?;
+        let mut names = self.inner.registered_names.lock().await;
+        // FIXME: Should be possible to avoid cloning/allocation here
+        if !names.remove(&well_known_name.to_owned()) {
+            return Ok(false);
+        }
+
+        fdo::AsyncDBusProxy::new(self)
+            .await?
+            .release_name(well_known_name)
+            .await
+            .map(|_| true)
+            .map_err(Into::into)
     }
 
     /// Checks if `self` is a connection to a message bus.
     ///
     /// This will return `false` for p2p connections.
     pub fn is_bus(&self) -> bool {
-        self.inner.is_bus()
+        self.inner.bus_conn
+    }
+
+    /// Assigns a serial number to `msg` that is unique to this connection.
+    ///
+    /// This method can fail if `msg` is corrupt.
+    pub fn assign_serial_num(&self, msg: &mut Message) -> Result<u32> {
+        let mut serial = 0;
+        msg.modify_primary_header(|primary| {
+            serial = *primary.serial_num_or_init(|| self.next_serial());
+            Ok(())
+        })?;
+
+        Ok(serial)
+    }
+
+    /// The unique name as assigned by the message bus or `None` if not a message bus connection.
+    pub fn unique_name(&self) -> Option<&OwnedUniqueName> {
+        self.inner.unique_name.get()
+    }
+
+    /// Max number of messages to queue.
+    pub fn max_queued(&self) -> usize {
+        self.msg_receiver.capacity()
+    }
+
+    /// Set the max number of messages to queue.
+    pub fn set_max_queued(&mut self, max: usize) {
+        self.msg_receiver.set_capacity(max);
+    }
+
+    /// The server's GUID.
+    pub fn server_guid(&self) -> &str {
+        self.inner.server_guid.as_str()
+    }
+
+    /// The underlying executor.
+    ///
+    /// When a connection is built with internal_executor set to false, zbus will not spawn a
+    /// thread to run the executor. You're responsible to continuously [tick the executor][tte].
+    /// Failure to do so will result in hangs.
+    ///
+    /// # Examples
+    ///
+    /// Here is how one would typically run the zbus executor through tokio's single-threaded
+    /// scheduler:
+    ///
+    /// ```
+    /// use zbus::ConnectionBuilder;
+    /// use tokio::runtime;
+    ///
+    /// runtime::Builder::new_current_thread()
+    ///        .build()
+    ///        .unwrap()
+    ///        .block_on(async {
+    ///     let conn = ConnectionBuilder::session()
+    ///         .unwrap()
+    ///         .internal_executor(false)
+    ///         .build()
+    ///         .await
+    ///         .unwrap();
+    ///     {
+    ///        let conn = conn.clone();
+    ///        tokio::task::spawn(async move {
+    ///            loop {
+    ///                conn.executor().tick().await;
+    ///            }
+    ///        });
+    ///     }
+    ///
+    ///     // All your other async code goes here.
+    /// });
+    /// ```
+    ///
+    /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
+    pub fn executor(&self) -> &Executor<'static> {
+        &self.inner.executor
     }
 
     /// Get a reference to the associated [`ObjectServer`].
     ///
     /// The `ObjectServer` is created on-demand.
-    pub fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
-        block_on(self.inner.object_server())
+    pub async fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
+        // FIXME: Maybe it makes sense after all to implement Deref<Target= ObjectServer> for
+        // crate::ObjectServer instead of this wrapper?
+        struct Wrapper<'s>(RwLockReadGuard<'s, blocking::ObjectServer>);
+        impl Deref for Wrapper<'_> {
+            type Target = ObjectServer;
+
+            fn deref(&self) -> &Self::Target {
+                self.0.inner()
+            }
+        }
+
+        Wrapper(self.sync_object_server().await)
+    }
+
+    pub(crate) async fn sync_object_server(&self) -> RwLockReadGuard<'_, blocking::ObjectServer> {
+        self.inner
+            .object_server
+            .get_or_init(|| self.setup_object_server())
+            .read()
+            .await
     }
 
     /// Get a mutable reference to the associated [`ObjectServer`].
@@ -245,64 +672,466 @@ impl Connection {
     ///
     /// The return value of this method should not be kept around for longer than needed. The method
     /// dispatch machinery of the [`ObjectServer`] will be paused as long as the return value is alive.
-    pub fn object_server_mut(&self) -> impl DerefMut<Target = ObjectServer> + '_ {
-        block_on(self.inner.object_server_mut())
+    pub async fn object_server_mut(&self) -> impl DerefMut<Target = ObjectServer> + '_ {
+        // FIXME: Maybe it makes sense after all to implement DerefMut<Target= ObjectServer>
+        // for crate::ObjectServer instead of this wrapper?
+        struct Wrapper<'s>(RwLockWriteGuard<'s, blocking::ObjectServer>);
+        impl Deref for Wrapper<'_> {
+            type Target = ObjectServer;
+
+            fn deref(&self) -> &Self::Target {
+                self.0.inner()
+            }
+        }
+        impl DerefMut for Wrapper<'_> {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                self.0.inner_mut()
+            }
+        }
+
+        Wrapper(self.sync_object_server_mut().await)
     }
 
-    /// Get a reference to the underlying async Connection.
-    pub fn inner(&self) -> &azync::Connection {
-        &self.inner
-    }
-
-    /// Get the underlying async Connection, consuming `self`.
-    pub fn into_inner(self) -> azync::Connection {
+    pub(crate) async fn sync_object_server_mut(
+        &self,
+    ) -> RwLockWriteGuard<'_, blocking::ObjectServer> {
         self.inner
+            .object_server
+            .get_or_init(|| self.setup_object_server())
+            .write()
+            .await
+    }
+
+    fn setup_object_server(&self) -> RwLock<blocking::ObjectServer> {
+        let weak_conn = WeakConnection::from(self);
+        let mut stream = MessageStream::from(self.clone());
+        let task = self.inner.executor.spawn(async move {
+            // TODO: Log errors when we've logging.
+            while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
+                match weak_conn.upgrade() {
+                    Some(conn) => {
+                        let server = conn.object_server().await;
+                        let _ = server.dispatch_message(&*msg).await;
+                    }
+                    // If connection is completely gone, no reason to keep running the task anymore.
+                    None => return,
+                }
+            }
+        });
+        self.inner
+            .object_server_dispatch_task
+            .set(task)
+            .expect("object server task set twice");
+
+        RwLock::new(blocking::ObjectServer::new(self))
+    }
+
+    pub(crate) async fn subscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
+        &self,
+        sender: S,
+        path: P,
+        interface: I,
+        signal_name: M,
+    ) -> Result<u64>
+    where
+        S: TryInto<BusName<'s>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
+    {
+        let signal = SignalInfo::new(sender, path, interface, signal_name)?;
+        let hash = signal.calc_hash();
+        let mut subscriptions = self.inner.signal_subscriptions.lock().await;
+        match subscriptions.get_mut(&hash) {
+            Some(subscription) => subscription.num_subscribers += 1,
+            None => {
+                let match_rule = signal.create_match_rule();
+                if let Some(match_rule) = &match_rule {
+                    fdo::AsyncDBusProxy::builder(self)
+                        .cache_properties(false)
+                        .build()
+                        .await?
+                        .add_match(match_rule)
+                        .await?;
+                }
+
+                subscriptions.insert(
+                    hash,
+                    SignalSubscription {
+                        num_subscribers: 1,
+                        match_rule,
+                    },
+                );
+            }
+        }
+
+        Ok(hash)
+    }
+
+    pub(crate) async fn unsubscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
+        &self,
+        sender: S,
+        path: P,
+        interface: I,
+        signal_name: M,
+    ) -> Result<bool>
+    where
+        S: TryInto<BusName<'s>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        S::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
+    {
+        let signal = SignalInfo::new(
+            sender.try_into().map_err(Into::into)?,
+            path,
+            interface,
+            signal_name,
+        )?;
+        let hash = signal.calc_hash();
+
+        self.unsubscribe_signal_by_id(hash).await
+    }
+
+    pub(crate) async fn unsubscribe_signal_by_id(&self, subscription_id: u64) -> Result<bool> {
+        let mut subscriptions = self.inner.signal_subscriptions.lock().await;
+        match subscriptions.get_mut(&subscription_id) {
+            Some(subscription) => {
+                subscription.num_subscribers -= 1;
+
+                if subscription.num_subscribers == 0 {
+                    if let Some(match_rule) = &subscription.match_rule {
+                        fdo::AsyncDBusProxy::builder(self)
+                            .cache_properties(false)
+                            .build()
+                            .await?
+                            .remove_match(match_rule.as_str())
+                            .await?;
+                    }
+
+                    subscriptions.remove(&subscription_id);
+                }
+
+                Ok(true)
+            }
+            None => Ok(false),
+        }
+    }
+
+    pub(crate) fn queue_unsubscribe_signal(&self, subscription_id: u64) {
+        let conn = self.clone();
+        self.inner
+            .executor
+            .spawn(async move {
+                // FIXME: Ignoring the errors here. We should at least log a message when we've
+                //        logging.
+                let _ = conn.unsubscribe_signal_by_id(subscription_id).await;
+            })
+            .detach()
+    }
+
+    async fn hello_bus(&self) -> Result<()> {
+        let dbus_proxy = fdo::AsyncDBusProxy::builder(self)
+            .cache_properties(false)
+            .build()
+            .await?;
+        let future = dbus_proxy.hello();
+
+        // With external executor, our executor is only run after the connection construction is
+        // completed and this method is (and must) run before that so we need to tick the executor
+        // ourselves in parallel to making the method call.  With the internal executor, this is
+        // not needed but harmless.
+        let name = {
+            let executor = self.inner.executor.clone();
+            let ticking_future = async move {
+                // Keep running as long as this task/future is not cancelled.
+                loop {
+                    executor.tick().await;
+                }
+            };
+
+            futures_util::pin_mut!(future);
+            futures_util::pin_mut!(ticking_future);
+
+            match select(future, ticking_future).await {
+                Either::Left((res, _)) => res?,
+                Either::Right((_, _)) => unreachable!("ticking task future shouldn't finish"),
+            }
+        };
+
+        self.inner
+            .unique_name
+            .set(name)
+            // programmer (probably our) error if this fails.
+            .expect("Attempted to set unique_name twice");
+
+        Ok(())
+    }
+
+    pub(crate) async fn new(
+        auth: Authenticated<Box<dyn Socket>>,
+        bus_connection: bool,
+        internal_executor: bool,
+    ) -> Result<Self> {
+        let auth = auth.into_inner();
+        let cap_unix_fd = auth.cap_unix_fd;
+
+        let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
+        let msg_receiver = msg_receiver.deactivate();
+        let (error_sender, error_receiver) = bounded(1);
+        let executor = Arc::new(Executor::new());
+        let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
+
+        // Start the message receiver task.
+        let msg_receiver_task =
+            MessageReceiverTask::new(raw_conn.clone(), msg_sender, error_sender).spawn(&executor);
+
+        let connection = Self {
+            error_receiver,
+            msg_receiver,
+            inner: Arc::new(ConnectionInner {
+                raw_conn,
+                server_guid: auth.server_guid,
+                cap_unix_fd,
+                bus_conn: bus_connection,
+                serial: AtomicU32::new(1),
+                unique_name: OnceCell::new(),
+                signal_subscriptions: Mutex::new(HashMap::new()),
+                object_server: OnceCell::new(),
+                object_server_dispatch_task: OnceCell::new(),
+                executor: executor.clone(),
+                msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
+                registered_names: Mutex::new(HashSet::new()),
+            }),
+        };
+
+        if internal_executor {
+            std::thread::Builder::new()
+                .name("zbus::Connection executor".into())
+                .spawn(move || {
+                    block_on(async move {
+                        // Run as long as there is a task to run.
+                        while !executor.is_empty() {
+                            executor.tick().await;
+                        }
+                    })
+                })?;
+        }
+
+        if !bus_connection {
+            return Ok(connection);
+        }
+
+        // Now that the server has approved us, we must send the bus Hello, as per specs
+        connection.hello_bus().await?;
+
+        Ok(connection)
+    }
+
+    fn next_serial(&self) -> u32 {
+        self.inner.serial.fetch_add(1, SeqCst)
+    }
+
+    /// Create a `Connection` to the session/user message bus.
+    pub async fn session() -> Result<Self> {
+        ConnectionBuilder::session()?.build().await
+    }
+
+    /// Create a `Connection` to the system-wide message bus.
+    pub async fn system() -> Result<Self> {
+        ConnectionBuilder::system()?.build().await
     }
 }
 
-impl From<azync::Connection> for Connection {
-    fn from(conn: azync::Connection) -> Self {
-        Self { inner: conn }
+impl Sink<Message> for Connection {
+    type Error = Error;
+
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        Pin::new(&mut &*self).poll_ready(cx)
+    }
+
+    fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
+        Pin::new(&mut &*self).start_send(msg)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        Pin::new(&mut &*self).poll_flush(cx)
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        Pin::new(&mut &*self).poll_close(cx)
+    }
+}
+
+impl<'a> Sink<Message> for &'a Connection {
+    type Error = Error;
+
+    fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
+        // TODO: We should have a max queue length in raw::Socket for outgoing messages.
+        Poll::Ready(Ok(()))
+    }
+
+    fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
+        if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
+            return Err(Error::Unsupported);
+        }
+
+        self.inner
+            .raw_conn
+            .lock()
+            .expect("poisened lock")
+            .enqueue_message(msg);
+
+        Ok(())
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        self.inner.raw_conn.lock().expect("poisened lock").flush(cx)
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        let mut raw_conn = self.inner.raw_conn.lock().expect("poisened lock");
+        match ready!(raw_conn.flush(cx)) {
+            Ok(_) => (),
+            Err(e) => return Poll::Ready(Err(e)),
+        }
+
+        Poll::Ready(raw_conn.close())
+    }
+}
+
+struct ReceiveMessage<'r> {
+    raw_conn: &'r sync::Mutex<RawConnection<Box<dyn Socket>>>,
+}
+
+impl<'r> Future for ReceiveMessage<'r> {
+    type Output = Result<Message>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let mut raw_conn = self.raw_conn.lock().expect("poisened lock");
+        raw_conn.try_receive_message(cx)
+    }
+}
+
+impl From<crate::blocking::Connection> for Connection {
+    fn from(conn: crate::blocking::Connection) -> Self {
+        conn.into_inner()
+    }
+}
+
+// Internal API that allows keeping a weak connection ref around.
+#[derive(Debug)]
+pub(crate) struct WeakConnection {
+    inner: Weak<ConnectionInner>,
+    msg_receiver: InactiveReceiver<Arc<Message>>,
+    error_receiver: Receiver<Error>,
+}
+
+impl WeakConnection {
+    /// Upgrade to a Connection.
+    pub fn upgrade(&self) -> Option<Connection> {
+        self.inner.upgrade().map(|inner| Connection {
+            inner,
+            msg_receiver: self.msg_receiver.clone(),
+            error_receiver: self.error_receiver.clone(),
+        })
+    }
+}
+
+impl From<&Connection> for WeakConnection {
+    fn from(conn: &Connection) -> Self {
+        Self {
+            inner: Arc::downgrade(&conn.inner),
+            msg_receiver: conn.msg_receiver.clone(),
+            error_receiver: conn.error_receiver.clone(),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use futures_util::stream::TryStreamExt;
     use ntest::timeout;
-    use std::{os::unix::net::UnixStream, thread};
+    use std::os::unix::net::UnixStream;
     use test_env_log::test;
 
-    use crate::{ConnectionBuilder, Guid, MessageStream};
+    use super::*;
+
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
+        async_io::block_on(test_unix_p2p()).unwrap();
+    }
+
+    async fn test_unix_p2p() -> Result<()> {
         let guid = Guid::generate();
 
         let (p0, p1) = UnixStream::pair().unwrap();
 
-        let server_thread = thread::spawn(move || {
-            let c = ConnectionBuilder::unix_stream(p0)
-                .server(&guid)
-                .p2p()
-                .build()
-                .unwrap();
-            let reply = c
+        let server = ConnectionBuilder::unix_stream(p0)
+            .server(&guid)
+            .p2p()
+            .build();
+        let client = ConnectionBuilder::unix_stream(p1).p2p().build();
+
+        let (client_conn, server_conn) = futures_util::try_join!(client, server)?;
+
+        let server_future = async {
+            let mut method: Option<Arc<Message>> = None;
+            let mut stream = MessageStream::from(&server_conn);
+            while let Some(m) = stream.try_next().await? {
+                if m.to_string() == "Method call Test" {
+                    method.replace(m);
+
+                    break;
+                }
+            }
+            let method = method.unwrap();
+
+            // Send another message first to check the queueing function on client side.
+            server_conn
+                .emit_signal(None::<()>, "/", "org.zbus.p2p", "ASignalForYou", &())
+                .await?;
+            server_conn.reply(&method, &("yay")).await
+        };
+
+        let client_future = async {
+            let mut stream = MessageStream::from(&client_conn);
+            let reply = client_conn
                 .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
-                .unwrap();
+                .await?;
             assert_eq!(reply.to_string(), "Method return");
-            let val: String = reply.body().unwrap();
-            val
-        });
+            // Check we didn't miss the signal that was sent during the call.
+            let m = stream.try_next().await?.unwrap();
+            assert_eq!(m.to_string(), "Signal ASignalForYou");
+            reply.body::<String>()
+        };
 
-        let c = ConnectionBuilder::unix_stream(p1).p2p().build().unwrap();
-        let mut s = MessageStream::from(&c);
-        let m = s.next().unwrap().unwrap();
-        assert_eq!(m.to_string(), "Method call Test");
-        c.reply(&m, &("yay")).unwrap();
-
-        for _ in s {}
-
-        let val = server_thread.join().expect("failed to join server thread");
+        let (val, _) = futures_util::try_join!(client_future, server_future)?;
         assert_eq!(val, "yay");
+
+        Ok(())
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn serial_monotonically_increases() {
+        async_io::block_on(test_serial_monotonically_increases());
+    }
+
+    async fn test_serial_monotonically_increases() {
+        let c = Connection::session().await.unwrap();
+        let serial = c.next_serial() + 1;
+
+        for next in serial..serial + 10 {
+            assert_eq!(next, c.next_serial());
+        }
     }
 }

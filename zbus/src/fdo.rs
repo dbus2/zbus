@@ -34,7 +34,7 @@ pub(crate) struct Introspectable;
 
 #[dbus_interface(name = "org.freedesktop.DBus.Introspectable")]
 impl Introspectable {
-    fn introspect(
+    async fn introspect(
         &self,
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: MessageHeader<'_>,
@@ -44,7 +44,7 @@ impl Introspectable {
             .get_node(path)
             .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{}'", path)))?;
 
-        Ok(node.introspect())
+        Ok(node.introspect().await)
     }
 }
 
@@ -52,10 +52,14 @@ impl Introspectable {
 #[dbus_proxy(interface = "org.freedesktop.DBus.Properties")]
 trait Properties {
     /// Get a property value.
-    fn get(&self, interface_name: InterfaceName<'_>, property_name: &str) -> Result<OwnedValue>;
+    async fn get(
+        &self,
+        interface_name: InterfaceName<'_>,
+        property_name: &str,
+    ) -> Result<OwnedValue>;
 
     /// Set a property value.
-    fn set(
+    async fn set(
         &self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
@@ -63,10 +67,13 @@ trait Properties {
     ) -> Result<()>;
 
     /// Get all properties.
-    fn get_all(&self, interface_name: InterfaceName<'_>) -> Result<HashMap<String, OwnedValue>>;
+    async fn get_all(
+        &self,
+        interface_name: InterfaceName<'_>,
+    ) -> Result<HashMap<String, OwnedValue>>;
 
     #[dbus_proxy(signal)]
-    fn properties_changed(
+    async fn properties_changed(
         &self,
         interface_name: InterfaceName<'_>,
         changed_properties: HashMap<&str, Value<'_>>,
@@ -86,7 +93,7 @@ assert_impl_all!(Properties: Send, Sync, Unpin);
 
 #[dbus_interface(name = "org.freedesktop.DBus.Properties")]
 impl Properties {
-    fn get(
+    async fn get(
         &self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
@@ -96,12 +103,12 @@ impl Properties {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
             .get_node(path)
-            .and_then(|node| node.get_interface(interface_name.clone()))
+            .and_then(|node| node.interface_lock(interface_name.clone()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-        let res = iface.read().expect("lock poisoned").get(property_name);
+        let res = iface.read().await.get(property_name).await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
                 "Unknown property '{}'",
@@ -111,7 +118,7 @@ impl Properties {
     }
 
     // TODO: should be able to take a &Value instead (but obscure deserialize error for now..)
-    fn set(
+    async fn set(
         &mut self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
@@ -123,15 +130,12 @@ impl Properties {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
             .get_node(path)
-            .and_then(|node| node.get_interface(interface_name.clone()))
+            .and_then(|node| node.interface_lock(interface_name.clone()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-        let res = iface
-            .write()
-            .expect("lock poisoned")
-            .set(property_name, &value, &ctxt);
+        let res = iface.write().await.set(property_name, &value, &ctxt).await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
                 "Unknown property '{}'",
@@ -140,7 +144,7 @@ impl Properties {
         })
     }
 
-    fn get_all(
+    async fn get_all(
         &self,
         interface_name: InterfaceName<'_>,
         #[zbus(object_server)] server: &ObjectServer,
@@ -149,19 +153,19 @@ impl Properties {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
             .get_node(path)
-            .and_then(|node| node.get_interface(interface_name.clone()))
+            .and_then(|node| node.interface_lock(interface_name.clone()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-        let res = iface.read().expect("lock poisoned").get_all();
+        let res = iface.read().await.get_all().await;
         Ok(res)
     }
 
     /// Emits the `org.freedesktop.DBus.Properties.PropertiesChanged` signal.
     #[dbus_interface(signal)]
     #[rustfmt::skip]
-    pub fn properties_changed(
+    pub async fn properties_changed(
         ctxt: &SignalContext<'_>,
         interface_name: InterfaceName<'_>,
         changed_properties: &HashMap<&str, &Value<'_>>,
@@ -694,7 +698,7 @@ mod tests {
     fn signal_connect() {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
-        let conn = crate::Connection::session().unwrap();
+        let conn = crate::blocking::Connection::session().unwrap();
 
         let owner_change_signaled = Arc::new(Event::new());
         let owner_change_listener = owner_change_signaled.listen();
@@ -761,7 +765,7 @@ mod tests {
     }
 
     async fn test_signal_stream() {
-        let conn = crate::azync::Connection::session().await.unwrap();
+        let conn = crate::Connection::session().await.unwrap();
 
         {
             let conn = conn.clone();

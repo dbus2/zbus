@@ -129,16 +129,16 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     let (proxy_doc, proxy_struct, connection, builder) = if azync {
         let sync_proxy = Ident::new(&format!("{}Proxy", input.ident), Span::call_site());
         let doc = format!("Asynchronous sibling of [`{}`].", sync_proxy);
-        let connection = quote! { #zbus::azync::Connection };
-        let proxy = quote! { #zbus::azync::Proxy };
-        let builder = quote! { #zbus::azync::ProxyBuilder };
+        let connection = quote! { #zbus::Connection };
+        let proxy = quote! { #zbus::Proxy };
+        let builder = quote! { #zbus::ProxyBuilder };
 
         (doc, proxy, connection, builder)
     } else {
         let doc = String::from("");
-        let connection = quote! { #zbus::Connection };
-        let proxy = quote! { #zbus::Proxy };
-        let builder = quote! { #zbus::ProxyBuilder };
+        let connection = quote! { #zbus::blocking::Connection };
+        let proxy = quote! { #zbus::blocking::Proxy };
+        let builder = quote! { #zbus::blocking::ProxyBuilder };
 
         (doc, proxy, connection, builder)
     };
@@ -179,8 +179,8 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             #methods
         }
 
-        impl<'c> ::std::convert::From<#zbus::azync::Proxy<'c>> for #proxy_name<'c> {
-            fn from(proxy: #zbus::azync::Proxy<'c>) -> Self {
+        impl<'c> ::std::convert::From<#zbus::Proxy<'c>> for #proxy_name<'c> {
+            fn from(proxy: #zbus::Proxy<'c>) -> Self {
                 #proxy_name(::std::convert::Into::into(proxy))
             }
         }
@@ -383,13 +383,13 @@ fn gen_proxy_property(
             let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
             let receive = format_ident!("receive_{}_changed", method_name);
             let gen_doc = format!("Create a stream for the `{}` property changes. \
-                                   This is a convenient wrapper around [`zbus::azync::Proxy::receive_property_stream`].",
+                                   This is a convenient wrapper around [`zbus::Proxy::receive_property_stream`].",
                                   property_name);
             quote! {
                 #[doc = #gen_doc]
                 pub async fn #receive#ty_generics(
                     &self
-                ) -> #zbus::azync::PropertyStream<'static, <#ret_type as #zbus::ResultAdapter>::Ok>
+                ) -> #zbus::PropertyStream<'static, <#ret_type as #zbus::ResultAdapter>::Ok>
                 #where_clause
                 {
                     self.0.receive_property_stream(#property_name).await
@@ -416,13 +416,13 @@ fn gen_proxy_property(
         };
         let (proxy_method, link) = if *azync {
             (
-                "zbus::azync::Proxy::connect_property_changed",
-                "https://docs.rs/zbus/latest/zbus/azync/struct.Proxy.html#method.connect_property_changed",
+                "zbus::Proxy::connect_property_changed",
+                "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_property_changed",
             )
         } else {
             (
                 "zbus::Proxy::connect_property_changed",
-                "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_property_changed",
+                "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_property_changed",
             )
         };
         let gen_doc = format!(
@@ -546,11 +546,11 @@ fn gen_proxy_signal(
         );
 
         let receive_signal_link =
-            "https://docs.rs/zbus/latest/zbus/azync/struct.Proxy.html#method.receive_signal";
+            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.receive_signal";
         let receive_gen_doc = format!(
             "Create a stream that receives `{}` signals.\n\
             \n\
-            This a convenient wrapper around [`zbus::azync::Proxy::receive_signal`]({}).",
+            This a convenient wrapper around [`zbus::Proxy::receive_signal`]({}).",
             signal_name, receive_signal_link,
         );
         let receive_signal = quote! {
@@ -630,7 +630,7 @@ fn gen_proxy_signal(
         };
         let stream_types = quote! {
             #[doc = #stream_gen_doc]
-            pub struct #stream_name<'s>(#zbus::azync::SignalStream<'s>);
+            pub struct #stream_name<'s>(#zbus::SignalStream<'s>);
 
             #zbus::export::static_assertions::assert_impl_all!(
                 #stream_name<'_>: ::std::marker::Send, ::std::marker::Unpin
@@ -652,19 +652,19 @@ fn gen_proxy_signal(
             }
 
             impl<'s> #stream_name<'s> {
-                /// Consumes `self`, returning the underlying `zbus::azync::SignalStream`.
-                pub fn into_inner(self) -> #zbus::azync::SignalStream<'s> {
+                /// Consumes `self`, returning the underlying `zbus::SignalStream`.
+                pub fn into_inner(self) -> #zbus::SignalStream<'s> {
                     self.0
                 }
 
-                /// The reference to the underlying `zbus::azync::SignalStream`.
-                pub fn inner(&self) -> & #zbus::azync::SignalStream<'s> {
+                /// The reference to the underlying `zbus::SignalStream`.
+                pub fn inner(&self) -> & #zbus::SignalStream<'s> {
                     &self.0
                 }
             }
 
             impl<'s> std::ops::Deref for #stream_name<'s> {
-                type Target = #zbus::azync::SignalStream<'s>;
+                type Target = #zbus::SignalStream<'s>;
 
                 fn deref(&self) -> &Self::Target {
                     &self.0
@@ -700,13 +700,13 @@ fn gen_proxy_signal(
 
     let (proxy_method, link) = if *azync {
         (
-            "zbus::azync::Proxy::connect_signal",
-            "https://docs.rs/zbus/latest/zbus/azync/struct.Proxy.html#method.connect_signal",
+            "zbus::Proxy::connect_signal",
+            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_signal",
         )
     } else {
         (
             "zbus::Proxy::connect_signal",
-            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_signal",
+            "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_signal",
         )
     };
     let gen_doc = format!(

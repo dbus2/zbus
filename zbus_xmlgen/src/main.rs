@@ -11,7 +11,10 @@ use std::{
     str::FromStr,
 };
 
-use zbus::xml::{Interface, Node};
+use zbus::{
+    blocking::{Connection, ConnectionBuilder, ProxyBuilder},
+    xml::{Interface, Node},
+};
 
 mod gen;
 use gen::GenTrait;
@@ -19,8 +22,8 @@ use gen::GenTrait;
 fn main() -> Result<(), Box<dyn Error>> {
     let input_src;
 
-    let proxy = |conn: zbus::Connection, service, path| -> zbus::fdo::IntrospectableProxy<'_> {
-        zbus::ProxyBuilder::new(&conn)
+    let proxy = |conn: Connection, service, path| -> zbus::fdo::IntrospectableProxy<'_> {
+        ProxyBuilder::new(&conn)
             .destination(service)
             .expect("invalid destination")
             .path(path)
@@ -32,9 +35,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let node: Node = match args().nth(1) {
         Some(bus) if bus == "--system" || bus == "--session" => {
             let connection = if bus == "--system" {
-                zbus::Connection::system()?
+                Connection::system()?
             } else {
-                zbus::Connection::session()?
+                Connection::session()?
             };
             let service = args().nth(2).expect("Missing param for service");
             let path = args().nth(3).expect("Missing param for object path");
@@ -53,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let service = args().nth(3).expect("Missing param for service");
             let path = args().nth(4).expect("Missing param for object path");
 
-            let connection = zbus::ConnectionBuilder::address(&*address)?.build()?;
+            let connection = ConnectionBuilder::address(&*address)?.build()?;
 
             input_src = format!("Interface '{}' from service '{}'", path, service);
 
