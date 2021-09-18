@@ -164,6 +164,10 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * `out_args` - When returning multiple values from a method, naming the out arguments become
 ///   important. You can use `out_args` for specifying names for your out arguments.
 ///
+/// * `raw_return` - Note: this is an advanced API that is not normally needed.  This method
+/// returns `DispatchResult` instead of the actual return from the method, and will construct and
+/// send its reply message in the returned closure.
+///
 /// * `blocking` - Allow use of the blocking APIs in this call.
 ///
 /// Note: a `<property_name_in_snake_case>_changed` method is generated for each property: this

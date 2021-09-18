@@ -109,12 +109,20 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         let is_blocking = attrs.iter().any(|x| x.is_blocking());
         let is_property = attrs.iter().any(|x| x.is_property());
         let is_signal = attrs.iter().any(|x| x.is_signal());
+        let raw_return = attrs
+            .iter()
+            .filter_map(|x| match x {
+                ItemAttribute::RawReturn(r) => Some(r),
+                _ => None,
+            })
+            .next();
+        let is_raw_ret = raw_return.is_some();
         let out_args = attrs.iter().find(|x| x.is_out_args()).map(|x| match x {
             ItemAttribute::OutArgs(a) => a,
             _ => unreachable!(),
         });
-        assert!(!(is_async && is_blocking));
         assert!(!is_property || !is_signal);
+        assert!((is_async as u8) + (is_blocking as u8) + (is_raw_ret as u8) < 2);
 
         let has_inputs = inputs.len() > 1;
 
@@ -164,9 +172,32 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
         let mut intro_args = quote!();
         intro_args.extend(introspect_input_args(&typed_inputs, is_signal));
-        let is_result_output = introspect_add_output_args(&mut intro_args, output, &out_args)?;
+        let is_result_output = match raw_return {
+            Some(arg_types) => {
+                if let Some(arg_names) = out_args {
+                    assert_eq!(arg_types.len(), arg_names.len());
+                    for (ty, name) in arg_types.iter().zip(arg_names) {
+                        let attrs = format!("name=\"{}\" type=\"{}\"", name, ty);
+                        intro_args.extend(quote!(
+                            ::std::writeln!(writer, "{:indent$}<arg type=\"{}\" direction=\"out\"/>", "",
+                                     #attrs, indent = level).unwrap();
+                        ));
+                    }
+                } else {
+                    for ty in arg_types {
+                        let attrs = format!("type=\"{}\"", ty);
+                        intro_args.extend(quote!(
+                            ::std::writeln!(writer, "{:indent$}<arg {} direction=\"out\"/>", "",
+                                     #attrs, indent = level).unwrap();
+                        ));
+                    }
+                }
+                false
+            }
+            None => introspect_add_output_args(&mut intro_args, output, &out_args)?,
+        };
 
-        let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus, is_blocking)?;
+        let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus)?;
 
         clean_input_args(inputs);
 
@@ -311,21 +342,28 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             let m = if is_blocking {
                 quote! {
                     #member_name if allow_blocking => {
+                        #args_from_msg
                         let closure = move || {
                             let c : #zbus::blocking::Connection = c.clone().into();
                             let c = &c;
-                            #args_from_msg
                             let reply = self.#ident(#args);
                             #reply
                         };
                         #zbus::DispatchResult::Blocking(::std::boxed::Box::new(closure))
                     },
                 }
+            } else if is_raw_ret {
+                quote! {
+                    #member_name => {
+                        #args_from_msg
+                        self.#ident(#args)
+                    },
+                }
             } else {
                 quote! {
                     #member_name => {
+                        #args_from_msg
                         let future = async move {
-                            #args_from_msg
                             let reply = self.#ident(#args)#method_await;
                             #reply
                         };
@@ -454,7 +492,6 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 fn get_args_from_inputs(
     inputs: &[PatType],
     zbus: &TokenStream,
-    is_blocking: bool,
 ) -> syn::Result<(TokenStream, TokenStream)> {
     if inputs.is_empty() {
         Ok((quote!(), quote!()))
@@ -463,17 +500,14 @@ fn get_args_from_inputs(
         let mut conn_arg_decl = None;
         let mut header_arg_decl = None;
         let mut signal_context_arg_decl = None;
+        let mut decls = quote! {};
         let mut args = Vec::new();
         let mut tys = Vec::new();
 
-        let reply_error = if is_blocking {
-            quote! {
-                c.reply_dbus_error(&m.header()?, <#zbus::fdo::Error as ::std::convert::From<_>>::from(e))
-            }
-        } else {
-            quote! {
-                c.reply_dbus_error(&m.header()?, <#zbus::fdo::Error as ::std::convert::From<_>>::from(e)).await
-            }
+        let reply_error = quote! {
+            #zbus::DispatchResult::Async(::std::boxed::Box::pin(async move {
+                c.reply_dbus_error(&m.header().unwrap(), <#zbus::fdo::Error as ::std::convert::From<_>>::from(e)).await
+            }))
         };
 
         for input in inputs {
@@ -481,6 +515,7 @@ fn get_args_from_inputs(
             let mut is_conn = false;
             let mut is_header = false;
             let mut is_signal_context = false;
+            let mut is_raw_blocking = false;
 
             for attr in &input.attrs {
                 if !attr.path.is_ident("zbus") {
@@ -509,6 +544,8 @@ fn get_args_from_inputs(
                                 is_header = true;
                             } else if p.is_ident("signal_context") {
                                 is_signal_context = true;
+                            } else if p.is_ident("allow_blocking") {
+                                is_raw_blocking = true;
                             } else {
                                 return Err(syn::Error::new_spanned(
                                     item,
@@ -538,7 +575,7 @@ fn get_args_from_inputs(
                 }
 
                 let server_arg = &input.pat;
-                server_arg_decl = Some(quote! { let #server_arg = &s; });
+                server_arg_decl = Some(quote! { let #server_arg = s; });
             } else if is_conn {
                 if conn_arg_decl.is_some() {
                     return Err(syn::Error::new_spanned(
@@ -548,7 +585,7 @@ fn get_args_from_inputs(
                 }
 
                 let conn_arg = &input.pat;
-                conn_arg_decl = Some(quote! { let #conn_arg = &c; });
+                conn_arg_decl = Some(quote! { let #conn_arg = c; });
             } else if is_header {
                 if header_arg_decl.is_some() {
                     return Err(syn::Error::new_spanned(
@@ -560,7 +597,7 @@ fn get_args_from_inputs(
                 let header_arg = &input.pat;
 
                 header_arg_decl = Some(quote! {
-                    let #header_arg = match m.header() {
+                    let #header_arg : #zbus::MessageHeader<'call> = match m.header() {
                         ::std::result::Result::Ok(r) => r,
                         ::std::result::Result::Err(e) => {
                             return #reply_error;
@@ -587,6 +624,11 @@ fn get_args_from_inputs(
                         }
                     };
                 });
+            } else if is_raw_blocking {
+                let pat = &input.pat;
+                decls.extend(quote! {
+                    let #pat = allow_blocking;
+                });
             } else {
                 args.push(&input.pat);
                 tys.push(&input.ty);
@@ -601,6 +643,8 @@ fn get_args_from_inputs(
             #header_arg_decl
 
             #signal_context_arg_decl
+
+            #decls
 
             let (#(#args),*): (#(#tys),*) =
                 match m.body() {
