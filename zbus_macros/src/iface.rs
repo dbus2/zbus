@@ -516,6 +516,7 @@ fn get_args_from_inputs(
             let mut is_header = false;
             let mut is_signal_context = false;
             let mut is_raw_blocking = false;
+            let mut is_message = false;
 
             for attr in &input.attrs {
                 if !attr.path.is_ident("zbus") {
@@ -546,6 +547,8 @@ fn get_args_from_inputs(
                                 is_signal_context = true;
                             } else if p.is_ident("allow_blocking") {
                                 is_raw_blocking = true;
+                            } else if p.is_ident("message") {
+                                is_message = true;
                             } else {
                                 return Err(syn::Error::new_spanned(
                                     item,
@@ -628,6 +631,11 @@ fn get_args_from_inputs(
                 let pat = &input.pat;
                 decls.extend(quote! {
                     let #pat = allow_blocking;
+                });
+            } else if is_message {
+                let pat = &input.pat;
+                decls.extend(quote! {
+                    let #pat = m;
                 });
             } else {
                 args.push(&input.pat);
@@ -718,7 +726,7 @@ fn introspect_input_args(
                     matches!(
                         nested_meta,
                         NestedMeta::Meta(Meta::Path(path))
-                        if path.is_ident("object_server") || path.is_ident("connection") || path.is_ident("header") || path.is_ident("signal_context")
+                        if path.is_ident("object_server") || path.is_ident("connection") || path.is_ident("header") || path.is_ident("signal_context") || path.is_ident("message") || path.is_ident("allow_blocking")
                     )
                 });
 
