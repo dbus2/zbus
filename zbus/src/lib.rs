@@ -203,6 +203,7 @@ pub use utils::*;
 pub mod fdo;
 
 mod raw;
+pub use raw::Socket;
 
 pub mod blocking;
 
