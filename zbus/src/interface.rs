@@ -76,6 +76,11 @@ pub trait Interface: Any + Send + Sync {
     where
         Self: Sized;
 
+    /// Return true if this interface requires support for making blocking API calls.
+    ///
+    /// This function's return value should remain constant for any given interface object.
+    fn requires_blocking(&self) -> bool;
+
     /// Get a property value.
     fn get<'call>(
         &'call self,

@@ -40,6 +40,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
     let mut call_mut_dispatch = quote!();
     let mut introspect = quote!();
     let mut generated_signals = quote!();
+    let mut has_blocking = false;
 
     // the impl Type
     let ty = match input.self_ty.as_ref() {
@@ -137,6 +138,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         });
         assert!(!is_property || !is_signal);
         assert!((is_async as u8) + (is_blocking as u8) + (is_raw_ret as u8) < 2);
+        has_blocking |= is_blocking;
 
         let has_inputs = inputs.len() > 1;
         assert!(in_args.is_none() || raw_args.is_some());
@@ -442,6 +444,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         {
             fn name() -> #zbus::names::InterfaceName<'static> {
                 #zbus::names::InterfaceName::from_str_unchecked(#iface_name)
+            }
+
+            fn requires_blocking(&self) -> bool {
+                #has_blocking
             }
 
             fn get<'call>(

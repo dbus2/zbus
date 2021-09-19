@@ -209,6 +209,7 @@ impl<'a> ConnectionBuilder<'a> {
                 }
             });
             conn.setup_object_server_task(send_task);
+            conn.object_server_mut().await.supports_blocking = true;
 
             let weak_conn = WeakConnection::from(&conn);
             std::thread::spawn(move || {

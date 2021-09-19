@@ -296,6 +296,7 @@ impl Node {
 pub struct ObjectServer {
     conn: WeakConnection,
     root: Node,
+    pub(crate) supports_blocking: bool,
 }
 
 assert_impl_all!(ObjectServer: Send, Sync, Unpin);
@@ -306,6 +307,7 @@ impl ObjectServer {
         Self {
             conn: conn.into(),
             root: Node::new("/".try_into().expect("zvariant bug")),
+            supports_blocking: false,
         }
     }
 
@@ -361,6 +363,9 @@ impl ObjectServer {
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
+        if iface.requires_blocking() && !self.supports_blocking {
+            return Err(Error::Unsupported);
+        }
         let path = path.try_into().map_err(Into::into)?;
         Ok(self.get_node_mut(&path, true).unwrap().at(I::name(), iface))
     }
