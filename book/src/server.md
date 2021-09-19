@@ -21,13 +21,14 @@ In this example, that is exactly what we're going to do and request the bus for 
 our choice:
 
 ```rust,no_run
-use std::{convert::TryInto, error::Error};
+use zbus::{Connection, Result};
 
-use zbus::Connection;
-
-fn main() -> std::result::Result<(), Box<dyn Error>> {
-    let connection = Connection::session()?
-        .request_name("org.zbus.MyGreeter")?;
+#[async_std::main]
+async fn main() -> Result<()> {
+    let connection = Connection::session()
+        .await?
+        .request_name("org.zbus.MyGreeter")
+        .await?;
 
     loop {}
 }
@@ -53,14 +54,17 @@ Let's write a `SayHello` method, that takes a string as argument, and reply with
 by replacing the loop above with this code:
 
 ```rust,no_run
-# use std::convert::TryInto;
-# fn main() -> Result<(), Box<dyn std::error::Error>> {
-#    let connection = zbus::Connection::session()?
-#        .request_name("org.zbus.MyGreeter")?;
+use futures_util::stream::TryStreamExt;
+
+# #[async_std::main]
+# async fn main() -> zbus::Result<()> {
+#    let connection = zbus::Connection::session()
+#        .await?
+#        .request_name("org.zbus.MyGreeter")
+#        .await?;
 #
 let mut stream = zbus::MessageStream::from(&connection);
-for msg in stream {
-    let msg = msg?;
+while let Some(msg) = stream.try_next().await? {
     let msg_header = msg.header()?;
     dbg!(&msg);
 
@@ -69,7 +73,7 @@ for msg in stream {
             // real code would check msg_header path(), interface() and member()
             // handle invalid calls, introspection, errors etc
             let arg: &str = msg.body()?;
-            connection.reply(&msg, &(format!("Hello {}!", arg)))?;
+            connection.reply(&msg, &(format!("Hello {}!", arg))).await?;
 
             break;
         }
@@ -101,8 +105,7 @@ signal emission.
 Let see how to use it:
 
 ```rust,no_run
-# use std::error::Error;
-# use zbus::{dbus_interface, fdo, ObjectServer, Connection, SignalContext};
+# use zbus::{SignalContext, ObjectServer, Connection, dbus_interface, fdo, Result};
 #
 use event_listener::Event;
 
@@ -113,39 +116,42 @@ struct Greeter {
 
 #[dbus_interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
-    fn say_hello(&self, name: &str) -> String {
+    async fn say_hello(&self, name: &str) -> String {
         format!("Hello {}!", name)
     }
 
     // Rude!
-    fn go_away(&self) {
+    async fn go_away(&self) {
         self.done.notify(1);
     }
 
     /// A "GreeterName" property.
     #[dbus_interface(property)]
-    fn greeter_name(&self) -> &str {
+    async fn greeter_name(&self) -> &str {
         &self.name
     }
 
     /// A setter for the "GreeterName" property.
     ///
-    /// Additionally, a `greeter_name_changed` method has been generated for you if you need to 
+    /// Additionally, a `greeter_name_changed` method has been generated for you if you need to
     /// notify listeners that "GreeterName" was updated. It will be automatically called when
     /// using this setter.
     #[dbus_interface(property)]
-    fn set_greeter_name(&mut self, name: String) {
+    async fn set_greeter_name(&mut self, name: String) {
         self.name = name;
     }
 
     /// A signal; the implementation is provided by the macro.
     #[dbus_interface(signal)]
-    fn greeted_everyone(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
+    async fn greeted_everyone(ctxt: &SignalContext<'_>) -> Result<()>;
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::session()?
-        .request_name("org.zbus.MyGreeter")?;
+#[async_std::main]
+async fn main() -> Result<()> {
+    let connection = Connection::session()
+        .await?
+        .request_name("org.zbus.MyGreeter")
+        .await?;
     let greeter = Greeter {
         name: "GreeterName".to_string(),
         done: event_listener::Event::new(),
@@ -153,6 +159,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let done_listener = greeter.done.listen();
     connection
         .object_server_mut()
+        .await
         .at("/org/zbus/MyGreeter", greeter)?;
 
     done_listener.wait();
@@ -194,8 +201,8 @@ method calls, where the return type is a directly serializable value, like the `
 `say_hello()` above.
 
 The second is a result return value, where the `Ok` variant is the serializable value, and the
-error is any error type that has a `reply(&self, &zbus::Connection, &zbus::Message)` method.
-The `zbus::fdo::Error` type implements this method, and should cover most common use cases.
+error is any error type that has an async `reply(&self, &zbus::Connection, &zbus::Message)`
+method. The `zbus::fdo::Error` type implements this method, and should cover most common use cases.
 However, when a custom error type needs to be emitted from the method as an error reply, it
 can be created with `derive(zbus::DBusError)`, and used in the returned `Result<T, E>`.
 
@@ -221,7 +228,6 @@ is generated for you that emits the necessary property change signal for you. He
 it with the previous example code:
 
 ```rust,no_run
-# use std::error::Error;
 # use zbus::dbus_interface;
 # 
 # struct Greeter {
@@ -231,26 +237,29 @@ it with the previous example code:
 # #[dbus_interface(name = "org.zbus.MyGreeter1")]
 # impl Greeter {
 #     #[dbus_interface(property)]
-#     fn greeter_name(&self) -> &str {
+#     async fn greeter_name(&self) -> &str {
 #         &self.name
 #     }
 # 
 #     #[dbus_interface(property)]
-#     fn set_greeter_name(&mut self, name: String) {
+#     async fn set_greeter_name(&mut self, name: String) {
 #         self.name = name;
 #     }
 # }
 #
-# fn main() -> Result<(), Box<dyn Error>> {
-# let connection = zbus::Connection::session()?;
-# let mut object_server = connection.object_server_mut();
+# #[async_std::main]
+# async fn main() -> zbus::Result<()> {
+# let connection = zbus::Connection::session().await?;
+# let mut object_server = connection.object_server_mut().await;
+use zbus::InterfaceDerefMut;
+
 object_server.with_mut(
     "/org/zbus/MyGreeter",
-    |iface: &mut Greeter, signal_ctxt| {
+    |mut iface: InterfaceDerefMut<Greeter>, signal_ctxt| async move {
         iface.name = String::from("👋");
-        iface.greeter_name_changed(signal_ctxt)
+        iface.greeter_name_changed(&signal_ctxt).await
     },
-)?;
+).await?;
 # Ok(())
 # }
 ```

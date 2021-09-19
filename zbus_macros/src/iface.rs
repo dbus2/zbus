@@ -78,6 +78,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             _ => continue,
         };
 
+        let is_async = method.sig.asyncness.is_some();
+
         let Signature {
             ident,
             inputs,
@@ -121,6 +123,14 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         } else {
             panic!("The method is missing a self receiver");
         };
+        if is_signal && !is_async {
+            return Err(syn::Error::new_spanned(&method, "signals must be async"));
+        }
+        let method_await = if is_async {
+            quote! { .await }
+        } else {
+            quote! {}
+        };
 
         let mut typed_inputs = inputs
             .iter()
@@ -157,11 +167,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             let ret = quote!(r);
 
             quote!(match reply {
-                ::std::result::Result::Ok(r) => c.reply(m, &#ret),
-                ::std::result::Result::Err(e) => e.reply(c, m),
+                ::std::result::Result::Ok(r) => c.reply(m, &#ret).await,
+                ::std::result::Result::Err(e) => e.reply(c, m).await,
             })
         } else {
-            quote!(c.reply(m, &reply))
+            quote!(c.reply(m, &reply).await)
         };
 
         let member_name = attrs
@@ -192,6 +202,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     #member_name,
                     &(#args),
                 )
+                .await
             });
         } else if is_property {
             let p = properties.entry(member_name.to_string());
@@ -199,9 +210,13 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             if matches!(p, Entry::Vacant(_)) {
                 let prop_changed_method = quote!(
-                    pub fn #prop_changed_method_name(&self, signal_context: &#zbus::SignalContext<'_>) -> #zbus::Result<()> {
+                    pub async fn #prop_changed_method_name(
+                        &self,
+                        signal_context: &#zbus::SignalContext<'_>,
+                    ) -> #zbus::Result<()> {
                         let mut changed = ::std::collections::HashMap::new();
                         let value = #zbus::Interface::get(self, &#member_name)
+                            .await
                             .expect(&::std::format!("Property '{}' does not exist", #member_name))?;
                         changed.insert(#member_name, &*value);
                         #zbus::fdo::Properties::properties_changed(
@@ -209,7 +224,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                             #zbus::names::InterfaceName::from_str_unchecked(#iface_name),
                             &changed,
                             &[],
-                        )
+                        ).await
                     }
                 );
                 generated_signals.extend(prop_changed_method);
@@ -221,7 +236,15 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 p.write = true;
 
                 let set_call = if is_result_output {
-                    quote!(self.#ident(val))
+                    quote!(self.#ident(val)#method_await)
+                } else if is_async {
+                    quote!(
+                            #zbus::export::futures_util::future::FutureExt::map(
+                                self.#ident(val),
+                                ::std::result::Result::Ok,
+                            )
+                            .await
+                    )
                 } else {
                     quote!(::std::result::Result::Ok(self.#ident(val)))
                 };
@@ -235,10 +258,16 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                                 ));
                             }
                         };
-                        let result = #set_call.and_then(|set_result| {
-                            self.#prop_changed_method_name(&signal_context)?;
-                            ::std::result::Result::Ok(set_result)
-                        });
+                        let result = match #set_call {
+                            ::std::result::Result::Ok(set_result) => {
+                                self
+                                    .#prop_changed_method_name(&signal_context)
+                                    .await
+                                    .map(|_| set_result)
+                                    .map_err(Into::into)
+                            }
+                            e => e,
+                        };
                         ::std::option::Option::Some(result)
                     }
                 );
@@ -252,7 +281,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         ::std::option::Option::Some(::std::result::Result::Ok(
                             ::std::convert::Into::into(
                                 <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
-                                    self.#ident(),
+                                    self.#ident()#method_await,
                                 ),
                             ),
                         ))
@@ -265,7 +294,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         ::std::string::ToString::to_string(#member_name),
                         ::std::convert::Into::into(
                             <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
-                                self.#ident(),
+                                self.#ident()#method_await,
                             ),
                         ),
                     );
@@ -279,7 +308,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             let m = quote!(
                 #member_name => {
                     #args_from_msg
-                    let reply = self.#ident(#args);
+                    let reply = self.#ident(#args)#method_await;
                     ::std::option::Option::Some(#reply)
                 },
             );
@@ -306,6 +335,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             #generated_signals
         }
 
+        #[#zbus::export::async_trait::async_trait]
         impl #generics #zbus::Interface for #self_ty
         #where_clause
         {
@@ -313,7 +343,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 #zbus::names::InterfaceName::from_str_unchecked(#iface_name)
             }
 
-            fn get(
+            async fn get(
                 &self,
                 property_name: &str,
             ) -> ::std::option::Option<#zbus::fdo::Result<#zbus::zvariant::OwnedValue>> {
@@ -323,7 +353,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 }
             }
 
-            fn get_all(
+            async fn get_all(
                 &self,
             ) -> ::std::collections::HashMap<
                 ::std::string::String,
@@ -337,10 +367,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 props
             }
 
-            fn set(
+            async fn set(
                 &mut self,
                 property_name: &str,
-                value: &#zbus::zvariant::Value,
+                value: &#zbus::zvariant::Value<'_>,
                 signal_context: &#zbus::SignalContext<'_>,
             ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
                 match property_name {
@@ -349,7 +379,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 }
             }
 
-            fn call(
+            async fn call(
                 &self,
                 s: &#zbus::ObjectServer,
                 c: &#zbus::Connection,
@@ -362,7 +392,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 }
             }
 
-            fn call_mut(
+            async fn call_mut(
                 &mut self,
                 s: &#zbus::ObjectServer,
                 c: &#zbus::Connection,
@@ -497,7 +527,7 @@ fn get_args_from_inputs(
                         ::std::result::Result::Ok(r) => r,
                         ::std::result::Result::Err(e) => {
                             return ::std::option::Option::Some(
-                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
+                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await,
                             );
                         }
                     };
@@ -519,7 +549,7 @@ fn get_args_from_inputs(
                         ::std::result::Result::Ok(e) => e,
                         ::std::result::Result::Err(e) => {
                             return ::std::option::Option::Some(
-                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
+                                <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await,
                             );
                         }
                     };
@@ -544,7 +574,7 @@ fn get_args_from_inputs(
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
                         return ::std::option::Option::Some(
-                            <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m),
+                            <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await,
                         );
                     }
                 };

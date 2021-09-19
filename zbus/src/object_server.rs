@@ -1,93 +1,65 @@
+use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{
-    any::{Any, TypeId},
     collections::{hash_map::Entry, HashMap},
     convert::TryInto,
     fmt::Write,
+    future::Future,
     marker::PhantomData,
     ops::{Deref, DerefMut},
-    sync::{Arc, RwLock, RwLockWriteGuard},
+    sync::Arc,
 };
 
 use static_assertions::assert_impl_all;
-use zbus_names::{InterfaceName, MemberName};
-use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
+use zbus_names::InterfaceName;
+use zvariant::{ObjectPath, OwnedObjectPath};
 
 use crate::{
-    azync::{self, WeakConnection},
     fdo,
     fdo::{Introspectable, Peer, Properties},
-    Connection, Error, Message, MessageHeader, MessageType, Result, SignalContext,
+    Connection, Error, Interface, Message, MessageHeader, MessageType, Result, SignalContext,
+    WeakConnection,
 };
 
-/// The trait used to dispatch messages to an interface instance.
-///
-/// Note: It is not recommended to manually implement this trait. The [`dbus_interface`] macro
-/// implements it for you.
-///
-/// [`dbus_interface`]: attr.dbus_interface.html
-pub trait Interface: Any + Send + Sync {
-    /// Return the name of the interface. Ex: "org.foo.MyInterface"
-    fn name() -> InterfaceName<'static>
-    where
-        Self: Sized;
-
-    /// Get a property value. Returns `None` if the property doesn't exist.
-    fn get(&self, property_name: &str) -> Option<fdo::Result<OwnedValue>>;
-
-    /// Return all the properties.
-    fn get_all(&self) -> HashMap<String, OwnedValue>;
-
-    /// Set a property value. Returns `None` if the property doesn't exist.
-    fn set(
-        &mut self,
-        property_name: &str,
-        value: &Value<'_>,
-        ctxt: &SignalContext<'_>,
-    ) -> Option<fdo::Result<()>>;
-
-    /// Call a `&self` method. Returns `None` if the method doesn't exist.
-    fn call(
-        &self,
-        server: &ObjectServer,
-        connection: &Connection,
-        msg: &Message,
-        name: MemberName<'_>,
-    ) -> Option<Result<u32>>;
-
-    /// Call a `&mut self` method. Returns `None` if the method doesn't exist.
-    fn call_mut(
-        &mut self,
-        server: &ObjectServer,
-        connection: &Connection,
-        msg: &Message,
-        name: MemberName<'_>,
-    ) -> Option<Result<u32>>;
-
-    /// Write introspection XML to the writer, with the given indentation level.
-    fn introspect_to_writer(&self, writer: &mut dyn Write, level: usize);
+/// Opaque structure that derefs to an `Interface` type.
+pub struct InterfaceDeref<'d, I> {
+    iface: RwLockReadGuard<'d, dyn Interface>,
+    phantom: PhantomData<I>,
 }
 
-// FIXME: Do we really need these unsafe implementations? If so, can't they be implemented w/o
-///       `unsafe` usage?
-impl dyn Interface {
-    /// Return Any of self
-    fn downcast_ref<T: Any>(&self) -> Option<&T> {
-        if <dyn Interface as Any>::type_id(self) == TypeId::of::<T>() {
-            // SAFETY: If type ID matches, it means object is of type T
-            Some(unsafe { &*(self as *const dyn Interface as *const T) })
-        } else {
-            None
-        }
-    }
+impl<I> Deref for InterfaceDeref<'_, I>
+where
+    I: Interface,
+{
+    type Target = I;
 
-    /// Return Any of self
-    fn downcast_mut<T: Any>(&mut self) -> Option<&mut T> {
-        if <dyn Interface as Any>::type_id(self) == TypeId::of::<T>() {
-            // SAFETY: If type ID matches, it means object is of type T
-            Some(unsafe { &mut *(self as *mut dyn Interface as *mut T) })
-        } else {
-            None
-        }
+    fn deref(&self) -> &I {
+        self.iface.downcast_ref::<I>().unwrap()
+    }
+}
+
+/// Opaque structure that mutably derefs to an `Interface` type.
+pub struct InterfaceDerefMut<'d, I> {
+    iface: RwLockWriteGuard<'d, dyn Interface>,
+    phantom: PhantomData<I>,
+}
+
+impl<I> Deref for InterfaceDerefMut<'_, I>
+where
+    I: Interface,
+{
+    type Target = I;
+
+    fn deref(&self) -> &I {
+        self.iface.downcast_ref::<I>().unwrap()
+    }
+}
+
+impl<I> DerefMut for InterfaceDerefMut<'_, I>
+where
+    I: Interface,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.iface.downcast_mut::<I>().unwrap()
     }
 }
 
@@ -113,7 +85,7 @@ impl Node {
         node
     }
 
-    pub(crate) fn get_interface(
+    pub(crate) fn interface_lock(
         &self,
         interface_name: InterfaceName<'_>,
     ) -> Option<Arc<RwLock<dyn Interface>>> {
@@ -147,9 +119,38 @@ impl Node {
         true
     }
 
-    fn with_iface_func<F, I>(&self, func: F, signal_ctxt: &SignalContext<'_>) -> Result<()>
+    async fn with_iface_func<'node, 's, F, Fut, I>(
+        &'node self,
+        func: F,
+        signal_ctxt: SignalContext<'s>,
+    ) -> Result<()>
     where
-        F: Fn(&I, &SignalContext<'_>) -> Result<()>,
+        F: FnOnce(InterfaceDeref<'node, I>, SignalContext<'s>) -> Fut,
+        Fut: Future<Output = Result<()>>,
+        I: Interface,
+    {
+        let iface = self.get_interface::<I>().await?;
+
+        func(iface, signal_ctxt).await
+    }
+
+    async fn with_iface_func_mut<'node, 's, F, Fut, I>(
+        &'node self,
+        func: F,
+        signal_ctxt: SignalContext<'s>,
+    ) -> Result<()>
+    where
+        F: FnOnce(InterfaceDerefMut<'node, I>, SignalContext<'s>) -> Fut,
+        Fut: Future<Output = Result<()>>,
+        I: Interface,
+    {
+        let iface = self.get_interface_mut::<I>().await?;
+
+        func(iface, signal_ctxt).await
+    }
+
+    async fn get_interface<I>(&self) -> Result<InterfaceDeref<'_, I>>
+    where
         I: Interface,
     {
         let iface = self
@@ -157,67 +158,38 @@ impl Node {
             .get(&I::name())
             .ok_or(Error::InterfaceNotFound)?
             .read()
-            .expect("lock poisoned");
-        let iface = iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
-        func(iface, signal_ctxt)
-    }
-
-    fn with_iface_func_mut<F, I>(&self, func: F, signal_ctxt: &SignalContext<'_>) -> Result<()>
-    where
-        F: Fn(&mut I, &SignalContext<'_>) -> Result<()>,
-        I: Interface,
-    {
-        let mut iface = self.get_interface_mut::<I>()?;
-
-        func(&mut *iface, signal_ctxt)
-    }
-
-    fn get_interface_mut<I>(&self) -> Result<impl DerefMut<Target = I> + '_>
-    where
-        I: Interface,
-    {
-        struct DownCast<'d, G> {
-            iface: RwLockWriteGuard<'d, dyn Interface>,
-            phantom: PhantomData<G>,
-        }
-
-        impl<G> Deref for DownCast<'_, G>
-        where
-            G: Interface,
-        {
-            type Target = G;
-
-            fn deref(&self) -> &G {
-                self.iface.downcast_ref::<G>().unwrap()
-            }
-        }
-
-        impl<G> DerefMut for DownCast<'_, G>
-        where
-            G: Interface,
-        {
-            fn deref_mut(&mut self) -> &mut Self::Target {
-                self.iface.downcast_mut::<G>().unwrap()
-            }
-        }
-
-        let mut iface = self
-            .interfaces
-            .get(&I::name())
-            .ok_or(Error::InterfaceNotFound)?
-            .write()
-            .expect("lock poisoned");
+            .await;
         // Ensure what we return can later be dowcasted safely.
         iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
-        iface.downcast_mut::<I>().ok_or(Error::InterfaceNotFound)?;
 
-        Ok(DownCast {
+        Ok(InterfaceDeref {
             iface,
             phantom: PhantomData,
         })
     }
 
-    fn introspect_to_writer<W: Write>(&self, writer: &mut W, level: usize) {
+    async fn get_interface_mut<I>(&self) -> Result<InterfaceDerefMut<'_, I>>
+    where
+        I: Interface,
+    {
+        let mut iface = self
+            .interfaces
+            .get(&I::name())
+            .ok_or(Error::InterfaceNotFound)?
+            .write()
+            .await;
+        // Ensure what we return can later be dowcasted safely.
+        iface.downcast_ref::<I>().ok_or(Error::InterfaceNotFound)?;
+        iface.downcast_mut::<I>().ok_or(Error::InterfaceNotFound)?;
+
+        Ok(InterfaceDerefMut {
+            iface,
+            phantom: PhantomData,
+        })
+    }
+
+    #[async_recursion::async_recursion]
+    async fn introspect_to_writer<W: Write + Send>(&self, writer: &mut W, level: usize) {
         if level == 0 {
             writeln!(
                 writer,
@@ -230,10 +202,7 @@ impl Node {
         }
 
         for iface in self.interfaces.values() {
-            iface
-                .read()
-                .expect("lock poisoned")
-                .introspect_to_writer(writer, level + 2);
+            iface.read().await.introspect_to_writer(writer, level + 2);
         }
 
         for (path, node) in &self.children {
@@ -246,7 +215,7 @@ impl Node {
                 indent = level
             )
             .unwrap();
-            node.introspect_to_writer(writer, level);
+            node.introspect_to_writer(writer, level).await;
             writeln!(writer, "{:indent$}</node>", "", indent = level).unwrap();
         }
 
@@ -255,10 +224,10 @@ impl Node {
         }
     }
 
-    pub(crate) fn introspect(&self) -> String {
+    pub(crate) async fn introspect(&self) -> String {
         let mut xml = String::with_capacity(1024);
 
-        self.introspect_to_writer(&mut xml, 0);
+        self.introspect_to_writer(&mut xml, 0).await;
 
         xml
     }
@@ -281,6 +250,7 @@ impl Node {
 /// use zbus::{Connection, ObjectServer, dbus_interface};
 /// use std::sync::{Arc, Mutex};
 /// use event_listener::Event;
+///# use async_io::block_on;
 ///
 /// struct Example {
 ///     // Interfaces are owned by the ObjectServer. They can have
@@ -297,7 +267,7 @@ impl Node {
 /// #[dbus_interface(name = "org.myiface.Example")]
 /// impl Example {
 ///     // This will be the "Quit" D-Bus method.
-///     fn quit(&mut self) {
+///     async fn quit(&mut self) {
 ///         self.quit_event.notify(1);
 ///     }
 ///
@@ -305,16 +275,20 @@ impl Node {
 ///     // how to expose properties & signals as well.
 /// }
 ///
-/// let connection = Connection::session()?;
+///# block_on(async {
+/// let connection = Connection::session().await?;
 ///
 /// let quit_event = Event::new();
 /// let quit_listener = quit_event.listen();
 /// let interface = Example::new(quit_event);
 /// connection
 ///     .object_server_mut()
+///     .await
 ///     .at("/org/zbus/path", interface)?;
 ///
-/// quit_listener.wait();
+/// quit_listener.await;
+///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+///# });
 ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
 #[derive(Debug)]
@@ -327,7 +301,7 @@ assert_impl_all!(ObjectServer: Send, Sync, Unpin);
 
 impl ObjectServer {
     /// Creates a new D-Bus `ObjectServer`.
-    pub(crate) fn new(conn: &azync::Connection) -> Self {
+    pub(crate) fn new(conn: &Connection) -> Self {
         Self {
             conn: conn.into(),
             root: Node::new("/".try_into().expect("zvariant bug")),
@@ -380,8 +354,6 @@ impl ObjectServer {
     /// Register a D-Bus [`Interface`] at a given path. (see the example above)
     ///
     /// If the interface already exists at this path, returns false.
-    ///
-    /// [`Interface`]: trait.Interface.html
     pub fn at<'p, P, I>(&mut self, path: P, iface: I) -> Result<bool>
     where
         I: Interface,
@@ -396,8 +368,6 @@ impl ObjectServer {
     ///
     /// If there are no more interfaces left at that path, destroys the object as well.
     /// Returns whether the object was destroyed.
-    ///
-    /// [`Interface`]: trait.Interface.html
     pub fn remove<'p, I, P>(&mut self, path: P) -> Result<bool>
     where
         I: Interface,
@@ -438,31 +408,37 @@ impl ObjectServer {
     ///
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
+    ///# use zbus::{Connection, InterfaceDeref, ObjectServer, SignalContext, dbus_interface};
+    ///# use async_io::block_on;
     ///#
     /// struct MyIface;
     /// #[dbus_interface(name = "org.myiface.MyIface")]
     /// impl MyIface {
     ///     #[dbus_interface(signal)]
-    ///     fn emit_signal(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
+    ///     async fn emit_signal(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
     /// }
     ///
-    ///# let connection = Connection::session()?;
+    ///# block_on(async {
+    ///# let connection = Connection::session().await?;
     ///#
     ///# let path = "/org/zbus/path";
-    ///# connection.object_server_mut().at(path, MyIface)?;
+    ///# connection.object_server_mut().await.at(path, MyIface)?;
     /// connection
     ///     .object_server()
-    ///     .with(path, |_iface: &MyIface, signal_ctxt| {
-    ///         MyIface::emit_signal(signal_ctxt)
-    ///     })?;
-    ///#
+    ///     .await
+    ///     .with(path, |_iface: InterfaceDeref<'_, MyIface>, signal_ctxt| async move {
+    ///         MyIface::emit_signal(&signal_ctxt).await
+    ///     })
+    ///     .await?;
+    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    ///# })?;
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn with<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
+    pub async fn with<'server, 'p, P, F, Fut, I>(&'server self, path: P, func: F) -> Result<()>
     where
-        F: Fn(&I, &SignalContext<'_>) -> Result<()>,
+        F: FnOnce(InterfaceDeref<'server, I>, SignalContext<'p>) -> Fut,
+        Fut: Future<Output = Result<()>>,
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
@@ -473,7 +449,7 @@ impl ObjectServer {
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
         let ctxt = SignalContext::new(&conn, path).unwrap();
 
-        node.with_iface_func(func, &ctxt)
+        node.with_iface_func(func, ctxt).await
     }
 
     /// Run `func` with the given path & interface.
@@ -486,35 +462,41 @@ impl ObjectServer {
     ///
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
+    ///# use zbus::{Connection, InterfaceDerefMut, ObjectServer, SignalContext, dbus_interface};
+    ///# use async_io::block_on;
     ///#
     /// struct MyIface(u32);
     ///
     /// #[dbus_interface(name = "org.myiface.MyIface")]
     /// impl MyIface {
     ///      #[dbus_interface(property)]
-    ///      fn count(&self) -> u32 {
+    ///      async fn count(&self) -> u32 {
     ///          self.0
     ///      }
     /// }
     ///
-    ///# let connection = Connection::session()?;
+    ///# block_on(async {
+    ///# let connection = Connection::session().await?;
     ///#
     ///# let path = "/org/zbus/path";
-    ///# connection.object_server_mut().at(path, MyIface(0))?;
+    ///# connection.object_server_mut().await.at(path, MyIface(0))?;
     /// connection
     ///     .object_server()
-    ///     .with_mut(path, |iface: &mut MyIface, signal_ctxt| {
+    ///     .await
+    ///     .with_mut(path, |mut iface: InterfaceDerefMut<'_, MyIface>, signal_ctxt| async move {
     ///         iface.0 = 42;
-    ///         iface.count_changed(signal_ctxt)
-    ///     })?;
-    ///#
+    ///         iface.count_changed(&signal_ctxt).await
+    ///     })
+    ///     .await?;
+    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    ///# })?;
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn with_mut<'p, P, F, I>(&self, path: P, func: F) -> Result<()>
+    pub async fn with_mut<'server, 'p, P, F, Fut, I>(&'server self, path: P, func: F) -> Result<()>
     where
-        F: Fn(&mut I, &SignalContext<'_>) -> Result<()>,
+        F: FnOnce(InterfaceDerefMut<'server, I>, SignalContext<'p>) -> Fut,
+        Fut: Future<Output = Result<()>>,
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
@@ -525,7 +507,20 @@ impl ObjectServer {
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
         let ctxt = SignalContext::new(&conn, path).unwrap();
 
-        node.with_iface_func_mut(func, &ctxt)
+        node.with_iface_func_mut(func, ctxt).await
+    }
+
+    /// Get a reference to the interface at the given path.
+    pub async fn get_interface<'p, P, I>(&self, path: P) -> Result<InterfaceDeref<'_, I>>
+    where
+        I: Interface,
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
+    {
+        let path = path.try_into().map_err(Into::into)?;
+        let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+
+        node.get_interface().await
     }
 
     /// Get a reference to the interface at the given path.
@@ -544,6 +539,7 @@ impl ObjectServer {
     ///
     /// ```no_run
     ///# use std::error::Error;
+    ///# use async_io::block_on;
     ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
     ///
     /// struct MyIface(u32);
@@ -551,26 +547,29 @@ impl ObjectServer {
     /// #[dbus_interface(name = "org.myiface.MyIface")]
     /// impl MyIface {
     ///    #[dbus_interface(property)]
-    ///    fn count(&self) -> u32 {
+    ///    async fn count(&self) -> u32 {
     ///        self.0
     ///    }
     /// }
+    ///
+    ///# block_on(async {
     /// // Setup connection and object_server etc here and then in another part of the code:
-    ///#
-    ///# let connection = Connection::session()?;
+    ///# let connection = Connection::session().await?;
     ///#
     ///# let path = "/org/zbus/path";
-    ///# connection.object_server_mut().at(path, MyIface(22))?;
-    /// let mut object_server = connection.object_server();
-    /// let mut iface = object_server.get_interface::<_, MyIface>(path)?;
+    ///# connection.object_server_mut().await.at(path, MyIface(22))?;
+    /// let mut object_server = connection.object_server().await;
+    /// let mut iface = object_server.get_interface_mut::<_, MyIface>(path).await?;
     /// // Note: This will not be needed when using `ObjectServer::with_mut`
     /// let ctxt = SignalContext::new(&connection, path)?;
     /// iface.0 = 42;
-    /// iface.count_changed(&ctxt)?;
+    /// iface.count_changed(&ctxt).await?;
+    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    ///# })?;
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn get_interface<'p, P, I>(&self, path: P) -> Result<impl DerefMut<Target = I> + '_>
+    pub async fn get_interface_mut<'p, P, I>(&self, path: P) -> Result<InterfaceDerefMut<'_, I>>
     where
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
@@ -579,10 +578,10 @@ impl ObjectServer {
         let path = path.try_into().map_err(Into::into)?;
         let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
 
-        node.get_interface_mut()
+        node.get_interface_mut().await
     }
 
-    fn dispatch_method_call_try(
+    async fn dispatch_method_call_try(
         &self,
         connection: &Connection,
         msg_header: &MessageHeader<'_>,
@@ -611,31 +610,37 @@ impl ObjectServer {
         let node = self
             .get_node(path)
             .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
-        let iface = node.get_interface(iface.clone()).ok_or_else(|| {
+        let iface = node.interface_lock(iface.clone()).ok_or_else(|| {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
         })?;
 
-        let res = iface
-            .read()
-            .expect("lock poisoned")
-            .call(self, connection, msg, member.clone());
-        res.or_else(|| {
-            iface
-                .write()
-                .expect("lock poisoned")
-                .call_mut(self, connection, msg, member.clone())
-        })
-        .ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
+        let read_lock = iface.read().await;
+        let res = match read_lock.call(self, connection, msg, member.clone()).await {
+            Some(ret) => Some(ret),
+            None => {
+                drop(read_lock);
+                iface
+                    .write()
+                    .await
+                    .call_mut(self, connection, msg, member.clone())
+                    .await
+            }
+        };
+
+        res.ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
     }
 
-    fn dispatch_method_call(
+    async fn dispatch_method_call(
         &self,
         connection: &Connection,
         msg_header: &MessageHeader<'_>,
         msg: &Message,
     ) -> Result<u32> {
-        match self.dispatch_method_call_try(connection, msg_header, msg) {
-            Err(e) => e.reply(connection, msg),
+        match self
+            .dispatch_method_call_try(connection, msg_header, msg)
+            .await
+        {
+            Err(e) => e.reply(connection, msg).await,
             Ok(r) => r,
         }
     }
@@ -652,24 +657,29 @@ impl ObjectServer {
     ///   the caller through the associated server connection.
     ///
     /// Returns an error if the message is malformed, true if it's handled, false otherwise.
-    pub(crate) fn dispatch_message(&self, msg: &Message) -> Result<bool> {
+    pub(crate) async fn dispatch_message(&self, msg: &Message) -> Result<bool> {
         let msg_header = msg.header()?;
 
         match msg_header.message_type()? {
             MessageType::MethodCall => {
                 let conn = self.connection();
-                self.dispatch_method_call(&conn, &msg_header, msg)?;
+                self.dispatch_method_call(&conn, &msg_header, msg).await?;
                 Ok(true)
             }
             _ => Ok(false),
         }
     }
 
-    fn connection(&self) -> Connection {
+    pub(crate) fn connection(&self) -> Connection {
         self.conn
             .upgrade()
             .expect("ObjectServer can't exist w/o an associated Connection")
-            .into()
+    }
+}
+
+impl From<crate::blocking::ObjectServer> for ObjectServer {
+    fn from(server: crate::blocking::ObjectServer) -> Self {
+        server.into_inner()
     }
 }
 
@@ -687,6 +697,7 @@ mod tests {
         thread,
     };
 
+    use async_io::block_on;
     use event_listener::Event;
     use ntest::timeout;
     use serde::{Deserialize, Serialize};
@@ -695,7 +706,8 @@ mod tests {
     use zvariant::derive::Type;
 
     use crate::{
-        dbus_interface, dbus_proxy, Connection, MessageHeader, MessageType, SignalContext,
+        blocking, dbus_interface, dbus_proxy, Connection, InterfaceDeref, MessageHeader,
+        MessageType, SignalContext,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -764,10 +776,12 @@ mod tests {
 
     #[dbus_interface(interface = "org.freedesktop.MyIface")]
     impl MyIfaceImpl {
-        fn ping(&mut self, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> u32 {
+        async fn ping(&mut self, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> u32 {
             self.count += 1;
             if self.count % 3 == 0 {
-                MyIfaceImpl::alert_count(&ctxt, self.count).expect("Failed to emit signal");
+                MyIfaceImpl::alert_count(&ctxt, self.count)
+                    .await
+                    .expect("Failed to emit signal");
             }
             self.count
         }
@@ -815,7 +829,7 @@ mod tests {
             Ok((42, String::from("Meaning of life")))
         }
 
-        fn test_hashmap_return(&self) -> zbus::fdo::Result<HashMap<String, String>> {
+        async fn test_hashmap_return(&self) -> zbus::fdo::Result<HashMap<String, String>> {
             let mut map = HashMap::new();
             map.insert("hi".into(), "hello".into());
             map.insert("bye".into(), "now".into());
@@ -846,12 +860,12 @@ mod tests {
         }
 
         #[dbus_interface(property)]
-        fn hash_map(&self) -> HashMap<String, String> {
-            self.test_hashmap_return().unwrap()
+        async fn hash_map(&self) -> HashMap<String, String> {
+            self.test_hashmap_return().await.unwrap()
         }
 
         #[dbus_interface(signal)]
-        fn alert_count(ctxt: &SignalContext<'_>, val: u32) -> zbus::Result<()>;
+        async fn alert_count(ctxt: &SignalContext<'_>, val: u32) -> zbus::Result<()>;
     }
 
     fn check_hash_map(map: HashMap<String, String>) {
@@ -860,7 +874,7 @@ mod tests {
     }
 
     fn my_iface_test(tx: Sender<()>) -> std::result::Result<u32, Box<dyn Error>> {
-        let conn = Connection::session()?;
+        let conn = blocking::Connection::session()?;
         let proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
@@ -947,16 +961,24 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn basic_iface() {
+        block_on(basic_iface_());
+    }
+
+    async fn basic_iface_() {
         let (tx, rx) = channel::<()>();
 
         let conn = Connection::session()
+            .await
             .unwrap()
             // primary name
             .request_name("org.freedesktop.MyService")
+            .await
             .unwrap()
             .request_name("org.freedesktop.MyService.foo")
+            .await
             .unwrap()
             .request_name("org.freedesktop.MyService.bar")
+            .await
             .unwrap();
 
         let child = thread::spawn(move || my_iface_test(tx).expect("child failed"));
@@ -966,22 +988,30 @@ mod tests {
         let (next_tx, next_rx) = sync_channel(64);
         let iface = MyIfaceImpl::new(next_tx.clone());
         {
-            let mut server = conn.object_server_mut();
+            let mut server = conn.object_server_mut().await;
             server.at("/org/freedesktop/MyService", iface).unwrap();
 
             server
-                .with("/org/freedesktop/MyService", |iface: &MyIfaceImpl, ctxt| {
-                    iface.count_changed(ctxt)
-                })
+                .with(
+                    "/org/freedesktop/MyService",
+                    |iface: InterfaceDeref<'_, MyIfaceImpl>, ctxt| async move {
+                        iface.count_changed(&ctxt).await
+                    },
+                )
+                .await
                 .unwrap();
         }
 
         loop {
             conn.object_server_mut()
+                .await
                 .with(
                     "/org/freedesktop/MyService",
-                    |_iface: &MyIfaceImpl, ctxt| MyIfaceImpl::alert_count(ctxt, 51),
+                    |_iface: InterfaceDeref<'_, MyIfaceImpl>, ctxt| async move {
+                        MyIfaceImpl::alert_count(&ctxt, 51).await
+                    },
                 )
+                .await
                 .unwrap();
 
             match next_rx.recv().unwrap() {
@@ -989,38 +1019,56 @@ mod tests {
                 NextAction::CreateObj(key) => {
                     let path = format!("/zbus/test/{}", key);
                     conn.object_server_mut()
+                        .await
                         .at(path, MyIfaceImpl::new(next_tx.clone()))
                         .unwrap();
                 }
                 NextAction::DestroyObj(key) => {
                     let path = format!("/zbus/test/{}", key);
                     conn.object_server_mut()
+                        .await
                         .remove::<MyIfaceImpl, _>(path)
                         .unwrap();
                 }
             }
         }
 
+        // FIXME: This should ideally be done in asnyc/await way.
         let val = child.join().expect("failed to join");
         assert_eq!(val, 2);
 
         // Release primary name explicitly and let others be released implicitly.
-        assert_eq!(conn.release_name("org.freedesktop.MyService"), Ok(true));
-        assert_eq!(conn.release_name("org.freedesktop.MyService.foo"), Ok(true));
-        assert_eq!(conn.release_name("org.freedesktop.MyService.bar"), Ok(true));
+        assert_eq!(
+            conn.release_name("org.freedesktop.MyService").await,
+            Ok(true)
+        );
+        assert_eq!(
+            conn.release_name("org.freedesktop.MyService.foo").await,
+            Ok(true)
+        );
+        assert_eq!(
+            conn.release_name("org.freedesktop.MyService.bar").await,
+            Ok(true)
+        );
 
         // Let's ensure all names were released.
-        let proxy = zbus::fdo::DBusProxy::new(&conn).unwrap();
+        let proxy = zbus::fdo::AsyncDBusProxy::new(&conn).await.unwrap();
         assert_eq!(
-            proxy.name_has_owner("org.freedesktop.MyService".try_into().unwrap()),
+            proxy
+                .name_has_owner("org.freedesktop.MyService".try_into().unwrap())
+                .await,
             Ok(false)
         );
         assert_eq!(
-            proxy.name_has_owner("org.freedesktop.MyService.foo".try_into().unwrap()),
+            proxy
+                .name_has_owner("org.freedesktop.MyService.foo".try_into().unwrap())
+                .await,
             Ok(false)
         );
         assert_eq!(
-            proxy.name_has_owner("org.freedesktop.MyService.bar".try_into().unwrap()),
+            proxy
+                .name_has_owner("org.freedesktop.MyService.bar".try_into().unwrap())
+                .await,
             Ok(false)
         );
     }

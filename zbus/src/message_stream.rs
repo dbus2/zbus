@@ -1,46 +1,79 @@
-use futures_util::StreamExt;
+use std::{
+    io::ErrorKind,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
+
+use async_broadcast::Receiver as ActiveReceiver;
+use async_channel::Receiver;
+use futures_core::{ready, stream, Future};
+use futures_util::{
+    future::{select, Either},
+    StreamExt,
+};
 use static_assertions::assert_impl_all;
-use std::sync::Arc;
 
-use async_io::block_on;
+use crate::{Connection, Error, Message, Result};
 
-use crate::{azync, Connection, Message, Result};
-
-/// Synchronous sibling of [`azync::MessageStream`].
+/// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
-/// Just like [`azync::MessageStream`] must be continuously polled, you must continuously iterate
-/// over this type until it's consumed or dropped.
-#[derive(derivative::Derivative, Clone)]
-#[derivative(Debug)]
-pub struct MessageStream(pub(crate) azync::MessageStream);
+/// You can convert a [`Connection`] to this type.
+///
+/// **NOTE**: You must ensure a `MessageStream` is continuously polled or you will experience hangs.
+/// If you don't need to continuously poll the `MessageStream` but need to keep it around for later
+/// use, keep the connection around and convert it into a `MessageStream` when needed. The
+/// conversion is not an expensive operation so you don't need to  worry about performance, unless
+/// you do it very frequently. If you need to convert back and forth frequently, you may want to
+/// consider keeping both a connection and stream around.
+#[derive(Clone, Debug)]
+#[must_use = "streams do nothing unless polled"]
+pub struct MessageStream {
+    msg_receiver: ActiveReceiver<Arc<Message>>,
+    error_receiver: Receiver<Error>,
+}
 
 assert_impl_all!(MessageStream: Send, Sync, Unpin);
 
-impl MessageStream {
-    /// Get a reference to the underlying async message stream.
-    pub fn inner(&self) -> &azync::MessageStream {
-        &self.0
-    }
-
-    /// Get the underlying async message stream, consuming `self`.
-    pub fn into_inner(self) -> azync::MessageStream {
-        self.0
-    }
-}
-
-impl Iterator for MessageStream {
+impl stream::Stream for MessageStream {
     type Item = Result<Arc<Message>>;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        block_on(self.0.next())
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        let msg_fut = this.msg_receiver.next();
+        let err_fut = this.error_receiver.next();
+        let mut select_fut = select(msg_fut, err_fut);
+
+        match ready!(Pin::new(&mut select_fut).poll(cx)) {
+            Either::Left((msg, _)) => Poll::Ready(msg.map(Ok)),
+            Either::Right((error, _)) => Poll::Ready(
+                error
+                    .map(|e| match &e {
+                        Error::Io(io_error) => {
+                            let kind = io_error.kind();
+                            if kind == ErrorKind::UnexpectedEof || kind == ErrorKind::BrokenPipe {
+                                None
+                            } else {
+                                Some(Err(e))
+                            }
+                        }
+                        _ => Some(Err(e)),
+                    })
+                    .flatten(),
+            ),
+        }
     }
 }
 
 impl From<Connection> for MessageStream {
     fn from(conn: Connection) -> Self {
-        let azync = azync::MessageStream::from(conn.into_inner());
+        let msg_receiver = conn.msg_receiver.activate();
+        let error_receiver = conn.error_receiver;
 
-        Self(azync)
+        Self {
+            msg_receiver,
+            error_receiver,
+        }
     }
 }
 

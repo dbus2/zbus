@@ -69,8 +69,9 @@ use std::error::Error;
 use zbus::Connection;
 use zvariant::Value;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::session()?;
+#[async_std::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let connection = Connection::session().await?;
 
     let m = connection.call_method(
         Some("org.freedesktop.Notifications"),
@@ -79,7 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "Notify",
         &("my-app", 0u32, "dialog-information", "A summary", "Some body",
           vec![""; 0], HashMap::<&str, &Value>::new(), 5000),
-    )?;
+    ).await?;
     let reply: u32 = m.body().unwrap();
     dbg!(reply);
     Ok(())
@@ -95,15 +96,15 @@ Instead, we want to wrap this `Notify` D-Bus method in a Rust function. Let's se
 
 ## Trait-derived proxy call
 
-A trait declaration `T` with a `dbus_proxy` attribute will have a derived `TProxy` implemented
-thanks to procedural macros. The trait methods will have respective `impl` methods wrapping the
-D-Bus calls:
+A trait declaration `T` with a `dbus_proxy` attribute will have a derived `AsyncTProxy` and `TProxy`
+(see [chapter on "blocking"][cob] for more information on that) implemented thanks to procedural
+macros. The trait methods will have respective `impl` methods wrapping the D-Bus calls:
 
 ```rust,no_run
 use std::collections::HashMap;
 use std::error::Error;
 
-use zbus::dbus_proxy;
+use zbus::{Connection, dbus_proxy};
 use zvariant::Value;
 
 #[dbus_proxy]
@@ -120,25 +121,233 @@ trait Notifications {
               expire_timeout: i32) -> zbus::Result<u32>;
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::session()?;
+#[async_std::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let connection = Connection::session().await?;
 
-    let proxy = NotificationsProxy::new(&connection)?;
-    let reply = proxy.notify("my-app", 0, "dialog-information", "A summary", "Some body",
-                             &[], HashMap::new(), 5000)?;
+    let proxy = AsyncNotificationsProxy::new(&connection).await?;
+    let reply = proxy.notify(
+        "my-app",
+        0,
+        "dialog-information",
+        "A summary", "Some body",
+        &[],
+        HashMap::new(),
+        5000,
+    ).await?;
     dbg!(reply);
 
     Ok(())
 }
 ```
 
-A `TProxy` has a few associated methods, such as `new(connection)`, using the default associated
-service name and object path, and an associated builder if you need to specify something different.
+A `AsyncTProxy` and `TProxy` has a few associated methods, such as `new(connection)`, using the
+default associated service name and object path, and an associated builder if you need to specify
+something different.
 
 This should help to avoid the kind of mistakes we saw earlier. It's also a bit easier to use, thanks
 to Rust type inference. This makes it also possible to have higher-level types, they fit more
 naturally with the rest of the code. You can further document the D-Bus API or provide additional
 helpers.
+
+### Signals
+
+Signals are like methods, except they don't expect a reply. They are typically emitted by services
+to notify interested peers of any changes to the state of the service. zbus provides you with an API
+to register signal handler functions, and to receive and call them.
+
+Let's look at this API in action, with an example where we get our location from
+[Geoclue](https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md):
+
+```rust,no_run
+use zbus::{Connection, dbus_proxy, Result};
+use zvariant::ObjectPath;
+use futures_util::future::FutureExt;
+
+#[dbus_proxy(
+    default_service = "org.freedesktop.GeoClue2",
+    interface = "org.freedesktop.GeoClue2.Manager",
+    default_path = "/org/freedesktop/GeoClue2/Manager"
+)]
+trait Manager {
+    #[dbus_proxy(object = "Client")]
+    fn get_client(&self);
+}
+
+#[dbus_proxy(
+    default_service = "org.freedesktop.GeoClue2",
+    interface = "org.freedesktop.GeoClue2.Client"
+)]
+trait Client {
+    fn start(&self) -> Result<()>;
+    fn stop(&self) -> Result<()>;
+
+    #[dbus_proxy(property)]
+    fn set_desktop_id(&mut self, id: &str) -> Result<()>;
+
+    #[dbus_proxy(signal)]
+    fn location_updated(&self, old: ObjectPath<'_>, new: ObjectPath<'_>) -> Result<()>;
+}
+
+#[dbus_proxy(
+    default_service = "org.freedesktop.GeoClue2",
+    interface = "org.freedesktop.GeoClue2.Location"
+)]
+trait Location {
+    #[dbus_proxy(property)]
+    fn latitude(&self) -> Result<f64>;
+    #[dbus_proxy(property)]
+    fn longitude(&self) -> Result<f64>;
+}
+
+#[async_std::main]
+async fn main() -> Result<()> {
+    let conn = Connection::system().await?;
+    let manager = AsyncManagerProxy::new(&conn).await?;
+    let mut client = manager.get_client().await?;
+    // Gotta do this, sorry!
+    client.set_desktop_id("org.freedesktop.zbus").await?;
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    client
+        .connect_location_updated(move |_old, new| {
+            let new = new.to_string();
+            let conn = conn.clone();
+            let tx = tx.clone();
+
+            async move {
+                let location = AsyncLocationProxy::builder(&conn)
+                    .path(new).unwrap()
+                    .build()
+                    .await
+                    .unwrap();
+                println!(
+                    "Latitude: {}\nLongitude: {}",
+                    location.latitude().await.unwrap(),
+                    location.longitude().await.unwrap(),
+                );
+                tx.send(()).unwrap();
+            }
+            .boxed()
+        })
+        .await?;
+
+    client.start().await?;
+
+    // Wait till there is a signal that was handled.
+    rx.recv().unwrap();
+
+    Ok(())
+}
+```
+
+While the Geoclue's D-Bus API is a bit involved, we still ended-up with a not-so-complicated (~60
+LOC) code for getting our location.
+
+#### Signal Streams: A better way
+
+While you can connect your callbacks to receive signals (as we saw in the previous example), zbus
+also provides another method of receiving signals with better ergonomics for use in typical
+asynchronous Rust code: signal streams. Let's change the previous example to make use of signal
+streams to see how that works:
+
+```rust,no_run
+// Instead of `futures_util::future::FutureExt`
+use futures_util::stream::StreamExt;
+
+# use zbus::{Connection, dbus_proxy, Result};
+# use zvariant::ObjectPath;
+#
+# #[dbus_proxy(
+#     default_service = "org.freedesktop.GeoClue2",
+#     interface = "org.freedesktop.GeoClue2.Manager",
+#     default_path = "/org/freedesktop/GeoClue2/Manager"
+# )]
+# trait Manager {
+#     #[dbus_proxy(object = "Client")]
+#     fn get_client(&self);
+# }
+#
+# #[dbus_proxy(
+#     default_service = "org.freedesktop.GeoClue2",
+#     interface = "org.freedesktop.GeoClue2.Client"
+# )]
+# trait Client {
+#     fn start(&self) -> Result<()>;
+#     fn stop(&self) -> Result<()>;
+#
+#     #[dbus_proxy(property)]
+#     fn set_desktop_id(&mut self, id: &str) -> Result<()>;
+#
+#     #[dbus_proxy(signal)]
+#     fn location_updated(&self, old: ObjectPath<'_>, new: ObjectPath<'_>) -> Result<()>;
+# }
+#
+# #[dbus_proxy(
+#     default_service = "org.freedesktop.GeoClue2",
+#     interface = "org.freedesktop.GeoClue2.Location"
+# )]
+# trait Location {
+#     #[dbus_proxy(property)]
+#     fn latitude(&self) -> Result<f64>;
+#     #[dbus_proxy(property)]
+#     fn longitude(&self) -> Result<f64>;
+# }
+#
+# #[async_std::main]
+# async fn main() -> Result<()> {
+#     let conn = Connection::system().await?;
+#     let manager = AsyncManagerProxy::new(&conn).await?;
+#     let mut client = manager.get_client().await?;
+#
+#   client.set_desktop_id("org.freedesktop.zbus").await?;
+#
+    // Everything else remains the same before this point.
+    let props = zbus::fdo::AsyncPropertiesProxy::builder(&conn)
+        .destination("org.freedesktop.GeoClue2")?
+        .path(client.path())?
+        .build()
+        .await?;
+    let mut props_changed_stream = props.receive_properties_changed().await?;
+    let mut location_updated_stream = client.receive_location_updated().await?;
+
+    client.start().await?;
+
+    futures_util::try_join!(
+        async {
+            while let Some(signal) = props_changed_stream.next().await {
+                let args = signal.args()?;
+
+                for (name, value) in args.changed_properties().iter() {
+                    println!("{}.{} changed to `{:?}`", args.interface_name(), name, value);
+                }
+            }
+
+            Ok::<(), zbus::Error>(())
+        },
+        async {
+            while let Some(signal) = location_updated_stream.next().await {
+                let args = signal.args()?;
+
+                let location = AsyncLocationProxy::builder(&conn)
+                    .path(args.new())?
+                    .build()
+                    .await?;
+                println!(
+                    "Latitude: {}\nLongitude: {}",
+                    location.latitude().await?,
+                    location.longitude().await?,
+                );
+            }
+
+            // No need to specify type of Result each time
+            Ok(())
+        }
+    )?;
+#
+#   Ok(())
+# }
+```
 
 ### Properties
 
@@ -163,8 +372,7 @@ To set the property, prefix the name of the property with `set_`.
 For a more real world example, let's try and read two properties from systemd's main service:
 
 ```rust,no_run
-# use std::error::Error;
-# use zbus::dbus_proxy;
+# use zbus::{Connection, dbus_proxy, Result};
 #
 #[dbus_proxy(
     interface = "org.freedesktop.systemd1.Manager",
@@ -173,18 +381,19 @@ For a more real world example, let's try and read two properties from systemd's 
 )]
 trait SystemdManager {
     #[dbus_proxy(property)]
-    fn architecture(&self) -> zbus::Result<String>;
+    fn architecture(&self) -> Result<String>;
     #[dbus_proxy(property)]
-    fn environment(&self) -> zbus::Result<Vec<String>>;
+    fn environment(&self) -> Result<Vec<String>>;
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::session()?;
+#[async_std::main]
+async fn main() -> Result<()> {
+    let connection = Connection::session().await?;
 
-    let proxy = SystemdManagerProxy::new(&connection)?;
-    println!("Host architecture: {}", proxy.architecture()?);
+    let proxy = AsyncSystemdManagerProxy::new(&connection).await?;
+    println!("Host architecture: {}", proxy.architecture().await?);
     println!("Environment:");
-    for env in proxy.environment()? {
+    for env in proxy.environment().await? {
         println!("  {}", env);
     }
 
@@ -215,118 +424,72 @@ Environment variables:
 
 By default, the proxy will cache the properties and watch for changes.
 
-To be notified of a property change, you may use the synchronous API with the properties callback.
-The methods are named after the properties names `connect_<prop_name>_changed`, for example:
+To be notified of a property change, you have a choice of callback-based or stream API, just like
+signals. The methods are named after the properties' names: `connect_<prop_name>_changed` and
+`receive_<prop_name>_changed()`, respectively.
+
+Here is an example of the stream-based API in action:
 
 ```rust,no_run
-# use std::error::Error;
-# use zbus::dbus_proxy;
+# use zbus::{Connection, dbus_proxy, Result};
+# use futures_util::stream::StreamExt;
 #
-#[dbus_proxy(
-    interface = "org.freedesktop.systemd1.Manager",
-    default_service = "org.freedesktop.systemd1",
-    default_path = "/org/freedesktop/systemd1"
-)]
-trait SystemdManager {
-    #[dbus_proxy(property)]
-    fn log_level(&self) -> zbus::Result<String>;
-}
+# #[async_std::main]
+# async fn main() -> Result<()> {
+    #[dbus_proxy(
+        interface = "org.freedesktop.systemd1.Manager",
+        default_service = "org.freedesktop.systemd1",
+        default_path = "/org/freedesktop/systemd1"
+    )]
+    trait SystemdManager {
+        #[dbus_proxy(property)]
+        fn log_level(&self) -> Result<String>;
+    }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::session()?;
+    let connection = Connection::session().await?;
 
-    let proxy = SystemdManagerProxy::new(&connection)?;
-    proxy.connect_log_level_changed(|v| {
+    let proxy = AsyncSystemdManagerProxy::new(&connection).await?;
+    let mut stream = proxy.receive_log_level_changed().await;
+    while let Some(v) = stream.next().await {
         println!("LogLevel changed: {:?}", v);
-    });
-
-    Ok(())
-}
+    }
+#
+#   Ok(())
+# }
 ```
 
-(see the next chapter for the async stream API version)
-
-### Signals
-
-Signals are like methods, except they don't expect a reply. They are typically emitted by services
-to notify interested peers of any changes to the state of the service. zbus provides you with an API
-to register signal handler functions, and to receive and call them.
-
-Let's look at this API in action, with an example where we get our location from
-[Geoclue](https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md):
+and the equivalent callback-based API in action:
 
 ```rust,no_run
-use zbus::{Connection, dbus_proxy, Result};
-use zvariant::{ObjectPath, OwnedObjectPath};
+# use std::{thread::sleep, time::Duration};
+# use futures_util::future::FutureExt;
+# use zbus::{Connection, dbus_proxy, Result};
+#
+# #[dbus_proxy(
+#    interface = "org.freedesktop.systemd1.Manager",
+#    default_service = "org.freedesktop.systemd1",
+#    default_path = "/org/freedesktop/systemd1"
+# )]
+# trait SystemdManager {
+#    #[dbus_proxy(property)]
+#    fn log_level(&self) -> zbus::Result<String>;
+# }
+#
+# #[async_std::main]
+# async fn main() -> Result<()> {
+#    let connection = Connection::session().await?;
+#
+#    let proxy = AsyncSystemdManagerProxy::new(&connection).await?;
+    proxy.connect_log_level_changed(|v| async move {
+        println!("LogLevel changed: {:?}", v);
+    }.boxed());
 
-#[dbus_proxy(
-    default_service = "org.freedesktop.GeoClue2",
-    interface = "org.freedesktop.GeoClue2.Manager",
-    default_path = "/org/freedesktop/GeoClue2/Manager"
-)]
-trait Manager {
-    #[dbus_proxy(object = "Client")]
-    /// The method normally returns an `ObjectPath`.
-    /// With the object attribute, we can make it return a `ClientProxy` directly.
-    fn get_client(&self);
-}
-
-#[dbus_proxy(
-    default_service = "org.freedesktop.GeoClue2",
-    interface = "org.freedesktop.GeoClue2.Client"
-)]
-trait Client {
-    fn start(&self) -> Result<()>;
-    fn stop(&self) -> Result<()>;
-
-    #[dbus_proxy(property)]
-    fn set_desktop_id(&mut self, id: &str) -> Result<()>;
-
-    #[dbus_proxy(signal)]
-    fn location_updated(&self, old: ObjectPath<'_>, new: ObjectPath<'_>) -> Result<()>;
-}
-
-#[dbus_proxy(
-    default_service = "org.freedesktop.GeoClue2",
-    interface = "org.freedesktop.GeoClue2.Location"
-)]
-trait Location {
-    #[dbus_proxy(property)]
-    fn latitude(&self) -> Result<f64>;
-    #[dbus_proxy(property)]
-    fn longitude(&self) -> Result<f64>;
-}
-let conn = Connection::system().unwrap();
-let manager = ManagerProxy::new(&conn).unwrap();
-let mut client = manager.get_client().unwrap();
-// Gotta do this, sorry!
-client.set_desktop_id("org.freedesktop.zbus").unwrap();
-
-let (tx, rx) = std::sync::mpsc::channel();
-client
-    .connect_location_updated(move |_old, new| {
-        let location = LocationProxy::builder(&conn)
-            .path(new.as_str())
-            .unwrap()
-            .build()
-            .unwrap();
-        println!(
-            "Latitude: {}\nLongitude: {}",
-            location.latitude().unwrap(),
-            location.longitude().unwrap(),
-        );
-        tx.send(()).unwrap();
-    })
-    .unwrap();
-
-client.start().unwrap();
-
-// Wait till there is a signal that was handled.
-rx.recv().unwrap();
+    // Do other things or go to sleep.
+    sleep(Duration::from_secs(60));
+#
+#   Ok(())
+# }
 ```
-
-While the Geoclue's D-Bus API is a bit involved, we still ended-up with a not-so-complicated (~60
-LOC) code for getting our location.
 
 ## Generating the trait from an XML interface
 
@@ -511,5 +674,6 @@ There you have it, a Rust-friendly binding for your D-Bus service!
 [developer-friendly tool]: https://crates.io/crates/zbus_xmlgen
 [`gdbus-codegen`]: https://developer.gnome.org/gio/stable/gdbus-codegen.html
 [`pkg-config`]: https://www.freedesktop.org/wiki/Software/pkg-config/
+[cob]: blocking.html
 
 [^busctl]: `busctl` is part of [`systemd`](https://www.freedesktop.org/wiki/Software/systemd/).

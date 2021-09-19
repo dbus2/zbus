@@ -33,10 +33,9 @@ where we start with basic D-Bus concepts and explain with code samples, how zbus
 This code display a notification on your Freedesktop.org-compatible OS:
 
 ```rust,no_run
-use std::collections::HashMap;
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
 
-use zbus::dbus_proxy;
+use zbus::{Connection, dbus_proxy};
 use zvariant::Value;
 
 #[dbus_proxy(
@@ -58,11 +57,12 @@ trait Notifications {
     ) -> zbus::Result<u32>;
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let connection = zbus::Connection::session()?;
+#[async_std::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let connection = Connection::session().await?;
 
     // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
-    let proxy = NotificationsProxy::new(&connection)?;
+    let proxy = AsyncNotificationsProxy::new(&connection).await?;
     let reply = proxy.notify(
         "my-app",
         0,
@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         &[],
         &HashMap::new(),
         5000,
-    )?;
+    ).await?;
     dbg!(reply);
 
     Ok(())
@@ -89,7 +89,7 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use zbus::{dbus_interface, fdo, ObjectServer, Connection};
+use zbus::{ObjectServer, Connection, dbus_interface, fdo};
 
 struct Greeter {
     count: u64
@@ -97,18 +97,23 @@ struct Greeter {
 
 #[dbus_interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
+    // Can be `async` as well.
     fn say_hello(&mut self, name: &str) -> String {
         self.count += 1;
         format!("Hello {}! I have been called: {}", name, self.count)
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::session()?
-        .request_name("org.zbus.MyGreeter")?;
+#[async_std::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let connection = Connection::session()
+        .await?
+        .request_name("org.zbus.MyGreeter")
+        .await?;
     let mut greeter = Greeter { count: 0 };
     connection
         .object_server_mut()
+        .await
         .at("/org/zbus/MyGreeter", greeter)?;
 
     // Do other things or go to sleep.
@@ -126,13 +131,10 @@ Hello Maria!
 s
 ```
 
-### Asynchronous API
+### Blocking API
 
-Runtime-agnostic async/await-compatible API for both
-[(not so) low-level](https://docs.rs/zbus/latest/zbus/azync/connection/struct.Connection.html)
-message handling and
-[high-level client-side proxy](https://dbus.pages.freedesktop.org/zbus/async.html#client) is also
-provided. High-level server-side API coming soon.
+While zbus is primarily asynchronous (since 2.0), [blocking wrappers][bw] are provided for
+convenience.
 
 ### Compatibility with async runtimes
 
@@ -262,16 +264,21 @@ for allowing unprivileged processes to speak to privileged processes.
 use zbus::Connection;
 use zbus_polkit::policykit1::*;
 
-let connection = Connection::system().unwrap();
-let proxy = AuthorityProxy::new(&connection).unwrap();
-let subject = Subject::new_for_owner(std::process::id(), None, None).unwrap();
-let result = proxy.check_authorization(
-    &subject,
-    "org.zbus.BeAwesome",
-    &std::collections::HashMap::new(),
-    CheckAuthorizationFlags::AllowUserInteraction.into(),
-    "",
-);
+#[async_std::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let connection = Connection::system().await?;
+    let proxy = AsyncAuthorityProxy::new(&connection).await?;
+    let subject = Subject::new_for_owner(std::process::id(), None, None)?;
+    let result = proxy.check_authorization(
+        &subject,
+        "org.zbus.BeAwesome",
+        &std::collections::HashMap::new(),
+        CheckAuthorizationFlags::AllowUserInteraction.into(),
+        "",
+    ).await?;
+
+    Ok(())
+}
 ```
 
 ### zbus_xmlgen
@@ -323,6 +330,7 @@ build host.
 MIT license [LICENSE-MIT](LICENSE-MIT)
 
 [PolicyKit]: https://gitlab.freedesktop.org/polkit/polkit/
+[bw]: https://docs.rs/zbus/2.0.0-beta.7/zbus/blocking/index.html
 [iektc]: https://docs.rs/zbus/2.0.0-beta.6/zbus/azync/struct.Connection.html#method.executor
 [`ConnectionBuilder`]: https://docs.rs/zbus/2.0.0-beta.6/zbus/struct.ConnectionBuilder.html
 [dbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names

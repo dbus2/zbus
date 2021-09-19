@@ -12,7 +12,7 @@ mod iface;
 mod proxy;
 mod utils;
 
-/// Attribute macro for defining D-Bus proxies (using [`zbus::Proxy`] and [`zbus::azync::Proxy`]).
+/// Attribute macro for defining D-Bus proxies (using [`zbus::Proxy`] and [`zbus::blocking::Proxy`]).
 ///
 /// The macro must be applied on a `trait T`. Two matching `impl T` will provide a synchronous Proxy
 /// implementation, named `TraitNameProxy` and an asynchronous one, named `AsyncTraitNameProxy`. The
@@ -43,7 +43,7 @@ mod utils;
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_proxy;
-/// use zbus::{Connection, Result, fdo, zvariant::Value};
+/// use zbus::{blocking::Connection, Result, fdo, zvariant::Value};
 /// use futures_util::future::FutureExt;
 /// use async_io::block_on;
 ///
@@ -120,8 +120,8 @@ mod utils;
 /// [`zbus_polkit`] is a good example of how to bind a real D-Bus API.
 ///
 /// [`zbus_polkit`]: https://docs.rs/zbus_polkit/1.0.0/zbus_polkit/policykit1/index.html
-/// [`zbus::Proxy`]: https://docs.rs/zbus/2.0.0-beta.6/zbus/struct.Proxy.html
-/// [`zbus::azync::Proxy`]: https://docs.rs/zbus/2.0.0-beta.6/zbus/azync/struct.Proxy.html
+/// [`zbus::Proxy`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.Proxy.html
+/// [`zbus::blocking::Proxy`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/blocking/struct.Proxy.html
 /// [`zbus::SignalReceiver::receive_for`]:
 /// https://docs.rs/zbus/1.5.0/zbus/struct.SignalReceiver.html#method.receive_for
 /// [`ObjectPath`]: https://docs.rs/zvariant/2.5.0/zvariant/struct.ObjectPath.html
@@ -185,7 +185,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 ///# use std::error::Error;
 /// use zbus_macros::dbus_interface;
-/// use zbus::{MessageHeader, ObjectServer, SignalContext};
+/// use zbus::{ObjectServer, SignalContext, MessageHeader};
 ///
 /// struct Example {
 ///     some_data: String,
@@ -194,7 +194,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[dbus_interface(name = "org.myservice.Example")]
 /// impl Example {
 ///     // "Quit" method. A method may throw errors.
-///     fn quit(
+///     async fn quit(
 ///         &self,
 ///         #[zbus(header)]
 ///         hdr: MessageHeader<'_>,
@@ -206,6 +206,8 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///         let path = hdr.path()?.unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);
 ///         Example::bye(&ctxt, &msg);
+///
+///         // Do some asynchronous tasks before quitting..
 ///
 ///         Ok(())
 ///     }
@@ -220,7 +222,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 ///     // "Bye" signal (note: no implementation body).
 ///     #[dbus_interface(signal)]
-///     fn bye(signal_ctxt: &SignalContext<'_>, message: &str) -> zbus::Result<()>;
+///     async fn bye(signal_ctxt: &SignalContext<'_>, message: &str) -> zbus::Result<()>;
 ///
 ///     #[dbus_interface(out_args("answer", "question"))]
 ///     fn meaning_of_life(&self) -> zbus::fdo::Result<(i32, String)> {
@@ -261,7 +263,8 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * `description(&self)` - get the associated error description (the first argument of an error
 ///   message)
 ///
-/// * `reply(&self, &zbus::Connection, &zbus::Message)` - send this error as reply to the message.
+/// * `reply(&self, &zbus::Connection, &zbus::Message)` - send this error as reply to the
+///   message.
 ///
 /// Note: it is recommended that errors take a single argument `String` which describes it in
 /// a human-friendly fashion (support for other arguments is limited or TODO currently).

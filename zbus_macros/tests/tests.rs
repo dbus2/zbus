@@ -47,7 +47,7 @@ fn test_proxy() {
             T: AsRef<str>;
     }
 
-    let connection = zbus::Connection::session().unwrap();
+    let connection = zbus::blocking::Connection::session().unwrap();
     let proxy = TestProxy::builder(&connection)
         .cache_properties(false)
         .build()
@@ -58,7 +58,7 @@ fn test_proxy() {
         })
         .unwrap();
     // Let's also test signal streams.
-    let connection = zbus::azync::Connection::from(connection);
+    let connection = zbus::Connection::from(connection);
     block_on(async move {
         let proxy = AsyncTestProxy::builder(&connection)
             .cache_properties(false)
@@ -157,13 +157,13 @@ fn test_interface() {
         }
 
         #[dbus_interface(property)]
-        fn set_my_prop(&self, _val: u16) {
+        fn set_my_prop(&mut self, _val: u16) {
             unimplemented!()
         }
 
         /// Emit a signal.
         #[dbus_interface(signal)]
-        fn signal(ctxt: &SignalContext, arg: u8, other: &str) -> zbus::Result<()>;
+        async fn signal(ctxt: &SignalContext<'_>, arg: u8, other: &str) -> zbus::Result<()>;
     }
 
     const EXPECTED_XML: &str = r#"<interface name="org.freedesktop.zbus.Test">
@@ -212,13 +212,16 @@ fn test_interface() {
     assert_eq!(Test::<u32>::name(), "org.freedesktop.zbus.Test");
 
     if false {
-        // check compilation
-        let c = zbus::Connection::session().unwrap();
-        let s = c.object_server();
-        let m = zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
-            .unwrap();
-        let _ = t.call(&s, &c, &m, "StrU32".try_into().unwrap()).unwrap();
-        let ctxt = SignalContext::new(&c, "/does/not/matter").unwrap();
-        Test::<u32>::signal(&ctxt, 23, "ergo sum").unwrap();
+        block_on(async {
+            // check compilation
+            let c = zbus::Connection::session().await.unwrap();
+            let s = c.object_server().await;
+            let m =
+                zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
+                    .unwrap();
+            let _ = block_on(t.call(&s, &c, &m, "StrU32".try_into().unwrap())).unwrap();
+            let ctxt = SignalContext::new(&c, "/does/not/matter").unwrap();
+            block_on(Test::<u32>::signal(&ctxt, 23, "ergo sum")).unwrap();
+        });
     }
 }
