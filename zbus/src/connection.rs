@@ -986,18 +986,18 @@ impl<'a> Sink<Message> for &'a Connection {
         self.inner
             .raw_conn
             .lock()
-            .expect("poisened lock")
+            .expect("poisoned lock")
             .enqueue_message(msg);
 
         Ok(())
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        self.inner.raw_conn.lock().expect("poisened lock").flush(cx)
+        self.inner.raw_conn.lock().expect("poisoned lock").flush(cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        let mut raw_conn = self.inner.raw_conn.lock().expect("poisened lock");
+        let mut raw_conn = self.inner.raw_conn.lock().expect("poisoned lock");
         match ready!(raw_conn.flush(cx)) {
             Ok(_) => (),
             Err(e) => return Poll::Ready(Err(e)),
@@ -1015,7 +1015,7 @@ impl<'r> Future for ReceiveMessage<'r> {
     type Output = Result<Message>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut raw_conn = self.raw_conn.lock().expect("poisened lock");
+        let mut raw_conn = self.raw_conn.lock().expect("poisoned lock");
         raw_conn.try_receive_message(cx)
     }
 }
