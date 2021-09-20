@@ -146,7 +146,10 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
                 let name = self.name();
                 match self {
                     #replies
-                    Self::ZBus(_) => ::std::panic!("Can not reply with ZBus error type"),
+                    Self::ZBus(e) => {
+                        let err = #zbus::fdo::Error::Failed(e.to_string());
+                        err.reply_to(call)
+                    }
                 }
             }
         }
