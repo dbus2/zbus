@@ -248,7 +248,7 @@ impl Node {
 /// ```no_run
 ///# use std::error::Error;
 /// use zbus::{Connection, ObjectServer, dbus_interface};
-/// use std::sync::{Arc, Mutex};
+/// use std::sync::Arc;
 /// use event_listener::Event;
 ///# use async_io::block_on;
 ///
