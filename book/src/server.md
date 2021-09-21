@@ -47,10 +47,15 @@ $ busctl --user list | grep zbus
 org.zbus.MyGreeter                             412452 server            elmarco :1.396        user@1000.service -       -
 ```
 
-### ⚠ Hang on
+### 🖐 Hang on
 
 This example is not handling incoming messages yet. Any attempt to call the server will time out
 (including the shell completion!).
+
+### ⚠ Service activation pitfalls
+
+Make sure to request the service name after you have setup the handlers, otherwise incoming messages
+may be lost. Activated services may receive calls (or messages) right after taking their name.
 
 ## Handling low-level messages
 
@@ -66,11 +71,11 @@ use futures_util::stream::TryStreamExt;
 # async fn main() -> zbus::Result<()> {
 #    let connection = zbus::Connection::session()
 #        .await?;
+let mut stream = zbus::MessageStream::from(&connection);
 #    connection
 #        .request_name("org.zbus.MyGreeter")
 #        .await?;
 #
-let mut stream = zbus::MessageStream::from(&connection);
 while let Some(msg) = stream.try_next().await? {
     let msg_header = msg.header()?;
     dbg!(&msg);
