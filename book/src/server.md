@@ -8,7 +8,12 @@
 
 # Writing a server interface
 
-Let see how to provide a server method "SayHello", to greet a client.
+In this chapter, we are going to implement a server with a method "SayHello", to greet back the
+calling client.
+
+We will first discuss the need to associate a service name with the server. Then we are going to
+manually handle incoming messages using the low-level API. Finally, we will present the
+`ObjectServer` higher-level API and some of its more advanced concepts.
 
 ## Taking a service name
 
@@ -99,10 +104,10 @@ need, but it is also easy to get it wrong. Fortunately, zbus has a simpler solut
 
 ## Using the `ObjectServer`
 
-One can write an `impl` with a set of methods and let the `dbus_interface` procedural macro write
-the D-Bus details for us. It will dispatch all the incoming method calls to their respective
-handlers, and implicilty handle introspection requests. It also has support for properties and
-signal emission.
+One can write an `impl` block with a set of methods and let the `dbus_interface` procedural macro
+write the D-Bus message handling details. It will dispatch the incoming method calls to their
+respective handlers, as well as replying to introspection requests. It also has support for
+properties and signal emission.
 
 Let see how to use it:
 
@@ -199,7 +204,7 @@ Easy-peasy!
 
 ### Method errors
 
-There are two possibilities for the return value for interface methods. The first is for infallible
+There are two possibilities for the return value of interface methods. The first is for infallible
 method calls, where the return type is a directly serializable value, like the `String` in
 `say_hello()` above.
 
@@ -211,24 +216,19 @@ can be created with `derive(zbus::DBusError)`, and used in the returned `Result<
 
 ### Sending signals
 
-As you might have noticed in the previous example, the signal methods don't take an `&self` argument
-but rather a `SignalContext` reference. This allows you to easily emit signals whether from inside
-or outside of your `dbus_interface` methods' context. To make things easier, `dbus_interface`
-methods can receive a `SignalContext` passed to them using the special `zbus(signal_context)`
-attribute:
+As you might have noticed in the previous example, the signal methods don't take a `&self` argument
+but a `SignalContext` reference. This allows to emit signals whether from inside or outside of the
+`dbus_interface` methods' context. To make things simpler, `dbus_interface` methods can receive a
+`SignalContext` passed to them using the special `zbus(signal_context)` attribute:
 
 Please refer to [`dbus_interface` documentation][didoc] for an example and list of other special
 attributes you can make use of.
 
 ### Notifying property changes
 
-While notification about property changes by the D-Bus peers are taken care of for you by zbus,
-when changing the properties from the service implementation, you'd want to notify the peers about
-that. No worries, we got your covered.
-
-For each property you declare through the `dbus_interface` macro, a `<property_name>_changed` method
-is generated for you that emits the necessary property change signal for you. Here is how we'll use
-it with the previous example code:
+For each property declared through the `dbus_interface` macro, a `<property_name>_changed` method is
+generated that emits the necessary property change signal. Here is how to use it with the previous
+example code:
 
 ```rust,no_run
 # use zbus::dbus_interface;
