@@ -192,7 +192,7 @@ where
 impl<'a> ProxyProperties<'a> {
     pub(crate) fn new() -> Self {
         // note: do we need to make this configurable?
-        let (mut sender, receiver) = broadcast(1);
+        let (mut sender, receiver) = broadcast(64);
         sender.set_overflow(true);
         let receiver = receiver.deactivate();
 
