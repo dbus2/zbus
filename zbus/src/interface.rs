@@ -6,11 +6,10 @@ use std::{
     sync::Arc,
 };
 
-use async_io::block_on;
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{DynamicType, Value};
 
-use crate::{Connection, Message, ObjectServer, Result, SignalContext};
+use crate::{block_on, Connection, Message, ObjectServer, Result, SignalContext};
 
 /// A helper type returned by [`Interface`] callbacks.
 pub enum DispatchResult<'a> {

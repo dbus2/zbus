@@ -1,7 +1,6 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
-use async_io::block_on;
 use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_task::Task;
 use once_cell::sync::OnceCell;
@@ -33,7 +32,7 @@ use futures_util::{
 };
 
 use crate::{
-    blocking, fdo,
+    blocking, fdo, forbid_blocking,
     raw::{Connection as RawConnection, Socket},
     Authenticated, ConnectionBuilder, DBusError, Error, Guid, Message, MessageStream, MessageType,
     ObjectServer, Result,
@@ -727,10 +726,10 @@ impl Connection {
                     Some(conn) => {
                         let executor = conn.inner.executor.clone();
                         executor
-                            .spawn(async move {
+                            .spawn(forbid_blocking(async move {
                                 let server = conn.object_server().await;
                                 let _ = server.dispatch_message(&msg).await;
-                            })
+                            }))
                             .detach();
                     }
                     // If connection is completely gone, no reason to keep running the task anymore.
@@ -948,10 +947,10 @@ impl Connection {
             std::thread::Builder::new()
                 .name("zbus::Connection executor".into())
                 .spawn(move || {
-                    block_on(async move {
+                    async_io::block_on(async move {
                         // Run as long as there is a task to run.
                         while !executor.is_empty() {
-                            executor.tick().await;
+                            forbid_blocking(executor.tick()).await;
                         }
                     })
                 })?;

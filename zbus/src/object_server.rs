@@ -1,4 +1,3 @@
-use async_io::block_on;
 use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -15,7 +14,7 @@ use zbus_names::{InterfaceName, MemberName};
 use zvariant::{ObjectPath, OwnedObjectPath};
 
 use crate::{
-    fdo,
+    block_on, fdo,
     fdo::{Introspectable, Peer, Properties},
     Connection, DispatchResult, Error, Interface, Message, MessageHeader, MessageType, Result,
     SignalContext, WeakConnection,

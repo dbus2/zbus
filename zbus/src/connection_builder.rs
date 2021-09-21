@@ -1,4 +1,4 @@
-use async_io::{block_on, Async};
+use async_io::Async;
 use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
 use std::{convert::TryInto, os::unix::net::UnixStream, sync::mpsc};
@@ -215,7 +215,7 @@ impl<'a> ConnectionBuilder<'a> {
             std::thread::spawn(move || {
                 for msg in recv {
                     if let Some(conn) = weak_conn.upgrade() {
-                        let _ = block_on(conn.sync_object_server()).dispatch_sync(&msg);
+                        let _ = async_io::block_on(conn.sync_object_server()).dispatch_sync(&msg);
                     } else {
                         return;
                     }

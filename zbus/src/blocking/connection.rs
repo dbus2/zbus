@@ -7,9 +7,7 @@ use std::{
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
-use async_io::block_on;
-
-use crate::{blocking::ObjectServer, DBusError, Error, Message, Result};
+use crate::{block_on, blocking::ObjectServer, DBusError, Error, Message, Result};
 
 /// A blocking wrapper of [`zbus::blocking::Connection`].
 ///

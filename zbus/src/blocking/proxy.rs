@@ -1,4 +1,3 @@
-use async_io::block_on;
 use static_assertions::assert_impl_all;
 use std::{
     convert::{TryFrom, TryInto},
@@ -9,7 +8,8 @@ use zbus_names::{BusName, InterfaceName, MemberName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
-    blocking::Connection, Error, Message, PropertyChangedHandlerId, Result, SignalHandlerId,
+    block_on, blocking::Connection, Error, Message, PropertyChangedHandlerId, Result,
+    SignalHandlerId,
 };
 
 use crate::fdo;
