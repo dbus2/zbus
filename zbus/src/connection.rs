@@ -514,7 +514,7 @@ impl Connection {
             // method).
             self.object_server().await;
 
-            fdo::AsyncDBusProxy::new(&self)
+            fdo::AsyncDBusProxy::new(self)
                 .await?
                 .request_name(
                     well_known_name.clone(),
