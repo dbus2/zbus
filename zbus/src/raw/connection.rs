@@ -4,6 +4,8 @@ use std::{
     task::{Context, Poll},
 };
 
+use event_listener::{Event, EventListener};
+
 use crate::{message::Message, message_header::MIN_MESSAGE_SIZE, raw::Socket, OwnedFd};
 use futures_core::ready;
 
@@ -20,6 +22,7 @@ use futures_core::ready;
 pub struct Connection<S> {
     #[derivative(Debug = "ignore")]
     socket: S,
+    event: Event,
     raw_in_buffer: Vec<u8>,
     raw_in_fds: Vec<OwnedFd>,
     msg_in_buffer: Option<Message>,
@@ -31,6 +34,7 @@ impl<S: Socket> Connection<S> {
     pub(crate) fn wrap(socket: S) -> Connection<S> {
         Connection {
             socket,
+            event: Event::new(),
             raw_in_buffer: vec![],
             raw_in_fds: vec![],
             msg_in_buffer: None,
@@ -46,6 +50,7 @@ impl<S: Socket> Connection<S> {
     ///
     /// This method will thus only block if the socket is in blocking mode.
     pub fn try_flush(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        self.event.notify(usize::MAX);
         // first, empty the raw_out_buffer of any partially-sent message
         while !self.raw_out_buffer.is_empty() {
             let (front, _) = self.raw_out_buffer.as_slices();
@@ -97,6 +102,7 @@ impl<S: Socket> Connection<S> {
     /// If the socket is in non-blocking mode, it may read a partial message. In such case it
     /// will buffer it internally and try to complete it the next time you call `try_receive_message`.
     pub fn try_receive_message(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<Message>> {
+        self.event.notify(usize::MAX);
         if self.msg_in_buffer.is_none() {
             // We don't have enough data to make a proper message header yet.
             // Some partial read may be in raw_in_buffer, so we try to complete it
@@ -158,6 +164,7 @@ impl<S: Socket> Connection<S> {
     ///
     /// After this call, all reading and writing operations will fail.
     pub fn close(&self) -> crate::Result<()> {
+        self.event.notify(usize::MAX);
         self.socket().close().map_err(|e| e.into())
     }
 
@@ -170,6 +177,10 @@ impl<S: Socket> Connection<S> {
     /// corrupt the internal state of this wrapper.
     pub fn socket(&self) -> &S {
         &self.socket
+    }
+
+    pub(crate) fn monitor_activity(&self) -> EventListener {
+        self.event.listen()
     }
 }
 

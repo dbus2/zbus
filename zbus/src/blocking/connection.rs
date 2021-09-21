@@ -1,3 +1,4 @@
+use event_listener::EventListener;
 use static_assertions::assert_impl_all;
 use std::{
     convert::TryInto,
@@ -227,6 +228,13 @@ impl Connection {
     pub fn into_inner(self) -> crate::Connection {
         self.inner
     }
+
+    /// Returns a listener, notified on various connection activity.
+    ///
+    /// This function is meant for the caller to implement idle or timeout on inactivity.
+    pub fn monitor_activity(&self) -> EventListener {
+        self.inner.monitor_activity()
+    }
 }
 
 impl From<crate::Connection> for Connection {
@@ -267,12 +275,19 @@ mod tests {
         });
 
         let c = ConnectionBuilder::unix_stream(p1).p2p().build().unwrap();
+        let listener = c.monitor_activity();
         let mut s = MessageStream::from(&c);
         let m = s.next().unwrap().unwrap();
         assert_eq!(m.to_string(), "Method call Test");
         c.reply(&m, &("yay")).unwrap();
 
         for _ in s {}
+
+        // there was some activity
+        listener.wait();
+        let listener = c.monitor_activity();
+        // there is nothing happening, timeout
+        assert!(!listener.wait_timeout(std::time::Duration::from_millis(500)));
 
         let val = server_thread.join().expect("failed to join server thread");
         assert_eq!(val, "yay");
