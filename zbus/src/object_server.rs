@@ -967,17 +967,16 @@ mod tests {
     async fn basic_iface_() {
         let (tx, rx) = channel::<()>();
 
-        let conn = Connection::session()
-            .await
-            .unwrap()
+        let conn = Connection::session().await.unwrap();
+        conn
             // primary name
             .request_name("org.freedesktop.MyService")
             .await
-            .unwrap()
-            .request_name("org.freedesktop.MyService.foo")
+            .unwrap();
+        conn.request_name("org.freedesktop.MyService.foo")
             .await
-            .unwrap()
-            .request_name("org.freedesktop.MyService.bar")
+            .unwrap();
+        conn.request_name("org.freedesktop.MyService.bar")
             .await
             .unwrap();
 

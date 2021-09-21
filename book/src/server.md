@@ -26,7 +26,8 @@ use zbus::{Connection, Result};
 #[async_std::main]
 async fn main() -> Result<()> {
     let connection = Connection::session()
-        .await?
+        .await?;
+    connection
         .request_name("org.zbus.MyGreeter")
         .await?;
 
@@ -59,7 +60,8 @@ use futures_util::stream::TryStreamExt;
 # #[async_std::main]
 # async fn main() -> zbus::Result<()> {
 #    let connection = zbus::Connection::session()
-#        .await?
+#        .await?;
+#    connection
 #        .request_name("org.zbus.MyGreeter")
 #        .await?;
 #
@@ -149,8 +151,6 @@ impl Greeter {
 #[async_std::main]
 async fn main() -> Result<()> {
     let connection = Connection::session()
-        .await?
-        .request_name("org.zbus.MyGreeter")
         .await?;
     let greeter = Greeter {
         name: "GreeterName".to_string(),
@@ -161,6 +161,9 @@ async fn main() -> Result<()> {
         .object_server_mut()
         .await
         .at("/org/zbus/MyGreeter", greeter)?;
+    connection
+        .request_name("org.zbus.MyGreeter")
+        .await?;
 
     done_listener.wait();
 

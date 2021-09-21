@@ -500,7 +500,7 @@ impl Connection {
     /// since that is the most typical case. If that is not what you want, you should use
     /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
     /// **after** you've setup your service implementation with the `ObjectServer`).
-    pub async fn request_name<'w, W>(self, well_known_name: W) -> Result<Self>
+    pub async fn request_name<'w, W>(&self, well_known_name: W) -> Result<()>
     where
         W: TryInto<WellKnownName<'w>>,
         W::Error: Into<Error>,
@@ -525,7 +525,7 @@ impl Connection {
         }
 
         drop(names);
-        Ok(self)
+        Ok(())
     }
 
     /// Deregister a previously registered well-known name for this service on the bus.
