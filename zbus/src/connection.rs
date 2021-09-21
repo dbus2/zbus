@@ -524,7 +524,6 @@ impl Connection {
             names.insert(well_known_name.to_owned());
         }
 
-        drop(names);
         Ok(())
     }
 
