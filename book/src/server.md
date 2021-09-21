@@ -111,10 +111,74 @@ need, but it is also easy to get it wrong. Fortunately, zbus has a simpler solut
 
 One can write an `impl` block with a set of methods and let the `dbus_interface` procedural macro
 write the D-Bus message handling details. It will dispatch the incoming method calls to their
-respective handlers, as well as replying to introspection requests. It also has support for
-properties and signal emission.
+respective handlers, as well as replying to introspection requests.
 
-Let see how to use it:
+### `MyGreeter` simple example
+
+Let see how to use it for `MyGreeter` interface:
+
+```rust,no_run
+# use zbus::{SignalContext, ObjectServer, Connection, dbus_interface, fdo, Result};
+#
+
+struct Greeter;
+
+#[dbus_interface(name = "org.zbus.MyGreeter1")]
+impl Greeter {
+    async fn say_hello(&self, name: &str) -> String {
+        format!("Hello {}!", name)
+    }
+}
+
+#[async_std::main]
+async fn main() -> Result<()> {
+    let connection = Connection::session().await?;
+    // setup the server
+    connection
+        .object_server_mut()
+        .await
+        .at("/org/zbus/MyGreeter", Greeter)?;
+    // before requesting the name
+    connection
+        .request_name("org.zbus.MyGreeter")
+        .await?;
+
+    loop {
+        // do something else, sleep or timeout here:
+        // handling D-Bus messages is done in the background
+        std::thread::park();
+    }
+}
+```
+
+It should work with the same `busctl` command used previously.
+
+This time, we can also introspect the service:
+
+```bash
+$ busctl --user introspect org.zbus.MyGreeter /org/zbus/MyGreeter
+NAME                                TYPE      SIGNATURE RESULT/VALUE FLAGS
+org.freedesktop.DBus.Introspectable interface -         -             -
+.Introspect                         method    -         s             -
+org.freedesktop.DBus.Peer           interface -         -             -
+.GetMachineId                       method    -         s             -
+.Ping                               method    -         -             -
+org.freedesktop.DBus.Properties     interface -         -             -
+.Get                                method    ss        v             -
+.GetAll                             method    s         a{sv}         -
+.Set                                method    ssv       -             -
+.PropertiesChanged                  signal    sa{sv}as  -             -
+org.zbus.MyGreeter1                 interface -         -             -
+.SayHello                           method    s         s             -
+```
+
+### A more complete example
+
+`ObjectServer` supports various method attributes to declare properties or signals.
+
+This is a more complete example, demonstrating some of its usages. It also shows a way to
+synchronize with the interface handlers from outside, thanks to an `event_listener` (this is one of
+the many ways).
 
 ```rust,no_run
 # use zbus::{SignalContext, ObjectServer, Connection, dbus_interface, fdo, Result};
@@ -181,31 +245,18 @@ async fn main() -> Result<()> {
 }
 ```
 
-(check it works with the same `busctl` command as last time)
-
-This time, we can also introspect the server:
+This is the introspection result:
 
 ```bash
 $ busctl --user introspect org.zbus.MyGreeter /org/zbus/MyGreeter
 NAME                                TYPE      SIGNATURE RESULT/VALUE FLAGS
-org.freedesktop.DBus.Introspectable interface -         -             -
-.Introspect                         method    -         s             -
-org.freedesktop.DBus.Peer           interface -         -             -
-.GetMachineId                       method    -         s             -
-.Ping                               method    -         -             -
-org.freedesktop.DBus.Properties     interface -         -             -
-.Get                                method    ss        v             -
-.GetAll                             method    s         a{sv}         -
-.Set                                method    ssv       -             -
-.PropertiesChanged                  signal    sa{sv}as  -             -
+[...]
 org.zbus.MyGreeter1                 interface -         -             -
 .GoAway                             method    -         -             -
 .SayHello                           method    s         s             -
 .GreeterName                        property  s         "GreeterName" emits-change writable
 .GreetedEveryone                    signal    -         -             -
 ```
-
-Easy-peasy!
 
 ### Method errors
 
