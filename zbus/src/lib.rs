@@ -95,14 +95,15 @@
 //! #[async_std::main]
 //! async fn main() -> Result<(), Box<dyn Error>> {
 //!     let connection = Connection::session()
-//!         .await?
-//!         .request_name("org.zbus.MyGreeter")
 //!         .await?;
 //!     let mut greeter = Greeter { count: 0 };
 //!     connection
 //!         .object_server_mut()
 //!         .await
 //!         .at("/org/zbus/MyGreeter", greeter)?;
+//!     connection
+//!         .request_name("org.zbus.MyGreeter")
+//!         .await?;
 //!
 //!     // Do other things or go to sleep.
 //!     sleep(Duration::from_secs(60));
@@ -802,21 +803,18 @@ mod tests {
 
         rx.recv().unwrap();
         for _ in 0..2 {
-            let conn = blocking::Connection::session()
-                .unwrap()
-                .request_name("org.freedesktop.zbus.ComeAndGo")
-                .unwrap();
-
+            let conn = blocking::Connection::session().unwrap();
             conn.object_server_mut()
                 .at("/org/freedesktop/zbus/ComeAndGo", ComeAndGo)
                 .unwrap();
-
+            conn.request_name("org.freedesktop.zbus.ComeAndGo").unwrap();
             conn.object_server_mut()
                 .with(
                     "/org/freedesktop/zbus/ComeAndGo",
                     |_: InterfaceDeref<'_, ComeAndGo>, ctxt| block_on(ComeAndGo::the_signal(&ctxt)),
                 )
                 .unwrap();
+
             rx.recv().unwrap();
 
             // Now we release the name ownership to use a different connection (i-e new unique name).

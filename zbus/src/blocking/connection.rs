@@ -169,7 +169,7 @@ impl Connection {
     /// that is not what you want, you should use [`crate::fdo::DBusProxy::request_name`] instead
     /// (but make sure then that name is requested **after** you've setup your service
     /// implementation with the `ObjectServer`).
-    pub fn request_name<'w, W>(self, well_known_name: W) -> Result<Self>
+    pub fn request_name<'w, W>(&self, well_known_name: W) -> Result<()>
     where
         W: TryInto<WellKnownName<'w>>,
         W::Error: Into<Error>,
