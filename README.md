@@ -107,14 +107,15 @@ impl Greeter {
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let connection = Connection::session()
-        .await?
-        .request_name("org.zbus.MyGreeter")
         .await?;
     let mut greeter = Greeter { count: 0 };
     connection
         .object_server_mut()
         .await
         .at("/org/zbus/MyGreeter", greeter)?;
+    connection
+        .request_name("org.zbus.MyGreeter")
+        .await?;
 
     // Do other things or go to sleep.
     sleep(Duration::from_secs(60));

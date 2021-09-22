@@ -193,8 +193,7 @@ impl Greeter {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::session()?
-        .request_name("org.zbus.MyGreeter")?;
+    let connection = Connection::session()?;
     let greeter = Greeter {
         name: "GreeterName".to_string(),
         done: event_listener::Event::new(),
@@ -203,6 +202,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     connection
         .object_server_mut()
         .at("/org/zbus/MyGreeter", greeter)?;
+    connection.request_name("org.zbus.MyGreeter")?;
 
     done_listener.wait();
 
