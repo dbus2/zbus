@@ -152,6 +152,14 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   You can call a signal method from a an interface method, or from an [`ObjectServer::with`]
 ///   function.
 ///
+/// * `raw_args` - Note: this is an advanced API that is not normally needed.  This method will
+///   parse the incoming call message itself, extracting the arguments from the body.  This
+///   attribute takes a list of the dbus argument type strings for use in allowing the method to be
+///   introspected; consider using `in_args`.
+///
+/// * `in_args` - A list of names for the arguments whose types were defined in `raw_args`.  This
+///   is only allowed if you also use `raw_args`.
+///
 /// * `struct_return` - This attribute is depcrecated and a noop. If you want to return a single
 ///   structure from a method, simply declare it to return a named structure or a tuple with a
 ///   tuple as the only field.
@@ -163,6 +171,12 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// * `out_args` - When returning multiple values from a method, naming the out arguments become
 ///   important. You can use `out_args` for specifying names for your out arguments.
+///
+/// * `raw_return` - Note: this is an advanced API that is not normally needed.  This method
+/// returns `DispatchResult` instead of the actual return from the method, and will construct and
+/// send its reply message in the returned closure.
+///
+/// * `blocking` - Allow use of the blocking APIs in this call.
 ///
 /// Note: a `<property_name_in_snake_case>_changed` method is generated for each property: this
 /// method emits the "PropertiesChanged" signal for the associated property. The setter (if it
@@ -255,6 +269,8 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// possible for you to declare proxy methods to directly return this type, rather than
 /// [`zbus::Error`]. However, for this to work, we require a variant by the name `ZBus` that
 /// contains an unnamed field of type [`zbus::Error`].
+///
+/// The `DBusError` trait is also implemented.
 ///
 /// Additionally, the derived `impl E` will provide the following convenience methods:
 ///

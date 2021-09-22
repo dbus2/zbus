@@ -1,7 +1,6 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
-use async_io::block_on;
 use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_task::Task;
 use event_listener::EventListener;
@@ -34,9 +33,9 @@ use futures_util::{
 };
 
 use crate::{
-    blocking, fdo,
+    blocking, fdo, forbid_blocking,
     raw::{Connection as RawConnection, Socket},
-    Authenticated, ConnectionBuilder, Error, Guid, Message, MessageStream, MessageType,
+    Authenticated, ConnectionBuilder, DBusError, Error, Guid, Message, MessageStream, MessageType,
     ObjectServer, Result,
 };
 
@@ -490,6 +489,21 @@ impl Connection {
         self.send_message(m).await
     }
 
+    /// Reply an error to a message.
+    ///
+    /// Given an existing message (likely a method call), send an error reply back to the caller
+    /// using one of the standard interface reply types.
+    ///
+    /// Returns the message serial number.
+    pub async fn reply_dbus_error(
+        &self,
+        call: &zbus::MessageHeader<'_>,
+        err: impl DBusError,
+    ) -> Result<u32> {
+        let m = err.reply_to(call);
+        self.send_message(m?).await
+    }
+
     /// Register a well-known name for this service on the bus.
     ///
     /// You can request multiple names for the same `ObjectServer`. Use [`Connection::release_name`]
@@ -710,8 +724,13 @@ impl Connection {
             while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
                 match weak_conn.upgrade() {
                     Some(conn) => {
-                        let server = conn.object_server().await;
-                        let _ = server.dispatch_message(&*msg).await;
+                        let executor = conn.inner.executor.clone();
+                        executor
+                            .spawn(forbid_blocking(async move {
+                                let server = conn.object_server().await;
+                                let _ = server.dispatch_message(&msg).await;
+                            }))
+                            .detach();
                     }
                     // If connection is completely gone, no reason to keep running the task anymore.
                     None => return,
@@ -721,9 +740,21 @@ impl Connection {
         self.inner
             .object_server_dispatch_task
             .set(task)
-            .expect("object server task set twice");
+            .expect("Object server task already created");
 
         RwLock::new(blocking::ObjectServer::new(self))
+    }
+
+    pub(crate) fn setup_object_server_task(&self, task: Task<()>) {
+        self.inner
+            .object_server_dispatch_task
+            .set(task)
+            .expect("Object server task already created");
+
+        self.inner
+            .object_server
+            .set(RwLock::new(blocking::ObjectServer::new(self)))
+            .expect("Object server already created");
     }
 
     pub(crate) async fn subscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
@@ -916,10 +947,10 @@ impl Connection {
             std::thread::Builder::new()
                 .name("zbus::Connection executor".into())
                 .spawn(move || {
-                    block_on(async move {
+                    async_io::block_on(async move {
                         // Run as long as there is a task to run.
                         while !executor.is_empty() {
-                            executor.tick().await;
+                            forbid_blocking(executor.tick()).await;
                         }
                     })
                 })?;

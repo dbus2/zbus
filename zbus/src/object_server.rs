@@ -10,14 +10,14 @@ use std::{
 };
 
 use static_assertions::assert_impl_all;
-use zbus_names::InterfaceName;
+use zbus_names::{InterfaceName, MemberName};
 use zvariant::{ObjectPath, OwnedObjectPath};
 
 use crate::{
-    fdo,
+    block_on, fdo,
     fdo::{Introspectable, Peer, Properties},
-    Connection, Error, Interface, Message, MessageHeader, MessageType, Result, SignalContext,
-    WeakConnection,
+    Connection, DispatchResult, Error, Interface, Message, MessageHeader, MessageType, Result,
+    SignalContext, WeakConnection,
 };
 
 /// Opaque structure that derefs to an `Interface` type.
@@ -295,6 +295,7 @@ impl Node {
 pub struct ObjectServer {
     conn: WeakConnection,
     root: Node,
+    pub(crate) supports_blocking: bool,
 }
 
 assert_impl_all!(ObjectServer: Send, Sync, Unpin);
@@ -305,6 +306,7 @@ impl ObjectServer {
         Self {
             conn: conn.into(),
             root: Node::new("/".try_into().expect("zvariant bug")),
+            supports_blocking: false,
         }
     }
 
@@ -360,6 +362,9 @@ impl ObjectServer {
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
+        if iface.requires_blocking() && !self.supports_blocking {
+            return Err(Error::Unsupported);
+        }
         let path = path.try_into().map_err(Into::into)?;
         Ok(self.get_node_mut(&path, true).unwrap().at(I::name(), iface))
     }
@@ -581,12 +586,10 @@ impl ObjectServer {
         node.get_interface_mut().await
     }
 
-    async fn dispatch_method_call_try(
+    fn iface_for_msg<'h>(
         &self,
-        connection: &Connection,
-        msg_header: &MessageHeader<'_>,
-        msg: &Message,
-    ) -> fdo::Result<Result<u32>> {
+        msg_header: &MessageHeader<'h>,
+    ) -> fdo::Result<(Arc<RwLock<dyn Interface>>, MemberName<'h>)> {
         let path = msg_header
             .path()
             .ok()
@@ -614,33 +617,118 @@ impl ObjectServer {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
         })?;
 
-        let read_lock = iface.read().await;
-        let res = match read_lock.call(self, connection, msg, member.clone()).await {
-            Some(ret) => Some(ret),
-            None => {
-                drop(read_lock);
-                iface
-                    .write()
-                    .await
-                    .call_mut(self, connection, msg, member.clone())
-                    .await
-            }
-        };
+        Ok((iface, member.clone()))
+    }
 
-        res.ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
+    async fn dispatch_method_call_try(
+        &self,
+        connection: &Connection,
+        msg_header: &MessageHeader<'_>,
+        msg: &Arc<Message>,
+    ) -> fdo::Result<Result<u32>> {
+        let (iface, member) = self.iface_for_msg(msg_header)?;
+
+        let read_lock = iface.read().await;
+        match read_lock.call(self, connection, msg, member.clone(), false) {
+            DispatchResult::MethodNotFound => {
+                return Err(fdo::Error::UnknownMethod(format!(
+                    "Unknown method '{}'",
+                    member
+                )));
+            }
+            DispatchResult::Async(f) => {
+                return Ok(f.await);
+            }
+            DispatchResult::Blocking(_) => {
+                return Ok(Err(Error::Unsupported));
+            }
+            DispatchResult::RequiresMut => {}
+        }
+        drop(read_lock);
+        let mut write_lock = iface.write().await;
+        match write_lock.call_mut(self, connection, msg, member.clone(), false) {
+            DispatchResult::MethodNotFound => {}
+            DispatchResult::RequiresMut => {}
+            DispatchResult::Async(f) => {
+                return Ok(f.await);
+            }
+            DispatchResult::Blocking(_) => {
+                return Ok(Err(Error::Unsupported));
+            }
+        }
+        drop(write_lock);
+        Err(fdo::Error::UnknownMethod(format!(
+            "Unknown method '{}'",
+            member
+        )))
+    }
+
+    fn dispatch_method_call_sync_try(
+        &self,
+        connection: &Connection,
+        msg_header: &MessageHeader<'_>,
+        msg: &Arc<Message>,
+    ) -> fdo::Result<Result<u32>> {
+        let (iface, member) = self.iface_for_msg(msg_header)?;
+
+        let read_lock = block_on(iface.read());
+        match read_lock.call(self, connection, msg, member.clone(), true) {
+            DispatchResult::MethodNotFound => {
+                return Err(fdo::Error::UnknownMethod(format!(
+                    "Unknown method '{}'",
+                    member
+                )));
+            }
+            DispatchResult::Async(f) => {
+                return Ok(block_on(f));
+            }
+            DispatchResult::Blocking(f) => {
+                return Ok(f());
+            }
+            DispatchResult::RequiresMut => {}
+        }
+        drop(read_lock);
+        let mut write_lock = block_on(iface.write());
+        match write_lock.call_mut(self, connection, msg, member.clone(), true) {
+            DispatchResult::MethodNotFound => {}
+            DispatchResult::RequiresMut => {}
+            DispatchResult::Async(f) => {
+                return Ok(block_on(f));
+            }
+            DispatchResult::Blocking(f) => {
+                return Ok(f());
+            }
+        }
+        drop(write_lock);
+        Err(fdo::Error::UnknownMethod(format!(
+            "Unknown method '{}'",
+            member
+        )))
     }
 
     async fn dispatch_method_call(
         &self,
         connection: &Connection,
         msg_header: &MessageHeader<'_>,
-        msg: &Message,
+        msg: &Arc<Message>,
     ) -> Result<u32> {
         match self
             .dispatch_method_call_try(connection, msg_header, msg)
             .await
         {
             Err(e) => e.reply(connection, msg).await,
+            Ok(r) => r,
+        }
+    }
+
+    fn dispatch_method_call_sync(
+        &self,
+        connection: &Connection,
+        msg_header: &MessageHeader<'_>,
+        msg: &Arc<Message>,
+    ) -> Result<u32> {
+        match self.dispatch_method_call_sync_try(connection, msg_header, msg) {
+            Err(e) => block_on(e.reply(connection, msg)),
             Ok(r) => r,
         }
     }
@@ -657,7 +745,7 @@ impl ObjectServer {
     ///   the caller through the associated server connection.
     ///
     /// Returns an error if the message is malformed, true if it's handled, false otherwise.
-    pub(crate) async fn dispatch_message(&self, msg: &Message) -> Result<bool> {
+    pub(crate) async fn dispatch_message(&self, msg: &Arc<Message>) -> Result<bool> {
         let msg_header = msg.header()?;
 
         match msg_header.message_type()? {
@@ -667,6 +755,19 @@ impl ObjectServer {
                 Ok(true)
             }
             _ => Ok(false),
+        }
+    }
+
+    pub(crate) fn dispatch_sync(&self, msg: &Arc<Message>) -> Result<()> {
+        let msg_header = msg.header()?;
+
+        match msg_header.message_type()? {
+            MessageType::MethodCall => {
+                let conn = self.connection();
+                self.dispatch_method_call_sync(&conn, &msg_header, msg)?;
+                Ok(())
+            }
+            _ => Ok(()),
         }
     }
 

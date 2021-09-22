@@ -3,11 +3,10 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use async_io::block_on;
 use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
-use crate::{Error, Interface, InterfaceDeref, InterfaceDerefMut, Result, SignalContext};
+use crate::{block_on, Error, Interface, InterfaceDeref, InterfaceDerefMut, Result, SignalContext};
 
 /// A blocking wrapper of [`crate::ObjectServer`].
 ///

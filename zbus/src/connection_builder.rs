@@ -1,11 +1,12 @@
 use async_io::Async;
+use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
-use std::{convert::TryInto, os::unix::net::UnixStream};
+use std::{convert::TryInto, os::unix::net::UnixStream, sync::mpsc};
 
 use crate::{
     address::{self, Address},
     raw::Socket,
-    Authenticated, Connection, Error, Guid, Result,
+    Authenticated, Connection, Error, Guid, MessageStream, MessageType, Result, WeakConnection,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -25,6 +26,7 @@ pub struct ConnectionBuilder<'a> {
     guid: Option<&'a Guid>,
     p2p: bool,
     internal_executor: bool,
+    blocking_object_server: bool,
 }
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -121,6 +123,19 @@ impl<'a> ConnectionBuilder<'a> {
         self
     }
 
+    /// Enable or disable the blocking callback thread.
+    ///
+    /// The thread is disabled by default.
+    ///
+    ///
+    /// See the documentation of the `blocking` attribute of [`zbus::dbus_interface`] or the
+    /// [`zbus::DispatchResult::Blocking`] variant for more details.
+    pub fn blocking_object_server(mut self, enabled: bool) -> Self {
+        self.blocking_object_server = enabled;
+
+        self
+    }
+
     /// Build the connection, consuming the builder.
     ///
     /// # Errors
@@ -176,6 +191,37 @@ impl<'a> ConnectionBuilder<'a> {
 
         let mut conn = Connection::new(auth, !self.p2p, self.internal_executor).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
+        if self.blocking_object_server {
+            let (send, recv) = mpsc::channel();
+            let mut stream = MessageStream::from(&conn);
+            let send_task = conn.executor().spawn(async move {
+                while let Some(msg) = stream.next().await {
+                    if let Ok(msg) = msg {
+                        if msg.header().and_then(|h| h.message_type())
+                            == Ok(MessageType::MethodCall)
+                            && send.send(msg).is_err()
+                        {
+                            return;
+                        }
+                    } else {
+                        return;
+                    }
+                }
+            });
+            conn.setup_object_server_task(send_task);
+            conn.object_server_mut().await.supports_blocking = true;
+
+            let weak_conn = WeakConnection::from(&conn);
+            std::thread::spawn(move || {
+                for msg in recv {
+                    if let Some(conn) = weak_conn.upgrade() {
+                        let _ = async_io::block_on(conn.sync_object_server()).dispatch_sync(&msg);
+                    } else {
+                        return;
+                    }
+                }
+            });
+        }
 
         Ok(conn)
     }
@@ -187,6 +233,7 @@ impl<'a> ConnectionBuilder<'a> {
             max_queued: None,
             guid: None,
             internal_executor: true,
+            blocking_object_server: false,
         }
     }
 }

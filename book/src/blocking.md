@@ -145,9 +145,14 @@ Similarly here, you'd use [`blocking::ObjectServer`] that is associated with eve
 [`blocking::Connection`] instance. While there is no blocking version of `Interface`,
 `dbus_interface` allows you to write non-async methods.
 
-**Note:** Even though you can write non-async methods, these methods are still called from an async
-context. Therefore, you can not use blocking API that's a wrapper of an async API. This is not a
-limitation of zbus but rather a [well-known general problem][wkgp] in the Rust async/await world.
+**Note:** Even though you can write non-async methods, by default these methods
+are still called from an async context. Therefore, you should not use blocking
+APIs from them, including the zbus blocking APIs. To indicate that you want to
+use blocking APIs, you must annotate your sync method with
+`#[dbus_interface(blocking)]` and start a
+[blocking `ObjectServerDispatcher`][bosd] to run these tasks.  This is not a
+limitation of zbus but rather a [well-known general problem][wkgp] in the Rust
+async/await world.
 
 ```rust,no_run
 # use std::error::Error;
@@ -215,4 +220,5 @@ fn main() -> Result<(), Box<dyn Error>> {
 [`futures::sink::Sink`]: https://docs.rs/futures/latest/futures/sink/trait.Sink.html
 [`std::iter::Iterator`]: https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html
 [blocking module]: https://docs.rs/zbus/2.0.0-beta.7/zbus/blocking/index.html
+[bosd]: https://docs.rs/zbus/2.0.0-beta.7/zbus/blocking/struct.ObjectServerDispatcher.html
 [wkgp]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich

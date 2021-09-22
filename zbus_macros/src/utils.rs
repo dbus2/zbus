@@ -66,6 +66,10 @@ pub enum ItemAttribute {
     Property,
     Signal,
     StructReturn,
+    Blocking,
+    InArgs(Vec<String>),
+    RawArgs(Vec<String>),
+    RawReturn(Vec<String>),
     OutArgs(Vec<String>),
     Name(String),
     Object(String),
@@ -78,6 +82,10 @@ impl ItemAttribute {
 
     pub fn is_signal(&self) -> bool {
         self == &Self::Signal
+    }
+
+    pub fn is_blocking(&self) -> bool {
+        self == &Self::Blocking
     }
 
     pub fn is_out_args(&self) -> bool {
@@ -151,6 +159,10 @@ fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
         "property" => Ok(ItemAttribute::Property),
         "signal" => Ok(ItemAttribute::Signal),
         "struct_return" => Ok(ItemAttribute::StructReturn),
+        "blocking" => Ok(ItemAttribute::Blocking),
+        "in_args" => Ok(ItemAttribute::InArgs(values)),
+        "raw_args" => Ok(ItemAttribute::RawArgs(values)),
+        "raw_return" => Ok(ItemAttribute::RawReturn(values)),
         "out_args" => Ok(ItemAttribute::OutArgs(values)),
         "object" => Ok(ItemAttribute::Object(values.remove(0))),
         s => panic!("Unknown item meta {}", s),

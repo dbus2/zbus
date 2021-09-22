@@ -26,7 +26,8 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
-    Connection, Error, Message, MessageHeader, MessageStream, MessageType, ProxyBuilder, Result,
+    forbid_blocking, Connection, Error, Message, MessageHeader, MessageStream, MessageType,
+    ProxyBuilder, Result,
 };
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, ()> + Send>;
@@ -956,12 +957,15 @@ impl<'a> Proxy<'a> {
                 dest_name_update_event: inner.dest_name_update_event.clone(),
             };
             let mut stream = MessageStream::from(self.inner.conn.clone());
-            self.inner.conn.executor().spawn(async move {
-                // TODO: Log errors when we've logging.
-                while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
-                    let _ = inner.handle_signal(&msg).await;
-                }
-            })
+            self.inner
+                .conn
+                .executor()
+                .spawn(forbid_blocking(async move {
+                    // TODO: Log errors when we've logging.
+                    while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
+                        let _ = inner.handle_signal(&msg).await;
+                    }
+                }))
         });
     }
 
