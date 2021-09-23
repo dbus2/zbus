@@ -148,6 +148,7 @@ Similarly here, you'd use [`blocking::ObjectServer`] that is associated with eve
 **Note:** Even though you can write non-async methods, these methods are still called from an async
 context. Therefore, you can not use blocking API that's a wrapper of an async API. This is not a
 limitation of zbus but rather a [well-known general problem][wkgp] in the Rust async/await world.
+The [`blocking` crate] provides an easy way around this problem.
 
 ```rust,no_run
 # use std::error::Error;
@@ -216,3 +217,4 @@ fn main() -> Result<(), Box<dyn Error>> {
 [`std::iter::Iterator`]: https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html
 [blocking module]: https://docs.rs/zbus/2.0.0-beta.7/zbus/blocking/index.html
 [wkgp]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
+[`blocking` crate]: https://docs.rs/blocking/

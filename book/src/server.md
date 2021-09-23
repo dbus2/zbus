@@ -177,8 +177,8 @@ org.zbus.MyGreeter1                 interface -         -             -
 `ObjectServer` supports various method attributes to declare properties or signals.
 
 This is a more complete example, demonstrating some of its usages. It also shows a way to
-synchronize with the interface handlers from outside, thanks to an `event_listener` (this is one of
-the many ways).
+synchronize with the interface handlers from outside, thanks to the `event_listener` crate
+(this is just one of the many ways).
 
 ```rust,no_run
 # use zbus::{SignalContext, ObjectServer, Connection, dbus_interface, fdo, Result};
