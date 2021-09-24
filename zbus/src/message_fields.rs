@@ -10,7 +10,7 @@ const MAX_FIELDS_IN_MESSAGE: usize = 16;
 /// A collection of [`MessageField`] instances.
 ///
 /// [`MessageField`]: enum.MessageField.html
-#[derive(Debug, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct MessageFields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
 
 assert_impl_all!(MessageFields<'_>: Send, Sync, Unpin);

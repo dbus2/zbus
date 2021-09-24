@@ -246,7 +246,7 @@ impl MessagePrimaryHeader {
 ///
 /// [`MessagePrimaryHeader`]: struct.MessagePrimaryHeader.html
 /// [`MessageFields`]: struct.MessageFields.html
-#[derive(Debug, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct MessageHeader<'m> {
     primary: MessagePrimaryHeader,
     #[serde(borrow)]

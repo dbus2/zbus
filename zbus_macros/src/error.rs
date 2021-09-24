@@ -137,11 +137,19 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
                 c: &#zbus::Connection,
                 call: &#zbus::Message,
             ) -> ::std::result::Result<u32, #zbus::Error> {
-                let name = self.name();
+                c.send_message(#zbus::DBusError::reply_to(self, &call.header()?)?).await
+            }
+        }
 
+        impl #zbus::DBusError for #name {
+            fn reply_to(&self, call: &#zbus::MessageHeader) -> #zbus::Result<#zbus::Message> {
+                let name = self.name();
                 match self {
                     #replies
-                    Self::ZBus(_) => ::std::panic!("Can not reply with ZBus error type"),
+                    Self::ZBus(e) => {
+                        let err = #zbus::fdo::Error::Failed(e.to_string());
+                        err.reply_to(call)
+                    }
                 }
             }
         }
@@ -172,11 +180,12 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
 }
 
 fn gen_reply_for_variant(variant: &Variant) -> TokenStream {
+    let zbus = zbus_path();
     let ident = &variant.ident;
     match &variant.fields {
         Fields::Unit => {
             quote! {
-                Self::#ident => c.reply_error(call, name, &()).await,
+                Self::#ident => #zbus::MessageBuilder::error(call, name)?.build(&()),
             }
         }
         Fields::Unnamed(f) => {
@@ -185,13 +194,13 @@ fn gen_reply_for_variant(variant: &Variant) -> TokenStream {
                 .map(|v| syn::Ident::new(&v, ident.span()))
                 .collect::<Vec<_>>();
             quote! {
-                Self::#ident(#(#fields),*) => c.reply_error(call, name, &(#(#fields),*)).await,
+                Self::#ident(#(#fields),*) => #zbus::MessageBuilder::error(call, name)?.build(&(#(#fields),*)),
             }
         }
         Fields::Named(f) => {
             let fields = f.named.iter().map(|v| v.ident.as_ref()).collect::<Vec<_>>();
             quote! {
-                Self::#ident { #(#fields),* } => c.reply_error(call, name, &(#(#fields),*)).await,
+                Self::#ident { #(#fields),* } => #zbus::MessageBuilder::error(call, name)?.build(&(#(#fields),*)),
             }
         }
     }

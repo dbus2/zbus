@@ -36,7 +36,7 @@ use futures_util::{
 use crate::{
     blocking, fdo,
     raw::{Connection as RawConnection, Socket},
-    Authenticated, ConnectionBuilder, Error, Guid, Message, MessageStream, MessageType,
+    Authenticated, ConnectionBuilder, DBusError, Error, Guid, Message, MessageStream, MessageType,
     ObjectServer, Result,
 };
 
@@ -488,6 +488,21 @@ impl Connection {
     {
         let m = Message::method_error(self.unique_name(), call, error_name, body)?;
         self.send_message(m).await
+    }
+
+    /// Reply an error to a message.
+    ///
+    /// Given an existing message (likely a method call), send an error reply back to the caller
+    /// using one of the standard interface reply types.
+    ///
+    /// Returns the message serial number.
+    pub async fn reply_dbus_error(
+        &self,
+        call: &zbus::MessageHeader<'_>,
+        err: impl DBusError,
+    ) -> Result<u32> {
+        let m = err.reply_to(call);
+        self.send_message(m?).await
     }
 
     /// Register a well-known name for this service on the bus.
