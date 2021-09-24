@@ -11,9 +11,10 @@
 //! call by them from async contexts because of the infamous [async sandwich footgun][asf]. This is
 //! is an especially important fact to keep in mind for [`crate::dbus_interface`]. While
 //! `dbus_interface` allows non-async methods for convenience, these methods are called from an
-//! async context.
+//! async context. The [`blocking` crate] provides an easy way around this problem though.
 //!
 //! [asf]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
+//! [`blocking` crate]: https://docs.rs/blocking/
 
 mod connection;
 pub use connection::*;
