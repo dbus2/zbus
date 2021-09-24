@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::BTreeMap;
 use syn::{
     self, parse_quote, punctuated::Punctuated, AngleBracketedGenericArguments, AttributeArgs,
     FnArg, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue,
@@ -208,28 +208,6 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             let p = properties.entry(member_name.to_string());
             let prop_changed_method_name = format_ident!("{}_changed", snake_case(&member_name));
 
-            if matches!(p, Entry::Vacant(_)) {
-                let prop_changed_method = quote!(
-                    pub async fn #prop_changed_method_name(
-                        &self,
-                        signal_context: &#zbus::SignalContext<'_>,
-                    ) -> #zbus::Result<()> {
-                        let mut changed = ::std::collections::HashMap::new();
-                        let value = #zbus::Interface::get(self, &#member_name)
-                            .await
-                            .expect(&::std::format!("Property '{}' does not exist", #member_name))?;
-                        changed.insert(#member_name, &*value);
-                        #zbus::fdo::Properties::properties_changed(
-                            signal_context,
-                            #zbus::names::InterfaceName::from_str_unchecked(#iface_name),
-                            &changed,
-                            &[],
-                        ).await
-                    }
-                );
-                generated_signals.extend(prop_changed_method);
-            }
-
             let p = p.or_insert_with(Property::new);
             p.doc_comments.extend(doc_comments);
             if has_inputs {
@@ -299,7 +277,25 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         ),
                     );
                 );
-                get_all.extend(q)
+                get_all.extend(q);
+
+                let prop_changed_method = quote!(
+                    pub async fn #prop_changed_method_name(
+                        &self,
+                        signal_context: &#zbus::SignalContext<'_>,
+                    ) -> #zbus::Result<()> {
+                        let mut changed = ::std::collections::HashMap::new();
+                        let value = <#zbus::zvariant::Value as ::std::convert::From<_>>::from(self.#ident()#method_await);
+                        changed.insert(#member_name, &value);
+                        #zbus::fdo::Properties::properties_changed(
+                            signal_context,
+                            #zbus::names::InterfaceName::from_str_unchecked(#iface_name),
+                            &changed,
+                            &[],
+                        ).await
+                    }
+                );
+                generated_signals.extend(prop_changed_method);
             }
         } else {
             introspect.extend(doc_comments);

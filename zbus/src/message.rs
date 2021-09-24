@@ -70,12 +70,12 @@ impl<'a> MessageBuilder<'a> {
     }
 
     /// Create a message of type [`MessageType::MethodReturn`].
-    pub fn method_return(reply_to: &Message) -> Result<Self> {
+    pub fn method_return(reply_to: &MessageHeader<'_>) -> Result<Self> {
         Self::new(MessageType::MethodReturn).reply_to(reply_to)
     }
 
     /// Create a message of type [`MessageType::Error`].
-    pub fn error<'e: 'a, E>(reply_to: &Message, name: E) -> Result<Self>
+    pub fn error<'e: 'a, E>(reply_to: &MessageHeader<'_>, name: E) -> Result<Self>
     where
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
@@ -172,8 +172,7 @@ impl<'a> MessageBuilder<'a> {
         Ok(self)
     }
 
-    fn reply_to(mut self, reply_to: &Message) -> Result<Self> {
-        let reply_to = reply_to.header()?;
+    fn reply_to(mut self, reply_to: &MessageHeader<'_>) -> Result<Self> {
         let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
         self.header
             .fields_mut()
@@ -364,7 +363,7 @@ impl Message {
         S::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = MessageBuilder::method_return(call)?;
+        let mut b = MessageBuilder::method_return(&call.header()?)?;
         if let Some(sender) = sender {
             b = b.sender(sender)?;
         }
@@ -387,7 +386,7 @@ impl Message {
         E::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = MessageBuilder::error(call, name)?;
+        let mut b = MessageBuilder::error(&call.header()?, name)?;
         if let Some(sender) = sender {
             b = b.sender(sender)?;
         }
