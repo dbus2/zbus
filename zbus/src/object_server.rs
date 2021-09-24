@@ -695,7 +695,7 @@ impl From<crate::blocking::ObjectServer> for ObjectServer {
 #[cfg(test)]
 #[allow(clippy::blacklisted_name)]
 mod tests {
-    use std::{collections::HashMap, convert::TryInto};
+    use std::{collections::HashMap, convert::TryInto, os::unix::net::UnixStream};
 
     use async_channel::{bounded, Sender};
     use async_io::block_on;
@@ -708,8 +708,8 @@ mod tests {
     use zvariant::derive::Type;
 
     use crate::{
-        dbus_interface, dbus_proxy, Connection, InterfaceDeref, MessageHeader, MessageType,
-        SignalContext,
+        dbus_interface, dbus_proxy, Connection, ConnectionBuilder, InterfaceDeref, MessageHeader,
+        MessageType, SignalContext,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -878,8 +878,7 @@ mod tests {
         assert_eq!(map["bye"], "now");
     }
 
-    async fn my_iface_test(event: Event) -> zbus::Result<u32> {
-        let conn = Connection::session().await?;
+    async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         let proxy = AsyncMyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
@@ -974,35 +973,62 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn basic_iface() {
-        block_on(basic_iface_());
+        block_on(basic_iface_(false));
     }
 
-    async fn basic_iface_() {
+    #[test]
+    #[timeout(15000)]
+    fn basic_iface_unix_p2p() {
+        block_on(basic_iface_(true));
+    }
+
+    async fn basic_iface_(p2p: bool) {
         let event = event_listener::Event::new();
 
-        let conn = Connection::session().await.unwrap();
-        conn
-            // primary name
-            .request_name("org.freedesktop.MyService")
-            .await
-            .unwrap();
-        conn.request_name("org.freedesktop.MyService.foo")
-            .await
-            .unwrap();
-        conn.request_name("org.freedesktop.MyService.bar")
-            .await
-            .unwrap();
+        let (service_conn, client_conn) = if p2p {
+            let guid = zbus::Guid::generate();
+
+            let (p0, p1) = UnixStream::pair().unwrap();
+
+            let service_conn = ConnectionBuilder::unix_stream(p0)
+                .server(&guid)
+                .p2p()
+                .build();
+            let client_conn = ConnectionBuilder::unix_stream(p1).p2p().build();
+
+            futures_util::try_join!(service_conn, client_conn).unwrap()
+        } else {
+            let client_conn = Connection::session().await.unwrap();
+            let service_conn = Connection::session().await.unwrap();
+
+            service_conn
+                // primary name
+                .request_name("org.freedesktop.MyService")
+                .await
+                .unwrap();
+            service_conn
+                .request_name("org.freedesktop.MyService.foo")
+                .await
+                .unwrap();
+            service_conn
+                .request_name("org.freedesktop.MyService.bar")
+                .await
+                .unwrap();
+
+            (service_conn, client_conn)
+        };
 
         let listen = event.listen();
-        let child = async_std::task::spawn(my_iface_test(event));
+        let child = async_std::task::spawn(my_iface_test(client_conn, event));
         // Wait for the listener to be ready
         listen.await;
 
         let (next_tx, next_rx) = bounded(64);
         let iface = MyIfaceImpl::new(next_tx.clone());
         {
-            let mut server = conn.object_server_mut().await;
+            let mut server = service_conn.object_server_mut().await;
             server.at("/org/freedesktop/MyService", iface).unwrap();
+            server.start_dispatch();
 
             server
                 .with(
@@ -1016,7 +1042,8 @@ mod tests {
         }
 
         loop {
-            conn.object_server_mut()
+            service_conn
+                .object_server_mut()
                 .await
                 .with(
                     "/org/freedesktop/MyService",
@@ -1031,14 +1058,16 @@ mod tests {
                 NextAction::Quit => break,
                 NextAction::CreateObj(key) => {
                     let path = format!("/zbus/test/{}", key);
-                    conn.object_server_mut()
+                    service_conn
+                        .object_server_mut()
                         .await
                         .at(path, MyIfaceImpl::new(next_tx.clone()))
                         .unwrap();
                 }
                 NextAction::DestroyObj(key) => {
                     let path = format!("/zbus/test/{}", key);
-                    conn.object_server_mut()
+                    service_conn
+                        .object_server_mut()
                         .await
                         .remove::<MyIfaceImpl, _>(path)
                         .unwrap();
@@ -1049,22 +1078,30 @@ mod tests {
         let val = child.await.unwrap();
         assert_eq!(val, 2);
 
+        if p2p {
+            return;
+        }
+
         // Release primary name explicitly and let others be released implicitly.
         assert_eq!(
-            conn.release_name("org.freedesktop.MyService").await,
+            service_conn.release_name("org.freedesktop.MyService").await,
             Ok(true)
         );
         assert_eq!(
-            conn.release_name("org.freedesktop.MyService.foo").await,
+            service_conn
+                .release_name("org.freedesktop.MyService.foo")
+                .await,
             Ok(true)
         );
         assert_eq!(
-            conn.release_name("org.freedesktop.MyService.bar").await,
+            service_conn
+                .release_name("org.freedesktop.MyService.bar")
+                .await,
             Ok(true)
         );
 
         // Let's ensure all names were released.
-        let proxy = zbus::fdo::AsyncDBusProxy::new(&conn).await.unwrap();
+        let proxy = zbus::fdo::AsyncDBusProxy::new(&service_conn).await.unwrap();
         assert_eq!(
             proxy
                 .name_has_owner("org.freedesktop.MyService".try_into().unwrap())
