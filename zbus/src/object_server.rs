@@ -945,6 +945,9 @@ mod tests {
         let val = proxy.ping()?;
 
         proxy.create_obj("MyObj")?;
+        // issue#207: interface panics on incorrect number of args.
+        assert!(proxy.call_method("CreateObj", &()).is_err());
+
         let my_obj_proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/zbus/test/MyObj")?
