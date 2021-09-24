@@ -718,12 +718,14 @@ impl Connection {
     }
 
     fn setup_object_server(&self) -> RwLock<blocking::ObjectServer> {
-        self.start_object_server();
+        if self.is_bus() {
+            self.start_object_server();
+        }
 
         RwLock::new(blocking::ObjectServer::new(self))
     }
 
-    fn start_object_server(&self) {
+    pub(crate) fn start_object_server(&self) {
         self.inner.object_server_dispatch_task.get_or_init(|| {
             let weak_conn = WeakConnection::from(self);
             let mut stream = MessageStream::from(self.clone());

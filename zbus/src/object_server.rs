@@ -630,6 +630,15 @@ impl ObjectServer {
         res.ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
     }
 
+    /// Start listening to incoming method messages and dispatch them to appropriate interfaces.
+    ///
+    /// This is implicit when creating a bus connection (the default) and doesn't do anything if
+    /// `self` is already dispatching. You only need to explicitly call it when using peer-to-peer
+    /// connections (see [`zbus::ConnectionBuilder::p2p`]).
+    pub fn start_dispatch(&self) {
+        self.connection().start_object_server();
+    }
+
     async fn dispatch_method_call(
         &self,
         connection: &Connection,
