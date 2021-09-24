@@ -308,7 +308,9 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         let reply = self.#ident(#args)#method_await;
                         #reply
                     };
-                    #zbus::DispatchResult::Async(::std::boxed::Box::pin(future))
+                    #zbus::DispatchResult::Async(::std::boxed::Box::pin(async move {
+                        future.await.map(|_seq: u32| ())
+                    }))
                 },
             };
 

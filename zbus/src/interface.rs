@@ -23,7 +23,7 @@ pub enum DispatchResult<'a> {
     RequiresMut,
 
     /// The method was found and will be completed by running this Future
-    Async(Pin<Box<dyn Future<Output = Result<u32>> + Send + 'a>>),
+    Async(Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>),
 }
 
 impl<'a> DispatchResult<'a> {
@@ -40,6 +40,7 @@ impl<'a> DispatchResult<'a> {
                 Ok(r) => conn.reply(msg, &r).await,
                 Err(e) => conn.reply_dbus_error(&hdr, e).await,
             }
+            .map(|_seq| ())
         }))
     }
 }

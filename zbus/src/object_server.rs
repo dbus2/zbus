@@ -586,7 +586,7 @@ impl ObjectServer {
         connection: &Connection,
         msg_header: &MessageHeader<'_>,
         msg: &Message,
-    ) -> fdo::Result<Result<u32>> {
+    ) -> fdo::Result<Result<()>> {
         let path = msg_header
             .path()
             .ok()
@@ -657,12 +657,12 @@ impl ObjectServer {
         connection: &Connection,
         msg_header: &MessageHeader<'_>,
         msg: &Message,
-    ) -> Result<u32> {
+    ) -> Result<()> {
         match self
             .dispatch_method_call_try(connection, msg_header, msg)
             .await
         {
-            Err(e) => e.reply(connection, msg).await,
+            Err(e) => e.reply(connection, msg).await.map(|_seq| ()),
             Ok(r) => r,
         }
     }
