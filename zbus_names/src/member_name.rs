@@ -42,6 +42,11 @@ pub struct MemberName<'name>(Str<'name>);
 assert_impl_all!(MemberName<'_>: Send, Sync, Unpin);
 
 impl<'name> MemberName<'name> {
+    /// A borrowed clone (never allocates, unlike clone).
+    pub fn as_ref(&self) -> MemberName<'_> {
+        MemberName(self.0.as_ref())
+    }
+
     /// The member name as string.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
