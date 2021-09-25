@@ -42,6 +42,11 @@ pub struct ObjectPath<'a>(Cow<'a, [u8]>);
 assert_impl_all!(ObjectPath<'_>: Send, Sync, Unpin);
 
 impl<'a> ObjectPath<'a> {
+    /// A borrowed clone (this never allocates, unlike clone).
+    pub fn as_ref(&self) -> ObjectPath<'_> {
+        ObjectPath(Cow::Borrowed(&self.0))
+    }
+
     /// The object path as a string.
     pub fn as_str(&self) -> &str {
         // SAFETY: non-UTF8 characters in ObjectPath should NEVER happen
