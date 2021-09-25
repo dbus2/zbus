@@ -718,27 +718,32 @@ impl Connection {
     }
 
     fn setup_object_server(&self) -> RwLock<blocking::ObjectServer> {
-        let weak_conn = WeakConnection::from(self);
-        let mut stream = MessageStream::from(self.clone());
-        let task = self.inner.executor.spawn(async move {
-            // TODO: Log errors when we've logging.
-            while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
-                match weak_conn.upgrade() {
-                    Some(conn) => {
-                        let server = conn.object_server().await;
-                        let _ = server.dispatch_message(&*msg).await;
-                    }
-                    // If connection is completely gone, no reason to keep running the task anymore.
-                    None => return,
-                }
-            }
-        });
-        self.inner
-            .object_server_dispatch_task
-            .set(task)
-            .expect("object server task set twice");
+        if self.is_bus() {
+            self.start_object_server();
+        }
 
         RwLock::new(blocking::ObjectServer::new(self))
+    }
+
+    pub(crate) fn start_object_server(&self) {
+        self.inner.object_server_dispatch_task.get_or_init(|| {
+            let weak_conn = WeakConnection::from(self);
+            let mut stream = MessageStream::from(self.clone());
+
+            self.inner.executor.spawn(async move {
+                // TODO: Log errors when we've logging.
+                while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
+                    match weak_conn.upgrade() {
+                        Some(conn) => {
+                            let server = conn.object_server().await;
+                            let _ = server.dispatch_message(&*msg).await;
+                        }
+                        // If connection is completely gone, no reason to keep running the task anymore.
+                        None => return,
+                    }
+                }
+            })
+        });
     }
 
     pub(crate) async fn subscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
