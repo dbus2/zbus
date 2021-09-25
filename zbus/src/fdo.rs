@@ -103,7 +103,7 @@ impl Properties {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
             .get_node(path)
-            .and_then(|node| node.interface_lock(interface_name.clone()))
+            .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
@@ -129,7 +129,7 @@ impl Properties {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
             .get_node(path)
-            .and_then(|node| node.interface_lock(interface_name.clone()))
+            .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
@@ -168,7 +168,7 @@ impl Properties {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
             .get_node(path)
-            .and_then(|node| node.interface_lock(interface_name.clone()))
+            .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
@@ -749,7 +749,7 @@ mod tests {
         let well_known: WellKnownName<'static> = well_known.try_into().unwrap();
         proxy
             .request_name(
-                well_known.clone(),
+                well_known.as_ref(),
                 fdo::RequestNameFlags::ReplaceExisting.into(),
             )
             .unwrap();
@@ -757,7 +757,7 @@ mod tests {
         owner_change_listener.wait();
         name_acquired_listener.wait();
 
-        let result = proxy.release_name(well_known.clone()).unwrap();
+        let result = proxy.release_name(well_known.as_ref()).unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::Released);
 
         let result = proxy.release_name(well_known).unwrap();
@@ -829,7 +829,7 @@ mod tests {
         let well_known: WellKnownName<'static> = well_known.try_into().unwrap();
         proxy
             .request_name(
-                well_known.clone(),
+                well_known.as_ref(),
                 fdo::RequestNameFlags::ReplaceExisting.into(),
             )
             .await
@@ -848,7 +848,7 @@ mod tests {
         );
         assert_eq!(name_acquired.args().unwrap().name(), &well_known);
 
-        let result = proxy.release_name(well_known.clone()).await.unwrap();
+        let result = proxy.release_name(well_known.as_ref()).await.unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::Released);
 
         let result = proxy.release_name(well_known).await.unwrap();

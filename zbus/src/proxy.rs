@@ -407,7 +407,7 @@ impl<'a> ProxyInner<'a> {
 
                 let unique_name = match fdo::AsyncDBusProxy::new(&self.conn)
                     .await?
-                    .get_name_owner(destination.clone())
+                    .get_name_owner(destination.as_ref())
                     .await
                 {
                     // That's ok. The destination isn't available right now.
@@ -639,7 +639,7 @@ impl<'a> Proxy<'a> {
         });
         self.properties.task.set(task).unwrap();
 
-        if let Ok(values) = proxy.get_all(self.inner.interface.clone()).await {
+        if let Ok(values) = proxy.get_all(self.inner.interface.as_ref()).await {
             self.properties
                 .values
                 .lock()
@@ -684,7 +684,7 @@ impl<'a> Proxy<'a> {
         Ok(self
             .properties_proxy()
             .await?
-            .get(self.inner.interface.clone(), property_name)
+            .get(self.inner.interface.as_ref(), property_name)
             .await?)
     }
 
@@ -724,7 +724,7 @@ impl<'a> Proxy<'a> {
     {
         self.properties_proxy()
             .await?
-            .set(self.inner.interface.clone(), property_name, &value.into())
+            .set(self.inner.interface.as_ref(), property_name, &value.into())
             .await
     }
 
@@ -794,7 +794,7 @@ impl<'a> Proxy<'a> {
                     self.destination(),
                     self.path().clone(),
                     self.interface(),
-                    signal_name.clone(),
+                    signal_name.as_ref(),
                 )
                 .await?;
 

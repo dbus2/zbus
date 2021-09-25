@@ -610,12 +610,12 @@ impl ObjectServer {
         let node = self
             .get_node(path)
             .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
-        let iface = node.interface_lock(iface.clone()).ok_or_else(|| {
+        let iface = node.interface_lock(iface.as_ref()).ok_or_else(|| {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
         })?;
 
         let read_lock = iface.read().await;
-        match read_lock.call(self, connection, msg, member.clone()) {
+        match read_lock.call(self, connection, msg, member.as_ref()) {
             DispatchResult::NotFound => {
                 return Err(fdo::Error::UnknownMethod(format!(
                     "Unknown method '{}'",
@@ -629,7 +629,7 @@ impl ObjectServer {
         }
         drop(read_lock);
         let mut write_lock = iface.write().await;
-        match write_lock.call_mut(self, connection, msg, member.clone()) {
+        match write_lock.call_mut(self, connection, msg, member.as_ref()) {
             DispatchResult::NotFound => {}
             DispatchResult::RequiresMut => {}
             DispatchResult::Async(f) => {
