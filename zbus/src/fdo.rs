@@ -117,12 +117,11 @@ impl Properties {
         })
     }
 
-    // TODO: should be able to take a &Value instead (but obscure deserialize error for now..)
     async fn set(
         &self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
-        value: OwnedValue,
+        value: Value<'_>,
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: MessageHeader<'_>,
         #[zbus(signal_context)] ctxt: SignalContext<'_>,
