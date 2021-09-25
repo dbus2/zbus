@@ -34,6 +34,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
     let self_ty = &input.self_ty;
     let mut properties = BTreeMap::new();
     let mut set_dispatch = quote!();
+    let mut set_mut_dispatch = quote!();
     let mut get_dispatch = quote!();
     let mut get_all = quote!();
     let mut call_dispatch = quote!();
@@ -226,30 +227,50 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 } else {
                     quote!(::std::result::Result::Ok(self.#ident(val)))
                 };
-                let q = quote!(
-                    #member_name => {
-                        let val = match ::std::convert::TryInto::try_into(value) {
-                            ::std::result::Result::Ok(val) => val,
-                            ::std::result::Result::Err(e) => {
-                                return ::std::option::Option::Some(::std::result::Result::Err(
-                                    ::std::convert::Into::into(#zbus::Error::Variant(e)),
-                                ));
+                let do_set = quote!(
+                    match ::std::convert::TryInto::try_into(value) {
+                        ::std::result::Result::Ok(val) => {
+                            match #set_call {
+                                ::std::result::Result::Ok(set_result) => {
+                                    self
+                                        .#prop_changed_method_name(&signal_context)
+                                        .await
+                                        .map(|_| set_result)
+                                        .map_err(Into::into)
+                                }
+                                e => e,
                             }
-                        };
-                        let result = match #set_call {
-                            ::std::result::Result::Ok(set_result) => {
-                                self
-                                    .#prop_changed_method_name(&signal_context)
-                                    .await
-                                    .map(|_| set_result)
-                                    .map_err(Into::into)
-                            }
-                            e => e,
-                        };
-                        ::std::option::Option::Some(result)
+                        }
+                        ::std::result::Result::Err(e) => {
+                            ::std::result::Result::Err(
+                                ::std::convert::Into::into(#zbus::Error::Variant(e)),
+                            )
+                        }
                     }
                 );
-                set_dispatch.extend(q);
+
+                if is_mut {
+                    let q = quote!(
+                        #member_name => {
+                            ::std::option::Option::Some(#do_set)
+                        }
+                    );
+                    set_mut_dispatch.extend(q);
+
+                    let q = quote!(
+                        #member_name => #zbus::DispatchResult::RequiresMut,
+                    );
+                    set_dispatch.extend(q);
+                } else {
+                    let q = quote!(
+                        #member_name => {
+                            #zbus::DispatchResult::Async(::std::boxed::Box::pin(async move {
+                                #do_set
+                            }))
+                        }
+                    );
+                    set_dispatch.extend(q);
+                }
             } else {
                 p.ty = Some(get_property_type(output)?);
                 p.read = true;
@@ -371,14 +392,26 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 props
             }
 
-            async fn set(
+            fn set<'call>(
+                &'call self,
+                property_name: &'call str,
+                value: &'call #zbus::zvariant::Value<'_>,
+                signal_context: &'call #zbus::SignalContext<'_>,
+            ) -> #zbus::DispatchResult<'call> {
+                match property_name {
+                    #set_dispatch
+                    _ => #zbus::DispatchResult::NotFound,
+                }
+            }
+
+            async fn set_mut(
                 &mut self,
                 property_name: &str,
                 value: &#zbus::zvariant::Value<'_>,
                 signal_context: &#zbus::SignalContext<'_>,
             ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
                 match property_name {
-                    #set_dispatch
+                    #set_mut_dispatch
                     _ => ::std::option::Option::None,
                 }
             }

@@ -64,8 +64,27 @@ pub trait Interface: Any + Send + Sync {
     /// Return all the properties.
     async fn get_all(&self) -> HashMap<String, OwnedValue>;
 
-    /// Set a property value. Returns `None` if the property doesn't exist.
-    async fn set(
+    /// Set a property value.
+    ///
+    /// Return [`DispatchResult::NotFound`] if the property doesn't exist, or
+    /// [`DispatchResult::RequiresMut`] if `set_mut` should be used instead.  The default
+    /// implementation just returns `RequiresMut`.
+    fn set<'call>(
+        &'call self,
+        property_name: &'call str,
+        value: &'call Value<'_>,
+        ctxt: &'call SignalContext<'_>,
+    ) -> DispatchResult<'call> {
+        let _ = (property_name, value, ctxt);
+        DispatchResult::RequiresMut
+    }
+
+    /// Set a property value.
+    ///
+    /// Returns `None` if the property doesn't exist.
+    ///
+    /// This will only be invoked if `set` returned `RequiresMut`.
+    async fn set_mut(
         &mut self,
         property_name: &str,
         value: &Value<'_>,
