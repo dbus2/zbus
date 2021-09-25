@@ -311,6 +311,11 @@ impl<'a> ProxyInner<'a> {
     /// This is only called when the user show interest in receiving a signal so that we don't end up
     /// doing all this needlessly.
     pub(crate) async fn destination_unique_name(&self) -> Result<()> {
+        if !self.conn.is_bus() {
+            // Names don't mean much outside the bus context.
+            return Ok(());
+        }
+
         let destination = &self.destination;
         match destination {
             BusName::Unique(name) => {

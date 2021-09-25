@@ -630,6 +630,15 @@ impl ObjectServer {
         res.ok_or_else(|| fdo::Error::UnknownMethod(format!("Unknown method '{}'", member)))
     }
 
+    /// Start listening to incoming method messages and dispatch them to appropriate interfaces.
+    ///
+    /// This is implicit when creating a bus connection (the default) and doesn't do anything if
+    /// `self` is already dispatching. You only need to explicitly call it when using peer-to-peer
+    /// connections (see [`zbus::ConnectionBuilder::p2p`]).
+    pub fn start_dispatch(&self) {
+        self.connection().start_object_server();
+    }
+
     async fn dispatch_method_call(
         &self,
         connection: &Connection,
@@ -686,19 +695,12 @@ impl From<crate::blocking::ObjectServer> for ObjectServer {
 #[cfg(test)]
 #[allow(clippy::blacklisted_name)]
 mod tests {
-    use std::{
-        collections::HashMap,
-        convert::TryInto,
-        error::Error,
-        sync::{
-            mpsc::{channel, sync_channel, Sender, SyncSender},
-            Arc,
-        },
-        thread,
-    };
+    use std::{collections::HashMap, convert::TryInto, os::unix::net::UnixStream};
 
+    use async_channel::{bounded, Sender};
     use async_io::block_on;
     use event_listener::Event;
+    use futures_util::StreamExt;
     use ntest::timeout;
     use serde::{Deserialize, Serialize};
     use test_env_log::test;
@@ -706,7 +708,7 @@ mod tests {
     use zvariant::derive::Type;
 
     use crate::{
-        blocking, dbus_interface, dbus_proxy, Connection, InterfaceDeref, MessageHeader,
+        dbus_interface, dbus_proxy, Connection, ConnectionBuilder, InterfaceDeref, MessageHeader,
         MessageType, SignalContext,
     };
 
@@ -756,12 +758,12 @@ mod tests {
     }
 
     struct MyIfaceImpl {
-        next_tx: SyncSender<NextAction>,
+        next_tx: Sender<NextAction>,
         count: u32,
     }
 
     impl MyIfaceImpl {
-        fn new(next_tx: SyncSender<NextAction>) -> Self {
+        fn new(next_tx: Sender<NextAction>) -> Self {
             Self { next_tx, count: 0 }
         }
     }
@@ -786,8 +788,8 @@ mod tests {
             self.count
         }
 
-        fn quit(&self) {
-            self.next_tx.send(NextAction::Quit).unwrap();
+        async fn quit(&self) {
+            self.next_tx.send(NextAction::Quit).await.unwrap();
         }
 
         fn test_header(&self, #[zbus(header)] header: MessageHeader<'_>) {
@@ -837,12 +839,15 @@ mod tests {
             Ok(map)
         }
 
-        fn create_obj(&self, key: String) {
-            self.next_tx.send(NextAction::CreateObj(key)).unwrap();
+        async fn create_obj(&self, key: String) {
+            self.next_tx.send(NextAction::CreateObj(key)).await.unwrap();
         }
 
-        fn destroy_obj(&self, key: String) {
-            self.next_tx.send(NextAction::DestroyObj(key)).unwrap();
+        async fn destroy_obj(&self, key: String) {
+            self.next_tx
+                .send(NextAction::DestroyObj(key))
+                .await
+                .unwrap();
         }
 
         #[dbus_interface(property)]
@@ -873,44 +878,47 @@ mod tests {
         assert_eq!(map["bye"], "now");
     }
 
-    fn my_iface_test(tx: Sender<()>) -> std::result::Result<u32, Box<dyn Error>> {
-        let conn = blocking::Connection::session()?;
-        let proxy = MyIfaceProxy::builder(&conn)
+    async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
+        let proxy = AsyncMyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
             // the server isn't yet running
             .cache_properties(false)
-            .build()?;
-        let props_proxy = zbus::fdo::PropertiesProxy::builder(&conn)
+            .build()
+            .await?;
+        let props_proxy = zbus::fdo::AsyncPropertiesProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
-            .build()?;
+            .build()
+            .await?;
 
-        let prop_changed = Arc::new(Event::new());
-        let prop_changed_listener = prop_changed.listen();
-        props_proxy
-            .connect_properties_changed(move |_, changed, _| {
-                let (name, _) = changed.iter().next().unwrap();
-                assert_eq!(*name, "Count");
-                prop_changed.notify(1);
+        let mut props_changed_stream = props_proxy.receive_properties_changed().await?;
+        event.notify(1);
+
+        match props_changed_stream.next().await {
+            Some(changed) => {
+                assert_eq!(
+                    *changed.args()?.changed_properties().keys().next().unwrap(),
+                    "Count"
+                );
+            }
+            None => panic!(""),
+        };
+
+        proxy.ping().await?;
+        assert_eq!(proxy.count().await?, 1);
+        proxy.test_header().await?;
+        proxy
+            .test_single_struct_arg(ArgStructTest {
+                foo: 1,
+                bar: "TestString".into(),
             })
-            .unwrap();
-        tx.send(()).unwrap();
-
-        prop_changed_listener.wait();
-
-        proxy.ping()?;
-        assert_eq!(proxy.count()?, 1);
-        proxy.test_header()?;
-        proxy.test_single_struct_arg(ArgStructTest {
-            foo: 1,
-            bar: "TestString".into(),
-        })?;
-        check_hash_map(proxy.test_hashmap_return()?);
-        check_hash_map(proxy.hash_map()?);
+            .await?;
+        check_hash_map(proxy.test_hashmap_return().await?);
+        check_hash_map(proxy.hash_map().await?);
         #[cfg(feature = "xml")]
         {
-            let xml = proxy.introspect()?;
+            let xml = proxy.introspect().await?;
             let node = crate::xml::Node::from_reader(xml.as_bytes())?;
             let ifaces = node.interfaces();
             let iface = ifaces
@@ -939,59 +947,88 @@ mod tests {
             }
         }
         // build-time check to see if macro is doing the right thing.
-        let _ = proxy.test_single_struct_ret()?.foo;
-        let _ = proxy.test_multi_ret()?.1;
+        let _ = proxy.test_single_struct_ret().await?.foo;
+        let _ = proxy.test_multi_ret().await?.1;
 
-        let val = proxy.ping()?;
+        let val = proxy.ping().await?;
 
-        proxy.create_obj("MyObj")?;
+        proxy.create_obj("MyObj").await?;
         // issue#207: interface panics on incorrect number of args.
-        assert!(proxy.call_method("CreateObj", &()).is_err());
+        assert!(proxy.call_method("CreateObj", &()).await.is_err());
 
-        let my_obj_proxy = MyIfaceProxy::builder(&conn)
+        let my_obj_proxy = AsyncMyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/zbus/test/MyObj")?
-            .build()?;
-        my_obj_proxy.ping()?;
-        proxy.destroy_obj("MyObj")?;
-        assert!(my_obj_proxy.introspect().is_err());
-        assert!(my_obj_proxy.ping().is_err());
+            .build()
+            .await?;
+        my_obj_proxy.ping().await?;
+        proxy.destroy_obj("MyObj").await?;
+        assert!(my_obj_proxy.introspect().await.is_err());
+        assert!(my_obj_proxy.ping().await.is_err());
 
-        proxy.quit()?;
+        proxy.quit().await?;
         Ok(val)
     }
 
     #[test]
     #[timeout(15000)]
     fn basic_iface() {
-        block_on(basic_iface_());
+        block_on(basic_iface_(false));
     }
 
-    async fn basic_iface_() {
-        let (tx, rx) = channel::<()>();
+    #[test]
+    #[timeout(15000)]
+    fn basic_iface_unix_p2p() {
+        block_on(basic_iface_(true));
+    }
 
-        let conn = Connection::session().await.unwrap();
-        conn
-            // primary name
-            .request_name("org.freedesktop.MyService")
-            .await
-            .unwrap();
-        conn.request_name("org.freedesktop.MyService.foo")
-            .await
-            .unwrap();
-        conn.request_name("org.freedesktop.MyService.bar")
-            .await
-            .unwrap();
+    async fn basic_iface_(p2p: bool) {
+        let event = event_listener::Event::new();
 
-        let child = thread::spawn(move || my_iface_test(tx).expect("child failed"));
+        let (service_conn, client_conn) = if p2p {
+            let guid = zbus::Guid::generate();
+
+            let (p0, p1) = UnixStream::pair().unwrap();
+
+            let service_conn = ConnectionBuilder::unix_stream(p0)
+                .server(&guid)
+                .p2p()
+                .build();
+            let client_conn = ConnectionBuilder::unix_stream(p1).p2p().build();
+
+            futures_util::try_join!(service_conn, client_conn).unwrap()
+        } else {
+            let client_conn = Connection::session().await.unwrap();
+            let service_conn = Connection::session().await.unwrap();
+
+            service_conn
+                // primary name
+                .request_name("org.freedesktop.MyService")
+                .await
+                .unwrap();
+            service_conn
+                .request_name("org.freedesktop.MyService.foo")
+                .await
+                .unwrap();
+            service_conn
+                .request_name("org.freedesktop.MyService.bar")
+                .await
+                .unwrap();
+
+            (service_conn, client_conn)
+        };
+
+        let listen = event.listen();
+        let child = async_std::task::spawn(my_iface_test(client_conn, event));
         // Wait for the listener to be ready
-        rx.recv().unwrap();
+        listen.await;
 
-        let (next_tx, next_rx) = sync_channel(64);
+        let (next_tx, next_rx) = bounded(64);
         let iface = MyIfaceImpl::new(next_tx.clone());
         {
-            let mut server = conn.object_server_mut().await;
+            let mut server = service_conn.object_server_mut().await;
             server.at("/org/freedesktop/MyService", iface).unwrap();
+            server.start_dispatch();
 
             server
                 .with(
@@ -1005,7 +1042,8 @@ mod tests {
         }
 
         loop {
-            conn.object_server_mut()
+            service_conn
+                .object_server_mut()
                 .await
                 .with(
                     "/org/freedesktop/MyService",
@@ -1016,18 +1054,20 @@ mod tests {
                 .await
                 .unwrap();
 
-            match next_rx.recv().unwrap() {
+            match next_rx.recv().await.unwrap() {
                 NextAction::Quit => break,
                 NextAction::CreateObj(key) => {
                     let path = format!("/zbus/test/{}", key);
-                    conn.object_server_mut()
+                    service_conn
+                        .object_server_mut()
                         .await
                         .at(path, MyIfaceImpl::new(next_tx.clone()))
                         .unwrap();
                 }
                 NextAction::DestroyObj(key) => {
                     let path = format!("/zbus/test/{}", key);
-                    conn.object_server_mut()
+                    service_conn
+                        .object_server_mut()
                         .await
                         .remove::<MyIfaceImpl, _>(path)
                         .unwrap();
@@ -1035,26 +1075,33 @@ mod tests {
             }
         }
 
-        // FIXME: This should ideally be done in asnyc/await way.
-        let val = child.join().expect("failed to join");
+        let val = child.await.unwrap();
         assert_eq!(val, 2);
+
+        if p2p {
+            return;
+        }
 
         // Release primary name explicitly and let others be released implicitly.
         assert_eq!(
-            conn.release_name("org.freedesktop.MyService").await,
+            service_conn.release_name("org.freedesktop.MyService").await,
             Ok(true)
         );
         assert_eq!(
-            conn.release_name("org.freedesktop.MyService.foo").await,
+            service_conn
+                .release_name("org.freedesktop.MyService.foo")
+                .await,
             Ok(true)
         );
         assert_eq!(
-            conn.release_name("org.freedesktop.MyService.bar").await,
+            service_conn
+                .release_name("org.freedesktop.MyService.bar")
+                .await,
             Ok(true)
         );
 
         // Let's ensure all names were released.
-        let proxy = zbus::fdo::AsyncDBusProxy::new(&conn).await.unwrap();
+        let proxy = zbus::fdo::AsyncDBusProxy::new(&service_conn).await.unwrap();
         assert_eq!(
             proxy
                 .name_has_owner("org.freedesktop.MyService".try_into().unwrap())
