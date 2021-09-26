@@ -578,10 +578,13 @@ fn get_args_from_inputs(
                 let signal_context_arg = &input.pat;
 
                 signal_context_arg_decl = Some(quote! {
-                    let #signal_context_arg = match m.header().and_then(|h| {
-                        h.path().and_then(|p| #zbus::SignalContext::new(c, p.unwrap()))
-                    }) {
-                        ::std::result::Result::Ok(e) => e,
+                    let #signal_context_arg = match m.path() {
+                        ::std::result::Result::Ok(::std::option::Option::Some(p)) => {
+                            #zbus::SignalContext::new(c, p).expect("Infallible conversion failed")
+                        }
+                        ::std::result::Result::Ok(::std::option::Option::None) => {
+                            return #zbus::fdo::Error::UnknownObject("Path Required".into()).reply(c, m).await;
+                        }
                         ::std::result::Result::Err(e) => {
                             return <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await;
                         }
