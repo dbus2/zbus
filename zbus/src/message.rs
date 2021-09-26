@@ -232,6 +232,7 @@ impl<'a> MessageBuilder<'a> {
         Ok(Message {
             primary_header: header.into_primary(),
             bytes,
+            body_offset: hdr_len,
             fds: Arc::new(RwLock::new(Fds::Raw(fds))),
         })
     }
@@ -273,6 +274,7 @@ impl Clone for Fds {
 pub struct Message {
     primary_header: MessagePrimaryHeader,
     bytes: Vec<u8>,
+    body_offset: usize,
     fds: Arc<RwLock<Fds>>,
 }
 
@@ -398,11 +400,17 @@ impl Message {
             return Err(Error::IncorrectEndian);
         }
 
-        let primary_header = zvariant::from_slice(&bytes, dbus_context!(0)).map_err(Error::from)?;
+        let (primary_header, fields_len) = MessagePrimaryHeader::read(&bytes)?;
+        let header = zvariant::from_slice(&bytes, dbus_context!(0))?;
         let fds = Arc::new(RwLock::new(Fds::Owned(fds)));
+
+        let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
+        let body_offset = header_len + padding_for_8_bytes(header_len);
+
         Ok(Self {
             primary_header,
             bytes,
+            body_offset,
             fds,
         })
     }
@@ -477,11 +485,8 @@ impl Message {
     where
         B: serde::de::Deserialize<'d> + Type,
     {
-        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
-        header_len = header_len + padding_for_8_bytes(header_len);
-
         zvariant::from_slice_fds(
-            &self.bytes[header_len..],
+            &self.bytes[self.body_offset..],
             Some(&self.fds()),
             dbus_context!(0),
         )
@@ -521,11 +526,8 @@ impl Message {
             Err(e) => return Err(e),
         };
 
-        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
-        header_len = header_len + padding_for_8_bytes(header_len);
-
         zvariant::from_slice_fds_for_dynamic_signature(
-            &self.bytes[header_len..],
+            &self.bytes[self.body_offset..],
             Some(&self.fds()),
             dbus_context!(0),
             &body_sig,
@@ -547,16 +549,7 @@ impl Message {
 
     /// Get a reference to the byte encoding of the body of the message.
     pub fn body_as_bytes(&self) -> Result<&[u8]> {
-        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
-        header_len = header_len + padding_for_8_bytes(header_len);
-
-        Ok(&self.bytes[header_len..])
-    }
-
-    fn fields_len(&self) -> Result<usize> {
-        zvariant::from_slice(&self.bytes[FIELDS_LEN_START_OFFSET..], dbus_context!(0))
-            .map(|v: u32| v as usize)
-            .map_err(Error::from)
+        Ok(&self.bytes[self.body_offset..])
     }
 }
 
