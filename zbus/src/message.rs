@@ -474,11 +474,15 @@ impl Message {
     }
 
     /// Deserialize the header.
+    ///
+    /// Note: prefer using the direct access methods if possible; they are more efficient.
     pub fn header(&self) -> Result<MessageHeader<'_>> {
         zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(Error::from)
     }
 
     /// Deserialize the fields.
+    ///
+    /// Note: prefer using the direct access methods if possible; they are more efficient.
     pub fn fields(&self) -> Result<MessageFields<'_>> {
         let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
         zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
