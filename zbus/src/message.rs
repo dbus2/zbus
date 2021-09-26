@@ -17,7 +17,6 @@ use crate::{
     MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
 };
 
-const FIELDS_LEN_START_OFFSET: usize = 12;
 const LOCK_PANIC_MSG: &str = "lock poisoned";
 
 macro_rules! dbus_context {
@@ -393,7 +392,7 @@ impl Message {
         b.build(body)
     }
 
-    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self> {
+    pub(crate) fn from_raw_parts(bytes: Vec<u8>, fds: Vec<OwnedFd>) -> Result<Self> {
         if bytes.len() < MIN_MESSAGE_SIZE {
             return Err(Error::InsufficientData);
         }
@@ -402,28 +401,13 @@ impl Message {
             return Err(Error::IncorrectEndian);
         }
 
-        let primary_header = zvariant::from_slice(bytes, dbus_context!(0)).map_err(Error::from)?;
-        let bytes = bytes.to_vec();
-        let fds = Arc::new(RwLock::new(Fds::Raw(vec![])));
+        let primary_header = zvariant::from_slice(&bytes, dbus_context!(0)).map_err(Error::from)?;
+        let fds = Arc::new(RwLock::new(Fds::Owned(fds)));
         Ok(Self {
             primary_header,
             bytes,
             fds,
         })
-    }
-
-    pub(crate) fn add_bytes(&mut self, bytes: &[u8]) -> Result<()> {
-        if bytes.len() > self.bytes_to_completion()? {
-            return Err(Error::ExcessData);
-        }
-
-        self.bytes.extend(bytes);
-
-        Ok(())
-    }
-
-    pub(crate) fn set_owned_fds(&self, fds: Vec<OwnedFd>) {
-        *self.fds.write().expect(LOCK_PANIC_MSG) = Fds::Owned(fds);
     }
 
     /// Disown the associated file descriptors from the message.

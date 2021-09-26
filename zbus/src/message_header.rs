@@ -7,7 +7,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{derive::Type, ObjectPath, Signature};
+use zvariant::{derive::Type, EncodingContext, ObjectPath, Signature};
 
 use crate::{Error, MessageField, MessageFieldCode, MessageFields};
 
@@ -166,6 +166,13 @@ impl MessagePrimaryHeader {
             body_len,
             serial_num: SerialNum(OnceCell::new()),
         }
+    }
+
+    pub(crate) fn read(buf: &[u8]) -> Result<(MessagePrimaryHeader, u32), Error> {
+        let ctx = EncodingContext::<byteorder::NativeEndian>::new_dbus(0);
+        let primary_header = zvariant::from_slice(buf, ctx)?;
+        let fields_len = zvariant::from_slice(&buf[PRIMARY_HEADER_SIZE..], ctx)?;
+        Ok((primary_header, fields_len))
     }
 
     /// D-Bus code for bytorder encoding of the message.
