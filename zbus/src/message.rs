@@ -392,11 +392,8 @@ impl Message {
         b.build(body)
     }
 
+    /// Create a message from its full contents
     pub(crate) fn from_raw_parts(bytes: Vec<u8>, fds: Vec<OwnedFd>) -> Result<Self> {
-        if bytes.len() < MIN_MESSAGE_SIZE {
-            return Err(Error::InsufficientData);
-        }
-
         if EndianSig::try_from(bytes[0])? != NATIVE_ENDIAN_SIG {
             return Err(Error::IncorrectEndian);
         }
@@ -428,15 +425,6 @@ impl Message {
         } else {
             vec![]
         }
-    }
-
-    pub(crate) fn bytes_to_completion(&self) -> Result<usize> {
-        let header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
-        let body_padding = padding_for_8_bytes(header_len);
-        let body_len = self.primary_header().body_len();
-        let required = header_len + body_padding + body_len as usize;
-
-        Ok(required - self.bytes.len())
     }
 
     /// The signature of the body.
@@ -489,10 +477,6 @@ impl Message {
     where
         B: serde::de::Deserialize<'d> + Type,
     {
-        if self.bytes_to_completion()? != 0 {
-            return Err(Error::InsufficientData);
-        }
-
         let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         header_len = header_len + padding_for_8_bytes(header_len);
 
@@ -537,10 +521,6 @@ impl Message {
             Err(e) => return Err(e),
         };
 
-        if self.bytes_to_completion()? != 0 {
-            return Err(Error::InsufficientData);
-        }
-
         let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         header_len = header_len + padding_for_8_bytes(header_len);
 
@@ -567,10 +547,6 @@ impl Message {
 
     /// Get a reference to the byte encoding of the body of the message.
     pub fn body_as_bytes(&self) -> Result<&[u8]> {
-        if self.bytes_to_completion()? != 0 {
-            return Err(Error::InsufficientData);
-        }
-
         let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
         header_len = header_len + padding_for_8_bytes(header_len);
 
