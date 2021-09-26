@@ -236,7 +236,6 @@ fn sasl_auth_id() -> String {
 #[derive(Debug)]
 struct Cookie {
     id: String,
-    creation_time: String,
     cookie: String,
 }
 
@@ -276,16 +275,13 @@ impl Cookie {
                     ))
                 })?
                 .to_string();
-            let creation_time = split
-                .next()
-                .ok_or_else(|| {
-                    Error::Handshake(format!(
-                        "DBus cookie `{}` missing creation time at line {}",
-                        path.to_str().unwrap(),
-                        n
-                    ))
-                })?
-                .to_string();
+            let _ = split.next().ok_or_else(|| {
+                Error::Handshake(format!(
+                    "DBus cookie `{}` missing creation time at line {}",
+                    path.to_str().unwrap(),
+                    n
+                ))
+            })?;
             let cookie = split
                 .next()
                 .ok_or_else(|| {
@@ -296,11 +292,7 @@ impl Cookie {
                     ))
                 })?
                 .to_string();
-            cookies.push(Cookie {
-                id,
-                creation_time,
-                cookie,
-            })
+            cookies.push(Cookie { id, cookie })
         }
         Ok(cookies)
     }
