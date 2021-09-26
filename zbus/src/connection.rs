@@ -124,7 +124,8 @@ struct ConnectionInner {
     executor: Arc<Executor<'static>>,
 
     // Message receiver task
-    msg_receiver_task: sync::Mutex<Option<Task<()>>>,
+    #[allow(unused)]
+    msg_receiver_task: Task<()>,
 
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 
@@ -931,7 +932,7 @@ impl Connection {
                 object_server: OnceCell::new(),
                 object_server_dispatch_task: OnceCell::new(),
                 executor: executor.clone(),
-                msg_receiver_task: sync::Mutex::new(Some(msg_receiver_task)),
+                msg_receiver_task,
                 registered_names: Mutex::new(HashSet::new()),
             }),
         };
