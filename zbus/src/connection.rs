@@ -124,6 +124,7 @@ struct ConnectionInner {
     executor: Arc<Executor<'static>>,
 
     // Message receiver task
+    #[allow(unused)]
     msg_receiver_task: Task<()>,
 
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
