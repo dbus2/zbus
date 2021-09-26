@@ -26,7 +26,7 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
-    Connection, Error, Message, MessageHeader, MessageStream, MessageType, ProxyBuilder, Result,
+    Connection, Error, Message, MessageStream, MessageType, ProxyBuilder, Result,
 };
 
 type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, ()> + Send>;
@@ -266,25 +266,24 @@ impl<'a> ProxyInner<'a> {
         }
     }
 
-    async fn matching_signal<'m>(
-        &self,
-        h: &'m MessageHeader<'m>,
-    ) -> Result<Option<&'m MemberName<'m>>> {
-        if h.primary().msg_type() != MessageType::Signal {
+    async fn matching_signal<'m>(&self, m: &'m Message) -> Result<Option<MemberName<'m>>> {
+        if m.message_type() != MessageType::Signal {
             return Ok(None);
         }
 
-        if h.interface() == Ok(Some(&self.interface)) && h.path() == Ok(Some(&self.path)) {
+        if m.interface() == Ok(Some(self.interface.as_ref()))
+            && m.path() == Ok(Some(self.path.as_ref()))
+        {
             for _ in 0..2 {
                 let listener = self.dest_name_update_event.listen();
-                if h.sender()
-                    == Ok(self
+                if m.header()?.sender()?
+                    == self
                         .dest_unique_name
                         .read()
                         .expect("lock poisoned")
-                        .as_deref())
+                        .as_deref()
                 {
-                    return Ok(h.member().ok().flatten());
+                    return Ok(m.member().ok().flatten());
                 }
 
                 // Due to signal and task run not being orderered (see issue#190), we can easily end
@@ -436,11 +435,7 @@ impl<'a> ProxyInner<'a> {
             return Ok(false);
         }
 
-        let h = match msg.header() {
-            Ok(h) => h,
-            _ => return Ok(false),
-        };
-        let signal_name = match self.matching_signal(&h).await? {
+        let signal_name = match self.matching_signal(msg).await? {
             Some(signal) => signal,
             _ => return Ok(false),
         };
@@ -810,15 +805,10 @@ impl<'a> Proxy<'a> {
                 let signal_name = signal_name.clone();
 
                 async move {
-                    Ok(match msg.header().ok() {
-                        Some(h) => {
-                            if proxy.matching_signal(&h).await? == Some(&signal_name) {
-                                Some(msg)
-                            } else {
-                                None
-                            }
-                        }
-                        None => None,
+                    Ok(if proxy.matching_signal(&msg).await? == Some(signal_name) {
+                        Some(msg)
+                    } else {
+                        None
                     })
                 }
             })

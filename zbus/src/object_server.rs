@@ -16,8 +16,8 @@ use zvariant::{ObjectPath, OwnedObjectPath};
 use crate::{
     fdo,
     fdo::{Introspectable, Peer, Properties},
-    Connection, DispatchResult, Error, Interface, Message, MessageHeader, MessageType, Result,
-    SignalContext, WeakConnection,
+    Connection, DispatchResult, Error, Interface, Message, MessageType, Result, SignalContext,
+    WeakConnection,
 };
 
 /// Opaque structure that derefs to an `Interface` type.
@@ -584,15 +584,14 @@ impl ObjectServer {
     async fn dispatch_method_call_try(
         &self,
         connection: &Connection,
-        msg_header: &MessageHeader<'_>,
         msg: &Message,
     ) -> fdo::Result<Result<()>> {
-        let path = msg_header
+        let path = msg
             .path()
             .ok()
             .flatten()
             .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
-        let iface = msg_header
+        let iface = msg
             .interface()
             .ok()
             .flatten()
@@ -601,14 +600,14 @@ impl ObjectServer {
             // invoked. Implementations may choose to either return an error, or deliver the message
             // as though it had an arbitrary one of those interfaces.
             .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
-        let member = msg_header
+        let member = msg
             .member()
             .ok()
             .flatten()
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
 
         let node = self
-            .get_node(path)
+            .get_node(&path)
             .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
         let iface = node.interface_lock(iface.as_ref()).ok_or_else(|| {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
@@ -652,16 +651,8 @@ impl ObjectServer {
         self.connection().start_object_server();
     }
 
-    async fn dispatch_method_call(
-        &self,
-        connection: &Connection,
-        msg_header: &MessageHeader<'_>,
-        msg: &Message,
-    ) -> Result<()> {
-        match self
-            .dispatch_method_call_try(connection, msg_header, msg)
-            .await
-        {
+    async fn dispatch_method_call(&self, connection: &Connection, msg: &Message) -> Result<()> {
+        match self.dispatch_method_call_try(connection, msg).await {
             Err(e) => e.reply(connection, msg).await.map(|_seq| ()),
             Ok(r) => r,
         }
@@ -680,12 +671,10 @@ impl ObjectServer {
     ///
     /// Returns an error if the message is malformed, true if it's handled, false otherwise.
     pub(crate) async fn dispatch_message(&self, msg: &Message) -> Result<bool> {
-        let msg_header = msg.header()?;
-
-        match msg_header.message_type()? {
+        match msg.message_type() {
             MessageType::MethodCall => {
                 let conn = self.connection();
-                self.dispatch_method_call(&conn, &msg_header, msg).await?;
+                self.dispatch_method_call(&conn, msg).await?;
                 Ok(true)
             }
             _ => Ok(false),
