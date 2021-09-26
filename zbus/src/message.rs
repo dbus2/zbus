@@ -13,8 +13,8 @@ use zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
     utils::padding_for_8_bytes, EndianSig, Error, MessageField, MessageFieldCode, MessageFields,
-    MessageFlags, MessageHeader, MessagePrimaryHeader, MessageType, OwnedFd, Result,
-    MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
+    MessageFlags, MessageHeader, MessagePrimaryHeader, MessageType, OwnedFd, QuickMessageFields,
+    Result, MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
 };
 
 const LOCK_PANIC_MSG: &str = "lock poisoned";
@@ -231,6 +231,7 @@ impl<'a> MessageBuilder<'a> {
 
         Ok(Message {
             primary_header: header.into_primary(),
+            quick_fields: QuickMessageFields::default(),
             bytes,
             body_offset: hdr_len,
             fds: Arc::new(RwLock::new(Fds::Raw(fds))),
@@ -273,6 +274,7 @@ impl Clone for Fds {
 #[derive(Clone)]
 pub struct Message {
     primary_header: MessagePrimaryHeader,
+    quick_fields: QuickMessageFields,
     bytes: Vec<u8>,
     body_offset: usize,
     fds: Arc<RwLock<Fds>>,
@@ -406,9 +408,11 @@ impl Message {
 
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_offset = header_len + padding_for_8_bytes(header_len);
+        let quick_fields = QuickMessageFields::new(&bytes, &header)?;
 
         Ok(Self {
             primary_header,
+            quick_fields,
             bytes,
             body_offset,
             fds,
@@ -478,6 +482,31 @@ impl Message {
     pub fn fields(&self) -> Result<MessageFields<'_>> {
         let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
         zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
+    }
+
+    /// The message type.
+    pub fn message_type(&self) -> MessageType {
+        self.primary_header.msg_type()
+    }
+
+    /// The object to send a call to, or the object a signal is emitted from.
+    pub fn path(&self) -> Result<Option<ObjectPath<'_>>> {
+        self.quick_fields.path(self)
+    }
+
+    /// The interface to invoke a method call on, or that a signal is emitted from.
+    pub fn interface(&self) -> Result<Option<InterfaceName<'_>>> {
+        self.quick_fields.interface(self)
+    }
+
+    /// The member, either the method name or signal name.
+    pub fn member(&self) -> Result<Option<MemberName<'_>>> {
+        self.quick_fields.member(self)
+    }
+
+    /// The serial number of the message this message is a reply to.
+    pub fn reply_serial(&self) -> Result<Option<u32>> {
+        self.quick_fields.reply_serial(self)
     }
 
     /// Deserialize the body (without checking signature matching).

@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use static_assertions::assert_impl_all;
-use zvariant::derive::Type;
+use std::convert::{TryFrom, TryInto};
+use zbus_names::{InterfaceName, MemberName};
+use zvariant::{derive::Type, ObjectPath};
 
-use crate::{MessageField, MessageFieldCode};
+use crate::{Error, Message, MessageField, MessageFieldCode, MessageHeader, Result};
 
 // It's actually 10 (and even not that) but let's round it to next 8-byte alignment
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
@@ -69,6 +71,111 @@ impl<'m> MessageFields<'m> {
         }
 
         None
+    }
+}
+
+/// A byte range of a field in a Message, used in [`QuickMessageFields`].
+///
+/// Some invalid encodings (end = 0) are used to indicate "not cached" and "not present".
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct FieldPos {
+    start: u32,
+    end: u32,
+}
+
+impl FieldPos {
+    pub fn new_unknown() -> Self {
+        Self { start: 0, end: 0 }
+    }
+
+    pub fn new_not_present() -> Self {
+        Self { start: 1, end: 0 }
+    }
+
+    pub fn build(msg_buf: &[u8], field_buf: &str) -> Option<Self> {
+        let buf_start = msg_buf.as_ptr() as usize;
+        let field_start = field_buf.as_ptr() as usize;
+        let offset = field_start.checked_sub(buf_start)?;
+        if offset <= msg_buf.len() && offset + field_buf.len() <= msg_buf.len() {
+            Some(Self {
+                start: offset.try_into().ok()?,
+                end: (offset + field_buf.len()).try_into().ok()?,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn new<T>(msg_buf: &[u8], field: Option<&T>) -> Self
+    where
+        T: std::ops::Deref<Target = str>,
+    {
+        match field {
+            Some(value) => Self::build(msg_buf, value).unwrap_or_else(Self::new_unknown),
+            None => Self::new_not_present(),
+        }
+    }
+
+    /// Reassemble a previously cached field, or generate it with the fallback closure.
+    pub fn read<'m, T>(
+        &self,
+        msg_buf: &'m [u8],
+        fallback: impl FnOnce() -> Result<Option<T>>,
+    ) -> Result<Option<T>>
+    where
+        T: TryFrom<&'m str>,
+        T::Error: Into<Error>,
+    {
+        match self {
+            Self { start: 0, end: 0 } => fallback(),
+            Self { start: 1, end: 0 } => Ok(None),
+            Self { start, end } => {
+                let s = std::str::from_utf8(&msg_buf[(*start as usize)..(*end as usize)])
+                    .expect("Invalid utf8 when reconstructing string");
+                T::try_from(s).map(Some).map_err(Into::into)
+            }
+        }
+    }
+}
+
+/// A cache of some commonly-used fields of the header of a Message.
+#[derive(Debug, Default, Copy, Clone)]
+pub(crate) struct QuickMessageFields {
+    path: FieldPos,
+    interface: FieldPos,
+    member: FieldPos,
+    reply_serial: Option<Option<u32>>,
+}
+
+impl QuickMessageFields {
+    pub fn new(buf: &[u8], header: &MessageHeader<'_>) -> Result<Self> {
+        Ok(Self {
+            path: FieldPos::new(buf, header.path()?),
+            interface: FieldPos::new(buf, header.interface()?),
+            member: FieldPos::new(buf, header.member()?),
+            reply_serial: Some(header.reply_serial()?),
+        })
+    }
+
+    pub fn path<'m>(&self, msg: &'m Message) -> Result<Option<ObjectPath<'m>>> {
+        self.path
+            .read(msg.as_bytes(), || Ok(msg.header()?.path()?.cloned()))
+    }
+
+    pub fn interface<'m>(&self, msg: &'m Message) -> Result<Option<InterfaceName<'m>>> {
+        self.interface
+            .read(msg.as_bytes(), || Ok(msg.header()?.interface()?.cloned()))
+    }
+
+    pub fn member<'m>(&self, msg: &'m Message) -> Result<Option<MemberName<'m>>> {
+        self.member
+            .read(msg.as_bytes(), || Ok(msg.header()?.member()?.cloned()))
+    }
+
+    pub fn reply_serial(&self, msg: &Message) -> Result<Option<u32>> {
+        self.reply_serial
+            .map(Ok)
+            .unwrap_or_else(|| msg.header()?.reply_serial())
     }
 }
 
