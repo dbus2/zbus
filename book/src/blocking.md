@@ -69,7 +69,7 @@ trait Location {
     fn longitude(&self) -> Result<f64>;
 }
 let conn = Connection::system().unwrap();
-let manager = ManagerProxy::new(&conn).unwrap();
+let manager = ManagerProxyBlocking::new(&conn).unwrap();
 let mut client = manager.get_client().unwrap();
 // Gotta do this, sorry!
 client.set_desktop_id("org.freedesktop.zbus").unwrap();
@@ -77,7 +77,7 @@ client.set_desktop_id("org.freedesktop.zbus").unwrap();
 let (tx, rx) = std::sync::mpsc::channel();
 client
     .connect_location_updated(move |_old, new| {
-        let location = LocationProxy::builder(&conn)
+        let location = LocationProxyBlocking::builder(&conn)
             .path(new.as_str())
             .unwrap()
             .build()
@@ -127,7 +127,7 @@ trait SystemdManager {
 fn main() -> Result<()> {
     let connection = Connection::session()?;
 
-    let proxy = SystemdManagerProxy::new(&connection)?;
+    let proxy = SystemdManagerProxyBlocking::new(&connection)?;
     proxy.connect_log_level_changed(|v| {
         println!("LogLevel changed: {:?}", v);
     });

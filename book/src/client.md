@@ -96,9 +96,10 @@ Instead, we want to wrap this `Notify` D-Bus method in a Rust function. Let's se
 
 ## Trait-derived proxy call
 
-A trait declaration `T` with a `dbus_proxy` attribute will have a derived `AsyncTProxy` and `TProxy`
-(see [chapter on "blocking"][cob] for more information on that) implemented thanks to procedural
-macros. The trait methods will have respective `impl` methods wrapping the D-Bus calls:
+A trait declaration `T` with a `dbus_proxy` attribute will have a derived `TProxy` and
+`TProxyBlocking` (see [chapter on "blocking"][cob] for more information on that) implemented thanks
+to procedural macros. The trait methods will have respective `impl` methods wrapping the D-Bus
+calls:
 
 ```rust,no_run
 use std::collections::HashMap;
@@ -125,7 +126,7 @@ trait Notifications {
 async fn main() -> Result<(), Box<dyn Error>> {
     let connection = Connection::session().await?;
 
-    let proxy = AsyncNotificationsProxy::new(&connection).await?;
+    let proxy = NotificationsProxy::new(&connection).await?;
     let reply = proxy.notify(
         "my-app",
         0,
@@ -141,7 +142,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-A `AsyncTProxy` and `TProxy` has a few associated methods, such as `new(connection)`, using the
+A `TProxy` and `TProxyBlocking` has a few associated methods, such as `new(connection)`, using the
 default associated service name and object path, and an associated builder if you need to specify
 something different.
 
@@ -203,7 +204,7 @@ trait Location {
 #[async_std::main]
 async fn main() -> Result<()> {
     let conn = Connection::system().await?;
-    let manager = AsyncManagerProxy::new(&conn).await?;
+    let manager = ManagerProxy::new(&conn).await?;
     let mut client = manager.get_client().await?;
     // Gotta do this, sorry!
     client.set_desktop_id("org.freedesktop.zbus").await?;
@@ -216,7 +217,7 @@ async fn main() -> Result<()> {
             let tx = tx.clone();
 
             async move {
-                let location = AsyncLocationProxy::builder(&conn)
+                let location = LocationProxy::builder(&conn)
                     .path(new).unwrap()
                     .build()
                     .await
@@ -297,7 +298,7 @@ use futures_util::stream::StreamExt;
 # #[async_std::main]
 # async fn main() -> Result<()> {
 #     let conn = Connection::system().await?;
-#     let manager = AsyncManagerProxy::new(&conn).await?;
+#     let manager = ManagerProxy::new(&conn).await?;
 #     let mut client = manager.get_client().await?;
 #
 #   client.set_desktop_id("org.freedesktop.zbus").await?;
@@ -329,7 +330,7 @@ use futures_util::stream::StreamExt;
             while let Some(signal) = location_updated_stream.next().await {
                 let args = signal.args()?;
 
-                let location = AsyncLocationProxy::builder(&conn)
+                let location = LocationProxy::builder(&conn)
                     .path(args.new())?
                     .build()
                     .await?;
@@ -390,7 +391,7 @@ trait SystemdManager {
 async fn main() -> Result<()> {
     let connection = Connection::session().await?;
 
-    let proxy = AsyncSystemdManagerProxy::new(&connection).await?;
+    let proxy = SystemdManagerProxy::new(&connection).await?;
     println!("Host architecture: {}", proxy.architecture().await?);
     println!("Environment:");
     for env in proxy.environment().await? {
@@ -448,7 +449,7 @@ Here is an example of the stream-based API in action:
 
     let connection = Connection::session().await?;
 
-    let proxy = AsyncSystemdManagerProxy::new(&connection).await?;
+    let proxy = SystemdManagerProxy::new(&connection).await?;
     let mut stream = proxy.receive_log_level_changed().await;
     while let Some(v) = stream.next().await {
         println!("LogLevel changed: {:?}", v);
@@ -479,7 +480,7 @@ and the equivalent callback-based API in action:
 # async fn main() -> Result<()> {
 #    let connection = Connection::session().await?;
 #
-#    let proxy = AsyncSystemdManagerProxy::new(&connection).await?;
+#    let proxy = SystemdManagerProxy::new(&connection).await?;
     proxy.connect_log_level_changed(|v| async move {
         println!("LogLevel changed: {:?}", v);
     }.boxed());

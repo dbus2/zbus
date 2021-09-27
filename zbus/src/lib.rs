@@ -50,7 +50,7 @@
 //!     let connection = Connection::session().await?;
 //!
 //!     // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
-//!     let proxy = AsyncNotificationsProxy::new(&connection).await?;
+//!     let proxy = NotificationsProxy::new(&connection).await?;
 //!     let reply = proxy.notify(
 //!         "my-app",
 //!         0,
@@ -781,7 +781,7 @@ mod tests {
                 fn the_signal(&self) -> zbus::Result<()>;
             }
 
-            let proxy = ComeAndGoProxy::new(&conn).unwrap();
+            let proxy = ComeAndGoProxyBlocking::new(&conn).unwrap();
             let tx_clone = tx.clone();
             let (signal_tx, signal_rx) = channel();
             proxy

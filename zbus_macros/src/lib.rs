@@ -14,8 +14,8 @@ mod utils;
 
 /// Attribute macro for defining D-Bus proxies (using [`zbus::Proxy`] and [`zbus::blocking::Proxy`]).
 ///
-/// The macro must be applied on a `trait T`. Two matching `impl T` will provide a synchronous Proxy
-/// implementation, named `TraitNameProxy` and an asynchronous one, named `AsyncTraitNameProxy`. The
+/// The macro must be applied on a `trait T`. Two matching `impl T` will provide an asynchronous Proxy
+/// implementation, named `TraitNameProxy` and a blocking one, named `TraitNameProxyBlocking`. The
 /// proxy instances can be created with the associated `new()` or `builder()` methods. The former
 /// doesn't take any argument and uses the default service name and path. The later allows you to
 /// specify non-default proxy arguments.
@@ -79,8 +79,8 @@ mod utils;
 ///     fn some_signal(&self, arg1: &str, arg2: u32) -> fdo::Result<()>;
 ///
 ///     #[dbus_proxy(object = "SomeOtherIface")]
-///     // The method will return a `SomeOtherIfaceProxy` or `AsyncSomeOtherIfaceProxy`, depending on
-///     // whether it is called on `SomeIfaceProxy` or `AsyncSomeIfaceProxy`, respectively.
+///     // The method will return a `SomeOtherIfaceProxy` or `SomeOtherIfaceProxyBlocking`, depending on
+///     // whether it is called on `SomeIfaceProxy` or `SomeIfaceProxyBlocking`, respectively.
 ///     fn some_method(&self, arg1: &str);
 /// };
 ///
@@ -92,7 +92,7 @@ mod utils;
 ///
 /// let connection = Connection::session()?;
 /// // Use `builder` to override the default arguments, `new` otherwise.
-/// let proxy = SomeIfaceProxy::builder(&connection)
+/// let proxy = SomeIfaceProxyBlocking::builder(&connection)
 ///                .destination("org.another.Service")?
 ///                .cache_properties(false)
 ///                .build()?;
@@ -108,7 +108,7 @@ mod utils;
 ///
 /// // Now the same again, but asynchronous.
 /// block_on(async move {
-///     let proxy = AsyncSomeIfaceProxy::builder(&connection.into())
+///     let proxy = SomeIfaceProxy::builder(&connection.into())
 ///                    .cache_properties(false)
 ///                    .build()
 ///                    .await

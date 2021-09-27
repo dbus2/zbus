@@ -76,7 +76,12 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     }
 
     let blocking_proxy = if gen_blocking {
-        let proxy_name = format!("{}Proxy", input.ident);
+        let proxy_name = if gen_async {
+            format!("{}ProxyBlocking", input.ident)
+        } else {
+            // When only generating blocking proxy, there is no need for a suffix.
+            format!("{}Proxy", input.ident)
+        };
         create_proxy(
             &input,
             iface_name.as_deref(),
@@ -89,11 +94,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
         quote! {}
     };
     let async_proxy = if gen_async {
-        let proxy_name = if gen_blocking {
-            format!("Async{}Proxy", input.ident)
-        } else {
-            format!("{}Proxy", input.ident)
-        };
+        let proxy_name = format!("{}Proxy", input.ident);
         create_proxy(
             &input,
             iface_name.as_deref(),
@@ -304,9 +305,9 @@ fn gen_proxy_method_call(
     let proxy_object = attrs.iter().find_map(|x| match x {
         ItemAttribute::Object(o) => {
             if *blocking {
-                Some(format!("{}Proxy", o))
+                Some(format!("{}ProxyBlocking", o))
             } else {
-                Some(format!("Async{}Proxy", o))
+                Some(format!("{}Proxy", o))
             }
         }
         _ => None,
