@@ -9,34 +9,38 @@ use syn::{
 use crate::utils::*;
 
 struct AsyncOpts {
-    azync: bool,
+    blocking: bool,
     usage: TokenStream,
     wait: TokenStream,
 }
 
 impl AsyncOpts {
-    fn new(azync: bool) -> Self {
-        let (usage, wait) = if azync {
-            (quote! { async }, quote! { .await })
-        } else {
+    fn new(blocking: bool) -> Self {
+        let (usage, wait) = if blocking {
             (quote! {}, quote! {})
+        } else {
+            (quote! { async }, quote! { .await })
         };
-        Self { azync, usage, wait }
+        Self {
+            blocking,
+            usage,
+            wait,
+        }
     }
 }
 
 pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
-    let sync_proxy = create_proxy(&args, &input, false);
-    let async_proxy = create_proxy(&args, &input, true);
+    let blocking_proxy = create_proxy(&args, &input, true);
+    let async_proxy = create_proxy(&args, &input, false);
 
     quote! {
-        #sync_proxy
+        #blocking_proxy
 
         #async_proxy
     }
 }
 
-pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> TokenStream {
+pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, blocking: bool) -> TokenStream {
     let mut iface_name = None;
     let mut default_path = None;
     let mut default_service = None;
@@ -73,10 +77,10 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     }
 
     let doc = get_doc_attrs(&input.attrs);
-    let proxy_name = if azync {
-        format!("Async{}Proxy", input.ident)
-    } else {
+    let proxy_name = if blocking {
         format!("{}Proxy", input.ident)
+    } else {
+        format!("Async{}Proxy", input.ident)
     };
     let proxy_name = Ident::new(&proxy_name, Span::call_site());
     let ident = input.ident.to_string();
@@ -86,7 +90,7 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
     let mut has_properties = false;
-    let async_opts = AsyncOpts::new(azync);
+    let async_opts = AsyncOpts::new(blocking);
 
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
@@ -126,19 +130,19 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     }
 
     let AsyncOpts { usage, wait, .. } = async_opts;
-    let (proxy_doc, proxy_struct, connection, builder) = if azync {
-        let sync_proxy = Ident::new(&format!("{}Proxy", input.ident), Span::call_site());
-        let doc = format!("Asynchronous sibling of [`{}`].", sync_proxy);
-        let connection = quote! { #zbus::Connection };
-        let proxy = quote! { #zbus::Proxy };
-        let builder = quote! { #zbus::ProxyBuilder };
-
-        (doc, proxy, connection, builder)
-    } else {
+    let (proxy_doc, proxy_struct, connection, builder) = if blocking {
         let doc = String::from("");
         let connection = quote! { #zbus::blocking::Connection };
         let proxy = quote! { #zbus::blocking::Proxy };
         let builder = quote! { #zbus::blocking::ProxyBuilder };
+
+        (doc, proxy, connection, builder)
+    } else {
+        let blocking_proxy = Ident::new(&format!("{}Proxy", input.ident), Span::call_site());
+        let doc = format!("Asynchronous sibling of [`{}`].", blocking_proxy);
+        let connection = quote! { #zbus::Connection };
+        let proxy = quote! { #zbus::Proxy };
+        let builder = quote! { #zbus::ProxyBuilder };
 
         (doc, proxy, connection, builder)
     };
@@ -239,7 +243,11 @@ fn gen_proxy_method_call(
     m: &TraitItemMethod,
     async_opts: &AsyncOpts,
 ) -> TokenStream {
-    let AsyncOpts { usage, wait, azync } = async_opts;
+    let AsyncOpts {
+        usage,
+        wait,
+        blocking,
+    } = async_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let args: Vec<_> = m
@@ -251,10 +259,10 @@ fn gen_proxy_method_call(
     let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
     let proxy_object = attrs.iter().find_map(|x| match x {
         ItemAttribute::Object(o) => {
-            if *azync {
-                Some(format!("Async{}Proxy", o))
-            } else {
+            if *blocking {
                 Some(format!("{}Proxy", o))
+            } else {
+                Some(format!("Async{}Proxy", o))
             }
         }
         _ => None,
@@ -349,7 +357,11 @@ fn gen_proxy_property(
     m: &TraitItemMethod,
     async_opts: &AsyncOpts,
 ) -> TokenStream {
-    let AsyncOpts { usage, wait, azync } = async_opts;
+    let AsyncOpts {
+        usage,
+        wait,
+        blocking,
+    } = async_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let signature = &m.sig;
@@ -379,7 +391,9 @@ fn gen_proxy_property(
             None
         };
 
-        let receive = if *azync {
+        let receive = if *blocking {
+            quote! {}
+        } else {
             let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
             let receive = format_ident!("receive_{}_changed", method_name);
             let gen_doc = format!("Create a stream for the `{}` property changes. \
@@ -395,8 +409,6 @@ fn gen_proxy_property(
                     self.0.receive_property_stream(#property_name).await
                 }
             }
-        } else {
-            quote! {}
         };
 
         let cached_getter = format_ident!("cached_{}", method_name);
@@ -406,23 +418,23 @@ fn gen_proxy_property(
         );
 
         let connect = format_ident!("connect_{}_changed", method_name);
-        let handler = if *azync {
+        let handler = if *blocking {
+            parse_quote! { __H: FnMut(Option<&#zbus::zvariant::Value<'_>>) + Send + 'static }
+        } else {
             parse_quote! {
                 for<'v> __H: FnMut(Option<&'v #zbus::zvariant::Value<'_>>) ->
                     #zbus::export::futures_core::future::BoxFuture<'v, ()> + Send + 'static
             }
-        } else {
-            parse_quote! { __H: FnMut(Option<&#zbus::zvariant::Value<'_>>) + Send + 'static }
         };
-        let (proxy_method, link) = if *azync {
+        let (proxy_method, link) = if *blocking {
             (
                 "zbus::Proxy::connect_property_changed",
-                "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_property_changed",
+                "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_property_changed",
             )
         } else {
             (
                 "zbus::Proxy::connect_property_changed",
-                "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_property_changed",
+                "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_property_changed",
             )
         };
         let gen_doc = format!(
@@ -489,7 +501,11 @@ fn gen_proxy_signal(
     m: &TraitItemMethod,
     async_opts: &AsyncOpts,
 ) -> (TokenStream, TokenStream) {
-    let AsyncOpts { usage, wait, azync } = async_opts;
+    let AsyncOpts {
+        usage,
+        wait,
+        blocking,
+    } = async_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let method = format_ident!("connect_{}", snake_case_name);
@@ -523,7 +539,7 @@ fn gen_proxy_signal(
         .map(|(i, _)| Literal::usize_unsuffixed(i))
         .collect();
 
-    let (receive_signal, stream_types) = if async_opts.azync {
+    let (receive_signal, stream_types) = if !async_opts.blocking {
         let mut generics = m.sig.generics.clone();
         let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
         for param in generics
@@ -688,25 +704,25 @@ fn gen_proxy_signal(
         (quote! {}, quote! {})
     };
 
-    let handler = if *azync {
+    let handler = if *blocking {
+        quote! { ::std::ops::FnMut(#(#input_types),*) }
+    } else {
         quote! {
             ::std::ops::FnMut(
                 #(#input_types),*
             ) -> #zbus::export::futures_core::future::BoxFuture<'static, ()>
         }
-    } else {
-        quote! { ::std::ops::FnMut(#(#input_types),*) }
     };
 
-    let (proxy_method, link) = if *azync {
+    let (proxy_method, link) = if *blocking {
         (
             "zbus::Proxy::connect_signal",
-            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_signal",
+            "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_signal",
         )
     } else {
         (
             "zbus::Proxy::connect_signal",
-            "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_signal",
+            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_signal",
         )
     };
     let gen_doc = format!(
