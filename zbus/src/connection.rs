@@ -391,9 +391,9 @@ impl Connection {
                     m.as_ref()
                         .map(|m| {
                             matches!(
-                                m.primary_header().msg_type(),
+                                m.message_type(),
                                 MessageType::Error | MessageType::MethodReturn
-                            ) && m.header().and_then(|h| h.reply_serial()) == Ok(Some(serial))
+                            ) && m.reply_serial() == Ok(Some(serial))
                         })
                         .unwrap_or(false),
                 )
@@ -403,7 +403,7 @@ impl Connection {
         {
             Some(msg) => match msg {
                 Ok(m) => {
-                    match m.header()?.message_type()? {
+                    match m.message_type() {
                         MessageType::Error => Err(m.into()),
                         MessageType::MethodReturn => Ok(m),
                         // We already established the msg type in `filter` above.

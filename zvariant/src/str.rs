@@ -22,6 +22,11 @@ pub struct Str<'a>(#[serde(borrow)] Cow<'a, str>);
 assert_impl_all!(Str<'_>: Send, Sync, Unpin);
 
 impl<'a> Str<'a> {
+    /// A borrowed clone (this never allocates, unlike clone).
+    pub fn as_ref(&self) -> Str<'_> {
+        Str(Cow::Borrowed(&self.0))
+    }
+
     /// The underlying string.
     pub fn as_str(&self) -> &str {
         &self.0

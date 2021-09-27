@@ -55,6 +55,14 @@ pub enum BusName<'name> {
 assert_impl_all!(BusName<'_>: Send, Sync, Unpin);
 
 impl<'name> BusName<'name> {
+    /// A borrowed clone (never allocates, unlike clone).
+    pub fn as_ref(&self) -> BusName<'_> {
+        match self {
+            BusName::Unique(name) => BusName::Unique(name.as_ref()),
+            BusName::WellKnown(name) => BusName::WellKnown(name.as_ref()),
+        }
+    }
+
     /// The well-known-name as string.
     pub fn as_str(&self) -> &str {
         match self {

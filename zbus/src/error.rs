@@ -24,8 +24,6 @@ pub enum Error {
     Address(String),
     /// An I/O error.
     Io(io::Error),
-    /// Insufficient data provided to create a valid D-Bus message.
-    InsufficientData,
     /// Invalid message field.
     InvalidField,
     /// Data too large.
@@ -64,7 +62,6 @@ impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Address(_), Self::Address(_)) => true,
-            (Self::InsufficientData, Self::InsufficientData) => true,
             (Self::InterfaceNotFound, Self::InterfaceNotFound) => true,
             (Self::Handshake(_), Self::Handshake(_)) => true,
             (Self::InvalidReply, Self::InvalidReply) => true,
@@ -95,7 +92,6 @@ impl error::Error for Error {
             Error::Io(e) => Some(e),
             Error::ExcessData => None,
             Error::Handshake(_) => None,
-            Error::InsufficientData => None,
             Error::IncorrectEndian => None,
             Error::Variant(e) => Some(e),
             Error::Names(e) => Some(e),
@@ -121,10 +117,6 @@ impl fmt::Display for Error {
             Error::ExcessData => write!(f, "excess data"),
             Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::Handshake(e) => write!(f, "D-Bus handshake failed: {}", e),
-            Error::InsufficientData => write!(
-                f,
-                "Insufficient data provided to create a valid D-Bus message"
-            ),
             Error::IncorrectEndian => write!(f, "incorrect endian"),
             Error::InvalidField => write!(f, "invalid message field"),
             Error::Variant(e) => write!(f, "{}", e),
