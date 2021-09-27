@@ -881,7 +881,7 @@ mod tests {
     }
 
     async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
-        let proxy = AsyncMyIfaceProxy::builder(&conn)
+        let proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
             // the server isn't yet running
@@ -958,7 +958,7 @@ mod tests {
         // issue#207: interface panics on incorrect number of args.
         assert!(proxy.call_method("CreateObj", &()).await.is_err());
 
-        let my_obj_proxy = AsyncMyIfaceProxy::builder(&conn)
+        let my_obj_proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/zbus/test/MyObj")?
             .build()

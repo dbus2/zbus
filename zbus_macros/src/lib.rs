@@ -31,7 +31,8 @@ mod utils;
 ///
 /// * `gen_async` - Whether or not to generate the asynchronous Proxy type.
 ///
-/// * `gen_blocking` - Whether or not to generate the blocking Proxy type.
+/// * `gen_blocking` - Whether or not to generate the blocking Proxy type. If set to `false`, the
+///   asynchronous proxy type will take the name `TraitNameProxy` (i-e no `Async` prefix).
 ///
 /// Each trait method will be expanded to call to the associated D-Bus remote interface.
 ///

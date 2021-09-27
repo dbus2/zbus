@@ -76,22 +76,30 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     }
 
     let blocking_proxy = if gen_blocking {
+        let proxy_name = format!("{}Proxy", input.ident);
         create_proxy(
             &input,
             iface_name.as_deref(),
             default_path.as_deref(),
             default_service.as_deref(),
+            &proxy_name,
             true,
         )
     } else {
         quote! {}
     };
     let async_proxy = if gen_async {
+        let proxy_name = if gen_blocking {
+            format!("Async{}Proxy", input.ident)
+        } else {
+            format!("{}Proxy", input.ident)
+        };
         create_proxy(
             &input,
             iface_name.as_deref(),
             default_path.as_deref(),
             default_service.as_deref(),
+            &proxy_name,
             false,
         )
     } else {
@@ -110,17 +118,13 @@ pub fn create_proxy(
     iface_name: Option<&str>,
     default_path: Option<&str>,
     default_service: Option<&str>,
+    proxy_name: &str,
     blocking: bool,
 ) -> TokenStream {
     let zbus = zbus_path();
 
     let doc = get_doc_attrs(&input.attrs);
-    let proxy_name = if blocking {
-        format!("{}Proxy", input.ident)
-    } else {
-        format!("Async{}Proxy", input.ident)
-    };
-    let proxy_name = Ident::new(&proxy_name, Span::call_site());
+    let proxy_name = Ident::new(proxy_name, Span::call_site());
     let ident = input.ident.to_string();
     let name = iface_name
         .map(ToString::to_string)
