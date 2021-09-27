@@ -302,12 +302,27 @@ fn gen_proxy_method_call(
         .filter_map(|arg| arg_ident(arg))
         .collect();
     let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
+    let async_proxy_object = attrs.iter().find_map(|x| match x {
+        ItemAttribute::AsyncObject(o) => Some(o.clone()),
+        _ => None,
+    });
+    let blocking_proxy_object = attrs.iter().find_map(|x| match x {
+        ItemAttribute::BlockingObject(o) => Some(o.clone()),
+        _ => None,
+    });
     let proxy_object = attrs.iter().find_map(|x| match x {
         ItemAttribute::Object(o) => {
             if *blocking {
-                Some(format!("{}ProxyBlocking", o))
+                // FIXME: for some reason Rust doesn't let us move `blocking_proxy_object` so we've to clone.
+                blocking_proxy_object
+                    .as_ref()
+                    .cloned()
+                    .or_else(|| Some(format!("{}ProxyBlocking", o)))
             } else {
-                Some(format!("{}Proxy", o))
+                async_proxy_object
+                    .as_ref()
+                    .cloned()
+                    .or_else(|| Some(format!("{}Proxy", o)))
             }
         }
         _ => None,

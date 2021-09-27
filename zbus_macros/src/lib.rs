@@ -50,6 +50,12 @@ mod utils;
 /// * `object` - methods that returns an [`ObjectPath`] can be annotated with the `object` attribute
 ///   to specify the proxy object to be constructed from the returned [`ObjectPath`].
 ///
+/// * `async_object` - if the assumptions made by `object` attribute about naming of the
+///   asynchronous proxy types, don't fit your bill, you can use this to specify its exact name.
+///
+/// * `blocking_object` - if the assumptions made by `object` attribute about naming of the proxy types,
+///   don't fit your bill, you can use this to specify the exact name of the asynchronous proxy type.
+///
 ///   NB: Any doc comments provided shall be appended to the ones added by the macro.
 ///
 /// # Example
@@ -79,8 +85,11 @@ mod utils;
 ///     fn some_signal(&self, arg1: &str, arg2: u32) -> fdo::Result<()>;
 ///
 ///     #[dbus_proxy(object = "SomeOtherIface")]
-///     // The method will return a `SomeOtherIfaceProxy` or `SomeOtherIfaceProxyBlocking`, depending on
-///     // whether it is called on `SomeIfaceProxy` or `SomeIfaceProxyBlocking`, respectively.
+///     // The method will return a `SomeOtherIfaceProxy` or `SomeOtherIfaceProxyBlocking`, depending
+///     // on whether it is called on `SomeIfaceProxy` or `SomeIfaceProxyBlocking`, respectively.
+///     //
+///     // NB: We could also specify the specific names using `async_object` and `blocking_object`
+///     // attributes.
 ///     fn some_method(&self, arg1: &str);
 /// };
 ///
