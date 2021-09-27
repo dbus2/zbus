@@ -20,6 +20,15 @@ mod utils;
 /// doesn't take any argument and uses the default service name and path. The later allows you to
 /// specify non-default proxy arguments.
 ///
+/// The following attributes are supported:
+///
+/// * `interface` - the name of the D-Bus interface this proxy is for.
+///
+/// * `default_service` - the default service this proxy should connect to.
+///
+/// * `default_path` - The default object path the method calls will be sent on and signals will be
+///   sent for by the target service.
+///
 /// Each trait method will be expanded to call to the associated D-Bus remote interface.
 ///
 /// Trait methods accept `dbus_proxy` attributes:
