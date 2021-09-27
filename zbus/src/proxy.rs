@@ -25,7 +25,7 @@ use zbus_names::{
 use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
-    fdo::{self, AsyncIntrospectableProxy, AsyncPropertiesProxy},
+    fdo::{self, IntrospectableProxy, PropertiesProxy},
     Connection, Error, Message, MessageStream, MessageType, ProxyBuilder, Result,
 };
 
@@ -60,7 +60,7 @@ pub(crate) struct PropertyChangedHandlerInfo {
 
 // Hold proxy properties related data.
 pub(crate) struct ProxyProperties<'a> {
-    pub(crate) proxy: OnceCell<AsyncPropertiesProxy<'a>>,
+    pub(crate) proxy: OnceCell<PropertiesProxy<'a>>,
     pub(crate) values: SyncMutex<HashMap<String, OwnedValue>>,
     task: OnceCell<Task<()>>,
     pub(crate) changed_handlers:
@@ -404,7 +404,7 @@ impl<'a> ProxyInner<'a> {
                     .set(task)
                     .expect("Attempted to set destination update task twice");
 
-                let unique_name = match fdo::AsyncDBusProxy::new(&self.conn)
+                let unique_name = match fdo::DBusProxy::new(&self.conn)
                     .await?
                     .get_name_owner(destination.as_ref())
                     .await
@@ -579,7 +579,7 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
-        let proxy = AsyncIntrospectableProxy::builder(&self.inner.conn)
+        let proxy = IntrospectableProxy::builder(&self.inner.conn)
             .destination(&self.inner.destination)?
             .path(&self.inner.path)?
             .build()
@@ -589,11 +589,11 @@ impl<'a> Proxy<'a> {
     }
 
     #[async_recursion]
-    async fn properties_proxy(&self) -> Result<&AsyncPropertiesProxy<'static>> {
+    async fn properties_proxy(&self) -> Result<&PropertiesProxy<'static>> {
         match self.properties.proxy.get() {
             Some(proxy) => Ok(proxy),
             None => {
-                let proxy = AsyncPropertiesProxy::builder(&self.inner.conn)
+                let proxy = PropertiesProxy::builder(&self.inner.conn)
                     // Safe because already checked earlier
                     .destination(self.inner.destination.to_owned())
                     .unwrap()
@@ -1034,7 +1034,7 @@ mod tests {
         let conn = Connection::session().await?;
         let unique_name = conn.unique_name().unwrap();
 
-        let proxy = fdo::AsyncDBusProxy::new(&conn).await?;
+        let proxy = fdo::DBusProxy::new(&conn).await?;
 
         let well_known = "org.freedesktop.zbus.async.ProxySignalStreamTest";
         let owner_changed_stream = proxy
@@ -1122,7 +1122,7 @@ mod tests {
         let name_acquired_signaled2 = Arc::new(Event::new());
         let name_acquired_listener2 = name_acquired_signaled2.listen();
 
-        let proxy = fdo::AsyncDBusProxy::new(&conn).await?;
+        let proxy = fdo::DBusProxy::new(&conn).await?;
         let well_known = "org.freedesktop.zbus.async.ProxySignalConnectTest";
         let unique_name = conn.unique_name().unwrap().clone();
         let name_owner_changed_id = {
@@ -1176,7 +1176,7 @@ mod tests {
             })
             .await?;
 
-        fdo::DBusProxy::new(&crate::blocking::Connection::from(conn))?
+        crate::blocking::fdo::DBusProxy::new(&crate::blocking::Connection::from(conn))?
             .request_name(
                 well_known.try_into()?,
                 fdo::RequestNameFlags::ReplaceExisting.into(),

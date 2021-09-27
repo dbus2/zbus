@@ -65,7 +65,7 @@ fn test_proxy() {
             .build()
             .await
             .unwrap();
-        fdo::AsyncDBusProxy::new(&connection)
+        fdo::DBusProxy::new(&connection)
             .await
             .unwrap()
             .request_name(

@@ -201,6 +201,7 @@ pub use interface::*;
 mod utils;
 pub use utils::*;
 
+#[macro_use]
 pub mod fdo;
 
 mod raw;
@@ -586,7 +587,10 @@ mod tests {
         .unwrap();
         let serial = client_conn.send_message(msg).unwrap();
 
-        crate::fdo::DBusProxy::new(&conn).unwrap().get_id().unwrap();
+        crate::blocking::fdo::DBusProxy::new(&conn)
+            .unwrap()
+            .get_id()
+            .unwrap();
 
         for m in stream {
             let msg = m.unwrap();

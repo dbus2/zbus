@@ -303,7 +303,7 @@ use futures_util::stream::StreamExt;
 #   client.set_desktop_id("org.freedesktop.zbus").await?;
 #
     // Everything else remains the same before this point.
-    let props = zbus::fdo::AsyncPropertiesProxy::builder(&conn)
+    let props = zbus::fdo::PropertiesProxy::builder(&conn)
         .destination("org.freedesktop.GeoClue2")?
         .path(client.path())?
         .build()

@@ -888,7 +888,7 @@ mod tests {
             .cache_properties(false)
             .build()
             .await?;
-        let props_proxy = zbus::fdo::AsyncPropertiesProxy::builder(&conn)
+        let props_proxy = zbus::fdo::PropertiesProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
             .build()
@@ -1103,7 +1103,7 @@ mod tests {
         );
 
         // Let's ensure all names were released.
-        let proxy = zbus::fdo::AsyncDBusProxy::new(&service_conn).await.unwrap();
+        let proxy = zbus::fdo::DBusProxy::new(&service_conn).await.unwrap();
         assert_eq!(
             proxy
                 .name_has_owner("org.freedesktop.MyService".try_into().unwrap())
