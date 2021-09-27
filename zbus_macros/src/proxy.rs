@@ -31,6 +31,7 @@ impl AsyncOpts {
 
 pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     let (mut gen_async, mut gen_blocking) = (true, true);
+    let (mut async_name, mut blocking_name) = (None, None);
     let mut iface_name = None;
     let mut default_path = None;
     let mut default_service = None;
@@ -55,6 +56,18 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                     } else {
                         panic!("Invalid service argument")
                     }
+                } else if nv.path.is_ident("async_name") {
+                    if let syn::Lit::Str(lit) = &nv.lit {
+                        async_name = Some(lit.value());
+                    } else {
+                        panic!("Invalid service argument")
+                    }
+                } else if nv.path.is_ident("blocking_name") {
+                    if let syn::Lit::Str(lit) = &nv.lit {
+                        blocking_name = Some(lit.value());
+                    } else {
+                        panic!("Invalid service argument")
+                    }
                 } else if nv.path.is_ident("gen_async") {
                     if let syn::Lit::Bool(lit) = &nv.lit {
                         gen_async = lit.value();
@@ -76,12 +89,14 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     }
 
     let blocking_proxy = if gen_blocking {
-        let proxy_name = if gen_async {
-            format!("{}ProxyBlocking", input.ident)
-        } else {
-            // When only generating blocking proxy, there is no need for a suffix.
-            format!("{}Proxy", input.ident)
-        };
+        let proxy_name = blocking_name.unwrap_or_else(|| {
+            if gen_async {
+                format!("{}ProxyBlocking", input.ident)
+            } else {
+                // When only generating blocking proxy, there is no need for a suffix.
+                format!("{}Proxy", input.ident)
+            }
+        });
         create_proxy(
             &input,
             iface_name.as_deref(),
@@ -94,7 +109,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
         quote! {}
     };
     let async_proxy = if gen_async {
-        let proxy_name = format!("{}Proxy", input.ident);
+        let proxy_name = async_name.unwrap_or_else(|| format!("{}Proxy", input.ident));
         create_proxy(
             &input,
             iface_name.as_deref(),

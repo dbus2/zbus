@@ -34,6 +34,10 @@ mod utils;
 /// * `gen_blocking` - Whether or not to generate the blocking Proxy type. If set to `false`, the
 ///   asynchronous proxy type will take the name `TraitNameProxy` (i-e no `Async` prefix).
 ///
+/// * `async_name` - Specify the exact name of the asynchronous proxy type.
+///
+/// * `blocking_name` - Specify the exact name of the blocking proxy type.
+///
 /// Each trait method will be expanded to call to the associated D-Bus remote interface.
 ///
 /// Trait methods accept `dbus_proxy` attributes:
@@ -51,10 +55,10 @@ mod utils;
 ///   to specify the proxy object to be constructed from the returned [`ObjectPath`].
 ///
 /// * `async_object` - if the assumptions made by `object` attribute about naming of the
-///   asynchronous proxy types, don't fit your bill, you can use this to specify its exact name.
+///   asynchronous proxy type, don't fit your bill, you can use this to specify its exact name.
 ///
-/// * `blocking_object` - if the assumptions made by `object` attribute about naming of the proxy types,
-///   don't fit your bill, you can use this to specify the exact name of the asynchronous proxy type.
+/// * `blocking_object` - if the assumptions made by `object` attribute about naming of the
+///   blocking proxy type, don't fit your bill, you can use this to specify its exact name.
 ///
 ///   NB: Any doc comments provided shall be appended to the ones added by the macro.
 ///
@@ -84,18 +88,20 @@ mod utils;
 ///     #[dbus_proxy(signal)]
 ///     fn some_signal(&self, arg1: &str, arg2: u32) -> fdo::Result<()>;
 ///
-///     #[dbus_proxy(object = "SomeOtherIface")]
-///     // The method will return a `SomeOtherIfaceProxy` or `SomeOtherIfaceProxyBlocking`, depending
+///     #[dbus_proxy(object = "SomeOtherIface", blocking_object = "SomeOtherIterfaceBlock")]
+///     // The method will return a `SomeOtherIfaceProxy` or `SomeOtherIfaceProxyBlock`, depending
 ///     // on whether it is called on `SomeIfaceProxy` or `SomeIfaceProxyBlocking`, respectively.
 ///     //
-///     // NB: We could also specify the specific names using `async_object` and `blocking_object`
-///     // attributes.
+///     // NB: We explicitly specified the exact name of the blocking proxy type. If we hadn't,
+///     // `SomeOtherIfaceProxyBlock` would have been assumed and expected. We could also specify
+///     // the specific name of the asynchronous proxy types, using the `async_object` attribute.
 ///     fn some_method(&self, arg1: &str);
 /// };
 ///
 /// #[dbus_proxy(
 ///     interface = "org.test.SomeOtherIface",
-///     default_service = "org.test.SomeOtherService"
+///     default_service = "org.test.SomeOtherService",
+///     blocking_name = "SomeOtherIterfaceBlock",
 /// )]
 /// trait SomeOtherIface {}
 ///
