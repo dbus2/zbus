@@ -302,8 +302,12 @@ mod tests {
 
         // there was some activity
         listener.wait();
-        let listener = c.monitor_activity();
-        // there is nothing happening, timeout
-        assert!(!listener.wait_timeout(std::time::Duration::from_millis(10)));
+        // eventually, nothing happens and it will timeout
+        loop {
+            let listener = c.monitor_activity();
+            if !listener.wait_timeout(std::time::Duration::from_millis(10)) {
+                break;
+            }
+        }
     }
 }
