@@ -297,13 +297,13 @@ mod tests {
 
         for _ in s {}
 
+        let val = server_thread.join().expect("failed to join server thread");
+        assert_eq!(val, "yay");
+
         // there was some activity
         listener.wait();
         let listener = c.monitor_activity();
         // there is nothing happening, timeout
-        assert!(!listener.wait_timeout(std::time::Duration::from_millis(500)));
-
-        let val = server_thread.join().expect("failed to join server thread");
-        assert_eq!(val, "yay");
+        assert!(!listener.wait_timeout(std::time::Duration::from_millis(10)));
     }
 }
