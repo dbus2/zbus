@@ -88,6 +88,17 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
         }
     }
 
+    // Some sanity checks
+    if !gen_blocking && !gen_async {
+        panic!("Can't disable both asynchronous and blocking proxy. 😸");
+    }
+    if !gen_blocking && blocking_name.is_some() {
+        panic!("Can't set blocking proxy's name if you disabled it. 😸");
+    }
+    if !gen_async && async_name.is_some() {
+        panic!("Can't set asynchronous proxy's name if you disabled it. 😸");
+    }
+
     let blocking_proxy = if gen_blocking {
         let proxy_name = blocking_name.unwrap_or_else(|| {
             if gen_async {
