@@ -30,24 +30,11 @@ impl AsyncOpts {
 }
 
 pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
-    let blocking_proxy = create_proxy(&args, &input, true);
-    let async_proxy = create_proxy(&args, &input, false);
-
-    quote! {
-        #blocking_proxy
-
-        #async_proxy
-    }
-}
-
-pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, blocking: bool) -> TokenStream {
+    let (mut gen_async, mut gen_blocking) = (true, true);
     let mut iface_name = None;
     let mut default_path = None;
     let mut default_service = None;
-
-    let zbus = zbus_path();
-
-    for arg in args {
+    for arg in &args {
         match arg {
             NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
                 if nv.path.is_ident("interface") || nv.path.is_ident("name") {
@@ -68,6 +55,18 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, blocking: bool) -> T
                     } else {
                         panic!("Invalid service argument")
                     }
+                } else if nv.path.is_ident("gen_async") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        gen_async = lit.value();
+                    } else {
+                        panic!("Invalid gen_async argument")
+                    }
+                } else if nv.path.is_ident("gen_blocking") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        gen_blocking = lit.value();
+                    } else {
+                        panic!("Invalid gen_blocking argument")
+                    }
                 } else {
                     panic!("Unsupported argument");
                 }
@@ -75,6 +74,45 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, blocking: bool) -> T
             _ => panic!("Unknown attribute"),
         }
     }
+
+    let blocking_proxy = if gen_blocking {
+        create_proxy(
+            &input,
+            iface_name.as_deref(),
+            default_path.as_deref(),
+            default_service.as_deref(),
+            true,
+        )
+    } else {
+        quote! {}
+    };
+    let async_proxy = if gen_async {
+        create_proxy(
+            &input,
+            iface_name.as_deref(),
+            default_path.as_deref(),
+            default_service.as_deref(),
+            false,
+        )
+    } else {
+        quote! {}
+    };
+
+    quote! {
+        #blocking_proxy
+
+        #async_proxy
+    }
+}
+
+pub fn create_proxy(
+    input: &ItemTrait,
+    iface_name: Option<&str>,
+    default_path: Option<&str>,
+    default_service: Option<&str>,
+    blocking: bool,
+) -> TokenStream {
+    let zbus = zbus_path();
 
     let doc = get_doc_attrs(&input.attrs);
     let proxy_name = if blocking {
@@ -84,9 +122,15 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, blocking: bool) -> T
     };
     let proxy_name = Ident::new(&proxy_name, Span::call_site());
     let ident = input.ident.to_string();
-    let name = iface_name.unwrap_or(format!("org.freedesktop.{}", ident));
-    let default_path = default_path.unwrap_or(format!("/org/freedesktop/{}", ident));
-    let default_service = default_service.unwrap_or_else(|| name.clone());
+    let name = iface_name
+        .map(ToString::to_string)
+        .unwrap_or(format!("org.freedesktop.{}", ident));
+    let default_path = default_path
+        .map(ToString::to_string)
+        .unwrap_or(format!("/org/freedesktop/{}", ident));
+    let default_service = default_service
+        .map(ToString::to_string)
+        .unwrap_or_else(|| name.clone());
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
     let mut has_properties = false;

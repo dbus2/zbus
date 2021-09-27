@@ -29,6 +29,10 @@ mod utils;
 /// * `default_path` - The default object path the method calls will be sent on and signals will be
 ///   sent for by the target service.
 ///
+/// * `gen_async` - Whether or not to generate the asynchronous Proxy type.
+///
+/// * `gen_blocking` - Whether or not to generate the blocking Proxy type.
+///
 /// Each trait method will be expanded to call to the associated D-Bus remote interface.
 ///
 /// Trait methods accept `dbus_proxy` attributes:

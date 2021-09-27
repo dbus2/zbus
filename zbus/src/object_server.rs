@@ -720,7 +720,7 @@ mod tests {
         bar: String,
     }
 
-    #[dbus_proxy]
+    #[dbus_proxy(gen_blocking = false)]
     trait MyIface {
         fn ping(&self) -> zbus::Result<u32>;
 

@@ -634,7 +634,7 @@ mod tests {
 
         let child = std::thread::spawn(move || {
             let conn = blocking::Connection::session().unwrap();
-            #[super::dbus_proxy(interface = "org.freedesktop.Secret.Service")]
+            #[super::dbus_proxy(interface = "org.freedesktop.Secret.Service", gen_async = false)]
             trait Secret {
                 fn open_session(
                     &self,
