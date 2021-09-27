@@ -13,11 +13,10 @@ use zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
     utils::padding_for_8_bytes, EndianSig, Error, MessageField, MessageFieldCode, MessageFields,
-    MessageFlags, MessageHeader, MessagePrimaryHeader, MessageType, OwnedFd, Result,
-    MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
+    MessageFlags, MessageHeader, MessagePrimaryHeader, MessageType, OwnedFd, QuickMessageFields,
+    Result, MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
 };
 
-const FIELDS_LEN_START_OFFSET: usize = 12;
 const LOCK_PANIC_MSG: &str = "lock poisoned";
 
 macro_rules! dbus_context {
@@ -232,7 +231,9 @@ impl<'a> MessageBuilder<'a> {
 
         Ok(Message {
             primary_header: header.into_primary(),
+            quick_fields: QuickMessageFields::default(),
             bytes,
+            body_offset: hdr_len,
             fds: Arc::new(RwLock::new(Fds::Raw(fds))),
         })
     }
@@ -273,7 +274,9 @@ impl Clone for Fds {
 #[derive(Clone)]
 pub struct Message {
     primary_header: MessagePrimaryHeader,
+    quick_fields: QuickMessageFields,
     bytes: Vec<u8>,
+    body_offset: usize,
     fds: Arc<RwLock<Fds>>,
 }
 
@@ -393,37 +396,27 @@ impl Message {
         b.build(body)
     }
 
-    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        if bytes.len() < MIN_MESSAGE_SIZE {
-            return Err(Error::InsufficientData);
-        }
-
+    /// Create a message from its full contents
+    pub(crate) fn from_raw_parts(bytes: Vec<u8>, fds: Vec<OwnedFd>) -> Result<Self> {
         if EndianSig::try_from(bytes[0])? != NATIVE_ENDIAN_SIG {
             return Err(Error::IncorrectEndian);
         }
 
-        let primary_header = zvariant::from_slice(bytes, dbus_context!(0)).map_err(Error::from)?;
-        let bytes = bytes.to_vec();
-        let fds = Arc::new(RwLock::new(Fds::Raw(vec![])));
+        let (primary_header, fields_len) = MessagePrimaryHeader::read(&bytes)?;
+        let header = zvariant::from_slice(&bytes, dbus_context!(0))?;
+        let fds = Arc::new(RwLock::new(Fds::Owned(fds)));
+
+        let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
+        let body_offset = header_len + padding_for_8_bytes(header_len);
+        let quick_fields = QuickMessageFields::new(&bytes, &header)?;
+
         Ok(Self {
             primary_header,
+            quick_fields,
             bytes,
+            body_offset,
             fds,
         })
-    }
-
-    pub(crate) fn add_bytes(&mut self, bytes: &[u8]) -> Result<()> {
-        if bytes.len() > self.bytes_to_completion()? {
-            return Err(Error::ExcessData);
-        }
-
-        self.bytes.extend(bytes);
-
-        Ok(())
-    }
-
-    pub(crate) fn set_owned_fds(&self, fds: Vec<OwnedFd>) {
-        *self.fds.write().expect(LOCK_PANIC_MSG) = Fds::Owned(fds);
     }
 
     /// Disown the associated file descriptors from the message.
@@ -444,15 +437,6 @@ impl Message {
         } else {
             vec![]
         }
-    }
-
-    pub(crate) fn bytes_to_completion(&self) -> Result<usize> {
-        let header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
-        let body_padding = padding_for_8_bytes(header_len);
-        let body_len = self.primary_header().body_len();
-        let required = header_len + body_padding + body_len as usize;
-
-        Ok(required - self.bytes.len())
     }
 
     /// The signature of the body.
@@ -490,14 +474,43 @@ impl Message {
     }
 
     /// Deserialize the header.
+    ///
+    /// Note: prefer using the direct access methods if possible; they are more efficient.
     pub fn header(&self) -> Result<MessageHeader<'_>> {
         zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(Error::from)
     }
 
     /// Deserialize the fields.
+    ///
+    /// Note: prefer using the direct access methods if possible; they are more efficient.
     pub fn fields(&self) -> Result<MessageFields<'_>> {
         let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
         zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
+    }
+
+    /// The message type.
+    pub fn message_type(&self) -> MessageType {
+        self.primary_header.msg_type()
+    }
+
+    /// The object to send a call to, or the object a signal is emitted from.
+    pub fn path(&self) -> Result<Option<ObjectPath<'_>>> {
+        self.quick_fields.path(self)
+    }
+
+    /// The interface to invoke a method call on, or that a signal is emitted from.
+    pub fn interface(&self) -> Result<Option<InterfaceName<'_>>> {
+        self.quick_fields.interface(self)
+    }
+
+    /// The member, either the method name or signal name.
+    pub fn member(&self) -> Result<Option<MemberName<'_>>> {
+        self.quick_fields.member(self)
+    }
+
+    /// The serial number of the message this message is a reply to.
+    pub fn reply_serial(&self) -> Result<Option<u32>> {
+        self.quick_fields.reply_serial(self)
     }
 
     /// Deserialize the body (without checking signature matching).
@@ -505,15 +518,8 @@ impl Message {
     where
         B: serde::de::Deserialize<'d> + Type,
     {
-        if self.bytes_to_completion()? != 0 {
-            return Err(Error::InsufficientData);
-        }
-
-        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
-        header_len = header_len + padding_for_8_bytes(header_len);
-
         zvariant::from_slice_fds(
-            &self.bytes[header_len..],
+            &self.bytes[self.body_offset..],
             Some(&self.fds()),
             dbus_context!(0),
         )
@@ -553,15 +559,8 @@ impl Message {
             Err(e) => return Err(e),
         };
 
-        if self.bytes_to_completion()? != 0 {
-            return Err(Error::InsufficientData);
-        }
-
-        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
-        header_len = header_len + padding_for_8_bytes(header_len);
-
         zvariant::from_slice_fds_for_dynamic_signature(
-            &self.bytes[header_len..],
+            &self.bytes[self.body_offset..],
             Some(&self.fds()),
             dbus_context!(0),
             &body_sig,
@@ -583,20 +582,7 @@ impl Message {
 
     /// Get a reference to the byte encoding of the body of the message.
     pub fn body_as_bytes(&self) -> Result<&[u8]> {
-        if self.bytes_to_completion()? != 0 {
-            return Err(Error::InsufficientData);
-        }
-
-        let mut header_len = MIN_MESSAGE_SIZE + self.fields_len()?;
-        header_len = header_len + padding_for_8_bytes(header_len);
-
-        Ok(&self.bytes[header_len..])
-    }
-
-    fn fields_len(&self) -> Result<usize> {
-        zvariant::from_slice(&self.bytes[FIELDS_LEN_START_OFFSET..], dbus_context!(0))
-            .map(|v: u32| v as usize)
-            .map_err(Error::from)
+        Ok(&self.bytes[self.body_offset..])
     }
 }
 

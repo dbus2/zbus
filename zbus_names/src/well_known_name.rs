@@ -42,6 +42,11 @@ pub struct WellKnownName<'name>(Str<'name>);
 assert_impl_all!(WellKnownName<'_>: Send, Sync, Unpin);
 
 impl<'name> WellKnownName<'name> {
+    /// A borrowed clone (never allocates, unlike clone).
+    pub fn as_ref(&self) -> WellKnownName<'_> {
+        WellKnownName(self.0.as_ref())
+    }
+
     /// The well-known-name as string.
     pub fn as_str(&self) -> &str {
         self.0.as_str()

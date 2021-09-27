@@ -6,7 +6,10 @@ use std::{
 
 use event_listener::{Event, EventListener};
 
-use crate::{message::Message, message_header::MIN_MESSAGE_SIZE, raw::Socket, OwnedFd};
+use crate::{
+    message_header::MIN_MESSAGE_SIZE, raw::Socket, utils::padding_for_8_bytes, Message,
+    MessagePrimaryHeader, OwnedFd,
+};
 use futures_core::ready;
 
 /// A low-level representation of a D-Bus connection
@@ -25,7 +28,7 @@ pub struct Connection<S> {
     event: Event,
     raw_in_buffer: Vec<u8>,
     raw_in_fds: Vec<OwnedFd>,
-    msg_in_buffer: Option<Message>,
+    raw_in_pos: usize,
     raw_out_buffer: VecDeque<u8>,
     msg_out_buffer: VecDeque<Message>,
 }
@@ -37,7 +40,7 @@ impl<S: Socket> Connection<S> {
             event: Event::new(),
             raw_in_buffer: vec![],
             raw_in_fds: vec![],
-            msg_in_buffer: None,
+            raw_in_pos: 0,
             raw_out_buffer: VecDeque::new(),
             msg_out_buffer: VecDeque::new(),
         }
@@ -103,61 +106,52 @@ impl<S: Socket> Connection<S> {
     /// will buffer it internally and try to complete it the next time you call `try_receive_message`.
     pub fn try_receive_message(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<Message>> {
         self.event.notify(usize::MAX);
-        if self.msg_in_buffer.is_none() {
+        if self.raw_in_pos < MIN_MESSAGE_SIZE {
+            self.raw_in_buffer.resize(MIN_MESSAGE_SIZE, 0);
             // We don't have enough data to make a proper message header yet.
             // Some partial read may be in raw_in_buffer, so we try to complete it
             // until we have MIN_MESSAGE_SIZE bytes
             //
             // Given that MIN_MESSAGE_SIZE is 16, this codepath is actually extremely unlikely
             // to be taken more than once
-            while self.raw_in_buffer.len() < MIN_MESSAGE_SIZE {
-                let current_bytes = self.raw_in_buffer.len();
-                let mut buf = vec![0; MIN_MESSAGE_SIZE - current_bytes];
-                let (read, fds) = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
-                if read == 0 {
+            while self.raw_in_pos < MIN_MESSAGE_SIZE {
+                let (len, fds) = ready!(self
+                    .socket
+                    .poll_recvmsg(cx, &mut self.raw_in_buffer[self.raw_in_pos..]))?;
+                self.raw_in_pos += len;
+                self.raw_in_fds.extend(fds);
+                if len == 0 {
                     return Poll::Ready(Err(crate::Error::Io(std::io::Error::new(
                         std::io::ErrorKind::UnexpectedEof,
                         "failed to receive message",
                     ))));
                 }
-                self.raw_in_buffer.extend(&buf[..read]);
-                self.raw_in_fds.extend(fds);
             }
 
-            // We now have a full message header, so let us construct the Message
-            self.msg_in_buffer = Some(Message::from_bytes(&self.raw_in_buffer)?);
-            self.raw_in_buffer.clear();
+            let (primary_header, fields_len) = MessagePrimaryHeader::read(&self.raw_in_buffer)?;
+            let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
+            let body_padding = padding_for_8_bytes(header_len);
+            let body_len = primary_header.body_len() as usize;
+
+            // We now have a full message header, so we know the exact length of the complete message
+            self.raw_in_buffer
+                .resize(header_len + body_padding + body_len, 0);
         }
 
-        // At this point, we must have a partial message in self.msg_in_buffer, and we
-        // need to complete it
-        {
-            let msg = self.msg_in_buffer.as_mut().unwrap();
-            loop {
-                match msg.bytes_to_completion() {
-                    Ok(0) => {
-                        // the message is now complete, we can return
-                        break;
-                    }
-                    Ok(needed) => {
-                        // we need to read more data
-                        let mut buf = vec![0; needed];
-                        let (read, fds) = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
-                        msg.add_bytes(&buf[..read])?;
-                        self.raw_in_fds.extend(fds);
-                    }
-                    Err(e) => {
-                        // the message is invalid, return the error
-                        return Poll::Ready(Err(e));
-                    }
-                }
-            }
+        // Now we have an incomplete message; read the rest
+        while self.raw_in_buffer.len() > self.raw_in_pos {
+            let (read, fds) = ready!(self
+                .socket
+                .poll_recvmsg(cx, &mut self.raw_in_buffer[self.raw_in_pos..]))?;
+            self.raw_in_pos += read;
+            self.raw_in_fds.extend(fds);
         }
 
-        // If we reach here, the message is complete, return it
-        let msg = self.msg_in_buffer.take().unwrap();
-        msg.set_owned_fds(std::mem::take(&mut self.raw_in_fds));
-        Poll::Ready(Ok(msg))
+        // If we reach here, the message is complete; return it
+        self.raw_in_pos = 0;
+        let bytes = std::mem::take(&mut self.raw_in_buffer);
+        let fds = std::mem::take(&mut self.raw_in_fds);
+        Poll::Ready(Message::from_raw_parts(bytes, fds))
     }
 
     /// Close the connection.

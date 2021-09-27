@@ -41,6 +41,11 @@ pub struct UniqueName<'name>(Str<'name>);
 assert_impl_all!(UniqueName<'_>: Send, Sync, Unpin);
 
 impl<'name> UniqueName<'name> {
+    /// A borrowed clone (never allocates, unlike clone).
+    pub fn as_ref(&self) -> UniqueName<'_> {
+        UniqueName(self.0.as_ref())
+    }
+
     /// The unique name as string.
     pub fn as_str(&self) -> &str {
         self.0.as_str()

@@ -44,6 +44,11 @@ pub struct InterfaceName<'name>(Str<'name>);
 assert_impl_all!(InterfaceName<'_>: Send, Sync, Unpin);
 
 impl<'name> InterfaceName<'name> {
+    /// A borrowed clone (never allocates, unlike clone).
+    pub fn as_ref(&self) -> InterfaceName<'_> {
+        InterfaceName(self.0.as_ref())
+    }
+
     /// The interface name as string.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
