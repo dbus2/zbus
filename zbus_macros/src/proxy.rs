@@ -26,8 +26,65 @@ impl AsyncOpts {
 }
 
 pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
-    let sync_proxy = create_proxy(&args, &input, false);
-    let async_proxy = create_proxy(&args, &input, true);
+    let mut is_async = None;
+    let mut is_sync = None;
+    let mut proxy_name = None;
+    args.iter().for_each(|arg| match arg {
+        NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
+            if nv.path.is_ident("azync") {
+                if let syn::Lit::Bool(lit) = &nv.lit {
+                    is_async = Some(lit.value)
+                } else {
+                    panic!("Invalid azync argument, expected boolean type");
+                }
+            }
+            if nv.path.is_ident("sync") {
+                if let syn::Lit::Bool(lit) = &nv.lit {
+                    is_sync = Some(lit.value)
+                } else {
+                    panic!("Invalid sync argument, expected boolean type");
+                }
+            }
+            if nv.path.is_ident("proxy_name") {
+                if let syn::Lit::Str(lit) = &nv.lit {
+                    proxy_name = Some(lit.value())
+                } else {
+                    panic!("Invalid proxy_name argument, expected string type");
+                }
+            }
+        }
+        _ => (),
+    });
+
+    let is_sync = is_sync.unwrap_or(true);
+    let is_async = is_async.unwrap_or(true);
+
+    let (async_proxy_name, sync_proxy_name) = if let Some(name) = proxy_name {
+        // Use name only if either sync/async are enabled not both
+        if (is_sync && !is_async) || (is_async && !is_sync) {
+            (format!("Async{}Proxy", name), format!("{}Proxy", name))
+        } else {
+            panic!("proxy_name can only be used with sync/async only proxies")
+        }
+    } else {
+        (
+            format!("Async{}Proxy", input.ident),
+            format!("{}Proxy", input.ident),
+        )
+    };
+    let sync_proxy = if is_sync {
+        let sync_proxy = Ident::new(&sync_proxy_name, Span::call_site());
+        create_proxy(&args, &input, &sync_proxy, false)
+    } else {
+        quote! {}
+    };
+
+    let async_proxy = if is_async {
+        let async_proxy = Ident::new(&async_proxy_name, Span::call_site());
+        create_proxy(&args, &input, &async_proxy, true)
+    } else {
+        quote! {}
+    };
 
     quote! {
         #sync_proxy
@@ -36,7 +93,12 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     }
 }
 
-pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> TokenStream {
+pub fn create_proxy(
+    args: &[NestedMeta],
+    input: &ItemTrait,
+    proxy_name: &Ident,
+    azync: bool,
+) -> TokenStream {
     let mut iface_name = None;
     let mut default_path = None;
     let mut default_service = None;
@@ -64,6 +126,11 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                     } else {
                         panic!("Invalid service argument")
                     }
+                } else if nv.path.is_ident("azync")
+                    || nv.path.is_ident("sync")
+                    || nv.path.is_ident("proxy_name")
+                {
+                    continue;
                 } else {
                     panic!("Unsupported argument");
                 }
@@ -73,12 +140,6 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     }
 
     let doc = get_doc_attrs(&input.attrs);
-    let proxy_name = if azync {
-        format!("Async{}Proxy", input.ident)
-    } else {
-        format!("{}Proxy", input.ident)
-    };
-    let proxy_name = Ident::new(&proxy_name, Span::call_site());
     let ident = input.ident.to_string();
     let name = iface_name.unwrap_or(format!("org.freedesktop.{}", ident));
     let default_path = default_path.unwrap_or(format!("/org/freedesktop/{}", ident));
