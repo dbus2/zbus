@@ -130,21 +130,18 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, blocking: bool) -> T
     }
 
     let AsyncOpts { usage, wait, .. } = async_opts;
-    let (proxy_doc, proxy_struct, connection, builder) = if blocking {
-        let doc = String::from("");
+    let (proxy_struct, connection, builder) = if blocking {
         let connection = quote! { #zbus::blocking::Connection };
         let proxy = quote! { #zbus::blocking::Proxy };
         let builder = quote! { #zbus::blocking::ProxyBuilder };
 
-        (doc, proxy, connection, builder)
+        (proxy, connection, builder)
     } else {
-        let blocking_proxy = Ident::new(&format!("{}Proxy", input.ident), Span::call_site());
-        let doc = format!("Asynchronous sibling of [`{}`].", blocking_proxy);
         let connection = quote! { #zbus::Connection };
         let proxy = quote! { #zbus::Proxy };
         let builder = quote! { #zbus::ProxyBuilder };
 
-        (doc, proxy, connection, builder)
+        (proxy, connection, builder)
     };
 
     quote! {
@@ -154,7 +151,6 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, blocking: bool) -> T
             const PATH: &'static str = #default_path;
         }
 
-        #[doc = #proxy_doc]
         #(#doc)*
         #[derive(Clone, Debug)]
         pub struct #proxy_name<'c>(#proxy_struct<'c>);
