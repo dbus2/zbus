@@ -304,6 +304,6 @@ mod tests {
         listener.wait();
         let listener = c.monitor_activity();
         // there is nothing happening, timeout
-        assert!(!listener.wait_timeout(std::time::Duration::from_millis(500)));
+        assert!(!listener.wait_timeout(std::time::Duration::from_millis(10)));
     }
 }
