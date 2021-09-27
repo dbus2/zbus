@@ -9,41 +9,33 @@ use syn::{
 use crate::utils::*;
 
 struct AsyncOpts {
-    azync: bool,
+    blocking: bool,
     usage: TokenStream,
     wait: TokenStream,
 }
 
 impl AsyncOpts {
-    fn new(azync: bool) -> Self {
-        let (usage, wait) = if azync {
-            (quote! { async }, quote! { .await })
-        } else {
+    fn new(blocking: bool) -> Self {
+        let (usage, wait) = if blocking {
             (quote! {}, quote! {})
+        } else {
+            (quote! { async }, quote! { .await })
         };
-        Self { azync, usage, wait }
+        Self {
+            blocking,
+            usage,
+            wait,
+        }
     }
 }
 
 pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
-    let sync_proxy = create_proxy(&args, &input, false);
-    let async_proxy = create_proxy(&args, &input, true);
-
-    quote! {
-        #sync_proxy
-
-        #async_proxy
-    }
-}
-
-pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> TokenStream {
+    let (mut gen_async, mut gen_blocking) = (true, true);
+    let (mut async_name, mut blocking_name) = (None, None);
     let mut iface_name = None;
     let mut default_path = None;
     let mut default_service = None;
-
-    let zbus = zbus_path();
-
-    for arg in args {
+    for arg in &args {
         match arg {
             NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
                 if nv.path.is_ident("interface") || nv.path.is_ident("name") {
@@ -64,6 +56,30 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
                     } else {
                         panic!("Invalid service argument")
                     }
+                } else if nv.path.is_ident("async_name") {
+                    if let syn::Lit::Str(lit) = &nv.lit {
+                        async_name = Some(lit.value());
+                    } else {
+                        panic!("Invalid service argument")
+                    }
+                } else if nv.path.is_ident("blocking_name") {
+                    if let syn::Lit::Str(lit) = &nv.lit {
+                        blocking_name = Some(lit.value());
+                    } else {
+                        panic!("Invalid service argument")
+                    }
+                } else if nv.path.is_ident("gen_async") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        gen_async = lit.value();
+                    } else {
+                        panic!("Invalid gen_async argument")
+                    }
+                } else if nv.path.is_ident("gen_blocking") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        gen_blocking = lit.value();
+                    } else {
+                        panic!("Invalid gen_blocking argument")
+                    }
                 } else {
                     panic!("Unsupported argument");
                 }
@@ -72,21 +88,84 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
         }
     }
 
-    let doc = get_doc_attrs(&input.attrs);
-    let proxy_name = if azync {
-        format!("Async{}Proxy", input.ident)
+    // Some sanity checks
+    if !gen_blocking && !gen_async {
+        panic!("Can't disable both asynchronous and blocking proxy. 😸");
+    }
+    if !gen_blocking && blocking_name.is_some() {
+        panic!("Can't set blocking proxy's name if you disabled it. 😸");
+    }
+    if !gen_async && async_name.is_some() {
+        panic!("Can't set asynchronous proxy's name if you disabled it. 😸");
+    }
+
+    let blocking_proxy = if gen_blocking {
+        let proxy_name = blocking_name.unwrap_or_else(|| {
+            if gen_async {
+                format!("{}ProxyBlocking", input.ident)
+            } else {
+                // When only generating blocking proxy, there is no need for a suffix.
+                format!("{}Proxy", input.ident)
+            }
+        });
+        create_proxy(
+            &input,
+            iface_name.as_deref(),
+            default_path.as_deref(),
+            default_service.as_deref(),
+            &proxy_name,
+            true,
+        )
     } else {
-        format!("{}Proxy", input.ident)
+        quote! {}
     };
-    let proxy_name = Ident::new(&proxy_name, Span::call_site());
+    let async_proxy = if gen_async {
+        let proxy_name = async_name.unwrap_or_else(|| format!("{}Proxy", input.ident));
+        create_proxy(
+            &input,
+            iface_name.as_deref(),
+            default_path.as_deref(),
+            default_service.as_deref(),
+            &proxy_name,
+            false,
+        )
+    } else {
+        quote! {}
+    };
+
+    quote! {
+        #blocking_proxy
+
+        #async_proxy
+    }
+}
+
+pub fn create_proxy(
+    input: &ItemTrait,
+    iface_name: Option<&str>,
+    default_path: Option<&str>,
+    default_service: Option<&str>,
+    proxy_name: &str,
+    blocking: bool,
+) -> TokenStream {
+    let zbus = zbus_path();
+
+    let doc = get_doc_attrs(&input.attrs);
+    let proxy_name = Ident::new(proxy_name, Span::call_site());
     let ident = input.ident.to_string();
-    let name = iface_name.unwrap_or(format!("org.freedesktop.{}", ident));
-    let default_path = default_path.unwrap_or(format!("/org/freedesktop/{}", ident));
-    let default_service = default_service.unwrap_or_else(|| name.clone());
+    let name = iface_name
+        .map(ToString::to_string)
+        .unwrap_or(format!("org.freedesktop.{}", ident));
+    let default_path = default_path
+        .map(ToString::to_string)
+        .unwrap_or(format!("/org/freedesktop/{}", ident));
+    let default_service = default_service
+        .map(ToString::to_string)
+        .unwrap_or_else(|| name.clone());
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
     let mut has_properties = false;
-    let async_opts = AsyncOpts::new(azync);
+    let async_opts = AsyncOpts::new(blocking);
 
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
@@ -126,21 +205,18 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
     }
 
     let AsyncOpts { usage, wait, .. } = async_opts;
-    let (proxy_doc, proxy_struct, connection, builder) = if azync {
-        let sync_proxy = Ident::new(&format!("{}Proxy", input.ident), Span::call_site());
-        let doc = format!("Asynchronous sibling of [`{}`].", sync_proxy);
-        let connection = quote! { #zbus::Connection };
-        let proxy = quote! { #zbus::Proxy };
-        let builder = quote! { #zbus::ProxyBuilder };
-
-        (doc, proxy, connection, builder)
-    } else {
-        let doc = String::from("");
+    let (proxy_struct, connection, builder) = if blocking {
         let connection = quote! { #zbus::blocking::Connection };
         let proxy = quote! { #zbus::blocking::Proxy };
         let builder = quote! { #zbus::blocking::ProxyBuilder };
 
-        (doc, proxy, connection, builder)
+        (proxy, connection, builder)
+    } else {
+        let connection = quote! { #zbus::Connection };
+        let proxy = quote! { #zbus::Proxy };
+        let builder = quote! { #zbus::ProxyBuilder };
+
+        (proxy, connection, builder)
     };
 
     quote! {
@@ -150,7 +226,6 @@ pub fn create_proxy(args: &[NestedMeta], input: &ItemTrait, azync: bool) -> Toke
             const PATH: &'static str = #default_path;
         }
 
-        #[doc = #proxy_doc]
         #(#doc)*
         #[derive(Clone, Debug)]
         pub struct #proxy_name<'c>(#proxy_struct<'c>);
@@ -239,7 +314,11 @@ fn gen_proxy_method_call(
     m: &TraitItemMethod,
     async_opts: &AsyncOpts,
 ) -> TokenStream {
-    let AsyncOpts { usage, wait, azync } = async_opts;
+    let AsyncOpts {
+        usage,
+        wait,
+        blocking,
+    } = async_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let args: Vec<_> = m
@@ -249,12 +328,27 @@ fn gen_proxy_method_call(
         .filter_map(|arg| arg_ident(arg))
         .collect();
     let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
+    let async_proxy_object = attrs.iter().find_map(|x| match x {
+        ItemAttribute::AsyncObject(o) => Some(o.clone()),
+        _ => None,
+    });
+    let blocking_proxy_object = attrs.iter().find_map(|x| match x {
+        ItemAttribute::BlockingObject(o) => Some(o.clone()),
+        _ => None,
+    });
     let proxy_object = attrs.iter().find_map(|x| match x {
         ItemAttribute::Object(o) => {
-            if *azync {
-                Some(format!("Async{}Proxy", o))
+            if *blocking {
+                // FIXME: for some reason Rust doesn't let us move `blocking_proxy_object` so we've to clone.
+                blocking_proxy_object
+                    .as_ref()
+                    .cloned()
+                    .or_else(|| Some(format!("{}ProxyBlocking", o)))
             } else {
-                Some(format!("{}Proxy", o))
+                async_proxy_object
+                    .as_ref()
+                    .cloned()
+                    .or_else(|| Some(format!("{}Proxy", o)))
             }
         }
         _ => None,
@@ -349,7 +443,11 @@ fn gen_proxy_property(
     m: &TraitItemMethod,
     async_opts: &AsyncOpts,
 ) -> TokenStream {
-    let AsyncOpts { usage, wait, azync } = async_opts;
+    let AsyncOpts {
+        usage,
+        wait,
+        blocking,
+    } = async_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let signature = &m.sig;
@@ -379,7 +477,9 @@ fn gen_proxy_property(
             None
         };
 
-        let receive = if *azync {
+        let receive = if *blocking {
+            quote! {}
+        } else {
             let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
             let receive = format_ident!("receive_{}_changed", method_name);
             let gen_doc = format!("Create a stream for the `{}` property changes. \
@@ -395,8 +495,6 @@ fn gen_proxy_property(
                     self.0.receive_property_stream(#property_name).await
                 }
             }
-        } else {
-            quote! {}
         };
 
         let cached_getter = format_ident!("cached_{}", method_name);
@@ -406,23 +504,23 @@ fn gen_proxy_property(
         );
 
         let connect = format_ident!("connect_{}_changed", method_name);
-        let handler = if *azync {
+        let handler = if *blocking {
+            parse_quote! { __H: FnMut(Option<&#zbus::zvariant::Value<'_>>) + Send + 'static }
+        } else {
             parse_quote! {
                 for<'v> __H: FnMut(Option<&'v #zbus::zvariant::Value<'_>>) ->
                     #zbus::export::futures_core::future::BoxFuture<'v, ()> + Send + 'static
             }
-        } else {
-            parse_quote! { __H: FnMut(Option<&#zbus::zvariant::Value<'_>>) + Send + 'static }
         };
-        let (proxy_method, link) = if *azync {
+        let (proxy_method, link) = if *blocking {
             (
                 "zbus::Proxy::connect_property_changed",
-                "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_property_changed",
+                "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_property_changed",
             )
         } else {
             (
                 "zbus::Proxy::connect_property_changed",
-                "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_property_changed",
+                "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_property_changed",
             )
         };
         let gen_doc = format!(
@@ -489,7 +587,11 @@ fn gen_proxy_signal(
     m: &TraitItemMethod,
     async_opts: &AsyncOpts,
 ) -> (TokenStream, TokenStream) {
-    let AsyncOpts { usage, wait, azync } = async_opts;
+    let AsyncOpts {
+        usage,
+        wait,
+        blocking,
+    } = async_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let method = format_ident!("connect_{}", snake_case_name);
@@ -523,7 +625,7 @@ fn gen_proxy_signal(
         .map(|(i, _)| Literal::usize_unsuffixed(i))
         .collect();
 
-    let (receive_signal, stream_types) = if async_opts.azync {
+    let (receive_signal, stream_types) = if !async_opts.blocking {
         let mut generics = m.sig.generics.clone();
         let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
         for param in generics
@@ -688,25 +790,25 @@ fn gen_proxy_signal(
         (quote! {}, quote! {})
     };
 
-    let handler = if *azync {
+    let handler = if *blocking {
+        quote! { ::std::ops::FnMut(#(#input_types),*) }
+    } else {
         quote! {
             ::std::ops::FnMut(
                 #(#input_types),*
             ) -> #zbus::export::futures_core::future::BoxFuture<'static, ()>
         }
-    } else {
-        quote! { ::std::ops::FnMut(#(#input_types),*) }
     };
 
-    let (proxy_method, link) = if *azync {
+    let (proxy_method, link) = if *blocking {
         (
             "zbus::Proxy::connect_signal",
-            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_signal",
+            "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_signal",
         )
     } else {
         (
             "zbus::Proxy::connect_signal",
-            "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_signal",
+            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_signal",
         )
     };
     let gen_doc = format!(

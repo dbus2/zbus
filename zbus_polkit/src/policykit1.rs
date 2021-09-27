@@ -445,5 +445,5 @@ trait Authority {
     fn backend_version(&self) -> fdo::Result<String>;
 }
 
-assert_impl_all!(AsyncAuthorityProxy<'_>: Send, Sync, Unpin);
 assert_impl_all!(AuthorityProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(AuthorityProxyBlocking<'_>: Send, Sync, Unpin);

@@ -14,11 +14,29 @@ mod utils;
 
 /// Attribute macro for defining D-Bus proxies (using [`zbus::Proxy`] and [`zbus::blocking::Proxy`]).
 ///
-/// The macro must be applied on a `trait T`. Two matching `impl T` will provide a synchronous Proxy
-/// implementation, named `TraitNameProxy` and an asynchronous one, named `AsyncTraitNameProxy`. The
+/// The macro must be applied on a `trait T`. Two matching `impl T` will provide an asynchronous Proxy
+/// implementation, named `TraitNameProxy` and a blocking one, named `TraitNameProxyBlocking`. The
 /// proxy instances can be created with the associated `new()` or `builder()` methods. The former
 /// doesn't take any argument and uses the default service name and path. The later allows you to
 /// specify non-default proxy arguments.
+///
+/// The following attributes are supported:
+///
+/// * `interface` - the name of the D-Bus interface this proxy is for.
+///
+/// * `default_service` - the default service this proxy should connect to.
+///
+/// * `default_path` - The default object path the method calls will be sent on and signals will be
+///   sent for by the target service.
+///
+/// * `gen_async` - Whether or not to generate the asynchronous Proxy type.
+///
+/// * `gen_blocking` - Whether or not to generate the blocking Proxy type. If set to `false`, the
+///   asynchronous proxy type will take the name `TraitNameProxy` (i-e no `Async` prefix).
+///
+/// * `async_name` - Specify the exact name of the asynchronous proxy type.
+///
+/// * `blocking_name` - Specify the exact name of the blocking proxy type.
 ///
 /// Each trait method will be expanded to call to the associated D-Bus remote interface.
 ///
@@ -35,6 +53,12 @@ mod utils;
 ///
 /// * `object` - methods that returns an [`ObjectPath`] can be annotated with the `object` attribute
 ///   to specify the proxy object to be constructed from the returned [`ObjectPath`].
+///
+/// * `async_object` - if the assumptions made by `object` attribute about naming of the
+///   asynchronous proxy type, don't fit your bill, you can use this to specify its exact name.
+///
+/// * `blocking_object` - if the assumptions made by `object` attribute about naming of the
+///   blocking proxy type, don't fit your bill, you can use this to specify its exact name.
 ///
 ///   NB: Any doc comments provided shall be appended to the ones added by the macro.
 ///
@@ -64,21 +88,26 @@ mod utils;
 ///     #[dbus_proxy(signal)]
 ///     fn some_signal(&self, arg1: &str, arg2: u32) -> fdo::Result<()>;
 ///
-///     #[dbus_proxy(object = "SomeOtherIface")]
-///     // The method will return a `SomeOtherIfaceProxy` or `AsyncSomeOtherIfaceProxy`, depending on
-///     // whether it is called on `SomeIfaceProxy` or `AsyncSomeIfaceProxy`, respectively.
+///     #[dbus_proxy(object = "SomeOtherIface", blocking_object = "SomeOtherIterfaceBlock")]
+///     // The method will return a `SomeOtherIfaceProxy` or `SomeOtherIfaceProxyBlock`, depending
+///     // on whether it is called on `SomeIfaceProxy` or `SomeIfaceProxyBlocking`, respectively.
+///     //
+///     // NB: We explicitly specified the exact name of the blocking proxy type. If we hadn't,
+///     // `SomeOtherIfaceProxyBlock` would have been assumed and expected. We could also specify
+///     // the specific name of the asynchronous proxy types, using the `async_object` attribute.
 ///     fn some_method(&self, arg1: &str);
 /// };
 ///
 /// #[dbus_proxy(
 ///     interface = "org.test.SomeOtherIface",
-///     default_service = "org.test.SomeOtherService"
+///     default_service = "org.test.SomeOtherService",
+///     blocking_name = "SomeOtherIterfaceBlock",
 /// )]
 /// trait SomeOtherIface {}
 ///
 /// let connection = Connection::session()?;
 /// // Use `builder` to override the default arguments, `new` otherwise.
-/// let proxy = SomeIfaceProxy::builder(&connection)
+/// let proxy = SomeIfaceProxyBlocking::builder(&connection)
 ///                .destination("org.another.Service")?
 ///                .cache_properties(false)
 ///                .build()?;
@@ -94,7 +123,7 @@ mod utils;
 ///
 /// // Now the same again, but asynchronous.
 /// block_on(async move {
-///     let proxy = AsyncSomeIfaceProxy::builder(&connection.into())
+///     let proxy = SomeIfaceProxy::builder(&connection.into())
 ///                    .cache_properties(false)
 ///                    .build()
 ///                    .await

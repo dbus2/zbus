@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let connection = Connection::session().await?;
 
     // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
-    let proxy = AsyncNotificationsProxy::new(&connection).await?;
+    let proxy = NotificationsProxy::new(&connection).await?;
     let reply = proxy.notify(
         "my-app",
         0,
@@ -268,7 +268,7 @@ use zbus_polkit::policykit1::*;
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let connection = Connection::system().await?;
-    let proxy = AsyncAuthorityProxy::new(&connection).await?;
+    let proxy = AuthorityProxy::new(&connection).await?;
     let subject = Subject::new_for_owner(std::process::id(), None, None)?;
     let result = proxy.check_authorization(
         &subject,

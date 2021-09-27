@@ -50,7 +50,7 @@
 //!     let connection = Connection::session().await?;
 //!
 //!     // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
-//!     let proxy = AsyncNotificationsProxy::new(&connection).await?;
+//!     let proxy = NotificationsProxy::new(&connection).await?;
 //!     let reply = proxy.notify(
 //!         "my-app",
 //!         0,
@@ -201,6 +201,7 @@ pub use interface::*;
 mod utils;
 pub use utils::*;
 
+#[macro_use]
 pub mod fdo;
 
 mod raw;
@@ -586,7 +587,10 @@ mod tests {
         .unwrap();
         let serial = client_conn.send_message(msg).unwrap();
 
-        crate::fdo::DBusProxy::new(&conn).unwrap().get_id().unwrap();
+        crate::blocking::fdo::DBusProxy::new(&conn)
+            .unwrap()
+            .get_id()
+            .unwrap();
 
         for m in stream {
             let msg = m.unwrap();
@@ -634,7 +638,7 @@ mod tests {
 
         let child = std::thread::spawn(move || {
             let conn = blocking::Connection::session().unwrap();
-            #[super::dbus_proxy(interface = "org.freedesktop.Secret.Service")]
+            #[super::dbus_proxy(interface = "org.freedesktop.Secret.Service", gen_async = false)]
             trait Secret {
                 fn open_session(
                     &self,
@@ -777,7 +781,7 @@ mod tests {
                 fn the_signal(&self) -> zbus::Result<()>;
             }
 
-            let proxy = ComeAndGoProxy::new(&conn).unwrap();
+            let proxy = ComeAndGoProxyBlocking::new(&conn).unwrap();
             let tx_clone = tx.clone();
             let (signal_tx, signal_rx) = channel();
             proxy

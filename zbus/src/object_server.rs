@@ -720,7 +720,7 @@ mod tests {
         bar: String,
     }
 
-    #[dbus_proxy]
+    #[dbus_proxy(gen_blocking = false)]
     trait MyIface {
         fn ping(&self) -> zbus::Result<u32>;
 
@@ -881,14 +881,14 @@ mod tests {
     }
 
     async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
-        let proxy = AsyncMyIfaceProxy::builder(&conn)
+        let proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
             // the server isn't yet running
             .cache_properties(false)
             .build()
             .await?;
-        let props_proxy = zbus::fdo::AsyncPropertiesProxy::builder(&conn)
+        let props_proxy = zbus::fdo::PropertiesProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
             .build()
@@ -958,7 +958,7 @@ mod tests {
         // issue#207: interface panics on incorrect number of args.
         assert!(proxy.call_method("CreateObj", &()).await.is_err());
 
-        let my_obj_proxy = AsyncMyIfaceProxy::builder(&conn)
+        let my_obj_proxy = MyIfaceProxy::builder(&conn)
             .destination("org.freedesktop.MyService")?
             .path("/zbus/test/MyObj")?
             .build()
@@ -1103,7 +1103,7 @@ mod tests {
         );
 
         // Let's ensure all names were released.
-        let proxy = zbus::fdo::AsyncDBusProxy::new(&service_conn).await.unwrap();
+        let proxy = zbus::fdo::DBusProxy::new(&service_conn).await.unwrap();
         assert_eq!(
             proxy
                 .name_has_owner("org.freedesktop.MyService".try_into().unwrap())

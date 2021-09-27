@@ -22,7 +22,7 @@ use gen::GenTrait;
 fn main() -> Result<(), Box<dyn Error>> {
     let input_src;
 
-    let proxy = |conn: Connection, service, path| -> zbus::fdo::IntrospectableProxy<'_> {
+    let proxy = |conn: Connection, service, path| -> zbus::blocking::fdo::IntrospectableProxy<'_> {
         ProxyBuilder::new(&conn)
             .destination(service)
             .expect("invalid destination")

@@ -530,7 +530,7 @@ impl Connection {
             // method).
             self.object_server().await;
 
-            fdo::AsyncDBusProxy::new(self)
+            fdo::DBusProxy::new(self)
                 .await?
                 .request_name(
                     well_known_name.clone(),
@@ -563,7 +563,7 @@ impl Connection {
             return Ok(false);
         }
 
-        fdo::AsyncDBusProxy::new(self)
+        fdo::DBusProxy::new(self)
             .await?
             .release_name(well_known_name)
             .await
@@ -776,7 +776,7 @@ impl Connection {
             None => {
                 let match_rule = signal.create_match_rule();
                 if let Some(match_rule) = &match_rule {
-                    fdo::AsyncDBusProxy::builder(self)
+                    fdo::DBusProxy::builder(self)
                         .cache_properties(false)
                         .build()
                         .await?
@@ -833,7 +833,7 @@ impl Connection {
 
                 if subscription.num_subscribers == 0 {
                     if let Some(match_rule) = &subscription.match_rule {
-                        fdo::AsyncDBusProxy::builder(self)
+                        fdo::DBusProxy::builder(self)
                             .cache_properties(false)
                             .build()
                             .await?
@@ -863,7 +863,7 @@ impl Connection {
     }
 
     async fn hello_bus(&self) -> Result<()> {
-        let dbus_proxy = fdo::AsyncDBusProxy::builder(self)
+        let dbus_proxy = fdo::DBusProxy::builder(self)
             .cache_properties(false)
             .build()
             .await?;
