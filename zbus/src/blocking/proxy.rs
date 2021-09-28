@@ -336,6 +336,7 @@ mod tests {
     use zbus_names::{BusName, UniqueName};
 
     use super::*;
+    use crate::blocking;
     use ntest::timeout;
     use test_env_log::test;
     use zvariant::Optional;
@@ -352,7 +353,7 @@ mod tests {
         let name_acquired_signaled = Arc::new(Event::new());
         let name_acquired_listener = name_acquired_signaled.listen();
 
-        let proxy = fdo::DBusProxy::new(&conn).unwrap();
+        let proxy = blocking::fdo::DBusProxy::new(&conn).unwrap();
         let well_known = "org.freedesktop.zbus.ProxySignalTest";
         let unique_name = conn.unique_name().unwrap().to_string();
         proxy
@@ -382,7 +383,7 @@ mod tests {
             })
             .unwrap();
 
-        fdo::DBusProxy::new(&conn)
+        blocking::fdo::DBusProxy::new(&conn)
             .unwrap()
             .request_name(
                 well_known.try_into().unwrap(),

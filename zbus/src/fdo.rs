@@ -16,15 +16,25 @@ use zvariant::{derive::Type, ObjectPath, Optional, OwnedObjectPath, OwnedValue, 
 
 use crate::{dbus_interface, dbus_proxy, DBusError, MessageHeader, ObjectServer, SignalContext};
 
-/// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
-#[dbus_proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
-trait Introspectable {
-    /// Returns an XML description of the object, including its interfaces (with signals and
-    /// methods), objects below it in the object path tree, and its properties.
-    fn introspect(&self) -> Result<String>;
+#[rustfmt::skip]
+macro_rules! gen_introspectable_proxy {
+    ($gen_async:literal, $gen_blocking:literal) => {
+        /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
+        #[dbus_proxy(
+            interface = "org.freedesktop.DBus.Introspectable",
+            default_path = "/",
+            gen_async = $gen_async,
+            gen_blocking = $gen_blocking,
+        )]
+        trait Introspectable {
+            /// Returns an XML description of the object, including its interfaces (with signals and
+            /// methods), objects below it in the object path tree, and its properties.
+            fn introspect(&self) -> Result<String>;
+        }
+    };
 }
 
-assert_impl_all!(AsyncIntrospectableProxy<'_>: Send, Sync, Unpin);
+gen_introspectable_proxy!(true, false);
 assert_impl_all!(IntrospectableProxy<'_>: Send, Sync, Unpin);
 
 /// Server-side implementation for the `org.freedesktop.DBus.Introspectable` interface.
@@ -48,40 +58,49 @@ impl Introspectable {
     }
 }
 
-/// Proxy for the `org.freedesktop.DBus.Properties` interface.
-#[dbus_proxy(interface = "org.freedesktop.DBus.Properties")]
-trait Properties {
-    /// Get a property value.
-    async fn get(
-        &self,
-        interface_name: InterfaceName<'_>,
-        property_name: &str,
-    ) -> Result<OwnedValue>;
+#[rustfmt::skip]
+macro_rules! gen_properties_proxy {
+    ($gen_async:literal, $gen_blocking:literal) => {
+        /// Proxy for the `org.freedesktop.DBus.Properties` interface.
+        #[dbus_proxy(
+            interface = "org.freedesktop.DBus.Properties",
+            gen_async = $gen_async,
+            gen_blocking = $gen_blocking,
+        )]
+        trait Properties {
+            /// Get a property value.
+            async fn get(
+                &self,
+                interface_name: InterfaceName<'_>,
+                property_name: &str,
+            ) -> Result<OwnedValue>;
 
-    /// Set a property value.
-    async fn set(
-        &self,
-        interface_name: InterfaceName<'_>,
-        property_name: &str,
-        value: &Value<'_>,
-    ) -> Result<()>;
+            /// Set a property value.
+            async fn set(
+                &self,
+                interface_name: InterfaceName<'_>,
+                property_name: &str,
+                value: &Value<'_>,
+            ) -> Result<()>;
 
-    /// Get all properties.
-    async fn get_all(
-        &self,
-        interface_name: InterfaceName<'_>,
-    ) -> Result<HashMap<String, OwnedValue>>;
+            /// Get all properties.
+            async fn get_all(
+                &self,
+                interface_name: InterfaceName<'_>,
+            ) -> Result<HashMap<String, OwnedValue>>;
 
-    #[dbus_proxy(signal)]
-    async fn properties_changed(
-        &self,
-        interface_name: InterfaceName<'_>,
-        changed_properties: HashMap<&str, Value<'_>>,
-        invalidated_properties: Vec<&str>,
-    ) -> Result<()>;
+            #[dbus_proxy(signal)]
+            async fn properties_changed(
+                &self,
+                interface_name: InterfaceName<'_>,
+                changed_properties: HashMap<&str, Value<'_>>,
+                invalidated_properties: Vec<&str>,
+            ) -> Result<()>;
+        }
+    };
 }
 
-assert_impl_all!(AsyncPropertiesProxy<'_>: Send, Sync, Unpin);
+gen_properties_proxy!(true, false);
 assert_impl_all!(PropertiesProxy<'_>: Send, Sync, Unpin);
 
 /// Server-side implementation for the `org.freedesktop.DBus.Properties` interface.
@@ -193,58 +212,80 @@ impl Properties {
 pub type ManagedObjects =
     HashMap<OwnedObjectPath, HashMap<OwnedInterfaceName, HashMap<String, OwnedValue>>>;
 
-/// Proxy for the `org.freedesktop.DBus.ObjectManager` interface.
-///
-/// **NB:** Changes to properties on existing interfaces are not reported using this interface.
-/// Please use [`PropertiesProxy::connect_properties_changed`] to monitor changes to properties on
-/// objects.
-#[dbus_proxy(interface = "org.freedesktop.DBus.ObjectManager")]
-trait ObjectManager {
-    /// The return value of this method is a dict whose keys are object paths. All returned object
-    /// paths are children of the object path implementing this interface, i.e. their object paths
-    /// start with the ObjectManager's object path plus '/'.
-    ///
-    /// Each value is a dict whose keys are interfaces names. Each value in this inner dict is the
-    /// same dict that would be returned by the org.freedesktop.DBus.Properties.GetAll() method for
-    /// that combination of object path and interface. If an interface has no properties, the empty
-    /// dict is returned.
-    fn get_managed_objects(&self) -> Result<ManagedObjects>;
+#[rustfmt::skip]
+macro_rules! gen_object_manager_proxy {
+    ($gen_async:literal, $gen_blocking:literal) => {
+        /// Proxy for the `org.freedesktop.DBus.ObjectManager` interface.
+        ///
+        /// **NB:** Changes to properties on existing interfaces are not reported using this interface.
+        /// Please use [`PropertiesProxy::connect_properties_changed`] to monitor changes to properties on
+        /// objects.
+        #[dbus_proxy(
+            interface = "org.freedesktop.DBus.ObjectManager",
+            gen_async = $gen_async,
+            gen_blocking = $gen_blocking,
+        )]
+        trait ObjectManager {
+            /// The return value of this method is a dict whose keys are object paths. All returned object
+            /// paths are children of the object path implementing this interface, i.e. their object paths
+            /// start with the ObjectManager's object path plus '/'.
+            ///
+            /// Each value is a dict whose keys are interfaces names. Each value in this inner dict is the
+            /// same dict that would be returned by the org.freedesktop.DBus.Properties.GetAll() method for
+            /// that combination of object path and interface. If an interface has no properties, the empty
+            /// dict is returned.
+            fn get_managed_objects(&self) -> Result<ManagedObjects>;
 
-    /// This signal is emitted when either a new object is added or when an existing object gains
-    /// one or more interfaces. The `interfaces_and_properties` argument contains a map with the
-    /// interfaces and properties (if any) that have been added to the given object path.
-    #[dbus_proxy(signal)]
-    fn interfaces_added(
-        &self,
-        object_path: ObjectPath<'_>,
-        interfaces_and_properties: HashMap<&str, HashMap<&str, Value<'_>>>,
-    ) -> Result<()>;
+            /// This signal is emitted when either a new object is added or when an existing object gains
+            /// one or more interfaces. The `interfaces_and_properties` argument contains a map with the
+            /// interfaces and properties (if any) that have been added to the given object path.
+            #[dbus_proxy(signal)]
+            fn interfaces_added(
+                &self,
+                object_path: ObjectPath<'_>,
+                interfaces_and_properties: HashMap<&str, HashMap<&str, Value<'_>>>,
+            ) -> Result<()>;
 
-    /// This signal is emitted whenever an object is removed or it loses one or more interfaces.
-    /// The `interfaces` parameters contains a list of the interfaces that were removed.
-    #[dbus_proxy(signal)]
-    fn interfaces_removed(&self, object_path: ObjectPath<'_>, interfaces: Vec<&str>) -> Result<()>;
+            /// This signal is emitted whenever an object is removed or it loses one or more interfaces.
+            /// The `interfaces` parameters contains a list of the interfaces that were removed.
+            #[dbus_proxy(signal)]
+            fn interfaces_removed(
+                &self,
+                object_path: ObjectPath<'_>,
+                interfaces: Vec<&str>,
+            ) -> Result<()>;
+        }
+    };
 }
 
-assert_impl_all!(AsyncObjectManagerProxy<'_>: Send, Sync, Unpin);
+gen_object_manager_proxy!(true, false);
 assert_impl_all!(ObjectManagerProxy<'_>: Send, Sync, Unpin);
 
-/// Proxy for the `org.freedesktop.DBus.Peer` interface.
-#[dbus_proxy(interface = "org.freedesktop.DBus.Peer")]
-trait Peer {
-    /// On receipt, an application should do nothing other than reply as usual. It does not matter
-    /// which object path a ping is sent to.
-    fn ping(&self) -> Result<()>;
+#[rustfmt::skip]
+macro_rules! gen_peer_proxy {
+    ($gen_async:literal, $gen_blocking:literal) => {
+        /// Proxy for the `org.freedesktop.DBus.Peer` interface.
+        #[dbus_proxy(
+            interface = "org.freedesktop.DBus.Peer",
+            gen_async = $gen_async,
+            gen_blocking = $gen_blocking,
+        )]
+        trait Peer {
+            /// On receipt, an application should do nothing other than reply as usual. It does not matter
+            /// which object path a ping is sent to.
+            fn ping(&self) -> Result<()>;
 
-    /// An application should reply the containing a hex-encoded UUID representing the identity of
-    /// the machine the process is running on. This UUID must be the same for all processes on a
-    /// single system at least until that system next reboots. It should be the same across reboots
-    /// if possible, but this is not always possible to implement and is not guaranteed. It does not
-    /// matter which object path a GetMachineId is sent to.
-    fn get_machine_id(&self) -> Result<String>;
+            /// An application should reply the containing a hex-encoded UUID representing the identity of
+            /// the machine the process is running on. This UUID must be the same for all processes on a
+            /// single system at least until that system next reboots. It should be the same across reboots
+            /// if possible, but this is not always possible to implement and is not guaranteed. It does not
+            /// matter which object path a GetMachineId is sent to.
+            fn get_machine_id(&self) -> Result<String>;
+        }
+    };
 }
 
-assert_impl_all!(AsyncPeerProxy<'_>: Send, Sync, Unpin);
+gen_peer_proxy!(true, false);
 assert_impl_all!(PeerProxy<'_>: Send, Sync, Unpin);
 
 pub(crate) struct Peer;
@@ -277,31 +318,49 @@ impl Peer {
     }
 }
 
-/// Proxy for the `org.freedesktop.DBus.Monitoring` interface.
-#[dbus_proxy(interface = "org.freedesktop.DBus.Monitoring")]
-trait Monitoring {
-    /// Converts the connection into a monitor connection which can be used as a
-    /// debugging/monitoring tool.
-    fn become_monitor(&self, n1: &[&str], n2: u32) -> Result<()>;
+#[rustfmt::skip]
+macro_rules! gen_monitoring_proxy {
+    ($gen_async:literal, $gen_blocking:literal) => {
+        /// Proxy for the `org.freedesktop.DBus.Monitoring` interface.
+        #[dbus_proxy(
+            interface = "org.freedesktop.DBus.Monitoring",
+            gen_async = $gen_async,
+            gen_blocking = $gen_blocking,
+        )]
+        trait Monitoring {
+            /// Converts the connection into a monitor connection which can be used as a
+            /// debugging/monitoring tool.
+            fn become_monitor(&self, n1: &[&str], n2: u32) -> Result<()>;
+        }
+    };
 }
 
-assert_impl_all!(AsyncMonitoringProxy<'_>: Send, Sync, Unpin);
+gen_monitoring_proxy!(true, false);
 assert_impl_all!(MonitoringProxy<'_>: Send, Sync, Unpin);
 
-/// Proxy for the `org.freedesktop.DBus.Stats` interface.
-#[dbus_proxy(interface = "org.freedesktop.DBus.Debug.Stats")]
-trait Stats {
-    /// GetStats (undocumented)
-    fn get_stats(&self) -> Result<Vec<HashMap<String, OwnedValue>>>;
+#[rustfmt::skip]
+macro_rules! gen_stats_proxy {
+    ($gen_async:literal, $gen_blocking:literal) => {
+        /// Proxy for the `org.freedesktop.DBus.Stats` interface.
+        #[dbus_proxy(
+            interface = "org.freedesktop.DBus.Debug.Stats",
+            gen_async = $gen_async,
+            gen_blocking = $gen_blocking,
+        )]
+        trait Stats {
+            /// GetStats (undocumented)
+            fn get_stats(&self) -> Result<Vec<HashMap<String, OwnedValue>>>;
 
-    /// GetConnectionStats (undocumented)
-    fn get_connection_stats(&self, n1: &str) -> Result<Vec<HashMap<String, OwnedValue>>>;
+            /// GetConnectionStats (undocumented)
+            fn get_connection_stats(&self, n1: &str) -> Result<Vec<HashMap<String, OwnedValue>>>;
 
-    /// GetAllMatchRules (undocumented)
-    fn get_all_match_rules(&self) -> Result<Vec<HashMap<String, Vec<String>>>>;
+            /// GetAllMatchRules (undocumented)
+            fn get_all_match_rules(&self) -> Result<Vec<HashMap<String, Vec<String>>>>;
+        }
+    };
 }
 
-assert_impl_all!(AsyncStatsProxy<'_>: Send, Sync, Unpin);
+gen_stats_proxy!(true, false);
 assert_impl_all!(StatsProxy<'_>: Send, Sync, Unpin);
 
 /// The flags used by the bus [`request_name`] method.
@@ -394,117 +453,130 @@ pub enum ReleaseNameReply {
 
 assert_impl_all!(ReleaseNameReply: Send, Sync, Unpin);
 
-/// Proxy for the `org.freedesktop.DBus` interface.
-#[dbus_proxy(interface = "org.freedesktop.DBus")]
-trait DBus {
-    /// Adds a match rule to match messages going through the message bus
-    fn add_match(&self, rule: &str) -> Result<()>;
+#[rustfmt::skip]
+macro_rules! gen_dbus_proxy {
+    ($gen_async:literal, $gen_blocking:literal) => {
+        /// Proxy for the `org.freedesktop.DBus` interface.
+        #[dbus_proxy(
+            interface = "org.freedesktop.DBus",
+            gen_async = $gen_async,
+            gen_blocking = $gen_blocking,
+        )]
+        trait DBus {
+            /// Adds a match rule to match messages going through the message bus
+            fn add_match(&self, rule: &str) -> Result<()>;
 
-    /// Returns auditing data used by Solaris ADT, in an unspecified binary format.
-    fn get_adt_audit_session_data(&self, bus_name: BusName<'_>) -> Result<Vec<u8>>;
+            /// Returns auditing data used by Solaris ADT, in an unspecified binary format.
+            fn get_adt_audit_session_data(&self, bus_name: BusName<'_>) -> Result<Vec<u8>>;
 
-    /// Returns as many credentials as possible for the process connected to the server.
-    fn get_connection_credentials(
-        &self,
-        bus_name: BusName<'_>,
-    ) -> Result<HashMap<String, OwnedValue>>;
+            /// Returns as many credentials as possible for the process connected to the server.
+            fn get_connection_credentials(
+                &self,
+                bus_name: BusName<'_>,
+            ) -> Result<HashMap<String, OwnedValue>>;
 
-    /// Returns the security context used by SELinux, in an unspecified format.
-    #[dbus_proxy(name = "GetConnectionSELinuxSecurityContext")]
-    fn get_connection_selinux_security_context(&self, bus_name: BusName<'_>) -> Result<Vec<u8>>;
+            /// Returns the security context used by SELinux, in an unspecified format.
+            #[dbus_proxy(name = "GetConnectionSELinuxSecurityContext")]
+            fn get_connection_selinux_security_context(
+                &self,
+                bus_name: BusName<'_>,
+            ) -> Result<Vec<u8>>;
 
-    /// Returns the Unix process ID of the process connected to the server.
-    #[dbus_proxy(name = "GetConnectionUnixProcessID")]
-    fn get_connection_unix_process_id(&self, bus_name: BusName<'_>) -> Result<u32>;
+            /// Returns the Unix process ID of the process connected to the server.
+            #[dbus_proxy(name = "GetConnectionUnixProcessID")]
+            fn get_connection_unix_process_id(&self, bus_name: BusName<'_>) -> Result<u32>;
 
-    /// Returns the Unix user ID of the process connected to the server.
-    fn get_connection_unix_user(&self, bus_name: BusName<'_>) -> Result<u32>;
+            /// Returns the Unix user ID of the process connected to the server.
+            fn get_connection_unix_user(&self, bus_name: BusName<'_>) -> Result<u32>;
 
-    /// Gets the unique ID of the bus.
-    fn get_id(&self) -> Result<String>;
+            /// Gets the unique ID of the bus.
+            fn get_id(&self) -> Result<String>;
 
-    /// Returns the unique connection name of the primary owner of the name given.
-    fn get_name_owner(&self, name: BusName<'_>) -> Result<OwnedUniqueName>;
+            /// Returns the unique connection name of the primary owner of the name given.
+            fn get_name_owner(&self, name: BusName<'_>) -> Result<OwnedUniqueName>;
 
-    /// Returns the unique name assigned to the connection.
-    fn hello(&self) -> Result<OwnedUniqueName>;
+            /// Returns the unique name assigned to the connection.
+            fn hello(&self) -> Result<OwnedUniqueName>;
 
-    /// Returns a list of all names that can be activated on the bus.
-    fn list_activatable_names(&self) -> Result<Vec<OwnedBusName>>;
+            /// Returns a list of all names that can be activated on the bus.
+            fn list_activatable_names(&self) -> Result<Vec<OwnedBusName>>;
 
-    /// Returns a list of all currently-owned names on the bus.
-    fn list_names(&self) -> Result<Vec<OwnedBusName>>;
+            /// Returns a list of all currently-owned names on the bus.
+            fn list_names(&self) -> Result<Vec<OwnedBusName>>;
 
-    /// List the connections currently queued for a bus name.
-    fn list_queued_owners(&self, name: WellKnownName<'_>) -> Result<Vec<OwnedUniqueName>>;
+            /// List the connections currently queued for a bus name.
+            fn list_queued_owners(&self, name: WellKnownName<'_>) -> Result<Vec<OwnedUniqueName>>;
 
-    /// Checks if the specified name exists (currently has an owner).
-    fn name_has_owner(&self, name: BusName<'_>) -> Result<bool>;
+            /// Checks if the specified name exists (currently has an owner).
+            fn name_has_owner(&self, name: BusName<'_>) -> Result<bool>;
 
-    /// Ask the message bus to release the method caller's claim to the given name.
-    fn release_name(&self, name: WellKnownName<'_>) -> Result<ReleaseNameReply>;
+            /// Ask the message bus to release the method caller's claim to the given name.
+            fn release_name(&self, name: WellKnownName<'_>) -> Result<ReleaseNameReply>;
 
-    /// Reload server configuration.
-    fn reload_config(&self) -> Result<()>;
+            /// Reload server configuration.
+            fn reload_config(&self) -> Result<()>;
 
-    /// Removes the first rule that matches.
-    fn remove_match(&self, rule: &str) -> Result<()>;
+            /// Removes the first rule that matches.
+            fn remove_match(&self, rule: &str) -> Result<()>;
 
-    /// Ask the message bus to assign the given name to the method caller.
-    fn request_name(
-        &self,
-        name: WellKnownName<'_>,
-        flags: BitFlags<RequestNameFlags>,
-    ) -> Result<RequestNameReply>;
+            /// Ask the message bus to assign the given name to the method caller.
+            fn request_name(
+                &self,
+                name: WellKnownName<'_>,
+                flags: BitFlags<RequestNameFlags>,
+            ) -> Result<RequestNameReply>;
 
-    /// Tries to launch the executable associated with a name (service
-    /// activation), as an explicit request.
-    fn start_service_by_name(&self, name: WellKnownName<'_>, flags: u32) -> Result<u32>;
+            /// Tries to launch the executable associated with a name (service
+            /// activation), as an explicit request.
+            fn start_service_by_name(&self, name: WellKnownName<'_>, flags: u32) -> Result<u32>;
 
-    /// This method adds to or modifies that environment when activating services.
-    fn update_activation_environment(&self, environment: HashMap<&str, &str>) -> Result<()>;
+            /// This method adds to or modifies that environment when activating services.
+            fn update_activation_environment(&self, environment: HashMap<&str, &str>)
+                -> Result<()>;
 
-    /// This signal indicates that the owner of a name has
-    /// changed. It's also the signal to use to detect the appearance
-    /// of new names on the bus.
-    #[dbus_proxy(signal)]
-    fn name_owner_changed(
-        &self,
-        name: BusName<'_>,
-        old_owner: Optional<UniqueName<'_>>,
-        new_owner: Optional<UniqueName<'_>>,
-    );
+            /// This signal indicates that the owner of a name has
+            /// changed. It's also the signal to use to detect the appearance
+            /// of new names on the bus.
+            #[dbus_proxy(signal)]
+            fn name_owner_changed(
+                &self,
+                name: BusName<'_>,
+                old_owner: Optional<UniqueName<'_>>,
+                new_owner: Optional<UniqueName<'_>>,
+            );
 
-    /// This signal is sent to a specific application when it loses ownership of a name.
-    #[dbus_proxy(signal)]
-    fn name_lost(&self, name: BusName<'_>);
+            /// This signal is sent to a specific application when it loses ownership of a name.
+            #[dbus_proxy(signal)]
+            fn name_lost(&self, name: BusName<'_>);
 
-    /// This signal is sent to a specific application when it gains ownership of a name.
-    #[dbus_proxy(signal)]
-    fn name_acquired(&self, name: BusName<'_>);
+            /// This signal is sent to a specific application when it gains ownership of a name.
+            #[dbus_proxy(signal)]
+            fn name_acquired(&self, name: BusName<'_>);
 
-    /// This property lists abstract “features” provided by the message bus, and can be used by
-    /// clients to detect the capabilities of the message bus with which they are communicating.
-    #[dbus_proxy(property)]
-    fn features(&self) -> Result<Vec<String>>;
+            /// This property lists abstract “features” provided by the message bus, and can be used by
+            /// clients to detect the capabilities of the message bus with which they are communicating.
+            #[dbus_proxy(property)]
+            fn features(&self) -> Result<Vec<String>>;
 
-    /// This property lists interfaces provided by the `/org/freedesktop/DBus` object, and can be
-    /// used by clients to detect the capabilities of the message bus with which they are
-    /// communicating. Unlike the standard Introspectable interface, querying this property does not
-    /// require parsing XML. This property was added in version 1.11.x of the reference
-    /// implementation of the message bus.
-    ///
-    /// The standard `org.freedesktop.DBus` and `org.freedesktop.DBus.Properties` interfaces are not
-    /// included in the value of this property, because their presence can be inferred from the fact
-    /// that a method call on `org.freedesktop.DBus.Properties` asking for properties of
-    /// `org.freedesktop.DBus` was successful. The standard `org.freedesktop.DBus.Peer` and
-    /// `org.freedesktop.DBus.Introspectable` interfaces are not included in the value of this
-    /// property either, because they do not indicate features of the message bus implementation.
-    #[dbus_proxy(property)]
-    fn interfaces(&self) -> Result<Vec<OwnedInterfaceName>>;
+            /// This property lists interfaces provided by the `/org/freedesktop/DBus` object, and can be
+            /// used by clients to detect the capabilities of the message bus with which they are
+            /// communicating. Unlike the standard Introspectable interface, querying this property does not
+            /// require parsing XML. This property was added in version 1.11.x of the reference
+            /// implementation of the message bus.
+            ///
+            /// The standard `org.freedesktop.DBus` and `org.freedesktop.DBus.Properties` interfaces are not
+            /// included in the value of this property, because their presence can be inferred from the fact
+            /// that a method call on `org.freedesktop.DBus.Properties` asking for properties of
+            /// `org.freedesktop.DBus` was successful. The standard `org.freedesktop.DBus.Peer` and
+            /// `org.freedesktop.DBus.Introspectable` interfaces are not included in the value of this
+            /// property either, because they do not indicate features of the message bus implementation.
+            #[dbus_proxy(property)]
+            fn interfaces(&self) -> Result<Vec<OwnedInterfaceName>>;
+        }
+    };
 }
 
-assert_impl_all!(AsyncDBusProxy<'_>: Send, Sync, Unpin);
+gen_dbus_proxy!(true, false);
 assert_impl_all!(DBusProxy<'_>: Send, Sync, Unpin);
 
 /// Errors from <https://gitlab.freedesktop.org/dbus/dbus/-/blob/master/dbus/dbus-protocol.h>
@@ -720,7 +792,7 @@ mod tests {
         let name_acquired_signaled = Arc::new(Event::new());
         let name_acquired_listener = name_acquired_signaled.listen();
 
-        let proxy = fdo::DBusProxy::new(&conn).unwrap();
+        let proxy = crate::blocking::fdo::DBusProxy::new(&conn).unwrap();
 
         let well_known = "org.freedesktop.zbus.FdoSignalConnectTest";
         let mut unique_name = Some(conn.unique_name().unwrap().clone());
@@ -791,7 +863,7 @@ mod tests {
             });
         }
 
-        let proxy = fdo::AsyncDBusProxy::new(&conn).await.unwrap();
+        let proxy = fdo::DBusProxy::new(&conn).await.unwrap();
 
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
