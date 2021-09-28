@@ -616,10 +616,14 @@ impl<'a> Proxy<'a> {
         let proxy = self.properties_proxy().await?;
 
         let mut stream = proxy.receive_properties_changed().await?;
-        let properties = self.properties.clone();
+        let properties = Arc::downgrade(&self.properties);
         let task = self.inner.conn.executor().spawn(async move {
             while let Some(changed) = stream.next().await {
                 if let Ok(args) = changed.args() {
+                    let properties = match properties.upgrade() {
+                        Some(p) => p,
+                        None => break,
+                    };
                     properties.update_cache(&args);
 
                     for inval in args.invalidated_properties() {
