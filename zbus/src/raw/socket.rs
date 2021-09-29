@@ -67,9 +67,13 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
 
 /// Trait representing some transport layer over which the DBus protocol can be used
 ///
-/// The crate provides an implementation of it for std's [`UnixStream`] on unix platforms.
-/// You will want to implement this trait to integrate zbus with a async-runtime-aware
-/// implementation of the socket, for example.
+/// The crate provides implementations for `async_io` and `tokio`'s `UnixStream` wrappers if you
+/// enable the corresponding crate features (`async_io` is enabled by default).
+///
+/// You can implement it manually to integrate with other runtimes or other dbus transports.  Feel
+/// free to submit pull requests to add support for more runtimes to zbus itself so rust's orphan
+/// rules don't force the use of a wrapper struct (and to avoid duplicating the work across many
+/// projects).
 pub trait Socket: std::fmt::Debug + Send + Sync {
     /// Attempt to receive a message from the socket.
     ///
@@ -178,5 +182,58 @@ impl Socket for Async<UnixStream> {
     fn as_raw_fd(&self) -> RawFd {
         // This causes a name collision if imported
         std::os::unix::io::AsRawFd::as_raw_fd(self.get_ref())
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl Socket for tokio::net::UnixStream {
+    fn poll_recvmsg(
+        &mut self,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<(usize, Vec<OwnedFd>)>> {
+        loop {
+            match self.try_io(tokio::io::Interest::READABLE, || {
+                fd_recvmsg(self.as_raw_fd(), buf)
+            }) {
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => match self.poll_read_ready(cx) {
+                    Poll::Pending => return Poll::Pending,
+                    Poll::Ready(res) => res?,
+                },
+                v => return Poll::Ready(v),
+            }
+        }
+    }
+
+    fn poll_sendmsg(
+        &mut self,
+        cx: &mut Context<'_>,
+        buffer: &[u8],
+        fds: &[RawFd],
+    ) -> Poll<io::Result<usize>> {
+        loop {
+            match self.try_io(tokio::io::Interest::WRITABLE, || {
+                fd_sendmsg(self.as_raw_fd(), buffer, fds)
+            }) {
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    match self.poll_write_ready(cx) {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready(res) => res?,
+                    }
+                }
+                v => return Poll::Ready(v),
+            }
+        }
+    }
+
+    fn close(&self) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn as_raw_fd(&self) -> RawFd {
+        // This causes a name collision if imported
+        std::os::unix::io::AsRawFd::as_raw_fd(self)
     }
 }
