@@ -655,7 +655,7 @@ impl<'a> Proxy<'a> {
     /// was invalidated by an update, because caching was disabled for this property or proxy, or
     /// because the cache has not yet been populated.  Use `get_property` to fetch the value from
     /// the peer.
-    pub fn get_cached_property<T>(&self, property_name: &str) -> fdo::Result<Option<T>>
+    pub fn cached_property<T>(&self, property_name: &str) -> fdo::Result<Option<T>>
     where
         T: TryFrom<OwnedValue>,
     {
@@ -700,7 +700,7 @@ impl<'a> Proxy<'a> {
         T: TryFrom<OwnedValue>,
     {
         let value = if self.has_cached_properties() {
-            if let Some(value) = self.get_cached_property(property_name)? {
+            if let Some(value) = self.cached_property(property_name)? {
                 return Ok(value);
             } else {
                 let value = self.get_proxy_property(property_name).await?;

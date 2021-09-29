@@ -548,7 +548,7 @@ fn gen_proxy_property(
                 ::std::option::Option<<#ret_type as #zbus::ResultAdapter>::Ok>,
                 <#ret_type as #zbus::ResultAdapter>::Err>
             {
-                self.0.get_cached_property(#property_name).map_err(::std::convert::Into::into)
+                self.0.cached_property(#property_name).map_err(::std::convert::Into::into)
             }
 
             #[doc = #gen_doc]
