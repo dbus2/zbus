@@ -155,11 +155,11 @@ impl<'a> Proxy<'a> {
     /// was invalidated by an update, because caching was disabled for this property or proxy, or
     /// because the cache has not yet been populated.  Use `get_property` to fetch the value from
     /// the peer.
-    pub fn get_cached_property<T>(&self, property_name: &str) -> fdo::Result<Option<T>>
+    pub fn cached_property<T>(&self, property_name: &str) -> fdo::Result<Option<T>>
     where
         T: TryFrom<OwnedValue>,
     {
-        self.azync.get_cached_property(property_name)
+        self.azync.cached_property(property_name)
     }
 
     /// Get the property `property_name`.
