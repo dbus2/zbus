@@ -2,7 +2,7 @@
 >
 > This version of the book is based on zbus 2.0 API, which is currently in beta stages. For using the
 > sample code in this book, you'll need to explicitly depend on the
-> [latest beta](https://crates.io/crates/zbus/2.0.0-beta.6).
+> [latest beta](https://crates.io/crates/zbus/2.0.0-beta.7).
 > 
 > The 1.0 version of this book is available [here](https://dbus.pages.freedesktop.org/zbus/1.0/).
 
@@ -324,4 +324,4 @@ object_server.with_mut(
 ```
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
-[didoc]: https://docs.rs/zbus/2.0.0-beta.6/zbus/attr.dbus_interface.html
+[didoc]: https://docs.rs/zbus/2.0.0-beta.7/zbus/attr.dbus_interface.html
