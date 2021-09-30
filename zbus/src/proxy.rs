@@ -1,5 +1,5 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
-use async_channel::bounded;
+use async_channel::{bounded, Receiver};
 use async_lock::Mutex;
 use async_recursion::async_recursion;
 use async_task::Task;
@@ -701,7 +701,7 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub async fn receive_signal<M>(&self, signal_name: M) -> Result<SignalStream<'a>>
+    pub async fn receive_signal<M>(&self, signal_name: M) -> Result<SignalStream>
     where
         M: TryInto<MemberName<'static>>,
         M::Error: Into<Error>,
@@ -752,7 +752,7 @@ impl<'a> Proxy<'a> {
         ));
 
         Ok(SignalStream {
-            stream: recv.boxed(),
+            stream: recv,
             conn,
             subscription_id,
             handler_id,
@@ -882,27 +882,25 @@ impl<'a> Proxy<'a> {
 /// A [`stream::Stream`] implementation that yields signal [messages](`Message`).
 ///
 /// Use [`Proxy::receive_signal`] to create an instance of this type.
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
-pub struct SignalStream<'s> {
-    #[derivative(Debug = "ignore")]
-    stream: stream::BoxStream<'s, Arc<Message>>,
+#[derive(Debug)]
+pub struct SignalStream {
+    stream: Receiver<Arc<Message>>,
     conn: Connection,
     subscription_id: Option<u64>,
     handler_id: SignalHandlerKey,
 }
 
-assert_impl_all!(SignalStream<'_>: Send, Unpin);
+assert_impl_all!(SignalStream: Send, Sync, Unpin);
 
-impl stream::Stream for SignalStream<'_> {
+impl stream::Stream for SignalStream {
     type Item = Arc<Message>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        stream::Stream::poll_next(self.get_mut().stream.as_mut(), cx)
+        stream::Stream::poll_next(Pin::new(&mut self.get_mut().stream), cx)
     }
 }
 
-impl std::ops::Drop for SignalStream<'_> {
+impl std::ops::Drop for SignalStream {
     fn drop(&mut self) {
         if let Some(id) = self.subscription_id.take() {
             self.conn.queue_unsubscribe_signal(id);

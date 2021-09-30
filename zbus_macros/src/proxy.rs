@@ -658,7 +658,7 @@ fn gen_proxy_signal(
         let receive_signal = quote! {
             #[doc = #receive_gen_doc]
             #(#doc)*
-            pub async fn #receiver_name(&self) -> #zbus::Result<#stream_name<'c>>
+            pub async fn #receiver_name(&self) -> #zbus::Result<#stream_name>
             {
                 self.receive_signal(#signal_name).await.map(#stream_name)
             }
@@ -732,13 +732,13 @@ fn gen_proxy_signal(
         };
         let stream_types = quote! {
             #[doc = #stream_gen_doc]
-            pub struct #stream_name<'s>(#zbus::SignalStream<'s>);
+            pub struct #stream_name(#zbus::SignalStream);
 
             #zbus::export::static_assertions::assert_impl_all!(
-                #stream_name<'_>: ::std::marker::Send, ::std::marker::Unpin
+                #stream_name: ::std::marker::Send, ::std::marker::Unpin
             );
 
-            impl #zbus::export::futures_core::stream::Stream for #stream_name<'_> {
+            impl #zbus::export::futures_core::stream::Stream for #stream_name {
                 type Item = #signal_name_ident;
 
                 fn poll_next(
@@ -753,27 +753,27 @@ fn gen_proxy_signal(
                 }
             }
 
-            impl<'s> #stream_name<'s> {
+            impl #stream_name {
                 /// Consumes `self`, returning the underlying `zbus::SignalStream`.
-                pub fn into_inner(self) -> #zbus::SignalStream<'s> {
+                pub fn into_inner(self) -> #zbus::SignalStream {
                     self.0
                 }
 
                 /// The reference to the underlying `zbus::SignalStream`.
-                pub fn inner(&self) -> & #zbus::SignalStream<'s> {
+                pub fn inner(&self) -> & #zbus::SignalStream {
                     &self.0
                 }
             }
 
-            impl<'s> std::ops::Deref for #stream_name<'s> {
-                type Target = #zbus::SignalStream<'s>;
+            impl std::ops::Deref for #stream_name {
+                type Target = #zbus::SignalStream;
 
                 fn deref(&self) -> &Self::Target {
                     &self.0
                 }
             }
 
-            impl ::std::ops::DerefMut for #stream_name<'_> {
+            impl ::std::ops::DerefMut for #stream_name {
                 fn deref_mut(&mut self) -> &mut Self::Target {
                     &mut self.0
                 }
