@@ -6,7 +6,7 @@ use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_task::Task;
 use event_listener::EventListener;
 use futures_core::future::BoxFuture;
-use futures_util::stream::FuturesUnordered;
+use futures_util::stream::{FuturesUnordered, Stream};
 use once_cell::sync::OnceCell;
 use slotmap::DenseSlotMap;
 use static_assertions::assert_impl_all;
@@ -176,6 +176,8 @@ struct ConnectionInner {
     #[allow(unused)]
     msg_receiver_task: Task<()>,
 
+    signal_handler_task: OnceCell<Task<()>>,
+
     signal_subscriptions: Mutex<HashMap<u64, SignalSubscription>>,
 
     object_server: OnceCell<RwLock<blocking::ObjectServer>>,
@@ -240,30 +242,31 @@ impl MessageReceiverTask {
             };
 
             let msg = Arc::new(msg);
-            let futures = FuturesUnordered::new();
-            self.start_handlers(&msg, &futures);
-            // Call all the ordered handlers for this message and wait for them to complete before
-            // handling the next message
-            let () = futures.collect().await;
-
             // Ignoring errors. See comment above.
             let _ = self.msg_sender.broadcast(msg.clone()).await;
+        }
+    }
+}
+
+impl ConnectionTaskShared {
+    async fn signal_handler_task(
+        self: Arc<Self>,
+        mut stream: impl Stream<Item = Arc<Message>> + Unpin,
+    ) {
+        while let Some(msg) = stream.next().await {
+            let () = self.start_handlers(&msg).collect().await;
         }
     }
 
     fn start_handlers<'msg>(
         &self,
         msg: &'msg Arc<Message>,
-        futures: &FuturesUnordered<BoxFuture<'msg, ()>>,
-    ) {
+    ) -> FuturesUnordered<BoxFuture<'msg, ()>> {
+        let futures = FuturesUnordered::new();
         if msg.message_type() != MessageType::Signal {
-            return;
+            return futures;
         }
-        let mut handlers = self
-            .task_shared
-            .signal_handlers
-            .lock()
-            .expect("poisoned lock");
+        let mut handlers = self.signal_handlers.lock().expect("poisoned lock");
         // TODO if we have lots of handlers, we might want to do smarter filtering
         for (_key, handler) in handlers.iter_mut() {
             if let Some(member) = &handler.filter_member {
@@ -283,6 +286,7 @@ impl MessageReceiverTask {
             }
             futures.push((handler.handler)(msg));
         }
+        futures
     }
 }
 
@@ -839,6 +843,12 @@ impl Connection {
     }
 
     pub(crate) fn add_signal_handler(&self, handler: SignalHandler) -> SignalHandlerKey {
+        self.inner.signal_handler_task.get_or_init(|| {
+            let task_shared = self.inner.task_shared.clone();
+            let stream = self.msg_receiver.activate_cloned();
+            self.executor()
+                .spawn(task_shared.signal_handler_task(stream))
+        });
         let mut handlers = self
             .inner
             .task_shared
@@ -1041,6 +1051,7 @@ impl Connection {
                 unique_name: OnceCell::new(),
                 signal_subscriptions: Mutex::new(HashMap::new()),
                 object_server: OnceCell::new(),
+                signal_handler_task: OnceCell::new(),
                 object_server_dispatch_task: OnceCell::new(),
                 executor: executor.clone(),
                 msg_receiver_task,
