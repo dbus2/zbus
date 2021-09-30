@@ -5,7 +5,10 @@ use async_io::block_on;
 use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_task::Task;
 use event_listener::EventListener;
+use futures_core::future::BoxFuture;
+use futures_util::stream::FuturesUnordered;
 use once_cell::sync::OnceCell;
+use slotmap::DenseSlotMap;
 use static_assertions::assert_impl_all;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
@@ -108,10 +111,48 @@ struct SignalSubscription {
     match_rule: Option<String>,
 }
 
+slotmap::new_key_type! {
+    pub(crate) struct SignalHandlerKey;
+}
+
+type SignalHandlerHandlerAsyncFunction =
+    Box<dyn for<'msg> FnMut(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send>;
+
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
+pub(crate) struct SignalHandler {
+    pub(crate) filter_member: Option<MemberName<'static>>,
+    pub(crate) filter_path: Option<ObjectPath<'static>>,
+    pub(crate) filter_interface: Option<InterfaceName<'static>>,
+    #[derivative(Debug = "ignore")]
+    handler: SignalHandlerHandlerAsyncFunction,
+}
+
+impl SignalHandler {
+    pub fn signal<H>(
+        path: ObjectPath<'static>,
+        interface: InterfaceName<'static>,
+        member: MemberName<'static>,
+        handler: H,
+    ) -> Self
+    where
+        H: for<'msg> FnMut(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send + 'static,
+    {
+        Self {
+            filter_member: Some(member),
+            filter_path: Some(path),
+            filter_interface: Some(interface),
+            handler: Box::new(handler),
+        }
+    }
+}
+
 /// Inner state shared with tasks that are stopped by ConnectionInner's drop
 #[derive(Debug)]
 struct ConnectionTaskShared {
     raw_conn: sync::Mutex<RawConnection<Box<dyn Socket>>>,
+    // DenseSlotMap is used because we'll likely iterate this more often than modifying it.
+    signal_handlers: sync::Mutex<DenseSlotMap<SignalHandlerKey, SignalHandler>>,
 }
 
 /// Inner state shared by Connection and WeakConnection
@@ -199,8 +240,48 @@ impl MessageReceiverTask {
             };
 
             let msg = Arc::new(msg);
+            let futures = FuturesUnordered::new();
+            self.start_handlers(&msg, &futures);
+            // Call all the ordered handlers for this message and wait for them to complete before
+            // handling the next message
+            let () = futures.collect().await;
+
             // Ignoring errors. See comment above.
             let _ = self.msg_sender.broadcast(msg.clone()).await;
+        }
+    }
+
+    fn start_handlers<'msg>(
+        &self,
+        msg: &'msg Arc<Message>,
+        futures: &FuturesUnordered<BoxFuture<'msg, ()>>,
+    ) {
+        if msg.message_type() != MessageType::Signal {
+            return;
+        }
+        let mut handlers = self
+            .task_shared
+            .signal_handlers
+            .lock()
+            .expect("poisoned lock");
+        // TODO if we have lots of handlers, we might want to do smarter filtering
+        for (_key, handler) in handlers.iter_mut() {
+            if let Some(member) = &handler.filter_member {
+                if msg.member() != Ok(Some(member.as_ref())) {
+                    continue;
+                }
+            }
+            if let Some(path) = &handler.filter_path {
+                if msg.path() != Ok(Some(path.as_ref())) {
+                    continue;
+                }
+            }
+            if let Some(interface) = &handler.filter_interface {
+                if msg.interface() != Ok(Some(interface.as_ref())) {
+                    continue;
+                }
+            }
+            futures.push((handler.handler)(msg));
         }
     }
 }
@@ -757,6 +838,26 @@ impl Connection {
         });
     }
 
+    pub(crate) fn add_signal_handler(&self, handler: SignalHandler) -> SignalHandlerKey {
+        let mut handlers = self
+            .inner
+            .task_shared
+            .signal_handlers
+            .lock()
+            .expect("poisoned lock");
+        handlers.insert(handler)
+    }
+
+    pub(crate) fn remove_signal_handler(&self, key: SignalHandlerKey) -> Option<SignalHandler> {
+        let mut handlers = self
+            .inner
+            .task_shared
+            .signal_handlers
+            .lock()
+            .expect("poisoned lock");
+        handlers.remove(key)
+    }
+
     pub(crate) async fn subscribe_signal<'s, 'p, 'i, 'm, S, P, I, M>(
         &self,
         sender: S,
@@ -920,6 +1021,7 @@ impl Connection {
         let executor = Arc::new(Executor::new());
         let task_shared = Arc::new(ConnectionTaskShared {
             raw_conn: sync::Mutex::new(auth.conn),
+            signal_handlers: sync::Mutex::new(DenseSlotMap::with_key()),
         });
 
         // Start the message receiver task.
