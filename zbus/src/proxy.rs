@@ -26,22 +26,15 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    Connection, Error, Message, MessageStream, MessageType, ProxyBuilder, Result,
+    Connection, Error, Message, MessageStream, MessageType, ProxyBuilder, Result, SignalHandler,
+    SignalHandlerKey,
 };
 
-type SignalHandler = Box<dyn for<'msg> FnMut(&'msg Message) -> BoxFuture<'msg, ()> + Send>;
-
-new_key_type! {
-    /// The ID for a registered signal handler.
-    pub struct SignalHandlerId;
-}
+/// The ID for a registered signal handler.
+#[derive(Debug, Copy, Clone)]
+pub struct SignalHandlerId(SignalHandlerKey);
 
 assert_impl_all!(SignalHandlerId: Send, Sync, Unpin);
-
-struct SignalHandlerInfo {
-    signal_name: MemberName<'static>,
-    handler: SignalHandler,
-}
 
 type PropertyChangedEvent = Arc<(String, Option<OwnedValue>)>;
 
@@ -146,12 +139,8 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) interface: InterfaceName<'a>,
     // Keep it in an Arc so that dest_name_update_task can keep its own ref to it.
     dest_unique_name: Arc<RwLock<Option<OwnedUniqueName>>>,
-    #[derivative(Debug = "ignore")]
-    // Keep it in an Arc so that sign_handler_task can keep its own ref to it.
-    sig_handlers: Arc<Mutex<SlotMap<SignalHandlerId, SignalHandlerInfo>>>,
-    sig_handler_task: OnceCell<Task<()>>,
-    #[derivative(Debug = "ignore")]
-    signal_msg_stream: OnceCell<Mutex<MessageStream>>,
+    // A list of the keys so that dropping the Proxy will disconnect the signals
+    sig_handlers: SyncMutex<Vec<SignalHandlerKey>>,
     dest_name_update_task: OnceCell<Task<()>>,
     dest_name_update_event: Arc<Event>,
 }
@@ -258,9 +247,7 @@ impl<'a> ProxyInner<'a> {
             path,
             interface,
             dest_unique_name: Arc::new(RwLock::new(None)),
-            sig_handlers: Arc::new(Mutex::new(SlotMap::with_key())),
-            sig_handler_task: OnceCell::new(),
-            signal_msg_stream: OnceCell::new(),
+            sig_handlers: SyncMutex::new(Vec::new()),
             dest_name_update_task: OnceCell::new(),
             dest_name_update_event: Arc::new(Event::new()),
         }
@@ -420,29 +407,6 @@ impl<'a> ProxyInner<'a> {
         }
 
         Ok(())
-    }
-
-    async fn handle_signal(&self, msg: &Message) -> Result<bool> {
-        let mut handlers = self.sig_handlers.lock().await;
-        if handlers.is_empty() {
-            return Ok(false);
-        }
-
-        let signal_name = match self.matching_signal(msg).await? {
-            Some(signal) => signal,
-            _ => return Ok(false),
-        };
-
-        let mut handled = false;
-        for info in handlers
-            .values_mut()
-            .filter(|info| info.signal_name == *signal_name)
-        {
-            (*info.handler)(msg).await;
-            handled = true;
-        }
-
-        Ok(handled)
     }
 }
 
@@ -835,32 +799,17 @@ impl<'a> Proxy<'a> {
     pub async fn connect_signal<M, H>(
         &self,
         signal_name: M,
-        handler: H,
+        mut handler: H,
     ) -> fdo::Result<SignalHandlerId>
     where
         M: TryInto<MemberName<'static>>,
         M::Error: Into<Error>,
         for<'msg> H: FnMut(&'msg Message) -> BoxFuture<'msg, ()> + Send + 'static,
     {
-        // Ensure the stream.
-        self.msg_stream().await;
-
-        // Start the dispatch task.
-        self.start_signal_dispatch_task();
-
         // Time to try resolve the destination name & track changes to it.
         self.inner.destination_unique_name().await?;
 
         let signal_name = signal_name.try_into().map_err(Into::into)?;
-        let id = self
-            .inner
-            .sig_handlers
-            .lock()
-            .await
-            .insert(SignalHandlerInfo {
-                signal_name: signal_name.clone(),
-                handler: Box::new(handler),
-            });
 
         if self.inner.conn.is_bus() {
             let _ = self
@@ -870,12 +819,26 @@ impl<'a> Proxy<'a> {
                     self.destination(),
                     self.path().clone(),
                     self.interface(),
-                    signal_name,
+                    signal_name.as_ref(),
                 )
                 .await?;
         }
 
-        Ok(id)
+        let msg_handler = SignalHandler::signal(
+            self.path().to_owned(),
+            self.interface().to_owned(),
+            signal_name,
+            move |msg| handler(msg),
+        );
+        let id = self.inner.conn.add_signal_handler(msg_handler);
+
+        self.inner
+            .sig_handlers
+            .lock()
+            .expect("lock poisoned")
+            .push(id);
+
+        Ok(SignalHandlerId(id))
     }
 
     /// Deregister the signal handler with the ID `handler_id`.
@@ -889,72 +852,28 @@ impl<'a> Proxy<'a> {
     /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
     /// connection.
     pub async fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
-        match self.inner.sig_handlers.lock().await.remove(handler_id) {
-            Some(handler_info) => {
-                if self.inner.conn.is_bus() {
-                    let _ = self
-                        .inner
-                        .conn
-                        .unsubscribe_signal(
-                            self.destination(),
-                            self.path().clone(),
-                            self.interface(),
-                            handler_info.signal_name,
-                        )
-                        .await?;
-                }
-
-                Ok(true)
+        if let Some(handler) = self.inner.conn.remove_signal_handler(handler_id.0) {
+            self.inner
+                .sig_handlers
+                .lock()
+                .expect("lock poisoned")
+                .retain(|id| *id != handler_id.0);
+            if self.inner.conn.is_bus() {
+                let _ = self
+                    .inner
+                    .conn
+                    .unsubscribe_signal(
+                        self.destination(),
+                        self.path().clone(),
+                        self.interface(),
+                        handler.filter_member.unwrap(),
+                    )
+                    .await?;
             }
-            None => Ok(false),
+            Ok(true)
+        } else {
+            Ok(false)
         }
-    }
-
-    async fn msg_stream(&self) -> &Mutex<MessageStream> {
-        match self.inner.signal_msg_stream.get() {
-            Some(stream) => stream,
-            None => {
-                let stream = self.inner.conn.clone().into();
-                self.inner
-                    .signal_msg_stream
-                    .set(Mutex::new(stream))
-                    .unwrap_or_else(|_| panic!("Attempted to set stream twice"));
-
-                // Safety: We just set it in the previous line.
-                self.inner
-                    .signal_msg_stream
-                    .get()
-                    .expect("message stream not set")
-            }
-        }
-    }
-
-    fn start_signal_dispatch_task(&self) {
-        self.inner.sig_handler_task.get_or_init(|| {
-            let inner = &self.inner;
-            // Clone of inner with 'static lifetime.
-            let inner = ProxyInner {
-                conn: inner.conn.clone(),
-                destination: inner.destination.to_owned(),
-                path: inner.path.to_owned(),
-                interface: inner.interface.to_owned(),
-                dest_unique_name: inner.dest_unique_name.clone(),
-                sig_handlers: inner.sig_handlers.clone(),
-                // We'll not need the next 3 and so these will remain uninitialized.
-                sig_handler_task: OnceCell::new(),
-                signal_msg_stream: OnceCell::new(),
-                dest_name_update_task: OnceCell::new(),
-                // Won't need this either but doesn't hurt keeping the clone around.
-                dest_name_update_event: inner.dest_name_update_event.clone(),
-            };
-            let mut stream = MessageStream::from(self.inner.conn.clone());
-            self.inner.conn.executor().spawn(async move {
-                // TODO: Log errors when we've logging.
-                while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
-                    let _ = inner.handle_signal(&msg).await;
-                }
-            })
-        });
     }
 
     /// Get a stream to receive property changed events.
