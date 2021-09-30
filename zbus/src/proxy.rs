@@ -129,20 +129,35 @@ pub struct Proxy<'a> {
 
 assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 
+/// This is required to avoid having the Drop impl extend the lifetime 'a, which breaks zbus_xmlgen
+/// (and possibly other crates).
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
-pub(crate) struct ProxyInner<'a> {
+pub(crate) struct ProxyInnerStatic {
     #[derivative(Debug = "ignore")]
     pub(crate) conn: Connection,
+    // A list of the keys so that dropping the Proxy will disconnect the signals
+    sig_handlers: SyncMutex<Vec<SignalHandlerKey>>,
+}
+
+#[derive(Debug)]
+pub(crate) struct ProxyInner<'a> {
+    inner_without_borrows: ProxyInnerStatic,
     pub(crate) destination: BusName<'a>,
     pub(crate) path: ObjectPath<'a>,
     pub(crate) interface: InterfaceName<'a>,
     // Keep it in an Arc so that dest_name_update_task can keep its own ref to it.
     dest_unique_name: Arc<RwLock<Option<OwnedUniqueName>>>,
-    // A list of the keys so that dropping the Proxy will disconnect the signals
-    sig_handlers: SyncMutex<Vec<SignalHandlerKey>>,
     dest_name_update_task: OnceCell<Task<()>>,
     dest_name_update_event: Arc<Event>,
+}
+
+impl Drop for ProxyInnerStatic {
+    fn drop(&mut self) {
+        for id in self.sig_handlers.get_mut().expect("lock poisoned") {
+            self.conn.remove_signal_handler(*id);
+        }
+    }
 }
 
 pub struct PropertyStream<'a, T> {
@@ -242,12 +257,14 @@ impl<'a> ProxyInner<'a> {
         interface: InterfaceName<'a>,
     ) -> Self {
         Self {
-            conn,
+            inner_without_borrows: ProxyInnerStatic {
+                conn,
+                sig_handlers: SyncMutex::new(Vec::new()),
+            },
             destination,
             path,
             interface,
             dest_unique_name: Arc::new(RwLock::new(None)),
-            sig_handlers: SyncMutex::new(Vec::new()),
             dest_name_update_task: OnceCell::new(),
             dest_name_update_event: Arc::new(Event::new()),
         }
@@ -297,7 +314,7 @@ impl<'a> ProxyInner<'a> {
     /// This is only called when the user show interest in receiving a signal so that we don't end up
     /// doing all this needlessly.
     pub(crate) async fn destination_unique_name(&self) -> Result<()> {
-        if !self.conn.is_bus() {
+        if !self.inner_without_borrows.conn.is_bus() {
             // Names don't mean much outside the bus context.
             return Ok(());
         }
@@ -322,7 +339,7 @@ impl<'a> ProxyInner<'a> {
                     return Ok(());
                 }
 
-                let mut conn = self.conn.clone();
+                let mut conn = self.inner_without_borrows.conn.clone();
                 let dest_unique_name = self.dest_unique_name.clone();
                 let dest_name_update_event = self.dest_name_update_event.clone();
                 let well_known_name = OwnedWellKnownName::from(well_known_name.to_owned());
@@ -337,7 +354,7 @@ impl<'a> ProxyInner<'a> {
                         "NameOwnerChanged",
                     )
                     .await?;
-                let task = self.conn.executor().spawn(async move {
+                let task = self.inner_without_borrows.conn.executor().spawn(async move {
                     struct Subcription<'c> {
                         id: u64,
                         conn: &'c mut Connection,
@@ -391,7 +408,7 @@ impl<'a> ProxyInner<'a> {
                     .set(task)
                     .expect("Attempted to set destination update task twice");
 
-                let unique_name = match fdo::DBusProxy::new(&self.conn)
+                let unique_name = match fdo::DBusProxy::new(&self.inner_without_borrows.conn)
                     .await?
                     .get_name_owner(destination.as_ref())
                     .await
@@ -514,7 +531,7 @@ impl<'a> Proxy<'a> {
 
     /// Get a reference to the associated connection.
     pub fn connection(&self) -> &Connection {
-        &self.inner.conn
+        &self.inner.inner_without_borrows.conn
     }
 
     /// Get a reference to the destination service name.
@@ -536,7 +553,7 @@ impl<'a> Proxy<'a> {
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub async fn introspect(&self) -> fdo::Result<String> {
-        let proxy = IntrospectableProxy::builder(&self.inner.conn)
+        let proxy = IntrospectableProxy::builder(&self.inner.inner_without_borrows.conn)
             .destination(&self.inner.destination)?
             .path(&self.inner.path)?
             .build()
@@ -550,7 +567,7 @@ impl<'a> Proxy<'a> {
         match self.properties.proxy.get() {
             Some(proxy) => Ok(proxy),
             None => {
-                let proxy = PropertiesProxy::builder(&self.inner.conn)
+                let proxy = PropertiesProxy::builder(&self.inner.inner_without_borrows.conn)
                     // Safe because already checked earlier
                     .destination(self.inner.destination.to_owned())
                     .unwrap()
@@ -574,7 +591,8 @@ impl<'a> Proxy<'a> {
 
         let mut stream = proxy.receive_properties_changed().await?;
         let properties = Arc::downgrade(&self.properties);
-        let task = self.inner.conn.executor().spawn(async move {
+        let executor = self.inner.inner_without_borrows.conn.executor();
+        let task = executor.spawn(async move {
             while let Some(changed) = stream.next().await {
                 if let Ok(args) = changed.args() {
                     let properties = match properties.upgrade() {
@@ -698,6 +716,7 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
         self.inner
+            .inner_without_borrows
             .conn
             .call_method(
                 Some(&self.inner.destination),
@@ -742,9 +761,10 @@ impl<'a> Proxy<'a> {
         self.inner.destination_unique_name().await?;
 
         let signal_name = signal_name.try_into().map_err(Into::into)?;
-        let subscription_id = if self.inner.conn.is_bus() {
+        let subscription_id = if self.inner.inner_without_borrows.conn.is_bus() {
             let id = self
                 .inner
+                .inner_without_borrows
                 .conn
                 .subscribe_signal(
                     self.destination(),
@@ -760,7 +780,7 @@ impl<'a> Proxy<'a> {
         };
 
         let proxy = self.inner.clone();
-        let stream = MessageStream::from(&self.inner.conn)
+        let stream = MessageStream::from(&self.inner.inner_without_borrows.conn)
             .try_filter_map(move |msg| {
                 let proxy = proxy.clone();
                 let signal_name = signal_name.clone();
@@ -777,7 +797,7 @@ impl<'a> Proxy<'a> {
 
         Ok(SignalStream {
             stream: stream.boxed(),
-            conn: self.inner.conn.clone(),
+            conn: self.inner.inner_without_borrows.conn.clone(),
             subscription_id,
         })
     }
@@ -811,9 +831,10 @@ impl<'a> Proxy<'a> {
 
         let signal_name = signal_name.try_into().map_err(Into::into)?;
 
-        if self.inner.conn.is_bus() {
+        if self.inner.inner_without_borrows.conn.is_bus() {
             let _ = self
                 .inner
+                .inner_without_borrows
                 .conn
                 .subscribe_signal(
                     self.destination(),
@@ -830,9 +851,14 @@ impl<'a> Proxy<'a> {
             signal_name,
             move |msg| handler(msg),
         );
-        let id = self.inner.conn.add_signal_handler(msg_handler);
+        let id = self
+            .inner
+            .inner_without_borrows
+            .conn
+            .add_signal_handler(msg_handler);
 
         self.inner
+            .inner_without_borrows
             .sig_handlers
             .lock()
             .expect("lock poisoned")
@@ -852,15 +878,22 @@ impl<'a> Proxy<'a> {
     /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
     /// connection.
     pub async fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
-        if let Some(handler) = self.inner.conn.remove_signal_handler(handler_id.0) {
+        if let Some(handler) = self
+            .inner
+            .inner_without_borrows
+            .conn
+            .remove_signal_handler(handler_id.0)
+        {
             self.inner
+                .inner_without_borrows
                 .sig_handlers
                 .lock()
                 .expect("lock poisoned")
                 .retain(|id| *id != handler_id.0);
-            if self.inner.conn.is_bus() {
+            if self.inner.inner_without_borrows.conn.is_bus() {
                 let _ = self
                     .inner
+                    .inner_without_borrows
                     .conn
                     .unsubscribe_signal(
                         self.destination(),
