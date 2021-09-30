@@ -1,9 +1,10 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
+use async_channel::bounded;
 use async_lock::Mutex;
 use async_recursion::async_recursion;
 use async_task::Task;
 use futures_core::{future::BoxFuture, stream};
-use futures_util::{stream::StreamExt, TryStreamExt};
+use futures_util::stream::StreamExt;
 use once_cell::sync::OnceCell;
 use slotmap::{new_key_type, SlotMap};
 use static_assertions::assert_impl_all;
@@ -23,8 +24,7 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    Connection, Error, Message, MessageStream, MessageType, ProxyBuilder, Result, SignalHandler,
-    SignalHandlerKey,
+    Connection, Error, Message, ProxyBuilder, Result, SignalHandler, SignalHandlerKey,
 };
 
 /// The ID for a registered signal handler.
@@ -266,26 +266,6 @@ impl<'a> ProxyInner<'a> {
             interface,
             dest_unique_name: Arc::new(RwLock::new(None)),
         }
-    }
-
-    async fn matching_signal<'m>(&self, m: &'m Message) -> Result<Option<MemberName<'m>>> {
-        if m.message_type() != MessageType::Signal {
-            return Ok(None);
-        }
-
-        if m.interface() == Ok(Some(self.interface.as_ref()))
-            && m.path() == Ok(Some(self.path.as_ref()))
-            && m.header()?.sender()?
-                == self
-                    .dest_unique_name
-                    .read()
-                    .expect("lock poisoned")
-                    .as_deref()
-        {
-            return Ok(m.member().ok().flatten());
-        }
-
-        Ok(None)
     }
 
     /// Resolves the destination name to the associated unique connection name and watches for any changes.
@@ -748,26 +728,34 @@ impl<'a> Proxy<'a> {
             None
         };
 
-        let proxy = self.inner.clone();
-        let stream = MessageStream::from(&self.inner.inner_without_borrows.conn)
-            .try_filter_map(move |msg| {
-                let proxy = proxy.clone();
-                let signal_name = signal_name.clone();
+        let dest_unique_name = self.inner.dest_unique_name.clone();
+        let conn = self.inner.inner_without_borrows.conn.clone();
+        let (send, recv) = bounded(64);
 
-                async move {
-                    Ok(if proxy.matching_signal(&msg).await? == Some(signal_name) {
-                        Some(msg)
-                    } else {
-                        None
-                    })
-                }
-            })
-            .filter_map(|msg| async move { msg.ok() });
+        let handler_id = conn.add_signal_handler(SignalHandler::signal(
+            self.path().to_owned(),
+            self.interface().to_owned(),
+            signal_name,
+            move |msg| {
+                let dest_unique_name = dest_unique_name.clone();
+                let send = send.clone();
+                Box::pin(async move {
+                    if let Ok(h) = msg.header() {
+                        if let Ok(s) = h.sender() {
+                            if s == dest_unique_name.read().expect("lock poisoned").as_deref() {
+                                let _ = send.send(msg.clone()).await;
+                            }
+                        }
+                    }
+                })
+            },
+        ));
 
         Ok(SignalStream {
-            stream: stream.boxed(),
-            conn: self.inner.inner_without_borrows.conn.clone(),
+            stream: recv.boxed(),
+            conn,
             subscription_id,
+            handler_id,
         })
     }
 
@@ -901,6 +889,7 @@ pub struct SignalStream<'s> {
     stream: stream::BoxStream<'s, Arc<Message>>,
     conn: Connection,
     subscription_id: Option<u64>,
+    handler_id: SignalHandlerKey,
 }
 
 assert_impl_all!(SignalStream<'_>: Send, Unpin);
@@ -918,6 +907,7 @@ impl std::ops::Drop for SignalStream<'_> {
         if let Some(id) = self.subscription_id.take() {
             self.conn.queue_unsubscribe_signal(id);
         }
+        self.conn.remove_signal_handler(self.handler_id);
     }
 }
 
