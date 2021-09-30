@@ -138,6 +138,7 @@ pub(crate) struct ProxyInnerStatic {
     pub(crate) conn: Connection,
     // A list of the keys so that dropping the Proxy will disconnect the signals
     sig_handlers: SyncMutex<Vec<SignalHandlerKey>>,
+    dest_name_watcher: OnceCell<SignalHandlerKey>,
 }
 
 #[derive(Debug)]
@@ -148,13 +149,15 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) interface: InterfaceName<'a>,
     // Keep it in an Arc so that dest_name_update_task can keep its own ref to it.
     dest_unique_name: Arc<RwLock<Option<OwnedUniqueName>>>,
-    dest_name_update_task: OnceCell<Task<()>>,
     dest_name_update_event: Arc<Event>,
 }
 
 impl Drop for ProxyInnerStatic {
     fn drop(&mut self) {
         for id in self.sig_handlers.get_mut().expect("lock poisoned") {
+            self.conn.remove_signal_handler(*id);
+        }
+        if let Some(id) = self.dest_name_watcher.get() {
             self.conn.remove_signal_handler(*id);
         }
     }
@@ -260,12 +263,12 @@ impl<'a> ProxyInner<'a> {
             inner_without_borrows: ProxyInnerStatic {
                 conn,
                 sig_handlers: SyncMutex::new(Vec::new()),
+                dest_name_watcher: OnceCell::new(),
             },
             destination,
             path,
             interface,
             dest_unique_name: Arc::new(RwLock::new(None)),
-            dest_name_update_task: OnceCell::new(),
             dest_name_update_event: Arc::new(Event::new()),
         }
     }
@@ -334,79 +337,67 @@ impl<'a> ProxyInner<'a> {
                 }
             }
             BusName::WellKnown(well_known_name) => {
-                if self.dest_name_update_task.get().is_some() {
+                if self.inner_without_borrows.dest_name_watcher.get().is_some() {
                     // Already watching over the bus for any name updates so nothing to do here.
                     return Ok(());
                 }
 
-                let mut conn = self.inner_without_borrows.conn.clone();
+                let conn = &self.inner_without_borrows.conn;
                 let dest_unique_name = self.dest_unique_name.clone();
                 let dest_name_update_event = self.dest_name_update_event.clone();
                 let well_known_name = OwnedWellKnownName::from(well_known_name.to_owned());
                 // We've to use low-level API here to avoid infinite cycles. Otherwise, we'll
                 // get a complicated error from MIR, w/ this repeated multiple times:
                 // note: ...which requires building MIR for `proxy::<impl at zbus/src/azync/proxy.rs:338:1: 886:2>::receive_signal`...
-                let subscription_id = conn
-                    .subscribe_signal(
-                        "org.freedesktop.DBus",
-                        "/org/freedesktop/DBus",
-                        "org.freedesktop.DBus",
-                        "NameOwnerChanged",
-                    )
-                    .await?;
-                let task = self.inner_without_borrows.conn.executor().spawn(async move {
-                    struct Subcription<'c> {
-                        id: u64,
-                        conn: &'c mut Connection,
-                    }
-                    impl Drop for Subcription<'_> {
-                        fn drop(&mut self) {
-                            self.conn.queue_unsubscribe_signal(self.id);
-                        }
-                    }
-                    let mut stream = MessageStream::from(conn.clone());
-                    let _subscription = Subcription {
-                        id: subscription_id,
-                        conn: &mut conn,
-                    };
-                    while let Some(Ok(msg)) = stream.next().await {
-                        let header = match msg.header() {
-                            Ok(h) => h,
-                            Err(_) => continue,
-                        };
-                        if header.sender()
-                            != Ok(Some(&UniqueName::from_str_unchecked(
-                                "org.freedesktop.DBus",
-                            )))
-                            || header.path()
-                                != Ok(Some(&ObjectPath::from_str_unchecked(
-                                    "/org/freedesktop/DBus",
-                                )))
-                            || header.interface()
-                                != Ok(Some(&InterfaceName::from_str_unchecked(
-                                    "org.freedesktop.DBus",
-                                )))
-                            || header.member()
-                                != Ok(Some(&MemberName::from_str_unchecked("NameOwnerChanged")))
-                        {
-                            continue;
-                        }
-                        if let Ok((name, _, new_owner)) = msg.body::<(
-                            WellKnownName<'_>,
-                            Optional<UniqueName<'_>>,
-                            Optional<UniqueName<'_>>,
-                        )>() {
-                            if name == well_known_name {
-                                let unique_name = new_owner.as_ref().map(|n| n.to_owned().into());
-                                *dest_unique_name.write().expect("lock poisoned") = unique_name;
-                                dest_name_update_event.notify(usize::MAX);
-                            }
-                        }
-                    }
-                });
-                self.dest_name_update_task
-                    .set(task)
-                    .expect("Attempted to set destination update task twice");
+                conn.subscribe_signal(
+                    "org.freedesktop.DBus",
+                    "/org/freedesktop/DBus",
+                    "org.freedesktop.DBus",
+                    "NameOwnerChanged",
+                )
+                .await?;
+
+                self.inner_without_borrows
+                    .dest_name_watcher
+                    .get_or_init(|| {
+                        conn.add_signal_handler(SignalHandler::signal(
+                            ObjectPath::from_str_unchecked("/org/freedesktop/DBus"),
+                            InterfaceName::from_str_unchecked("org.freedesktop.DBus"),
+                            MemberName::from_str_unchecked("NameOwnerChanged"),
+                            move |msg| {
+                                let dest_unique_name = dest_unique_name.clone();
+                                let dest_name_update_event = dest_name_update_event.clone();
+                                let well_known_name = well_known_name.clone();
+                                Box::pin(async move {
+                                    let header = match msg.header() {
+                                        Ok(h) => h,
+                                        Err(_) => return,
+                                    };
+                                    if header.sender()
+                                        != Ok(Some(&UniqueName::from_str_unchecked(
+                                            "org.freedesktop.DBus",
+                                        )))
+                                    {
+                                        return;
+                                    }
+                                    if let Ok((name, _, new_owner)) = msg.body::<(
+                                        WellKnownName<'_>,
+                                        Optional<UniqueName<'_>>,
+                                        Optional<UniqueName<'_>>,
+                                    )>(
+                                    ) {
+                                        if name == well_known_name {
+                                            let unique_name =
+                                                new_owner.as_ref().map(|n| n.to_owned().into());
+                                            *dest_unique_name.write().expect("lock poisoned") =
+                                                unique_name;
+                                            dest_name_update_event.notify(usize::MAX);
+                                        }
+                                    }
+                                })
+                            },
+                        ))
+                    });
 
                 let unique_name = match fdo::DBusProxy::new(&self.inner_without_borrows.conn)
                     .await?
