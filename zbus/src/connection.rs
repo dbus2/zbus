@@ -108,6 +108,13 @@ struct SignalSubscription {
     match_rule: Option<String>,
 }
 
+/// Inner state shared with tasks that are stopped by ConnectionInner's drop
+#[derive(Debug)]
+struct ConnectionTaskShared {
+    raw_conn: sync::Mutex<RawConnection<Box<dyn Socket>>>,
+}
+
+/// Inner state shared by Connection and WeakConnection
 #[derive(Debug)]
 struct ConnectionInner {
     server_guid: Guid,
@@ -116,7 +123,8 @@ struct ConnectionInner {
     unique_name: OnceCell<OwnedUniqueName>,
     registered_names: Mutex<HashSet<WellKnownName<'static>>>,
 
-    raw_conn: Arc<sync::Mutex<DynSocketConnection>>,
+    task_shared: Arc<ConnectionTaskShared>,
+
     // Serial number for next outgoing message
     serial: AtomicU32,
 
@@ -140,8 +148,8 @@ struct ConnectionInner {
 // [`AsyncDrop`]: https://github.com/rust-lang/wg-async-foundations/issues/65
 
 #[derive(Debug)]
-struct MessageReceiverTask<S> {
-    raw_conn: Arc<sync::Mutex<RawConnection<S>>>,
+struct MessageReceiverTask {
+    task_shared: Arc<ConnectionTaskShared>,
 
     // Message broadcaster.
     msg_sender: Broadcaster<Arc<Message>>,
@@ -150,16 +158,14 @@ struct MessageReceiverTask<S> {
     error_sender: Sender<Error>,
 }
 
-type DynSocketConnection = RawConnection<Box<dyn Socket>>;
-
-impl MessageReceiverTask<Box<dyn Socket>> {
+impl MessageReceiverTask {
     fn new(
-        raw_conn: Arc<sync::Mutex<DynSocketConnection>>,
+        task_shared: Arc<ConnectionTaskShared>,
         msg_sender: Broadcaster<Arc<Message>>,
         error_sender: Sender<Error>,
     ) -> Arc<Self> {
         Arc::new(Self {
-            raw_conn,
+            task_shared,
             msg_sender,
             error_sender,
         })
@@ -180,7 +186,7 @@ impl MessageReceiverTask<Box<dyn Socket>> {
             // TODO: We should still log in case of error when we've logging.
 
             let receive_msg = ReceiveMessage {
-                raw_conn: &*self.raw_conn,
+                raw_conn: &self.task_shared.raw_conn,
             };
             let msg = match receive_msg.await {
                 Ok(msg) => msg,
@@ -912,17 +918,20 @@ impl Connection {
         let msg_receiver = msg_receiver.deactivate();
         let (error_sender, error_receiver) = bounded(1);
         let executor = Arc::new(Executor::new());
-        let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
+        let task_shared = Arc::new(ConnectionTaskShared {
+            raw_conn: sync::Mutex::new(auth.conn),
+        });
 
         // Start the message receiver task.
         let msg_receiver_task =
-            MessageReceiverTask::new(raw_conn.clone(), msg_sender, error_sender).spawn(&executor);
+            MessageReceiverTask::new(task_shared.clone(), msg_sender, error_sender)
+                .spawn(&executor);
 
         let connection = Self {
             error_receiver,
             msg_receiver,
             inner: Arc::new(ConnectionInner {
-                raw_conn,
+                task_shared,
                 server_guid: auth.server_guid,
                 cap_unix_fd,
                 bus_conn: bus_connection,
@@ -979,6 +988,7 @@ impl Connection {
     /// This function is meant for the caller to implement idle or timeout on inactivity.
     pub fn monitor_activity(&self) -> EventListener {
         self.inner
+            .task_shared
             .raw_conn
             .lock()
             .expect("poisoned lock")
@@ -1020,6 +1030,7 @@ impl<'a> Sink<Message> for &'a Connection {
         }
 
         self.inner
+            .task_shared
             .raw_conn
             .lock()
             .expect("poisoned lock")
@@ -1029,11 +1040,21 @@ impl<'a> Sink<Message> for &'a Connection {
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        self.inner.raw_conn.lock().expect("poisoned lock").flush(cx)
+        self.inner
+            .task_shared
+            .raw_conn
+            .lock()
+            .expect("poisoned lock")
+            .flush(cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        let mut raw_conn = self.inner.raw_conn.lock().expect("poisoned lock");
+        let mut raw_conn = self
+            .inner
+            .task_shared
+            .raw_conn
+            .lock()
+            .expect("poisoned lock");
         match ready!(raw_conn.flush(cx)) {
             Ok(_) => (),
             Err(e) => return Poll::Ready(Err(e)),
