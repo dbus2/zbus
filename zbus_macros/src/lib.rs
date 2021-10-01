@@ -206,7 +206,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [`ObjectServer`] this method was called by.
 /// * `header` - This marks the method argument to receive the message header associated with the
 /// D-Bus method call being handled.
-/// * `signal_context` - This marks the method argument to receive a `zbus::SignalContext`
+/// * `signal_context` - This marks the method argument to receive a [`SignalContext`]
 /// instance, which is needed for emitting signals the easy way.
 ///
 /// # Example
@@ -267,6 +267,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [`ObjectServer`]: https://docs.rs/zbus/1.0.0/zbus/struct.ObjectServer.html
 /// [`ObjectServer::with`]: https://docs.rs/zbus/1.2.0/zbus/struct.ObjectServer.html#method.with
 /// [`Connection::emit_signal()`]: https://docs.rs/zbus/1.0.0/zbus/struct.Connection.html#method.emit_signal
+/// [`SignalContext`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.SignalContext.html
 /// [`Interface`]: https://docs.rs/zbus/1.0.0/zbus/trait.Interface.html
 #[proc_macro_attribute]
 pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
