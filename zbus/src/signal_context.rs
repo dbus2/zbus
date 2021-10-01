@@ -37,4 +37,20 @@ impl<'s> SignalContext<'s> {
     pub fn path(&self) -> &ObjectPath<'s> {
         &self.path
     }
+
+    /// Creates an owned clone of `self`.
+    pub fn to_owned(&self) -> SignalContext<'static> {
+        SignalContext {
+            conn: self.conn.clone(),
+            path: self.path.to_owned(),
+        }
+    }
+
+    /// Creates an owned clone of `self`.
+    pub fn into_owned(self) -> SignalContext<'static> {
+        SignalContext {
+            conn: self.conn,
+            path: self.path.into_owned(),
+        }
+    }
 }
