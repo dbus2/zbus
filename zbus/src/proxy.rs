@@ -422,14 +422,7 @@ impl<'a> ProxyInner<'a> {
         Ok(())
     }
 
-    /// Handle the provided signal message.
-    ///
-    /// Call any handlers registered through the [`Self::connect_signal`] method for the provided
-    /// signal message.
-    ///
-    /// If no errors are encountered, `Ok(true)` is returned if any handlers where found and called for,
-    /// the signal; `Ok(false)` otherwise.
-    pub async fn handle_signal(&self, msg: &Message) -> Result<bool> {
+    async fn handle_signal(&self, msg: &Message) -> Result<bool> {
         let mut handlers = self.sig_handlers.lock().await;
         if handlers.is_empty() {
             return Ok(false);
