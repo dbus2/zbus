@@ -28,6 +28,11 @@ impl<'s> SignalContext<'s> {
             .map_err(Into::into)
     }
 
+    /// Create a new signal context for the given connection and object path.
+    pub fn from_parts(conn: Connection, path: ObjectPath<'s>) -> Self {
+        Self { conn, path }
+    }
+
     /// Get a reference to the associated connection.
     pub fn connection(&self) -> &Connection {
         &self.conn
