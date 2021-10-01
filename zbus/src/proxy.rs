@@ -151,10 +151,10 @@ pub(crate) struct ProxyInner<'a> {
 impl Drop for ProxyInnerStatic {
     fn drop(&mut self) {
         for id in self.sig_handlers.get_mut().expect("lock poisoned") {
-            self.conn.remove_signal_handler(*id);
+            self.conn.queue_remove_signal_handler(*id);
         }
         if let Some(id) = self.dest_name_watcher.get() {
-            self.conn.remove_signal_handler(*id);
+            self.conn.queue_remove_signal_handler(*id);
         }
     }
 }
@@ -307,56 +307,56 @@ impl<'a> ProxyInner<'a> {
                 let conn = &self.inner_without_borrows.conn;
                 let dest_unique_name = self.dest_unique_name.clone();
                 let well_known_name = OwnedWellKnownName::from(well_known_name.to_owned());
-                // We've to use low-level API here to avoid infinite cycles. Otherwise, we'll
-                // get a complicated error from MIR, w/ this repeated multiple times:
-                // note: ...which requires building MIR for `proxy::<impl at zbus/src/azync/proxy.rs:338:1: 886:2>::receive_signal`...
-                conn.subscribe_signal(
-                    "org.freedesktop.DBus",
-                    "/org/freedesktop/DBus",
-                    "org.freedesktop.DBus",
-                    "NameOwnerChanged",
-                )
-                .await?;
+                let signal_expr = format!(
+                    concat!(
+                        "type='signal',",
+                        "sender='org.freedesktop.DBus',",
+                        "path='/org/freedesktop/DBus',",
+                        "interface='org.freedesktop.DBus',",
+                        "member='NameOwnerChanged',",
+                        "arg0='{}'"
+                    ),
+                    well_known_name
+                );
 
-                self.inner_without_borrows
-                    .dest_name_watcher
-                    .get_or_init(|| {
-                        conn.add_signal_handler(SignalHandler::signal(
-                            ObjectPath::from_str_unchecked("/org/freedesktop/DBus"),
-                            InterfaceName::from_str_unchecked("org.freedesktop.DBus"),
-                            MemberName::from_str_unchecked("NameOwnerChanged"),
-                            move |msg| {
-                                let dest_unique_name = dest_unique_name.clone();
-                                let well_known_name = well_known_name.clone();
-                                Box::pin(async move {
-                                    let header = match msg.header() {
-                                        Ok(h) => h,
-                                        Err(_) => return,
-                                    };
-                                    if header.sender()
-                                        != Ok(Some(&UniqueName::from_str_unchecked(
-                                            "org.freedesktop.DBus",
-                                        )))
-                                    {
-                                        return;
+                let id = conn
+                    .add_signal_handler(SignalHandler::signal(
+                        ObjectPath::from_str_unchecked("/org/freedesktop/DBus"),
+                        InterfaceName::from_str_unchecked("org.freedesktop.DBus"),
+                        MemberName::from_str_unchecked("NameOwnerChanged"),
+                        signal_expr,
+                        move |msg| {
+                            let dest_unique_name = dest_unique_name.clone();
+                            let well_known_name = well_known_name.clone();
+                            let sender_ok = msg.header().ok().map_or(false, |h| {
+                                h.sender()
+                                    == Ok(Some(&UniqueName::from_str_unchecked(
+                                        "org.freedesktop.DBus",
+                                    )))
+                            });
+                            if sender_ok {
+                                match msg.body::<(
+                                    WellKnownName<'_>,
+                                    Optional<UniqueName<'_>>,
+                                    Optional<UniqueName<'_>>,
+                                )>() {
+                                    Ok((name, _, new_owner)) if name == well_known_name => {
+                                        let unique_name =
+                                            new_owner.as_ref().map(|n| n.to_owned().into());
+                                        *dest_unique_name.write().expect("lock poisoned") =
+                                            unique_name;
                                     }
-                                    if let Ok((name, _, new_owner)) = msg.body::<(
-                                        WellKnownName<'_>,
-                                        Optional<UniqueName<'_>>,
-                                        Optional<UniqueName<'_>>,
-                                    )>(
-                                    ) {
-                                        if name == well_known_name {
-                                            let unique_name =
-                                                new_owner.as_ref().map(|n| n.to_owned().into());
-                                            *dest_unique_name.write().expect("lock poisoned") =
-                                                unique_name;
-                                        }
-                                    }
-                                })
-                            },
-                        ))
-                    });
+                                    _ => {}
+                                }
+                            }
+                            Box::pin(async move {})
+                        },
+                    ))
+                    .await?;
+
+                if let Err(id) = self.inner_without_borrows.dest_name_watcher.set(id) {
+                    conn.remove_signal_handler(id).await?;
+                }
 
                 let unique_name = match fdo::DBusProxy::new(&self.inner_without_borrows.conn)
                     .await?
@@ -710,51 +710,43 @@ impl<'a> Proxy<'a> {
         self.inner.destination_unique_name().await?;
 
         let signal_name = signal_name.try_into().map_err(Into::into)?;
-        let subscription_id = if self.inner.inner_without_borrows.conn.is_bus() {
-            let id = self
-                .inner
-                .inner_without_borrows
-                .conn
-                .subscribe_signal(
-                    self.destination(),
-                    self.path().clone(),
-                    self.interface(),
-                    signal_name.as_ref(),
-                )
-                .await?;
-
-            Some(id)
-        } else {
-            None
-        };
+        let expr = format!(
+            "type='signal',sender='{}',path='{}',interface='{}',member='{}'",
+            self.destination(),
+            self.path(),
+            self.interface(),
+            &signal_name,
+        );
 
         let dest_unique_name = self.inner.dest_unique_name.clone();
         let conn = self.inner.inner_without_borrows.conn.clone();
         let (send, recv) = bounded(64);
 
-        let handler_id = conn.add_signal_handler(SignalHandler::signal(
-            self.path().to_owned(),
-            self.interface().to_owned(),
-            signal_name,
-            move |msg| {
-                let dest_unique_name = dest_unique_name.clone();
-                let send = send.clone();
-                Box::pin(async move {
-                    if let Ok(h) = msg.header() {
-                        if let Ok(s) = h.sender() {
-                            if s == dest_unique_name.read().expect("lock poisoned").as_deref() {
-                                let _ = send.send(msg.clone()).await;
+        let handler_id = conn
+            .add_signal_handler(SignalHandler::signal(
+                self.path().to_owned(),
+                self.interface().to_owned(),
+                signal_name,
+                expr,
+                move |msg| {
+                    let dest_unique_name = dest_unique_name.clone();
+                    let send = send.clone();
+                    Box::pin(async move {
+                        if let Ok(h) = msg.header() {
+                            if let Ok(s) = h.sender() {
+                                if s == dest_unique_name.read().expect("lock poisoned").as_deref() {
+                                    let _ = send.send(msg.clone()).await;
+                                }
                             }
                         }
-                    }
-                })
-            },
-        ));
+                    })
+                },
+            ))
+            .await?;
 
         Ok(SignalStream {
             stream: recv,
             conn,
-            subscription_id,
             handler_id,
         })
     }
@@ -787,32 +779,27 @@ impl<'a> Proxy<'a> {
         self.inner.destination_unique_name().await?;
 
         let signal_name = signal_name.try_into().map_err(Into::into)?;
-
-        if self.inner.inner_without_borrows.conn.is_bus() {
-            let _ = self
-                .inner
-                .inner_without_borrows
-                .conn
-                .subscribe_signal(
-                    self.destination(),
-                    self.path().clone(),
-                    self.interface(),
-                    signal_name.as_ref(),
-                )
-                .await?;
-        }
+        let expr = format!(
+            "type='signal',sender='{}',path='{}',interface='{}',member='{}'",
+            self.destination(),
+            self.path(),
+            self.interface(),
+            &signal_name,
+        );
 
         let msg_handler = SignalHandler::signal(
             self.path().to_owned(),
             self.interface().to_owned(),
             signal_name,
+            expr,
             move |msg| handler(msg),
         );
         let id = self
             .inner
             .inner_without_borrows
             .conn
-            .add_signal_handler(msg_handler);
+            .add_signal_handler(msg_handler)
+            .await?;
 
         self.inner
             .inner_without_borrows
@@ -835,35 +822,18 @@ impl<'a> Proxy<'a> {
     /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
     /// connection.
     pub async fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
-        if let Some(handler) = self
+        self.inner
+            .inner_without_borrows
+            .sig_handlers
+            .lock()
+            .expect("lock poisoned")
+            .retain(|id| *id != handler_id.0);
+        Ok(self
             .inner
             .inner_without_borrows
             .conn
             .remove_signal_handler(handler_id.0)
-        {
-            self.inner
-                .inner_without_borrows
-                .sig_handlers
-                .lock()
-                .expect("lock poisoned")
-                .retain(|id| *id != handler_id.0);
-            if self.inner.inner_without_borrows.conn.is_bus() {
-                let _ = self
-                    .inner
-                    .inner_without_borrows
-                    .conn
-                    .unsubscribe_signal(
-                        self.destination(),
-                        self.path().clone(),
-                        self.interface(),
-                        handler.filter_member.unwrap(),
-                    )
-                    .await?;
-            }
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+            .await?)
     }
 
     /// Get a stream to receive property changed events.
@@ -886,7 +856,6 @@ impl<'a> Proxy<'a> {
 pub struct SignalStream {
     stream: Receiver<Arc<Message>>,
     conn: Connection,
-    subscription_id: Option<u64>,
     handler_id: SignalHandlerKey,
 }
 
@@ -902,10 +871,7 @@ impl stream::Stream for SignalStream {
 
 impl std::ops::Drop for SignalStream {
     fn drop(&mut self) {
-        if let Some(id) = self.subscription_id.take() {
-            self.conn.queue_unsubscribe_signal(id);
-        }
-        self.conn.remove_signal_handler(self.handler_id);
+        self.conn.queue_remove_signal_handler(self.handler_id);
     }
 }
 
