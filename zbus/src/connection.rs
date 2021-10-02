@@ -68,7 +68,7 @@ impl SignalHandler {
     pub fn signal<H>(
         path: ObjectPath<'static>,
         interface: InterfaceName<'static>,
-        member: MemberName<'static>,
+        member: impl Into<Option<MemberName<'static>>>,
         match_expr: String,
         handler: H,
     ) -> Self
@@ -76,7 +76,7 @@ impl SignalHandler {
         H: for<'msg> FnMut(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send + 'static,
     {
         Self {
-            filter_member: Some(member),
+            filter_member: member.into(),
             filter_path: Some(path),
             filter_interface: Some(interface),
             match_expr,

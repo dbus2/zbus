@@ -751,6 +751,57 @@ impl<'a> Proxy<'a> {
         })
     }
 
+    /// Create a stream for all signals emitted by this service.
+    ///
+    /// # Errors
+    ///
+    /// Apart from general I/O errors that can result from socket communications, calling this
+    /// method will also result in an error if the destination service has not yet registered its
+    /// well-known name with the bus (assuming you're using the well-known name as destination).
+    pub async fn receive_all_signals(&self) -> Result<SignalStream> {
+        // Time to try & resolve the destination name & track changes to it.
+        self.inner.destination_unique_name().await?;
+
+        let expr = format!(
+            "type='signal',sender='{}',path='{}',interface='{}'",
+            self.destination(),
+            self.path(),
+            self.interface(),
+        );
+
+        let dest_unique_name = self.inner.dest_unique_name.clone();
+        let conn = self.inner.inner_without_borrows.conn.clone();
+        let (send, recv) = bounded(64);
+
+        let handler_id = conn
+            .add_signal_handler(SignalHandler::signal(
+                self.path().to_owned(),
+                self.interface().to_owned(),
+                None,
+                expr,
+                move |msg| {
+                    let dest_unique_name = dest_unique_name.clone();
+                    let send = send.clone();
+                    Box::pin(async move {
+                        if let Ok(h) = msg.header() {
+                            if let Ok(s) = h.sender() {
+                                if s == dest_unique_name.read().expect("lock poisoned").as_deref() {
+                                    let _ = send.send(msg.clone()).await;
+                                }
+                            }
+                        }
+                    })
+                },
+            ))
+            .await?;
+
+        Ok(SignalStream {
+            stream: recv,
+            conn,
+            handler_id,
+        })
+    }
+
     /// Register a handler for signal named `signal_name`.
     ///
     /// A unique ID for the handler is returned, which can be used to deregister this handler using
