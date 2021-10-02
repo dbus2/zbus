@@ -674,6 +674,37 @@ impl<'a> Proxy<'a> {
         Ok(reply.body()?)
     }
 
+    /// Call a method and handle the reply in the callback scope.
+    ///
+    /// See [`Connection::dispatch_call`] for why this is useful.
+    pub async fn dispatch_call<'m, M, B, H>(
+        &self,
+        method_name: M,
+        body: &B,
+        handler: H,
+    ) -> Result<()>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+        H: for<'msg> FnOnce(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send + 'static,
+    {
+        let msg = Message::method(
+            self.inner.inner_without_borrows.conn.unique_name(),
+            Some(&self.inner.destination),
+            self.inner.path.as_ref(),
+            Some(&self.inner.interface),
+            method_name,
+            body,
+        )?;
+
+        self.inner
+            .inner_without_borrows
+            .conn
+            .dispatch_call(msg, handler)
+            .await
+    }
+
     /// Create a stream for signal named `signal_name`.
     ///
     /// # Errors
