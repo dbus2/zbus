@@ -544,11 +544,26 @@ impl<'a> Proxy<'a> {
             proxy.disconnect_signal(id).await?;
         }
 
-        if let Ok(values) = proxy.get_all(self.inner.interface.as_ref()).await {
-            for (name, value) in values {
-                self.set_cached_property(name, Some(value));
-            }
-        }
+        // We must dispatch the get_all so that its result is properly ordered with respect to the
+        // updates from the above connect_properties_changed.
+        let properties = self.properties.clone();
+        let done = Event::new();
+        let waiter = done.listen();
+        proxy
+            .dispatch_get_all(self.inner.interface.as_ref(), move |res| {
+                if let Ok(all) = res {
+                    let mut values = properties.values.lock().expect("lock poisoned");
+                    for (name, value) in all {
+                        let entry = values.entry(name).or_insert_with(PropertyValue::default);
+                        entry.value = Some(value);
+                    }
+                }
+                done.notify(1);
+                Box::pin(async {})
+            })
+            .await?;
+
+        waiter.await;
 
         Ok(())
     }
