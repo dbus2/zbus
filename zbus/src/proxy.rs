@@ -1,16 +1,15 @@
-use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver};
-use async_lock::Mutex;
 use async_recursion::async_recursion;
-use async_task::Task;
-use futures_core::{future::BoxFuture, stream};
-use futures_util::stream::StreamExt;
+use event_listener::{Event, EventListener};
+use futures_core::{future::BoxFuture, ready, stream};
+use futures_util::stream::{FuturesUnordered, StreamExt};
 use once_cell::sync::OnceCell;
 use slotmap::{new_key_type, SlotMap};
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
+    future::Future,
     pin::Pin,
     sync::{Arc, Mutex as SyncMutex, RwLock},
     task::{Context, Poll},
@@ -33,30 +32,35 @@ pub struct SignalHandlerId(SignalHandlerKey);
 
 assert_impl_all!(SignalHandlerId: Send, Sync, Unpin);
 
-type PropertyChangedEvent = Arc<(String, Option<OwnedValue>)>;
-
 type PropertyChangedHandler =
     Box<dyn for<'v> FnMut(Option<&'v Value<'_>>) -> BoxFuture<'v, ()> + Send>;
 
 new_key_type! {
     /// The ID for a registered proprety changed handler.
-    pub struct PropertyChangedHandlerId;
+    struct PropertyChangedHandlerKey;
 }
 
-pub(crate) struct PropertyChangedHandlerInfo {
-    property_name: &'static str,
-    handler: PropertyChangedHandler,
+/// The ID for a registered proprety changed handler.
+#[derive(Debug, Copy, Clone)]
+pub struct PropertyChangedHandlerId {
+    name: &'static str,
+    key: PropertyChangedHandlerKey,
+}
+
+#[derive(Default, derivative::Derivative)]
+#[derivative(Debug)]
+struct PropertyValue {
+    value: Option<OwnedValue>,
+    #[derivative(Debug = "ignore")]
+    handlers: Option<SlotMap<PropertyChangedHandlerKey, PropertyChangedHandler>>,
+    event: Event,
 }
 
 // Hold proxy properties related data.
 pub(crate) struct ProxyProperties<'a> {
     pub(crate) proxy: OnceCell<PropertiesProxy<'a>>,
-    pub(crate) values: SyncMutex<HashMap<String, OwnedValue>>,
-    task: OnceCell<Task<()>>,
-    pub(crate) changed_handlers:
-        Mutex<SlotMap<PropertyChangedHandlerId, PropertyChangedHandlerInfo>>,
-    broadcaster: Broadcaster<PropertyChangedEvent>,
-    receiver: InactiveReceiver<PropertyChangedEvent>,
+    values: SyncMutex<HashMap<String, PropertyValue>>,
+    task: OnceCell<SignalHandlerId>,
 }
 
 impl<'a> std::fmt::Debug for ProxyProperties<'a> {
@@ -161,7 +165,8 @@ impl Drop for ProxyInnerStatic {
 
 pub struct PropertyStream<'a, T> {
     name: &'a str,
-    stream: stream::BoxStream<'static, PropertyChangedEvent>,
+    event: EventListener,
+    properties: Arc<ProxyProperties<'static>>,
     phantom: std::marker::PhantomData<T>,
 }
 
@@ -173,78 +178,61 @@ where
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let m = self.get_mut();
-        let (name, stream) = (m.name, m.stream.as_mut());
-        // there must be a way to simplify the following code..
-        match futures_core::ready!(stream::Stream::poll_next(stream, cx)) {
-            Some(item) => {
-                if item.0 == name {
-                    if let Some(Ok(v)) = item.1.clone().map(T::try_from) {
-                        Poll::Ready(Some(Some(v)))
-                    } else {
-                        Poll::Ready(Some(None))
-                    }
-                } else {
-                    Poll::Pending
-                }
-            }
-            None => Poll::Ready(None),
-        }
+        ready!(Pin::new(&mut m.event).poll(cx));
+        let values = m.properties.values.lock().expect("lock poisoned");
+        let entry = values
+            .get(m.name)
+            .expect("PropertyStream with no corresponding property");
+        m.event = entry.event.listen();
+        let value = entry.value.as_ref().cloned();
+        Poll::Ready(Some(value.and_then(|v| T::try_from(v).ok())))
     }
 }
 
 impl<'a> ProxyProperties<'a> {
     pub(crate) fn new() -> Self {
-        // note: do we need to make this configurable?
-        let (mut sender, receiver) = broadcast(64);
-        sender.set_overflow(true);
-        let receiver = receiver.deactivate();
-
         Self {
             proxy: Default::default(),
             values: Default::default(),
             task: Default::default(),
-            changed_handlers: Default::default(),
-            broadcaster: sender,
-            receiver,
         }
     }
 
-    fn update_cache(&self, args: &fdo::PropertiesChangedArgs<'_>) {
+    fn update_cache<'f>(
+        &self,
+        changed: &'f HashMap<String, Value<'static>>,
+        invalidated: Vec<String>,
+    ) -> impl Future<Output = ()> + 'f {
         let mut values = self.values.lock().expect("lock poisoned");
+        let futures = FuturesUnordered::new();
 
-        for inval in args.invalidated_properties() {
-            values.remove(*inval);
+        for inval in invalidated {
+            if let Some(entry) = values.get_mut(&*inval) {
+                entry.value = None;
+                entry.event.notify(usize::MAX);
+                if let Some(handlers) = &mut entry.handlers {
+                    for handler in handlers.values_mut() {
+                        futures.push(handler(None));
+                    }
+                }
+            }
         }
 
-        for (property_name, value) in args
-            .changed_properties()
-            .iter()
-            .map(|(k, v)| (k.to_string(), OwnedValue::from(v)))
-        {
-            values.insert(property_name, value);
-        }
-    }
+        for (property_name, value) in changed {
+            let entry = values
+                .entry(property_name.to_string())
+                .or_insert_with(PropertyValue::default);
 
-    async fn changed(&self, property_name: &str, value: Option<&Value<'_>>) {
-        if self.broadcaster.receiver_count() > 0 {
-            // Ignore event errors.
-            // TODO: We should still log in case of error when we've logging.
-            let _res = self
-                .broadcaster
-                .broadcast(Arc::new((
-                    property_name.to_string(),
-                    value.map(OwnedValue::from),
-                )))
-                .await;
+            entry.value = Some(OwnedValue::from(value));
+            entry.event.notify(usize::MAX);
+            if let Some(handlers) = &mut entry.handlers {
+                for handler in handlers.values_mut() {
+                    futures.push(handler(Some(value)));
+                }
+            }
         }
 
-        let mut handlers = self.changed_handlers.lock().await;
-        for info in handlers
-            .values_mut()
-            .filter(|info| info.property_name == property_name)
-        {
-            (*info.handler)(value).await;
-        }
+        futures.collect()
     }
 }
 
@@ -449,16 +437,16 @@ impl<'a> Proxy<'a> {
             return Err(Error::Unsupported);
         }
 
-        let id = self
-            .properties
-            .changed_handlers
-            .lock()
-            .await
-            .insert(PropertyChangedHandlerInfo {
-                property_name,
-                handler: Box::new(handler),
-            });
-        Ok(id)
+        let mut values = self.properties.values.lock().expect("lock poisoned");
+        let entry = values
+            .entry(property_name.to_string())
+            .or_insert_with(PropertyValue::default);
+        let handlers = entry.handlers.get_or_insert_with(SlotMap::with_key);
+        let key = handlers.insert(Box::new(handler));
+        Ok(PropertyChangedHandlerId {
+            key,
+            name: property_name,
+        })
     }
 
     /// Deregister the property handler with the ID `handler_id`.
@@ -471,11 +459,12 @@ impl<'a> Proxy<'a> {
     ) -> Result<bool> {
         Ok(self
             .properties
-            .changed_handlers
+            .values
             .lock()
-            .await
-            .remove(handler_id)
-            .is_some())
+            .expect("lock poisoned")
+            .get_mut(handler_id.name)
+            .and_then(|e| e.handlers.as_mut())
+            .map_or(false, |h| h.remove(handler_id.key).is_some()))
     }
 
     /// Get a reference to the associated connection.
@@ -537,37 +526,34 @@ impl<'a> Proxy<'a> {
 
     pub(crate) async fn cache_properties(&self) -> Result<()> {
         let proxy = self.properties_proxy().await?;
-
-        let mut stream = proxy.receive_properties_changed().await?;
-        let properties = Arc::downgrade(&self.properties);
-        let executor = self.inner.inner_without_borrows.conn.executor();
-        let task = executor.spawn(async move {
-            while let Some(changed) = stream.next().await {
-                if let Ok(args) = changed.args() {
-                    let properties = match properties.upgrade() {
-                        Some(p) => p,
-                        None => break,
-                    };
-                    properties.update_cache(&args);
-
-                    for inval in args.invalidated_properties() {
-                        properties.changed(inval, None).await;
+        let interface = self.interface().to_owned();
+        let properties = self.properties.clone();
+        let id = proxy
+            .connect_properties_changed(move |iface, changed, invalidated| {
+                let matches = iface == interface;
+                let properties = properties.clone();
+                // TODO fix fdo/macros so this to-owned mess is not needed
+                let changed = changed
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), OwnedValue::from(v).into()))
+                    .collect();
+                let invalidated = invalidated.into_iter().map(String::from).collect();
+                Box::pin(async move {
+                    if matches {
+                        properties.update_cache(&changed, invalidated).await;
                     }
+                })
+            })
+            .await?;
 
-                    for (property_name, value) in args.changed_properties() {
-                        properties.changed(property_name, Some(value)).await;
-                    }
-                }
-            }
-        });
-        self.properties.task.set(task).unwrap();
+        if let Err(id) = self.properties.task.set(id) {
+            proxy.disconnect_signal(id).await?;
+        }
 
         if let Ok(values) = proxy.get_all(self.inner.interface.as_ref()).await {
-            self.properties
-                .values
-                .lock()
-                .expect("lock poisoned")
-                .extend(values);
+            for (name, value) in values {
+                self.set_cached_property(name, Some(value));
+            }
         }
 
         Ok(())
@@ -588,6 +574,7 @@ impl<'a> Proxy<'a> {
             .lock()
             .expect("lock poisoned")
             .get(property_name)
+            .and_then(|e| e.value.as_ref())
             .cloned()
             .map(T::try_from)
             .transpose()
@@ -596,11 +583,10 @@ impl<'a> Proxy<'a> {
 
     fn set_cached_property(&self, property_name: String, value: Option<OwnedValue>) {
         let mut values = self.properties.values.lock().expect("lock poisoned");
-        if let Some(value) = value {
-            values.insert(property_name, value);
-        } else {
-            values.remove(&property_name);
-        }
+        let entry = values
+            .entry(property_name)
+            .or_insert_with(PropertyValue::default);
+        entry.value = value;
     }
 
     async fn get_proxy_property(&self, property_name: &str) -> Result<OwnedValue> {
@@ -892,9 +878,16 @@ impl<'a> Proxy<'a> {
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
     pub async fn receive_property_stream<'n, T>(&self, name: &'n str) -> PropertyStream<'n, T> {
+        let mut values = self.properties.values.lock().expect("lock poisoned");
+        let entry = values
+            .entry(name.to_string())
+            .or_insert_with(PropertyValue::default);
+        let event = entry.event.listen();
+
         PropertyStream {
             name,
-            stream: self.properties.receiver.activate_cloned().boxed(),
+            event,
+            properties: self.properties.clone(),
             phantom: std::marker::PhantomData,
         }
     }
