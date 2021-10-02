@@ -790,13 +790,30 @@ fn gen_proxy_signal(
         (quote! {}, quote! {})
     };
 
+    let input_types_s: Vec<_> = SetLifetimeS
+        .fold_signature(m.sig.clone())
+        .inputs
+        .iter()
+        .filter_map(|arg| match arg {
+            FnArg::Typed(p) => Some(p.ty.clone()),
+            _ => None,
+        })
+        .collect();
+
     let handler = if *blocking {
         quote! { ::std::ops::FnMut(#(#input_types),*) }
-    } else {
+    } else if input_types == input_types_s {
         quote! {
             ::std::ops::FnMut(
                 #(#input_types),*
             ) -> #zbus::export::futures_core::future::BoxFuture<'static, ()>
+        }
+    } else {
+        quote! {
+            for<'s>
+            ::std::ops::FnMut(
+                #(#input_types_s),*
+            ) -> #zbus::export::futures_core::future::BoxFuture<'s, ()>
         }
     };
 
