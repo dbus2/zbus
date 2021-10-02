@@ -354,6 +354,7 @@ fn gen_proxy_method_call(
         _ => None,
     });
     let method = Ident::new(snake_case_name, Span::call_site());
+    let dispatch_method = Ident::new(&format!("dispatch_{}", snake_case_name), Span::call_site());
     let inputs = &m.sig.inputs;
     let mut generics = m.sig.generics.clone();
     let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
@@ -427,11 +428,57 @@ fn gen_proxy_method_call(
             fn #method#ty_generics(#inputs) #output
             #where_clause
         };
+
+        generics.params.push(parse_quote!(__H));
+        let cbargs = match output {
+            syn::ReturnType::Default => quote!(()),
+            syn::ReturnType::Type(_, t) => quote!((#t)),
+        };
+        let handler = if *blocking {
+            parse_quote! { __H: FnOnce #cbargs + Send + 'static }
+        } else {
+            parse_quote! {
+                __H: FnOnce #cbargs ->
+                    #zbus::export::futures_core::future::BoxFuture<'static, ()> + Send + 'static
+            }
+        };
+        {
+            let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
+            where_clause.predicates.push(handler);
+        }
+        let (_, ty_generics, where_clause) = generics.split_for_impl();
+        let mut dispatch_inputs: Vec<_> = inputs.iter().map(|i| i.to_token_stream()).collect();
+        dispatch_inputs.push(quote! {
+            __handler: __H
+        });
+
+        let dispatch_signature = quote! {
+            fn #dispatch_method#ty_generics(#(#dispatch_inputs),*) -> #zbus::Result<()>
+            #where_clause
+        };
+        let see_doc = format!(
+            "Dispatch a [`Self::{}`] call with a reply handled in the callback scope.",
+            method
+        );
         quote! {
             #(#doc)*
             pub #usage #signature {
                 let reply = self.0.call(#method_name, #body)#wait?;
                 ::std::result::Result::Ok(reply)
+            }
+
+            #[doc=#see_doc]
+            #[doc=""]
+            #[doc="See the documentation for that method and [`zbus::Connection::dispatch_call`] for details."]
+            pub #usage #dispatch_signature {
+                self.0.dispatch_call(#method_name, #body, move |msg| {
+                    if msg.message_type() == #zbus::MessageType::MethodReturn {
+                        __handler(msg.body().map_err(Into::into))
+                    } else {
+                        let err: #zbus::Error = msg.clone().into();
+                        __handler(Err(err.into()))
+                    }
+                })#wait
             }
         }
     }
