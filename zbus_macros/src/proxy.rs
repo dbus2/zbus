@@ -851,6 +851,12 @@ fn gen_proxy_signal(
     }
     generics.params.push(parse_quote!(__H));
 
+    let do_nothing = if *blocking {
+        quote!(())
+    } else {
+        quote!(Box::pin(async {}))
+    };
+
     let (_, ty_generics, where_clause) = generics.split_for_impl();
     let methods = quote! {
         #[doc = #gen_doc]
@@ -862,9 +868,11 @@ fn gen_proxy_signal(
         #where_clause,
         {
             self.0.connect_signal(#signal_name, move |m| {
-                let (#(#args),*) = m.body().expect("Incorrect signal signature");
-
-                handler(#(#args),*)
+                match m.body() {
+                    Ok((#(#args),*)) => handler(#(#args),*),
+                    // TODO log errors, or allow a fallback?
+                    Err(_) => #do_nothing,
+                }
             })#wait
         }
 
