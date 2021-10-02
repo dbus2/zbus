@@ -419,7 +419,6 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let stream = MessageStream::from(self.clone());
         let m = Message::method(
             self.unique_name(),
             destination,
@@ -428,7 +427,20 @@ impl Connection {
             method_name,
             body,
         )?;
-        let serial = self.send_message(m).await?;
+        self.call_method_raw(m).await
+    }
+
+    /// Send a method call.
+    ///
+    /// Send the given message, which must be a method call, over the connection and wait for the
+    /// reply. Typically you'd want to use [`Connection::call_method`] instead.
+    ///
+    /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
+    /// error replies are returned as [`Error::MethodError`].
+    pub async fn call_method_raw(&self, msg: Message) -> Result<Arc<Message>> {
+        debug_assert_eq!(msg.message_type(), MessageType::MethodCall);
+        let stream = MessageStream::from(self.clone());
+        let serial = self.send_message(msg).await?;
         match stream
             .filter(move |m| {
                 ready(
