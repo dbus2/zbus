@@ -50,6 +50,8 @@ slotmap::new_key_type! {
 
 type SignalHandlerHandlerAsyncFunction =
     Box<dyn for<'msg> FnMut(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send>;
+type DispatchMethodReturnFunction =
+    Box<dyn for<'msg> FnOnce(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send>;
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
@@ -119,12 +121,16 @@ struct ConnectionInner {
 }
 
 /// Inner state that runs synchronized with the flow of incoming messages.
-#[derive(Debug)]
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 struct OrderedCallbacks {
     task: OnceCell<Task<()>>,
 
     // DenseSlotMap is used because we'll likely iterate this more often than modifying it.
     handlers: sync::Mutex<DenseSlotMap<SignalHandlerKey, SignalHandler>>,
+
+    #[derivative(Debug = "ignore")]
+    replies: sync::Mutex<HashMap<u32, DispatchMethodReturnFunction>>,
 }
 
 // FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
@@ -196,7 +202,16 @@ impl OrderedCallbacks {
         Arc::new(Self {
             task: Default::default(),
             handlers: sync::Mutex::new(DenseSlotMap::with_key()),
+            replies: sync::Mutex::new(HashMap::new()),
         })
+    }
+
+    fn start(self: &Arc<Self>, conn: &Connection) {
+        self.task.get_or_init(|| {
+            let scope = Arc::downgrade(self);
+            let stream = conn.msg_receiver.activate_cloned();
+            conn.executor().spawn(Self::run(scope, stream))
+        });
     }
 
     async fn run(weak: Weak<Self>, mut stream: impl Stream<Item = Arc<Message>> + Unpin) {
@@ -215,28 +230,32 @@ impl OrderedCallbacks {
         msg: &'msg Arc<Message>,
     ) -> FuturesUnordered<BoxFuture<'msg, ()>> {
         let futures = FuturesUnordered::new();
-        if msg.message_type() != MessageType::Signal {
-            return futures;
-        }
-        let mut handlers = self.handlers.lock().expect("poisoned lock");
-        // TODO if we have lots of handlers, we might want to do smarter filtering
-        for (_key, handler) in handlers.iter_mut() {
-            if let Some(member) = &handler.filter_member {
-                if msg.member() != Ok(Some(member.as_ref())) {
-                    continue;
+        if msg.message_type() == MessageType::Signal {
+            let mut handlers = self.handlers.lock().expect("poisoned lock");
+            // TODO if we have lots of handlers, we might want to do smarter filtering
+            for (_key, handler) in handlers.iter_mut() {
+                if let Some(member) = &handler.filter_member {
+                    if msg.member() != Ok(Some(member.as_ref())) {
+                        continue;
+                    }
                 }
-            }
-            if let Some(path) = &handler.filter_path {
-                if msg.path() != Ok(Some(path.as_ref())) {
-                    continue;
+                if let Some(path) = &handler.filter_path {
+                    if msg.path() != Ok(Some(path.as_ref())) {
+                        continue;
+                    }
                 }
-            }
-            if let Some(interface) = &handler.filter_interface {
-                if msg.interface() != Ok(Some(interface.as_ref())) {
-                    continue;
+                if let Some(interface) = &handler.filter_interface {
+                    if msg.interface() != Ok(Some(interface.as_ref())) {
+                        continue;
+                    }
                 }
+                futures.push((handler.handler)(msg));
             }
-            futures.push((handler.handler)(msg));
+        } else if let Ok(Some(seq)) = msg.reply_serial() {
+            let mut handlers = self.replies.lock().expect("poisoned lock");
+            if let Some(handler) = handlers.remove(&seq) {
+                futures.push(handler(msg));
+            }
         }
         futures
     }
@@ -476,6 +495,32 @@ impl Connection {
                 )))
             }
         }
+    }
+
+    /// Send a method call and execute a callback on reply.
+    ///
+    /// This callback is well-ordered with respect to the other callbacks in this scope; see
+    /// [`Connection::new_scope`] for details on why scopes are useful and how to create them.
+    /// Having the reply ordered with respect to other callbacks is useful for populating caches
+    /// that are updated by signals, which otherwise will contain a race between the return of the
+    /// initial population call and an update signal.
+    ///
+    /// Note: the callback will only be run if the current scope is still alive.
+    pub async fn dispatch_call<H>(&self, mut msg: Message, reply: H) -> Result<()>
+    where
+        H: for<'msg> FnOnce(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send + 'static,
+    {
+        self.scope.start(self);
+        let serial = self.assign_serial_num(&mut msg)?;
+        self.scope
+            .replies
+            .lock()
+            .expect("poisoned lock")
+            .insert(serial, Box::new(reply));
+
+        (&*self).send(msg).await?;
+
+        Ok(())
     }
 
     /// Emit a signal.
@@ -811,11 +856,7 @@ impl Connection {
         &self,
         handler: SignalHandler,
     ) -> Result<SignalHandlerKey> {
-        self.scope.task.get_or_init(|| {
-            let scope = Arc::downgrade(&self.scope);
-            let stream = self.msg_receiver.activate_cloned();
-            self.executor().spawn(OrderedCallbacks::run(scope, stream))
-        });
+        self.scope.start(self);
         if self.is_bus() {
             self.add_match(handler.match_expr.clone()).await?;
         }
