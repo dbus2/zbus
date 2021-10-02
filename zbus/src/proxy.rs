@@ -200,8 +200,8 @@ impl<'a> ProxyProperties<'a> {
 
     fn update_cache<'f>(
         &self,
-        changed: &'f HashMap<String, Value<'static>>,
-        invalidated: Vec<String>,
+        changed: &'f HashMap<&'f str, Value<'f>>,
+        invalidated: Vec<&'f str>,
     ) -> impl Future<Output = ()> + 'f {
         let mut values = self.values.lock().expect("lock poisoned");
         let futures = FuturesUnordered::new();
@@ -532,12 +532,6 @@ impl<'a> Proxy<'a> {
             .connect_properties_changed(move |iface, changed, invalidated| {
                 let matches = iface == interface;
                 let properties = properties.clone();
-                // TODO fix fdo/macros so this to-owned mess is not needed
-                let changed = changed
-                    .into_iter()
-                    .map(|(k, v)| (k.to_string(), OwnedValue::from(v).into()))
-                    .collect();
-                let invalidated = invalidated.into_iter().map(String::from).collect();
                 Box::pin(async move {
                     if matches {
                         properties.update_cache(&changed, invalidated).await;
