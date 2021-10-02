@@ -346,17 +346,29 @@ impl<'a> ProxyInner<'a> {
                     conn.remove_signal_handler(id).await?;
                 }
 
-                let unique_name = match fdo::DBusProxy::new(&self.inner_without_borrows.conn)
+                let dest_unique_name = self.dest_unique_name.clone();
+                let (send, recv) = bounded(1);
+                fdo::DBusProxy::new(&self.inner_without_borrows.conn)
                     .await?
-                    .get_name_owner(destination.as_ref())
-                    .await
-                {
-                    // That's ok. The destination isn't available right now.
-                    Err(fdo::Error::NameHasNoOwner(_)) => None,
-                    res => Some(res?),
-                };
+                    .dispatch_get_name_owner(destination.as_ref(), move |res| {
+                        let res = res.map(|unique_name| {
+                            *dest_unique_name.write().expect("lock poisoned") = Some(unique_name);
+                        });
+                        Box::pin(async move {
+                            // if this fails, the calling task was dropped prior to finishing, so
+                            // this result was already ignored.  No further cleanup needed.
+                            let _ = send.send(res).await;
+                        })
+                    })
+                    .await?;
 
-                *self.dest_unique_name.write().expect("lock poisoned") = unique_name;
+                match recv.recv().await {
+                    // That's ok. The destination isn't available right now.
+                    Ok(Err(fdo::Error::NameHasNoOwner(_))) => {}
+                    Ok(res) => res?,
+                    // channel hangup shouldn't happen
+                    Err(_) => return Err(Error::InvalidReply),
+                }
             }
         }
 
