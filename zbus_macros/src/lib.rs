@@ -51,6 +51,8 @@ mod utils;
 ///   register and deregister a handler for the signal, whose signature must match that of the
 ///   signature declaration.
 ///
+/// * `no_reply` - declare a method call that does not wait for a reply.
+///
 /// * `dispatch` - expose the method call as a dispatched callback instead of a normal method.
 ///   The declared return type is used as the callback's argument and so may contain non-owned
 ///   types (which are not allowed in normal calls).
