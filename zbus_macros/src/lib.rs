@@ -51,6 +51,10 @@ mod utils;
 ///   register and deregister a handler for the signal, whose signature must match that of the
 ///   signature declaration.
 ///
+/// * `dispatch` - expose the method call as a dispatched callback instead of a normal method.
+///   The declared return type is used as the callback's argument and so may contain non-owned
+///   types (which are not allowed in normal calls).
+///
 /// * `object` - methods that returns an [`ObjectPath`] can be annotated with the `object` attribute
 ///   to specify the proxy object to be constructed from the returned [`ObjectPath`].
 ///

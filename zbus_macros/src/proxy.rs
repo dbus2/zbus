@@ -353,8 +353,14 @@ fn gen_proxy_method_call(
         }
         _ => None,
     });
+    let dispatch_only = attrs.iter().any(|x| matches!(x, ItemAttribute::Dispatch));
+
     let method = Ident::new(snake_case_name, Span::call_site());
-    let dispatch_method = Ident::new(&format!("dispatch_{}", snake_case_name), Span::call_site());
+    let dispatch_method = if dispatch_only {
+        method.clone()
+    } else {
+        Ident::new(&format!("dispatch_{}", snake_case_name), Span::call_site())
+    };
     let inputs = &m.sig.inputs;
     let mut generics = m.sig.generics.clone();
     let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
@@ -429,6 +435,14 @@ fn gen_proxy_method_call(
             #where_clause
         };
 
+        let method_impl = quote! {
+            #(#doc)*
+            pub #usage #signature {
+                let reply = self.0.call(#method_name, #body)#wait?;
+                ::std::result::Result::Ok(reply)
+            }
+        };
+
         generics.params.push(parse_quote!(__H));
         let cbargs = match output {
             syn::ReturnType::Default => quote!(()),
@@ -456,20 +470,8 @@ fn gen_proxy_method_call(
             fn #dispatch_method#ty_generics(#(#dispatch_inputs),*) -> #zbus::Result<()>
             #where_clause
         };
-        let see_doc = format!(
-            "Dispatch a [`Self::{}`] call with a reply handled in the callback scope.",
-            method
-        );
-        quote! {
-            #(#doc)*
-            pub #usage #signature {
-                let reply = self.0.call(#method_name, #body)#wait?;
-                ::std::result::Result::Ok(reply)
-            }
 
-            #[doc=#see_doc]
-            #[doc=""]
-            #[doc="See the documentation for that method and [`zbus::Connection::dispatch_call`] for details."]
+        let dispatch_impl = quote! {
             pub #usage #dispatch_signature {
                 self.0.dispatch_call(#method_name, #body, move |msg| {
                     if msg.message_type() == #zbus::MessageType::MethodReturn {
@@ -479,6 +481,26 @@ fn gen_proxy_method_call(
                         __handler(Err(err.into()))
                     }
                 })#wait
+            }
+        };
+
+        if dispatch_only {
+            quote! {
+                #(#doc)*
+                #dispatch_impl
+            }
+        } else {
+            let see_doc = format!(
+                "Dispatch a [`Self::{}`] call with a reply handled in the callback scope.",
+                method
+            );
+            quote! {
+                #method_impl
+
+                #[doc=#see_doc]
+                #[doc=""]
+                #[doc="See the documentation for that method and [`zbus::Connection::dispatch_call`] for details."]
+                #dispatch_impl
             }
         }
     }
