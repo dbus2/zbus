@@ -23,7 +23,8 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    Connection, Error, Message, ProxyBuilder, Result, SignalHandler, SignalHandlerKey,
+    Connection, Error, Message, MessageBuilder, ProxyBuilder, Result, SignalHandler,
+    SignalHandlerKey,
 };
 
 /// The ID for a registered signal handler.
@@ -699,6 +700,30 @@ impl<'a> Proxy<'a> {
         let reply = self.call_method(method_name, body).await?;
 
         Ok(reply.body()?)
+    }
+
+    /// Call a method without expecting a reply
+    ///
+    /// This sets the `NoReplyExpected` flag on the calling message and does not wait for a reply.
+    pub async fn call_noreply<'m, M, B>(&self, method_name: M, body: &B) -> Result<()>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        let msg = MessageBuilder::method_call(self.inner.path.as_ref(), method_name)?
+            .with_flags(zbus::MessageFlags::NoReplyExpected)?
+            .destination(&self.inner.destination)?
+            .interface(&self.inner.interface)?
+            .build(body)?;
+
+        self.inner
+            .inner_without_borrows
+            .conn
+            .send_message(msg)
+            .await?;
+
+        Ok(())
     }
 
     /// Call a method and handle the reply in the callback scope.

@@ -214,6 +214,18 @@ impl<'a> Proxy<'a> {
         block_on(self.azync.call(method_name, body))
     }
 
+    /// Call a method without expecting a reply
+    ///
+    /// This sets the `NoReplyExpected` flag on the calling message and does not wait for a reply.
+    pub fn call_noreply<'m, M, B>(&self, method_name: M, body: &B) -> Result<()>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        block_on(self.azync.call_noreply(method_name, body))
+    }
+
     /// Call a method and handle the reply in the callback scope.
     ///
     /// See [`crate::Connection::dispatch_call`] for why this is useful.
