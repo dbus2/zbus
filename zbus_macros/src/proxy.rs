@@ -10,12 +10,13 @@ use crate::utils::*;
 
 struct ProxyOpts {
     blocking: bool,
+    gen_dispatch: bool,
     usage: TokenStream,
     wait: TokenStream,
 }
 
 impl ProxyOpts {
-    fn new(blocking: bool) -> Self {
+    fn new(blocking: bool, gen_dispatch: bool) -> Self {
         let (usage, wait) = if blocking {
             (quote! {}, quote! {})
         } else {
@@ -23,6 +24,7 @@ impl ProxyOpts {
         };
         Self {
             blocking,
+            gen_dispatch,
             usage,
             wait,
         }
@@ -30,7 +32,7 @@ impl ProxyOpts {
 }
 
 pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
-    let (mut gen_async, mut gen_blocking) = (true, true);
+    let (mut gen_async, mut gen_blocking, mut gen_dispatch) = (true, true, true);
     let (mut async_name, mut blocking_name) = (None, None);
     let mut iface_name = None;
     let mut default_path = None;
@@ -80,6 +82,12 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                     } else {
                         panic!("Invalid gen_blocking argument")
                     }
+                } else if nv.path.is_ident("gen_dispatch") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        gen_dispatch = lit.value();
+                    } else {
+                        panic!("Invalid gen_dispatch argument")
+                    }
                 } else {
                     panic!("Unsupported argument");
                 }
@@ -108,7 +116,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 format!("{}Proxy", input.ident)
             }
         });
-        let proxy_opts = ProxyOpts::new(true);
+        let proxy_opts = ProxyOpts::new(true, gen_dispatch);
         create_proxy(
             &input,
             iface_name.as_deref(),
@@ -122,7 +130,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     };
     let async_proxy = if gen_async {
         let proxy_name = async_name.unwrap_or_else(|| format!("{}Proxy", input.ident));
-        let proxy_opts = ProxyOpts::new(false);
+        let proxy_opts = ProxyOpts::new(false, gen_dispatch);
         create_proxy(
             &input,
             iface_name.as_deref(),
@@ -320,6 +328,7 @@ fn gen_proxy_method_call(
         usage,
         wait,
         blocking,
+        gen_dispatch,
     } = proxy_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
@@ -456,6 +465,10 @@ fn gen_proxy_method_call(
             }
         };
 
+        if !gen_dispatch {
+            return method_impl;
+        }
+
         generics.params.push(parse_quote!(__H));
         let cbargs = match output {
             syn::ReturnType::Default => quote!(()),
@@ -529,6 +542,7 @@ fn gen_proxy_property(
         usage,
         wait,
         blocking,
+        ..
     } = proxy_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
@@ -673,6 +687,7 @@ fn gen_proxy_signal(
         usage,
         wait,
         blocking,
+        ..
     } = proxy_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);

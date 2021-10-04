@@ -34,6 +34,9 @@ mod utils;
 /// * `gen_blocking` - Whether or not to generate the blocking Proxy type. If set to `false`, the
 ///   asynchronous proxy type will take the name `TraitNameProxy` (i-e no `Async` prefix).
 ///
+/// * `gen_dispatch` - Whether or not to generate a `dispatch_` wrapper on calls for you. If set to
+///   `false`, you can still generate these with the `dispatch` attribute.
+///
 /// * `async_name` - Specify the exact name of the asynchronous proxy type.
 ///
 /// * `blocking_name` - Specify the exact name of the blocking proxy type.
