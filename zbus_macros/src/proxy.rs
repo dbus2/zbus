@@ -8,13 +8,13 @@ use syn::{
 
 use crate::utils::*;
 
-struct AsyncOpts {
+struct ProxyOpts {
     blocking: bool,
     usage: TokenStream,
     wait: TokenStream,
 }
 
-impl AsyncOpts {
+impl ProxyOpts {
     fn new(blocking: bool) -> Self {
         let (usage, wait) = if blocking {
             (quote! {}, quote! {})
@@ -165,7 +165,7 @@ pub fn create_proxy(
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
     let mut has_properties = false;
-    let async_opts = AsyncOpts::new(blocking);
+    let proxy_opts = ProxyOpts::new(blocking);
 
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
@@ -190,21 +190,21 @@ pub fn create_proxy(
                 });
             let m = if is_property {
                 has_properties = true;
-                gen_proxy_property(&name, &method_name, m, &async_opts)
+                gen_proxy_property(&name, &method_name, m, &proxy_opts)
             } else if is_signal {
                 let (method, types) =
-                    gen_proxy_signal(&proxy_name, &name, &method_name, m, &async_opts);
+                    gen_proxy_signal(&proxy_name, &name, &method_name, m, &proxy_opts);
                 stream_types.extend(types);
 
                 method
             } else {
-                gen_proxy_method_call(&name, &method_name, m, &async_opts)
+                gen_proxy_method_call(&name, &method_name, m, &proxy_opts)
             };
             methods.extend(m);
         }
     }
 
-    let AsyncOpts { usage, wait, .. } = async_opts;
+    let ProxyOpts { usage, wait, .. } = proxy_opts;
     let (proxy_struct, connection, builder) = if blocking {
         let connection = quote! { #zbus::blocking::Connection };
         let proxy = quote! { #zbus::blocking::Proxy };
@@ -312,13 +312,13 @@ fn gen_proxy_method_call(
     method_name: &str,
     snake_case_name: &str,
     m: &TraitItemMethod,
-    async_opts: &AsyncOpts,
+    proxy_opts: &ProxyOpts,
 ) -> TokenStream {
-    let AsyncOpts {
+    let ProxyOpts {
         usage,
         wait,
         blocking,
-    } = async_opts;
+    } = proxy_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let args: Vec<_> = m
@@ -521,13 +521,13 @@ fn gen_proxy_property(
     property_name: &str,
     method_name: &str,
     m: &TraitItemMethod,
-    async_opts: &AsyncOpts,
+    proxy_opts: &ProxyOpts,
 ) -> TokenStream {
-    let AsyncOpts {
+    let ProxyOpts {
         usage,
         wait,
         blocking,
-    } = async_opts;
+    } = proxy_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let signature = &m.sig;
@@ -665,13 +665,13 @@ fn gen_proxy_signal(
     signal_name: &str,
     snake_case_name: &str,
     m: &TraitItemMethod,
-    async_opts: &AsyncOpts,
+    proxy_opts: &ProxyOpts,
 ) -> (TokenStream, TokenStream) {
-    let AsyncOpts {
+    let ProxyOpts {
         usage,
         wait,
         blocking,
-    } = async_opts;
+    } = proxy_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let method = format_ident!("connect_{}", snake_case_name);
@@ -705,7 +705,7 @@ fn gen_proxy_signal(
         .map(|(i, _)| Literal::usize_unsuffixed(i))
         .collect();
 
-    let (receive_signal, stream_types) = if !async_opts.blocking {
+    let (receive_signal, stream_types) = if !proxy_opts.blocking {
         let mut generics = m.sig.generics.clone();
         let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
         for param in generics
