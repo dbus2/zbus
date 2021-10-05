@@ -8,6 +8,7 @@ use syn::{
 
 use crate::utils::*;
 
+#[derive(Clone)]
 struct ProxyOpts {
     blocking: bool,
     gen_connect: bool,
@@ -17,28 +18,32 @@ struct ProxyOpts {
 }
 
 impl ProxyOpts {
-    fn new(blocking: bool, gen_connect: bool, gen_dispatch: bool) -> Self {
-        let (usage, wait) = if blocking {
-            (quote! {}, quote! {})
-        } else {
-            (quote! { async }, quote! { .await })
-        };
+    fn new() -> Self {
         Self {
-            blocking,
-            gen_connect,
-            gen_dispatch,
-            usage,
-            wait,
+            blocking: false,
+            gen_connect: true,
+            gen_dispatch: true,
+            usage: quote! { async },
+            wait: quote! { .await },
         }
+    }
+
+    fn blocking(&self) -> Self {
+        let mut rv = self.clone();
+        rv.blocking = true;
+        rv.usage = quote! {};
+        rv.wait = quote! {};
+        rv
     }
 }
 
 pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
-    let (mut gen_async, mut gen_blocking, mut gen_connect, mut gen_dispatch) = (true, true, true, true);
+    let (mut gen_async, mut gen_blocking) = (true, true);
     let (mut async_name, mut blocking_name) = (None, None);
     let mut iface_name = None;
     let mut default_path = None;
     let mut default_service = None;
+    let mut proxy_opts = ProxyOpts::new();
     for arg in &args {
         match arg {
             NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
@@ -86,13 +91,13 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                     }
                 } else if nv.path.is_ident("gen_connect") {
                     if let syn::Lit::Bool(lit) = &nv.lit {
-                        gen_connect = lit.value();
+                        proxy_opts.gen_connect = lit.value();
                     } else {
                         panic!("Invalid gen_connect argument")
                     }
                 } else if nv.path.is_ident("gen_dispatch") {
                     if let syn::Lit::Bool(lit) = &nv.lit {
-                        gen_dispatch = lit.value();
+                        proxy_opts.gen_dispatch = lit.value();
                     } else {
                         panic!("Invalid gen_dispatch argument")
                     }
@@ -124,21 +129,19 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 format!("{}Proxy", input.ident)
             }
         });
-        let proxy_opts = ProxyOpts::new(true, gen_connect, gen_dispatch);
         create_proxy(
             &input,
             iface_name.as_deref(),
             default_path.as_deref(),
             default_service.as_deref(),
             &proxy_name,
-            proxy_opts,
+            proxy_opts.blocking(),
         )
     } else {
         quote! {}
     };
     let async_proxy = if gen_async {
         let proxy_name = async_name.unwrap_or_else(|| format!("{}Proxy", input.ident));
-        let proxy_opts = ProxyOpts::new(false, gen_connect, gen_dispatch);
         create_proxy(
             &input,
             iface_name.as_deref(),
