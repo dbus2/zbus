@@ -10,13 +10,14 @@ use crate::utils::*;
 
 struct ProxyOpts {
     blocking: bool,
+    gen_connect: bool,
     gen_dispatch: bool,
     usage: TokenStream,
     wait: TokenStream,
 }
 
 impl ProxyOpts {
-    fn new(blocking: bool, gen_dispatch: bool) -> Self {
+    fn new(blocking: bool, gen_connect: bool, gen_dispatch: bool) -> Self {
         let (usage, wait) = if blocking {
             (quote! {}, quote! {})
         } else {
@@ -24,6 +25,7 @@ impl ProxyOpts {
         };
         Self {
             blocking,
+            gen_connect,
             gen_dispatch,
             usage,
             wait,
@@ -32,7 +34,7 @@ impl ProxyOpts {
 }
 
 pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
-    let (mut gen_async, mut gen_blocking, mut gen_dispatch) = (true, true, true);
+    let (mut gen_async, mut gen_blocking, mut gen_connect, mut gen_dispatch) = (true, true, true, true);
     let (mut async_name, mut blocking_name) = (None, None);
     let mut iface_name = None;
     let mut default_path = None;
@@ -82,6 +84,12 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                     } else {
                         panic!("Invalid gen_blocking argument")
                     }
+                } else if nv.path.is_ident("gen_connect") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        gen_connect = lit.value();
+                    } else {
+                        panic!("Invalid gen_connect argument")
+                    }
                 } else if nv.path.is_ident("gen_dispatch") {
                     if let syn::Lit::Bool(lit) = &nv.lit {
                         gen_dispatch = lit.value();
@@ -116,7 +124,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 format!("{}Proxy", input.ident)
             }
         });
-        let proxy_opts = ProxyOpts::new(true, gen_dispatch);
+        let proxy_opts = ProxyOpts::new(true, gen_connect, gen_dispatch);
         create_proxy(
             &input,
             iface_name.as_deref(),
@@ -130,7 +138,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     };
     let async_proxy = if gen_async {
         let proxy_name = async_name.unwrap_or_else(|| format!("{}Proxy", input.ident));
-        let proxy_opts = ProxyOpts::new(false, gen_dispatch);
+        let proxy_opts = ProxyOpts::new(false, gen_connect, gen_dispatch);
         create_proxy(
             &input,
             iface_name.as_deref(),
@@ -329,6 +337,7 @@ fn gen_proxy_method_call(
         wait,
         blocking,
         gen_dispatch,
+        ..
     } = proxy_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
@@ -542,6 +551,7 @@ fn gen_proxy_property(
         usage,
         wait,
         blocking,
+        gen_connect,
         ..
     } = proxy_opts;
     let zbus = zbus_path();
@@ -632,6 +642,22 @@ fn gen_proxy_property(
 
         let (_, ty_generics, where_clause) = generics.split_for_impl();
 
+        let connect_impl = if *gen_connect {
+            quote! {
+                #[doc = #gen_doc]
+                pub #usage fn #connect#ty_generics(
+                    &self,
+                    mut handler: __H,
+                ) -> #zbus::Result<#zbus::PropertyChangedHandlerId>
+                #where_clause,
+                {
+                    self.0.connect_property_changed(#property_name, handler)#wait
+                }
+            }
+        } else {
+            quote! {}
+        };
+
         quote! {
             #(#doc)*
             #[allow(clippy::needless_question_mark)]
@@ -647,16 +673,7 @@ fn gen_proxy_property(
                 self.0.cached_property(#property_name).map_err(::std::convert::Into::into)
             }
 
-            #[doc = #gen_doc]
-            pub #usage fn #connect#ty_generics(
-                &self,
-                mut handler: __H,
-            ) -> #zbus::Result<#zbus::PropertyChangedHandlerId>
-            #where_clause,
-            {
-                self.0.connect_property_changed(#property_name, handler)#wait
-            }
-
+            #connect_impl
             #receive
         }
     }
@@ -687,6 +704,7 @@ fn gen_proxy_signal(
         usage,
         wait,
         blocking,
+        gen_connect,
         ..
     } = proxy_opts;
     let zbus = zbus_path();
@@ -955,24 +973,31 @@ fn gen_proxy_signal(
     };
 
     let (_, ty_generics, where_clause) = generics.split_for_impl();
-    let methods = quote! {
-        #[doc = #gen_doc]
-        #(#doc)*
-        pub #usage fn #method#ty_generics(
-            &self,
-            mut handler: __H,
-        ) -> #zbus::fdo::Result<#zbus::SignalHandlerId>
-        #where_clause,
-        {
-            self.0.connect_signal(#signal_name, move |m| {
-                match m.body() {
-                    Ok((#(#args),*)) => handler(#(#args),*),
-                    // TODO log errors, or allow a fallback?
-                    Err(_) => #do_nothing,
-                }
-            })#wait
+    let connect_signal = if *gen_connect {
+        quote! {
+            #[doc = #gen_doc]
+            #(#doc)*
+            pub #usage fn #method#ty_generics(
+                &self,
+                mut handler: __H,
+            ) -> #zbus::fdo::Result<#zbus::SignalHandlerId>
+            #where_clause,
+            {
+                self.0.connect_signal(#signal_name, move |m| {
+                    match m.body() {
+                        Ok((#(#args),*)) => handler(#(#args),*),
+                        // TODO log errors, or allow a fallback?
+                        Err(_) => #do_nothing,
+                    }
+                })#wait
+            }
         }
+    } else {
+        quote! {}
+    };
 
+    let methods = quote! {
+        #connect_signal
         #receive_signal
     };
 
