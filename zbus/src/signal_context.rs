@@ -28,6 +28,11 @@ impl<'s> SignalContext<'s> {
             .map_err(Into::into)
     }
 
+    /// Create a new signal context for the given connection and object path.
+    pub fn from_parts(conn: Connection, path: ObjectPath<'s>) -> Self {
+        Self { conn, path }
+    }
+
     /// Get a reference to the associated connection.
     pub fn connection(&self) -> &Connection {
         &self.conn
@@ -36,5 +41,21 @@ impl<'s> SignalContext<'s> {
     /// Get a reference to the associated object path.
     pub fn path(&self) -> &ObjectPath<'s> {
         &self.path
+    }
+
+    /// Creates an owned clone of `self`.
+    pub fn to_owned(&self) -> SignalContext<'static> {
+        SignalContext {
+            conn: self.conn.clone(),
+            path: self.path.to_owned(),
+        }
+    }
+
+    /// Creates an owned clone of `self`.
+    pub fn into_owned(self) -> SignalContext<'static> {
+        SignalContext {
+            conn: self.conn,
+            path: self.path.into_owned(),
+        }
     }
 }
