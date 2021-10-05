@@ -108,26 +108,28 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                 format!("{}Proxy", input.ident)
             }
         });
+        let proxy_opts = ProxyOpts::new(true);
         create_proxy(
             &input,
             iface_name.as_deref(),
             default_path.as_deref(),
             default_service.as_deref(),
             &proxy_name,
-            true,
+            proxy_opts,
         )
     } else {
         quote! {}
     };
     let async_proxy = if gen_async {
         let proxy_name = async_name.unwrap_or_else(|| format!("{}Proxy", input.ident));
+        let proxy_opts = ProxyOpts::new(false);
         create_proxy(
             &input,
             iface_name.as_deref(),
             default_path.as_deref(),
             default_service.as_deref(),
             &proxy_name,
-            false,
+            proxy_opts,
         )
     } else {
         quote! {}
@@ -140,13 +142,13 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     }
 }
 
-pub fn create_proxy(
+fn create_proxy(
     input: &ItemTrait,
     iface_name: Option<&str>,
     default_path: Option<&str>,
     default_service: Option<&str>,
     proxy_name: &str,
-    blocking: bool,
+    proxy_opts: ProxyOpts,
 ) -> TokenStream {
     let zbus = zbus_path();
 
@@ -165,7 +167,7 @@ pub fn create_proxy(
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
     let mut has_properties = false;
-    let proxy_opts = ProxyOpts::new(blocking);
+    let blocking = proxy_opts.blocking;
 
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
