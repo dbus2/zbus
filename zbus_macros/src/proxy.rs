@@ -11,6 +11,7 @@ use crate::utils::*;
 #[derive(Clone)]
 struct ProxyOpts {
     blocking: bool,
+    gen_cached: bool,
     gen_connect: bool,
     gen_dispatch: bool,
     usage: TokenStream,
@@ -21,6 +22,7 @@ impl ProxyOpts {
     fn new() -> Self {
         Self {
             blocking: false,
+            gen_cached: true,
             gen_connect: true,
             gen_dispatch: true,
             usage: quote! { async },
@@ -88,6 +90,12 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                         gen_blocking = lit.value();
                     } else {
                         panic!("Invalid gen_blocking argument")
+                    }
+                } else if nv.path.is_ident("gen_cached") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        proxy_opts.gen_cached = lit.value();
+                    } else {
+                        panic!("Invalid gen_cached argument")
                     }
                 } else if nv.path.is_ident("gen_connect") {
                     if let syn::Lit::Bool(lit) = &nv.lit {
@@ -554,6 +562,7 @@ fn gen_proxy_property(
         usage,
         wait,
         blocking,
+        gen_cached,
         gen_connect,
         ..
     } = proxy_opts;
@@ -645,6 +654,20 @@ fn gen_proxy_property(
 
         let (_, ty_generics, where_clause) = generics.split_for_impl();
 
+        let cached_impl = if *gen_cached {
+            quote! {
+                #[doc = #cached_doc]
+                pub fn #cached_getter(&self) -> ::std::result::Result<
+                    ::std::option::Option<<#ret_type as #zbus::ResultAdapter>::Ok>,
+                    <#ret_type as #zbus::ResultAdapter>::Err>
+                {
+                    self.0.cached_property(#property_name).map_err(::std::convert::Into::into)
+                }
+            }
+        } else {
+            quote! {}
+        };
+
         let connect_impl = if *gen_connect {
             quote! {
                 #[doc = #gen_doc]
@@ -668,14 +691,7 @@ fn gen_proxy_property(
                 #body
             }
 
-            #[doc = #cached_doc]
-            pub fn #cached_getter(&self) -> ::std::result::Result<
-                ::std::option::Option<<#ret_type as #zbus::ResultAdapter>::Ok>,
-                <#ret_type as #zbus::ResultAdapter>::Err>
-            {
-                self.0.cached_property(#property_name).map_err(::std::convert::Into::into)
-            }
-
+            #cached_impl
             #connect_impl
             #receive
         }
