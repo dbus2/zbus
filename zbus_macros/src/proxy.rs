@@ -14,6 +14,7 @@ struct ProxyOpts {
     gen_cached: bool,
     gen_connect: bool,
     gen_dispatch: bool,
+    gen_receive: bool,
     usage: TokenStream,
     wait: TokenStream,
 }
@@ -25,6 +26,7 @@ impl ProxyOpts {
             gen_cached: true,
             gen_connect: true,
             gen_dispatch: true,
+            gen_receive: true,
             usage: quote! { async },
             wait: quote! { .await },
         }
@@ -108,6 +110,12 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                         proxy_opts.gen_dispatch = lit.value();
                     } else {
                         panic!("Invalid gen_dispatch argument")
+                    }
+                } else if nv.path.is_ident("gen_receive") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        proxy_opts.gen_receive = lit.value();
+                    } else {
+                        panic!("Invalid gen_receive argument")
                     }
                 } else {
                     panic!("Unsupported argument");
@@ -564,6 +572,7 @@ fn gen_proxy_property(
         blocking,
         gen_cached,
         gen_connect,
+        gen_receive,
         ..
     } = proxy_opts;
     let zbus = zbus_path();
@@ -595,7 +604,7 @@ fn gen_proxy_property(
             None
         };
 
-        let receive = if *blocking {
+        let receive = if *blocking || !*gen_receive {
             quote! {}
         } else {
             let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
@@ -759,7 +768,7 @@ fn gen_proxy_signal(
         .map(|(i, _)| Literal::usize_unsuffixed(i))
         .collect();
 
-    let (receive_signal, stream_types) = if !proxy_opts.blocking {
+    let (receive_signal, stream_types) = if !proxy_opts.blocking && proxy_opts.gen_receive {
         let mut generics = m.sig.generics.clone();
         let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
         for param in generics
