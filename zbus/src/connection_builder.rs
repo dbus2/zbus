@@ -1,12 +1,17 @@
 use async_io::Async;
 use async_lock::RwLock;
 use static_assertions::assert_impl_all;
-use std::{collections::HashMap, convert::TryInto, os::unix::net::UnixStream, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryInto,
+    os::unix::net::UnixStream,
+    sync::Arc,
+};
 use zvariant::ObjectPath;
 
 use crate::{
     address::{self, Address},
-    names::InterfaceName,
+    names::{InterfaceName, WellKnownName},
     raw::Socket,
     Authenticated, Connection, Error, Guid, Interface, Result,
 };
@@ -34,6 +39,7 @@ pub struct ConnectionBuilder<'a> {
     internal_executor: bool,
     #[derivative(Debug = "ignore")]
     interfaces: Interfaces<'a>,
+    names: HashSet<WellKnownName<'a>>,
 }
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -149,6 +155,23 @@ impl<'a> ConnectionBuilder<'a> {
         Ok(self)
     }
 
+    /// Register a well-known name for this connection on the bus.
+    ///
+    /// This is similar to [`zbus::Connection::register_name`], except the name is requested as part
+    /// of the connection setup ([`ConnectionBuilder::build`]), immediately after interfaces
+    /// registered (through [`ConnectionBuilder::serve_at`]) are advertised. Typically this is
+    /// exactly what you want.
+    pub fn name<W>(mut self, well_known_name: W) -> Result<Self>
+    where
+        W: TryInto<WellKnownName<'a>>,
+        W::Error: Into<Error>,
+    {
+        let well_known_name = well_known_name.try_into().map_err(Into::into)?;
+        self.names.insert(well_known_name);
+
+        Ok(self)
+    }
+
     /// Build the connection, consuming the builder.
     ///
     /// # Errors
@@ -219,6 +242,10 @@ impl<'a> ConnectionBuilder<'a> {
             conn.start_object_server();
         }
 
+        for name in self.names {
+            conn.request_name(name).await?;
+        }
+
         Ok(conn)
     }
 
@@ -230,6 +257,7 @@ impl<'a> ConnectionBuilder<'a> {
             guid: None,
             internal_executor: true,
             interfaces: HashMap::new(),
+            names: HashSet::new(),
         }
     }
 }

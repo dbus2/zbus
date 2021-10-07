@@ -3,7 +3,9 @@ use static_assertions::assert_impl_all;
 use std::{convert::TryInto, os::unix::net::UnixStream};
 use zvariant::ObjectPath;
 
-use crate::{address::Address, blocking::Connection, Error, Guid, Interface, Result};
+use crate::{
+    address::Address, blocking::Connection, names::WellKnownName, Error, Guid, Interface, Result,
+};
 
 /// A builder for [`zbus::blocking::Connection`].
 #[derive(Debug)]
@@ -86,6 +88,20 @@ impl<'a> ConnectionBuilder<'a> {
         P::Error: Into<Error>,
     {
         self.0.serve_at(path, iface).map(Self)
+    }
+
+    /// Register a well-known name for this connection on the bus.
+    ///
+    /// This is similar to [`zbus::blocking::Connection::register_name`], except the name is
+    /// requested as part of the connection setup ([`ConnectionBuilder::build`]), immediately after
+    /// interfaces registered (through [`ConnectionBuilder::serve_at`]) are advertised. Typically
+    /// this is exactly what you want.
+    pub fn name<W>(self, well_known_name: W) -> Result<Self>
+    where
+        W: TryInto<WellKnownName<'a>>,
+        W::Error: Into<Error>,
+    {
+        self.0.name(well_known_name).map(Self)
     }
 
     /// Build the connection, consuming the builder.

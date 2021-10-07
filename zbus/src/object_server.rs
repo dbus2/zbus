@@ -1025,10 +1025,17 @@ mod tests {
                 ConnectionBuilder::unix_stream(p1).p2p(),
             )
         } else {
-            (
-                ConnectionBuilder::session().unwrap(),
-                ConnectionBuilder::session().unwrap(),
-            )
+            let service_conn_builder = ConnectionBuilder::session()
+                .unwrap()
+                .name("org.freedesktop.MyService")
+                .unwrap()
+                .name("org.freedesktop.MyService.foo")
+                .unwrap()
+                .name("org.freedesktop.MyService.bar")
+                .unwrap();
+            let client_conn_builder = ConnectionBuilder::session().unwrap();
+
+            (service_conn_builder, client_conn_builder)
         };
         let (next_tx, next_rx) = bounded(64);
         let iface = MyIfaceImpl::new(next_tx.clone());
@@ -1039,22 +1046,6 @@ mod tests {
         let (service_conn, client_conn) =
             futures_util::try_join!(service_conn_builder.build(), client_conn_builder.build(),)
                 .unwrap();
-
-        if !p2p {
-            service_conn
-                // primary name
-                .request_name("org.freedesktop.MyService")
-                .await
-                .unwrap();
-            service_conn
-                .request_name("org.freedesktop.MyService.foo")
-                .await
-                .unwrap();
-            service_conn
-                .request_name("org.freedesktop.MyService.bar")
-                .await
-                .unwrap();
-        }
 
         let listen = event.listen();
         let child = async_std::task::spawn(my_iface_test(client_conn, event));
