@@ -1189,4 +1189,98 @@ mod tests {
 
         Ok(())
     }
+
+    struct WindowManager {
+        title: String,
+    }
+
+    use zbus::{dbus_interface, dbus_proxy};
+
+    #[dbus_interface(name = "org.freedesktop.zbus.test.WindowManager")]
+    impl WindowManager {
+        #[dbus_interface(property)]
+        fn title(&self) -> String {
+            self.title.clone()
+        }
+    }
+
+    #[dbus_proxy(
+        interface = "org.freedesktop.zbus.test.WindowManager",
+        default_service = "org.freedesktop.zbus.test.WindowManager",
+        default_path = "/test/WindowManager"
+    )]
+    trait WindowManager {
+        #[dbus_proxy(property)]
+        fn title(&self) -> fdo::Result<String>;
+    }
+
+    struct SlowExecutor<T> {
+        task: T,
+        timer: Option<async_io::Timer>,
+    }
+
+    // This emulates an executor that is running other tasks (for 10ms each) between polling the
+    // given future.  It can be done safely if you use pin_project or unpin the task.
+    impl<T: Future> Future for SlowExecutor<T> {
+        type Output = T::Output;
+        fn poll(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<T::Output> {
+            let this = unsafe { self.get_unchecked_mut() }; // for projection
+            let timer = this.timer.get_or_insert_with(|| {
+                async_io::Timer::after(std::time::Duration::from_millis(10))
+            });
+            ready!(Pin::new(timer).poll(ctx));
+            this.timer = None;
+            unsafe { Pin::new_unchecked(&mut this.task) }.poll(ctx)
+        }
+    }
+
+    async fn test_wm_race(n: u64) -> Result<()> {
+        let conn = Connection::session().await?;
+        conn.object_server_mut().await.at(
+            "/test/WindowManager",
+            WindowManager {
+                title: String::from("a"),
+            },
+        )?;
+        conn.request_name("org.freedesktop.zbus.test.WindowManager")
+            .await?;
+        let a = SlowExecutor {
+            timer: None,
+            task: async { WindowManagerProxy::new(&conn).await },
+        };
+
+        let b = async {
+            async_io::Timer::after(std::time::Duration::from_millis(5)).await;
+            for i in 0..=n {
+                async_io::Timer::after(std::time::Duration::from_millis(10)).await;
+                conn.object_server()
+                    .await
+                    .with_mut::<_, _, _, WindowManager>(
+                        "/test/WindowManager",
+                        |mut wm, sc| async move {
+                            wm.title = format!("{}", i);
+                            wm.title_changed(&sc).await?;
+                            Ok(())
+                        },
+                    )
+                    .await?;
+            }
+            Ok(())
+        };
+
+        let (proxy, b) = join!(a, b);
+
+        let no_race = WindowManagerProxy::new(&conn).await?.title().await?;
+        let cached = proxy?.title().await?;
+        assert_eq!(no_race, cached);
+
+        b
+    }
+
+    #[test]
+    fn wm_race() {
+        for n in 0..9 {
+            block_on(test_wm_race(n)).unwrap();
+        }
+    }
 }
