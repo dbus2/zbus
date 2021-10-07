@@ -324,12 +324,7 @@ fn gen_proxy_method_call(
     } = async_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
-    let args: Vec<_> = m
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|arg| arg_ident(arg))
-        .collect();
+    let args: Vec<_> = m.sig.inputs.iter().filter_map(arg_ident).collect();
     let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
     let async_proxy_object = attrs.iter().find_map(|x| match x {
         ItemAttribute::AsyncObject(o) => Some(o.clone()),
