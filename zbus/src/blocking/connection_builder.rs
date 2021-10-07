@@ -1,8 +1,9 @@
 use async_io::block_on;
 use static_assertions::assert_impl_all;
 use std::{convert::TryInto, os::unix::net::UnixStream};
+use zvariant::ObjectPath;
 
-use crate::{address::Address, blocking::Connection, Error, Guid, Result};
+use crate::{address::Address, blocking::Connection, Error, Guid, Interface, Result};
 
 /// A builder for [`zbus::blocking::Connection`].
 #[derive(Debug)]
@@ -70,6 +71,21 @@ impl<'a> ConnectionBuilder<'a> {
     /// ```
     pub fn max_queued(self, max: usize) -> Self {
         Self(self.0.max_queued(max))
+    }
+
+    /// Register a D-Bus [`Interface`] to be served at a given path.
+    ///
+    /// This is similar to [`zbus::blocking::ObjectServer::at`], except that it allows you to have
+    /// your interfaces available immediately after the connection is established. Typically, this
+    /// is exactly what you'd want. Also in contrast to [`zbus::ObjectServer::at`], this method will
+    /// replace any previously added interface with the same name at the same path.
+    pub fn serve_at<P, I>(self, path: P, iface: I) -> Result<Self>
+    where
+        I: Interface,
+        P: TryInto<ObjectPath<'a>>,
+        P::Error: Into<Error>,
+    {
+        self.0.serve_at(path, iface).map(Self)
     }
 
     /// Build the connection, consuming the builder.

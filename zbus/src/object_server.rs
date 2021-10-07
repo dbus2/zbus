@@ -119,6 +119,20 @@ impl Node {
         true
     }
 
+    // FIXME: Better name?
+    fn at_ready(
+        &mut self,
+        name: InterfaceName<'static>,
+        iface: Arc<RwLock<dyn Interface>>,
+    ) -> bool {
+        match self.interfaces.entry(name) {
+            Entry::Vacant(e) => e.insert(iface),
+            Entry::Occupied(_) => return false,
+        };
+
+        true
+    }
+
     async fn with_iface_func<'node, 's, F, Fut, I>(
         &'node self,
         func: F,
@@ -353,6 +367,11 @@ impl ObjectServer {
 
     /// Register a D-Bus [`Interface`] at a given path. (see the example above)
     ///
+    /// Typically you'd want your interfaces to be registered immediately after the associated
+    /// connection is established and therefore use [`zbus::ConnectionBuilder::serve_at`] instead.
+    /// However, there are situations where you'd need to register interfaces dynamically and that's
+    /// where this method becomes useful.
+    ///
     /// If the interface already exists at this path, returns false.
     pub fn at<'p, P, I>(&mut self, path: P, iface: I) -> Result<bool>
     where
@@ -362,6 +381,25 @@ impl ObjectServer {
     {
         let path = path.try_into().map_err(Into::into)?;
         Ok(self.get_node_mut(&path, true).unwrap().at(I::name(), iface))
+    }
+
+    /// Same as `at` but expects an interface already in `Arc<RwLock<dyn Interface>>` form.
+    // FIXME: Better name?
+    pub(crate) fn at_ready<'p, P>(
+        &mut self,
+        path: P,
+        name: InterfaceName<'static>,
+        iface: Arc<RwLock<dyn Interface>>,
+    ) -> Result<bool>
+    where
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
+    {
+        let path = path.try_into().map_err(Into::into)?;
+        Ok(self
+            .get_node_mut(&path, true)
+            .unwrap()
+            .at_ready(name, iface))
     }
 
     /// Unregister a D-Bus [`Interface`] at a given path.
@@ -987,22 +1025,31 @@ mod tests {
     async fn basic_iface_(p2p: bool) {
         let event = event_listener::Event::new();
 
-        let (service_conn, client_conn) = if p2p {
-            let guid = zbus::Guid::generate();
-
+        let guid = zbus::Guid::generate();
+        let (service_conn_builder, client_conn_builder) = if p2p {
             let (p0, p1) = UnixStream::pair().unwrap();
 
-            let service_conn = ConnectionBuilder::unix_stream(p0)
-                .server(&guid)
-                .p2p()
-                .build();
-            let client_conn = ConnectionBuilder::unix_stream(p1).p2p().build();
-
-            futures_util::try_join!(service_conn, client_conn).unwrap()
+            (
+                ConnectionBuilder::unix_stream(p0).server(&guid).p2p(),
+                ConnectionBuilder::unix_stream(p1).p2p(),
+            )
         } else {
-            let client_conn = Connection::session().await.unwrap();
-            let service_conn = Connection::session().await.unwrap();
+            (
+                ConnectionBuilder::session().unwrap(),
+                ConnectionBuilder::session().unwrap(),
+            )
+        };
+        let (next_tx, next_rx) = bounded(64);
+        let iface = MyIfaceImpl::new(next_tx.clone());
+        let service_conn_builder = service_conn_builder
+            .serve_at("/org/freedesktop/MyService", iface)
+            .unwrap();
 
+        let (service_conn, client_conn) =
+            futures_util::try_join!(service_conn_builder.build(), client_conn_builder.build(),)
+                .unwrap();
+
+        if !p2p {
             service_conn
                 // primary name
                 .request_name("org.freedesktop.MyService")
@@ -1016,32 +1063,24 @@ mod tests {
                 .request_name("org.freedesktop.MyService.bar")
                 .await
                 .unwrap();
-
-            (service_conn, client_conn)
-        };
+        }
 
         let listen = event.listen();
         let child = async_std::task::spawn(my_iface_test(client_conn, event));
         // Wait for the listener to be ready
         listen.await;
 
-        let (next_tx, next_rx) = bounded(64);
-        let iface = MyIfaceImpl::new(next_tx.clone());
-        {
-            let mut server = service_conn.object_server_mut().await;
-            server.at("/org/freedesktop/MyService", iface).unwrap();
-            server.start_dispatch();
-
-            server
-                .with(
-                    "/org/freedesktop/MyService",
-                    |iface: InterfaceDeref<'_, MyIfaceImpl>, ctxt| async move {
-                        iface.count_changed(&ctxt).await
-                    },
-                )
-                .await
-                .unwrap();
-        }
+        service_conn
+            .object_server_mut()
+            .await
+            .with(
+                "/org/freedesktop/MyService",
+                |iface: InterfaceDeref<'_, MyIfaceImpl>, ctxt| async move {
+                    iface.count_changed(&ctxt).await
+                },
+            )
+            .await
+            .unwrap();
 
         loop {
             service_conn
