@@ -73,9 +73,6 @@ impl<'a> ConnectionBuilder<'a> {
     }
 
     /// The to-be-created connection will be a peer-to-peer connection.
-    ///
-    /// **Note:** When using [`zbus::ObjectServer`] with a p2p connection, you must explicitly start
-    /// the dispatch process by calling [`zbus::ObjectServer::start_dispatch`].
     pub fn p2p(mut self) -> Self {
         self.p2p = true;
 
