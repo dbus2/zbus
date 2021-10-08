@@ -53,11 +53,6 @@ org.zbus.MyGreeter                             412452 server            elmarco 
 This example is not handling incoming messages yet. Any attempt to call the server will time out
 (including the shell completion!).
 
-### ⚠ Service activation pitfalls
-
-Make sure to request the service name after you have setup the handlers, otherwise incoming messages
-may be lost. Activated services may receive calls (or messages) right after taking their name.
-
 ## Handling low-level messages
 
 At the low-level, you can handle method calls by checking the incoming messages manually.
@@ -68,6 +63,7 @@ by replacing the loop above with this code:
 ```rust,no_run
 use futures_util::stream::TryStreamExt;
 
+// Although we use `async-std` here, you can use any async runtime of choice.
 # #[async_std::main]
 # async fn main() -> zbus::Result<()> {
 #    let connection = zbus::Connection::session()
@@ -153,6 +149,41 @@ async fn main() -> Result<()> {
 }
 ```
 
+### ⚠ Service activation pitfalls
+
+A possible footgun here is that you must request the service name **after** you setup the handlers,
+otherwise incoming messages may be lost. Activated services may receive calls (or messages) right
+after taking their name. This is why it's typically better to make use of `ConnectionBuilder` for
+setting up your interfaces and requesting names, and not have to care about this:
+
+```rust,no_run
+# use zbus::{SignalContext, ObjectServer, ConnectionBuilder, dbus_interface, fdo, Result};
+#
+#
+# struct Greeter;
+#
+# #[dbus_interface(name = "org.zbus.MyGreeter1")]
+# impl Greeter {
+#     async fn say_hello(&self, name: &str) -> String {
+#         format!("Hello {}!", name)
+#     }
+# }
+#
+# #[async_std::main]
+# async fn main() -> Result<()> {
+    let _ = ConnectionBuilder::session()?
+        .name("org.zbus.MyGreeter")?
+        .serve_at("/org/zbus/MyGreeter", Greeter)?
+        .build()
+        .await?;
+#     loop {
+#         // do something else, sleep or timeout here:
+#         // handling D-Bus messages is done in the background
+#         std::thread::park();
+#     }
+# }
+```
+
 It should work with the same `busctl` command used previously.
 
 This time, we can also introspect the service:
@@ -183,7 +214,7 @@ synchronize with the interface handlers from outside, thanks to the `event_liste
 (this is just one of the many ways).
 
 ```rust,no_run
-# use zbus::{SignalContext, ObjectServer, Connection, dbus_interface, fdo, Result};
+# use zbus::{SignalContext, ObjectServer, ConnectionBuilder, dbus_interface, fdo, Result};
 #
 use event_listener::Event;
 
@@ -227,19 +258,15 @@ impl Greeter {
 // Although we use `async-std` here, you can use any async runtime of choice.
 #[async_std::main]
 async fn main() -> Result<()> {
-    let connection = Connection::session()
-        .await?;
     let greeter = Greeter {
         name: "GreeterName".to_string(),
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    connection
-        .object_server_mut()
-        .await
-        .at("/org/zbus/MyGreeter", greeter)?;
-    connection
-        .request_name("org.zbus.MyGreeter")
+    let _ = ConnectionBuilder::session()?
+        .name("org.zbus.MyGreeter")?
+        .serve_at("/org/zbus/MyGreeter", greeter)?
+        .build()
         .await?;
 
     done_listener.wait();

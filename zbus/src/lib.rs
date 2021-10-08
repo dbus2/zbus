@@ -78,7 +78,7 @@
 //!     thread::sleep,
 //!     time::Duration,
 //! };
-//! use zbus::{ObjectServer, Connection, dbus_interface, fdo};
+//! use zbus::{ObjectServer, ConnectionBuilder, dbus_interface, fdo};
 //!
 //! struct Greeter {
 //!     count: u64
@@ -96,15 +96,11 @@
 //! // Although we use `async-std` here, you can use any async runtime of choice.
 //! #[async_std::main]
 //! async fn main() -> Result<(), Box<dyn Error>> {
-//!     let connection = Connection::session()
-//!         .await?;
-//!     let mut greeter = Greeter { count: 0 };
-//!     connection
-//!         .object_server_mut()
-//!         .await
-//!         .at("/org/zbus/MyGreeter", greeter)?;
-//!     connection
-//!         .request_name("org.zbus.MyGreeter")
+//!     let greeter = Greeter { count: 0 };
+//!     let _ = ConnectionBuilder::session()?
+//!         .name("org.zbus.MyGreeter")?
+//!         .serve_at("/org/zbus/MyGreeter", greeter)?
+//!         .build()
 //!         .await?;
 //!
 //!     // Do other things or go to sleep.
@@ -613,8 +609,6 @@ mod tests {
         // the return type and zbus only removing the outer `()` only and then it not matching the
         // signature we receive on the reply message.
         use zvariant::{ObjectPath, Value};
-        let conn = blocking::Connection::session().unwrap();
-        let service_name = conn.unique_name().unwrap().clone();
 
         struct Secret;
         #[super::dbus_interface(name = "org.freedesktop.Secret.Service")]
@@ -634,9 +628,13 @@ mod tests {
         }
 
         let secret = Secret;
-        conn.object_server_mut()
-            .at("/org/freedesktop/secrets", secret)
+        let conn = blocking::ConnectionBuilder::session()
+            .unwrap()
+            .serve_at("/org/freedesktop/secrets", secret)
+            .unwrap()
+            .build()
             .unwrap();
+        let service_name = conn.unique_name().unwrap().clone();
 
         let child = std::thread::spawn(move || {
             let conn = blocking::Connection::session().unwrap();
@@ -810,11 +808,14 @@ mod tests {
 
         rx.recv().unwrap();
         for _ in 0..2 {
-            let conn = blocking::Connection::session().unwrap();
-            conn.object_server_mut()
-                .at("/org/freedesktop/zbus/ComeAndGo", ComeAndGo)
+            let conn = blocking::ConnectionBuilder::session()
+                .unwrap()
+                .serve_at("/org/freedesktop/zbus/ComeAndGo", ComeAndGo)
+                .unwrap()
+                .name("org.freedesktop.zbus.ComeAndGo")
+                .unwrap()
+                .build()
                 .unwrap();
-            conn.request_name("org.freedesktop.zbus.ComeAndGo").unwrap();
             conn.object_server_mut()
                 .with(
                     "/org/freedesktop/zbus/ComeAndGo",
