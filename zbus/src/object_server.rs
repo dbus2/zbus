@@ -572,13 +572,18 @@ impl ObjectServer {
             .flatten()
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
 
-        let root = self.root.read().await;
-        let node = root
-            .get_child(&path)
-            .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
-        let iface = node.interface_lock(iface.as_ref()).ok_or_else(|| {
-            fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
-        })?;
+        // Ensure the root lock isn't held while dispatching the message. That
+        // way, the object server can be mutated during that time.
+        let iface = {
+            let root = self.root.read().await;
+            let node = root
+                .get_child(&path)
+                .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
+
+            node.interface_lock(iface.as_ref()).ok_or_else(|| {
+                fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
+            })?
+        };
 
         let read_lock = iface.read().await;
         match read_lock.call(self, connection, msg, member.as_ref()) {
@@ -669,7 +674,7 @@ mod tests {
 
     use crate::{
         dbus_interface, dbus_proxy, CacheProperties, Connection, ConnectionBuilder, InterfaceRef,
-        MessageHeader, MessageType, SignalContext,
+        MessageHeader, MessageType, ObjectServer, SignalContext,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -803,6 +808,20 @@ mod tests {
             self.next_tx.send(NextAction::CreateObj(key)).await.unwrap();
         }
 
+        async fn create_obj_inside(
+            &self,
+            #[zbus(object_server)] object_server: &ObjectServer,
+            key: String,
+        ) {
+            object_server
+                .at(
+                    format!("/zbus/test/{}", key),
+                    MyIfaceImpl::new(self.next_tx.clone()),
+                )
+                .await
+                .unwrap();
+        }
+
         async fn destroy_obj(&self, key: String) {
             self.next_tx
                 .send(NextAction::DestroyObj(key))
@@ -933,6 +952,19 @@ mod tests {
         proxy.destroy_obj("MyObj").await?;
         assert!(my_obj_proxy.introspect().await.is_err());
         assert!(my_obj_proxy.ping().await.is_err());
+
+        // Make sure methods modifying the ObjectServer can be called without
+        // deadlocks.
+        proxy
+            .call_method("CreateObjInside", &("CreatedInside"))
+            .await?;
+        let created_inside_proxy = MyIfaceProxy::builder(&conn)
+            .destination("org.freedesktop.MyService")?
+            .path("/zbus/test/CreatedInside")?
+            .build()
+            .await?;
+        created_inside_proxy.ping().await?;
+        proxy.destroy_obj("CreatedInside").await?;
 
         proxy.quit().await?;
         Ok(val)
