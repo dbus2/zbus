@@ -133,7 +133,7 @@ async fn main() -> Result<()> {
     let connection = Connection::session().await?;
     // setup the server
     connection
-        .object_server_mut()
+        .object_server()
         .await
         .at("/org/zbus/MyGreeter", Greeter)
         .await?;
@@ -340,7 +340,7 @@ example code:
 # #[async_std::main]
 # async fn main() -> zbus::Result<()> {
 # let connection = zbus::Connection::session().await?;
-# let mut object_server = connection.object_server_mut().await;
+# let object_server = connection.object_server().await;
 use zbus::InterfaceDerefMut;
 
 let iface_ref = object_server.interface::<_, Greeter>("/org/zbus/MyGreeter").await?;

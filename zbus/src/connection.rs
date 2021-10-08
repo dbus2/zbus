@@ -2,7 +2,7 @@ use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
 use async_io::block_on;
-use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use async_lock::{Mutex, RwLock, RwLockReadGuard};
 use async_task::Task;
 use event_listener::EventListener;
 use once_cell::sync::OnceCell;
@@ -12,7 +12,7 @@ use std::{
     collections::{HashMap, HashSet},
     convert::TryInto,
     io::{self, ErrorKind},
-    ops::{Deref, DerefMut},
+    ops::Deref,
     pin::Pin,
     sync::{
         self,
@@ -150,7 +150,7 @@ impl MessageReceiverTask {
 /// Typically, a connection is made to the session bus with [`Connection::session`], or to the
 /// system bus with [`Connection::system`]. Then the connection is used with [`crate::Proxy`]
 /// instances or the on-demand [`ObjectServer`] instance that can be accessed through
-/// [`Connection::object_server`] or [`Connection::object_server_mut`].
+/// [`Connection::object_server`].
 ///
 /// `Connection` implements [`Clone`] and cloning it is a very cheap operation, as the underlying
 /// data is not cloned. This makes it very convenient to share the connection between different
@@ -679,47 +679,6 @@ impl Connection {
             .object_server
             .get_or_init(|| self.setup_object_server(start))
             .read()
-            .await
-    }
-
-    /// Get a mutable reference to the associated [`ObjectServer`].
-    ///
-    /// The `ObjectServer` is created on-demand.
-    ///
-    /// # Caveats
-    ///
-    /// The return value of this method should not be kept around for longer than needed. The method
-    /// dispatch machinery of the [`ObjectServer`] will be paused as long as the return value is alive.
-    pub async fn object_server_mut(&self) -> impl DerefMut<Target = ObjectServer> + '_ {
-        // FIXME: Maybe it makes sense after all to implement DerefMut<Target= ObjectServer>
-        // for crate::ObjectServer instead of this wrapper?
-        struct Wrapper<'s>(RwLockWriteGuard<'s, blocking::ObjectServer>);
-        impl Deref for Wrapper<'_> {
-            type Target = ObjectServer;
-
-            fn deref(&self) -> &Self::Target {
-                self.0.inner()
-            }
-        }
-        impl DerefMut for Wrapper<'_> {
-            fn deref_mut(&mut self) -> &mut Self::Target {
-                self.0.inner_mut()
-            }
-        }
-
-        let ret = Wrapper(self.sync_object_server_mut(true).await);
-
-        ret
-    }
-
-    pub(crate) async fn sync_object_server_mut(
-        &self,
-        start: bool,
-    ) -> RwLockWriteGuard<'_, blocking::ObjectServer> {
-        self.inner
-            .object_server
-            .get_or_init(|| self.setup_object_server(start))
-            .write()
             .await
     }
 

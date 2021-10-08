@@ -1,7 +1,4 @@
-use std::{
-    convert::TryInto,
-    ops::{Deref, DerefMut},
-};
+use std::{convert::TryInto, ops::Deref};
 
 use async_io::block_on;
 use static_assertions::assert_impl_all;
@@ -58,7 +55,7 @@ where
     ///# let connection = Connection::session()?;
     ///#
     ///# let path = "/org/zbus/path";
-    ///# connection.object_server_mut().at(path, MyIface(22))?;
+    ///# connection.object_server().at(path, MyIface(22))?;
     /// let mut object_server = connection.object_server();
     /// let iface_ref = object_server.interface::<_, MyIface>(path)?;
     /// let mut iface = iface_ref.get_mut();
@@ -118,7 +115,7 @@ where
 /// let quit_listener = quit_event.listen();
 /// let interface = Example::new(quit_event);
 /// connection
-///     .object_server_mut()
+///     .object_server()
 ///     .at("/org/zbus/path", interface)?;
 ///
 /// quit_listener.wait();
@@ -149,7 +146,7 @@ impl ObjectServer {
     /// If the interface already exists at this path, returns false.
     ///
     /// [`Interface`]: trait.Interface.html
-    pub fn at<'p, P, I>(&mut self, path: P, iface: I) -> Result<bool>
+    pub fn at<'p, P, I>(&self, path: P, iface: I) -> Result<bool>
     where
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
@@ -164,7 +161,7 @@ impl ObjectServer {
     /// Returns whether the object was destroyed.
     ///
     /// [`Interface`]: trait.Interface.html
-    pub fn remove<'p, I, P>(&mut self, path: P) -> Result<bool>
+    pub fn remove<'p, I, P>(&self, path: P) -> Result<bool>
     where
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
@@ -203,7 +200,7 @@ impl ObjectServer {
     ///# let connection = Connection::session()?;
     ///#
     ///# let path = "/org/zbus/path";
-    ///# connection.object_server_mut().at(path, MyIface)?;
+    ///# connection.object_server().at(path, MyIface)?;
     /// let iface_ref = connection
     ///     .object_server()
     ///     .interface::<_, MyIface>(path)?;
@@ -228,11 +225,6 @@ impl ObjectServer {
         &self.azync
     }
 
-    /// Get a mutable reference to the underlying async ObjectServer.
-    pub fn inner_mut(&mut self) -> &mut crate::ObjectServer {
-        &mut self.azync
-    }
-
     /// Get the underlying async ObjectServer, consuming `self`.
     pub fn into_inner(self) -> crate::ObjectServer {
         self.azync
@@ -244,12 +236,6 @@ impl Deref for ObjectServer {
 
     fn deref(&self) -> &Self::Target {
         self.inner()
-    }
-}
-
-impl DerefMut for ObjectServer {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner_mut()
     }
 }
 

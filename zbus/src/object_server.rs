@@ -122,7 +122,7 @@ where
     ///# let connection = Connection::session().await?;
     ///#
     ///# let path = "/org/zbus/path";
-    ///# connection.object_server_mut().await.at(path, MyIface(22)).await?;
+    ///# connection.object_server().await.at(path, MyIface(22)).await?;
     /// let mut object_server = connection.object_server().await;
     /// let iface_ref = object_server.interface::<_, MyIface>(path).await?;
     /// let mut iface = iface_ref.get_mut().await;
@@ -361,7 +361,7 @@ impl Node {
 /// let quit_listener = quit_event.listen();
 /// let interface = Example::new(quit_event);
 /// connection
-///     .object_server_mut()
+///     .object_server()
 ///     .await
 ///     .at("/org/zbus/path", interface)
 ///     .await?;
@@ -504,7 +504,7 @@ impl ObjectServer {
     ///# let connection = Connection::session().await?;
     ///#
     ///# let path = "/org/zbus/path";
-    ///# connection.object_server_mut().await.at(path, MyIface(0)).await?;
+    ///# connection.object_server().await.at(path, MyIface(0)).await?;
     /// let iface_ref = connection
     ///     .object_server()
     ///     .await
@@ -992,7 +992,7 @@ mod tests {
         listen.await;
 
         let iface: InterfaceRef<MyIfaceImpl> = service_conn
-            .object_server_mut()
+            .object_server()
             .await
             .interface("/org/freedesktop/MyService")
             .await
@@ -1014,7 +1014,7 @@ mod tests {
                 NextAction::CreateObj(key) => {
                     let path = format!("/zbus/test/{}", key);
                     service_conn
-                        .object_server_mut()
+                        .object_server()
                         .await
                         .at(path, MyIfaceImpl::new(next_tx.clone()))
                         .await
@@ -1023,7 +1023,7 @@ mod tests {
                 NextAction::DestroyObj(key) => {
                     let path = format!("/zbus/test/{}", key);
                     service_conn
-                        .object_server_mut()
+                        .object_server()
                         .await
                         .remove::<MyIfaceImpl, _>(path)
                         .await

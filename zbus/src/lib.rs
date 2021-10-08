@@ -812,7 +812,7 @@ mod tests {
                 .unwrap();
 
             let iface_ref = conn
-                .object_server_mut()
+                .object_server()
                 .interface::<_, ComeAndGo>("/org/freedesktop/zbus/ComeAndGo")
                 .unwrap();
             block_on(ComeAndGo::the_signal(iface_ref.signal_context())).unwrap();
