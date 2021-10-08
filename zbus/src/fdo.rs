@@ -54,7 +54,8 @@ impl Introspectable {
     ) -> Result<String> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let node = server
-            .get_node(path)
+            .root()
+            .get_child(path)
             .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{}'", path)))?;
 
         Ok(node.introspect().await)
@@ -124,7 +125,8 @@ impl Properties {
     ) -> Result<OwnedValue> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
-            .get_node(path)
+            .root()
+            .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
@@ -150,7 +152,8 @@ impl Properties {
     ) -> Result<()> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
-            .get_node(path)
+            .root()
+            .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
@@ -189,7 +192,8 @@ impl Properties {
     ) -> Result<HashMap<String, OwnedValue>> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let iface = server
-            .get_node(path)
+            .root()
+            .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))

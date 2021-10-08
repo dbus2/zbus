@@ -85,6 +85,49 @@ impl Node {
         node
     }
 
+    // Get the child Node at path.
+    pub(crate) fn get_child(&self, path: &ObjectPath<'_>) -> Option<&Node> {
+        let mut node = self;
+
+        for i in path.split('/').skip(1) {
+            if i.is_empty() {
+                continue;
+            }
+            match node.children.get(i) {
+                Some(n) => node = n,
+                None => return None,
+            }
+        }
+
+        Some(node)
+    }
+
+    // Get the child Node at path. Optionally create one if it doesn't exist.
+    fn get_child_mut(&mut self, path: &ObjectPath<'_>, create: bool) -> Option<&mut Node> {
+        let mut node = self;
+        let mut node_path = String::new();
+
+        for i in path.split('/').skip(1) {
+            if i.is_empty() {
+                continue;
+            }
+            write!(&mut node_path, "/{}", i).unwrap();
+            match node.children.entry(i.into()) {
+                Entry::Vacant(e) => {
+                    if create {
+                        let path = node_path.as_str().try_into().expect("Invalid Object Path");
+                        node = e.insert(Node::new(path));
+                    } else {
+                        return None;
+                    }
+                }
+                Entry::Occupied(e) => node = e.into_mut(),
+            }
+        }
+
+        Some(node)
+    }
+
     pub(crate) fn interface_lock(
         &self,
         interface_name: InterfaceName<'_>,
@@ -322,47 +365,8 @@ impl ObjectServer {
         }
     }
 
-    // Get the Node at path.
-    pub(crate) fn get_node(&self, path: &ObjectPath<'_>) -> Option<&Node> {
-        let mut node = &self.root;
-
-        for i in path.split('/').skip(1) {
-            if i.is_empty() {
-                continue;
-            }
-            match node.children.get(i) {
-                Some(n) => node = n,
-                None => return None,
-            }
-        }
-
-        Some(node)
-    }
-
-    // Get the Node at path. Optionally create one if it doesn't exist.
-    fn get_node_mut(&mut self, path: &ObjectPath<'_>, create: bool) -> Option<&mut Node> {
-        let mut node = &mut self.root;
-        let mut node_path = String::new();
-
-        for i in path.split('/').skip(1) {
-            if i.is_empty() {
-                continue;
-            }
-            write!(&mut node_path, "/{}", i).unwrap();
-            match node.children.entry(i.into()) {
-                Entry::Vacant(e) => {
-                    if create {
-                        let path = node_path.as_str().try_into().expect("Invalid Object Path");
-                        node = e.insert(Node::new(path));
-                    } else {
-                        return None;
-                    }
-                }
-                Entry::Occupied(e) => node = e.into_mut(),
-            }
-        }
-
-        Some(node)
+    pub(crate) fn root(&self) -> &Node {
+        &self.root
     }
 
     /// Register a D-Bus [`Interface`] at a given path. (see the example above)
@@ -380,7 +384,11 @@ impl ObjectServer {
         P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
-        Ok(self.get_node_mut(&path, true).unwrap().at(I::name(), iface))
+        Ok(self
+            .root
+            .get_child_mut(&path, true)
+            .unwrap()
+            .at(I::name(), iface))
     }
 
     /// Same as `at` but expects an interface already in `Arc<RwLock<dyn Interface>>` form.
@@ -397,7 +405,8 @@ impl ObjectServer {
     {
         let path = path.try_into().map_err(Into::into)?;
         Ok(self
-            .get_node_mut(&path, true)
+            .root
+            .get_child_mut(&path, true)
             .unwrap()
             .at_ready(name, iface))
     }
@@ -414,7 +423,8 @@ impl ObjectServer {
     {
         let path = path.try_into().map_err(Into::into)?;
         let node = self
-            .get_node_mut(&path, false)
+            .root
+            .get_child_mut(&path, false)
             .ok_or(Error::InterfaceNotFound)?;
         if !node.remove_interface(I::name()) {
             return Err(Error::InterfaceNotFound);
@@ -425,7 +435,8 @@ impl ObjectServer {
             let ppath = ObjectPath::from_string_unchecked(
                 path_parts.fold(String::new(), |a, p| format!("/{}{}", p, a)),
             );
-            self.get_node_mut(&ppath, false)
+            self.root
+                .get_child_mut(&ppath, false)
                 .unwrap()
                 .remove_node(last_part);
             return Ok(true);
@@ -482,7 +493,7 @@ impl ObjectServer {
         P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
-        let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+        let node = self.root.get_child(&path).ok_or(Error::InterfaceNotFound)?;
         let conn = self.connection();
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
         let ctxt = SignalContext::new(&conn, path).unwrap();
@@ -540,7 +551,7 @@ impl ObjectServer {
         P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
-        let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+        let node = self.root.get_child(&path).ok_or(Error::InterfaceNotFound)?;
         let conn = self.connection();
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
         let ctxt = SignalContext::new(&conn, path).unwrap();
@@ -556,7 +567,7 @@ impl ObjectServer {
         P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
-        let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+        let node = self.root.get_child(&path).ok_or(Error::InterfaceNotFound)?;
 
         node.get_interface().await
     }
@@ -614,7 +625,7 @@ impl ObjectServer {
         P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
-        let node = self.get_node(&path).ok_or(Error::InterfaceNotFound)?;
+        let node = self.root.get_child(&path).ok_or(Error::InterfaceNotFound)?;
 
         node.get_interface_mut().await
     }
@@ -645,7 +656,8 @@ impl ObjectServer {
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
 
         let node = self
-            .get_node(&path)
+            .root
+            .get_child(&path)
             .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
         let iface = node.interface_lock(iface.as_ref()).ok_or_else(|| {
             fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
