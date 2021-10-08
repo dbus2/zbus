@@ -609,8 +609,6 @@ mod tests {
         // the return type and zbus only removing the outer `()` only and then it not matching the
         // signature we receive on the reply message.
         use zvariant::{ObjectPath, Value};
-        let conn = blocking::Connection::session().unwrap();
-        let service_name = conn.unique_name().unwrap().clone();
 
         struct Secret;
         #[super::dbus_interface(name = "org.freedesktop.Secret.Service")]
@@ -630,9 +628,13 @@ mod tests {
         }
 
         let secret = Secret;
-        conn.object_server_mut()
-            .at("/org/freedesktop/secrets", secret)
+        let conn = blocking::ConnectionBuilder::session()
+            .unwrap()
+            .serve_at("/org/freedesktop/secrets", secret)
+            .unwrap()
+            .build()
             .unwrap();
+        let service_name = conn.unique_name().unwrap().clone();
 
         let child = std::thread::spawn(move || {
             let conn = blocking::Connection::session().unwrap();
@@ -806,11 +808,14 @@ mod tests {
 
         rx.recv().unwrap();
         for _ in 0..2 {
-            let conn = blocking::Connection::session().unwrap();
-            conn.object_server_mut()
-                .at("/org/freedesktop/zbus/ComeAndGo", ComeAndGo)
+            let conn = blocking::ConnectionBuilder::session()
+                .unwrap()
+                .serve_at("/org/freedesktop/zbus/ComeAndGo", ComeAndGo)
+                .unwrap()
+                .name("org.freedesktop.zbus.ComeAndGo")
+                .unwrap()
+                .build()
                 .unwrap();
-            conn.request_name("org.freedesktop.zbus.ComeAndGo").unwrap();
             conn.object_server_mut()
                 .with(
                     "/org/freedesktop/zbus/ComeAndGo",
