@@ -78,7 +78,7 @@
 //!     thread::sleep,
 //!     time::Duration,
 //! };
-//! use zbus::{ObjectServer, Connection, dbus_interface, fdo};
+//! use zbus::{ObjectServer, ConnectionBuilder, dbus_interface, fdo};
 //!
 //! struct Greeter {
 //!     count: u64
@@ -96,15 +96,11 @@
 //! // Although we use `async-std` here, you can use any async runtime of choice.
 //! #[async_std::main]
 //! async fn main() -> Result<(), Box<dyn Error>> {
-//!     let connection = Connection::session()
-//!         .await?;
-//!     let mut greeter = Greeter { count: 0 };
-//!     connection
-//!         .object_server_mut()
-//!         .await
-//!         .at("/org/zbus/MyGreeter", greeter)?;
-//!     connection
-//!         .request_name("org.zbus.MyGreeter")
+//!     let greeter = Greeter { count: 0 };
+//!     let _ = ConnectionBuilder::session()?
+//!         .name("org.zbus.MyGreeter")?
+//!         .serve_at("/org/zbus/MyGreeter", greeter)?
+//!         .build()
 //!         .await?;
 //!
 //!     // Do other things or go to sleep.
