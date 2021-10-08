@@ -698,13 +698,16 @@ impl Connection {
             }
         }
 
-        Wrapper(self.sync_object_server().await)
+        Wrapper(self.sync_object_server(true).await)
     }
 
-    pub(crate) async fn sync_object_server(&self) -> RwLockReadGuard<'_, blocking::ObjectServer> {
+    pub(crate) async fn sync_object_server(
+        &self,
+        start: bool,
+    ) -> RwLockReadGuard<'_, blocking::ObjectServer> {
         self.inner
             .object_server
-            .get_or_init(|| self.setup_object_server())
+            .get_or_init(|| self.setup_object_server(start))
             .read()
             .await
     }
@@ -734,21 +737,24 @@ impl Connection {
             }
         }
 
-        Wrapper(self.sync_object_server_mut().await)
+        let ret = Wrapper(self.sync_object_server_mut(true).await);
+
+        ret
     }
 
     pub(crate) async fn sync_object_server_mut(
         &self,
+        start: bool,
     ) -> RwLockWriteGuard<'_, blocking::ObjectServer> {
         self.inner
             .object_server
-            .get_or_init(|| self.setup_object_server())
+            .get_or_init(|| self.setup_object_server(start))
             .write()
             .await
     }
 
-    fn setup_object_server(&self) -> RwLock<blocking::ObjectServer> {
-        if self.is_bus() {
+    fn setup_object_server(&self, start: bool) -> RwLock<blocking::ObjectServer> {
+        if start {
             self.start_object_server();
         }
 

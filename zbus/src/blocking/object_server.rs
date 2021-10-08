@@ -74,6 +74,11 @@ impl ObjectServer {
 
     /// Register a D-Bus [`Interface`] at a given path. (see the example above)
     ///
+    /// Typically you'd want your interfaces to be registered immediately after the associated
+    /// connection is established and therefore use [`zbus::blocking::ConnectionBuilder::serve_at`]
+    /// instead. However, there are situations where you'd need to register interfaces dynamically
+    /// and that's where this method becomes useful.
+    ///
     /// If the interface already exists at this path, returns false.
     ///
     /// [`Interface`]: trait.Interface.html

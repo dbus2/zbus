@@ -1,11 +1,19 @@
 use async_io::Async;
+use async_lock::RwLock;
 use static_assertions::assert_impl_all;
-use std::{convert::TryInto, os::unix::net::UnixStream};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryInto,
+    os::unix::net::UnixStream,
+    sync::Arc,
+};
+use zvariant::ObjectPath;
 
 use crate::{
     address::{self, Address},
+    names::{InterfaceName, WellKnownName},
     raw::Socket,
-    Authenticated, Connection, Error, Guid, Result,
+    Authenticated, Connection, Error, Guid, Interface, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -17,14 +25,21 @@ enum Target {
     Socket(Box<dyn Socket>),
 }
 
+type Interfaces<'a> =
+    HashMap<ObjectPath<'a>, HashMap<InterfaceName<'static>, Arc<RwLock<dyn Interface>>>>;
+
 /// A builder for [`zbus::Connection`].
-#[derive(Debug)]
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 pub struct ConnectionBuilder<'a> {
     target: Target,
     max_queued: Option<usize>,
     guid: Option<&'a Guid>,
     p2p: bool,
     internal_executor: bool,
+    #[derivative(Debug = "ignore")]
+    interfaces: Interfaces<'a>,
+    names: HashSet<WellKnownName<'a>>,
 }
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -64,9 +79,6 @@ impl<'a> ConnectionBuilder<'a> {
     }
 
     /// The to-be-created connection will be a peer-to-peer connection.
-    ///
-    /// **Note:** When using [`zbus::ObjectServer`] with a p2p connection, you must explicitly start
-    /// the dispatch process by calling [`zbus::ObjectServer::start_dispatch`].
     pub fn p2p(mut self) -> Self {
         self.p2p = true;
 
@@ -122,6 +134,42 @@ impl<'a> ConnectionBuilder<'a> {
         self.internal_executor = enabled;
 
         self
+    }
+
+    /// Register a D-Bus [`Interface`] to be served at a given path.
+    ///
+    /// This is similar to [`zbus::ObjectServer::at`], except that it allows you to have your
+    /// interfaces available immediately after the connection is established. Typically, this is
+    /// exactly what you'd want. Also in contrast to [`zbus::ObjectServer::at`], this method will
+    /// replace any previously added interface with the same name at the same path.
+    pub fn serve_at<P, I>(mut self, path: P, iface: I) -> Result<Self>
+    where
+        I: Interface,
+        P: TryInto<ObjectPath<'a>>,
+        P::Error: Into<Error>,
+    {
+        let path = path.try_into().map_err(Into::into)?;
+        let entry = self.interfaces.entry(path).or_default();
+        entry.insert(I::name(), Arc::new(RwLock::new(iface)));
+
+        Ok(self)
+    }
+
+    /// Register a well-known name for this connection on the bus.
+    ///
+    /// This is similar to [`zbus::Connection::register_name`], except the name is requested as part
+    /// of the connection setup ([`ConnectionBuilder::build`]), immediately after interfaces
+    /// registered (through [`ConnectionBuilder::serve_at`]) are advertised. Typically this is
+    /// exactly what you want.
+    pub fn name<W>(mut self, well_known_name: W) -> Result<Self>
+    where
+        W: TryInto<WellKnownName<'a>>,
+        W::Error: Into<Error>,
+    {
+        let well_known_name = well_known_name.try_into().map_err(Into::into)?;
+        self.names.insert(well_known_name);
+
+        Ok(self)
     }
 
     /// Build the connection, consuming the builder.
@@ -180,6 +228,24 @@ impl<'a> ConnectionBuilder<'a> {
         let mut conn = Connection::new(auth, !self.p2p, self.internal_executor).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
 
+        if !self.interfaces.is_empty() {
+            let mut object_server = conn.sync_object_server_mut(false).await;
+            for (path, interfaces) in self.interfaces {
+                for (name, iface) in interfaces {
+                    // FIXME: Log warning message on `at` returning `false`.
+                    let added = object_server.at_ready(path.clone(), name, iface)?;
+                    // Duplicates shouldn't happen.
+                    assert!(added);
+                }
+            }
+
+            conn.start_object_server();
+        }
+
+        for name in self.names {
+            conn.request_name(name).await?;
+        }
+
         Ok(conn)
     }
 
@@ -190,6 +256,8 @@ impl<'a> ConnectionBuilder<'a> {
             max_queued: None,
             guid: None,
             internal_executor: true,
+            interfaces: HashMap::new(),
+            names: HashSet::new(),
         }
     }
 }
