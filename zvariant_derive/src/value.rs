@@ -42,9 +42,10 @@ fn impl_struct(
                 .next()
                 .cloned()
                 .unwrap_or_else(|| statc_lifetime.clone());
-            if lifetimes.next().is_some() {
-                panic!("Type with more than 1 lifetime not supported");
-            }
+            assert!(
+                lifetimes.next().is_none(),
+                "Type with more than 1 lifetime not supported"
+            );
 
             (quote! { #zv::Value<#value_lifetime> }, value_lifetime)
         }
