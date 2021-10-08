@@ -41,8 +41,7 @@ fn fd_recvmsg(fd: RawFd, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)>
             }
             Ok((msg.bytes, fds))
         }
-        Err(nix::Error::Sys(e)) => Err(e.into()),
-        _ => Err(io::Error::new(io::ErrorKind::Other, "unhandled nix error")),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -60,8 +59,7 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
             "failed to write to buffer",
         )),
         Ok(n) => Ok(n),
-        Err(nix::Error::Sys(e)) => Err(e.into()),
-        _ => Err(io::Error::new(io::ErrorKind::Other, "unhandled nix error")),
+        Err(e) => Err(e.into()),
     }
 }
 
