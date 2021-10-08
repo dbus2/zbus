@@ -57,6 +57,7 @@ trait Notifications {
     ) -> zbus::Result<u32>;
 }
 
+// Although we use `async-std` here, you can use any async runtime of choice.
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let connection = Connection::session().await?;
@@ -104,6 +105,7 @@ impl Greeter {
     }
 }
 
+// Although we use `async-std` here, you can use any async runtime of choice.
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let connection = Connection::session()
@@ -265,6 +267,7 @@ for allowing unprivileged processes to speak to privileged processes.
 use zbus::Connection;
 use zbus_polkit::policykit1::*;
 
+// Although we use `async-std` here, you can use any async runtime of choice.
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let connection = Connection::system().await?;

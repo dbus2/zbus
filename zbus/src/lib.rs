@@ -45,6 +45,7 @@
 //!     ) -> zbus::Result<u32>;
 //! }
 //!
+//! // Although we use `async-std` here, you can use any async runtime of choice.
 //! #[async_std::main]
 //! async fn main() -> Result<(), Box<dyn Error>> {
 //!     let connection = Connection::session().await?;
@@ -92,6 +93,7 @@
 //!     }
 //! }
 //!
+//! // Although we use `async-std` here, you can use any async runtime of choice.
 //! #[async_std::main]
 //! async fn main() -> Result<(), Box<dyn Error>> {
 //!     let connection = Connection::session()

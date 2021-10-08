@@ -69,6 +69,7 @@ use std::error::Error;
 use zbus::Connection;
 use zvariant::Value;
 
+// Although we use `async-std` here, you can use any async runtime of choice.
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let connection = Connection::session().await?;
@@ -122,6 +123,7 @@ trait Notifications {
               expire_timeout: i32) -> zbus::Result<u32>;
 }
 
+// Although we use `async-std` here, you can use any async runtime of choice.
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let connection = Connection::session().await?;
@@ -201,6 +203,7 @@ trait Location {
     fn longitude(&self) -> Result<f64>;
 }
 
+// Although we use `async-std` here, you can use any async runtime of choice.
 #[async_std::main]
 async fn main() -> Result<()> {
     let conn = Connection::system().await?;
