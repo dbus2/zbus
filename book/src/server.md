@@ -28,6 +28,7 @@ our choice:
 ```rust,no_run
 use zbus::{Connection, Result};
 
+// Although we use `async-std` here, you can use any async runtime of choice.
 #[async_std::main]
 async fn main() -> Result<()> {
     let connection = Connection::session()
@@ -130,6 +131,7 @@ impl Greeter {
     }
 }
 
+// Although we use `async-std` here, you can use any async runtime of choice.
 #[async_std::main]
 async fn main() -> Result<()> {
     let connection = Connection::session().await?;
@@ -222,6 +224,7 @@ impl Greeter {
     async fn greeted_everyone(ctxt: &SignalContext<'_>) -> Result<()>;
 }
 
+// Although we use `async-std` here, you can use any async runtime of choice.
 #[async_std::main]
 async fn main() -> Result<()> {
     let connection = Connection::session()

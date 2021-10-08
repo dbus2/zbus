@@ -13,6 +13,7 @@
 //! use zbus::Connection;
 //! use zbus_polkit::policykit1::*;
 //!
+//! // Although we use `async-std` here, you can use any async runtime of choice.
 //! #[async_std::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let connection = Connection::system().await?;
