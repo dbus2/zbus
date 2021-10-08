@@ -122,8 +122,8 @@ where
     ///# let connection = Connection::session().await?;
     ///#
     ///# let path = "/org/zbus/path";
-    ///# connection.object_server().await.at(path, MyIface(22)).await?;
-    /// let mut object_server = connection.object_server().await;
+    ///# connection.object_server().at(path, MyIface(22)).await?;
+    /// let mut object_server = connection.object_server();
     /// let iface_ref = object_server.interface::<_, MyIface>(path).await?;
     /// let mut iface = iface_ref.get_mut().await;
     /// iface.0 = 42;
@@ -362,7 +362,6 @@ impl Node {
 /// let interface = Example::new(quit_event);
 /// connection
 ///     .object_server()
-///     .await
 ///     .at("/org/zbus/path", interface)
 ///     .await?;
 ///
@@ -504,10 +503,9 @@ impl ObjectServer {
     ///# let connection = Connection::session().await?;
     ///#
     ///# let path = "/org/zbus/path";
-    ///# connection.object_server().await.at(path, MyIface(0)).await?;
+    ///# connection.object_server().at(path, MyIface(0)).await?;
     /// let iface_ref = connection
     ///     .object_server()
-    ///     .await
     ///     .interface::<_, MyIface>(path).await?;
     /// let mut iface = iface_ref.get_mut().await;
     /// iface.0 = 42;
@@ -993,7 +991,6 @@ mod tests {
 
         let iface: InterfaceRef<MyIfaceImpl> = service_conn
             .object_server()
-            .await
             .interface("/org/freedesktop/MyService")
             .await
             .unwrap();
@@ -1015,7 +1012,6 @@ mod tests {
                     let path = format!("/zbus/test/{}", key);
                     service_conn
                         .object_server()
-                        .await
                         .at(path, MyIfaceImpl::new(next_tx.clone()))
                         .await
                         .unwrap();
@@ -1024,7 +1020,6 @@ mod tests {
                     let path = format!("/zbus/test/{}", key);
                     service_conn
                         .object_server()
-                        .await
                         .remove::<MyIfaceImpl, _>(path)
                         .await
                         .unwrap();

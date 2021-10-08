@@ -134,7 +134,6 @@ async fn main() -> Result<()> {
     // setup the server
     connection
         .object_server()
-        .await
         .at("/org/zbus/MyGreeter", Greeter)
         .await?;
     // before requesting the name
@@ -340,7 +339,7 @@ example code:
 # #[async_std::main]
 # async fn main() -> zbus::Result<()> {
 # let connection = zbus::Connection::session().await?;
-# let object_server = connection.object_server().await;
+# let object_server = connection.object_server();
 use zbus::InterfaceDerefMut;
 
 let iface_ref = object_server.interface::<_, Greeter>("/org/zbus/MyGreeter").await?;

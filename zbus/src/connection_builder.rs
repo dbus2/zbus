@@ -229,7 +229,7 @@ impl<'a> ConnectionBuilder<'a> {
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
 
         if !self.interfaces.is_empty() {
-            let object_server = conn.sync_object_server(false).await;
+            let object_server = conn.sync_object_server(false);
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
                     // FIXME: Log warning message on `at` returning `false`.
