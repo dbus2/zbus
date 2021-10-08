@@ -462,7 +462,7 @@ where
                 let mut ser = Serializer(crate::SerializerCommon::<B, W> {
                     ctxt: self.ser.0.ctxt,
                     sig_parser,
-                    writer: &mut self.ser.0.writer,
+                    writer: self.ser.0.writer,
                     fds: &mut fds,
                     bytes_written,
                     value_sign: None,

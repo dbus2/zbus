@@ -89,15 +89,18 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     }
 
     // Some sanity checks
-    if !gen_blocking && !gen_async {
-        panic!("Can't disable both asynchronous and blocking proxy. 😸");
-    }
-    if !gen_blocking && blocking_name.is_some() {
-        panic!("Can't set blocking proxy's name if you disabled it. 😸");
-    }
-    if !gen_async && async_name.is_some() {
-        panic!("Can't set asynchronous proxy's name if you disabled it. 😸");
-    }
+    assert!(
+        gen_blocking || gen_async,
+        "Can't disable both asynchronous and blocking proxy. 😸",
+    );
+    assert!(
+        gen_blocking || blocking_name.is_none(),
+        "Can't set blocking proxy's name if you disabled it. 😸",
+    );
+    assert!(
+        gen_async || async_name.is_none(),
+        "Can't set asynchronous proxy's name if you disabled it. 😸",
+    );
 
     let blocking_proxy = if gen_blocking {
         let proxy_name = blocking_name.unwrap_or_else(|| {
@@ -321,12 +324,7 @@ fn gen_proxy_method_call(
     } = async_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
-    let args: Vec<_> = m
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|arg| arg_ident(arg))
-        .collect();
+    let args: Vec<_> = m.sig.inputs.iter().filter_map(arg_ident).collect();
     let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
     let async_proxy_object = attrs.iter().find_map(|x| match x {
         ItemAttribute::AsyncObject(o) => Some(o.clone()),
