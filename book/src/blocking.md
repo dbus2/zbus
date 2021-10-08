@@ -152,7 +152,7 @@ The [`blocking` crate] provides an easy way around this problem.
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{SignalContext, blocking::{ObjectServer, Connection}, dbus_interface, fdo};
+# use zbus::{blocking::{ObjectServer, ConnectionBuilder}, dbus_interface, fdo, SignalContext};
 #
 use event_listener::Event;
 
@@ -194,16 +194,15 @@ impl Greeter {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::session()?;
     let greeter = Greeter {
         name: "GreeterName".to_string(),
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    connection
-        .object_server_mut()
-        .at("/org/zbus/MyGreeter", greeter)?;
-    connection.request_name("org.zbus.MyGreeter")?;
+    let _ = ConnectionBuilder::session()?
+        .name("org.zbus.MyGreeter")?
+        .serve_at("/org/zbus/MyGreeter", greeter)?
+        .build()?;
 
     done_listener.wait();
 
