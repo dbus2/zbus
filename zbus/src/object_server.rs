@@ -122,7 +122,7 @@ where
     ///# let connection = Connection::session().await?;
     ///#
     ///# let path = "/org/zbus/path";
-    ///# connection.object_server_mut().await.at(path, MyIface(22))?;
+    ///# connection.object_server_mut().await.at(path, MyIface(22)).await?;
     /// let mut object_server = connection.object_server().await;
     /// let iface_ref = object_server.interface::<_, MyIface>(path).await?;
     /// let mut iface = iface_ref.get_mut().await;
@@ -363,7 +363,8 @@ impl Node {
 /// connection
 ///     .object_server_mut()
 ///     .await
-///     .at("/org/zbus/path", interface)?;
+///     .at("/org/zbus/path", interface)
+///     .await?;
 ///
 /// quit_listener.await;
 ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
@@ -373,7 +374,7 @@ impl Node {
 #[derive(Debug)]
 pub struct ObjectServer {
     conn: WeakConnection,
-    root: Node,
+    root: RwLock<Node>,
 }
 
 assert_impl_all!(ObjectServer: Send, Sync, Unpin);
@@ -383,11 +384,11 @@ impl ObjectServer {
     pub(crate) fn new(conn: &Connection) -> Self {
         Self {
             conn: conn.into(),
-            root: Node::new("/".try_into().expect("zvariant bug")),
+            root: RwLock::new(Node::new("/".try_into().expect("zvariant bug"))),
         }
     }
 
-    pub(crate) fn root(&self) -> &Node {
+    pub(crate) fn root(&self) -> &RwLock<Node> {
         &self.root
     }
 
@@ -399,7 +400,7 @@ impl ObjectServer {
     /// where this method becomes useful.
     ///
     /// If the interface already exists at this path, returns false.
-    pub fn at<'p, P, I>(&mut self, path: P, iface: I) -> Result<bool>
+    pub async fn at<'p, P, I>(&self, path: P, iface: I) -> Result<bool>
     where
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
@@ -408,26 +409,34 @@ impl ObjectServer {
         let path = path.try_into().map_err(Into::into)?;
         Ok(self
             .root
+            .write()
+            .await
             .get_child_mut(&path, true)
             .unwrap()
-            .at(I::name(), iface))
+            .at_ready(I::name(), Arc::new(RwLock::new(iface))))
     }
 
     /// Same as `at` but expects an interface already in `Arc<RwLock<dyn Interface>>` form.
     // FIXME: Better name?
-    pub(crate) fn at_ready<'p, P>(
-        &mut self,
+    pub(crate) async fn at_ready<'node, P>(
+        &'node self,
         path: P,
         name: InterfaceName<'static>,
-        iface: Arc<RwLock<dyn Interface>>,
+        iface: Arc<RwLock<dyn Interface + 'static>>,
     ) -> Result<bool>
     where
-        P: TryInto<ObjectPath<'p>>,
+        // Needs to be hardcoded as 'static instead of 'p like most other
+        // functions, due to https://github.com/rust-lang/rust/issues/63033
+        // (It doesn't matter a whole lot since this is an internal-only API
+        // anyway.)
+        P: TryInto<ObjectPath<'static>>,
         P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
         Ok(self
-            .root
+            .root()
+            .write()
+            .await
             .get_child_mut(&path, true)
             .unwrap()
             .at_ready(name, iface))
@@ -437,15 +446,15 @@ impl ObjectServer {
     ///
     /// If there are no more interfaces left at that path, destroys the object as well.
     /// Returns whether the object was destroyed.
-    pub fn remove<'p, I, P>(&mut self, path: P) -> Result<bool>
+    pub async fn remove<'p, I, P>(&self, path: P) -> Result<bool>
     where
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
-        let node = self
-            .root
+        let mut root = self.root.write().await;
+        let node = root
             .get_child_mut(&path, false)
             .ok_or(Error::InterfaceNotFound)?;
         if !node.remove_interface(I::name()) {
@@ -457,8 +466,7 @@ impl ObjectServer {
             let ppath = ObjectPath::from_string_unchecked(
                 path_parts.fold(String::new(), |a, p| format!("/{}{}", p, a)),
             );
-            self.root
-                .get_child_mut(&ppath, false)
+            root.get_child_mut(&ppath, false)
                 .unwrap()
                 .remove_node(last_part);
             return Ok(true);
@@ -496,7 +504,7 @@ impl ObjectServer {
     ///# let connection = Connection::session().await?;
     ///#
     ///# let path = "/org/zbus/path";
-    ///# connection.object_server_mut().await.at(path, MyIface(0))?;
+    ///# connection.object_server_mut().await.at(path, MyIface(0)).await?;
     /// let iface_ref = connection
     ///     .object_server()
     ///     .await
@@ -516,7 +524,8 @@ impl ObjectServer {
         P::Error: Into<Error>,
     {
         let path = path.try_into().map_err(Into::into)?;
-        let node = self.root.get_child(&path).ok_or(Error::InterfaceNotFound)?;
+        let root = self.root().read().await;
+        let node = root.get_child(&path).ok_or(Error::InterfaceNotFound)?;
 
         let lock = node
             .interface_lock(I::name())
@@ -565,8 +574,8 @@ impl ObjectServer {
             .flatten()
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
 
-        let node = self
-            .root
+        let root = self.root.read().await;
+        let node = root
             .get_child(&path)
             .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
         let iface = node.interface_lock(iface.as_ref()).ok_or_else(|| {
@@ -1008,6 +1017,7 @@ mod tests {
                         .object_server_mut()
                         .await
                         .at(path, MyIfaceImpl::new(next_tx.clone()))
+                        .await
                         .unwrap();
                 }
                 NextAction::DestroyObj(key) => {
@@ -1016,6 +1026,7 @@ mod tests {
                         .object_server_mut()
                         .await
                         .remove::<MyIfaceImpl, _>(path)
+                        .await
                         .unwrap();
                 }
             }

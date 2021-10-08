@@ -53,8 +53,8 @@ impl Introspectable {
         #[zbus(header)] header: MessageHeader<'_>,
     ) -> Result<String> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
-        let node = server
-            .root()
+        let root = server.root().read().await;
+        let node = root
             .get_child(path)
             .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{}'", path)))?;
 
@@ -124,8 +124,8 @@ impl Properties {
         #[zbus(header)] header: MessageHeader<'_>,
     ) -> Result<OwnedValue> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
-        let iface = server
-            .root()
+        let root = server.root().read().await;
+        let iface = root
             .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
@@ -151,8 +151,8 @@ impl Properties {
         #[zbus(signal_context)] ctxt: SignalContext<'_>,
     ) -> Result<()> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
-        let iface = server
-            .root()
+        let root = server.root().read().await;
+        let iface = root
             .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
@@ -191,8 +191,8 @@ impl Properties {
         #[zbus(header)] header: MessageHeader<'_>,
     ) -> Result<HashMap<String, OwnedValue>> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
-        let iface = server
-            .root()
+        let root = server.root().read().await;
+        let iface = root
             .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {

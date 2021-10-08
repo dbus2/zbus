@@ -229,11 +229,11 @@ impl<'a> ConnectionBuilder<'a> {
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
 
         if !self.interfaces.is_empty() {
-            let mut object_server = conn.sync_object_server_mut(false).await;
+            let object_server = conn.sync_object_server_mut(false).await;
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
                     // FIXME: Log warning message on `at` returning `false`.
-                    let added = object_server.at_ready(path.clone(), name, iface)?;
+                    let added = object_server.at_ready(path.to_owned(), name, iface).await?;
                     // Duplicates shouldn't happen.
                     assert!(added);
                 }

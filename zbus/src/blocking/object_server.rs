@@ -155,7 +155,7 @@ impl ObjectServer {
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
-        self.azync.at(path, iface)
+        block_on(self.azync.at(path, iface))
     }
 
     /// Unregister a D-Bus [`Interface`] at a given path.
@@ -170,7 +170,7 @@ impl ObjectServer {
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
-        self.azync.remove::<I, P>(path)
+        block_on(self.azync.remove::<I, P>(path))
     }
 
     /// Get the interface at the given path.

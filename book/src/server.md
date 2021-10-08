@@ -135,7 +135,8 @@ async fn main() -> Result<()> {
     connection
         .object_server_mut()
         .await
-        .at("/org/zbus/MyGreeter", Greeter)?;
+        .at("/org/zbus/MyGreeter", Greeter)
+        .await?;
     // before requesting the name
     connection
         .request_name("org.zbus.MyGreeter")
