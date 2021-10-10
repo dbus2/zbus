@@ -7,7 +7,7 @@ variables:
   APT_CACHE_DIR: $CI_PROJECT_DIR/apt
 
 check:
-  image: "rustdocker/rustfmt_clippy:1.51.0"
+  image: "rustdocker/rustfmt_clippy:1.55.0"
   stage: "lint"
   script:
     - rustc --version
@@ -18,7 +18,7 @@ check:
     - cargo audit
 
 test:
-  image: "rustdocker/rustfmt_clippy:1.51.0"
+  image: "rustdocker/rustfmt_clippy:1.55.0"
   stage: test
   script:
     - rustc --version
