@@ -1047,7 +1047,7 @@ impl Connection {
     /// ```
     ///
     /// The `connect_` API lets you be sure you handle signals in order and completely handle one
-    /// signal before statring on the next; this is required because it would be an error to handle
+    /// signal before starting on the next; this is required because it would be an error to handle
     /// either the announcement or ping messages out of order.  However, the baz interface is
     /// completely unrelated to yaks and shouldn't delay urgent messages just because you are busy
     /// shaving.  Placing the baz callbacks in a distinct scope from the foo/bar ones allows them
