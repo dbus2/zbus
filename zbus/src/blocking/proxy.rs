@@ -214,6 +214,34 @@ impl<'a> Proxy<'a> {
         block_on(self.azync.call(method_name, body))
     }
 
+    /// Call a method without expecting a reply
+    ///
+    /// This sets the `NoReplyExpected` flag on the calling message and does not wait for a reply.
+    pub fn call_noreply<'m, M, B>(&self, method_name: M, body: &B) -> Result<()>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        block_on(self.azync.call_noreply(method_name, body))
+    }
+
+    /// Call a method and handle the reply in the callback scope.
+    ///
+    /// See [`crate::Connection::dispatch_call`] for why this is useful.
+    pub fn dispatch_call<'m, M, B, H>(&self, method_name: M, body: &B, handler: H) -> Result<()>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+        H: FnOnce(&Arc<Message>) + Send + 'static,
+    {
+        block_on(self.azync.dispatch_call(method_name, body, move |msg| {
+            handler(msg);
+            Box::pin(ready(()))
+        }))
+    }
+
     /// Register a handler for signal named `signal_name`.
     ///
     /// A unique ID for the handler is returned, which can be used to deregister this handler using

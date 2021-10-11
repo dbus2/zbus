@@ -23,7 +23,8 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    Connection, Error, Message, ProxyBuilder, Result, SignalHandler, SignalHandlerKey,
+    Connection, Error, Message, MessageBuilder, ProxyBuilder, Result, SignalHandler,
+    SignalHandlerKey,
 };
 
 /// The ID for a registered signal handler.
@@ -346,17 +347,29 @@ impl<'a> ProxyInner<'a> {
                     conn.remove_signal_handler(id).await?;
                 }
 
-                let unique_name = match fdo::DBusProxy::new(&self.inner_without_borrows.conn)
+                let dest_unique_name = self.dest_unique_name.clone();
+                let (send, recv) = bounded(1);
+                fdo::DBusProxy::new(&self.inner_without_borrows.conn)
                     .await?
-                    .get_name_owner(destination.as_ref())
-                    .await
-                {
-                    // That's ok. The destination isn't available right now.
-                    Err(fdo::Error::NameHasNoOwner(_)) => None,
-                    res => Some(res?),
-                };
+                    .dispatch_get_name_owner(destination.as_ref(), move |res| {
+                        let res = res.map(|unique_name| {
+                            *dest_unique_name.write().expect("lock poisoned") = Some(unique_name);
+                        });
+                        Box::pin(async move {
+                            // if this fails, the calling task was dropped prior to finishing, so
+                            // this result was already ignored.  No further cleanup needed.
+                            let _ = send.send(res).await;
+                        })
+                    })
+                    .await?;
 
-                *self.dest_unique_name.write().expect("lock poisoned") = unique_name;
+                match recv.recv().await {
+                    // That's ok. The destination isn't available right now.
+                    Ok(Err(fdo::Error::NameHasNoOwner(_))) => {}
+                    Ok(res) => res?,
+                    // channel hangup shouldn't happen
+                    Err(_) => return Err(Error::InvalidReply),
+                }
             }
         }
 
@@ -544,11 +557,26 @@ impl<'a> Proxy<'a> {
             proxy.disconnect_signal(id).await?;
         }
 
-        if let Ok(values) = proxy.get_all(self.inner.interface.as_ref()).await {
-            for (name, value) in values {
-                self.set_cached_property(name, Some(value));
-            }
-        }
+        // We must dispatch the get_all so that its result is properly ordered with respect to the
+        // updates from the above connect_properties_changed.
+        let properties = self.properties.clone();
+        let done = Event::new();
+        let waiter = done.listen();
+        proxy
+            .dispatch_get_all(self.inner.interface.as_ref(), move |res| {
+                if let Ok(all) = res {
+                    let mut values = properties.values.lock().expect("lock poisoned");
+                    for (name, value) in all {
+                        let entry = values.entry(name).or_insert_with(PropertyValue::default);
+                        entry.value = Some(value);
+                    }
+                }
+                done.notify(1);
+                Box::pin(async {})
+            })
+            .await?;
+
+        waiter.await;
 
         Ok(())
     }
@@ -672,6 +700,61 @@ impl<'a> Proxy<'a> {
         let reply = self.call_method(method_name, body).await?;
 
         Ok(reply.body()?)
+    }
+
+    /// Call a method without expecting a reply
+    ///
+    /// This sets the `NoReplyExpected` flag on the calling message and does not wait for a reply.
+    pub async fn call_noreply<'m, M, B>(&self, method_name: M, body: &B) -> Result<()>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        let msg = MessageBuilder::method_call(self.inner.path.as_ref(), method_name)?
+            .with_flags(zbus::MessageFlags::NoReplyExpected)?
+            .destination(&self.inner.destination)?
+            .interface(&self.inner.interface)?
+            .build(body)?;
+
+        self.inner
+            .inner_without_borrows
+            .conn
+            .send_message(msg)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Call a method and handle the reply in the callback scope.
+    ///
+    /// See [`Connection::dispatch_call`] for why this is useful.
+    pub async fn dispatch_call<'m, M, B, H>(
+        &self,
+        method_name: M,
+        body: &B,
+        handler: H,
+    ) -> Result<()>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+        H: for<'msg> FnOnce(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send + 'static,
+    {
+        let msg = Message::method(
+            self.inner.inner_without_borrows.conn.unique_name(),
+            Some(&self.inner.destination),
+            self.inner.path.as_ref(),
+            Some(&self.inner.interface),
+            method_name,
+            body,
+        )?;
+
+        self.inner
+            .inner_without_borrows
+            .conn
+            .dispatch_call(msg, handler)
+            .await
     }
 
     /// Create a stream for signal named `signal_name`.
@@ -1105,5 +1188,99 @@ mod tests {
         assert!(proxy.disconnect_signal(name_acquired_id2).await?);
 
         Ok(())
+    }
+
+    struct WindowManager {
+        title: String,
+    }
+
+    use zbus::{dbus_interface, dbus_proxy};
+
+    #[dbus_interface(name = "org.freedesktop.zbus.test.WindowManager")]
+    impl WindowManager {
+        #[dbus_interface(property)]
+        fn title(&self) -> String {
+            self.title.clone()
+        }
+    }
+
+    #[dbus_proxy(
+        interface = "org.freedesktop.zbus.test.WindowManager",
+        default_service = "org.freedesktop.zbus.test.WindowManager",
+        default_path = "/test/WindowManager"
+    )]
+    trait WindowManager {
+        #[dbus_proxy(property)]
+        fn title(&self) -> fdo::Result<String>;
+    }
+
+    struct SlowExecutor<T> {
+        task: T,
+        timer: Option<async_io::Timer>,
+    }
+
+    // This emulates an executor that is running other tasks (for 10ms each) between polling the
+    // given future.  It can be done safely if you use pin_project or unpin the task.
+    impl<T: Future> Future for SlowExecutor<T> {
+        type Output = T::Output;
+        fn poll(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<T::Output> {
+            let this = unsafe { self.get_unchecked_mut() }; // for projection
+            let timer = this.timer.get_or_insert_with(|| {
+                async_io::Timer::after(std::time::Duration::from_millis(10))
+            });
+            ready!(Pin::new(timer).poll(ctx));
+            this.timer = None;
+            unsafe { Pin::new_unchecked(&mut this.task) }.poll(ctx)
+        }
+    }
+
+    async fn test_wm_race(n: u64) -> Result<()> {
+        let conn = Connection::session().await?;
+        conn.object_server_mut().await.at(
+            "/test/WindowManager",
+            WindowManager {
+                title: String::from("a"),
+            },
+        )?;
+        conn.request_name("org.freedesktop.zbus.test.WindowManager")
+            .await?;
+        let a = SlowExecutor {
+            timer: None,
+            task: async { WindowManagerProxy::new(&conn).await },
+        };
+
+        let b = async {
+            async_io::Timer::after(std::time::Duration::from_millis(5)).await;
+            for i in 0..=n {
+                async_io::Timer::after(std::time::Duration::from_millis(10)).await;
+                conn.object_server()
+                    .await
+                    .with_mut::<_, _, _, WindowManager>(
+                        "/test/WindowManager",
+                        |mut wm, sc| async move {
+                            wm.title = format!("{}", i);
+                            wm.title_changed(&sc).await?;
+                            Ok(())
+                        },
+                    )
+                    .await?;
+            }
+            Ok(())
+        };
+
+        let (proxy, b) = join!(a, b);
+
+        let no_race = WindowManagerProxy::new(&conn).await?.title().await?;
+        let cached = proxy?.title().await?;
+        assert_eq!(no_race, cached);
+
+        b
+    }
+
+    #[test]
+    fn wm_race() {
+        for n in 0..9 {
+            block_on(test_wm_race(n)).unwrap();
+        }
     }
 }

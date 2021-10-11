@@ -66,11 +66,13 @@ pub enum ItemAttribute {
     Property,
     Signal,
     StructReturn,
+    NoReply,
     OutArgs(Vec<String>),
     Name(String),
     Object(String),
     AsyncObject(String),
     BlockingObject(String),
+    Dispatch,
 }
 
 impl ItemAttribute {
@@ -153,10 +155,12 @@ fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
         "property" => Ok(ItemAttribute::Property),
         "signal" => Ok(ItemAttribute::Signal),
         "struct_return" => Ok(ItemAttribute::StructReturn),
+        "no_reply" => Ok(ItemAttribute::NoReply),
         "out_args" => Ok(ItemAttribute::OutArgs(values)),
         "object" => Ok(ItemAttribute::Object(values.remove(0))),
         "async_object" => Ok(ItemAttribute::AsyncObject(values.remove(0))),
         "blocking_object" => Ok(ItemAttribute::BlockingObject(values.remove(0))),
+        "dispatch" => Ok(ItemAttribute::Dispatch),
         s => panic!("Unknown item meta {}", s),
     }
 }

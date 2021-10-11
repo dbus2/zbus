@@ -102,6 +102,17 @@ impl Connection {
         )
     }
 
+    /// Send a method call.
+    ///
+    /// Send the given message, which must be a method call, over the connection and wait for the
+    /// reply. Typically you'd want to use [`Connection::call_method`] instead.
+    ///
+    /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
+    /// error replies are returned as [`Error::MethodError`].
+    pub fn call_method_raw(&self, msg: Message) -> Result<Arc<Message>> {
+        block_on(self.inner.call_method_raw(msg))
+    }
+
     /// Emit a signal.
     ///
     /// Create a signal message, and send it over the connection.

@@ -8,24 +8,36 @@ use syn::{
 
 use crate::utils::*;
 
-struct AsyncOpts {
+#[derive(Clone)]
+struct ProxyOpts {
     blocking: bool,
+    gen_cached: bool,
+    gen_connect: bool,
+    gen_dispatch: bool,
+    gen_receive: bool,
     usage: TokenStream,
     wait: TokenStream,
 }
 
-impl AsyncOpts {
-    fn new(blocking: bool) -> Self {
-        let (usage, wait) = if blocking {
-            (quote! {}, quote! {})
-        } else {
-            (quote! { async }, quote! { .await })
-        };
+impl ProxyOpts {
+    fn new() -> Self {
         Self {
-            blocking,
-            usage,
-            wait,
+            blocking: false,
+            gen_cached: true,
+            gen_connect: true,
+            gen_dispatch: true,
+            gen_receive: true,
+            usage: quote! { async },
+            wait: quote! { .await },
         }
+    }
+
+    fn blocking(&self) -> Self {
+        let mut rv = self.clone();
+        rv.blocking = true;
+        rv.usage = quote! {};
+        rv.wait = quote! {};
+        rv
     }
 }
 
@@ -35,6 +47,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     let mut iface_name = None;
     let mut default_path = None;
     let mut default_service = None;
+    let mut proxy_opts = ProxyOpts::new();
     for arg in &args {
         match arg {
             NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
@@ -80,6 +93,30 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                     } else {
                         panic!("Invalid gen_blocking argument")
                     }
+                } else if nv.path.is_ident("gen_cached") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        proxy_opts.gen_cached = lit.value();
+                    } else {
+                        panic!("Invalid gen_cached argument")
+                    }
+                } else if nv.path.is_ident("gen_connect") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        proxy_opts.gen_connect = lit.value();
+                    } else {
+                        panic!("Invalid gen_connect argument")
+                    }
+                } else if nv.path.is_ident("gen_dispatch") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        proxy_opts.gen_dispatch = lit.value();
+                    } else {
+                        panic!("Invalid gen_dispatch argument")
+                    }
+                } else if nv.path.is_ident("gen_receive") {
+                    if let syn::Lit::Bool(lit) = &nv.lit {
+                        proxy_opts.gen_receive = lit.value();
+                    } else {
+                        panic!("Invalid gen_receive argument")
+                    }
                 } else {
                     panic!("Unsupported argument");
                 }
@@ -117,7 +154,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             default_path.as_deref(),
             default_service.as_deref(),
             &proxy_name,
-            true,
+            proxy_opts.blocking(),
         )
     } else {
         quote! {}
@@ -130,7 +167,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             default_path.as_deref(),
             default_service.as_deref(),
             &proxy_name,
-            false,
+            proxy_opts,
         )
     } else {
         quote! {}
@@ -143,13 +180,13 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
     }
 }
 
-pub fn create_proxy(
+fn create_proxy(
     input: &ItemTrait,
     iface_name: Option<&str>,
     default_path: Option<&str>,
     default_service: Option<&str>,
     proxy_name: &str,
-    blocking: bool,
+    proxy_opts: ProxyOpts,
 ) -> TokenStream {
     let zbus = zbus_path();
 
@@ -168,7 +205,7 @@ pub fn create_proxy(
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
     let mut has_properties = false;
-    let async_opts = AsyncOpts::new(blocking);
+    let blocking = proxy_opts.blocking;
 
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
@@ -193,21 +230,21 @@ pub fn create_proxy(
                 });
             let m = if is_property {
                 has_properties = true;
-                gen_proxy_property(&name, &method_name, m, &async_opts)
+                gen_proxy_property(&name, &method_name, m, &proxy_opts)
             } else if is_signal {
                 let (method, types) =
-                    gen_proxy_signal(&proxy_name, &name, &method_name, m, &async_opts);
+                    gen_proxy_signal(&proxy_name, &name, &method_name, m, &proxy_opts);
                 stream_types.extend(types);
 
                 method
             } else {
-                gen_proxy_method_call(&name, &method_name, m, &async_opts)
+                gen_proxy_method_call(&name, &method_name, m, &proxy_opts)
             };
             methods.extend(m);
         }
     }
 
-    let AsyncOpts { usage, wait, .. } = async_opts;
+    let ProxyOpts { usage, wait, .. } = proxy_opts;
     let (proxy_struct, connection, builder) = if blocking {
         let connection = quote! { #zbus::blocking::Connection };
         let proxy = quote! { #zbus::blocking::Proxy };
@@ -315,13 +352,15 @@ fn gen_proxy_method_call(
     method_name: &str,
     snake_case_name: &str,
     m: &TraitItemMethod,
-    async_opts: &AsyncOpts,
+    proxy_opts: &ProxyOpts,
 ) -> TokenStream {
-    let AsyncOpts {
+    let ProxyOpts {
         usage,
         wait,
         blocking,
-    } = async_opts;
+        gen_dispatch,
+        ..
+    } = proxy_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let args: Vec<_> = m.sig.inputs.iter().filter_map(arg_ident).collect();
@@ -351,7 +390,15 @@ fn gen_proxy_method_call(
         }
         _ => None,
     });
+    let no_reply = attrs.iter().any(|x| matches!(x, ItemAttribute::NoReply));
+    let dispatch_only = attrs.iter().any(|x| matches!(x, ItemAttribute::Dispatch));
+
     let method = Ident::new(snake_case_name, Span::call_site());
+    let dispatch_method = if dispatch_only {
+        method.clone()
+    } else {
+        Ident::new(&format!("dispatch_{}", snake_case_name), Span::call_site())
+    };
     let inputs = &m.sig.inputs;
     let mut generics = m.sig.generics.clone();
     let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
@@ -425,11 +472,87 @@ fn gen_proxy_method_call(
             fn #method#ty_generics(#inputs) #output
             #where_clause
         };
-        quote! {
+
+        if no_reply {
+            return quote! {
+                #(#doc)*
+                pub #usage #signature {
+                    self.0.call_noreply(#method_name, #body)#wait?;
+                    ::std::result::Result::Ok(())
+                }
+            };
+        }
+
+        let method_impl = quote! {
             #(#doc)*
             pub #usage #signature {
                 let reply = self.0.call(#method_name, #body)#wait?;
                 ::std::result::Result::Ok(reply)
+            }
+        };
+
+        if !gen_dispatch {
+            return method_impl;
+        }
+
+        generics.params.push(parse_quote!(__H));
+        let cbargs = match output {
+            syn::ReturnType::Default => quote!(()),
+            syn::ReturnType::Type(_, t) => quote!((#t)),
+        };
+        let handler = if *blocking {
+            parse_quote! { __H: FnOnce #cbargs + Send + 'static }
+        } else {
+            parse_quote! {
+                __H: FnOnce #cbargs ->
+                    #zbus::export::futures_core::future::BoxFuture<'static, ()> + Send + 'static
+            }
+        };
+        {
+            let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
+            where_clause.predicates.push(handler);
+        }
+        let (_, ty_generics, where_clause) = generics.split_for_impl();
+        let mut dispatch_inputs: Vec<_> = inputs.iter().map(|i| i.to_token_stream()).collect();
+        dispatch_inputs.push(quote! {
+            __handler: __H
+        });
+
+        let dispatch_signature = quote! {
+            fn #dispatch_method#ty_generics(#(#dispatch_inputs),*) -> #zbus::Result<()>
+            #where_clause
+        };
+
+        let dispatch_impl = quote! {
+            pub #usage #dispatch_signature {
+                self.0.dispatch_call(#method_name, #body, move |msg| {
+                    if msg.message_type() == #zbus::MessageType::MethodReturn {
+                        __handler(msg.body().map_err(Into::into))
+                    } else {
+                        let err: #zbus::Error = msg.clone().into();
+                        __handler(Err(err.into()))
+                    }
+                })#wait
+            }
+        };
+
+        if dispatch_only {
+            quote! {
+                #(#doc)*
+                #dispatch_impl
+            }
+        } else {
+            let see_doc = format!(
+                "Dispatch a [`Self::{}`] call with a reply handled in the callback scope.",
+                method
+            );
+            quote! {
+                #method_impl
+
+                #[doc=#see_doc]
+                #[doc=""]
+                #[doc="See the documentation for that method and [`zbus::Connection::dispatch_call`] for details."]
+                #dispatch_impl
             }
         }
     }
@@ -439,13 +562,17 @@ fn gen_proxy_property(
     property_name: &str,
     method_name: &str,
     m: &TraitItemMethod,
-    async_opts: &AsyncOpts,
+    proxy_opts: &ProxyOpts,
 ) -> TokenStream {
-    let AsyncOpts {
+    let ProxyOpts {
         usage,
         wait,
         blocking,
-    } = async_opts;
+        gen_cached,
+        gen_connect,
+        gen_receive,
+        ..
+    } = proxy_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let signature = &m.sig;
@@ -475,7 +602,7 @@ fn gen_proxy_property(
             None
         };
 
-        let receive = if *blocking {
+        let receive = if *blocking || !*gen_receive {
             quote! {}
         } else {
             let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
@@ -534,6 +661,36 @@ fn gen_proxy_property(
 
         let (_, ty_generics, where_clause) = generics.split_for_impl();
 
+        let cached_impl = if *gen_cached {
+            quote! {
+                #[doc = #cached_doc]
+                pub fn #cached_getter(&self) -> ::std::result::Result<
+                    ::std::option::Option<<#ret_type as #zbus::ResultAdapter>::Ok>,
+                    <#ret_type as #zbus::ResultAdapter>::Err>
+                {
+                    self.0.cached_property(#property_name).map_err(::std::convert::Into::into)
+                }
+            }
+        } else {
+            quote! {}
+        };
+
+        let connect_impl = if *gen_connect {
+            quote! {
+                #[doc = #gen_doc]
+                pub #usage fn #connect#ty_generics(
+                    &self,
+                    mut handler: __H,
+                ) -> #zbus::Result<#zbus::PropertyChangedHandlerId>
+                #where_clause,
+                {
+                    self.0.connect_property_changed(#property_name, handler)#wait
+                }
+            }
+        } else {
+            quote! {}
+        };
+
         quote! {
             #(#doc)*
             #[allow(clippy::needless_question_mark)]
@@ -541,24 +698,8 @@ fn gen_proxy_property(
                 #body
             }
 
-            #[doc = #cached_doc]
-            pub fn #cached_getter(&self) -> ::std::result::Result<
-                ::std::option::Option<<#ret_type as #zbus::ResultAdapter>::Ok>,
-                <#ret_type as #zbus::ResultAdapter>::Err>
-            {
-                self.0.cached_property(#property_name).map_err(::std::convert::Into::into)
-            }
-
-            #[doc = #gen_doc]
-            pub #usage fn #connect#ty_generics(
-                &self,
-                mut handler: __H,
-            ) -> #zbus::Result<#zbus::PropertyChangedHandlerId>
-            #where_clause,
-            {
-                self.0.connect_property_changed(#property_name, handler)#wait
-            }
-
+            #cached_impl
+            #connect_impl
             #receive
         }
     }
@@ -583,13 +724,15 @@ fn gen_proxy_signal(
     signal_name: &str,
     snake_case_name: &str,
     m: &TraitItemMethod,
-    async_opts: &AsyncOpts,
+    proxy_opts: &ProxyOpts,
 ) -> (TokenStream, TokenStream) {
-    let AsyncOpts {
+    let ProxyOpts {
         usage,
         wait,
         blocking,
-    } = async_opts;
+        gen_connect,
+        ..
+    } = proxy_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
     let method = format_ident!("connect_{}", snake_case_name);
@@ -623,7 +766,7 @@ fn gen_proxy_signal(
         .map(|(i, _)| Literal::usize_unsuffixed(i))
         .collect();
 
-    let (receive_signal, stream_types) = if !async_opts.blocking {
+    let (receive_signal, stream_types) = if !proxy_opts.blocking && proxy_opts.gen_receive {
         let mut generics = m.sig.generics.clone();
         let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
         for param in generics
@@ -856,24 +999,31 @@ fn gen_proxy_signal(
     };
 
     let (_, ty_generics, where_clause) = generics.split_for_impl();
-    let methods = quote! {
-        #[doc = #gen_doc]
-        #(#doc)*
-        pub #usage fn #method#ty_generics(
-            &self,
-            mut handler: __H,
-        ) -> #zbus::fdo::Result<#zbus::SignalHandlerId>
-        #where_clause,
-        {
-            self.0.connect_signal(#signal_name, move |m| {
-                match m.body() {
-                    Ok((#(#args),*)) => handler(#(#args),*),
-                    // TODO log errors, or allow a fallback?
-                    Err(_) => #do_nothing,
-                }
-            })#wait
+    let connect_signal = if *gen_connect {
+        quote! {
+            #[doc = #gen_doc]
+            #(#doc)*
+            pub #usage fn #method#ty_generics(
+                &self,
+                mut handler: __H,
+            ) -> #zbus::fdo::Result<#zbus::SignalHandlerId>
+            #where_clause,
+            {
+                self.0.connect_signal(#signal_name, move |m| {
+                    match m.body() {
+                        Ok((#(#args),*)) => handler(#(#args),*),
+                        // TODO log errors, or allow a fallback?
+                        Err(_) => #do_nothing,
+                    }
+                })#wait
+            }
         }
+    } else {
+        quote! {}
+    };
 
+    let methods = quote! {
+        #connect_signal
         #receive_signal
     };
 

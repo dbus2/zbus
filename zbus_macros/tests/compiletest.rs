@@ -1,4 +1,4 @@
-#[rustversion::attr(any(before(1.53), nightly), ignore)]
+#[rustversion::attr(before(1.56), ignore)]
 #[test]
 fn ui() {
     let t = trybuild::TestCases::new();

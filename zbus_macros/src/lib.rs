@@ -34,6 +34,15 @@ mod utils;
 /// * `gen_blocking` - Whether or not to generate the blocking Proxy type. If set to `false`, the
 ///   asynchronous proxy type will take the name `TraitNameProxy` (i-e no `Async` prefix).
 ///
+/// * `gen_cached` - Whether or not to generate a `cached_` wrapper on properties.
+///
+/// * `gen_connect` - Whether or not to generate a `connect_` wrapper on properties and signals.
+///
+/// * `gen_dispatch` - Whether or not to generate a `dispatch_` wrapper on calls for you. If set to
+///   `false`, you can still generate these with the `dispatch` attribute.
+///
+/// * `gen_receive` - Whether or not to generate a `receive_` wrapper on properties and signals.
+///
 /// * `async_name` - Specify the exact name of the asynchronous proxy type.
 ///
 /// * `blocking_name` - Specify the exact name of the blocking proxy type.
@@ -50,6 +59,12 @@ mod utils;
 /// * `signal` - declare a signal just like a D-Bus method. The macro will provide a method to
 ///   register and deregister a handler for the signal, whose signature must match that of the
 ///   signature declaration.
+///
+/// * `no_reply` - declare a method call that does not wait for a reply.
+///
+/// * `dispatch` - expose the method call as a dispatched callback instead of a normal method.
+///   The declared return type is used as the callback's argument and so may contain non-owned
+///   types (which are not allowed in normal calls).
 ///
 /// * `object` - methods that returns an [`ObjectPath`] can be annotated with the `object` attribute
 ///   to specify the proxy object to be constructed from the returned [`ObjectPath`].

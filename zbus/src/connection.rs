@@ -50,6 +50,8 @@ slotmap::new_key_type! {
 
 type SignalHandlerHandlerAsyncFunction =
     Box<dyn for<'msg> FnMut(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send>;
+type DispatchMethodReturnFunction =
+    Box<dyn for<'msg> FnOnce(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send>;
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
@@ -89,8 +91,6 @@ impl SignalHandler {
 #[derive(Debug)]
 struct ConnectionTaskShared {
     raw_conn: sync::Mutex<RawConnection<Box<dyn Socket>>>,
-    // DenseSlotMap is used because we'll likely iterate this more often than modifying it.
-    signal_handlers: sync::Mutex<DenseSlotMap<SignalHandlerKey, SignalHandler>>,
 }
 
 /// Inner state shared by Connection and WeakConnection
@@ -114,12 +114,23 @@ struct ConnectionInner {
     #[allow(unused)]
     msg_receiver_task: Task<()>,
 
-    signal_handler_task: OnceCell<Task<()>>,
-
     signal_matches: Mutex<HashMap<String, u64>>,
 
     object_server: OnceCell<RwLock<blocking::ObjectServer>>,
     object_server_dispatch_task: OnceCell<Task<()>>,
+}
+
+/// Inner state that runs synchronized with the flow of incoming messages.
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
+struct OrderedCallbacks {
+    task: OnceCell<Task<()>>,
+
+    // DenseSlotMap is used because we'll likely iterate this more often than modifying it.
+    handlers: sync::Mutex<DenseSlotMap<SignalHandlerKey, SignalHandler>>,
+
+    #[derivative(Debug = "ignore")]
+    replies: sync::Mutex<HashMap<u32, DispatchMethodReturnFunction>>,
 }
 
 // FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
@@ -186,13 +197,31 @@ impl MessageReceiverTask {
     }
 }
 
-impl ConnectionTaskShared {
-    async fn signal_handler_task(
-        self: Arc<Self>,
-        mut stream: impl Stream<Item = Arc<Message>> + Unpin,
-    ) {
+impl OrderedCallbacks {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            task: Default::default(),
+            handlers: sync::Mutex::new(DenseSlotMap::with_key()),
+            replies: sync::Mutex::new(HashMap::new()),
+        })
+    }
+
+    fn start(self: &Arc<Self>, conn: &Connection) {
+        self.task.get_or_init(|| {
+            let scope = Arc::downgrade(self);
+            let stream = conn.msg_receiver.activate_cloned();
+            conn.executor().spawn(Self::run(scope, stream))
+        });
+    }
+
+    async fn run(weak: Weak<Self>, mut stream: impl Stream<Item = Arc<Message>> + Unpin) {
         while let Some(msg) = stream.next().await {
-            let () = self.start_handlers(&msg).collect().await;
+            let tasks = if let Some(this) = weak.upgrade() {
+                this.start_handlers(&msg)
+            } else {
+                return;
+            };
+            let () = tasks.collect().await;
         }
     }
 
@@ -201,28 +230,32 @@ impl ConnectionTaskShared {
         msg: &'msg Arc<Message>,
     ) -> FuturesUnordered<BoxFuture<'msg, ()>> {
         let futures = FuturesUnordered::new();
-        if msg.message_type() != MessageType::Signal {
-            return futures;
-        }
-        let mut handlers = self.signal_handlers.lock().expect("poisoned lock");
-        // TODO if we have lots of handlers, we might want to do smarter filtering
-        for (_key, handler) in handlers.iter_mut() {
-            if let Some(member) = &handler.filter_member {
-                if msg.member() != Ok(Some(member.as_ref())) {
-                    continue;
+        if msg.message_type() == MessageType::Signal {
+            let mut handlers = self.handlers.lock().expect("poisoned lock");
+            // TODO if we have lots of handlers, we might want to do smarter filtering
+            for (_key, handler) in handlers.iter_mut() {
+                if let Some(member) = &handler.filter_member {
+                    if msg.member() != Ok(Some(member.as_ref())) {
+                        continue;
+                    }
                 }
-            }
-            if let Some(path) = &handler.filter_path {
-                if msg.path() != Ok(Some(path.as_ref())) {
-                    continue;
+                if let Some(path) = &handler.filter_path {
+                    if msg.path() != Ok(Some(path.as_ref())) {
+                        continue;
+                    }
                 }
-            }
-            if let Some(interface) = &handler.filter_interface {
-                if msg.interface() != Ok(Some(interface.as_ref())) {
-                    continue;
+                if let Some(interface) = &handler.filter_interface {
+                    if msg.interface() != Ok(Some(interface.as_ref())) {
+                        continue;
+                    }
                 }
+                futures.push((handler.handler)(msg));
             }
-            futures.push((handler.handler)(msg));
+        } else if let Ok(Some(seq)) = msg.reply_serial() {
+            let mut handlers = self.replies.lock().expect("poisoned lock");
+            if let Some(handler) = handlers.remove(&seq) {
+                futures.push(handler(msg));
+            }
         }
         futures
     }
@@ -355,6 +388,7 @@ impl ConnectionTaskShared {
 #[derive(Clone, Debug)]
 pub struct Connection {
     inner: Arc<ConnectionInner>,
+    scope: Arc<OrderedCallbacks>,
 
     pub(crate) msg_receiver: InactiveReceiver<Arc<Message>>,
 
@@ -404,7 +438,6 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let stream = MessageStream::from(self.clone());
         let m = Message::method(
             self.unique_name(),
             destination,
@@ -413,7 +446,20 @@ impl Connection {
             method_name,
             body,
         )?;
-        let serial = self.send_message(m).await?;
+        self.call_method_raw(m).await
+    }
+
+    /// Send a method call.
+    ///
+    /// Send the given message, which must be a method call, over the connection and wait for the
+    /// reply. Typically you'd want to use [`Connection::call_method`] instead.
+    ///
+    /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
+    /// error replies are returned as [`Error::MethodError`].
+    pub async fn call_method_raw(&self, msg: Message) -> Result<Arc<Message>> {
+        debug_assert_eq!(msg.message_type(), MessageType::MethodCall);
+        let stream = MessageStream::from(self.clone());
+        let serial = self.send_message(msg).await?;
         match stream
             .filter(move |m| {
                 ready(
@@ -449,6 +495,32 @@ impl Connection {
                 )))
             }
         }
+    }
+
+    /// Send a method call and execute a callback on reply.
+    ///
+    /// This callback is well-ordered with respect to the other callbacks in this scope; see
+    /// [`Connection::new_scope`] for details on why scopes are useful and how to create them.
+    /// Having the reply ordered with respect to other callbacks is useful for populating caches
+    /// that are updated by signals, which otherwise will contain a race between the return of the
+    /// initial population call and an update signal.
+    ///
+    /// Note: the callback will only be run if the current scope is still alive.
+    pub async fn dispatch_call<H>(&self, mut msg: Message, reply: H) -> Result<()>
+    where
+        H: for<'msg> FnOnce(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send + 'static,
+    {
+        self.scope.start(self);
+        let serial = self.assign_serial_num(&mut msg)?;
+        self.scope
+            .replies
+            .lock()
+            .expect("poisoned lock")
+            .insert(serial, Box::new(reply));
+
+        (&*self).send(msg).await?;
+
+        Ok(())
     }
 
     /// Emit a signal.
@@ -790,19 +862,13 @@ impl Connection {
         &self,
         handler: SignalHandler,
     ) -> Result<SignalHandlerKey> {
-        self.inner.signal_handler_task.get_or_init(|| {
-            let task_shared = self.inner.task_shared.clone();
-            let stream = self.msg_receiver.activate_cloned();
-            self.executor()
-                .spawn(task_shared.signal_handler_task(stream))
-        });
+        self.scope.start(self);
         if self.is_bus() {
             self.add_match(handler.match_expr.clone()).await?;
         }
         Ok(self
-            .inner
-            .task_shared
-            .signal_handlers
+            .scope
+            .handlers
             .lock()
             .expect("poisoned lock")
             .insert(handler))
@@ -818,9 +884,8 @@ impl Connection {
 
     pub(crate) async fn remove_signal_handler(&self, key: SignalHandlerKey) -> Result<bool> {
         let handler = self
-            .inner
-            .task_shared
-            .signal_handlers
+            .scope
+            .handlers
             .lock()
             .expect("poisoned lock")
             .remove(key);
@@ -878,6 +943,127 @@ impl Connection {
         }
     }
 
+    /// Create a new callback ordering scope.
+    ///
+    /// Note: this is an advanced feature that is not normally needed.  It only applies if you use
+    /// callbacks (the `connect_*` or `dispatch_*` APIs) and not just the `Stream`/`Future` API.
+    ///
+    /// Connections support callbacks for executing user-defined functions in response to incoming
+    /// messages.  Callbacks may be added using [`crate::Proxy::connect_signal`] or the wrappers
+    /// generated by the `dbus_proxy` macro.  By default, there is a single scope for callbacks
+    /// shared by all clones of a single Connection.
+    ///
+    /// Within a scope, all callbacks for a given [`Message`] are completed before the next message
+    /// is handled.  If these callbacks are long-running or need to make further dbus calls, this
+    /// could cause delays in starting other callbacks.
+    ///
+    /// This function creates a new Connection clone with independent scope for ordering its
+    /// callbacks.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use std::collections::HashMap;
+    /// use std::sync::{Arc,Mutex};
+    /// use zbus::Connection;
+    /// # struct SDB;
+    /// # type StudentRecord = ();
+    /// # impl SDB {
+    /// #   async fn lookup(&self, s: &String) -> StudentRecord {}
+    /// # }
+    /// # static student_db : SDB = SDB;
+    /// #
+    /// #[zbus::dbus_proxy]
+    /// trait Enroll {
+    ///     #[dbus_proxy(signal)]
+    ///     fn enroll(&self, names: Vec<String>);
+    /// }
+    ///
+    /// # type Announcement = ();
+    /// # type PingMessage = ();
+    /// # trait Mock {
+    /// #    fn words_mut(&mut self) -> Vec<()> { vec![] }
+    /// #    fn str(&self) -> &str { "" }
+    /// #    fn add_link(&self, record: &StudentRecord) {}
+    /// #    fn format(&self) -> &str { "" }
+    /// # }
+    /// # impl Mock for () {}
+    /// #[zbus::dbus_proxy]
+    /// trait Announce {
+    ///     #[dbus_proxy(signal)]
+    ///     fn announce(&self, msg: Announcement);
+    /// }
+    ///
+    /// #[zbus::dbus_proxy]
+    /// trait Baz {
+    ///     #[dbus_proxy(property)]
+    ///     fn location(&self) -> zbus::fdo::Result<i32>;
+    ///     #[dbus_proxy(signal)]
+    ///     fn urgent_ping(&self, msg: PingMessage);
+    /// }
+    ///
+    /// # async_io::block_on(async {
+    /// let names : Arc<Mutex<HashMap<String,StudentRecord>>> = Default::default();
+    ///
+    /// let conn = Connection::session().await?;
+    ///
+    /// let enroll = EnrollProxy::new(&conn).await?;
+    /// let daily_announcements = AnnounceProxy::new(&conn).await?;
+    /// let conn2 = conn.new_scope();
+    /// let baz = BazProxy::new(&conn2).await?;
+    ///
+    /// let names1 = names.clone();
+    /// enroll.connect_enroll(move |students| {
+    ///     let names = names1.clone();
+    ///     Box::pin(async move {
+    ///         for student in students {
+    ///             let record = student_db.lookup(&student).await; // this might take a while
+    ///             names.lock().unwrap().insert(student, record);
+    ///         }
+    ///     })
+    /// });
+    /// // We need to add hyperlinks to any student name before displaying the message.  A message
+    /// // will often be sent just after enrollment, so we must be sure that processing is done
+    /// // in order, even if it delays the announcement a bit.
+    /// let names1 = names.clone();
+    /// daily_announcements.connect_announce(move |mut announcement| {
+    ///     let names = names1.clone();
+    ///     Box::pin(async move {
+    ///         let names = names.lock().unwrap();
+    ///         for word in announcement.words_mut() {
+    ///             if let Some(record) = names.get(word.str()) {
+    ///                 word.add_link(&record);
+    ///             }
+    ///         }
+    ///         println!("Global announcement: {}", announcement.format());
+    ///     })
+    /// });
+    ///
+    /// baz.connect_location_changed(|pos| Box::pin(async move {
+    ///     println!("Baz has moved to {:?}", pos);
+    /// }));
+    /// baz.connect_urgent_ping(|msg| Box::pin(async move {
+    ///     println!("Baz has an urgent message for you: {}", msg.format());
+    /// }));
+    /// // If two baz signals arrive at the same time, we need to be sure to print them in the
+    /// // right order, or the message will appear to come from the wrong location.
+    ///
+    ///# Ok::<(), zbus::Error>(())
+    ///# });
+    /// ```
+    ///
+    /// The `connect_` API lets you be sure you handle signals in order and completely handle one
+    /// signal before starting on the next; this is required because it would be an error to handle
+    /// either the announcement or ping messages out of order.  However, the baz interface is
+    /// completely unrelated to yaks and shouldn't delay urgent messages just because you are busy
+    /// shaving.  Placing the baz callbacks in a distinct scope from the foo/bar ones allows them
+    /// to be handled in parallel, resulting in minimal or no delays in their output.
+    pub fn new_scope(&self) -> Connection {
+        let mut rv = self.clone();
+        rv.scope = OrderedCallbacks::new();
+        rv
+    }
+
     async fn hello_bus(&self) -> Result<()> {
         let dbus_proxy = fdo::DBusProxy::builder(self)
             .cache_properties(false)
@@ -930,8 +1116,8 @@ impl Connection {
         let executor = Arc::new(Executor::new());
         let task_shared = Arc::new(ConnectionTaskShared {
             raw_conn: sync::Mutex::new(auth.conn),
-            signal_handlers: sync::Mutex::new(DenseSlotMap::with_key()),
         });
+        let scope = OrderedCallbacks::new();
 
         // Start the message receiver task.
         let msg_receiver_task =
@@ -941,6 +1127,7 @@ impl Connection {
         let connection = Self {
             error_receiver,
             msg_receiver,
+            scope,
             inner: Arc::new(ConnectionInner {
                 task_shared,
                 server_guid: auth.server_guid,
@@ -950,7 +1137,6 @@ impl Connection {
                 unique_name: OnceCell::new(),
                 signal_matches: Mutex::new(HashMap::new()),
                 object_server: OnceCell::new(),
-                signal_handler_task: OnceCell::new(),
                 object_server_dispatch_task: OnceCell::new(),
                 executor: executor.clone(),
                 msg_receiver_task,
@@ -1099,6 +1285,10 @@ impl From<crate::blocking::Connection> for Connection {
 #[derive(Debug)]
 pub(crate) struct WeakConnection {
     inner: Weak<ConnectionInner>,
+    // This does not need to be weak because it does not cause a cyclic reference. It may also be
+    // the only remaining reference to the original scope (and ObjectServer needs to have a scope
+    // available for its callbacks in case they add signal handlers).
+    scope: Arc<OrderedCallbacks>,
     msg_receiver: InactiveReceiver<Arc<Message>>,
     error_receiver: Receiver<Error>,
 }
@@ -1108,6 +1298,7 @@ impl WeakConnection {
     pub fn upgrade(&self) -> Option<Connection> {
         self.inner.upgrade().map(|inner| Connection {
             inner,
+            scope: self.scope.clone(),
             msg_receiver: self.msg_receiver.clone(),
             error_receiver: self.error_receiver.clone(),
         })
@@ -1118,6 +1309,7 @@ impl From<&Connection> for WeakConnection {
     fn from(conn: &Connection) -> Self {
         Self {
             inner: Arc::downgrade(&conn.inner),
+            scope: conn.scope.clone(),
             msg_receiver: conn.msg_receiver.clone(),
             error_receiver: conn.error_receiver.clone(),
         }
