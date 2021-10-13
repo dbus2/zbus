@@ -292,7 +292,7 @@ impl<'a> Proxy<'a> {
         mut handler: H,
     ) -> Result<PropertyChangedHandlerId>
     where
-        H: FnMut(Option<&Value<'_>>) + Send + 'static,
+        H: FnMut(&Value<'_>) + Send + 'static,
     {
         block_on(
             self.azync

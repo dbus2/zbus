@@ -455,7 +455,7 @@ Here is an example of the stream-based API in action:
     let proxy = SystemdManagerProxy::new(&connection).await?;
     let mut stream = proxy.receive_log_level_changed().await;
     while let Some(v) = stream.next().await {
-        println!("LogLevel changed: {:?}", v);
+        println!("LogLevel changed: {:?}", v.get().await);
     }
 #
 #   Ok(())

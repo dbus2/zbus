@@ -516,10 +516,10 @@ fn gen_proxy_property(
 
         let connect = format_ident!("connect_{}_changed", method_name);
         let handler = if *blocking {
-            parse_quote! { __H: FnMut(Option<&#zbus::zvariant::Value<'_>>) + Send + 'static }
+            parse_quote! { __H: FnMut(&#zbus::zvariant::Value<'_>) + Send + 'static }
         } else {
             parse_quote! {
-                for<'v> __H: FnMut(Option<&'v #zbus::zvariant::Value<'_>>) ->
+                for<'v> __H: FnMut(&'v #zbus::zvariant::Value<'_>) ->
                     #zbus::export::futures_core::future::BoxFuture<'v, ()> + Send + 'static
             }
         };
