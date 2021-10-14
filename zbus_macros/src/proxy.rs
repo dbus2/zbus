@@ -494,7 +494,7 @@ fn gen_proxy_property(
             let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
             let receive = format_ident!("receive_{}_changed", method_name);
             let gen_doc = format!("Create a stream for the `{}` property changes. \
-                                   This is a convenient wrapper around [`zbus::Proxy::receive_property_stream`].",
+                                   This is a convenient wrapper around [`zbus::Proxy::receive_property_changed`].",
                                   property_name);
             quote! {
                 #[doc = #gen_doc]
@@ -503,7 +503,7 @@ fn gen_proxy_property(
                 ) -> #zbus::PropertyStream<'static, <#ret_type as #zbus::ResultAdapter>::Ok>
                 #where_clause
                 {
-                    self.0.receive_property_stream(#property_name).await
+                    self.0.receive_property_changed(#property_name).await
                 }
             }
         };

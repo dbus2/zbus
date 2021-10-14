@@ -148,7 +148,7 @@ impl Drop for ProxyInnerStatic {
 
 /// A [`stream::Stream`] implementation that yields property change notifications.
 ///
-/// Use [`Proxy::receive_property_stream`] to create an instance of this type.
+/// Use [`Proxy::receive_property_changed`] to create an instance of this type.
 #[derive(Debug)]
 pub struct PropertyStream<'a, T> {
     name: &'a str,
@@ -361,7 +361,7 @@ impl<'a> Proxy<'a> {
     {
         use futures_util::StreamExt;
         self.get_property_cache().ok_or(Error::Unsupported)?;
-        let mut stream = self.receive_property_stream(property_name).await;
+        let mut stream = self.receive_property_changed(property_name).await;
         let mut lock = self
             .inner
             .inner_without_borrows
@@ -833,7 +833,7 @@ impl<'a> Proxy<'a> {
     /// will only receive the last update.
     ///
     /// If caching is not enabled on this proxy, the resulting stream will not return any events.
-    pub async fn receive_property_stream<'n, T>(&self, name: &'n str) -> PropertyStream<'n, T> {
+    pub async fn receive_property_changed<'n, T>(&self, name: &'n str) -> PropertyStream<'n, T> {
         let properties = self.get_property_cache().cloned();
         let event = if let Some(properties) = &properties {
             let mut values = properties.values.lock().expect("lock poisoned");
@@ -1048,7 +1048,7 @@ mod tests {
 
         let _prop_stream =
             proxy
-                .receive_property_stream("SomeProp")
+                .receive_property_changed("SomeProp")
                 .await
                 .filter(|v: &Option<u32>| {
                     dbg!(v);
