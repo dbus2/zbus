@@ -5,7 +5,7 @@ use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::ObjectPath;
 
-use crate::{Connection, Error, Proxy, ProxyInner, ProxyProperties, Result};
+use crate::{Connection, Error, Proxy, ProxyInner, Result};
 
 /// Builder for proxies.
 #[derive(Debug)]
@@ -84,6 +84,18 @@ impl<'a, T> ProxyBuilder<'a, T> {
         self
     }
 
+    pub(crate) fn build_internal(self) -> Proxy<'a> {
+        let conn = self.conn;
+        let destination = self.destination.expect("missing `destination`");
+        let path = self.path.expect("missing `path`");
+        let interface = self.interface.expect("missing `interface`");
+        let cache = self.cache;
+
+        Proxy {
+            inner: Arc::new(ProxyInner::new(conn, destination, path, interface, cache)),
+        }
+    }
+
     /// Build a proxy from the builder.
     ///
     /// # Panics
@@ -93,24 +105,9 @@ impl<'a, T> ProxyBuilder<'a, T> {
     where
         T: From<Proxy<'a>>,
     {
-        let conn = self.conn;
-        let destination = self.destination.expect("missing `destination`");
-        let path = self.path.expect("missing `path`");
-        let interface = self.interface.expect("missing `interface`");
-        let cache = self.cache;
+        let proxy = self.build_internal();
 
-        let proxy = Proxy {
-            inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
-            properties: Arc::new(ProxyProperties::new()),
-        };
-
-        Box::pin(async move {
-            if cache {
-                proxy.cache_properties().await?;
-            }
-
-            Ok(proxy.into())
-        })
+        Box::pin(async move { Ok(proxy.into()) })
     }
 }
 
