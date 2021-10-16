@@ -235,6 +235,7 @@ impl<'a> MessageBuilder<'a> {
             bytes,
             body_offset: hdr_len,
             fds: Arc::new(RwLock::new(Fds::Raw(fds))),
+            recv_seq: MessageSequence::default(),
         })
     }
 }
@@ -252,6 +253,12 @@ impl Clone for Fds {
             Fds::Owned(v) => v.iter().map(|fd| fd.as_raw_fd()).collect(),
         })
     }
+}
+
+/// A position in the stream of [`Message`] objects received by a single [`zbus::Connection`].
+#[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct MessageSequence {
+    recv_seq: u64,
 }
 
 /// A D-Bus Message.
@@ -278,6 +285,7 @@ pub struct Message {
     bytes: Vec<u8>,
     body_offset: usize,
     fds: Arc<RwLock<Fds>>,
+    recv_seq: MessageSequence,
 }
 
 assert_impl_all!(Message: Send, Sync, Unpin);
@@ -397,7 +405,7 @@ impl Message {
     }
 
     /// Create a message from its full contents
-    pub(crate) fn from_raw_parts(bytes: Vec<u8>, fds: Vec<OwnedFd>) -> Result<Self> {
+    pub(crate) fn from_raw_parts(bytes: Vec<u8>, fds: Vec<OwnedFd>, recv_seq: u64) -> Result<Self> {
         if EndianSig::try_from(bytes[0])? != NATIVE_ENDIAN_SIG {
             return Err(Error::IncorrectEndian);
         }
@@ -416,6 +424,7 @@ impl Message {
             bytes,
             body_offset,
             fds,
+            recv_seq: MessageSequence { recv_seq },
         })
     }
 
@@ -583,6 +592,17 @@ impl Message {
     /// Get a reference to the byte encoding of the body of the message.
     pub fn body_as_bytes(&self) -> Result<&[u8]> {
         Ok(&self.bytes[self.body_offset..])
+    }
+
+    /// Get the receive ordering of a message.
+    ///
+    /// This may be used to identify how two events were ordered on the bus.  It only produces a
+    /// useful ordering for messages that were produced by the same [`zbus::Connection`].
+    ///
+    /// This is completely unrelated to the serial number on the message, which is set by the peer
+    /// and might not be ordered at all.
+    pub fn recv_position(&self) -> MessageSequence {
+        self.recv_seq
     }
 }
 

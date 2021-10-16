@@ -31,6 +31,7 @@ pub struct Connection<S> {
     raw_in_pos: usize,
     raw_out_buffer: VecDeque<u8>,
     msg_out_buffer: VecDeque<Message>,
+    prev_seq: u64,
 }
 
 impl<S: Socket> Connection<S> {
@@ -43,6 +44,7 @@ impl<S: Socket> Connection<S> {
             raw_in_pos: 0,
             raw_out_buffer: VecDeque::new(),
             msg_out_buffer: VecDeque::new(),
+            prev_seq: 0,
         }
     }
 
@@ -151,7 +153,9 @@ impl<S: Socket> Connection<S> {
         self.raw_in_pos = 0;
         let bytes = std::mem::take(&mut self.raw_in_buffer);
         let fds = std::mem::take(&mut self.raw_in_fds);
-        Poll::Ready(Message::from_raw_parts(bytes, fds))
+        let seq = self.prev_seq + 1;
+        self.prev_seq = seq;
+        Poll::Ready(Message::from_raw_parts(bytes, fds, seq))
     }
 
     /// Close the connection.
