@@ -710,6 +710,26 @@ fn gen_proxy_signal(
                     }
                 }
 
+                impl ::std::ops::Deref for #signal_name_ident {
+                    type Target = #zbus::Message;
+
+                    fn deref(&self) -> &#zbus::Message {
+                        &self.0
+                    }
+                }
+
+                impl ::std::convert::AsRef<::std::sync::Arc<#zbus::Message>> for #signal_name_ident {
+                    fn as_ref(&self) -> &::std::sync::Arc<#zbus::Message> {
+                        &self.0
+                    }
+                }
+
+                impl ::std::convert::AsRef<#zbus::Message> for #signal_name_ident {
+                    fn as_ref(&self) -> &#zbus::Message {
+                        &self.0
+                    }
+                }
+
                 #[doc = #signal_args_gen_doc]
                 pub struct #signal_args #ty_generics {
                     phantom: std::marker::PhantomData<&'s ()>,
