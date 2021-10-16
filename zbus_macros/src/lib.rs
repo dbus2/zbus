@@ -51,6 +51,8 @@ mod utils;
 ///   register and deregister a handler for the signal, whose signature must match that of the
 ///   signature declaration.
 ///
+/// * `no_reply` - declare a method call that does not wait for a reply.
+///
 /// * `object` - methods that returns an [`ObjectPath`] can be annotated with the `object` attribute
 ///   to specify the proxy object to be constructed from the returned [`ObjectPath`].
 ///
