@@ -351,6 +351,8 @@ fn gen_proxy_method_call(
         }
         _ => None,
     });
+    let no_reply = attrs.iter().any(|x| matches!(x, ItemAttribute::NoReply));
+
     let method = Ident::new(snake_case_name, Span::call_site());
     let inputs = &m.sig.inputs;
     let mut generics = m.sig.generics.clone();
@@ -425,6 +427,17 @@ fn gen_proxy_method_call(
             fn #method#ty_generics(#inputs) #output
             #where_clause
         };
+
+        if no_reply {
+            return quote! {
+                #(#doc)*
+                pub #usage #signature {
+                    self.0.call_noreply(#method_name, #body)#wait?;
+                    ::std::result::Result::Ok(())
+                }
+            };
+        }
+
         quote! {
             #(#doc)*
             pub #usage #signature {
