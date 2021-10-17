@@ -753,13 +753,11 @@ impl<'a> Proxy<'a> {
 
         Ok(SignalStream {
             stream,
-            conn,
+            proxy: self,
             expr,
             src_bus_name,
             src_query,
             src_unique_name,
-            path: self.path().to_owned(),
-            interface: self.interface().to_owned(),
             member: signal_name,
         })
     }
@@ -886,13 +884,11 @@ impl<'a> Proxy<'a> {
 #[derive(Debug)]
 pub struct SignalStream<'a> {
     stream: Receiver<Arc<Message>>,
-    conn: Connection,
+    proxy: &'a Proxy<'a>,
     expr: String,
     src_bus_name: Option<WellKnownName<'a>>,
     src_query: Option<u32>,
     src_unique_name: Option<UniqueName<'static>>,
-    path: ObjectPath<'a>,
-    interface: InterfaceName<'a>,
     member: Option<MemberName<'static>>,
 }
 
@@ -913,8 +909,8 @@ impl<'a> SignalStream<'a> {
         let path = msg.path()?;
 
         if (self.member.is_none() || memb == self.member)
-            && path.as_ref() == Some(&self.path)
-            && iface.as_ref() == Some(&self.interface)
+            && path.as_ref() == Some(self.proxy.path())
+            && iface.as_ref() == Some(self.proxy.interface())
         {
             let header = msg.header()?;
             let sender = header.sender()?;
@@ -968,7 +964,9 @@ impl<'a> stream::Stream for SignalStream<'a> {
 
 impl<'a> std::ops::Drop for SignalStream<'a> {
     fn drop(&mut self) {
-        self.conn.queue_remove_match(std::mem::take(&mut self.expr));
+        self.proxy
+            .connection()
+            .queue_remove_match(std::mem::take(&mut self.expr));
     }
 }
 
