@@ -161,27 +161,31 @@ impl MessageReceiverTask {
     // Keep receiving messages and put them on the queue.
     async fn receive_msg(self: Arc<Self>) {
         loop {
-            // Ignore errors from sending to msg or error channels. The only reason these calls
-            // fail is when the channel is closed and that will only happen when `Connection` is
-            // being dropped.
-            // TODO: We should still log in case of error when we've logging.
-
             let receive_msg = ReceiveMessage {
                 raw_conn: &self.task_shared.raw_conn,
             };
             let msg = match receive_msg.await {
                 Ok(msg) => msg,
                 Err(e) => {
-                    // Ignoring errors. See comment above.
+                    // Ignore errors when sending the error; this happens if the channel is
+                    // being dropped.
+                    //
+                    // This can be logged when we have logging, though that's mostly useless: it
+                    // only happens when the receive_msg task is running at the time the last
+                    // Connection is dropped.
                     let _ = self.error_sender.send(e).await;
-
-                    continue;
+                    self.msg_sender.close();
+                    self.error_sender.close();
+                    return;
                 }
             };
 
             let msg = Arc::new(msg);
-            // Ignoring errors. See comment above.
-            let _ = self.msg_sender.broadcast(msg.clone()).await;
+            if self.msg_sender.broadcast(msg.clone()).await.is_err() {
+                // An error would be due to the channel being closed, which only happens when the
+                // connection is dropped, so just stop the task.  See comment above about logging.
+                return;
+            }
         }
     }
 }
