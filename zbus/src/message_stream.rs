@@ -49,6 +49,12 @@ impl stream::Stream for MessageStream {
     }
 }
 
+impl FusedStream for MessageStream {
+    fn is_terminated(&self) -> bool {
+        self.msg_receiver.is_terminated() && self.error_receiver.is_terminated()
+    }
+}
+
 impl From<Connection> for MessageStream {
     fn from(conn: Connection) -> Self {
         let msg_receiver = conn.msg_receiver.activate();
