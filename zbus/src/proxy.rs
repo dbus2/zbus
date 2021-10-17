@@ -1,4 +1,4 @@
-use async_channel::{bounded, Receiver};
+use async_broadcast::Receiver;
 use async_recursion::async_recursion;
 use event_listener::{Event, EventListener};
 use futures_core::{future::BoxFuture, ready, stream};
@@ -711,48 +711,56 @@ impl<'a> Proxy<'a> {
         M: TryInto<MemberName<'static>>,
         M::Error: Into<Error>,
     {
+        let signal_name = signal_name.try_into().map_err(Into::into)?;
+        self.receive_signals(Some(signal_name)).await
+    }
+
+    async fn receive_signals(
+        &self,
+        signal_name: Option<MemberName<'static>>,
+    ) -> Result<SignalStream> {
         // Time to try & resolve the destination name & track changes to it.
+        let conn = self.inner.inner_without_borrows.conn.clone();
+        let stream = conn.msg_receiver.activate_cloned();
         self.inner.destination_unique_name().await?;
 
-        let signal_name = signal_name.try_into().map_err(Into::into)?;
-        let expr = format!(
-            "type='signal',sender='{}',path='{}',interface='{}',member='{}'",
+        let mut expr = format!(
+            "type='signal',sender='{}',path='{}',interface='{}'",
             self.destination(),
             self.path(),
             self.interface(),
-            &signal_name,
         );
+        if let Some(name) = &signal_name {
+            use std::fmt::Write;
+            write!(expr, ",member='{}'", name).unwrap();
+        }
+        conn.add_match(expr.clone()).await?;
 
-        let dest_unique_name = self.inner.dest_unique_name.clone();
-        let conn = self.inner.inner_without_borrows.conn.clone();
-        let (send, recv) = bounded(64);
-
-        let handler_id = conn
-            .add_signal_handler(SignalHandler::signal(
-                self.path().to_owned(),
-                self.interface().to_owned(),
-                signal_name,
-                expr,
-                move |msg| {
-                    let dest_unique_name = dest_unique_name.clone();
-                    let send = send.clone();
-                    Box::pin(async move {
-                        if let Ok(h) = msg.header() {
-                            if let Ok(s) = h.sender() {
-                                if s == dest_unique_name.read().expect("lock poisoned").as_deref() {
-                                    let _ = send.send(msg.clone()).await;
-                                }
-                            }
-                        }
-                    })
-                },
-            ))
-            .await?;
+        let (src_bus_name, src_unique_name, src_query) = match self.destination().to_owned() {
+            BusName::Unique(name) => (None, Some(name), None),
+            BusName::WellKnown(name) => {
+                let id = conn
+                    .send_message(
+                        MessageBuilder::method_call("/org/freedesktop/DBus", "GetNameOwner")?
+                            .destination("org.freedesktop.DBus")?
+                            .interface("org.freedesktop.DBus")?
+                            .build(&name)?,
+                    )
+                    .await?;
+                (Some(name), None, Some(id))
+            }
+        };
 
         Ok(SignalStream {
-            stream: recv,
+            stream,
             conn,
-            handler_id,
+            expr,
+            src_bus_name,
+            src_query,
+            src_unique_name,
+            path: self.path().to_owned(),
+            interface: self.interface().to_owned(),
+            member: signal_name,
         })
     }
 
@@ -764,47 +772,7 @@ impl<'a> Proxy<'a> {
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
     pub async fn receive_all_signals(&self) -> Result<SignalStream> {
-        // Time to try & resolve the destination name & track changes to it.
-        self.inner.destination_unique_name().await?;
-
-        let expr = format!(
-            "type='signal',sender='{}',path='{}',interface='{}'",
-            self.destination(),
-            self.path(),
-            self.interface(),
-        );
-
-        let dest_unique_name = self.inner.dest_unique_name.clone();
-        let conn = self.inner.inner_without_borrows.conn.clone();
-        let (send, recv) = bounded(64);
-
-        let handler_id = conn
-            .add_signal_handler(SignalHandler::signal(
-                self.path().to_owned(),
-                self.interface().to_owned(),
-                None,
-                expr,
-                move |msg| {
-                    let dest_unique_name = dest_unique_name.clone();
-                    let send = send.clone();
-                    Box::pin(async move {
-                        if let Ok(h) = msg.header() {
-                            if let Ok(s) = h.sender() {
-                                if s == dest_unique_name.read().expect("lock poisoned").as_deref() {
-                                    let _ = send.send(msg.clone()).await;
-                                }
-                            }
-                        }
-                    })
-                },
-            ))
-            .await?;
-
-        Ok(SignalStream {
-            stream: recv,
-            conn,
-            handler_id,
-        })
+        self.receive_signals(None).await
     }
 
     /// Register a handler for signal named `signal_name`.
@@ -919,7 +887,67 @@ impl<'a> Proxy<'a> {
 pub struct SignalStream {
     stream: Receiver<Arc<Message>>,
     conn: Connection,
-    handler_id: SignalHandlerKey,
+    expr: String,
+    src_bus_name: Option<WellKnownName<'static>>,
+    src_query: Option<u32>,
+    src_unique_name: Option<UniqueName<'static>>,
+    path: ObjectPath<'static>,
+    interface: InterfaceName<'static>,
+    member: Option<MemberName<'static>>,
+}
+
+impl SignalStream {
+    fn filter(&mut self, msg: &Message) -> Result<bool> {
+        if msg.message_type() == zbus::MessageType::MethodReturn
+            && self.src_query.is_some()
+            && msg.reply_serial()? == self.src_query
+        {
+            self.src_query = None;
+            self.src_unique_name = Some(OwnedUniqueName::into(msg.body()?));
+        }
+        if msg.message_type() != zbus::MessageType::Signal {
+            return Ok(false);
+        }
+        let memb = msg.member()?;
+        let iface = msg.interface()?;
+        let path = msg.path()?;
+
+        if (self.member.is_none() || memb == self.member)
+            && path.as_ref() == Some(&self.path)
+            && iface.as_ref() == Some(&self.interface)
+        {
+            let header = msg.header()?;
+            let sender = header.sender()?;
+            if sender == self.src_unique_name.as_ref() {
+                return Ok(true);
+            }
+        }
+
+        // The src_unique_name must be maintained in lock-step with the applied filter
+        if let Some(bus_name) = &self.src_bus_name {
+            if memb.as_deref() == Some("NameOwnerChanged")
+                && iface.as_deref() == Some("org.freedesktop.DBus")
+                && path.as_deref() == Some("/org/freedesktop/DBus")
+            {
+                let header = msg.header()?;
+                if let Ok(Some(sender)) = header.sender() {
+                    if sender == "org.freedesktop.DBus" {
+                        let (name, _, new_owner) = msg.body::<(
+                            WellKnownName<'_>,
+                            Optional<UniqueName<'_>>,
+                            Optional<UniqueName<'_>>,
+                        )>()?;
+
+                        if &name == bus_name {
+                            self.src_unique_name = new_owner.as_ref().map(|n| n.to_owned());
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(false)
+    }
 }
 
 assert_impl_all!(SignalStream: Send, Sync, Unpin);
@@ -928,13 +956,19 @@ impl stream::Stream for SignalStream {
     type Item = Arc<Message>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        stream::Stream::poll_next(Pin::new(&mut self.get_mut().stream), cx)
+        let this = self.get_mut();
+        while let Some(msg) = ready!(Pin::new(&mut this.stream).poll_next(cx)) {
+            if let Ok(true) = this.filter(&msg) {
+                return Poll::Ready(Some(msg));
+            }
+        }
+        Poll::Ready(None)
     }
 }
 
 impl std::ops::Drop for SignalStream {
     fn drop(&mut self) {
-        self.conn.queue_remove_signal_handler(self.handler_id);
+        self.conn.queue_remove_match(std::mem::take(&mut self.expr));
     }
 }
 
