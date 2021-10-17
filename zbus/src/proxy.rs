@@ -901,6 +901,12 @@ impl<'a> stream::Stream for SignalStream<'a> {
     }
 }
 
+impl<'a> stream::FusedStream for SignalStream<'a> {
+    fn is_terminated(&self) -> bool {
+        self.stream.is_terminated()
+    }
+}
+
 impl<'a> std::ops::Drop for SignalStream<'a> {
     fn drop(&mut self) {
         self.proxy
