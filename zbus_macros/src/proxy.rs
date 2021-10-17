@@ -784,6 +784,12 @@ fn gen_proxy_signal(
                 }
             }
 
+            impl #zbus::export::futures_core::stream::FusedStream for #stream_name<'_> {
+                fn is_terminated(&self) -> bool {
+                    self.0.is_terminated()
+                }
+            }
+
             impl<'a> #stream_name<'a> {
                 /// Consumes `self`, returning the underlying `zbus::SignalStream`.
                 pub fn into_inner(self) -> #zbus::SignalStream<'a> {
