@@ -706,7 +706,7 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub async fn receive_signal<M>(&self, signal_name: M) -> Result<SignalStream>
+    pub async fn receive_signal<M>(&self, signal_name: M) -> Result<SignalStream<'_>>
     where
         M: TryInto<MemberName<'static>>,
         M::Error: Into<Error>,
@@ -718,7 +718,7 @@ impl<'a> Proxy<'a> {
     async fn receive_signals(
         &self,
         signal_name: Option<MemberName<'static>>,
-    ) -> Result<SignalStream> {
+    ) -> Result<SignalStream<'_>> {
         // Time to try & resolve the destination name & track changes to it.
         let conn = self.inner.inner_without_borrows.conn.clone();
         let stream = conn.msg_receiver.activate_cloned();
@@ -771,7 +771,7 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub async fn receive_all_signals(&self) -> Result<SignalStream> {
+    pub async fn receive_all_signals(&self) -> Result<SignalStream<'_>> {
         self.receive_signals(None).await
     }
 
@@ -884,19 +884,19 @@ impl<'a> Proxy<'a> {
 ///
 /// Use [`Proxy::receive_signal`] to create an instance of this type.
 #[derive(Debug)]
-pub struct SignalStream {
+pub struct SignalStream<'a> {
     stream: Receiver<Arc<Message>>,
     conn: Connection,
     expr: String,
-    src_bus_name: Option<WellKnownName<'static>>,
+    src_bus_name: Option<WellKnownName<'a>>,
     src_query: Option<u32>,
     src_unique_name: Option<UniqueName<'static>>,
-    path: ObjectPath<'static>,
-    interface: InterfaceName<'static>,
+    path: ObjectPath<'a>,
+    interface: InterfaceName<'a>,
     member: Option<MemberName<'static>>,
 }
 
-impl SignalStream {
+impl<'a> SignalStream<'a> {
     fn filter(&mut self, msg: &Message) -> Result<bool> {
         if msg.message_type() == zbus::MessageType::MethodReturn
             && self.src_query.is_some()
@@ -950,9 +950,9 @@ impl SignalStream {
     }
 }
 
-assert_impl_all!(SignalStream: Send, Sync, Unpin);
+assert_impl_all!(SignalStream<'_>: Send, Sync, Unpin);
 
-impl stream::Stream for SignalStream {
+impl<'a> stream::Stream for SignalStream<'a> {
     type Item = Arc<Message>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -966,7 +966,7 @@ impl stream::Stream for SignalStream {
     }
 }
 
-impl std::ops::Drop for SignalStream {
+impl<'a> std::ops::Drop for SignalStream<'a> {
     fn drop(&mut self) {
         self.conn.queue_remove_match(std::mem::take(&mut self.expr));
     }
