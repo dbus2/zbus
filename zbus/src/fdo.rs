@@ -210,8 +210,7 @@ impl Properties {
     ) -> zbus::Result<()>;
 }
 
-/// The type returned by the [`ObjectManagerProxy::get_managed_objects`] and
-/// [`AsyncObjectManagerProxy::get_managed_objects`] methods.
+/// The type returned by the [`ObjectManagerProxy::get_managed_objects`] method.
 pub type ManagedObjects =
     HashMap<OwnedObjectPath, HashMap<OwnedInterfaceName, HashMap<String, OwnedValue>>>;
 
