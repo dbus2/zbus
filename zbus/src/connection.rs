@@ -256,7 +256,7 @@ impl ConnectionTaskShared {
 /// `Connection` keeps an internal queue of incoming message. The maximum capacity of this queue
 /// is configurable through the [`set_max_queued`] method. The default size is 64. When the queue is
 /// full, no more messages can be received until room is created for more. This is why it's
-/// important to ensure that all [`crate::MessageStream`] and [`crate::blocking::MessageStream`]
+/// important to ensure that all [`crate::MessageStream`] and [`crate::blocking::MessageIterator`]
 /// instances are continuously polled and iterated on, respectively.
 ///
 /// For sending messages you can either use [`Connection::send_message`] method or make use of the

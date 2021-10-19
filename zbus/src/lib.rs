@@ -249,7 +249,7 @@ mod tests {
     use zvariant::{Fd, OwnedObjectPath, OwnedValue, Type};
 
     use crate::{
-        blocking::{self, MessageStream},
+        blocking::{self, MessageIterator},
         fdo::{RequestNameFlags, RequestNameReply},
         Connection, InterfaceDeref, Message, MessageFlags, Result, SignalContext,
     };
@@ -570,7 +570,7 @@ mod tests {
         // produces is exactly the same: `Connection::call_method` dropping all incoming messages
         // while waiting for the reply to the method call.
         let conn = blocking::Connection::session().unwrap();
-        let stream = MessageStream::from(&conn);
+        let stream = MessageIterator::from(&conn);
 
         // Send a message as client before service starts to process messages
         let client_conn = blocking::Connection::session().unwrap();
@@ -689,7 +689,7 @@ mod tests {
     #[timeout(15000)]
     fn issue_122() {
         let conn = blocking::Connection::session().unwrap();
-        let stream = MessageStream::from(&conn);
+        let stream = MessageIterator::from(&conn);
 
         #[allow(clippy::mutex_atomic)]
         let pair = Arc::new((Mutex::new(false), Condvar::new()));

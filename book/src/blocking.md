@@ -17,8 +17,8 @@ it provides blocking wrapper types, under the [blocking module].
 The only difference to that of [asynchronous `Connection` API] is that you use
 [`blocking::Connection`] type instead. This type's API is almost identical to that of `Connection`,
 except all its methods are blocking. One notable difference is that there is no equivalent of
-[`futures::sink::Sink`] implementation provided. There is however [`blocking::MessageStream`] type,
-that implements [`std::iter::Iterator`].
+[`futures::sink::Sink`] implementation provided. There is however [`blocking::MessageIterator`]
+type, that implements [`std::iter::Iterator`].
 
 ## Client
 

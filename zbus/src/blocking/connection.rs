@@ -264,7 +264,7 @@ mod tests {
     use test_env_log::test;
 
     use crate::{
-        blocking::{ConnectionBuilder, MessageStream},
+        blocking::{ConnectionBuilder, MessageIterator},
         Guid,
     };
     #[test]
@@ -290,7 +290,7 @@ mod tests {
 
         let c = ConnectionBuilder::unix_stream(p1).p2p().build().unwrap();
         let listener = c.monitor_activity();
-        let mut s = MessageStream::from(&c);
+        let mut s = MessageIterator::from(&c);
         let m = s.next().unwrap().unwrap();
         assert_eq!(m.to_string(), "Method call Test");
         c.reply(&m, &("yay")).unwrap();
