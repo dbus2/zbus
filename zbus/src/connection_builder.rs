@@ -157,7 +157,7 @@ impl<'a> ConnectionBuilder<'a> {
 
     /// Register a well-known name for this connection on the bus.
     ///
-    /// This is similar to [`zbus::Connection::register_name`], except the name is requested as part
+    /// This is similar to [`zbus::Connection::request_name`], except the name is requested as part
     /// of the connection setup ([`ConnectionBuilder::build`]), immediately after interfaces
     /// registered (through [`ConnectionBuilder::serve_at`]) are advertised. Typically this is
     /// exactly what you want.

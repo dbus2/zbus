@@ -12,7 +12,10 @@ use zbus_names::{
     BusName, InterfaceName, OwnedBusName, OwnedInterfaceName, OwnedUniqueName, UniqueName,
     WellKnownName,
 };
-use zvariant::{derive::Type, ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value};
+use zvariant::{
+    derive::{DeserializeDict, SerializeDict, Type, TypeDict},
+    ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value,
+};
 
 use crate::{dbus_interface, dbus_proxy, DBusError, MessageHeader, ObjectServer, SignalContext};
 
@@ -207,8 +210,7 @@ impl Properties {
     ) -> zbus::Result<()>;
 }
 
-/// The type returned by the [`ObjectManagerProxy::get_managed_objects`] and
-/// [`AsyncObjectManagerProxy::get_managed_objects`] methods.
+/// The type returned by the [`ObjectManagerProxy::get_managed_objects`] method.
 pub type ManagedObjects =
     HashMap<OwnedObjectPath, HashMap<OwnedInterfaceName, HashMap<String, OwnedValue>>>;
 
@@ -453,6 +455,62 @@ pub enum ReleaseNameReply {
 
 assert_impl_all!(ReleaseNameReply: Send, Sync, Unpin);
 
+/// Credentials of a process connected to a bus server.
+///
+/// If unable to determine certain credentials (for instance, because the process is not on the same
+/// machine as the bus daemon, or because this version of the bus daemon does not support a
+/// particular security framework), or if the values of those credentials cannot be represented as
+/// documented here, then those credentials are omitted.
+///
+/// **Note**: unknown keys, in particular those with "." that are not from the specification, will
+/// be ignored. Use your own implementation or contribute your keys here, or in the specification.
+#[derive(Debug, DeserializeDict, PartialEq, SerializeDict, TypeDict)]
+pub struct ConnectionCredentials {
+    /// The numeric Unix user ID, as defined by POSIX
+    #[zvariant(rename = "UnixUserID")]
+    pub unix_user_id: Option<u32>,
+
+    /// The numeric Unix group IDs (including both the primary group and the supplementary groups),
+    /// as defined by POSIX, in numerically sorted order. This array is either complete or absent:
+    /// if the message bus is able to determine some but not all of the caller's groups, or if one
+    /// of the groups is not representable in a UINT32, it must not add this credential to the
+    /// dictionary.
+    #[zvariant(rename = "UnixGroupIDs")]
+    pub unix_group_ids: Option<Vec<u32>>,
+
+    /// The numeric process ID, on platforms that have this concept. On Unix, this is the process ID
+    /// defined by POSIX.
+    #[zvariant(rename = "ProcessID")]
+    pub process_id: Option<u32>,
+
+    /// The Windows security identifier in its string form, e.g.
+    /// `S-1-5-21-3623811015-3361044348-30300820-1013` for a domain or local computer user or
+    /// "S-1-5-18` for the LOCAL_SYSTEM user.
+    #[zvariant(rename = "WindowsSID")]
+    pub windows_sid: Option<String>,
+
+    /// On Linux systems, the security label that would result from the SO_PEERSEC getsockopt call.
+    /// The array contains the non-zero bytes of the security label in an unspecified
+    /// ASCII-compatible encoding, followed by a single zero byte.
+    ///
+    /// For example, the SELinux context `system_u:system_r:init_t:s0` (a string of length 27) would
+    /// be encoded as 28 bytes ending with `':', 's', '0', '\x00'`
+    ///
+    /// On SELinux systems this is the SELinux context, as output by `ps -Z` or `ls -Z`. Typical values
+    /// might include `system_u:system_r:init_t:s0`,
+    /// `unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023`, or
+    /// `unconfined_u:unconfined_r:chrome_sandbox_t:s0-s0:c0.c1023`.
+    ///
+    /// On Smack systems, this is the Smack label. Typical values might include `_`, `*`, `User`,
+    /// `System` or `System::Shared`.
+    ///
+    /// On AppArmor systems, this is the AppArmor context, a composite string encoding the AppArmor
+    /// label (one or more profiles) and the enforcement mode. Typical values might include
+    /// `unconfined`, `/usr/bin/firefox (enforce)` or `user1 (complain)`.
+    #[zvariant(rename = "LinuxSecurityLabel")]
+    pub linux_security_label: Option<Vec<u8>>,
+}
+
 #[rustfmt::skip]
 macro_rules! gen_dbus_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
@@ -473,7 +531,7 @@ macro_rules! gen_dbus_proxy {
             fn get_connection_credentials(
                 &self,
                 bus_name: BusName<'_>,
-            ) -> Result<HashMap<String, OwnedValue>>;
+            ) -> Result<ConnectionCredentials>;
 
             /// Returns the security context used by SELinux, in an unspecified format.
             #[dbus_proxy(name = "GetConnectionSELinuxSecurityContext")]

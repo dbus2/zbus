@@ -13,7 +13,10 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     dbus_proxy,
-    fdo::{ManagedObjects, ReleaseNameReply, RequestNameFlags, RequestNameReply, Result},
+    fdo::{
+        ConnectionCredentials, ManagedObjects, ReleaseNameReply, RequestNameFlags,
+        RequestNameReply, Result,
+    },
 };
 
 gen_introspectable_proxy!(false, true);
