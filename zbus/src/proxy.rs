@@ -11,14 +11,11 @@ use std::{
     convert::{TryFrom, TryInto},
     future::Future,
     pin::Pin,
-    sync::{Arc, Mutex as SyncMutex, RwLock},
+    sync::{Arc, Mutex as SyncMutex},
     task::{Context, Poll},
 };
 
-use zbus_names::{
-    BusName, InterfaceName, MemberName, OwnedUniqueName, OwnedWellKnownName, UniqueName,
-    WellKnownName,
-};
+use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName, WellKnownName};
 use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
@@ -140,7 +137,7 @@ pub(crate) struct ProxyInnerStatic {
     pub(crate) conn: Connection,
     // A list of the keys so that dropping the Proxy will disconnect the signals
     sig_handlers: SyncMutex<Vec<SignalHandlerKey>>,
-    dest_name_watcher: OnceCell<SignalHandlerKey>,
+    dest_name_watcher: OnceCell<String>,
 }
 
 #[derive(Debug)]
@@ -149,8 +146,6 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) destination: BusName<'a>,
     pub(crate) path: ObjectPath<'a>,
     pub(crate) interface: InterfaceName<'a>,
-    // Keep it in an Arc so that dest_name_update_task can keep its own ref to it.
-    dest_unique_name: Arc<RwLock<Option<OwnedUniqueName>>>,
 }
 
 impl Drop for ProxyInnerStatic {
@@ -158,8 +153,8 @@ impl Drop for ProxyInnerStatic {
         for id in self.sig_handlers.get_mut().expect("lock poisoned") {
             self.conn.queue_remove_signal_handler(*id);
         }
-        if let Some(id) = self.dest_name_watcher.get() {
-            self.conn.queue_remove_signal_handler(*id);
+        if let Some(expr) = self.dest_name_watcher.take() {
+            self.conn.queue_remove_match(expr);
         }
     }
 }
@@ -253,7 +248,6 @@ impl<'a> ProxyInner<'a> {
             destination,
             path,
             interface,
-            dest_unique_name: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -274,90 +268,35 @@ impl<'a> ProxyInner<'a> {
             return Ok(());
         }
 
-        let destination = &self.destination;
-        match destination {
-            BusName::Unique(name) => {
-                if self
-                    .dest_unique_name
-                    .read()
-                    .expect("lock poisoned")
-                    .is_none()
-                {
-                    *self.dest_unique_name.write().expect("lock poisoned") =
-                        Some(name.to_owned().into());
-                }
+        if let BusName::WellKnown(well_known_name) = &self.destination {
+            if self.inner_without_borrows.dest_name_watcher.get().is_some() {
+                // Already watching over the bus for any name updates so nothing to do here.
+                return Ok(());
             }
-            BusName::WellKnown(well_known_name) => {
-                if self.inner_without_borrows.dest_name_watcher.get().is_some() {
-                    // Already watching over the bus for any name updates so nothing to do here.
-                    return Ok(());
-                }
 
-                let conn = &self.inner_without_borrows.conn;
-                let dest_unique_name = self.dest_unique_name.clone();
-                let well_known_name = OwnedWellKnownName::from(well_known_name.to_owned());
-                let signal_expr = format!(
-                    concat!(
-                        "type='signal',",
-                        "sender='org.freedesktop.DBus',",
-                        "path='/org/freedesktop/DBus',",
-                        "interface='org.freedesktop.DBus',",
-                        "member='NameOwnerChanged',",
-                        "arg0='{}'"
-                    ),
-                    well_known_name
-                );
+            let conn = &self.inner_without_borrows.conn;
+            let signal_expr = format!(
+                concat!(
+                    "type='signal',",
+                    "sender='org.freedesktop.DBus',",
+                    "path='/org/freedesktop/DBus',",
+                    "interface='org.freedesktop.DBus',",
+                    "member='NameOwnerChanged',",
+                    "arg0='{}'"
+                ),
+                well_known_name
+            );
 
-                let id = conn
-                    .add_signal_handler(SignalHandler::signal(
-                        ObjectPath::from_str_unchecked("/org/freedesktop/DBus"),
-                        InterfaceName::from_str_unchecked("org.freedesktop.DBus"),
-                        MemberName::from_str_unchecked("NameOwnerChanged"),
-                        signal_expr,
-                        move |msg| {
-                            let dest_unique_name = dest_unique_name.clone();
-                            let well_known_name = well_known_name.clone();
-                            let sender_ok = msg.header().ok().map_or(false, |h| {
-                                h.sender()
-                                    == Ok(Some(&UniqueName::from_str_unchecked(
-                                        "org.freedesktop.DBus",
-                                    )))
-                            });
-                            if sender_ok {
-                                match msg.body::<(
-                                    WellKnownName<'_>,
-                                    Optional<UniqueName<'_>>,
-                                    Optional<UniqueName<'_>>,
-                                )>() {
-                                    Ok((name, _, new_owner)) if name == well_known_name => {
-                                        let unique_name =
-                                            new_owner.as_ref().map(|n| n.to_owned().into());
-                                        *dest_unique_name.write().expect("lock poisoned") =
-                                            unique_name;
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            Box::pin(async move {})
-                        },
-                    ))
-                    .await?;
+            conn.add_match(signal_expr.clone()).await?;
 
-                if let Err(id) = self.inner_without_borrows.dest_name_watcher.set(id) {
-                    conn.remove_signal_handler(id).await?;
-                }
-
-                let unique_name = match fdo::DBusProxy::new(&self.inner_without_borrows.conn)
-                    .await?
-                    .get_name_owner(destination.as_ref())
-                    .await
-                {
-                    // That's ok. The destination isn't available right now.
-                    Err(fdo::Error::NameHasNoOwner(_)) => None,
-                    res => Some(res?),
-                };
-
-                *self.dest_unique_name.write().expect("lock poisoned") = unique_name;
+            if self
+                .inner_without_borrows
+                .dest_name_watcher
+                .set(signal_expr.clone())
+                .is_err()
+            {
+                // we raced another destination_unique_name call and added it twice
+                conn.remove_match(signal_expr).await?;
             }
         }
 
