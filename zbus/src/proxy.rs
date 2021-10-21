@@ -5,6 +5,7 @@ use event_listener::{Event, EventListener};
 use futures_core::{future::BoxFuture, ready, stream};
 use futures_util::StreamExt;
 use once_cell::sync::OnceCell;
+use ordered_stream::{OrderedStream, PollResult};
 use slotmap::{new_key_type, SlotMap};
 use static_assertions::assert_impl_all;
 use std::{
@@ -21,8 +22,8 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    Connection, Error, Message, MessageBuilder, ProxyBuilder, Result, SignalHandler,
-    SignalHandlerKey,
+    Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder, Result,
+    SignalHandler, SignalHandlerKey,
 };
 
 /// The ID for a registered signal handler.
@@ -676,6 +677,7 @@ impl<'a> Proxy<'a> {
             src_query,
             src_unique_name,
             member: signal_name,
+            last_seq: MessageSequence::default(),
         })
     }
 
@@ -814,6 +816,7 @@ pub struct SignalStream<'a> {
     src_query: Option<u32>,
     src_unique_name: Option<UniqueName<'static>>,
     member: Option<MemberName<'static>>,
+    last_seq: MessageSequence,
 }
 
 impl<'a> SignalStream<'a> {
@@ -878,11 +881,43 @@ impl<'a> stream::Stream for SignalStream<'a> {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         while let Some(msg) = ready!(Pin::new(&mut this.stream).poll_next(cx)) {
+            this.last_seq = msg.recv_position();
             if let Ok(true) = this.filter(&msg) {
                 return Poll::Ready(Some(msg));
             }
         }
         Poll::Ready(None)
+    }
+}
+
+impl<'a> OrderedStream for SignalStream<'a> {
+    type Data = Arc<Message>;
+    type Ordering = MessageSequence;
+
+    fn poll_next_before(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        before: Option<&Self::Ordering>,
+    ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
+        let this = self.get_mut();
+        loop {
+            if let Some(before) = before {
+                if this.last_seq >= *before {
+                    return Poll::Ready(PollResult::NoneBefore);
+                }
+            }
+            if let Some(msg) = ready!(stream::Stream::poll_next(Pin::new(&mut this.stream), cx)) {
+                this.last_seq = msg.recv_position();
+                if let Ok(true) = this.filter(&msg) {
+                    return Poll::Ready(PollResult::Item {
+                        data: msg,
+                        ordering: this.last_seq,
+                    });
+                }
+            } else {
+                return Poll::Ready(PollResult::Terminated);
+            }
+        }
     }
 }
 
