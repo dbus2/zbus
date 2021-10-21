@@ -3,8 +3,9 @@ use async_channel::bounded;
 use async_executor::Task;
 use event_listener::{Event, EventListener};
 use futures_core::{future::BoxFuture, ready, stream};
+use futures_util::future::Either;
 use once_cell::sync::OnceCell;
-use ordered_stream::{OrderedStream, PollResult};
+use ordered_stream::{join as join_streams, FromFuture, OrderedStream, PollResult};
 use slotmap::{new_key_type, SlotMap};
 use static_assertions::assert_impl_all;
 use std::{
@@ -460,6 +461,7 @@ impl<'a> Proxy<'a> {
     /// Use PropertiesCache::ready() to wait for the cache to be populated and to get any errors
     /// encountered in the population.
     fn get_property_cache(&self) -> Option<&Arc<PropertiesCache>> {
+        use ordered_stream::OrderedStreamExt;
         if let Some(cache) = &self.inner.property_cache {
             let proxy_properties = &cache
                 .get_or_init(|| {
@@ -471,8 +473,64 @@ impl<'a> Proxy<'a> {
                         ready: recv,
                     });
 
+                    let interface = self.interface().to_owned();
+                    let properties = arc.clone();
+
                     let task = self.connection().executor().spawn(async move {
-                        drop((send, proxy)) // TODO
+                        let prop_changes = match proxy.receive_properties_changed().await {
+                            Ok(s) => s.map(Either::Left),
+                            Err(e) => {
+                                // ignore send errors, it just means the original future was cancelled
+                                let _ = send.send(Err(e)).await;
+                                return;
+                            }
+                        };
+
+                        let get_all = MessageBuilder::method_call(proxy.path().as_ref(), "GetAll")
+                            .unwrap()
+                            .destination(proxy.destination())
+                            .unwrap()
+                            .interface(proxy.interface())
+                            .unwrap()
+                            .build(&interface)
+                            .unwrap();
+
+                        let get_all = match proxy.connection().call_method_raw(get_all).await {
+                            Ok(s) => FromFuture::from(s).map(Either::Right),
+                            Err(e) => {
+                                let _ = send.send(Err(e)).await;
+                                return;
+                            }
+                        };
+
+                        let mut join = join_streams(prop_changes, get_all);
+
+                        loop {
+                            match join.next().await {
+                                Some(Either::Left(update)) => {
+                                    if let Ok(args) = update.args() {
+                                        if args.interface_name == interface {
+                                            properties.update_cache(
+                                                &args.changed_properties,
+                                                args.invalidated_properties,
+                                            );
+                                        }
+                                    }
+                                }
+                                Some(Either::Right(Ok(populate))) => {
+                                    let result = populate
+                                        .body()
+                                        .map(|values| properties.update_cache(&values, Vec::new()));
+                                    let _ = send.send(result).await;
+                                    send.close();
+                                }
+                                Some(Either::Right(Err(e))) => {
+                                    let _ = send.send(Err(e)).await;
+                                    send.close();
+                                }
+                                None => return,
+                            }
+                        }
                     });
 
                     (arc, task)
