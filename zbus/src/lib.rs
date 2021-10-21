@@ -220,6 +220,7 @@ pub mod export {
     pub use async_trait;
     pub use futures_core;
     pub use futures_util;
+    pub use ordered_stream;
     pub use serde;
     pub use static_assertions;
 }

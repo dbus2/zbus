@@ -38,6 +38,7 @@ async-channel = "1.6.1"
 async-executor = "1.4.1"
 async-task = "4.0.3"
 hex = "0.4.2"
+ordered-stream = "0.0.1"
 rand = "0.8.2"
 sha1 = { version = "0.6.0", features = ["std"] }
 slotmap = "1.0"
