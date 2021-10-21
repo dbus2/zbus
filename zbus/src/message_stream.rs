@@ -8,9 +8,10 @@ use async_broadcast::Receiver as ActiveReceiver;
 use async_channel::Receiver;
 use futures_core::{ready, stream};
 use futures_util::stream::FusedStream;
+use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 
-use crate::{Connection, Error, Message, Result};
+use crate::{Connection, Error, Message, MessageSequence, Result};
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
@@ -27,6 +28,7 @@ use crate::{Connection, Error, Message, Result};
 pub struct MessageStream {
     msg_receiver: ActiveReceiver<Arc<Message>>,
     error_receiver: Receiver<Error>,
+    last_seq: MessageSequence,
 }
 
 assert_impl_all!(MessageStream: Send, Sync, Unpin);
@@ -39,6 +41,7 @@ impl stream::Stream for MessageStream {
 
         if !this.msg_receiver.is_terminated() {
             if let Some(msg) = ready!(Pin::new(&mut this.msg_receiver).poll_next(cx)) {
+                this.last_seq = msg.recv_position();
                 return Poll::Ready(Some(Ok(msg)));
             }
         }
@@ -46,6 +49,32 @@ impl stream::Stream for MessageStream {
         Pin::new(&mut this.error_receiver)
             .poll_next(cx)
             .map(|v| v.map(Err))
+    }
+}
+
+impl OrderedStream for MessageStream {
+    type Data = Result<Arc<Message>>;
+    type Ordering = MessageSequence;
+
+    fn poll_next_before(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        before: Option<&Self::Ordering>,
+    ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
+        let this = self.get_mut();
+        if let Some(before) = before {
+            if this.last_seq >= *before {
+                return Poll::Ready(PollResult::NoneBefore);
+            }
+        }
+        if let Some(msg) = ready!(stream::Stream::poll_next(Pin::new(this), cx)) {
+            Poll::Ready(PollResult::Item {
+                data: msg,
+                ordering: this.last_seq,
+            })
+        } else {
+            Poll::Ready(PollResult::Terminated)
+        }
     }
 }
 
@@ -63,6 +92,7 @@ impl From<Connection> for MessageStream {
         Self {
             msg_receiver,
             error_receiver,
+            last_seq: Default::default(),
         }
     }
 }
