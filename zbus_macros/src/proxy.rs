@@ -784,6 +784,24 @@ fn gen_proxy_signal(
                 }
             }
 
+            impl #zbus::export::ordered_stream::OrderedStream for #stream_name<'_> {
+                type Data = #signal_name_ident;
+                type Ordering = #zbus::MessageSequence;
+
+                fn poll_next_before(
+                    self: ::std::pin::Pin<&mut Self>,
+                    cx: &mut ::std::task::Context<'_>,
+                    before: ::std::option::Option<&Self::Ordering>
+                    ) -> ::std::task::Poll<#zbus::export::ordered_stream::PollResult<Self::Ordering, Self::Data>> {
+                    #zbus::export::ordered_stream::OrderedStream::poll_next_before(
+                        ::std::pin::Pin::new(&mut self.get_mut().0),
+                        cx,
+                        before,
+                    )
+                    .map(|msg| msg.map_data(#signal_name_ident))
+                }
+            }
+
             impl #zbus::export::futures_core::stream::FusedStream for #stream_name<'_> {
                 fn is_terminated(&self) -> bool {
                     self.0.is_terminated()
