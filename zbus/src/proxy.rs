@@ -146,6 +146,10 @@ impl Drop for ProxyInnerStatic {
     }
 }
 
+/// A [`stream::Stream`] implementation that yields property change notifications.
+///
+/// Use [`Proxy::receive_property_stream`] to create an instance of this type.
+#[derive(Debug)]
 pub struct PropertyStream<'a, T> {
     name: &'a str,
     event: EventListener,
