@@ -763,6 +763,7 @@ fn gen_proxy_signal(
         };
         let stream_types = quote! {
             #[doc = #stream_gen_doc]
+            #[derive(Debug)]
             pub struct #stream_name<'a>(#zbus::SignalStream<'a>);
 
             #zbus::export::static_assertions::assert_impl_all!(
@@ -835,6 +836,7 @@ fn gen_proxy_signal(
             }
 
             #[doc = #args_struct_gen_doc]
+            #[derive(Debug, Clone)]
             pub struct #signal_name_ident(::std::sync::Arc<#zbus::Message>);
 
             #args_impl
