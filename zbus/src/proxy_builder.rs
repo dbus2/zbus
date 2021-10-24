@@ -1,6 +1,5 @@
 use std::{convert::TryInto, marker::PhantomData, sync::Arc};
 
-use futures_core::future::BoxFuture;
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::ObjectPath;
@@ -101,13 +100,13 @@ impl<'a, T> ProxyBuilder<'a, T> {
     /// # Panics
     ///
     /// Panics if the builder is lacking the necessary details to build a proxy.
-    pub fn build(self) -> BoxFuture<'a, Result<T>>
+    pub async fn build(self) -> Result<T>
     where
         T: From<Proxy<'a>>,
     {
         let proxy = self.build_internal();
 
-        Box::pin(async move { Ok(proxy.into()) })
+        Ok(proxy.into())
     }
 }
 
