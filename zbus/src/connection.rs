@@ -800,9 +800,7 @@ impl Connection {
             self.executor()
                 .spawn(task_shared.signal_handler_task(stream))
         });
-        if self.is_bus() {
-            self.add_match(handler.match_expr.clone()).await?;
-        }
+        self.add_match(handler.match_expr.clone()).await?;
         Ok(self
             .inner
             .task_shared
@@ -841,6 +839,9 @@ impl Connection {
 
     async fn add_match(&self, expr: String) -> Result<()> {
         use std::collections::hash_map::Entry;
+        if !self.is_bus() {
+            return Ok(());
+        }
         let mut subscriptions = self.inner.signal_matches.lock().await;
         match subscriptions.entry(expr) {
             Entry::Vacant(e) => {
