@@ -858,7 +858,7 @@ impl Connection {
         Ok(())
     }
 
-    async fn remove_match(&self, expr: String) -> Result<bool> {
+    pub(crate) async fn remove_match(&self, expr: String) -> Result<bool> {
         use std::collections::hash_map::Entry;
         if !self.is_bus() {
             return Ok(true);
