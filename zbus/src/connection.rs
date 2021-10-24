@@ -884,6 +884,14 @@ impl Connection {
         }
     }
 
+    pub(crate) fn queue_remove_match(&self, expr: String) {
+        let conn = self.clone();
+        self.inner
+            .executor
+            .spawn(async move { conn.remove_match(expr).await })
+            .detach()
+    }
+
     async fn hello_bus(&self) -> Result<()> {
         let dbus_proxy = fdo::DBusProxy::builder(self)
             .cache_properties(false)
