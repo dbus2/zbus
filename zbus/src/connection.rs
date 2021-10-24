@@ -835,7 +835,7 @@ impl Connection {
         }
     }
 
-    async fn add_match(&self, expr: String) -> Result<()> {
+    pub(crate) async fn add_match(&self, expr: String) -> Result<()> {
         use std::collections::hash_map::Entry;
         if !self.is_bus() {
             return Ok(());
