@@ -167,7 +167,12 @@ fn to_rust_type(ty: &str, input: bool, as_ref: bool) -> String {
             i64::SIGNATURE_CHAR => "i64".into(),
             u64::SIGNATURE_CHAR => "u64".into(),
             f64::SIGNATURE_CHAR => "f64".into(),
-            Fd::SIGNATURE_CHAR => "zbus::zvariant::Fd".into(),
+            Fd::SIGNATURE_CHAR => (if input {
+                "zbus::zvariant::Fd"
+            } else {
+                "zbus::zvariant::OwnedFd"
+            })
+            .into(),
             <&str>::SIGNATURE_CHAR => (if input || as_ref { "&str" } else { "String" }).into(),
             ObjectPath::SIGNATURE_CHAR => (if input {
                 if as_ref {
