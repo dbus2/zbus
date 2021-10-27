@@ -1,4 +1,5 @@
 use async_io::block_on;
+use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
 use std::{
     convert::{TryFrom, TryInto},
@@ -226,6 +227,32 @@ impl<'a> Proxy<'a> {
         block_on(self.azync.call_noreply(method_name, body))
     }
 
+    /// Create a stream for signal named `signal_name`.
+    ///
+    /// # Errors
+    ///
+    /// Apart from general I/O errors that can result from socket communications, calling this
+    /// method will also result in an error if the destination service has not yet registered its
+    /// well-known name with the bus (assuming you're using the well-known name as destination).
+    pub fn receive_signal<M>(&self, signal_name: M) -> Result<SignalIterator<'_>>
+    where
+        M: TryInto<MemberName<'static>>,
+        M::Error: Into<Error>,
+    {
+        block_on(self.azync.receive_signal(signal_name)).map(SignalIterator)
+    }
+
+    /// Create a stream for all signals emitted by this service.
+    ///
+    /// # Errors
+    ///
+    /// Apart from general I/O errors that can result from socket communications, calling this
+    /// method will also result in an error if the destination service has not yet registered its
+    /// well-known name with the bus (assuming you're using the well-known name as destination).
+    pub fn receive_all_signals(&self) -> Result<SignalIterator<'_>> {
+        block_on(self.azync.receive_all_signals()).map(SignalIterator)
+    }
+
     /// Register a handler for signal named `signal_name`.
     ///
     /// A unique ID for the handler is returned, which can be used to deregister this handler using
@@ -339,6 +366,22 @@ impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
             conn: proxy.connection().clone().into(),
             azync: proxy,
         }
+    }
+}
+
+/// An [`std::iter::Iterator`] implementation that yields signal [messages](`Message`).
+///
+/// Use [`Proxy::receive_signal`] to create an instance of this type.
+#[derive(Debug)]
+pub struct SignalIterator<'a>(crate::SignalStream<'a>);
+
+assert_impl_all!(SignalIterator<'_>: Send, Sync, Unpin);
+
+impl std::iter::Iterator for SignalIterator<'_> {
+    type Item = Arc<Message>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        block_on(self.0.next())
     }
 }
 
