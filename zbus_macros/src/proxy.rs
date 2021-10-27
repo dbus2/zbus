@@ -499,23 +499,30 @@ fn gen_proxy_property(
             None
         };
 
-        let receive = if *blocking {
-            quote! {}
+        let (proxy_name, prop_stream) = if *blocking {
+            (
+                "zbus::blocking::Proxy",
+                quote! { #zbus::blocking::PropertyIterator },
+            )
         } else {
-            let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
-            let receive = format_ident!("receive_{}_changed", method_name);
-            let gen_doc = format!("Create a stream for the `{}` property changes. \
-                                   This is a convenient wrapper around [`zbus::Proxy::receive_property_changed`].",
-                                  property_name);
-            quote! {
-                #[doc = #gen_doc]
-                pub async fn #receive#ty_generics(
-                    &self
-                ) -> #zbus::PropertyStream<'static, <#ret_type as #zbus::ResultAdapter>::Ok>
-                #where_clause
-                {
-                    self.0.receive_property_changed(#property_name).await
-                }
+            ("zbus::Proxy", quote! { #zbus::PropertyStream })
+        };
+
+        let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
+        let receive = format_ident!("receive_{}_changed", method_name);
+        let gen_doc = format!(
+            "Create a stream for the `{}` property changes. \
+                This is a convenient wrapper around [`{}::receive_property_changed`].",
+            property_name, proxy_name
+        );
+        let receive = quote! {
+            #[doc = #gen_doc]
+            pub #usage fn #receive#ty_generics(
+                &self
+            ) -> #prop_stream<'static, <#ret_type as #zbus::ResultAdapter>::Ok>
+            #where_clause
+            {
+                self.0.receive_property_changed(#property_name)#wait
             }
         };
 
