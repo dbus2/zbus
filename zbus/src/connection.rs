@@ -8,12 +8,12 @@ use event_listener::EventListener;
 use futures_core::future::BoxFuture;
 use futures_util::stream::{FuturesUnordered, Stream};
 use once_cell::sync::OnceCell;
+use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use slotmap::DenseSlotMap;
 use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet},
     convert::TryInto,
-    future::ready,
     io::{self, ErrorKind},
     ops::{Deref, DerefMut},
     pin::Pin,
@@ -161,27 +161,31 @@ impl MessageReceiverTask {
     // Keep receiving messages and put them on the queue.
     async fn receive_msg(self: Arc<Self>) {
         loop {
-            // Ignore errors from sending to msg or error channels. The only reason these calls
-            // fail is when the channel is closed and that will only happen when `Connection` is
-            // being dropped.
-            // TODO: We should still log in case of error when we've logging.
-
             let receive_msg = ReceiveMessage {
                 raw_conn: &self.task_shared.raw_conn,
             };
             let msg = match receive_msg.await {
                 Ok(msg) => msg,
                 Err(e) => {
-                    // Ignoring errors. See comment above.
+                    // Ignore errors when sending the error; this happens if the channel is
+                    // being dropped.
+                    //
+                    // This can be logged when we have logging, though that's mostly useless: it
+                    // only happens when the receive_msg task is running at the time the last
+                    // Connection is dropped.
                     let _ = self.error_sender.send(e).await;
-
-                    continue;
+                    self.msg_sender.close();
+                    self.error_sender.close();
+                    return;
                 }
             };
 
             let msg = Arc::new(msg);
-            // Ignoring errors. See comment above.
-            let _ = self.msg_sender.broadcast(msg.clone()).await;
+            if self.msg_sender.broadcast(msg.clone()).await.is_err() {
+                // An error would be due to the channel being closed, which only happens when the
+                // connection is dropped, so just stop the task.  See comment above about logging.
+                return;
+            }
         }
     }
 }
@@ -364,6 +368,81 @@ pub struct Connection {
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
 
+/// A method call whose completion can be awaited or joined with other streams.
+///
+/// This is useful for cache population method calls, where joining the [`JoinableStream`] with
+/// an update signal stream can be used to ensure that cache updates are not overwritten by a cache
+/// population whose task is scheduled later.
+#[derive(Debug)]
+pub(crate) struct PendingMethodCall {
+    stream: Option<MessageStream>,
+    serial: u32,
+}
+
+impl Future for PendingMethodCall {
+    type Output = Result<Arc<Message>>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.poll_before(cx, None).map(|ret| {
+            ret.map(|(_, r)| r).unwrap_or_else(|| {
+                Err(crate::Error::Io(io::Error::new(
+                    ErrorKind::BrokenPipe,
+                    "socket closed",
+                )))
+            })
+        })
+    }
+}
+
+impl OrderedFuture for PendingMethodCall {
+    type Output = Result<Arc<Message>>;
+    type Ordering = zbus::MessageSequence;
+
+    fn poll_before(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        before: Option<&Self::Ordering>,
+    ) -> Poll<Option<(Self::Ordering, Self::Output)>> {
+        let this = self.get_mut();
+        if let Some(stream) = &mut this.stream {
+            loop {
+                match Pin::new(&mut *stream).poll_next_before(cx, before) {
+                    Poll::Ready(PollResult::Item {
+                        data: Ok(msg),
+                        ordering,
+                    }) => {
+                        if msg.reply_serial() != Ok(Some(this.serial)) {
+                            continue;
+                        }
+                        let res = match msg.message_type() {
+                            MessageType::Error => Err(msg.into()),
+                            MessageType::MethodReturn => Ok(msg),
+                            _ => continue,
+                        };
+                        this.stream = None;
+                        return Poll::Ready(Some((ordering, res)));
+                    }
+                    Poll::Ready(PollResult::Item {
+                        data: Err(e),
+                        ordering,
+                    }) => {
+                        return Poll::Ready(Some((ordering, Err(e))));
+                    }
+
+                    Poll::Ready(PollResult::NoneBefore) => {
+                        return Poll::Ready(None);
+                    }
+                    Poll::Ready(PollResult::Terminated) => {
+                        return Poll::Ready(None);
+                    }
+                    Poll::Pending => return Poll::Pending,
+                }
+            }
+        }
+        Poll::Ready(None)
+    }
+}
+
 impl Connection {
     /// Send `msg` to the peer.
     ///
@@ -404,7 +483,6 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let stream = MessageStream::from(self.clone());
         let m = Message::method(
             self.unique_name(),
             destination,
@@ -413,42 +491,21 @@ impl Connection {
             method_name,
             body,
         )?;
-        let serial = self.send_message(m).await?;
-        match stream
-            .filter(move |m| {
-                ready(
-                    m.as_ref()
-                        .map(|m| {
-                            matches!(
-                                m.message_type(),
-                                MessageType::Error | MessageType::MethodReturn
-                            ) && m.reply_serial() == Ok(Some(serial))
-                        })
-                        .unwrap_or(false),
-                )
-            })
-            .next()
-            .await
-        {
-            Some(msg) => match msg {
-                Ok(m) => {
-                    match m.message_type() {
-                        MessageType::Error => Err(m.into()),
-                        MessageType::MethodReturn => Ok(m),
-                        // We already established the msg type in `filter` above.
-                        _ => unreachable!(),
-                    }
-                }
-                Err(e) => Err(e),
-            },
-            None => {
-                // If SocketStream gives us None, that means the socket was closed
-                Err(crate::Error::Io(io::Error::new(
-                    ErrorKind::BrokenPipe,
-                    "socket closed",
-                )))
-            }
-        }
+        self.call_method_raw(m).await?.await
+    }
+
+    /// Send a method call.
+    ///
+    /// Send the given message, which must be a method call, over the connection and return an
+    /// object that allows the reply to be retrieved.  Typically you'd want to use
+    /// [`Connection::call_method`] instead.
+    pub(crate) async fn call_method_raw(&self, msg: Message) -> Result<PendingMethodCall> {
+        debug_assert_eq!(msg.message_type(), MessageType::MethodCall);
+
+        let stream = Some(MessageStream::from(self.clone()));
+        let serial = self.send_message(msg).await?;
+
+        Ok(PendingMethodCall { stream, serial })
     }
 
     /// Emit a signal.
@@ -796,9 +853,7 @@ impl Connection {
             self.executor()
                 .spawn(task_shared.signal_handler_task(stream))
         });
-        if self.is_bus() {
-            self.add_match(handler.match_expr.clone()).await?;
-        }
+        self.add_match(handler.match_expr.clone()).await?;
         Ok(self
             .inner
             .task_shared
@@ -826,17 +881,18 @@ impl Connection {
             .remove(key);
         match handler {
             Some(h) => {
-                if self.is_bus() {
-                    self.remove_match(h.match_expr).await?;
-                }
+                self.remove_match(h.match_expr).await?;
                 Ok(true)
             }
             None => Ok(false),
         }
     }
 
-    async fn add_match(&self, expr: String) -> Result<()> {
+    pub(crate) async fn add_match(&self, expr: String) -> Result<()> {
         use std::collections::hash_map::Entry;
+        if !self.is_bus() {
+            return Ok(());
+        }
         let mut subscriptions = self.inner.signal_matches.lock().await;
         match subscriptions.entry(expr) {
             Entry::Vacant(e) => {
@@ -855,8 +911,11 @@ impl Connection {
         Ok(())
     }
 
-    async fn remove_match(&self, expr: String) -> Result<bool> {
+    pub(crate) async fn remove_match(&self, expr: String) -> Result<bool> {
         use std::collections::hash_map::Entry;
+        if !self.is_bus() {
+            return Ok(true);
+        }
         let mut subscriptions = self.inner.signal_matches.lock().await;
         // TODO when it becomes stable, use HashMap::raw_entry and only require expr: &str
         // (both here and in add_match)
@@ -876,6 +935,14 @@ impl Connection {
                 Ok(true)
             }
         }
+    }
+
+    pub(crate) fn queue_remove_match(&self, expr: String) {
+        let conn = self.clone();
+        self.inner
+            .executor
+            .spawn(async move { conn.remove_match(expr).await })
+            .detach()
     }
 
     async fn hello_bus(&self) -> Result<()> {

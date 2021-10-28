@@ -1,9 +1,11 @@
-use async_channel::{bounded, Receiver};
-use async_recursion::async_recursion;
+use async_broadcast::Receiver;
+use async_channel::bounded;
+use async_executor::Task;
 use event_listener::{Event, EventListener};
 use futures_core::{future::BoxFuture, ready, stream};
-use futures_util::stream::{FuturesUnordered, StreamExt};
+use futures_util::future::Either;
 use once_cell::sync::OnceCell;
+use ordered_stream::{join as join_streams, FromFuture, OrderedStream, PollResult};
 use slotmap::{new_key_type, SlotMap};
 use static_assertions::assert_impl_all;
 use std::{
@@ -11,20 +13,17 @@ use std::{
     convert::{TryFrom, TryInto},
     future::Future,
     pin::Pin,
-    sync::{Arc, Mutex as SyncMutex, RwLock},
+    sync::{Arc, Mutex as SyncMutex},
     task::{Context, Poll},
 };
 
-use zbus_names::{
-    BusName, InterfaceName, MemberName, OwnedUniqueName, OwnedWellKnownName, UniqueName,
-    WellKnownName,
-};
+use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName, WellKnownName};
 use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    Connection, Error, Message, MessageBuilder, ProxyBuilder, Result, SignalHandler,
-    SignalHandlerKey,
+    Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder, Result,
+    SignalHandler, SignalHandlerKey,
 };
 
 /// The ID for a registered signal handler.
@@ -32,9 +31,6 @@ use crate::{
 pub struct SignalHandlerId(SignalHandlerKey);
 
 assert_impl_all!(SignalHandlerId: Send, Sync, Unpin);
-
-type PropertyChangedHandler =
-    Box<dyn for<'v> FnMut(Option<&'v Value<'_>>) -> BoxFuture<'v, ()> + Send>;
 
 new_key_type! {
     /// The ID for a registered proprety changed handler.
@@ -44,32 +40,19 @@ new_key_type! {
 /// The ID for a registered proprety changed handler.
 #[derive(Debug, Copy, Clone)]
 pub struct PropertyChangedHandlerId {
-    name: &'static str,
     key: PropertyChangedHandlerKey,
 }
 
-#[derive(Default, derivative::Derivative)]
-#[derivative(Debug)]
+#[derive(Debug, Default)]
 struct PropertyValue {
     value: Option<OwnedValue>,
-    #[derivative(Debug = "ignore")]
-    handlers: Option<SlotMap<PropertyChangedHandlerKey, PropertyChangedHandler>>,
     event: Event,
 }
 
-// Hold proxy properties related data.
-pub(crate) struct ProxyProperties<'a> {
-    pub(crate) proxy: OnceCell<PropertiesProxy<'a>>,
+#[derive(Debug)]
+pub(crate) struct PropertiesCache {
     values: SyncMutex<HashMap<String, PropertyValue>>,
-    task: OnceCell<SignalHandlerId>,
-}
-
-impl<'a> std::fmt::Debug for ProxyProperties<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ProxyProperties")
-            .field("values", &self.values)
-            .finish_non_exhaustive()
-    }
+    ready: async_channel::Receiver<Result<()>>,
 }
 
 /// A client-side interface proxy.
@@ -123,10 +106,6 @@ impl<'a> std::fmt::Debug for ProxyProperties<'a> {
 #[derive(Clone, Debug)]
 pub struct Proxy<'a> {
     pub(crate) inner: Arc<ProxyInner<'a>>,
-    // Use a 'static as we can't self-reference ProxyInner fields
-    // eventually, we could make destination/path inside an Arc
-    // but then we would have other issues with async 'static closures
-    pub(crate) properties: Arc<ProxyProperties<'static>>,
 }
 
 assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
@@ -140,7 +119,10 @@ pub(crate) struct ProxyInnerStatic {
     pub(crate) conn: Connection,
     // A list of the keys so that dropping the Proxy will disconnect the signals
     sig_handlers: SyncMutex<Vec<SignalHandlerKey>>,
-    dest_name_watcher: OnceCell<SignalHandlerKey>,
+    dest_name_watcher: OnceCell<String>,
+
+    #[derivative(Debug = "ignore")]
+    property_handlers: SyncMutex<SlotMap<PropertyChangedHandlerKey, Task<()>>>,
 }
 
 #[derive(Debug)]
@@ -149,8 +131,8 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) destination: BusName<'a>,
     pub(crate) path: ObjectPath<'a>,
     pub(crate) interface: InterfaceName<'a>,
-    // Keep it in an Arc so that dest_name_update_task can keep its own ref to it.
-    dest_unique_name: Arc<RwLock<Option<OwnedUniqueName>>>,
+
+    property_cache: Option<OnceCell<(Arc<PropertiesCache>, Task<()>)>>,
 }
 
 impl Drop for ProxyInnerStatic {
@@ -158,16 +140,20 @@ impl Drop for ProxyInnerStatic {
         for id in self.sig_handlers.get_mut().expect("lock poisoned") {
             self.conn.queue_remove_signal_handler(*id);
         }
-        if let Some(id) = self.dest_name_watcher.get() {
-            self.conn.queue_remove_signal_handler(*id);
+        if let Some(expr) = self.dest_name_watcher.take() {
+            self.conn.queue_remove_match(expr);
         }
     }
 }
 
+/// A [`stream::Stream`] implementation that yields property change notifications.
+///
+/// Use [`Proxy::receive_property_stream`] to create an instance of this type.
+#[derive(Debug)]
 pub struct PropertyStream<'a, T> {
     name: &'a str,
     event: EventListener,
-    properties: Arc<ProxyProperties<'static>>,
+    properties: Option<Arc<PropertiesCache>>,
     phantom: std::marker::PhantomData<T>,
 }
 
@@ -179,8 +165,13 @@ where
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let m = self.get_mut();
+        // With no cache, we will get no updates; return immediately
+        let properties = match &m.properties {
+            Some(p) => p,
+            None => return Poll::Ready(None),
+        };
         ready!(Pin::new(&mut m.event).poll(cx));
-        let values = m.properties.values.lock().expect("lock poisoned");
+        let values = properties.values.lock().expect("lock poisoned");
         let entry = values
             .get(m.name)
             .expect("PropertyStream with no corresponding property");
@@ -190,32 +181,14 @@ where
     }
 }
 
-impl<'a> ProxyProperties<'a> {
-    pub(crate) fn new() -> Self {
-        Self {
-            proxy: Default::default(),
-            values: Default::default(),
-            task: Default::default(),
-        }
-    }
-
-    fn update_cache<'f>(
-        &self,
-        changed: &'f HashMap<&'f str, Value<'f>>,
-        invalidated: Vec<&'f str>,
-    ) -> impl Future<Output = ()> + 'f {
+impl PropertiesCache {
+    fn update_cache(&self, changed: &HashMap<&str, Value<'_>>, invalidated: Vec<&str>) {
         let mut values = self.values.lock().expect("lock poisoned");
-        let futures = FuturesUnordered::new();
 
         for inval in invalidated {
             if let Some(entry) = values.get_mut(&*inval) {
                 entry.value = None;
                 entry.event.notify(usize::MAX);
-                if let Some(handlers) = &mut entry.handlers {
-                    for handler in handlers.values_mut() {
-                        futures.push(handler(None));
-                    }
-                }
             }
         }
 
@@ -226,14 +199,18 @@ impl<'a> ProxyProperties<'a> {
 
             entry.value = Some(OwnedValue::from(value));
             entry.event.notify(usize::MAX);
-            if let Some(handlers) = &mut entry.handlers {
-                for handler in handlers.values_mut() {
-                    futures.push(handler(Some(value)));
-                }
-            }
         }
+    }
 
-        futures.collect()
+    /// Wait for the cache to be populated and return any error encountered during population
+    async fn ready(&self) -> Result<()> {
+        // Only one caller will actually get the result; all other callers see a closed channel,
+        // but that indicates the cache is ready (and on error, the cache will be empty, which just
+        // means we bypass it)
+        match self.ready.recv().await {
+            Ok(res) => res,
+            Err(_closed) => Ok(()),
+        }
     }
 }
 
@@ -243,17 +220,20 @@ impl<'a> ProxyInner<'a> {
         destination: BusName<'a>,
         path: ObjectPath<'a>,
         interface: InterfaceName<'a>,
+        cache: bool,
     ) -> Self {
+        let property_cache = if cache { Some(OnceCell::new()) } else { None };
         Self {
             inner_without_borrows: ProxyInnerStatic {
                 conn,
                 sig_handlers: SyncMutex::new(Vec::new()),
                 dest_name_watcher: OnceCell::new(),
+                property_handlers: SyncMutex::new(SlotMap::with_key()),
             },
             destination,
             path,
             interface,
-            dest_unique_name: Arc::new(RwLock::new(None)),
+            property_cache,
         }
     }
 
@@ -274,90 +254,35 @@ impl<'a> ProxyInner<'a> {
             return Ok(());
         }
 
-        let destination = &self.destination;
-        match destination {
-            BusName::Unique(name) => {
-                if self
-                    .dest_unique_name
-                    .read()
-                    .expect("lock poisoned")
-                    .is_none()
-                {
-                    *self.dest_unique_name.write().expect("lock poisoned") =
-                        Some(name.to_owned().into());
-                }
+        if let BusName::WellKnown(well_known_name) = &self.destination {
+            if self.inner_without_borrows.dest_name_watcher.get().is_some() {
+                // Already watching over the bus for any name updates so nothing to do here.
+                return Ok(());
             }
-            BusName::WellKnown(well_known_name) => {
-                if self.inner_without_borrows.dest_name_watcher.get().is_some() {
-                    // Already watching over the bus for any name updates so nothing to do here.
-                    return Ok(());
-                }
 
-                let conn = &self.inner_without_borrows.conn;
-                let dest_unique_name = self.dest_unique_name.clone();
-                let well_known_name = OwnedWellKnownName::from(well_known_name.to_owned());
-                let signal_expr = format!(
-                    concat!(
-                        "type='signal',",
-                        "sender='org.freedesktop.DBus',",
-                        "path='/org/freedesktop/DBus',",
-                        "interface='org.freedesktop.DBus',",
-                        "member='NameOwnerChanged',",
-                        "arg0='{}'"
-                    ),
-                    well_known_name
-                );
+            let conn = &self.inner_without_borrows.conn;
+            let signal_expr = format!(
+                concat!(
+                    "type='signal',",
+                    "sender='org.freedesktop.DBus',",
+                    "path='/org/freedesktop/DBus',",
+                    "interface='org.freedesktop.DBus',",
+                    "member='NameOwnerChanged',",
+                    "arg0='{}'"
+                ),
+                well_known_name
+            );
 
-                let id = conn
-                    .add_signal_handler(SignalHandler::signal(
-                        ObjectPath::from_str_unchecked("/org/freedesktop/DBus"),
-                        InterfaceName::from_str_unchecked("org.freedesktop.DBus"),
-                        MemberName::from_str_unchecked("NameOwnerChanged"),
-                        signal_expr,
-                        move |msg| {
-                            let dest_unique_name = dest_unique_name.clone();
-                            let well_known_name = well_known_name.clone();
-                            let sender_ok = msg.header().ok().map_or(false, |h| {
-                                h.sender()
-                                    == Ok(Some(&UniqueName::from_str_unchecked(
-                                        "org.freedesktop.DBus",
-                                    )))
-                            });
-                            if sender_ok {
-                                match msg.body::<(
-                                    WellKnownName<'_>,
-                                    Optional<UniqueName<'_>>,
-                                    Optional<UniqueName<'_>>,
-                                )>() {
-                                    Ok((name, _, new_owner)) if name == well_known_name => {
-                                        let unique_name =
-                                            new_owner.as_ref().map(|n| n.to_owned().into());
-                                        *dest_unique_name.write().expect("lock poisoned") =
-                                            unique_name;
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            Box::pin(async move {})
-                        },
-                    ))
-                    .await?;
+            conn.add_match(signal_expr.clone()).await?;
 
-                if let Err(id) = self.inner_without_borrows.dest_name_watcher.set(id) {
-                    conn.remove_signal_handler(id).await?;
-                }
-
-                let unique_name = match fdo::DBusProxy::new(&self.inner_without_borrows.conn)
-                    .await?
-                    .get_name_owner(destination.as_ref())
-                    .await
-                {
-                    // That's ok. The destination isn't available right now.
-                    Err(fdo::Error::NameHasNoOwner(_)) => None,
-                    res => Some(res?),
-                };
-
-                *self.dest_unique_name.write().expect("lock poisoned") = unique_name;
+            if self
+                .inner_without_borrows
+                .dest_name_watcher
+                .set(signal_expr.clone())
+                .is_err()
+            {
+                // we raced another destination_unique_name call and added it twice
+                conn.remove_match(signal_expr).await?;
             }
         }
 
@@ -429,25 +354,32 @@ impl<'a> Proxy<'a> {
     pub async fn connect_property_changed<H>(
         &self,
         property_name: &'static str,
-        handler: H,
+        mut handler: H,
     ) -> Result<PropertyChangedHandlerId>
     where
         for<'v> H: FnMut(Option<&'v Value<'_>>) -> BoxFuture<'v, ()> + Send + 'static,
     {
-        if !self.has_cached_properties() {
-            return Err(Error::Unsupported);
-        }
-
-        let mut values = self.properties.values.lock().expect("lock poisoned");
-        let entry = values
-            .entry(property_name.to_string())
-            .or_insert_with(PropertyValue::default);
-        let handlers = entry.handlers.get_or_insert_with(SlotMap::with_key);
-        let key = handlers.insert(Box::new(handler));
-        Ok(PropertyChangedHandlerId {
-            key,
-            name: property_name,
-        })
+        use futures_util::StreamExt;
+        self.get_property_cache().ok_or(Error::Unsupported)?;
+        let mut stream = self.receive_property_stream(property_name).await;
+        let mut lock = self
+            .inner
+            .inner_without_borrows
+            .property_handlers
+            .lock()
+            .expect("lock poisoned");
+        let task = self
+            .inner
+            .inner_without_borrows
+            .conn
+            .executor()
+            .spawn(async move {
+                while let Some(msg) = stream.next().await {
+                    handler(msg.as_ref()).await
+                }
+            });
+        let key = lock.insert(task);
+        Ok(PropertyChangedHandlerId { key })
     }
 
     /// Deregister the property handler with the ID `handler_id`.
@@ -458,14 +390,13 @@ impl<'a> Proxy<'a> {
         &self,
         handler_id: PropertyChangedHandlerId,
     ) -> Result<bool> {
-        Ok(self
-            .properties
-            .values
+        let mut lock = self
+            .inner
+            .inner_without_borrows
+            .property_handlers
             .lock()
-            .expect("lock poisoned")
-            .get_mut(handler_id.name)
-            .and_then(|e| e.handlers.as_mut())
-            .map_or(false, |h| h.remove(handler_id.key).is_some()))
+            .expect("lock poisoned");
+        Ok(lock.remove(handler_id.key).is_some())
     }
 
     /// Get a reference to the associated connection.
@@ -501,57 +432,118 @@ impl<'a> Proxy<'a> {
         proxy.introspect().await
     }
 
-    #[async_recursion]
-    async fn properties_proxy(&self) -> Result<&PropertiesProxy<'static>> {
-        match self.properties.proxy.get() {
-            Some(proxy) => Ok(proxy),
-            None => {
-                let proxy = PropertiesProxy::builder(&self.inner.inner_without_borrows.conn)
-                    // Safe because already checked earlier
-                    .destination(self.inner.destination.to_owned())
-                    .unwrap()
-                    // Safe because already checked earlier
-                    .path(self.inner.path.to_owned())
-                    .unwrap()
-                    // does not have properties and do not recurse!
-                    .cache_properties(false)
-                    .build()
-                    .await?;
-                // doesn't matter if another thread sets it before
-                let _ = self.properties.proxy.set(proxy);
-                // but we must have a Ok() here
-                self.properties.proxy.get().ok_or_else(|| panic!())
-            }
-        }
+    fn properties_proxy(&self) -> PropertiesProxy<'_> {
+        PropertiesProxy::builder(&self.inner.inner_without_borrows.conn)
+            // Safe because already checked earlier
+            .destination(self.inner.destination.as_ref())
+            .unwrap()
+            // Safe because already checked earlier
+            .path(self.inner.path.as_ref())
+            .unwrap()
+            // does not have properties
+            .cache_properties(false)
+            .build_internal()
+            .into()
     }
 
-    pub(crate) async fn cache_properties(&self) -> Result<()> {
-        let proxy = self.properties_proxy().await?;
-        let interface = self.interface().to_owned();
-        let properties = self.properties.clone();
-        let id = proxy
-            .connect_properties_changed(move |iface, changed, invalidated| {
-                let matches = iface == interface;
-                let properties = properties.clone();
-                Box::pin(async move {
-                    if matches {
-                        properties.update_cache(&changed, invalidated).await;
-                    }
+    fn owned_properties_proxy(&self) -> PropertiesProxy<'static> {
+        PropertiesProxy::builder(&self.inner.inner_without_borrows.conn)
+            // Safe because already checked earlier
+            .destination(self.inner.destination.to_owned())
+            .unwrap()
+            // Safe because already checked earlier
+            .path(self.inner.path.to_owned())
+            .unwrap()
+            // does not have properties
+            .cache_properties(false)
+            .build_internal()
+            .into()
+    }
+
+    /// Get the cache, starting it in the background if needed.
+    ///
+    /// Use PropertiesCache::ready() to wait for the cache to be populated and to get any errors
+    /// encountered in the population.
+    fn get_property_cache(&self) -> Option<&Arc<PropertiesCache>> {
+        use ordered_stream::OrderedStreamExt;
+        if let Some(cache) = &self.inner.property_cache {
+            let proxy_properties = &cache
+                .get_or_init(|| {
+                    let proxy = self.owned_properties_proxy();
+                    let (send, recv) = bounded(1);
+
+                    let arc = Arc::new(PropertiesCache {
+                        values: Default::default(),
+                        ready: recv,
+                    });
+
+                    let interface = self.interface().to_owned();
+                    let properties = arc.clone();
+
+                    let task = self.connection().executor().spawn(async move {
+                        let prop_changes = match proxy.receive_properties_changed().await {
+                            Ok(s) => s.map(Either::Left),
+                            Err(e) => {
+                                // ignore send errors, it just means the original future was cancelled
+                                let _ = send.send(Err(e)).await;
+                                return;
+                            }
+                        };
+
+                        let get_all = MessageBuilder::method_call(proxy.path().as_ref(), "GetAll")
+                            .unwrap()
+                            .destination(proxy.destination())
+                            .unwrap()
+                            .interface(proxy.interface())
+                            .unwrap()
+                            .build(&interface)
+                            .unwrap();
+
+                        let get_all = match proxy.connection().call_method_raw(get_all).await {
+                            Ok(s) => FromFuture::from(s).map(Either::Right),
+                            Err(e) => {
+                                let _ = send.send(Err(e)).await;
+                                return;
+                            }
+                        };
+
+                        let mut join = join_streams(prop_changes, get_all);
+
+                        loop {
+                            match join.next().await {
+                                Some(Either::Left(update)) => {
+                                    if let Ok(args) = update.args() {
+                                        if args.interface_name == interface {
+                                            properties.update_cache(
+                                                &args.changed_properties,
+                                                args.invalidated_properties,
+                                            );
+                                        }
+                                    }
+                                }
+                                Some(Either::Right(Ok(populate))) => {
+                                    let result = populate
+                                        .body()
+                                        .map(|values| properties.update_cache(&values, Vec::new()));
+                                    let _ = send.send(result).await;
+                                    send.close();
+                                }
+                                Some(Either::Right(Err(e))) => {
+                                    let _ = send.send(Err(e)).await;
+                                    send.close();
+                                }
+                                None => return,
+                            }
+                        }
+                    });
+
+                    (arc, task)
                 })
-            })
-            .await?;
-
-        if let Err(id) = self.properties.task.set(id) {
-            proxy.disconnect_signal(id).await?;
+                .0;
+            Some(proxy_properties)
+        } else {
+            None
         }
-
-        if let Ok(values) = proxy.get_all(self.inner.interface.as_ref()).await {
-            for (name, value) in values {
-                self.set_cached_property(name, Some(value));
-            }
-        }
-
-        Ok(())
     }
 
     /// Get the cached value of the property `property_name`.
@@ -564,36 +556,29 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        self.properties
-            .values
-            .lock()
-            .expect("lock poisoned")
-            .get(property_name)
-            .and_then(|e| e.value.as_ref())
-            .cloned()
-            .map(T::try_from)
-            .transpose()
-            .map_err(|_| Error::InvalidReply.into())
-    }
-
-    fn set_cached_property(&self, property_name: String, value: Option<OwnedValue>) {
-        let mut values = self.properties.values.lock().expect("lock poisoned");
-        let entry = values
-            .entry(property_name)
-            .or_insert_with(PropertyValue::default);
-        entry.value = value;
+        if let Some(lock) = self
+            .inner
+            .property_cache
+            .as_ref()
+            .and_then(OnceCell::get)
+            .map(|c| c.0.values.lock().expect("lock poisoned"))
+        {
+            lock.get(property_name)
+                .and_then(|e| e.value.as_ref())
+                .cloned()
+                .map(T::try_from)
+                .transpose()
+                .map_err(|_| Error::InvalidReply.into())
+        } else {
+            Ok(None)
+        }
     }
 
     async fn get_proxy_property(&self, property_name: &str) -> Result<OwnedValue> {
         Ok(self
             .properties_proxy()
-            .await?
             .get(self.inner.interface.as_ref(), property_name)
             .await?)
-    }
-
-    fn has_cached_properties(&self) -> bool {
-        self.properties.task.get().is_some()
     }
 
     /// Get the property `property_name`.
@@ -604,18 +589,14 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        let value = if self.has_cached_properties() {
-            if let Some(value) = self.cached_property(property_name)? {
-                return Ok(value);
-            } else {
-                let value = self.get_proxy_property(property_name).await?;
-                self.set_cached_property(property_name.to_string(), Some(value.clone()));
-                value
-            }
-        } else {
-            self.get_proxy_property(property_name).await?
-        };
+        if let Some(cache) = self.get_property_cache() {
+            cache.ready().await?;
+        }
+        if let Some(value) = self.cached_property(property_name)? {
+            return Ok(value);
+        }
 
+        let value = self.get_proxy_property(property_name).await?;
         value.try_into().map_err(|_| Error::InvalidReply.into())
     }
 
@@ -627,7 +608,6 @@ impl<'a> Proxy<'a> {
         T: Into<Value<'t>>,
     {
         self.properties_proxy()
-            .await?
             .set(self.inner.interface.as_ref(), property_name, &value.into())
             .await
     }
@@ -706,53 +686,60 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub async fn receive_signal<M>(&self, signal_name: M) -> Result<SignalStream>
+    pub async fn receive_signal<M>(&self, signal_name: M) -> Result<SignalStream<'_>>
     where
         M: TryInto<MemberName<'static>>,
         M::Error: Into<Error>,
     {
+        let signal_name = signal_name.try_into().map_err(Into::into)?;
+        self.receive_signals(Some(signal_name)).await
+    }
+
+    async fn receive_signals(
+        &self,
+        signal_name: Option<MemberName<'static>>,
+    ) -> Result<SignalStream<'_>> {
         // Time to try & resolve the destination name & track changes to it.
+        let conn = self.inner.inner_without_borrows.conn.clone();
+        let stream = conn.msg_receiver.activate_cloned();
         self.inner.destination_unique_name().await?;
 
-        let signal_name = signal_name.try_into().map_err(Into::into)?;
-        let expr = format!(
-            "type='signal',sender='{}',path='{}',interface='{}',member='{}'",
+        let mut expr = format!(
+            "type='signal',sender='{}',path='{}',interface='{}'",
             self.destination(),
             self.path(),
             self.interface(),
-            &signal_name,
         );
+        if let Some(name) = &signal_name {
+            use std::fmt::Write;
+            write!(expr, ",member='{}'", name).unwrap();
+        }
+        conn.add_match(expr.clone()).await?;
 
-        let dest_unique_name = self.inner.dest_unique_name.clone();
-        let conn = self.inner.inner_without_borrows.conn.clone();
-        let (send, recv) = bounded(64);
-
-        let handler_id = conn
-            .add_signal_handler(SignalHandler::signal(
-                self.path().to_owned(),
-                self.interface().to_owned(),
-                signal_name,
-                expr,
-                move |msg| {
-                    let dest_unique_name = dest_unique_name.clone();
-                    let send = send.clone();
-                    Box::pin(async move {
-                        if let Ok(h) = msg.header() {
-                            if let Ok(s) = h.sender() {
-                                if s == dest_unique_name.read().expect("lock poisoned").as_deref() {
-                                    let _ = send.send(msg.clone()).await;
-                                }
-                            }
-                        }
-                    })
-                },
-            ))
-            .await?;
+        let (src_bus_name, src_unique_name, src_query) = match self.destination().to_owned() {
+            BusName::Unique(name) => (None, Some(name), None),
+            BusName::WellKnown(name) => {
+                let id = conn
+                    .send_message(
+                        MessageBuilder::method_call("/org/freedesktop/DBus", "GetNameOwner")?
+                            .destination("org.freedesktop.DBus")?
+                            .interface("org.freedesktop.DBus")?
+                            .build(&name)?,
+                    )
+                    .await?;
+                (Some(name), None, Some(id))
+            }
+        };
 
         Ok(SignalStream {
-            stream: recv,
-            conn,
-            handler_id,
+            stream,
+            proxy: self,
+            expr,
+            src_bus_name,
+            src_query,
+            src_unique_name,
+            member: signal_name,
+            last_seq: MessageSequence::default(),
         })
     }
 
@@ -763,48 +750,8 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub async fn receive_all_signals(&self) -> Result<SignalStream> {
-        // Time to try & resolve the destination name & track changes to it.
-        self.inner.destination_unique_name().await?;
-
-        let expr = format!(
-            "type='signal',sender='{}',path='{}',interface='{}'",
-            self.destination(),
-            self.path(),
-            self.interface(),
-        );
-
-        let dest_unique_name = self.inner.dest_unique_name.clone();
-        let conn = self.inner.inner_without_borrows.conn.clone();
-        let (send, recv) = bounded(64);
-
-        let handler_id = conn
-            .add_signal_handler(SignalHandler::signal(
-                self.path().to_owned(),
-                self.interface().to_owned(),
-                None,
-                expr,
-                move |msg| {
-                    let dest_unique_name = dest_unique_name.clone();
-                    let send = send.clone();
-                    Box::pin(async move {
-                        if let Ok(h) = msg.header() {
-                            if let Ok(s) = h.sender() {
-                                if s == dest_unique_name.read().expect("lock poisoned").as_deref() {
-                                    let _ = send.send(msg.clone()).await;
-                                }
-                            }
-                        }
-                    })
-                },
-            ))
-            .await?;
-
-        Ok(SignalStream {
-            stream: recv,
-            conn,
-            handler_id,
-        })
+    pub async fn receive_all_signals(&self) -> Result<SignalStream<'_>> {
+        self.receive_signals(None).await
     }
 
     /// Register a handler for signal named `signal_name`.
@@ -896,17 +843,24 @@ impl<'a> Proxy<'a> {
     ///
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
+    ///
+    /// If caching is not enabled on this proxy, the resulting stream will not return any events.
     pub async fn receive_property_stream<'n, T>(&self, name: &'n str) -> PropertyStream<'n, T> {
-        let mut values = self.properties.values.lock().expect("lock poisoned");
-        let entry = values
-            .entry(name.to_string())
-            .or_insert_with(PropertyValue::default);
-        let event = entry.event.listen();
+        let properties = self.get_property_cache().cloned();
+        let event = if let Some(properties) = &properties {
+            let mut values = properties.values.lock().expect("lock poisoned");
+            let entry = values
+                .entry(name.to_string())
+                .or_insert_with(PropertyValue::default);
+            entry.event.listen()
+        } else {
+            Event::new().listen()
+        };
 
         PropertyStream {
             name,
             event,
-            properties: self.properties.clone(),
+            properties,
             phantom: std::marker::PhantomData,
         }
     }
@@ -916,25 +870,130 @@ impl<'a> Proxy<'a> {
 ///
 /// Use [`Proxy::receive_signal`] to create an instance of this type.
 #[derive(Debug)]
-pub struct SignalStream {
+pub struct SignalStream<'a> {
     stream: Receiver<Arc<Message>>,
-    conn: Connection,
-    handler_id: SignalHandlerKey,
+    proxy: &'a Proxy<'a>,
+    expr: String,
+    src_bus_name: Option<WellKnownName<'a>>,
+    src_query: Option<u32>,
+    src_unique_name: Option<UniqueName<'static>>,
+    member: Option<MemberName<'static>>,
+    last_seq: MessageSequence,
 }
 
-assert_impl_all!(SignalStream: Send, Sync, Unpin);
+impl<'a> SignalStream<'a> {
+    fn filter(&mut self, msg: &Message) -> Result<bool> {
+        if msg.message_type() == zbus::MessageType::MethodReturn
+            && self.src_query.is_some()
+            && msg.reply_serial()? == self.src_query
+        {
+            self.src_query = None;
+            self.src_unique_name = Some(OwnedUniqueName::into(msg.body()?));
+        }
+        if msg.message_type() != zbus::MessageType::Signal {
+            return Ok(false);
+        }
+        let memb = msg.member()?;
+        let iface = msg.interface()?;
+        let path = msg.path()?;
 
-impl stream::Stream for SignalStream {
-    type Item = Arc<Message>;
+        if (self.member.is_none() || memb == self.member)
+            && path.as_ref() == Some(self.proxy.path())
+            && iface.as_ref() == Some(self.proxy.interface())
+        {
+            let header = msg.header()?;
+            let sender = header.sender()?;
+            if sender == self.src_unique_name.as_ref() {
+                return Ok(true);
+            }
+        }
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        stream::Stream::poll_next(Pin::new(&mut self.get_mut().stream), cx)
+        // The src_unique_name must be maintained in lock-step with the applied filter
+        if let Some(bus_name) = &self.src_bus_name {
+            if memb.as_deref() == Some("NameOwnerChanged")
+                && iface.as_deref() == Some("org.freedesktop.DBus")
+                && path.as_deref() == Some("/org/freedesktop/DBus")
+            {
+                let header = msg.header()?;
+                if let Ok(Some(sender)) = header.sender() {
+                    if sender == "org.freedesktop.DBus" {
+                        let (name, _, new_owner) = msg.body::<(
+                            WellKnownName<'_>,
+                            Optional<UniqueName<'_>>,
+                            Optional<UniqueName<'_>>,
+                        )>()?;
+
+                        if &name == bus_name {
+                            self.src_unique_name = new_owner.as_ref().map(|n| n.to_owned());
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(false)
     }
 }
 
-impl std::ops::Drop for SignalStream {
+assert_impl_all!(SignalStream<'_>: Send, Sync, Unpin);
+
+impl<'a> stream::Stream for SignalStream<'a> {
+    type Item = Arc<Message>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        while let Some(msg) = ready!(Pin::new(&mut this.stream).poll_next(cx)) {
+            this.last_seq = msg.recv_position();
+            if let Ok(true) = this.filter(&msg) {
+                return Poll::Ready(Some(msg));
+            }
+        }
+        Poll::Ready(None)
+    }
+}
+
+impl<'a> OrderedStream for SignalStream<'a> {
+    type Data = Arc<Message>;
+    type Ordering = MessageSequence;
+
+    fn poll_next_before(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        before: Option<&Self::Ordering>,
+    ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
+        let this = self.get_mut();
+        loop {
+            if let Some(before) = before {
+                if this.last_seq >= *before {
+                    return Poll::Ready(PollResult::NoneBefore);
+                }
+            }
+            if let Some(msg) = ready!(stream::Stream::poll_next(Pin::new(&mut this.stream), cx)) {
+                this.last_seq = msg.recv_position();
+                if let Ok(true) = this.filter(&msg) {
+                    return Poll::Ready(PollResult::Item {
+                        data: msg,
+                        ordering: this.last_seq,
+                    });
+                }
+            } else {
+                return Poll::Ready(PollResult::Terminated);
+            }
+        }
+    }
+}
+
+impl<'a> stream::FusedStream for SignalStream<'a> {
+    fn is_terminated(&self) -> bool {
+        self.stream.is_terminated()
+    }
+}
+
+impl<'a> std::ops::Drop for SignalStream<'a> {
     fn drop(&mut self) {
-        self.conn.queue_remove_signal_handler(self.handler_id);
+        self.proxy
+            .connection()
+            .queue_remove_match(std::mem::take(&mut self.expr));
     }
 }
 
@@ -964,6 +1023,7 @@ mod tests {
     }
 
     async fn test_signal_stream() -> Result<()> {
+        use futures_util::StreamExt;
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = Connection::session().await?;
