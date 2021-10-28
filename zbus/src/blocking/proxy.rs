@@ -18,8 +18,7 @@ use crate::fdo;
 /// A blocking wrapper of [`crate::Proxy`].
 ///
 /// This API is mostly the same as [`crate::Proxy`], except that all its methods block to
-/// completion. One notable difference is that there is **currently** no blocking equivalent of
-/// [`crate::SignalStream`] API.
+/// completion.
 ///
 /// # Example
 ///
