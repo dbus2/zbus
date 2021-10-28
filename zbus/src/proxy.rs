@@ -3,7 +3,6 @@ use async_channel::bounded;
 use async_executor::Task;
 use event_listener::{Event, EventListener};
 use futures_core::{future::BoxFuture, ready, stream};
-use futures_util::StreamExt;
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedStream, PollResult};
 use slotmap::{new_key_type, SlotMap};
@@ -355,6 +354,7 @@ impl<'a> Proxy<'a> {
     where
         for<'v> H: FnMut(Option<&'v Value<'_>>) -> BoxFuture<'v, ()> + Send + 'static,
     {
+        use futures_util::StreamExt;
         self.get_property_cache().ok_or(Error::Unsupported)?;
         let mut stream = self.receive_property_stream(property_name).await;
         let mut lock = self
@@ -961,6 +961,7 @@ mod tests {
     }
 
     async fn test_signal_stream() -> Result<()> {
+        use futures_util::StreamExt;
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = Connection::session().await?;
