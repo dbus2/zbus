@@ -1,11 +1,10 @@
 use std::{convert::TryInto, marker::PhantomData, sync::Arc};
 
-use futures_core::future::BoxFuture;
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::ObjectPath;
 
-use crate::{Connection, Error, Proxy, ProxyInner, ProxyProperties, Result};
+use crate::{Connection, Error, Proxy, ProxyInner, Result};
 
 /// Builder for proxies.
 #[derive(Debug)]
@@ -84,33 +83,30 @@ impl<'a, T> ProxyBuilder<'a, T> {
         self
     }
 
-    /// Build a proxy from the builder.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the builder is lacking the necessary details to build a proxy.
-    pub fn build(self) -> BoxFuture<'a, Result<T>>
-    where
-        T: From<Proxy<'a>>,
-    {
+    pub(crate) fn build_internal(self) -> Proxy<'a> {
         let conn = self.conn;
         let destination = self.destination.expect("missing `destination`");
         let path = self.path.expect("missing `path`");
         let interface = self.interface.expect("missing `interface`");
         let cache = self.cache;
 
-        let proxy = Proxy {
-            inner: Arc::new(ProxyInner::new(conn, destination, path, interface)),
-            properties: Arc::new(ProxyProperties::new()),
-        };
+        Proxy {
+            inner: Arc::new(ProxyInner::new(conn, destination, path, interface, cache)),
+        }
+    }
 
-        Box::pin(async move {
-            if cache {
-                proxy.cache_properties().await?;
-            }
+    /// Build a proxy from the builder.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the builder is lacking the necessary details to build a proxy.
+    pub async fn build(self) -> Result<T>
+    where
+        T: From<Proxy<'a>>,
+    {
+        let proxy = self.build_internal();
 
-            Ok(proxy.into())
-        })
+        Ok(proxy.into())
     }
 }
 

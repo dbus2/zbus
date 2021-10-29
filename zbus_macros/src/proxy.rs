@@ -669,7 +669,7 @@ fn gen_proxy_signal(
         let receive_signal = quote! {
             #[doc = #receive_gen_doc]
             #(#doc)*
-            pub async fn #receiver_name(&self) -> #zbus::Result<#stream_name>
+            pub async fn #receiver_name(&self) -> #zbus::Result<#stream_name<'_>>
             {
                 self.receive_signal(#signal_name).await.map(#stream_name)
             }
@@ -710,6 +710,26 @@ fn gen_proxy_signal(
                     }
                 }
 
+                impl ::std::ops::Deref for #signal_name_ident {
+                    type Target = #zbus::Message;
+
+                    fn deref(&self) -> &#zbus::Message {
+                        &self.0
+                    }
+                }
+
+                impl ::std::convert::AsRef<::std::sync::Arc<#zbus::Message>> for #signal_name_ident {
+                    fn as_ref(&self) -> &::std::sync::Arc<#zbus::Message> {
+                        &self.0
+                    }
+                }
+
+                impl ::std::convert::AsRef<#zbus::Message> for #signal_name_ident {
+                    fn as_ref(&self) -> &#zbus::Message {
+                        &self.0
+                    }
+                }
+
                 #[doc = #signal_args_gen_doc]
                 pub struct #signal_args #ty_generics {
                     phantom: std::marker::PhantomData<&'s ()>,
@@ -743,13 +763,14 @@ fn gen_proxy_signal(
         };
         let stream_types = quote! {
             #[doc = #stream_gen_doc]
-            pub struct #stream_name(#zbus::SignalStream);
+            #[derive(Debug)]
+            pub struct #stream_name<'a>(#zbus::SignalStream<'a>);
 
             #zbus::export::static_assertions::assert_impl_all!(
-                #stream_name: ::std::marker::Send, ::std::marker::Unpin
+                #stream_name<'_>: ::std::marker::Send, ::std::marker::Unpin
             );
 
-            impl #zbus::export::futures_core::stream::Stream for #stream_name {
+            impl #zbus::export::futures_core::stream::Stream for #stream_name<'_> {
                 type Item = #signal_name_ident;
 
                 fn poll_next(
@@ -764,33 +785,58 @@ fn gen_proxy_signal(
                 }
             }
 
-            impl #stream_name {
+            impl #zbus::export::ordered_stream::OrderedStream for #stream_name<'_> {
+                type Data = #signal_name_ident;
+                type Ordering = #zbus::MessageSequence;
+
+                fn poll_next_before(
+                    self: ::std::pin::Pin<&mut Self>,
+                    cx: &mut ::std::task::Context<'_>,
+                    before: ::std::option::Option<&Self::Ordering>
+                    ) -> ::std::task::Poll<#zbus::export::ordered_stream::PollResult<Self::Ordering, Self::Data>> {
+                    #zbus::export::ordered_stream::OrderedStream::poll_next_before(
+                        ::std::pin::Pin::new(&mut self.get_mut().0),
+                        cx,
+                        before,
+                    )
+                    .map(|msg| msg.map_data(#signal_name_ident))
+                }
+            }
+
+            impl #zbus::export::futures_core::stream::FusedStream for #stream_name<'_> {
+                fn is_terminated(&self) -> bool {
+                    self.0.is_terminated()
+                }
+            }
+
+            impl<'a> #stream_name<'a> {
                 /// Consumes `self`, returning the underlying `zbus::SignalStream`.
-                pub fn into_inner(self) -> #zbus::SignalStream {
+                pub fn into_inner(self) -> #zbus::SignalStream<'a> {
                     self.0
                 }
 
                 /// The reference to the underlying `zbus::SignalStream`.
-                pub fn inner(&self) -> & #zbus::SignalStream {
+                pub fn inner(&self) -> & #zbus::SignalStream<'a> {
                     &self.0
                 }
             }
 
-            impl std::ops::Deref for #stream_name {
-                type Target = #zbus::SignalStream;
+            impl<'a> std::ops::Deref for #stream_name<'a> {
+                type Target = #zbus::SignalStream<'a>;
 
                 fn deref(&self) -> &Self::Target {
                     &self.0
                 }
             }
 
-            impl ::std::ops::DerefMut for #stream_name {
+            impl<'a> ::std::ops::DerefMut for #stream_name<'a> {
                 fn deref_mut(&mut self) -> &mut Self::Target {
                     &mut self.0
                 }
             }
 
             #[doc = #args_struct_gen_doc]
+            #[derive(Debug, Clone)]
             pub struct #signal_name_ident(::std::sync::Arc<#zbus::Message>);
 
             #args_impl
