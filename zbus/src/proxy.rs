@@ -680,12 +680,6 @@ impl<'a> Proxy<'a> {
     }
 
     /// Create a stream for signal named `signal_name`.
-    ///
-    /// # Errors
-    ///
-    /// Apart from general I/O errors that can result from socket communications, calling this
-    /// method will also result in an error if the destination service has not yet registered its
-    /// well-known name with the bus (assuming you're using the well-known name as destination).
     pub async fn receive_signal<M>(&self, signal_name: M) -> Result<SignalStream<'_>>
     where
         M: TryInto<MemberName<'static>>,
@@ -744,12 +738,6 @@ impl<'a> Proxy<'a> {
     }
 
     /// Create a stream for all signals emitted by this service.
-    ///
-    /// # Errors
-    ///
-    /// Apart from general I/O errors that can result from socket communications, calling this
-    /// method will also result in an error if the destination service has not yet registered its
-    /// well-known name with the bus (assuming you're using the well-known name as destination).
     pub async fn receive_all_signals(&self) -> Result<SignalStream<'_>> {
         self.receive_signals(None).await
     }
