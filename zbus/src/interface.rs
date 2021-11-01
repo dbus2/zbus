@@ -120,8 +120,13 @@ pub trait Interface: Any + Send + Sync {
     fn introspect_to_writer(&self, writer: &mut dyn Write, level: usize);
 }
 
-// FIXME: Do we really need these unsafe implementations? If so, can't they be implemented w/o
-///       `unsafe` usage?
+// Note: while it is possible to implement this without `unsafe`, it currently requires a helper
+// trait with a blanket impl that creates `dyn Any` refs.  It's simpler (and more performant) to
+// just check the type ID and do the downcast ourself.
+//
+// See https://github.com/rust-lang/rust/issues/65991 for a rustc feature that will make it
+// possible to get a `dyn Any` ref directly from a `dyn Interface` ref; once that is stable, we can
+// remove this unsafe code.
 impl dyn Interface {
     /// Return Any of self
     pub(crate) fn downcast_ref<T: Any>(&self) -> Option<&T> {
