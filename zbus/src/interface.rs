@@ -65,7 +65,7 @@ pub trait Interface: Any + Send + Sync {
         server: &'call ObjectServer,
         connection: &'call Connection,
         header: MessageHeader<'_>,
-        ctxt: SignalContext<'_>
+        ctxt: SignalContext<'_>,
     ) -> Option<fdo::Result<OwnedValue>>;
 
     /// Return all the properties.
@@ -74,7 +74,7 @@ pub trait Interface: Any + Send + Sync {
         server: &'call ObjectServer,
         connection: &'call Connection,
         header: MessageHeader<'_>,
-        ctxt: SignalContext<'_>
+        ctxt: SignalContext<'_>,
     ) -> HashMap<String, OwnedValue>;
 
     /// Set a property value.

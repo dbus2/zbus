@@ -17,7 +17,9 @@ use zvariant::{
     ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value,
 };
 
-use crate::{dbus_interface, dbus_proxy, Connection, DBusError, MessageHeader, ObjectServer, SignalContext};
+use crate::{
+    dbus_interface, dbus_proxy, Connection, DBusError, MessageHeader, ObjectServer, SignalContext,
+};
 
 #[rustfmt::skip]
 macro_rules! gen_introspectable_proxy {
@@ -132,7 +134,11 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-        let res = iface.read().await.get(property_name, server, connection, header, ctxt).await;
+        let res = iface
+            .read()
+            .await
+            .get(property_name, server, connection, header, ctxt)
+            .await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
                 "Unknown property '{}'",
@@ -141,6 +147,7 @@ impl Properties {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn set(
         &self,
         interface_name: InterfaceName<'_>,
@@ -159,7 +166,11 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-        match iface.read().await.set(property_name, &value, server, connection, &header, &ctxt) {
+        match iface
+            .read()
+            .await
+            .set(property_name, &value, server, connection, &header, &ctxt)
+        {
             zbus::DispatchResult::RequiresMut => {}
             zbus::DispatchResult::NotFound => {
                 return Err(Error::UnknownProperty(format!(
@@ -200,7 +211,11 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
             })?;
 
-        let res = iface.read().await.get_all(server, connection, header, ctxt).await;
+        let res = iface
+            .read()
+            .await
+            .get_all(server, connection, header, ctxt)
+            .await;
         Ok(res)
     }
 
