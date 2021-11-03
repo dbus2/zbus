@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{DynamicType, OwnedValue, Value};
 
-use crate::{fdo, Connection, Message, ObjectServer, Result, SignalContext};
+use crate::{fdo, Connection, Message, MessageHeader, ObjectServer, Result, SignalContext};
 
 /// A helper type returned by [`Interface`] callbacks.
 pub enum DispatchResult<'a> {
@@ -59,10 +59,23 @@ pub trait Interface: Any + Send + Sync {
         Self: Sized;
 
     /// Get a property value. Returns `None` if the property doesn't exist.
-    async fn get(&self, property_name: &str) -> Option<fdo::Result<OwnedValue>>;
+    async fn get<'call>(
+        &'call self,
+        property_name: &'call str,
+        server: &'call ObjectServer,
+        connection: &'call Connection,
+        header: MessageHeader<'_>,
+        ctxt: SignalContext<'_>
+    ) -> Option<fdo::Result<OwnedValue>>;
 
     /// Return all the properties.
-    async fn get_all(&self) -> HashMap<String, OwnedValue>;
+    async fn get_all<'call>(
+        &'call self,
+        server: &'call ObjectServer,
+        connection: &'call Connection,
+        header: MessageHeader<'_>,
+        ctxt: SignalContext<'_>
+    ) -> HashMap<String, OwnedValue>;
 
     /// Set a property value.
     ///
@@ -73,6 +86,9 @@ pub trait Interface: Any + Send + Sync {
         &'call self,
         property_name: &'call str,
         value: &'call Value<'_>,
+        _: &'call ObjectServer,
+        _: &'call Connection,
+        _: &'call MessageHeader<'_>,
         ctxt: &'call SignalContext<'_>,
     ) -> DispatchResult<'call> {
         let _ = (property_name, value, ctxt);
@@ -88,6 +104,9 @@ pub trait Interface: Any + Send + Sync {
         &mut self,
         property_name: &str,
         value: &Value<'_>,
+        server: &ObjectServer,
+        connection: &Connection,
+        header: &MessageHeader<'_>,
         ctxt: &SignalContext<'_>,
     ) -> Option<fdo::Result<()>>;
 
@@ -120,8 +139,13 @@ pub trait Interface: Any + Send + Sync {
     fn introspect_to_writer(&self, writer: &mut dyn Write, level: usize);
 }
 
-// FIXME: Do we really need these unsafe implementations? If so, can't they be implemented w/o
-///       `unsafe` usage?
+// Note: while it is possible to implement this without `unsafe`, it currently requires a helper
+// trait with a blanket impl that creates `dyn Any` refs.  It's simpler (and more performant) to
+// just check the type ID and do the downcast ourself.
+//
+// See https://github.com/rust-lang/rust/issues/65991 for a rustc feature that will make it
+// possible to get a `dyn Any` ref directly from a `dyn Interface` ref; once that is stable, we can
+// remove this unsafe code.
 impl dyn Interface {
     /// Return Any of self
     pub(crate) fn downcast_ref<T: Any>(&self) -> Option<&T> {
