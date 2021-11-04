@@ -532,39 +532,6 @@ fn gen_proxy_property(
             property_name,
         );
 
-        let connect = format_ident!("connect_{}_changed", method_name);
-        let handler = if *blocking {
-            parse_quote! { __H: FnMut(&#zbus::zvariant::Value<'_>) + Send + 'static }
-        } else {
-            parse_quote! {
-                for<'v> __H: FnMut(&'v #zbus::zvariant::Value<'_>) ->
-                    #zbus::export::futures_core::future::BoxFuture<'v, ()> + Send + 'static
-            }
-        };
-        let (proxy_method, link) = if *blocking {
-            (
-                "zbus::Proxy::connect_property_changed",
-                "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_property_changed",
-            )
-        } else {
-            (
-                "zbus::Proxy::connect_property_changed",
-                "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_property_changed",
-            )
-        };
-        let gen_doc = format!(
-            " Connect the handler for the `{}` property. This is a convenient wrapper around [`{}`]({}).",
-            property_name, proxy_method, link,
-        );
-        let mut generics = m.sig.generics.clone();
-        generics.params.push(parse_quote!(__H));
-        {
-            let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-            where_clause.predicates.push(handler);
-        }
-
-        let (_, ty_generics, where_clause) = generics.split_for_impl();
-
         quote! {
             #(#doc)*
             #[allow(clippy::needless_question_mark)]
@@ -578,16 +545,6 @@ fn gen_proxy_property(
                 <#ret_type as #zbus::ResultAdapter>::Err>
             {
                 self.0.cached_property(#property_name).map_err(::std::convert::Into::into)
-            }
-
-            #[doc = #gen_doc]
-            pub #usage fn #connect#ty_generics(
-                &self,
-                mut handler: __H,
-            ) -> #zbus::Result<#zbus::PropertyChangedHandlerId>
-            #where_clause,
-            {
-                self.0.connect_property_changed(#property_name, handler)#wait
             }
 
             #receive
@@ -624,7 +581,6 @@ fn gen_proxy_signal(
     } = async_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
-    let method = format_ident!("connect_{}", snake_case_name);
     let input_types: Vec<Box<Type>> = m
         .sig
         .inputs
@@ -897,94 +853,5 @@ fn gen_proxy_signal(
         #args_impl
     };
 
-    let input_types_s: Vec<_> = SetLifetimeS
-        .fold_signature(m.sig.clone())
-        .inputs
-        .iter()
-        .filter_map(|arg| match arg {
-            FnArg::Typed(p) => Some(p.ty.clone()),
-            _ => None,
-        })
-        .collect();
-
-    let handler = if *blocking {
-        quote! { ::std::ops::FnMut(#(#input_types),*) }
-    } else if input_types == input_types_s {
-        quote! {
-            ::std::ops::FnMut(
-                #(#input_types),*
-            ) -> #zbus::export::futures_core::future::BoxFuture<'static, ()>
-        }
-    } else {
-        quote! {
-            for<'s>
-            ::std::ops::FnMut(
-                #(#input_types_s),*
-            ) -> #zbus::export::futures_core::future::BoxFuture<'s, ()>
-        }
-    };
-
-    let (proxy_method, link) = if *blocking {
-        (
-            "zbus::Proxy::connect_signal",
-            "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_signal",
-        )
-    } else {
-        (
-            "zbus::Proxy::connect_signal",
-            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_signal",
-        )
-    };
-    let gen_doc = format!(
-        " Connect the handler for the `{}` signal. This is a convenient wrapper around [`{}`]({}).",
-        signal_name, proxy_method, link,
-    );
-
-    let mut generics = m.sig.generics.clone();
-    {
-        let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-        for param in generics
-            .params
-            .iter()
-            .filter(|a| matches!(a, syn::GenericParam::Type(_)))
-        {
-            where_clause
-                .predicates
-                .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + #zbus::zvariant::Type + ::std::fmt::Debug));
-        }
-        where_clause
-            .predicates
-            .push(parse_quote!(__H: #handler + ::std::marker::Send + 'static));
-    }
-    generics.params.push(parse_quote!(__H));
-
-    let do_nothing = if *blocking {
-        quote!(())
-    } else {
-        quote!(Box::pin(async {}))
-    };
-
-    let (_, ty_generics, where_clause) = generics.split_for_impl();
-    let methods = quote! {
-        #[doc = #gen_doc]
-        #(#doc)*
-        pub #usage fn #method#ty_generics(
-            &self,
-            mut handler: __H,
-        ) -> #zbus::fdo::Result<#zbus::SignalHandlerId>
-        #where_clause,
-        {
-            self.0.connect_signal(#signal_name, move |m| {
-                match m.body() {
-                    Ok((#(#args),*)) => handler(#(#args),*),
-                    // TODO log errors, or allow a fallback?
-                    Err(_) => #do_nothing,
-                }
-            })#wait
-        }
-
-        #receive_signal
-    };
-
-    (methods, stream_types)
+    (receive_signal, stream_types)
 }
