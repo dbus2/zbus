@@ -3,15 +3,12 @@ use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
 use std::{
     convert::{TryFrom, TryInto},
-    future::ready,
     sync::Arc,
 };
 use zbus_names::{BusName, InterfaceName, MemberName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
-use crate::{
-    blocking::Connection, Error, Message, PropertyChangedHandlerId, Result, SignalHandlerId,
-};
+use crate::{blocking::Connection, Error, Message, Result};
 
 use crate::fdo;
 
@@ -250,96 +247,6 @@ impl<'a> Proxy<'a> {
     /// well-known name with the bus (assuming you're using the well-known name as destination).
     pub fn receive_all_signals(&self) -> Result<SignalIterator<'_>> {
         block_on(self.azync.receive_all_signals()).map(SignalIterator)
-    }
-
-    /// Register a handler for signal named `signal_name`.
-    ///
-    /// A unique ID for the handler is returned, which can be used to deregister this handler using
-    /// [`Self::disconnect_signal`] method.
-    ///
-    /// *Note:* The signal handler will be called by the executor thread of the [`Connection`].
-    /// See the [`crate::Connection::executor`] documentation for an example of how you can run the
-    /// executor (and in turn all the signal handlers called) in your own thread.
-    ///
-    /// ### Errors
-    ///
-    /// This method can fail if addition of the relevant match rule on the bus fails. You can
-    /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
-    /// connection.
-    pub fn connect_signal<M, H>(
-        &self,
-        signal_name: M,
-        mut handler: H,
-    ) -> fdo::Result<SignalHandlerId>
-    where
-        M: TryInto<MemberName<'static>>,
-        M::Error: Into<Error>,
-        H: FnMut(&Message) + Send + 'static,
-    {
-        block_on(self.azync.connect_signal(signal_name, move |msg| {
-            Box::pin({
-                handler(msg);
-
-                ready(())
-            })
-        }))
-    }
-
-    /// Deregister the signal handler with the ID `handler_id`.
-    ///
-    /// This method returns `Ok(true)` if a handler with the id `handler_id` is found and removed;
-    /// `Ok(false)` otherwise.
-    ///
-    /// ### Errors
-    ///
-    /// This method can fail if removal of the relevant match rule on the bus fails. You can
-    /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
-    /// connection.
-    pub fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
-        block_on(self.azync.disconnect_signal(handler_id))
-    }
-
-    /// Register a changed handler for the property named `property_name`.
-    ///
-    /// A unique ID for the handler is returned, which can be used to deregister this handler using
-    /// [`Self::disconnect_signal`] method.
-    ///
-    /// *Note:* The signal handler will be called by the executor thread of the [`Connection`].
-    /// See the [`crate::Connection::executor`] documentation for an example of how you can run the
-    /// executor (and in turn all the signal handlers called) in your own thread.
-    ///
-    /// # Errors
-    ///
-    /// The current implementation requires cached properties. It returns an [`Error::Unsupported`]
-    /// if the proxy isn't setup with cache.
-    pub fn connect_property_changed<H>(
-        &self,
-        property_name: &'static str,
-        mut handler: H,
-    ) -> Result<PropertyChangedHandlerId>
-    where
-        H: FnMut(&Value<'_>) + Send + 'static,
-    {
-        block_on(
-            self.azync
-                .connect_property_changed(property_name, move |v| {
-                    Box::pin({
-                        handler(v);
-                        ready(())
-                    })
-                }),
-        )
-    }
-
-    /// Deregister the property handler with the ID `handler_id`.
-    ///
-    /// This method returns `Ok(true)` if a handler with the id `handler_id` is found and removed;
-    /// `Ok(false)` otherwise.
-    pub fn disconnect_property_changed(
-        &self,
-        handler_id: PropertyChangedHandlerId,
-    ) -> Result<bool> {
-        block_on(self.azync.disconnect_property_changed(handler_id))
     }
 
     /// Get an iterator to receive property changed events.

@@ -5,11 +5,8 @@ use async_io::block_on;
 use async_lock::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use async_task::Task;
 use event_listener::EventListener;
-use futures_core::future::BoxFuture;
-use futures_util::stream::{FuturesUnordered, Stream};
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
-use slotmap::DenseSlotMap;
 use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet},
@@ -44,55 +41,6 @@ use crate::{
 
 const DEFAULT_MAX_QUEUED: usize = 64;
 
-slotmap::new_key_type! {
-    pub(crate) struct SignalHandlerKey;
-}
-
-type SignalHandlerHandlerAsyncFunction =
-    Box<dyn for<'msg> FnMut(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send>;
-
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
-pub(crate) struct SignalHandler {
-    pub(crate) filter_member: Option<MemberName<'static>>,
-    pub(crate) filter_path: Option<ObjectPath<'static>>,
-    pub(crate) filter_interface: Option<InterfaceName<'static>>,
-    // Note: when fixing issue #69, change this to a match expression object and consider merging
-    // it and the filter expressions.
-    pub(crate) match_expr: String,
-    #[derivative(Debug = "ignore")]
-    handler: SignalHandlerHandlerAsyncFunction,
-}
-
-impl SignalHandler {
-    pub fn signal<H>(
-        path: ObjectPath<'static>,
-        interface: InterfaceName<'static>,
-        member: impl Into<Option<MemberName<'static>>>,
-        match_expr: String,
-        handler: H,
-    ) -> Self
-    where
-        H: for<'msg> FnMut(&'msg Arc<Message>) -> BoxFuture<'msg, ()> + Send + 'static,
-    {
-        Self {
-            filter_member: member.into(),
-            filter_path: Some(path),
-            filter_interface: Some(interface),
-            match_expr,
-            handler: Box::new(handler),
-        }
-    }
-}
-
-/// Inner state shared with tasks that are stopped by ConnectionInner's drop
-#[derive(Debug)]
-struct ConnectionTaskShared {
-    raw_conn: sync::Mutex<RawConnection<Box<dyn Socket>>>,
-    // DenseSlotMap is used because we'll likely iterate this more often than modifying it.
-    signal_handlers: sync::Mutex<DenseSlotMap<SignalHandlerKey, SignalHandler>>,
-}
-
 /// Inner state shared by Connection and WeakConnection
 #[derive(Debug)]
 struct ConnectionInner {
@@ -102,7 +50,7 @@ struct ConnectionInner {
     unique_name: OnceCell<OwnedUniqueName>,
     registered_names: Mutex<HashSet<WellKnownName<'static>>>,
 
-    task_shared: Arc<ConnectionTaskShared>,
+    raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
 
     // Serial number for next outgoing message
     serial: AtomicU32,
@@ -113,8 +61,6 @@ struct ConnectionInner {
     // Message receiver task
     #[allow(unused)]
     msg_receiver_task: Task<()>,
-
-    signal_handler_task: OnceCell<Task<()>>,
 
     signal_matches: Mutex<HashMap<String, u64>>,
 
@@ -130,7 +76,7 @@ struct ConnectionInner {
 
 #[derive(Debug)]
 struct MessageReceiverTask {
-    task_shared: Arc<ConnectionTaskShared>,
+    raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
 
     // Message broadcaster.
     msg_sender: Broadcaster<Arc<Message>>,
@@ -141,12 +87,12 @@ struct MessageReceiverTask {
 
 impl MessageReceiverTask {
     fn new(
-        task_shared: Arc<ConnectionTaskShared>,
+        raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
         msg_sender: Broadcaster<Arc<Message>>,
         error_sender: Sender<Error>,
     ) -> Arc<Self> {
         Arc::new(Self {
-            task_shared,
+            raw_conn,
             msg_sender,
             error_sender,
         })
@@ -162,7 +108,7 @@ impl MessageReceiverTask {
     async fn receive_msg(self: Arc<Self>) {
         loop {
             let receive_msg = ReceiveMessage {
-                raw_conn: &self.task_shared.raw_conn,
+                raw_conn: &self.raw_conn,
             };
             let msg = match receive_msg.await {
                 Ok(msg) => msg,
@@ -187,48 +133,6 @@ impl MessageReceiverTask {
                 return;
             }
         }
-    }
-}
-
-impl ConnectionTaskShared {
-    async fn signal_handler_task(
-        self: Arc<Self>,
-        mut stream: impl Stream<Item = Arc<Message>> + Unpin,
-    ) {
-        while let Some(msg) = stream.next().await {
-            let () = self.start_handlers(&msg).collect().await;
-        }
-    }
-
-    fn start_handlers<'msg>(
-        &self,
-        msg: &'msg Arc<Message>,
-    ) -> FuturesUnordered<BoxFuture<'msg, ()>> {
-        let futures = FuturesUnordered::new();
-        if msg.message_type() != MessageType::Signal {
-            return futures;
-        }
-        let mut handlers = self.signal_handlers.lock().expect("poisoned lock");
-        // TODO if we have lots of handlers, we might want to do smarter filtering
-        for (_key, handler) in handlers.iter_mut() {
-            if let Some(member) = &handler.filter_member {
-                if msg.member() != Ok(Some(member.as_ref())) {
-                    continue;
-                }
-            }
-            if let Some(path) = &handler.filter_path {
-                if msg.path() != Ok(Some(path.as_ref())) {
-                    continue;
-                }
-            }
-            if let Some(interface) = &handler.filter_interface {
-                if msg.interface() != Ok(Some(interface.as_ref())) {
-                    continue;
-                }
-            }
-            futures.push((handler.handler)(msg));
-        }
-        futures
     }
 }
 
@@ -852,51 +756,6 @@ impl Connection {
         });
     }
 
-    pub(crate) async fn add_signal_handler(
-        &self,
-        handler: SignalHandler,
-    ) -> Result<SignalHandlerKey> {
-        self.inner.signal_handler_task.get_or_init(|| {
-            let task_shared = self.inner.task_shared.clone();
-            let stream = self.msg_receiver.activate_cloned();
-            self.executor()
-                .spawn(task_shared.signal_handler_task(stream))
-        });
-        self.add_match(handler.match_expr.clone()).await?;
-        Ok(self
-            .inner
-            .task_shared
-            .signal_handlers
-            .lock()
-            .expect("poisoned lock")
-            .insert(handler))
-    }
-
-    pub(crate) fn queue_remove_signal_handler(&self, key: SignalHandlerKey) {
-        let conn = self.clone();
-        self.inner
-            .executor
-            .spawn(async move { conn.remove_signal_handler(key).await })
-            .detach()
-    }
-
-    pub(crate) async fn remove_signal_handler(&self, key: SignalHandlerKey) -> Result<bool> {
-        let handler = self
-            .inner
-            .task_shared
-            .signal_handlers
-            .lock()
-            .expect("poisoned lock")
-            .remove(key);
-        match handler {
-            Some(h) => {
-                self.remove_match(h.match_expr).await?;
-                Ok(true)
-            }
-            None => Ok(false),
-        }
-    }
-
     pub(crate) async fn add_match(&self, expr: String) -> Result<()> {
         use std::collections::hash_map::Entry;
         if !self.is_bus() {
@@ -1004,21 +863,17 @@ impl Connection {
         let msg_receiver = msg_receiver.deactivate();
         let (error_sender, error_receiver) = bounded(1);
         let executor = Arc::new(Executor::new());
-        let task_shared = Arc::new(ConnectionTaskShared {
-            raw_conn: sync::Mutex::new(auth.conn),
-            signal_handlers: sync::Mutex::new(DenseSlotMap::with_key()),
-        });
+        let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
         // Start the message receiver task.
         let msg_receiver_task =
-            MessageReceiverTask::new(task_shared.clone(), msg_sender, error_sender)
-                .spawn(&executor);
+            MessageReceiverTask::new(raw_conn.clone(), msg_sender, error_sender).spawn(&executor);
 
         let connection = Self {
             error_receiver,
             msg_receiver,
             inner: Arc::new(ConnectionInner {
-                task_shared,
+                raw_conn,
                 server_guid: auth.server_guid,
                 cap_unix_fd,
                 bus_conn: bus_connection,
@@ -1026,7 +881,6 @@ impl Connection {
                 unique_name: OnceCell::new(),
                 signal_matches: Mutex::new(HashMap::new()),
                 object_server: OnceCell::new(),
-                signal_handler_task: OnceCell::new(),
                 object_server_dispatch_task: OnceCell::new(),
                 executor: executor.clone(),
                 msg_receiver_task,
@@ -1076,7 +930,6 @@ impl Connection {
     /// This function is meant for the caller to implement idle or timeout on inactivity.
     pub fn monitor_activity(&self) -> EventListener {
         self.inner
-            .task_shared
             .raw_conn
             .lock()
             .expect("poisoned lock")
@@ -1118,7 +971,6 @@ impl<'a> Sink<Message> for &'a Connection {
         }
 
         self.inner
-            .task_shared
             .raw_conn
             .lock()
             .expect("poisoned lock")
@@ -1128,21 +980,11 @@ impl<'a> Sink<Message> for &'a Connection {
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        self.inner
-            .task_shared
-            .raw_conn
-            .lock()
-            .expect("poisoned lock")
-            .flush(cx)
+        self.inner.raw_conn.lock().expect("poisoned lock").flush(cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        let mut raw_conn = self
-            .inner
-            .task_shared
-            .raw_conn
-            .lock()
-            .expect("poisoned lock");
+        let mut raw_conn = self.inner.raw_conn.lock().expect("poisoned lock");
         match ready!(raw_conn.flush(cx)) {
             Ok(_) => (),
             Err(e) => return Poll::Ready(Err(e)),

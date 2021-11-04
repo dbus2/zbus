@@ -2,11 +2,10 @@ use async_broadcast::Receiver;
 use async_channel::bounded;
 use async_executor::Task;
 use event_listener::{Event, EventListener};
-use futures_core::{future::BoxFuture, ready, stream};
+use futures_core::{ready, stream};
 use futures_util::future::Either;
 use once_cell::sync::OnceCell;
 use ordered_stream::{join as join_streams, FromFuture, OrderedStream, PollResult};
-use slotmap::{new_key_type, SlotMap};
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
@@ -23,25 +22,7 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
     Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder, Result,
-    SignalHandler, SignalHandlerKey,
 };
-
-/// The ID for a registered signal handler.
-#[derive(Debug, Copy, Clone)]
-pub struct SignalHandlerId(SignalHandlerKey);
-
-assert_impl_all!(SignalHandlerId: Send, Sync, Unpin);
-
-new_key_type! {
-    /// The ID for a registered proprety changed handler.
-    struct PropertyChangedHandlerKey;
-}
-
-/// The ID for a registered proprety changed handler.
-#[derive(Debug, Copy, Clone)]
-pub struct PropertyChangedHandlerId {
-    key: PropertyChangedHandlerKey,
-}
 
 #[derive(Debug, Default)]
 struct PropertyValue {
@@ -117,12 +98,7 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 pub(crate) struct ProxyInnerStatic {
     #[derivative(Debug = "ignore")]
     pub(crate) conn: Connection,
-    // A list of the keys so that dropping the Proxy will disconnect the signals
-    sig_handlers: SyncMutex<Vec<SignalHandlerKey>>,
     dest_name_watcher: OnceCell<String>,
-
-    #[derivative(Debug = "ignore")]
-    property_handlers: SyncMutex<SlotMap<PropertyChangedHandlerKey, Task<()>>>,
 }
 
 #[derive(Debug)]
@@ -137,9 +113,6 @@ pub(crate) struct ProxyInner<'a> {
 
 impl Drop for ProxyInnerStatic {
     fn drop(&mut self) {
-        for id in self.sig_handlers.get_mut().expect("lock poisoned") {
-            self.conn.queue_remove_signal_handler(*id);
-        }
         if let Some(expr) = self.dest_name_watcher.take() {
             self.conn.queue_remove_match(expr);
         }
@@ -295,9 +268,7 @@ impl<'a> ProxyInner<'a> {
         Self {
             inner_without_borrows: ProxyInnerStatic {
                 conn,
-                sig_handlers: SyncMutex::new(Vec::new()),
                 dest_name_watcher: OnceCell::new(),
-                property_handlers: SyncMutex::new(SlotMap::with_key()),
             },
             destination,
             path,
@@ -405,73 +376,6 @@ impl<'a> Proxy<'a> {
             .interface(interface)?
             .build()
             .await
-    }
-
-    /// Register a changed handler for the property named `property_name`.
-    ///
-    /// A unique ID for the handler is returned, which can be used to deregister this handler
-    /// using [`Self::disconnect_property_changed`] method.
-    ///
-    /// *Note:* The signal handler will be called by the executor thread of the [`Connection`].
-    /// See the [`Connection::executor`] documentation for an example of how you can run the
-    /// executor (and in turn all the signal handlers called) in your own thread.
-    ///
-    /// # Errors
-    ///
-    /// The current implementation requires cached properties. It returns an [`Error::Unsupported`]
-    /// if the proxy isn't setup with cache.
-    pub async fn connect_property_changed<H>(
-        &self,
-        property_name: &'static str,
-        mut handler: H,
-    ) -> Result<PropertyChangedHandlerId>
-    where
-        for<'v> H: FnMut(&'v Value<'_>) -> BoxFuture<'v, ()> + Send + 'static,
-    {
-        use futures_util::StreamExt;
-        self.get_property_cache().ok_or(Error::Unsupported)?;
-        let mut stream = self
-            .receive_property_changed::<OwnedValue>(property_name)
-            .await;
-        let mut lock = self
-            .inner
-            .inner_without_borrows
-            .property_handlers
-            .lock()
-            .expect("lock poisoned");
-        let task = self
-            .inner
-            .inner_without_borrows
-            .conn
-            .executor()
-            .spawn(async move {
-                while let Some(event) = stream.next().await {
-                    let value = event
-                        .get()
-                        .await
-                        .expect("Infallible conversion from OwnedValue to OwnedValue");
-                    handler(&value).await
-                }
-            });
-        let key = lock.insert(task);
-        Ok(PropertyChangedHandlerId { key })
-    }
-
-    /// Deregister the property handler with the ID `handler_id`.
-    ///
-    /// This method returns `Ok(true)` if a handler with the id `handler_id` is found and removed;
-    /// `Ok(false)` otherwise.
-    pub async fn disconnect_property_changed(
-        &self,
-        handler_id: PropertyChangedHandlerId,
-    ) -> Result<bool> {
-        let mut lock = self
-            .inner
-            .inner_without_borrows
-            .property_handlers
-            .lock()
-            .expect("lock poisoned");
-        Ok(lock.remove(handler_id.key).is_some())
     }
 
     /// Get a reference to the associated connection.
@@ -815,91 +719,6 @@ impl<'a> Proxy<'a> {
     /// Create a stream for all signals emitted by this service.
     pub async fn receive_all_signals(&self) -> Result<SignalStream<'_>> {
         self.receive_signals(None).await
-    }
-
-    /// Register a handler for signal named `signal_name`.
-    ///
-    /// A unique ID for the handler is returned, which can be used to deregister this handler using
-    /// [`Self::disconnect_signal`] method.
-    ///
-    /// *Note:* The signal handler will be called by the executor thread of the [`Connection`].
-    /// See the [`Connection::executor`] documentation for an example of how you can run the
-    /// executor (and in turn all the signal handlers called) in your own thread.
-    ///
-    /// ### Errors
-    ///
-    /// This method can fail if addition of the relevant match rule on the bus fails. You can
-    /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
-    /// connection.
-    pub async fn connect_signal<M, H>(
-        &self,
-        signal_name: M,
-        mut handler: H,
-    ) -> fdo::Result<SignalHandlerId>
-    where
-        M: TryInto<MemberName<'static>>,
-        M::Error: Into<Error>,
-        for<'msg> H: FnMut(&'msg Message) -> BoxFuture<'msg, ()> + Send + 'static,
-    {
-        // Time to try resolve the destination name & track changes to it.
-        self.inner.destination_unique_name().await?;
-
-        let signal_name = signal_name.try_into().map_err(Into::into)?;
-        let expr = format!(
-            "type='signal',sender='{}',path='{}',interface='{}',member='{}'",
-            self.destination(),
-            self.path(),
-            self.interface(),
-            &signal_name,
-        );
-
-        let msg_handler = SignalHandler::signal(
-            self.path().to_owned(),
-            self.interface().to_owned(),
-            signal_name,
-            expr,
-            move |msg| handler(msg),
-        );
-        let id = self
-            .inner
-            .inner_without_borrows
-            .conn
-            .add_signal_handler(msg_handler)
-            .await?;
-
-        self.inner
-            .inner_without_borrows
-            .sig_handlers
-            .lock()
-            .expect("lock poisoned")
-            .push(id);
-
-        Ok(SignalHandlerId(id))
-    }
-
-    /// Deregister the signal handler with the ID `handler_id`.
-    ///
-    /// This method returns `Ok(true)` if a handler with the id `handler_id` is found and removed;
-    /// `Ok(false)` otherwise.
-    ///
-    /// ### Errors
-    ///
-    /// This method can fail if removal of the relevant match rule on the bus fails. You can
-    /// safely `unwrap` the `Result` if you're certain that associated connection is not a bus
-    /// connection.
-    pub async fn disconnect_signal(&self, handler_id: SignalHandlerId) -> fdo::Result<bool> {
-        self.inner
-            .inner_without_borrows
-            .sig_handlers
-            .lock()
-            .expect("lock poisoned")
-            .retain(|id| *id != handler_id.0);
-        Ok(self
-            .inner
-            .inner_without_borrows
-            .conn
-            .remove_signal_handler(handler_id.0)
-            .await?)
     }
 
     /// Get a stream to receive property changed events.

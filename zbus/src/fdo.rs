@@ -220,7 +220,7 @@ macro_rules! gen_object_manager_proxy {
         /// Proxy for the `org.freedesktop.DBus.ObjectManager` interface.
         ///
         /// **NB:** Changes to properties on existing interfaces are not reported using this interface.
-        /// Please use [`PropertiesProxy::connect_properties_changed`] to monitor changes to properties on
+        /// Please use [`PropertiesProxy::receive_properties_changed`] to monitor changes to properties on
         /// objects.
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.ObjectManager",
