@@ -74,41 +74,33 @@ let mut client = manager.get_client().unwrap();
 // Gotta do this, sorry!
 client.set_desktop_id("org.freedesktop.zbus").unwrap();
 
-let (tx, rx) = std::sync::mpsc::channel();
-client
-    .connect_location_updated(move |_old, new| {
-        let location = LocationProxyBlocking::builder(&conn)
-            .path(new.as_str())
-            .unwrap()
-            .build()
-            .unwrap();
-        println!(
-            "Latitude: {}\nLongitude: {}",
-            location.latitude().unwrap(),
-            location.longitude().unwrap(),
-        );
-        tx.send(()).unwrap();
-    })
-    .unwrap();
+let mut location_updated = client.receive_location_updated().unwrap();
 
 client.start().unwrap();
 
-// Wait till there is a signal that was handled.
-rx.recv().unwrap();
+// Wait for the signal.
+let signal = location_updated.next().unwrap();
+let args = signal.args().unwrap();
+
+let location = LocationProxyBlocking::builder(&conn)
+    .path(args.new())
+    .unwrap()
+    .build()
+    .unwrap();
+println!(
+    "Latitude: {}\nLongitude: {}",
+    location.latitude().unwrap(),
+    location.longitude().unwrap(),
+);
 ```
 
 As you can see, nothing changed in the `dbus_proxy` usage here and the rest largely remained the
-same as well.
-
-### Blocking Signal Streams
-
-Currently zbus does not provide a blocking wrapper for signal stream. However, we intend to fix this
-in the future.
+same as well. One difference that's not obvious is that the blocking API for receiving signals,
+implement [`std::iter::Iterator`] trait instead of [`futrues::stream::Stream`].
 
 ### Watching for properties
 
-Similar to signals, the only blocking API to watch for changes in properties is currently
-callback-based only:
+That's almost the same as receiving signals:
 
 ```rust,no_run
 # use std::{thread::sleep, time::Duration};
@@ -128,12 +120,8 @@ fn main() -> Result<()> {
     let connection = Connection::session()?;
 
     let proxy = SystemdManagerProxyBlocking::new(&connection)?;
-    proxy.connect_log_level_changed(|v| {
-        println!("LogLevel changed: {:?}", v);
-    });
-
-    // Do other things or go to sleep.
-    sleep(Duration::from_secs(60));
+    let v = proxy.receive_log_level_changed().next().unwrap();
+    println!("LogLevel changed: {:?}", v.get());
 
     Ok(())
 }
@@ -217,3 +205,4 @@ fn main() -> Result<(), Box<dyn Error>> {
 [blocking module]: https://docs.rs/zbus/2.0.0-beta.7/zbus/blocking/index.html
 [wkgp]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
 [`blocking` crate]: https://docs.rs/blocking/
+[`futures::stream::Stream`]: https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html
