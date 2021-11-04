@@ -66,7 +66,7 @@ mod utils;
 ///
 /// # Example
 ///
-/// ```
+/// ```no_run
 ///# use std::error::Error;
 /// use zbus_macros::dbus_proxy;
 /// use zbus::{blocking::Connection, Result, fdo, zvariant::Value};
