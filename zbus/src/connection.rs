@@ -602,6 +602,10 @@ impl Connection {
     /// since that is the most typical case. If that is not what you want, you should use
     /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
     /// **after** you've setup your service implementation with the `ObjectServer`).
+    ///
+    /// # Errors
+    ///
+    /// Fails with `zbus::Error::NameTaken` if the name is already owned by another peer.
     pub async fn request_name<'w, W>(&self, well_known_name: W) -> Result<()>
     where
         W: TryInto<WellKnownName<'w>>,
@@ -616,17 +620,22 @@ impl Connection {
             // method).
             self.object_server().await;
 
-            fdo::DBusProxy::new(self)
+            let reply = fdo::DBusProxy::new(self)
                 .await?
                 .request_name(
                     well_known_name.clone(),
                     fdo::RequestNameFlags::ReplaceExisting | fdo::RequestNameFlags::DoNotQueue,
                 )
                 .await?;
-            names.insert(well_known_name.to_owned());
+            if let fdo::RequestNameReply::Exists = reply {
+                Err(Error::NameTaken)
+            } else {
+                names.insert(well_known_name.to_owned());
+                Ok(())
+            }
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
     /// Deregister a previously registered well-known name for this service on the bus.
