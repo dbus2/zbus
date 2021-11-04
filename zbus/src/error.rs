@@ -54,6 +54,8 @@ pub enum Error {
     /// An XML error
     SerdeXml(serde_xml_rs::Error),
     NoBodySignature,
+    /// The requested name was already claimed by another peer.
+    NameTaken,
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -76,6 +78,7 @@ impl PartialEq for Error {
             (Self::InvalidField, Self::InvalidField) => true,
             (Self::Variant(s), Self::Variant(o)) => s == o,
             (Self::Names(s), Self::Names(o)) => s == o,
+            (Self::NameTaken, Self::NameTaken) => true,
             (Error::Io(_), Self::Io(_)) => false,
             #[cfg(feature = "xml")]
             (Self::SerdeXml(_), Self::SerdeXml(_)) => false,
@@ -105,6 +108,7 @@ impl error::Error for Error {
             Error::NoBodySignature => None,
             Error::InvalidField => None,
             Error::MissingField => None,
+            Error::NameTaken => None,
         }
     }
 }
@@ -135,6 +139,7 @@ impl fmt::Display for Error {
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => write!(f, "XML error: {}", e),
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
+            Error::NameTaken => write!(f, "name already taken on the bus"),
         }
     }
 }
