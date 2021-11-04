@@ -70,7 +70,7 @@ mod utils;
 ///# use std::error::Error;
 /// use zbus_macros::dbus_proxy;
 /// use zbus::{blocking::Connection, Result, fdo, zvariant::Value};
-/// use futures_util::future::FutureExt;
+/// use futures_util::stream::StreamExt;
 /// use async_io::block_on;
 ///
 /// #[dbus_proxy(
@@ -116,12 +116,9 @@ mod utils;
 /// let _ = proxy.do_this("foo", 32, &Value::new(true));
 /// let _ = proxy.set_a_property("val");
 ///
-/// let handler_id = proxy.connect_some_signal(|s, u| {
-///     println!("arg1: {}, arg2: {}", s, u);
-/// })?;
-///
-/// assert!(proxy.disconnect_signal(handler_id)?);
-/// assert!(!proxy.disconnect_signal(handler_id)?);
+/// let signal = proxy.receive_some_signal()?.next().unwrap();
+/// let args = signal.args()?;
+/// println!("arg1: {}, arg2: {}", args.arg1(), args.arg2());
 ///
 /// // Now the same again, but asynchronous.
 /// block_on(async move {
@@ -133,14 +130,9 @@ mod utils;
 ///     let _ = proxy.do_this("foo", 32, &Value::new(true)).await;
 ///     let _ = proxy.set_a_property("val").await;
 ///
-///     let handler_id = proxy.connect_some_signal(|s, u| {
-///         println!("arg1: {}, arg2: {}", s, u);
-///
-///         async {}.boxed()
-///     }).await?;
-///
-///     assert!(proxy.disconnect_signal(handler_id).await?);
-///     assert!(!proxy.disconnect_signal(handler_id).await?);
+///     let signal = proxy.receive_some_signal().await?.next().await.unwrap();
+///     let args = signal.args()?;
+///     println!("arg1: {}, arg2: {}", args.arg1(), args.arg2());
 ///
 ///     Ok::<(), zbus::Error>(())
 /// })?;

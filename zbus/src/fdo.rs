@@ -815,10 +815,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[cfg(test)]
 mod tests {
     use crate::{fdo, Error, Message};
-    use event_listener::Event;
     use futures_util::StreamExt;
     use ntest::timeout;
-    use std::{convert::TryInto, future::ready, sync::Arc};
+    use std::{convert::TryInto, future::ready};
     use test_env_log::test;
     use tokio::runtime;
     use zbus_names::WellKnownName;
@@ -840,76 +839,18 @@ mod tests {
 
     #[test]
     #[timeout(15000)]
-    fn signal_connect() {
-        // Register a well-known name with the session bus and ensure we get the appropriate
-        // signals called for that.
-        let conn = crate::blocking::Connection::session().unwrap();
-
-        let owner_change_signaled = Arc::new(Event::new());
-        let owner_change_listener = owner_change_signaled.listen();
-        let name_acquired_signaled = Arc::new(Event::new());
-        let name_acquired_listener = name_acquired_signaled.listen();
-
-        let proxy = crate::blocking::fdo::DBusProxy::new(&conn).unwrap();
-
-        let well_known = "org.freedesktop.zbus.FdoSignalConnectTest";
-        let mut unique_name = Some(conn.unique_name().unwrap().clone());
-        proxy
-            .connect_name_owner_changed(move |name, _, new_owner| {
-                if name != well_known {
-                    // Meant for the other testcase then
-                    return;
-                }
-                if let Some(unique) = unique_name.take() {
-                    assert_eq!(*new_owner.as_ref().unwrap(), *unique);
-                }
-                owner_change_signaled.notify(1);
-            })
-            .unwrap();
-        // `NameAcquired` is emitted twice, first when the unique name is assigned on
-        // connection and secondly after we ask for a specific name.
-        proxy
-            .connect_name_acquired(move |name| {
-                if name == well_known {
-                    name_acquired_signaled.notify(1);
-                }
-            })
-            .unwrap();
-
-        let well_known: WellKnownName<'static> = well_known.try_into().unwrap();
-        proxy
-            .request_name(
-                well_known.as_ref(),
-                fdo::RequestNameFlags::ReplaceExisting.into(),
-            )
-            .unwrap();
-
-        owner_change_listener.wait();
-        name_acquired_listener.wait();
-
-        let result = proxy.release_name(well_known.as_ref()).unwrap();
-        assert_eq!(result, fdo::ReleaseNameReply::Released);
-
-        let result = proxy.release_name(well_known).unwrap();
-        assert_eq!(result, fdo::ReleaseNameReply::NonExistent);
-    }
-
-    #[test]
-    #[timeout(15000)]
-    fn signal_stream() {
+    fn signal() {
         // Multi-threaded scheduler.
-        runtime::Runtime::new()
-            .unwrap()
-            .block_on(test_signal_stream());
+        runtime::Runtime::new().unwrap().block_on(test_signal());
 
         // single-threaded scheduler.
         runtime::Builder::new_current_thread()
             .build()
             .unwrap()
-            .block_on(test_signal_stream());
+            .block_on(test_signal());
     }
 
-    async fn test_signal_stream() {
+    async fn test_signal() {
         let conn = crate::Connection::session().await.unwrap();
 
         {
@@ -984,9 +925,12 @@ mod tests {
         let result = proxy.release_name(well_known).await.unwrap();
         assert_eq!(result, fdo::ReleaseNameReply::NonExistent);
 
-        let _stream = proxy.receive_features_changed().await.filter_map(|changed| async move {
-            let v = changed.get().await.ok();
-            dbg!(v)
-        });
+        let _stream = proxy
+            .receive_features_changed()
+            .await
+            .filter_map(|changed| async move {
+                let v = changed.get().await.ok();
+                dbg!(v)
+            });
     }
 }

@@ -1085,24 +1085,22 @@ impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
 
 #[cfg(test)]
 mod tests {
-    use event_listener::Event;
     use zbus_names::UniqueName;
 
     use super::*;
     use async_io::block_on;
-    use futures_util::{future::FutureExt, join};
     use ntest::timeout;
-    use std::{future::ready, sync::Arc};
+    use std::future::ready;
     use test_env_log::test;
     use zvariant::Optional;
 
     #[test]
     #[timeout(15000)]
-    fn signal_stream() {
-        block_on(test_signal_stream()).unwrap();
+    fn signal() {
+        block_on(test_signal()).unwrap();
     }
 
-    async fn test_signal_stream() -> Result<()> {
+    async fn test_signal() -> Result<()> {
         use futures_util::StreamExt;
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
@@ -1173,101 +1171,6 @@ mod tests {
 
         let acquired_signal = acquired_signal.0.unwrap();
         assert_eq!(acquired_signal.body::<&str>().unwrap(), well_known);
-
-        Ok(())
-    }
-
-    #[test]
-    #[timeout(15000)]
-    fn signal_connect() {
-        block_on(test_signal_connect()).unwrap();
-    }
-
-    async fn test_signal_connect() -> Result<()> {
-        // Register a well-known name with the session bus and ensure we get the appropriate
-        // signals called for that.
-        let conn = Connection::session().await?;
-
-        let owner_change_signaled = Arc::new(Event::new());
-        let owner_change_listener = owner_change_signaled.listen();
-
-        let name_acquired_signaled = Arc::new(Event::new());
-        let name_acquired_listener = name_acquired_signaled.listen();
-
-        let name_acquired_signaled2 = Arc::new(Event::new());
-        let name_acquired_listener2 = name_acquired_signaled2.listen();
-
-        let proxy = fdo::DBusProxy::new(&conn).await?;
-        let well_known = "org.freedesktop.zbus.async.ProxySignalConnectTest";
-        let unique_name = conn.unique_name().unwrap().clone();
-        let name_owner_changed_id = {
-            proxy
-                .connect_signal("NameOwnerChanged", move |m| {
-                    let unique_name = unique_name.clone();
-                    let signaled = owner_change_signaled.clone();
-
-                    async move {
-                        let (name, _, new_owner) = m
-                            .body::<(
-                                BusName<'_>,
-                                Optional<UniqueName<'_>>,
-                                Optional<UniqueName<'_>>,
-                            )>()
-                            .unwrap();
-                        if name != well_known {
-                            // Meant for the other testcase then
-                            return;
-                        }
-                        assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
-                        signaled.notify(1);
-                    }
-                    .boxed()
-                })
-                .await?
-        };
-        // `NameAcquired` is emitted twice, first when the unique name is assigned on
-        // connection and secondly after we ask for a specific name.
-        let name_acquired_id = proxy
-            .connect_signal("NameAcquired", move |m| {
-                let signaled = name_acquired_signaled.clone();
-                async move {
-                    if m.body::<&str>().unwrap() == well_known {
-                        signaled.notify(1);
-                    }
-                }
-                .boxed()
-            })
-            .await?;
-        // Test multiple handers for the same signal
-        let name_acquired_id2 = proxy
-            .connect_signal("NameAcquired", move |m| {
-                let signaled = name_acquired_signaled2.clone();
-                async move {
-                    if m.body::<&str>().unwrap() == well_known {
-                        signaled.notify(1);
-                    }
-                }
-                .boxed()
-            })
-            .await?;
-
-        crate::blocking::fdo::DBusProxy::new(&crate::blocking::Connection::from(conn))?
-            .request_name(
-                well_known.try_into()?,
-                fdo::RequestNameFlags::ReplaceExisting.into(),
-            )
-            .unwrap();
-
-        join!(
-            owner_change_listener,
-            name_acquired_listener,
-            name_acquired_listener2,
-        );
-
-        assert!(proxy.disconnect_signal(name_owner_changed_id).await?);
-        assert!(!proxy.disconnect_signal(name_owner_changed_id).await?);
-        assert!(proxy.disconnect_signal(name_acquired_id).await?);
-        assert!(proxy.disconnect_signal(name_acquired_id2).await?);
 
         Ok(())
     }
