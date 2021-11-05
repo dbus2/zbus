@@ -91,7 +91,7 @@ fn impl_enum(
         // Ensure all variants of the enum are unit type
         match variant.fields {
             Fields::Unit => (),
-            _ => panic!("`{}` must be a unit variant", variant.ident.to_string()),
+            _ => panic!("`{}` must be a unit variant", variant.ident),
         }
     }
 
