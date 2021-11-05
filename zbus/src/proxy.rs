@@ -656,19 +656,19 @@ impl<'a> Proxy<'a> {
     }
 
     /// Create a stream for signal named `signal_name`.
-    pub async fn receive_signal<M>(&self, signal_name: M) -> Result<SignalStream<'_>>
+    pub async fn receive_signal<'m: 'a, M>(&self, signal_name: M) -> Result<SignalStream<'a>>
     where
-        M: TryInto<MemberName<'static>>,
+        M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
     {
         let signal_name = signal_name.try_into().map_err(Into::into)?;
         self.receive_signals(Some(signal_name)).await
     }
 
-    async fn receive_signals(
+    async fn receive_signals<'m: 'a>(
         &self,
-        signal_name: Option<MemberName<'static>>,
-    ) -> Result<SignalStream<'_>> {
+        signal_name: Option<MemberName<'m>>,
+    ) -> Result<SignalStream<'a>> {
         // Time to try & resolve the destination name & track changes to it.
         let conn = self.inner.inner_without_borrows.conn.clone();
         let stream = conn.msg_receiver.activate_cloned();
@@ -703,7 +703,7 @@ impl<'a> Proxy<'a> {
 
         Ok(SignalStream {
             stream,
-            proxy: self,
+            proxy: self.clone(),
             expr,
             src_bus_name,
             src_query,
@@ -714,7 +714,7 @@ impl<'a> Proxy<'a> {
     }
 
     /// Create a stream for all signals emitted by this service.
-    pub async fn receive_all_signals(&self) -> Result<SignalStream<'_>> {
+    pub async fn receive_all_signals(&self) -> Result<SignalStream<'a>> {
         self.receive_signals(None).await
     }
 
@@ -754,12 +754,12 @@ impl<'a> Proxy<'a> {
 #[derive(Debug)]
 pub struct SignalStream<'a> {
     stream: Receiver<Arc<Message>>,
-    proxy: &'a Proxy<'a>,
+    proxy: Proxy<'a>,
     expr: String,
     src_bus_name: Option<WellKnownName<'a>>,
     src_query: Option<u32>,
     src_unique_name: Option<UniqueName<'static>>,
-    member: Option<MemberName<'static>>,
+    member: Option<MemberName<'a>>,
     last_seq: MessageSequence,
 }
 
