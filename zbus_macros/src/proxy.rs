@@ -118,6 +118,9 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             default_service.as_deref(),
             &proxy_name,
             true,
+            // Signal args structs are shared between the two proxies so always generate it for
+            // async proxy only unless async proxy generation is disabled.
+            !gen_async,
         )
     } else {
         quote! {}
@@ -131,6 +134,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             default_service.as_deref(),
             &proxy_name,
             false,
+            true,
         )
     } else {
         quote! {}
@@ -150,6 +154,7 @@ pub fn create_proxy(
     default_service: Option<&str>,
     proxy_name: &str,
     blocking: bool,
+    gen_sig_args: bool,
 ) -> TokenStream {
     let zbus = zbus_path();
 
@@ -195,8 +200,14 @@ pub fn create_proxy(
                 has_properties = true;
                 gen_proxy_property(&name, &method_name, m, &async_opts)
             } else if is_signal {
-                let (method, types) =
-                    gen_proxy_signal(&proxy_name, &name, &method_name, m, &async_opts);
+                let (method, types) = gen_proxy_signal(
+                    &proxy_name,
+                    &name,
+                    &method_name,
+                    m,
+                    &async_opts,
+                    gen_sig_args,
+                );
                 stream_types.extend(types);
 
                 method
@@ -488,23 +499,30 @@ fn gen_proxy_property(
             None
         };
 
-        let receive = if *blocking {
-            quote! {}
+        let (proxy_name, prop_stream) = if *blocking {
+            (
+                "zbus::blocking::Proxy",
+                quote! { #zbus::blocking::PropertyIterator },
+            )
         } else {
-            let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
-            let receive = format_ident!("receive_{}_changed", method_name);
-            let gen_doc = format!("Create a stream for the `{}` property changes. \
-                                   This is a convenient wrapper around [`zbus::Proxy::receive_property_stream`].",
-                                  property_name);
-            quote! {
-                #[doc = #gen_doc]
-                pub async fn #receive#ty_generics(
-                    &self
-                ) -> #zbus::PropertyStream<'static, <#ret_type as #zbus::ResultAdapter>::Ok>
-                #where_clause
-                {
-                    self.0.receive_property_stream(#property_name).await
-                }
+            ("zbus::Proxy", quote! { #zbus::PropertyStream })
+        };
+
+        let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
+        let receive = format_ident!("receive_{}_changed", method_name);
+        let gen_doc = format!(
+            "Create a stream for the `{}` property changes. \
+                This is a convenient wrapper around [`{}::receive_property_changed`].",
+            property_name, proxy_name
+        );
+        let receive = quote! {
+            #[doc = #gen_doc]
+            pub #usage fn #receive#ty_generics(
+                &self
+            ) -> #prop_stream<'_, <#ret_type as #zbus::ResultAdapter>::Ok>
+            #where_clause
+            {
+                self.0.receive_property_changed(#property_name)#wait
             }
         };
 
@@ -513,39 +531,6 @@ fn gen_proxy_property(
             " Get the cached value of the `{}` property, or `None` if the property is not cached.",
             property_name,
         );
-
-        let connect = format_ident!("connect_{}_changed", method_name);
-        let handler = if *blocking {
-            parse_quote! { __H: FnMut(Option<&#zbus::zvariant::Value<'_>>) + Send + 'static }
-        } else {
-            parse_quote! {
-                for<'v> __H: FnMut(Option<&'v #zbus::zvariant::Value<'_>>) ->
-                    #zbus::export::futures_core::future::BoxFuture<'v, ()> + Send + 'static
-            }
-        };
-        let (proxy_method, link) = if *blocking {
-            (
-                "zbus::Proxy::connect_property_changed",
-                "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_property_changed",
-            )
-        } else {
-            (
-                "zbus::Proxy::connect_property_changed",
-                "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_property_changed",
-            )
-        };
-        let gen_doc = format!(
-            " Connect the handler for the `{}` property. This is a convenient wrapper around [`{}`]({}).",
-            property_name, proxy_method, link,
-        );
-        let mut generics = m.sig.generics.clone();
-        generics.params.push(parse_quote!(__H));
-        {
-            let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-            where_clause.predicates.push(handler);
-        }
-
-        let (_, ty_generics, where_clause) = generics.split_for_impl();
 
         quote! {
             #(#doc)*
@@ -560,16 +545,6 @@ fn gen_proxy_property(
                 <#ret_type as #zbus::ResultAdapter>::Err>
             {
                 self.0.cached_property(#property_name).map_err(::std::convert::Into::into)
-            }
-
-            #[doc = #gen_doc]
-            pub #usage fn #connect#ty_generics(
-                &self,
-                mut handler: __H,
-            ) -> #zbus::Result<#zbus::PropertyChangedHandlerId>
-            #where_clause,
-            {
-                self.0.connect_property_changed(#property_name, handler)#wait
             }
 
             #receive
@@ -597,6 +572,7 @@ fn gen_proxy_signal(
     snake_case_name: &str,
     m: &TraitItemMethod,
     async_opts: &AsyncOpts,
+    gen_sig_args: bool,
 ) -> (TokenStream, TokenStream) {
     let AsyncOpts {
         usage,
@@ -605,7 +581,6 @@ fn gen_proxy_signal(
     } = async_opts;
     let zbus = zbus_path();
     let doc = get_doc_attrs(&m.attrs);
-    let method = format_ident!("connect_{}", snake_case_name);
     let input_types: Vec<Box<Type>> = m
         .sig
         .inputs
@@ -636,140 +611,167 @@ fn gen_proxy_signal(
         .map(|(i, _)| Literal::usize_unsuffixed(i))
         .collect();
 
-    let (receive_signal, stream_types) = if !async_opts.blocking {
-        let mut generics = m.sig.generics.clone();
-        let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-        for param in generics
-            .params
-            .iter()
-            .filter(|a| matches!(a, syn::GenericParam::Type(_)))
-        {
-            where_clause
+    let mut generics = m.sig.generics.clone();
+    let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
+    for param in generics
+        .params
+        .iter()
+        .filter(|a| matches!(a, syn::GenericParam::Type(_)))
+    {
+        where_clause
                 .predicates
                 .push(parse_quote!(#param: #zbus::export::serde::de::Deserialize<'s> + #zbus::zvariant::Type + ::std::fmt::Debug));
-        }
-        generics.params.push(parse_quote!('s));
-        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    }
+    generics.params.push(parse_quote!('s));
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-        let (receiver_name, stream_name, signal_args, signal_name_ident) = (
-            format_ident!("receive_{}", snake_case_name),
-            format_ident!("{}Stream", signal_name),
-            format_ident!("{}Args", signal_name),
-            format_ident!("{}", signal_name),
-        );
+    let (proxy_path, receive_signal_link, trait_name, trait_link, signal_type) = if *blocking {
+        (
+            "zbus::blocking::Proxy",
+            "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.receive_signal",
+            "Iterator",
+            "https://doc.rust-lang.org/std/iter/trait.Iterator.html",
+            quote! { blocking::SignalIterator },
+        )
+    } else {
+        (
+            "zbus::Proxy",
+            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.receive_signal",
+            "Stream",
+            "https://docs.rs/futures/0.3.15/futures/stream/trait.Stream.html",
+            quote! { SignalStream },
+        )
+    };
+    let (receiver_name, stream_name, signal_args, signal_name_ident) = (
+        format_ident!("receive_{}", snake_case_name),
+        format_ident!("{}{}", signal_name, trait_name),
+        format_ident!("{}Args", signal_name),
+        format_ident!("{}", signal_name),
+    );
 
-        let receive_signal_link =
-            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.receive_signal";
-        let receive_gen_doc = format!(
-            "Create a stream that receives `{}` signals.\n\
+    let receive_gen_doc = format!(
+        "Create a stream that receives `{}` signals.\n\
             \n\
-            This a convenient wrapper around [`zbus::Proxy::receive_signal`]({}).",
-            signal_name, receive_signal_link,
-        );
-        let receive_signal = quote! {
-            #[doc = #receive_gen_doc]
-            #(#doc)*
-            pub async fn #receiver_name(&self) -> #zbus::Result<#stream_name<'_>>
-            {
-                self.receive_signal(#signal_name).await.map(#stream_name)
-            }
-        };
+            This a convenient wrapper around [`{}::receive_signal`]({}).",
+        signal_name, proxy_path, receive_signal_link,
+    );
+    let receive_signal = quote! {
+        #[doc = #receive_gen_doc]
+        #(#doc)*
+        pub #usage fn #receiver_name(&self) -> #zbus::Result<#stream_name<'_>>
+        {
+            self.receive_signal(#signal_name)#wait.map(#stream_name)
+        }
+    };
 
-        let stream_gen_doc = format!(
-            "A [`stream::Stream`] implementation that yields [`{}`] signals.\n\
+    let stream_gen_doc = format!(
+        "A [`{}`] implementation that yields [`{}`] signals.\n\
             \n\
             Use [`{}::receive_{}`] to create an instance of this type.\n\
             \n\
-            [`stream::Stream`]: https://docs.rs/futures/0.3.15/futures/stream/trait.Stream.html",
-            signal_name, proxy_name, snake_case_name,
-        );
-        let signal_args_gen_doc = format!("`{}` signal arguments.", signal_name);
-        let args_struct_gen_doc = format!("A `{}` signal.", signal_name);
-        let args_impl = if args.is_empty() {
-            quote!()
+            [`{}`]: {}",
+        trait_name, signal_name, proxy_name, snake_case_name, trait_name, trait_link,
+    );
+    let signal_args_gen_doc = format!("`{}` signal arguments.", signal_name);
+    let args_struct_gen_doc = format!("A `{}` signal.", signal_name);
+    let args_struct_decl = if gen_sig_args {
+        quote! {
+            #[doc = #args_struct_gen_doc]
+            pub struct #signal_name_ident(::std::sync::Arc<#zbus::Message>);
+        }
+    } else {
+        quote!()
+    };
+    let args_impl = if args.is_empty() || !gen_sig_args {
+        quote!()
+    } else {
+        let arg_fields_init = if args.len() == 1 {
+            quote! { #(#args)*: args }
         } else {
-            let arg_fields_init = if args.len() == 1 {
-                quote! { #(#args)*: args }
-            } else {
-                quote! { #(#args: args.#args_nth),* }
-            };
-            quote! {
-                impl #signal_name_ident {
-                    /// Retrieve the signal arguments.
-                    pub fn args#ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
-                        #where_clause
-                    {
-                        self.0.body::<(#(#input_types),*)>()
-                            .map_err(::std::convert::Into::into)
-                            .map(|args| {
-                                #signal_args {
-                                    phantom: ::std::marker::PhantomData,
-                                    #arg_fields_init
-                                }
-                            })
-                    }
-                }
+            quote! { #(#args: args.#args_nth),* }
+        };
 
-                impl ::std::ops::Deref for #signal_name_ident {
-                    type Target = #zbus::Message;
-
-                    fn deref(&self) -> &#zbus::Message {
-                        &self.0
-                    }
-                }
-
-                impl ::std::convert::AsRef<::std::sync::Arc<#zbus::Message>> for #signal_name_ident {
-                    fn as_ref(&self) -> &::std::sync::Arc<#zbus::Message> {
-                        &self.0
-                    }
-                }
-
-                impl ::std::convert::AsRef<#zbus::Message> for #signal_name_ident {
-                    fn as_ref(&self) -> &#zbus::Message {
-                        &self.0
-                    }
-                }
-
-                #[doc = #signal_args_gen_doc]
-                pub struct #signal_args #ty_generics {
-                    phantom: std::marker::PhantomData<&'s ()>,
-                    #(
-                        pub #args: #input_types_s
-                     ),*
-                }
-
-                impl #impl_generics #signal_args #ty_generics
-                    #where_clause
+        quote! {
+            impl #signal_name_ident {
+                /// Retrieve the signal arguments.
+                pub fn args#ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
+                #where_clause
                 {
-                    #(
-                        pub fn #args(&self) -> &#input_types_s {
-                            &self.#args
-                        }
-                     )*
-                }
+                    self.0.body::<(#(#input_types),*)>()
+                        .map_err(::std::convert::Into::into)
+                        .map(|args| {
+                            #signal_args {
+                                phantom: ::std::marker::PhantomData,
+                                #arg_fields_init
+                            }
+                        })
+               }
+            }
 
-                impl #impl_generics std::fmt::Debug for #signal_args #ty_generics
-                    #where_clause
-                {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        f.debug_struct(#signal_name)
-                        #(
-                         .field(stringify!(#args), &self.#args)
-                        )*
-                         .finish()
-                    }
+            impl ::std::ops::Deref for #signal_name_ident {
+                type Target = #zbus::Message;
+
+                fn deref(&self) -> &#zbus::Message {
+                    &self.0
                 }
             }
-        };
-        let stream_types = quote! {
-            #[doc = #stream_gen_doc]
-            #[derive(Debug)]
-            pub struct #stream_name<'a>(#zbus::SignalStream<'a>);
 
-            #zbus::export::static_assertions::assert_impl_all!(
-                #stream_name<'_>: ::std::marker::Send, ::std::marker::Unpin
-            );
+            impl ::std::convert::AsRef<::std::sync::Arc<#zbus::Message>> for #signal_name_ident {
+                fn as_ref(&self) -> &::std::sync::Arc<#zbus::Message> {
+                    &self.0
+                }
+            }
 
+            impl ::std::convert::AsRef<#zbus::Message> for #signal_name_ident {
+                fn as_ref(&self) -> &#zbus::Message {
+                    &self.0
+                }
+            }
+
+            #[doc = #signal_args_gen_doc]
+            pub struct #signal_args #ty_generics {
+                phantom: std::marker::PhantomData<&'s ()>,
+                #(
+                    pub #args: #input_types_s
+                 ),*
+            }
+
+            impl #impl_generics #signal_args #ty_generics
+                #where_clause
+            {
+                #(
+                    pub fn #args(&self) -> &#input_types_s {
+                        &self.#args
+                    }
+                 )*
+            }
+
+            impl #impl_generics std::fmt::Debug for #signal_args #ty_generics
+                #where_clause
+            {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    f.debug_struct(#signal_name)
+                    #(
+                     .field(stringify!(#args), &self.#args)
+                    )*
+                     .finish()
+                }
+            }
+        }
+    };
+    let stream_impl = if *blocking {
+        quote! {
+            impl ::std::iter::Iterator for #stream_name<'_> {
+                type Item = #signal_name_ident;
+
+                fn next(&mut self) -> ::std::option::Option<Self::Item> {
+                    ::std::iter::Iterator::next(&mut self.0)
+                        .map(#signal_name_ident)
+                }
+            }
+        }
+    } else {
+        quote! {
             impl #zbus::export::futures_core::stream::Stream for #stream_name<'_> {
                 type Item = #signal_name_ident;
 
@@ -808,133 +810,48 @@ fn gen_proxy_signal(
                     self.0.is_terminated()
                 }
             }
+        }
+    };
+    let stream_types = quote! {
+        #[doc = #stream_gen_doc]
+        pub struct #stream_name<'a>(#zbus::#signal_type<'a>);
 
-            impl<'a> #stream_name<'a> {
-                /// Consumes `self`, returning the underlying `zbus::SignalStream`.
-                pub fn into_inner(self) -> #zbus::SignalStream<'a> {
-                    self.0
-                }
+        #zbus::export::static_assertions::assert_impl_all!(
+            #stream_name<'_>: ::std::marker::Send, ::std::marker::Unpin
+        );
 
-                /// The reference to the underlying `zbus::SignalStream`.
-                pub fn inner(&self) -> & #zbus::SignalStream<'a> {
-                    &self.0
-                }
+        impl<'a> #stream_name<'a> {
+            /// Consumes `self`, returning the underlying `zbus::#signal_type`.
+            pub fn into_inner(self) -> #zbus::#signal_type<'a> {
+                self.0
             }
 
-            impl<'a> std::ops::Deref for #stream_name<'a> {
-                type Target = #zbus::SignalStream<'a>;
-
-                fn deref(&self) -> &Self::Target {
-                    &self.0
-                }
+            /// The reference to the underlying `zbus::#signal_type`.
+            pub fn inner(&self) -> & #zbus::#signal_type<'a> {
+                &self.0
             }
+        }
 
-            impl<'a> ::std::ops::DerefMut for #stream_name<'a> {
-                fn deref_mut(&mut self) -> &mut Self::Target {
-                    &mut self.0
-                }
+        impl<'a> std::ops::Deref for #stream_name<'a> {
+            type Target = #zbus::#signal_type<'a>;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
             }
-
-            #[doc = #args_struct_gen_doc]
-            #[derive(Debug, Clone)]
-            pub struct #signal_name_ident(::std::sync::Arc<#zbus::Message>);
-
-            #args_impl
-        };
-
-        (receive_signal, stream_types)
-    } else {
-        (quote! {}, quote! {})
-    };
-
-    let input_types_s: Vec<_> = SetLifetimeS
-        .fold_signature(m.sig.clone())
-        .inputs
-        .iter()
-        .filter_map(|arg| match arg {
-            FnArg::Typed(p) => Some(p.ty.clone()),
-            _ => None,
-        })
-        .collect();
-
-    let handler = if *blocking {
-        quote! { ::std::ops::FnMut(#(#input_types),*) }
-    } else if input_types == input_types_s {
-        quote! {
-            ::std::ops::FnMut(
-                #(#input_types),*
-            ) -> #zbus::export::futures_core::future::BoxFuture<'static, ()>
-        }
-    } else {
-        quote! {
-            for<'s>
-            ::std::ops::FnMut(
-                #(#input_types_s),*
-            ) -> #zbus::export::futures_core::future::BoxFuture<'s, ()>
-        }
-    };
-
-    let (proxy_method, link) = if *blocking {
-        (
-            "zbus::Proxy::connect_signal",
-            "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.connect_signal",
-        )
-    } else {
-        (
-            "zbus::Proxy::connect_signal",
-            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.connect_signal",
-        )
-    };
-    let gen_doc = format!(
-        " Connect the handler for the `{}` signal. This is a convenient wrapper around [`{}`]({}).",
-        signal_name, proxy_method, link,
-    );
-
-    let mut generics = m.sig.generics.clone();
-    {
-        let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-        for param in generics
-            .params
-            .iter()
-            .filter(|a| matches!(a, syn::GenericParam::Type(_)))
-        {
-            where_clause
-                .predicates
-                .push(parse_quote!(#param: #zbus::export::serde::de::DeserializeOwned + #zbus::zvariant::Type + ::std::fmt::Debug));
-        }
-        where_clause
-            .predicates
-            .push(parse_quote!(__H: #handler + ::std::marker::Send + 'static));
-    }
-    generics.params.push(parse_quote!(__H));
-
-    let do_nothing = if *blocking {
-        quote!(())
-    } else {
-        quote!(Box::pin(async {}))
-    };
-
-    let (_, ty_generics, where_clause) = generics.split_for_impl();
-    let methods = quote! {
-        #[doc = #gen_doc]
-        #(#doc)*
-        pub #usage fn #method#ty_generics(
-            &self,
-            mut handler: __H,
-        ) -> #zbus::fdo::Result<#zbus::SignalHandlerId>
-        #where_clause,
-        {
-            self.0.connect_signal(#signal_name, move |m| {
-                match m.body() {
-                    Ok((#(#args),*)) => handler(#(#args),*),
-                    // TODO log errors, or allow a fallback?
-                    Err(_) => #do_nothing,
-                }
-            })#wait
         }
 
-        #receive_signal
+        impl ::std::ops::DerefMut for #stream_name<'_> {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+
+        #stream_impl
+
+        #args_struct_decl
+
+        #args_impl
     };
 
-    (methods, stream_types)
+    (receive_signal, stream_types)
 }

@@ -12,11 +12,11 @@ use crate::{blocking::Connection, Message, Result};
 /// over this type until it's consumed or dropped.
 #[derive(derivative::Derivative, Clone)]
 #[derivative(Debug)]
-pub struct MessageStream(pub(crate) crate::MessageStream);
+pub struct MessageIterator(pub(crate) crate::MessageStream);
 
-assert_impl_all!(MessageStream: Send, Sync, Unpin);
+assert_impl_all!(MessageIterator: Send, Sync, Unpin);
 
-impl MessageStream {
+impl MessageIterator {
     /// Get a reference to the underlying async message stream.
     pub fn inner(&self) -> &crate::MessageStream {
         &self.0
@@ -28,7 +28,7 @@ impl MessageStream {
     }
 }
 
-impl Iterator for MessageStream {
+impl Iterator for MessageIterator {
     type Item = Result<Arc<Message>>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -36,7 +36,7 @@ impl Iterator for MessageStream {
     }
 }
 
-impl From<Connection> for MessageStream {
+impl From<Connection> for MessageIterator {
     fn from(conn: Connection) -> Self {
         let azync = crate::MessageStream::from(conn.into_inner());
 
@@ -44,7 +44,7 @@ impl From<Connection> for MessageStream {
     }
 }
 
-impl From<&Connection> for MessageStream {
+impl From<&Connection> for MessageIterator {
     fn from(conn: &Connection) -> Self {
         Self::from(conn.clone())
     }

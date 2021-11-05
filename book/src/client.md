@@ -156,8 +156,8 @@ helpers.
 ### Signals
 
 Signals are like methods, except they don't expect a reply. They are typically emitted by services
-to notify interested peers of any changes to the state of the service. zbus provides you with an API
-to register signal handler functions, and to receive and call them.
+to notify interested peers of any changes to the state of the service. zbus provides you a
+[`Stream`]-based API for receiving signals.
 
 Let's look at this API in action, with an example where we get our location from
 [Geoclue](https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md):
@@ -165,7 +165,7 @@ Let's look at this API in action, with an example where we get our location from
 ```rust,no_run
 use zbus::{Connection, dbus_proxy, Result};
 use zvariant::ObjectPath;
-use futures_util::future::FutureExt;
+use futures_util::stream::StreamExt;
 
 #[dbus_proxy(
     default_service = "org.freedesktop.GeoClue2",
@@ -212,114 +212,19 @@ async fn main() -> Result<()> {
     // Gotta do this, sorry!
     client.set_desktop_id("org.freedesktop.zbus").await?;
 
-    let (tx, rx) = std::sync::mpsc::channel();
-    client
-        .connect_location_updated(move |_old, new| {
-            let new = new.to_string();
-            let conn = conn.clone();
-            let tx = tx.clone();
-
-            async move {
-                let location = LocationProxy::builder(&conn)
-                    .path(new).unwrap()
-                    .build()
-                    .await
-                    .unwrap();
-                println!(
-                    "Latitude: {}\nLongitude: {}",
-                    location.latitude().await.unwrap(),
-                    location.longitude().await.unwrap(),
-                );
-                tx.send(()).unwrap();
-            }
-            .boxed()
-        })
-        .await?;
-
-    client.start().await?;
-
-    // Wait till there is a signal that was handled.
-    rx.recv().unwrap();
-
-    Ok(())
-}
-```
-
-While the Geoclue's D-Bus API is a bit involved, we still ended-up with a not-so-complicated (~60
-LOC) code for getting our location.
-
-#### Signal Streams: A better way
-
-While you can connect your callbacks to receive signals (as we saw in the previous example), zbus
-also provides another method of receiving signals with better ergonomics for use in typical
-asynchronous Rust code: signal streams. Let's change the previous example to make use of signal
-streams to see how that works:
-
-```rust,no_run
-// Instead of `futures_util::future::FutureExt`
-use futures_util::stream::StreamExt;
-
-# use zbus::{Connection, dbus_proxy, Result};
-# use zvariant::ObjectPath;
-#
-# #[dbus_proxy(
-#     default_service = "org.freedesktop.GeoClue2",
-#     interface = "org.freedesktop.GeoClue2.Manager",
-#     default_path = "/org/freedesktop/GeoClue2/Manager"
-# )]
-# trait Manager {
-#     #[dbus_proxy(object = "Client")]
-#     fn get_client(&self);
-# }
-#
-# #[dbus_proxy(
-#     default_service = "org.freedesktop.GeoClue2",
-#     interface = "org.freedesktop.GeoClue2.Client"
-# )]
-# trait Client {
-#     fn start(&self) -> Result<()>;
-#     fn stop(&self) -> Result<()>;
-#
-#     #[dbus_proxy(property)]
-#     fn set_desktop_id(&mut self, id: &str) -> Result<()>;
-#
-#     #[dbus_proxy(signal)]
-#     fn location_updated(&self, old: ObjectPath<'_>, new: ObjectPath<'_>) -> Result<()>;
-# }
-#
-# #[dbus_proxy(
-#     default_service = "org.freedesktop.GeoClue2",
-#     interface = "org.freedesktop.GeoClue2.Location"
-# )]
-# trait Location {
-#     #[dbus_proxy(property)]
-#     fn latitude(&self) -> Result<f64>;
-#     #[dbus_proxy(property)]
-#     fn longitude(&self) -> Result<f64>;
-# }
-#
-# #[async_std::main]
-# async fn main() -> Result<()> {
-#     let conn = Connection::system().await?;
-#     let manager = ManagerProxy::new(&conn).await?;
-#     let mut client = manager.get_client().await?;
-#
-#   client.set_desktop_id("org.freedesktop.zbus").await?;
-#
-    // Everything else remains the same before this point.
     let props = zbus::fdo::PropertiesProxy::builder(&conn)
         .destination("org.freedesktop.GeoClue2")?
         .path(client.path())?
         .build()
         .await?;
-    let mut props_changed_stream = props.receive_properties_changed().await?;
-    let mut location_updated_stream = client.receive_location_updated().await?;
+    let mut props_changed = props.receive_properties_changed().await?;
+    let mut location_updated = client.receive_location_updated().await?;
 
     client.start().await?;
 
     futures_util::try_join!(
         async {
-            while let Some(signal) = props_changed_stream.next().await {
+            while let Some(signal) = props_changed.next().await {
                 let args = signal.args()?;
 
                 for (name, value) in args.changed_properties().iter() {
@@ -330,7 +235,7 @@ use futures_util::stream::StreamExt;
             Ok::<(), zbus::Error>(())
         },
         async {
-            while let Some(signal) = location_updated_stream.next().await {
+            while let Some(signal) = location_updated.next().await {
                 let args = signal.args()?;
 
                 let location = LocationProxy::builder(&conn)
@@ -348,10 +253,13 @@ use futures_util::stream::StreamExt;
             Ok(())
         }
     )?;
-#
-#   Ok(())
-# }
+
+   Ok(())
+}
 ```
+
+While the Geoclue's D-Bus API is a bit involved, we still ended-up with a not-so-complicated (~100
+LOC) code for getting our location.
 
 ### Properties
 
@@ -428,11 +336,10 @@ Environment variables:
 
 By default, the proxy will cache the properties and watch for changes.
 
-To be notified of a property change, you have a choice of callback-based or stream API, just like
-signals. The methods are named after the properties' names: `connect_<prop_name>_changed` and
-`receive_<prop_name>_changed()`, respectively.
+To be notified of a property change, you use a stream API, just like for receiving signals. The
+methods are named after the properties' names: `receive_<prop_name>_changed()`.
 
-Here is an example of the stream-based API in action:
+Here is an example:
 
 ```rust,no_run
 # use zbus::{Connection, dbus_proxy, Result};
@@ -455,41 +362,8 @@ Here is an example of the stream-based API in action:
     let proxy = SystemdManagerProxy::new(&connection).await?;
     let mut stream = proxy.receive_log_level_changed().await;
     while let Some(v) = stream.next().await {
-        println!("LogLevel changed: {:?}", v);
+        println!("LogLevel changed: {:?}", v.get().await);
     }
-#
-#   Ok(())
-# }
-```
-
-and the equivalent callback-based API in action:
-
-```rust,no_run
-# use std::{thread::sleep, time::Duration};
-# use futures_util::future::FutureExt;
-# use zbus::{Connection, dbus_proxy, Result};
-#
-# #[dbus_proxy(
-#    interface = "org.freedesktop.systemd1.Manager",
-#    default_service = "org.freedesktop.systemd1",
-#    default_path = "/org/freedesktop/systemd1"
-# )]
-# trait SystemdManager {
-#    #[dbus_proxy(property)]
-#    fn log_level(&self) -> zbus::Result<String>;
-# }
-#
-# #[async_std::main]
-# async fn main() -> Result<()> {
-#    let connection = Connection::session().await?;
-#
-#    let proxy = SystemdManagerProxy::new(&connection).await?;
-    proxy.connect_log_level_changed(|v| async move {
-        println!("LogLevel changed: {:?}", v);
-    }.boxed());
-
-    // Do other things or go to sleep.
-    sleep(Duration::from_secs(60));
 #
 #   Ok(())
 # }
@@ -679,5 +553,6 @@ There you have it, a Rust-friendly binding for your D-Bus service!
 [`gdbus-codegen`]: https://developer.gnome.org/gio/stable/gdbus-codegen.html
 [`pkg-config`]: https://www.freedesktop.org/wiki/Software/pkg-config/
 [cob]: blocking.html
+[`Stream`]: https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html
 
 [^busctl]: `busctl` is part of [`systemd`](https://www.freedesktop.org/wiki/Software/systemd/).
