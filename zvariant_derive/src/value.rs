@@ -176,7 +176,7 @@ fn impl_enum(
                 };
                 variant_values.push(value);
             }
-            _ => panic!("`{}` must be a unit variant", variant.ident.to_string()),
+            _ => panic!("`{}` must be a unit variant", variant.ident),
         }
     }
 
