@@ -47,19 +47,8 @@ fn test_proxy() {
             T: AsRef<str>;
     }
 
-    let connection = zbus::blocking::Connection::session().unwrap();
-    let proxy = TestProxyBlocking::builder(&connection)
-        .cache_properties(false)
-        .build()
-        .unwrap();
-    proxy
-        .connect_a_signal(move |_arg, other: String| {
-            println!("{}", other);
-        })
-        .unwrap();
-    // Let's also test signal streams.
-    let connection = zbus::Connection::from(connection);
     block_on(async move {
+        let connection = zbus::Connection::session().await.unwrap();
         let proxy = TestProxy::builder(&connection)
             .cache_properties(false)
             .build()

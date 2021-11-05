@@ -249,7 +249,7 @@ mod tests {
     use zvariant::{Fd, OwnedObjectPath, OwnedValue, Type};
 
     use crate::{
-        blocking::{self, MessageStream},
+        blocking::{self, MessageIterator},
         fdo::{RequestNameFlags, RequestNameReply},
         Connection, InterfaceDeref, Message, MessageFlags, Result, SignalContext,
     };
@@ -570,7 +570,7 @@ mod tests {
         // produces is exactly the same: `Connection::call_method` dropping all incoming messages
         // while waiting for the reply to the method call.
         let conn = blocking::Connection::session().unwrap();
-        let stream = MessageStream::from(&conn);
+        let stream = MessageIterator::from(&conn);
 
         // Send a message as client before service starts to process messages
         let client_conn = blocking::Connection::session().unwrap();
@@ -689,7 +689,7 @@ mod tests {
     #[timeout(15000)]
     fn issue_122() {
         let conn = blocking::Connection::session().unwrap();
-        let stream = MessageStream::from(&conn);
+        let stream = MessageIterator::from(&conn);
 
         #[allow(clippy::mutex_atomic)]
         let pair = Arc::new((Mutex::new(false), Condvar::new()));
@@ -783,20 +783,13 @@ mod tests {
             }
 
             let proxy = ComeAndGoProxyBlocking::new(&conn).unwrap();
-            let tx_clone = tx.clone();
-            let (signal_tx, signal_rx) = channel();
-            proxy
-                .connect_the_signal(move || {
-                    tx_clone.send(()).unwrap();
-                    signal_tx.send(()).unwrap();
-                })
-                .unwrap();
+            let signals = proxy.receive_the_signal().unwrap();
             tx.send(()).unwrap();
 
             // We receive two signals, each time from different unique names. W/o the fix for
             // issue#173, the second iteration hangs.
-            for _ in 0..2 {
-                signal_rx.recv().unwrap();
+            for _ in signals.take(2) {
+                tx.send(()).unwrap();
             }
         });
 
