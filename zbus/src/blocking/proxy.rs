@@ -253,7 +253,10 @@ impl<'a> Proxy<'a> {
     ///
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
-    pub fn receive_property_changed<T>(&'a self, name: &'a str) -> PropertyIterator<'a, T> {
+    pub fn receive_property_changed<'name: 'a, T>(
+        &self,
+        name: &'name str,
+    ) -> PropertyIterator<'a, T> {
         PropertyIterator(block_on(self.azync.receive_property_changed(name)))
     }
 

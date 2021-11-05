@@ -519,7 +519,7 @@ fn gen_proxy_property(
             #[doc = #gen_doc]
             pub #usage fn #receive#ty_generics(
                 &self
-            ) -> #prop_stream<'_, <#ret_type as #zbus::ResultAdapter>::Ok>
+            ) -> #prop_stream<'c, <#ret_type as #zbus::ResultAdapter>::Ok>
             #where_clause
             {
                 self.0.receive_property_changed(#property_name)#wait
