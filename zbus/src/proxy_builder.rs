@@ -119,7 +119,7 @@ where
         Self {
             conn: conn.clone(),
             destination: Some(BusName::from_static_str(T::DESTINATION).expect("invalid bus name")),
-            path: Some(T::PATH.try_into().expect("invalid default path")),
+            path: Some(ObjectPath::from_static_str(T::PATH).expect("invalid default path")),
             interface: Some(
                 InterfaceName::from_static_str(T::INTERFACE).expect("invalid interface name"),
             ),
