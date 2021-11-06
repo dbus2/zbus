@@ -86,6 +86,16 @@ impl<'name> BusName<'name> {
             BusName::WellKnown(name) => BusName::WellKnown(name.into_owned()),
         }
     }
+
+    /// Same as `try_from`, except it takes a `&'static str`.
+    pub fn from_static_str(name: &'static str) -> Result<Self> {
+        match Self::try_from(name)? {
+            BusName::Unique(_) => Ok(BusName::Unique(UniqueName::from_static_str_unchecked(name))),
+            BusName::WellKnown(_) => Ok(BusName::WellKnown(
+                WellKnownName::from_static_str_unchecked(name),
+            )),
+        }
+    }
 }
 
 impl Deref for BusName<'_> {
