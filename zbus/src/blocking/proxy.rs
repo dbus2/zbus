@@ -230,9 +230,9 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub fn receive_signal<M>(&self, signal_name: M) -> Result<SignalIterator<'_>>
+    pub fn receive_signal<'m: 'a, M>(&self, signal_name: M) -> Result<SignalIterator<'a>>
     where
-        M: TryInto<MemberName<'static>>,
+        M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
     {
         block_on(self.azync.receive_signal(signal_name)).map(SignalIterator)
@@ -245,7 +245,7 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub fn receive_all_signals(&self) -> Result<SignalIterator<'_>> {
+    pub fn receive_all_signals(&self) -> Result<SignalIterator<'a>> {
         block_on(self.azync.receive_all_signals()).map(SignalIterator)
     }
 
@@ -253,7 +253,10 @@ impl<'a> Proxy<'a> {
     ///
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
-    pub fn receive_property_changed<T>(&'a self, name: &'a str) -> PropertyIterator<'a, T> {
+    pub fn receive_property_changed<'name: 'a, T>(
+        &self,
+        name: &'name str,
+    ) -> PropertyIterator<'a, T> {
         PropertyIterator(block_on(self.azync.receive_property_changed(name)))
     }
 
