@@ -118,9 +118,11 @@ where
     pub fn new(conn: &Connection) -> Self {
         Self {
             conn: conn.clone(),
-            destination: Some(T::DESTINATION.try_into().expect("invalid bus name")),
+            destination: Some(BusName::from_static_str(T::DESTINATION).expect("invalid bus name")),
             path: Some(T::PATH.try_into().expect("invalid default path")),
-            interface: Some(T::INTERFACE.try_into().expect("invalid interface name")),
+            interface: Some(
+                InterfaceName::from_static_str(T::INTERFACE).expect("invalid interface name"),
+            ),
             cache: true,
             proxy_type: PhantomData,
         }
