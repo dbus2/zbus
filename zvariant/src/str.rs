@@ -1,9 +1,9 @@
 // FIXME: Drop this when the deprecated `Basic::ALIGNMENT` is dropped in the next API break.
 #![allow(deprecated)]
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use static_assertions::assert_impl_all;
-use std::{borrow::Cow, str};
+use std::hash::{Hash, Hasher};
 
 use crate::{Basic, EncodingFormat, Signature, Type};
 
@@ -15,21 +15,77 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 /// [`Value`]: enum.Value.html#variant.Str
 /// [`&str`]: https://doc.rust-lang.org/std/str/index.html
 /// [`String`]: https://doc.rust-lang.org/std/string/struct.String.html
-#[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Clone)]
-#[serde(rename(serialize = "zvariant::Str", deserialize = "zvariant::Str"))]
-pub struct Str<'a>(#[serde(borrow)] Cow<'a, str>);
+#[derive(Debug, Default, PartialEq, Eq, Hash, Clone)]
+pub struct Str<'a>(Inner<'a>);
+
+#[derive(Debug, Eq, Clone)]
+enum Inner<'a> {
+    Static(&'static str),
+    Borrowed(&'a str),
+    Owned(Box<str>),
+}
+
+impl<'a> Default for Inner<'a> {
+    fn default() -> Self {
+        Self::Static("")
+    }
+}
+
+impl<'a> PartialEq for Inner<'a> {
+    fn eq(&self, other: &Inner<'a>) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl<'a> Hash for Inner<'a> {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.as_str().hash(h)
+    }
+}
+
+impl<'a> Inner<'a> {
+    /// The underlying string.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Inner::Static(s) => s,
+            Inner::Borrowed(s) => s,
+            Inner::Owned(s) => s,
+        }
+    }
+}
+
+impl<'a> Serialize for Str<'a> {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(self.as_str())
+    }
+}
+
+impl<'de: 'a, 'a> Deserialize<'de> for Str<'a> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        <&'a str>::deserialize(d).map(Inner::Borrowed).map(Str)
+    }
+}
 
 assert_impl_all!(Str<'_>: Send, Sync, Unpin);
 
 impl<'a> Str<'a> {
+    /// An owned string without allocations
+    pub fn from_static(s: &'static str) -> Self {
+        Str(Inner::Static(s))
+    }
+
     /// A borrowed clone (this never allocates, unlike clone).
     pub fn as_ref(&self) -> Str<'_> {
-        Str(Cow::Borrowed(&self.0))
+        match &self.0 {
+            Inner::Static(s) => Str(Inner::Static(s)),
+            Inner::Borrowed(s) => Str(Inner::Borrowed(s)),
+            Inner::Owned(s) => Str(Inner::Borrowed(s)),
+        }
     }
 
     /// The underlying string.
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.0.as_str()
     }
 
     /// Creates an owned clone of `self`.
@@ -39,7 +95,11 @@ impl<'a> Str<'a> {
 
     /// Creates an owned clone of `self`.
     pub fn into_owned(self) -> Str<'static> {
-        Str(Cow::Owned(String::from(self.as_str())))
+        match self.0 {
+            Inner::Static(s) => Str(Inner::Static(s)),
+            Inner::Borrowed(s) => Str(Inner::Owned(s.into())),
+            Inner::Owned(s) => Str(Inner::Owned(s)),
+        }
     }
 }
 
@@ -61,25 +121,29 @@ impl<'a> Type for Str<'a> {
 
 impl<'a> From<&'a str> for Str<'a> {
     fn from(value: &'a str) -> Self {
-        Self(Cow::from(value))
+        Self(Inner::Borrowed(value))
     }
 }
 
 impl<'a> From<&'a String> for Str<'a> {
     fn from(value: &'a String) -> Self {
-        Self(Cow::from(value.as_str()))
+        Self(Inner::Borrowed(value))
     }
 }
 
 impl<'a> From<String> for Str<'a> {
     fn from(value: String) -> Self {
-        Self(Cow::from(value))
+        Self(Inner::Owned(value.into()))
     }
 }
 
 impl<'a> From<Str<'a>> for String {
     fn from(value: Str<'a>) -> String {
-        value.0.into_owned()
+        match value.0 {
+            Inner::Static(s) => s.into(),
+            Inner::Borrowed(s) => s.into(),
+            Inner::Owned(s) => s.into(),
+        }
     }
 }
 
@@ -111,7 +175,7 @@ impl<'a> PartialEq<&str> for Str<'a> {
 
 impl<'a> std::fmt::Display for Str<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        self.as_str().fmt(f)
     }
 }
 
