@@ -95,7 +95,7 @@ assert_impl_all!(Signature<'_>: Send, Sync, Unpin);
 impl<'a> Signature<'a> {
     /// The signature as a string.
     pub fn as_str(&self) -> &str {
-        // SAFETY: non-UTF8 characters in Signature should NEVER happen
+        // SAFETY: non-UTF8 characters in Signature are rejected by safe constructors
         unsafe { str::from_utf8_unchecked(self.as_bytes()) }
     }
 
@@ -108,7 +108,11 @@ impl<'a> Signature<'a> {
     ///
     /// Since the passed bytes are not checked for correctness, it's provided for ease of
     /// `Type` implementations.
-    pub fn from_bytes_unchecked<'s: 'a>(bytes: &'s [u8]) -> Self {
+    ///
+    /// # Safety
+    ///
+    /// This method is unsafe as it allows creating a `str` that is not valid UTF-8.
+    pub unsafe fn from_bytes_unchecked<'s: 'a>(bytes: &'s [u8]) -> Self {
         Self {
             bytes: Bytes::borrowed(bytes),
             pos: 0,
@@ -117,7 +121,11 @@ impl<'a> Signature<'a> {
     }
 
     /// Same as `from_bytes_unchecked`, except it takes a static reference.
-    pub fn from_static_bytes_unchecked(bytes: &'static [u8]) -> Self {
+    ///
+    /// # Safety
+    ///
+    /// This method is unsafe as it allows creating a `str` that is not valid UTF-8.
+    pub unsafe fn from_static_bytes_unchecked(bytes: &'static [u8]) -> Self {
         Self {
             bytes: Bytes::Static(bytes),
             pos: 0,
@@ -127,12 +135,20 @@ impl<'a> Signature<'a> {
 
     /// Same as `from_bytes_unchecked`, except it takes a string reference.
     pub fn from_str_unchecked<'s: 'a>(signature: &'s str) -> Self {
-        Self::from_bytes_unchecked(signature.as_bytes())
+        Self {
+            bytes: Bytes::borrowed(signature.as_bytes()),
+            pos: 0,
+            end: signature.len(),
+        }
     }
 
     /// Same as `from_str_unchecked`, except it takes a static string reference.
     pub fn from_static_str_unchecked(signature: &'static str) -> Self {
-        Self::from_static_bytes_unchecked(signature.as_bytes())
+        Self {
+            bytes: Bytes::Static(signature.as_bytes()),
+            pos: 0,
+            end: signature.len(),
+        }
     }
 
     /// Same as `from_str_unchecked`, except it takes an owned `String`.
@@ -270,10 +286,12 @@ impl<'a, 'b> From<&'b Signature<'a>> for Signature<'a> {
 impl<'a> TryFrom<&'a [u8]> for Signature<'a> {
     type Error = Error;
 
+    #[allow(deprecated)]
     fn try_from(value: &'a [u8]) -> Result<Self> {
         ensure_correct_signature_str(value)?;
 
-        Ok(Self::from_bytes_unchecked(value))
+        // SAFETY: ensure_correct_signature_str checks UTF8
+        unsafe { Ok(Self::from_bytes_unchecked(value)) }
     }
 }
 
@@ -386,6 +404,7 @@ impl<'de> Visitor<'de> for SignatureVisitor {
     }
 }
 
+#[allow(deprecated)]
 fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
     if signature.len() > 255 {
         return Err(serde::de::Error::invalid_length(
@@ -398,7 +417,8 @@ fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
         return Ok(());
     }
 
-    let signature = Signature::from_bytes_unchecked(signature);
+    // SAFETY: SignatureParser never calls as_str
+    let signature = unsafe { Signature::from_bytes_unchecked(signature) };
     let mut parser = SignatureParser::new(signature);
     while !parser.done() {
         let _ = parser.parse_next_signature()?;
