@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{DynamicType, OwnedValue, Value};
 
-use crate::{fdo, Connection, Message, ObjectServer, Result, SignalContext};
+use crate::{fdo, Connection, Message, MessageHeader, ObjectServer, Result, SignalContext};
 
 /// A helper type returned by [`Interface`] callbacks.
 pub enum DispatchResult<'a> {
@@ -59,10 +59,23 @@ pub trait Interface: Any + Send + Sync {
         Self: Sized;
 
     /// Get a property value. Returns `None` if the property doesn't exist.
-    async fn get(&self, property_name: &str) -> Option<fdo::Result<OwnedValue>>;
+    async fn get<'call>(
+        &'call self,
+        property_name: &'call str,
+        server: &'call ObjectServer,
+        connection: &'call Connection,
+        header: MessageHeader<'_>,
+        ctxt: SignalContext<'_>,
+    ) -> Option<fdo::Result<OwnedValue>>;
 
     /// Return all the properties.
-    async fn get_all(&self) -> HashMap<String, OwnedValue>;
+    async fn get_all<'call>(
+        &'call self,
+        server: &'call ObjectServer,
+        connection: &'call Connection,
+        header: MessageHeader<'_>,
+        ctxt: SignalContext<'_>,
+    ) -> HashMap<String, OwnedValue>;
 
     /// Set a property value.
     ///
@@ -73,6 +86,9 @@ pub trait Interface: Any + Send + Sync {
         &'call self,
         property_name: &'call str,
         value: &'call Value<'_>,
+        _: &'call ObjectServer,
+        _: &'call Connection,
+        _: &'call MessageHeader<'_>,
         ctxt: &'call SignalContext<'_>,
     ) -> DispatchResult<'call> {
         let _ = (property_name, value, ctxt);
@@ -88,6 +104,9 @@ pub trait Interface: Any + Send + Sync {
         &mut self,
         property_name: &str,
         value: &Value<'_>,
+        server: &ObjectServer,
+        connection: &Connection,
+        header: &MessageHeader<'_>,
         ctxt: &SignalContext<'_>,
     ) -> Option<fdo::Result<()>>;
 
