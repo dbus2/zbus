@@ -286,7 +286,6 @@ impl<'a, 'b> From<&'b Signature<'a>> for Signature<'a> {
 impl<'a> TryFrom<&'a [u8]> for Signature<'a> {
     type Error = Error;
 
-    #[allow(deprecated)]
     fn try_from(value: &'a [u8]) -> Result<Self> {
         ensure_correct_signature_str(value)?;
 
@@ -404,7 +403,6 @@ impl<'de> Visitor<'de> for SignatureVisitor {
     }
 }
 
-#[allow(deprecated)]
 fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
     if signature.len() > 255 {
         return Err(serde::de::Error::invalid_length(
