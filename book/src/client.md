@@ -153,6 +153,11 @@ to Rust type inference. This makes it also possible to have higher-level types, 
 naturally with the rest of the code. You can further document the D-Bus API or provide additional
 helpers.
 
+> **Note**
+>
+> For simple transient cases like the one above, you may find the [blocking API][cob] very
+> convenient to use.
+
 ### Signals
 
 Signals are like methods, except they don't expect a reply. They are typically emitted by services
