@@ -129,16 +129,18 @@ pub struct PropertyChanged<'a, T> {
     phantom: std::marker::PhantomData<T>,
 }
 
+impl<'a, T> PropertyChanged<'a, T> {
+    // The name of the property that changed.
+    pub fn name(&self) -> &str {
+        self.name
+    }
+}
+
 impl<'a, T> PropertyChanged<'a, T>
 where
     T: TryFrom<zvariant::OwnedValue>,
     T::Error: Into<crate::Error>,
 {
-    // The name of the property that changed.
-    pub fn name(&self) -> &str {
-        self.name
-    }
-
     // Get the value of the property that changed.
     //
     // If the notification signal contained the new value, it has been cached already and this call
@@ -195,8 +197,7 @@ pub struct PropertyStream<'a, T> {
 
 impl<'a, T> stream::Stream for PropertyStream<'a, T>
 where
-    T: TryFrom<zvariant::OwnedValue> + Unpin,
-    T::Error: Into<crate::Error>,
+    T: Unpin,
 {
     type Item = PropertyChanged<'a, T>;
 
