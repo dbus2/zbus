@@ -62,6 +62,17 @@ impl<'name> InterfaceName<'name> {
         Self(Str::from(name))
     }
 
+    /// Same as `try_from`, except it takes a `&'static str`.
+    pub fn from_static_str(name: &'static str) -> Result<Self> {
+        ensure_correct_interface_name(name)?;
+        Ok(Self(Str::from_static(name)))
+    }
+
+    /// Same as `from_str_unchecked`, except it takes a `&'static str`.
+    pub fn from_static_str_unchecked(name: &'static str) -> Self {
+        Self(Str::from_static(name))
+    }
+
     /// Same as `from_str_unchecked`, except it takes an owned `String`.
     ///
     /// Since the passed string is not checked for correctness, prefer using the

@@ -310,7 +310,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         changed.insert(#member_name, &value);
                         #zbus::fdo::Properties::properties_changed(
                             signal_context,
-                            #zbus::names::InterfaceName::from_str_unchecked(#iface_name),
+                            #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
                             &changed,
                             &[],
                         ).await
@@ -365,7 +365,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         #where_clause
         {
             fn name() -> #zbus::names::InterfaceName<'static> {
-                #zbus::names::InterfaceName::from_str_unchecked(#iface_name)
+                #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name)
             }
 
             async fn get(
