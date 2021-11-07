@@ -7,9 +7,8 @@ use serde::{
     ser::{Serialize, Serializer},
 };
 use static_assertions::assert_impl_all;
-use std::borrow::Cow;
 
-use crate::{Basic, EncodingFormat, Error, Result, Signature, Type};
+use crate::{Basic, EncodingFormat, Error, Result, Signature, Str, Type};
 
 /// String that identifies objects at a given destination on the D-Bus bus.
 ///
@@ -37,33 +36,36 @@ use crate::{Basic, EncodingFormat, Error, Result, Signature, Type};
 /// ObjectPath::try_from("/ha.d").unwrap_err();
 /// ```
 #[derive(PartialEq, Eq, Hash, Clone)]
-pub struct ObjectPath<'a>(Cow<'a, [u8]>);
+pub struct ObjectPath<'a>(Str<'a>);
 
 assert_impl_all!(ObjectPath<'_>: Send, Sync, Unpin);
 
 impl<'a> ObjectPath<'a> {
     /// A borrowed clone (this never allocates, unlike clone).
     pub fn as_ref(&self) -> ObjectPath<'_> {
-        ObjectPath(Cow::Borrowed(&self.0))
+        ObjectPath(self.0.as_ref())
     }
 
     /// The object path as a string.
     pub fn as_str(&self) -> &str {
-        // SAFETY: non-UTF8 characters in ObjectPath should NEVER happen
-        unsafe { str::from_utf8_unchecked(&self.0) }
+        self.0.as_str()
     }
 
     /// The object path as bytes.
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0
+        self.0.as_bytes()
     }
 
     /// Create a new `ObjectPath` from given bytes.
     ///
     /// Since the passed bytes are not checked for correctness, prefer using the
     /// `TryFrom<&[u8]>` implementation.
-    pub fn from_bytes_unchecked<'s: 'a>(bytes: &'s [u8]) -> Self {
-        Self(Cow::from(bytes))
+    ///
+    /// # Safety
+    ///
+    /// See [`std::str::from_utf8_unchecked`].
+    pub unsafe fn from_bytes_unchecked<'s: 'a>(bytes: &'s [u8]) -> Self {
+        Self(std::str::from_utf8_unchecked(bytes).into())
     }
 
     /// Create a new `ObjectPath` from the given string.
@@ -71,7 +73,7 @@ impl<'a> ObjectPath<'a> {
     /// Since the passed string is not checked for correctness, prefer using the
     /// `TryFrom<&str>` implementation.
     pub fn from_str_unchecked<'s: 'a>(path: &'s str) -> Self {
-        Self::from_bytes_unchecked(path.as_bytes())
+        Self(path.into())
     }
 
     /// Same as `from_str_unchecked`, except it takes an owned `String`.
@@ -79,7 +81,7 @@ impl<'a> ObjectPath<'a> {
     /// Since the passed string is not checked for correctness, prefer using the
     /// `TryFrom<String>` implementation.
     pub fn from_string_unchecked(path: String) -> Self {
-        Self(Cow::from(path.as_bytes().to_owned()))
+        Self(path.into())
     }
 
     /// the object path's length.
@@ -94,13 +96,12 @@ impl<'a> ObjectPath<'a> {
 
     /// Creates an owned clone of `self`.
     pub fn to_owned(&self) -> ObjectPath<'static> {
-        let s = self.0.clone().into_owned();
-        ObjectPath(Cow::Owned(s))
+        ObjectPath(self.0.to_owned())
     }
 
     /// Creates an owned clone of `self`.
     pub fn into_owned(self) -> ObjectPath<'static> {
-        ObjectPath(Cow::Owned(self.0.into_owned()))
+        ObjectPath(self.0.into_owned())
     }
 }
 
@@ -136,7 +137,8 @@ impl<'a> TryFrom<&'a [u8]> for ObjectPath<'a> {
     fn try_from(value: &'a [u8]) -> Result<Self> {
         ensure_correct_object_path_str(value)?;
 
-        Ok(Self::from_bytes_unchecked(value))
+        // SAFETY: ensure_correct_object_path_str checks UTF-8
+        unsafe { Ok(Self::from_bytes_unchecked(value)) }
     }
 }
 
