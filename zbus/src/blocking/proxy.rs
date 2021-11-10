@@ -160,6 +160,17 @@ impl<'a> Proxy<'a> {
         self.azync.cached_property(property_name)
     }
 
+    /// Get the cached value of the property `property_name`.
+    ///
+    /// Same as `cached_property`, but gives you access to the raw value stored in the cache. This
+    /// is useful if you want to avoid allocations and cloning.
+    pub fn cached_property_raw<'p>(
+        &'p self,
+        property_name: &'p str,
+    ) -> Option<impl Deref<Target = Value<'static>> + 'p> {
+        self.azync.cached_property_raw(property_name)
+    }
+
     /// Get the property `property_name`.
     ///
     /// Get the property value from the cache or call the `Get` method of the

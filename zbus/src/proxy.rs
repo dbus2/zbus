@@ -565,21 +565,54 @@ impl<'a> Proxy<'a> {
     where
         T: TryFrom<OwnedValue>,
     {
-        if let Some(lock) = self
+        self.cached_property_raw(property_name)
+            .as_deref()
+            .map(|v| T::try_from(OwnedValue::from(v)))
+            .transpose()
+            .map_err(|_| Error::InvalidReply.into())
+    }
+
+    /// Get the cached value of the property `property_name`.
+    ///
+    /// Same as `cached_property`, but gives you access to the raw value stored in the cache. This
+    /// is useful if you want to avoid allocations and cloning.
+    pub fn cached_property_raw<'p>(
+        &'p self,
+        property_name: &'p str,
+    ) -> Option<impl Deref<Target = Value<'static>> + 'p> {
+        if let Some(values) = self
             .inner
             .property_cache
             .as_ref()
             .and_then(OnceCell::get)
             .map(|c| c.0.values.lock().expect("lock poisoned"))
         {
-            lock.get(property_name)
-                .and_then(|e| e.value.as_ref())
-                .cloned()
-                .map(T::try_from)
-                .transpose()
-                .map_err(|_| Error::InvalidReply.into())
+            // ensure that the property is in the cache.
+            values.get(property_name)?;
+
+            struct Wrapper<'a> {
+                values: MutexGuard<'a, HashMap<String, PropertyValue>>,
+                property_name: &'a str,
+            }
+
+            impl Deref for Wrapper<'_> {
+                type Target = Value<'static>;
+
+                fn deref(&self) -> &Self::Target {
+                    self.values
+                        .get(self.property_name)
+                        .and_then(|e| e.value.as_ref())
+                        .map(|v| v.deref())
+                        .expect("inexistent property")
+                }
+            }
+
+            Some(Wrapper {
+                values,
+                property_name,
+            })
         } else {
-            Ok(None)
+            None
         }
     }
 
