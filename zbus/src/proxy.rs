@@ -136,7 +136,7 @@ impl<'a, T> PropertyChanged<'a, T> {
     }
 }
 
-impl<'a, T> PropertyChanged<'a, T>
+impl<T> PropertyChanged<'_, T>
 where
     T: TryFrom<zvariant::OwnedValue>,
     T::Error: Into<crate::Error>,
