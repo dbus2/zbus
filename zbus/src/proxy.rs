@@ -11,8 +11,9 @@ use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
     future::Future,
+    ops::Deref,
     pin::Pin,
-    sync::{Arc, Mutex as SyncMutex},
+    sync::{Arc, Mutex as SyncMutex, MutexGuard},
     task::{Context, Poll},
 };
 
@@ -134,6 +135,67 @@ impl<'a, T> PropertyChanged<'a, T> {
     pub fn name(&self) -> &str {
         self.name
     }
+
+    // Get the raw value of the property that changed.
+    //
+    // If the notification signal contained the new value, it has been cached already and this call
+    // will return that value. Otherwise (i-e invalidated property), a D-Bus call is made to fetch
+    // and cache the new value.
+    pub async fn get_raw<'p>(&'p self) -> Result<impl Deref<Target = Value<'static>> + 'p> {
+        struct Wrapper<'w> {
+            name: &'w str,
+            values: MutexGuard<'w, HashMap<String, PropertyValue>>,
+        }
+
+        impl<'w> Deref for Wrapper<'w> {
+            type Target = Value<'static>;
+
+            fn deref(&self) -> &Self::Target {
+                &*self
+                    .values
+                    .get(self.name)
+                    .expect("PropertyStream with no corresponding property")
+                    .value
+                    .as_ref()
+                    .expect("PropertyStream with no corresponding property")
+            }
+        }
+
+        {
+            let values = self.properties.values.lock().expect("lock poisoned");
+            if values
+                .get(self.name)
+                .expect("PropertyStream with no corresponding property")
+                .value
+                .is_some()
+            {
+                return Ok(Wrapper {
+                    name: self.name,
+                    values,
+                });
+            }
+        }
+
+        // The property was invalidated, so we need to fetch the new value.
+        let properties_proxy = self.proxy.properties_proxy();
+        let value = properties_proxy
+            .get(self.proxy.inner.interface.clone(), self.name)
+            .await
+            .map_err(crate::Error::from)?;
+
+        // Save the new value
+        let mut values = self.properties.values.lock().expect("lock poisoned");
+
+        values
+            .get_mut(self.name)
+            .expect("PropertyStream with no corresponding property")
+            .value = Some(value);
+
+        Ok(Wrapper {
+            name: self.name,
+            values,
+        })
+    }
 }
 
 impl<T> PropertyChanged<'_, T>
@@ -147,39 +209,9 @@ where
     // will return that value. Otherwise (i-e invalidated property), a D-Bus call is made to fetch
     // and cache the new value.
     pub async fn get(&self) -> Result<T> {
-        let properties = self.properties.clone();
-        let value = {
-            let values = properties.values.lock().expect("lock poisoned");
-            let entry = values
-                .get(self.name)
-                .expect("PropertyStream with no corresponding property");
-            entry.value.as_ref().cloned()
-        };
-
-        let value = match value {
-            Some(value) => Ok(value),
-            None => {
-                let properties_proxy = self.proxy.properties_proxy();
-                properties_proxy
-                    .get(self.proxy.inner.interface.clone(), self.name)
-                    .await
-                    .map_err(crate::Error::from)
-                    .map(|value| {
-                        // Save the new value
-                        properties
-                            .values
-                            .lock()
-                            .expect("lock poisoned")
-                            .get_mut(self.name)
-                            .expect("PropertyStream with no corresponding property")
-                            .value = Some(value.clone());
-
-                        value
-                    })
-            }
-        };
-
-        value.and_then(|value| T::try_from(value).map_err(Into::into))
+        self.get_raw()
+            .await
+            .and_then(|v| T::try_from(OwnedValue::from(&*v)).map_err(Into::into))
     }
 }
 

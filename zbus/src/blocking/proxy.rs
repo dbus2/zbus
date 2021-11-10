@@ -3,6 +3,7 @@ use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
 use std::{
     convert::{TryFrom, TryInto},
+    ops::Deref,
     sync::Arc,
 };
 use zbus_names::{BusName, InterfaceName, MemberName};
@@ -328,6 +329,15 @@ impl<'a, T> PropertyChanged<'a, T> {
     /// Get the name of the property that changed.
     pub fn name(&self) -> &str {
         self.0.name()
+    }
+
+    // Get the raw value of the property that changed.
+    //
+    // If the notification signal contained the new value, it has been cached already and this call
+    // will return that value. Otherwise (i-e invalidated property), a D-Bus call is made to fetch
+    // and cache the new value.
+    pub fn get_raw<'p>(&'p self) -> Result<impl Deref<Target = Value<'static>> + 'p> {
+        block_on(self.0.get_raw())
     }
 }
 
