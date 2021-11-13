@@ -736,7 +736,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use test_env_log::test;
     use zbus::DBusError;
-    use zvariant::derive::Type;
+    use zvariant::{derive::Type, Value};
 
     use crate::{
         dbus_interface, dbus_proxy, Connection, ConnectionBuilder, InterfaceDeref, MessageHeader,
@@ -938,6 +938,8 @@ mod tests {
 
         proxy.ping().await?;
         assert_eq!(proxy.count().await?, 1);
+        assert_eq!(proxy.cached_count()?, None);
+
         proxy.test_header().await?;
         proxy
             .test_single_struct_arg(ArgStructTest {
@@ -992,6 +994,12 @@ mod tests {
             .path("/zbus/test/MyObj")?
             .build()
             .await?;
+        assert_eq!(my_obj_proxy.count().await?, 0);
+        assert_eq!(my_obj_proxy.cached_count()?, Some(0));
+        assert_eq!(
+            my_obj_proxy.cached_property_raw("Count").as_deref(),
+            Some(&Value::from(0u32))
+        );
         my_obj_proxy.ping().await?;
         proxy.destroy_obj("MyObj").await?;
         assert!(my_obj_proxy.introspect().await.is_err());
