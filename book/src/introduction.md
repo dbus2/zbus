@@ -1,7 +1,4 @@
-<p align="center">
-  <img src="https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
-       width="128" height="128"/>
-</p>
+<img src="zbus-pixels.gif" alt="zbus illustration" style="width: 100%;">
 
 > **Note**
 >
