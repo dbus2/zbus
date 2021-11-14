@@ -153,9 +153,10 @@ impl<'a> Proxy<'a> {
     /// was invalidated by an update, because caching was disabled for this property or proxy, or
     /// because the cache has not yet been populated.  Use `get_property` to fetch the value from
     /// the peer.
-    pub fn cached_property<T>(&self, property_name: &str) -> fdo::Result<Option<T>>
+    pub fn cached_property<T>(&self, property_name: &str) -> Result<Option<T>>
     where
         T: TryFrom<OwnedValue>,
+        T::Error: Into<Error>,
     {
         self.azync.cached_property(property_name)
     }
@@ -175,9 +176,10 @@ impl<'a> Proxy<'a> {
     ///
     /// Get the property value from the cache or call the `Get` method of the
     /// `org.freedesktop.DBus.Properties` interface.
-    pub fn get_property<T>(&self, property_name: &str) -> fdo::Result<T>
+    pub fn get_property<T>(&self, property_name: &str) -> Result<T>
     where
         T: TryFrom<OwnedValue>,
+        T::Error: Into<Error>,
     {
         block_on(self.azync.get_property(property_name))
     }

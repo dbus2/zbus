@@ -561,15 +561,16 @@ impl<'a> Proxy<'a> {
     /// was invalidated by an update, because caching was disabled for this property or proxy, or
     /// because the cache has not yet been populated.  Use `get_property` to fetch the value from
     /// the peer.
-    pub fn cached_property<T>(&self, property_name: &str) -> fdo::Result<Option<T>>
+    pub fn cached_property<T>(&self, property_name: &str) -> Result<Option<T>>
     where
         T: TryFrom<OwnedValue>,
+        T::Error: Into<Error>,
     {
         self.cached_property_raw(property_name)
             .as_deref()
             .map(|v| T::try_from(OwnedValue::from(v)))
             .transpose()
-            .map_err(|_| Error::InvalidReply.into())
+            .map_err(Into::into)
     }
 
     /// Get the cached value of the property `property_name`.
@@ -627,9 +628,10 @@ impl<'a> Proxy<'a> {
     ///
     /// Get the property value from the cache (if caching is enabled on this proxy) or call the
     /// `Get` method of the `org.freedesktop.DBus.Properties` interface.
-    pub async fn get_property<T>(&self, property_name: &str) -> fdo::Result<T>
+    pub async fn get_property<T>(&self, property_name: &str) -> Result<T>
     where
         T: TryFrom<OwnedValue>,
+        T::Error: Into<Error>,
     {
         if let Some(cache) = self.get_property_cache() {
             cache.ready().await?;
@@ -639,7 +641,7 @@ impl<'a> Proxy<'a> {
         }
 
         let value = self.get_proxy_property(property_name).await?;
-        value.try_into().map_err(|_| Error::InvalidReply.into())
+        value.try_into().map_err(Into::into)
     }
 
     /// Set the property `property_name`.
