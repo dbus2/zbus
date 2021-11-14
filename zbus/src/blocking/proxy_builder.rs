@@ -5,7 +5,7 @@ use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::ObjectPath;
 
-use crate::{blocking::Connection, Error, Result};
+use crate::{blocking::Connection, CacheProperties, Error, Result};
 
 pub use crate::ProxyDefault;
 
@@ -51,7 +51,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
     }
 
     /// Set whether to cache properties.
-    pub fn cache_properties(self, cache: bool) -> Self {
+    pub fn cache_properties(self, cache: CacheProperties) -> Self {
         Self(self.0.cache_properties(cache))
     }
 
