@@ -475,84 +475,83 @@ impl<'a> Proxy<'a> {
     /// encountered in the population.
     fn get_property_cache(&self) -> Option<&Arc<PropertiesCache>> {
         use ordered_stream::OrderedStreamExt;
-        if let Some(cache) = &self.inner.property_cache {
-            let proxy_properties = &cache
-                .get_or_init(|| {
-                    let proxy = self.owned_properties_proxy();
-                    let (send, recv) = bounded(1);
+        let cache = match &self.inner.property_cache {
+            Some(cache) => cache,
+            None => return None,
+        };
+        let (cache, _) = &cache.get_or_init(|| {
+            let proxy = self.owned_properties_proxy();
+            let (send, recv) = bounded(1);
 
-                    let arc = Arc::new(PropertiesCache {
-                        values: Default::default(),
-                        ready: recv,
-                    });
+            let cache = Arc::new(PropertiesCache {
+                values: Default::default(),
+                ready: recv,
+            });
 
-                    let interface = self.interface().to_owned();
-                    let properties = arc.clone();
+            let interface = self.interface().to_owned();
+            let properties = cache.clone();
 
-                    let task = self.connection().executor().spawn(async move {
-                        let prop_changes = match proxy.receive_properties_changed().await {
-                            Ok(s) => s.map(Either::Left),
-                            Err(e) => {
-                                // ignore send errors, it just means the original future was cancelled
-                                let _ = send.send(Err(e)).await;
-                                return;
-                            }
-                        };
+            let task = self.connection().executor().spawn(async move {
+                let prop_changes = match proxy.receive_properties_changed().await {
+                    Ok(s) => s.map(Either::Left),
+                    Err(e) => {
+                        // ignore send errors, it just means the original future was cancelled
+                        let _ = send.send(Err(e)).await;
+                        return;
+                    }
+                };
 
-                        let get_all = MessageBuilder::method_call(proxy.path().as_ref(), "GetAll")
-                            .unwrap()
-                            .destination(proxy.destination())
-                            .unwrap()
-                            .interface(proxy.interface())
-                            .unwrap()
-                            .build(&interface)
-                            .unwrap();
+                let get_all = MessageBuilder::method_call(proxy.path().as_ref(), "GetAll")
+                    .unwrap()
+                    .destination(proxy.destination())
+                    .unwrap()
+                    .interface(proxy.interface())
+                    .unwrap()
+                    .build(&interface)
+                    .unwrap();
 
-                        let get_all = match proxy.connection().call_method_raw(get_all).await {
-                            Ok(s) => FromFuture::from(s).map(Either::Right),
-                            Err(e) => {
-                                let _ = send.send(Err(e)).await;
-                                return;
-                            }
-                        };
+                let get_all = match proxy.connection().call_method_raw(get_all).await {
+                    Ok(s) => FromFuture::from(s).map(Either::Right),
+                    Err(e) => {
+                        let _ = send.send(Err(e)).await;
+                        return;
+                    }
+                };
 
-                        let mut join = join_streams(prop_changes, get_all);
+                let mut join = join_streams(prop_changes, get_all);
 
-                        loop {
-                            match join.next().await {
-                                Some(Either::Left(update)) => {
-                                    if let Ok(args) = update.args() {
-                                        if args.interface_name == interface {
-                                            properties.update_cache(
-                                                &args.changed_properties,
-                                                args.invalidated_properties,
-                                            );
-                                        }
-                                    }
+                loop {
+                    match join.next().await {
+                        Some(Either::Left(update)) => {
+                            if let Ok(args) = update.args() {
+                                if args.interface_name == interface {
+                                    properties.update_cache(
+                                        &args.changed_properties,
+                                        args.invalidated_properties,
+                                    );
                                 }
-                                Some(Either::Right(Ok(populate))) => {
-                                    let result = populate
-                                        .body()
-                                        .map(|values| properties.update_cache(&values, Vec::new()));
-                                    let _ = send.send(result).await;
-                                    send.close();
-                                }
-                                Some(Either::Right(Err(e))) => {
-                                    let _ = send.send(Err(e)).await;
-                                    send.close();
-                                }
-                                None => return,
                             }
                         }
-                    });
+                        Some(Either::Right(Ok(populate))) => {
+                            let result = populate
+                                .body()
+                                .map(|values| properties.update_cache(&values, Vec::new()));
+                            let _ = send.send(result).await;
+                            send.close();
+                        }
+                        Some(Either::Right(Err(e))) => {
+                            let _ = send.send(Err(e)).await;
+                            send.close();
+                        }
+                        None => return,
+                    }
+                }
+            });
 
-                    (arc, task)
-                })
-                .0;
-            Some(proxy_properties)
-        } else {
-            None
-        }
+            (cache, task)
+        });
+
+        Some(cache)
     }
 
     /// Get the cached value of the property `property_name`.
