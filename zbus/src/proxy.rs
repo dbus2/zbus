@@ -13,7 +13,7 @@ use std::{
     future::Future,
     ops::Deref,
     pin::Pin,
-    sync::{Arc, Mutex as SyncMutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard},
     task::{Context, Poll},
 };
 
@@ -34,7 +34,7 @@ struct PropertyValue {
 
 #[derive(Debug)]
 pub(crate) struct PropertiesCache {
-    values: SyncMutex<HashMap<String, PropertyValue>>,
+    values: Mutex<HashMap<String, PropertyValue>>,
     ready: async_channel::Receiver<Result<()>>,
 }
 
