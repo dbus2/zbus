@@ -739,8 +739,8 @@ mod tests {
     use zvariant::{derive::Type, Value};
 
     use crate::{
-        dbus_interface, dbus_proxy, Connection, ConnectionBuilder, InterfaceDeref, MessageHeader,
-        MessageType, SignalContext,
+        dbus_interface, dbus_proxy, CacheProperties, Connection, ConnectionBuilder, InterfaceDeref,
+        MessageHeader, MessageType, SignalContext,
     };
 
     #[derive(Deserialize, Serialize, Type)]
@@ -914,7 +914,7 @@ mod tests {
             .destination("org.freedesktop.MyService")?
             .path("/org/freedesktop/MyService")?
             // the server isn't yet running
-            .cache_properties(false)
+            .cache_properties(CacheProperties::No)
             .build()
             .await?;
         let props_proxy = zbus::fdo::PropertiesProxy::builder(&conn)

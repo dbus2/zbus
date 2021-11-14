@@ -22,7 +22,8 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder, Result,
+    CacheProperties, Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder,
+    Result,
 };
 
 #[derive(Debug, Default)]
@@ -275,7 +276,7 @@ impl PropertiesCache {
     }
 
     /// Wait for the cache to be populated and return any error encountered during population
-    async fn ready(&self) -> Result<()> {
+    pub(crate) async fn ready(&self) -> Result<()> {
         // Only one caller will actually get the result; all other callers see a closed channel,
         // but that indicates the cache is ready (and on error, the cache will be empty, which just
         // means we bypass it)
@@ -292,9 +293,12 @@ impl<'a> ProxyInner<'a> {
         destination: BusName<'a>,
         path: ObjectPath<'a>,
         interface: InterfaceName<'a>,
-        cache: bool,
+        cache: CacheProperties,
     ) -> Self {
-        let property_cache = if cache { Some(OnceCell::new()) } else { None };
+        let property_cache = match cache {
+            CacheProperties::Yes | CacheProperties::Lazily => Some(OnceCell::new()),
+            CacheProperties::No => None,
+        };
         Self {
             inner_without_borrows: ProxyInnerStatic {
                 conn,
@@ -450,7 +454,7 @@ impl<'a> Proxy<'a> {
             .path(self.inner.path.as_ref())
             .unwrap()
             // does not have properties
-            .cache_properties(false)
+            .cache_properties(CacheProperties::No)
             .build_internal()
             .into()
     }
@@ -464,7 +468,7 @@ impl<'a> Proxy<'a> {
             .path(self.inner.path.to_owned())
             .unwrap()
             // does not have properties
-            .cache_properties(false)
+            .cache_properties(CacheProperties::No)
             .build_internal()
             .into()
     }
@@ -473,7 +477,7 @@ impl<'a> Proxy<'a> {
     ///
     /// Use PropertiesCache::ready() to wait for the cache to be populated and to get any errors
     /// encountered in the population.
-    fn get_property_cache(&self) -> Option<&Arc<PropertiesCache>> {
+    pub(crate) fn get_property_cache(&self) -> Option<&Arc<PropertiesCache>> {
         use ordered_stream::OrderedStreamExt;
         let cache = match &self.inner.property_cache {
             Some(cache) => cache,

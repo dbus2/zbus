@@ -35,8 +35,8 @@ use futures_util::{
 use crate::{
     blocking, fdo,
     raw::{Connection as RawConnection, Socket},
-    Authenticated, ConnectionBuilder, DBusError, Error, Guid, Message, MessageStream, MessageType,
-    ObjectServer, Result,
+    Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Guid, Message,
+    MessageStream, MessageType, ObjectServer, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -765,7 +765,7 @@ impl Connection {
         match subscriptions.entry(expr) {
             Entry::Vacant(e) => {
                 fdo::DBusProxy::builder(self)
-                    .cache_properties(false)
+                    .cache_properties(CacheProperties::No)
                     .build()
                     .await?
                     .add_match(e.key())
@@ -793,7 +793,7 @@ impl Connection {
                 *e.get_mut() -= 1;
                 if *e.get() == 0 {
                     fdo::DBusProxy::builder(self)
-                        .cache_properties(false)
+                        .cache_properties(CacheProperties::No)
                         .build()
                         .await?
                         .remove_match(e.key())
@@ -815,7 +815,7 @@ impl Connection {
 
     async fn hello_bus(&self) -> Result<()> {
         let dbus_proxy = fdo::DBusProxy::builder(self)
-            .cache_properties(false)
+            .cache_properties(CacheProperties::No)
             .build()
             .await?;
         let future = dbus_proxy.hello();
