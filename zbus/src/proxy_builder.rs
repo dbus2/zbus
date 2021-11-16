@@ -6,6 +6,25 @@ use zvariant::ObjectPath;
 
 use crate::{Connection, Error, Proxy, ProxyInner, Result};
 
+/// The properties caching mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CacheProperties {
+    /// Cache properties (default). The properties will be cached upfront as part of the proxy
+    /// creation.
+    Yes,
+    /// Don't cache properties.
+    No,
+    /// Cache properties but only populate the cache on the first read of a property.
+    Lazily,
+}
+
+impl Default for CacheProperties {
+    fn default() -> Self {
+        CacheProperties::Yes
+    }
+}
+
 /// Builder for proxies.
 #[derive(Debug)]
 pub struct ProxyBuilder<'a, T = ()> {
@@ -14,7 +33,7 @@ pub struct ProxyBuilder<'a, T = ()> {
     path: Option<ObjectPath<'a>>,
     interface: Option<InterfaceName<'a>>,
     proxy_type: PhantomData<T>,
-    cache: bool,
+    cache: CacheProperties,
 }
 
 impl<'a, T> Clone for ProxyBuilder<'a, T> {
@@ -40,7 +59,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
             destination: None,
             path: None,
             interface: None,
-            cache: true,
+            cache: CacheProperties::default(),
             proxy_type: PhantomData,
         }
     }
@@ -77,8 +96,8 @@ impl<'a, T> ProxyBuilder<'a, T> {
         Ok(self)
     }
 
-    /// Set whether to cache properties.
-    pub fn cache_properties(mut self, cache: bool) -> Self {
+    /// Set the properties caching mode.
+    pub fn cache_properties(mut self, cache: CacheProperties) -> Self {
         self.cache = cache;
         self
     }
@@ -104,7 +123,16 @@ impl<'a, T> ProxyBuilder<'a, T> {
     where
         T: From<Proxy<'a>>,
     {
+        let cache_upfront = self.cache == CacheProperties::Yes;
         let proxy = self.build_internal();
+
+        if cache_upfront {
+            proxy
+                .get_property_cache()
+                .expect("properties cache not initialized")
+                .ready()
+                .await?;
+        }
 
         Ok(proxy.into())
     }
@@ -123,7 +151,7 @@ where
             interface: Some(
                 InterfaceName::from_static_str(T::INTERFACE).expect("invalid interface name"),
             ),
-            cache: true,
+            cache: CacheProperties::default(),
             proxy_type: PhantomData,
         }
     }
@@ -162,7 +190,7 @@ mod tests {
             .unwrap()
             .interface("org.freedesktop.Interface")
             .unwrap()
-            .cache_properties(false);
+            .cache_properties(CacheProperties::No);
         assert!(matches!(
             builder.clone().destination.unwrap(),
             BusName::Unique(_),

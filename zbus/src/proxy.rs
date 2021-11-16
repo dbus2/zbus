@@ -11,8 +11,9 @@ use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
     future::Future,
+    ops::Deref,
     pin::Pin,
-    sync::{Arc, Mutex as SyncMutex},
+    sync::{Arc, Mutex, MutexGuard},
     task::{Context, Poll},
 };
 
@@ -21,7 +22,8 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder, Result,
+    CacheProperties, Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder,
+    Result,
 };
 
 #[derive(Debug, Default)]
@@ -32,7 +34,7 @@ struct PropertyValue {
 
 #[derive(Debug)]
 pub(crate) struct PropertiesCache {
-    values: SyncMutex<HashMap<String, PropertyValue>>,
+    values: Mutex<HashMap<String, PropertyValue>>,
     ready: async_channel::Receiver<Result<()>>,
 }
 
@@ -129,55 +131,88 @@ pub struct PropertyChanged<'a, T> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<'a, T> PropertyChanged<'a, T>
-where
-    T: TryFrom<zvariant::OwnedValue>,
-    T::Error: Into<crate::Error>,
-{
+impl<'a, T> PropertyChanged<'a, T> {
     // The name of the property that changed.
     pub fn name(&self) -> &str {
         self.name
     }
 
+    // Get the raw value of the property that changed.
+    //
+    // If the notification signal contained the new value, it has been cached already and this call
+    // will return that value. Otherwise (i-e invalidated property), a D-Bus call is made to fetch
+    // and cache the new value.
+    pub async fn get_raw<'p>(&'p self) -> Result<impl Deref<Target = Value<'static>> + 'p> {
+        struct Wrapper<'w> {
+            name: &'w str,
+            values: MutexGuard<'w, HashMap<String, PropertyValue>>,
+        }
+
+        impl<'w> Deref for Wrapper<'w> {
+            type Target = Value<'static>;
+
+            fn deref(&self) -> &Self::Target {
+                &*self
+                    .values
+                    .get(self.name)
+                    .expect("PropertyStream with no corresponding property")
+                    .value
+                    .as_ref()
+                    .expect("PropertyStream with no corresponding property")
+            }
+        }
+
+        {
+            let values = self.properties.values.lock().expect("lock poisoned");
+            if values
+                .get(self.name)
+                .expect("PropertyStream with no corresponding property")
+                .value
+                .is_some()
+            {
+                return Ok(Wrapper {
+                    name: self.name,
+                    values,
+                });
+            }
+        }
+
+        // The property was invalidated, so we need to fetch the new value.
+        let properties_proxy = self.proxy.properties_proxy();
+        let value = properties_proxy
+            .get(self.proxy.inner.interface.clone(), self.name)
+            .await
+            .map_err(crate::Error::from)?;
+
+        // Save the new value
+        let mut values = self.properties.values.lock().expect("lock poisoned");
+
+        values
+            .get_mut(self.name)
+            .expect("PropertyStream with no corresponding property")
+            .value = Some(value);
+
+        Ok(Wrapper {
+            name: self.name,
+            values,
+        })
+    }
+}
+
+impl<T> PropertyChanged<'_, T>
+where
+    T: TryFrom<zvariant::OwnedValue>,
+    T::Error: Into<crate::Error>,
+{
     // Get the value of the property that changed.
     //
     // If the notification signal contained the new value, it has been cached already and this call
     // will return that value. Otherwise (i-e invalidated property), a D-Bus call is made to fetch
     // and cache the new value.
     pub async fn get(&self) -> Result<T> {
-        let properties = self.properties.clone();
-        let value = {
-            let values = properties.values.lock().expect("lock poisoned");
-            let entry = values
-                .get(self.name)
-                .expect("PropertyStream with no corresponding property");
-            entry.value.as_ref().cloned()
-        };
-
-        let value = match value {
-            Some(value) => Ok(value),
-            None => {
-                let properties_proxy = self.proxy.properties_proxy();
-                properties_proxy
-                    .get(self.proxy.inner.interface.clone(), self.name)
-                    .await
-                    .map_err(crate::Error::from)
-                    .map(|value| {
-                        // Save the new value
-                        properties
-                            .values
-                            .lock()
-                            .expect("lock poisoned")
-                            .get_mut(self.name)
-                            .expect("PropertyStream with no corresponding property")
-                            .value = Some(value.clone());
-
-                        value
-                    })
-            }
-        };
-
-        value.and_then(|value| T::try_from(value).map_err(Into::into))
+        self.get_raw()
+            .await
+            .and_then(|v| T::try_from(OwnedValue::from(&*v)).map_err(Into::into))
     }
 }
 
@@ -195,8 +230,7 @@ pub struct PropertyStream<'a, T> {
 
 impl<'a, T> stream::Stream for PropertyStream<'a, T>
 where
-    T: TryFrom<zvariant::OwnedValue> + Unpin,
-    T::Error: Into<crate::Error>,
+    T: Unpin,
 {
     type Item = PropertyChanged<'a, T>;
 
@@ -242,7 +276,7 @@ impl PropertiesCache {
     }
 
     /// Wait for the cache to be populated and return any error encountered during population
-    async fn ready(&self) -> Result<()> {
+    pub(crate) async fn ready(&self) -> Result<()> {
         // Only one caller will actually get the result; all other callers see a closed channel,
         // but that indicates the cache is ready (and on error, the cache will be empty, which just
         // means we bypass it)
@@ -259,9 +293,12 @@ impl<'a> ProxyInner<'a> {
         destination: BusName<'a>,
         path: ObjectPath<'a>,
         interface: InterfaceName<'a>,
-        cache: bool,
+        cache: CacheProperties,
     ) -> Self {
-        let property_cache = if cache { Some(OnceCell::new()) } else { None };
+        let property_cache = match cache {
+            CacheProperties::Yes | CacheProperties::Lazily => Some(OnceCell::new()),
+            CacheProperties::No => None,
+        };
         Self {
             inner_without_borrows: ProxyInnerStatic {
                 conn,
@@ -417,7 +454,7 @@ impl<'a> Proxy<'a> {
             .path(self.inner.path.as_ref())
             .unwrap()
             // does not have properties
-            .cache_properties(false)
+            .cache_properties(CacheProperties::No)
             .build_internal()
             .into()
     }
@@ -431,7 +468,7 @@ impl<'a> Proxy<'a> {
             .path(self.inner.path.to_owned())
             .unwrap()
             // does not have properties
-            .cache_properties(false)
+            .cache_properties(CacheProperties::No)
             .build_internal()
             .into()
     }
@@ -440,86 +477,85 @@ impl<'a> Proxy<'a> {
     ///
     /// Use PropertiesCache::ready() to wait for the cache to be populated and to get any errors
     /// encountered in the population.
-    fn get_property_cache(&self) -> Option<&Arc<PropertiesCache>> {
+    pub(crate) fn get_property_cache(&self) -> Option<&Arc<PropertiesCache>> {
         use ordered_stream::OrderedStreamExt;
-        if let Some(cache) = &self.inner.property_cache {
-            let proxy_properties = &cache
-                .get_or_init(|| {
-                    let proxy = self.owned_properties_proxy();
-                    let (send, recv) = bounded(1);
+        let cache = match &self.inner.property_cache {
+            Some(cache) => cache,
+            None => return None,
+        };
+        let (cache, _) = &cache.get_or_init(|| {
+            let proxy = self.owned_properties_proxy();
+            let (send, recv) = bounded(1);
 
-                    let arc = Arc::new(PropertiesCache {
-                        values: Default::default(),
-                        ready: recv,
-                    });
+            let cache = Arc::new(PropertiesCache {
+                values: Default::default(),
+                ready: recv,
+            });
 
-                    let interface = self.interface().to_owned();
-                    let properties = arc.clone();
+            let interface = self.interface().to_owned();
+            let properties = cache.clone();
 
-                    let task = self.connection().executor().spawn(async move {
-                        let prop_changes = match proxy.receive_properties_changed().await {
-                            Ok(s) => s.map(Either::Left),
-                            Err(e) => {
-                                // ignore send errors, it just means the original future was cancelled
-                                let _ = send.send(Err(e)).await;
-                                return;
-                            }
-                        };
+            let task = self.connection().executor().spawn(async move {
+                let prop_changes = match proxy.receive_properties_changed().await {
+                    Ok(s) => s.map(Either::Left),
+                    Err(e) => {
+                        // ignore send errors, it just means the original future was cancelled
+                        let _ = send.send(Err(e)).await;
+                        return;
+                    }
+                };
 
-                        let get_all = MessageBuilder::method_call(proxy.path().as_ref(), "GetAll")
-                            .unwrap()
-                            .destination(proxy.destination())
-                            .unwrap()
-                            .interface(proxy.interface())
-                            .unwrap()
-                            .build(&interface)
-                            .unwrap();
+                let get_all = MessageBuilder::method_call(proxy.path().as_ref(), "GetAll")
+                    .unwrap()
+                    .destination(proxy.destination())
+                    .unwrap()
+                    .interface(proxy.interface())
+                    .unwrap()
+                    .build(&interface)
+                    .unwrap();
 
-                        let get_all = match proxy.connection().call_method_raw(get_all).await {
-                            Ok(s) => FromFuture::from(s).map(Either::Right),
-                            Err(e) => {
-                                let _ = send.send(Err(e)).await;
-                                return;
-                            }
-                        };
+                let get_all = match proxy.connection().call_method_raw(get_all).await {
+                    Ok(s) => FromFuture::from(s).map(Either::Right),
+                    Err(e) => {
+                        let _ = send.send(Err(e)).await;
+                        return;
+                    }
+                };
 
-                        let mut join = join_streams(prop_changes, get_all);
+                let mut join = join_streams(prop_changes, get_all);
 
-                        loop {
-                            match join.next().await {
-                                Some(Either::Left(update)) => {
-                                    if let Ok(args) = update.args() {
-                                        if args.interface_name == interface {
-                                            properties.update_cache(
-                                                &args.changed_properties,
-                                                args.invalidated_properties,
-                                            );
-                                        }
-                                    }
+                loop {
+                    match join.next().await {
+                        Some(Either::Left(update)) => {
+                            if let Ok(args) = update.args() {
+                                if args.interface_name == interface {
+                                    properties.update_cache(
+                                        &args.changed_properties,
+                                        args.invalidated_properties,
+                                    );
                                 }
-                                Some(Either::Right(Ok(populate))) => {
-                                    let result = populate
-                                        .body()
-                                        .map(|values| properties.update_cache(&values, Vec::new()));
-                                    let _ = send.send(result).await;
-                                    send.close();
-                                }
-                                Some(Either::Right(Err(e))) => {
-                                    let _ = send.send(Err(e)).await;
-                                    send.close();
-                                }
-                                None => return,
                             }
                         }
-                    });
+                        Some(Either::Right(Ok(populate))) => {
+                            let result = populate
+                                .body()
+                                .map(|values| properties.update_cache(&values, Vec::new()));
+                            let _ = send.send(result).await;
+                            send.close();
+                        }
+                        Some(Either::Right(Err(e))) => {
+                            let _ = send.send(Err(e)).await;
+                            send.close();
+                        }
+                        None => return,
+                    }
+                }
+            });
 
-                    (arc, task)
-                })
-                .0;
-            Some(proxy_properties)
-        } else {
-            None
-        }
+            (cache, task)
+        });
+
+        Some(cache)
     }
 
     /// Get the cached value of the property `property_name`.
@@ -528,25 +564,59 @@ impl<'a> Proxy<'a> {
     /// was invalidated by an update, because caching was disabled for this property or proxy, or
     /// because the cache has not yet been populated.  Use `get_property` to fetch the value from
     /// the peer.
-    pub fn cached_property<T>(&self, property_name: &str) -> fdo::Result<Option<T>>
+    pub fn cached_property<T>(&self, property_name: &str) -> Result<Option<T>>
     where
         T: TryFrom<OwnedValue>,
+        T::Error: Into<Error>,
     {
-        if let Some(lock) = self
+        self.cached_property_raw(property_name)
+            .as_deref()
+            .map(|v| T::try_from(OwnedValue::from(v)))
+            .transpose()
+            .map_err(Into::into)
+    }
+
+    /// Get the cached value of the property `property_name`.
+    ///
+    /// Same as `cached_property`, but gives you access to the raw value stored in the cache. This
+    /// is useful if you want to avoid allocations and cloning.
+    pub fn cached_property_raw<'p>(
+        &'p self,
+        property_name: &'p str,
+    ) -> Option<impl Deref<Target = Value<'static>> + 'p> {
+        if let Some(values) = self
             .inner
             .property_cache
             .as_ref()
             .and_then(OnceCell::get)
             .map(|c| c.0.values.lock().expect("lock poisoned"))
         {
-            lock.get(property_name)
-                .and_then(|e| e.value.as_ref())
-                .cloned()
-                .map(T::try_from)
-                .transpose()
-                .map_err(|_| Error::InvalidReply.into())
+            // ensure that the property is in the cache.
+            values.get(property_name)?;
+
+            struct Wrapper<'a> {
+                values: MutexGuard<'a, HashMap<String, PropertyValue>>,
+                property_name: &'a str,
+            }
+
+            impl Deref for Wrapper<'_> {
+                type Target = Value<'static>;
+
+                fn deref(&self) -> &Self::Target {
+                    self.values
+                        .get(self.property_name)
+                        .and_then(|e| e.value.as_ref())
+                        .map(|v| v.deref())
+                        .expect("inexistent property")
+                }
+            }
+
+            Some(Wrapper {
+                values,
+                property_name,
+            })
         } else {
-            Ok(None)
+            None
         }
     }
 
@@ -561,9 +631,10 @@ impl<'a> Proxy<'a> {
     ///
     /// Get the property value from the cache (if caching is enabled on this proxy) or call the
     /// `Get` method of the `org.freedesktop.DBus.Properties` interface.
-    pub async fn get_property<T>(&self, property_name: &str) -> fdo::Result<T>
+    pub async fn get_property<T>(&self, property_name: &str) -> Result<T>
     where
         T: TryFrom<OwnedValue>,
+        T::Error: Into<Error>,
     {
         if let Some(cache) = self.get_property_cache() {
             cache.ready().await?;
@@ -573,7 +644,7 @@ impl<'a> Proxy<'a> {
         }
 
         let value = self.get_proxy_property(property_name).await?;
-        value.try_into().map_err(|_| Error::InvalidReply.into())
+        value.try_into().map_err(Into::into)
     }
 
     /// Set the property `property_name`.

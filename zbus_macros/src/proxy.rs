@@ -252,7 +252,12 @@ pub fn create_proxy(
 
             /// Returns a customizable builder for this proxy.
             pub fn builder(conn: &#connection) -> #builder<'c, Self> {
-                #builder::new(conn).cache_properties(#has_properties)
+                let cache_props = if #has_properties {
+                    #zbus::CacheProperties::Yes
+                } else {
+                    #zbus::CacheProperties::No
+                };
+                #builder::new(conn).cache_properties(cache_props)
             }
 
             /// Consumes `self`, returning the underlying `zbus::Proxy`.

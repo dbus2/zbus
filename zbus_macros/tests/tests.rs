@@ -4,7 +4,7 @@ use futures_util::{
     stream::StreamExt,
 };
 use std::{convert::TryInto, future::ready};
-use zbus::{fdo, SignalContext};
+use zbus::{fdo, CacheProperties, SignalContext};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]
@@ -50,7 +50,7 @@ fn test_proxy() {
     block_on(async move {
         let connection = zbus::Connection::session().await.unwrap();
         let proxy = TestProxy::builder(&connection)
-            .cache_properties(false)
+            .cache_properties(CacheProperties::No)
             .build()
             .await
             .unwrap();
