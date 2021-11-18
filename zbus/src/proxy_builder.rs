@@ -10,18 +10,18 @@ use crate::{Connection, Error, Proxy, ProxyInner, Result};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum CacheProperties {
-    /// Cache properties (default). The properties will be cached upfront as part of the proxy
+    /// Cache properties. The properties will be cached upfront as part of the proxy
     /// creation.
     Yes,
     /// Don't cache properties.
     No,
-    /// Cache properties but only populate the cache on the first read of a property.
+    /// Cache properties but only populate the cache on the first read of a property (default).
     Lazily,
 }
 
 impl Default for CacheProperties {
     fn default() -> Self {
-        CacheProperties::Yes
+        CacheProperties::Lazily
     }
 }
 
