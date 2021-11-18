@@ -15,8 +15,9 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 /// [`Value`]: enum.Value.html#variant.Str
 /// [`&str`]: https://doc.rust-lang.org/std/str/index.html
 /// [`String`]: https://doc.rust-lang.org/std/string/struct.String.html
-#[derive(Debug, Default, PartialEq, Eq, Hash, Clone)]
-pub struct Str<'a>(Inner<'a>);
+#[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[serde(rename(serialize = "zvariant::Str", deserialize = "zvariant::Str"))]
+pub struct Str<'a>(#[serde(borrow)] Inner<'a>);
 
 #[derive(Debug, Eq, Clone)]
 enum Inner<'a> {
@@ -54,15 +55,18 @@ impl<'a> Inner<'a> {
     }
 }
 
-impl<'a> Serialize for Str<'a> {
+impl<'a> Serialize for Inner<'a> {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         s.serialize_str(self.as_str())
     }
 }
 
-impl<'de: 'a, 'a> Deserialize<'de> for Str<'a> {
-    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        <&'a str>::deserialize(d).map(Inner::Borrowed).map(Str)
+impl<'de: 'a, 'a> Deserialize<'de> for Inner<'a> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        <&'a str>::deserialize(deserializer).map(Inner::Borrowed)
     }
 }
 
