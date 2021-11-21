@@ -243,6 +243,15 @@ where
         };
         ready!(Pin::new(&mut m.event).poll(cx));
 
+        m.event = properties
+            .values
+            .read()
+            .expect("lock poisoned")
+            .get(m.name)
+            .expect("PropertyStream with no corresponding property")
+            .event
+            .listen();
+
         Poll::Ready(Some(PropertyChanged {
             name: m.name,
             properties,
