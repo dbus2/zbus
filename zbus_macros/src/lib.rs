@@ -314,5 +314,7 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_derive(DBusError, attributes(dbus_error))]
 pub fn derive_dbus_error(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    error::expand_derive(input).into()
+    error::expand_derive(input)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
