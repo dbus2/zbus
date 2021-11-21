@@ -383,7 +383,7 @@ mod tests {
         error::Error,
         result::Result,
     };
-    use test_env_log::test;
+    use test_log::test;
     use zbus_names::{InterfaceName, MemberName};
     use zvariant::{ObjectPath, Signature};
 

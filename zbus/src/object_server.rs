@@ -734,7 +734,7 @@ mod tests {
     use futures_util::StreamExt;
     use ntest::timeout;
     use serde::{Deserialize, Serialize};
-    use test_env_log::test;
+    use test_log::test;
     use zbus::DBusError;
     use zvariant::{derive::Type, Value};
 

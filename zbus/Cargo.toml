@@ -52,7 +52,7 @@ doc-comment = "0.3.3"
 futures-util = "0.3.8" # activate default features
 ntest = "0.7.1"
 env_logger = "0.8.4"
-test-env-log = "0.2.6"
+test-log = "0.2.8"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 async-std = { version = "1.10.0", features = ["attributes" ] }
 

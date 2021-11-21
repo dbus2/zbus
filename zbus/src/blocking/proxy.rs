@@ -374,7 +374,7 @@ mod tests {
     use super::*;
     use crate::blocking;
     use ntest::timeout;
-    use test_env_log::test;
+    use test_log::test;
 
     #[test]
     #[timeout(15000)]

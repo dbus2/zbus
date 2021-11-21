@@ -818,7 +818,7 @@ mod tests {
     use futures_util::StreamExt;
     use ntest::timeout;
     use std::{convert::TryInto, future::ready};
-    use test_env_log::test;
+    use test_log::test;
     use tokio::runtime;
     use zbus_names::WellKnownName;
 

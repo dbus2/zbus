@@ -261,7 +261,7 @@ impl From<crate::Connection> for Connection {
 mod tests {
     use ntest::timeout;
     use std::{os::unix::net::UnixStream, thread};
-    use test_env_log::test;
+    use test_log::test;
 
     use crate::{
         blocking::{ConnectionBuilder, MessageIterator},

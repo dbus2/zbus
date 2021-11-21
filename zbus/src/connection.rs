@@ -1047,7 +1047,7 @@ mod tests {
     use futures_util::stream::TryStreamExt;
     use ntest::timeout;
     use std::os::unix::net::UnixStream;
-    use test_env_log::test;
+    use test_log::test;
 
     use super::*;
 

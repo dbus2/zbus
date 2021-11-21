@@ -172,7 +172,7 @@ pub trait ProxyDefault {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test_env_log::test;
+    use test_log::test;
 
     #[test]
     #[ntest::timeout(15000)]

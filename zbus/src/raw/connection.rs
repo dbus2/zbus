@@ -196,7 +196,7 @@ mod tests {
     use async_io::Async;
     use futures_util::future::poll_fn;
     use std::os::unix::net::UnixStream;
-    use test_env_log::test;
+    use test_log::test;
 
     #[test]
     fn raw_send_receive() {

@@ -301,7 +301,7 @@ impl std::str::FromStr for Node {
 #[cfg(test)]
 mod tests {
     use std::{error::Error, str::FromStr};
-    use test_env_log::test;
+    use test_log::test;
 
     use super::Node;
 

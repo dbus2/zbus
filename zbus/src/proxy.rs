@@ -964,7 +964,7 @@ mod tests {
     use async_io::block_on;
     use ntest::timeout;
     use std::future::ready;
-    use test_env_log::test;
+    use test_log::test;
     use zvariant::Optional;
 
     #[test]

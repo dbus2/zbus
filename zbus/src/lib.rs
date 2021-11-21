@@ -243,7 +243,7 @@ mod tests {
     use async_io::block_on;
     use enumflags2::BitFlags;
     use ntest::timeout;
-    use test_env_log::test;
+    use test_log::test;
 
     use zbus_names::UniqueName;
     use zvariant::{Fd, OwnedObjectPath, OwnedValue, Type};
