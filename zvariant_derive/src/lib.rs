@@ -93,7 +93,9 @@ mod value;
 #[proc_macro_derive(Type)]
 pub fn type_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
-    r#type::expand_derive(ast).into()
+    r#type::expand_derive(ast)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
 
 /// Derive macro to add [`Type`] implementation to structs serialized as `a{sv}` type.
