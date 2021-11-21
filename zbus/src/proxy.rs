@@ -13,7 +13,7 @@ use std::{
     future::Future,
     ops::Deref,
     pin::Pin,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, RwLock, RwLockReadGuard},
     task::{Context, Poll},
 };
 
@@ -34,7 +34,7 @@ struct PropertyValue {
 
 #[derive(Debug)]
 pub(crate) struct PropertiesCache {
-    values: Mutex<HashMap<String, PropertyValue>>,
+    values: RwLock<HashMap<String, PropertyValue>>,
     ready: async_channel::Receiver<Result<()>>,
 }
 
@@ -145,7 +145,7 @@ impl<'a, T> PropertyChanged<'a, T> {
     pub async fn get_raw<'p>(&'p self) -> Result<impl Deref<Target = Value<'static>> + 'p> {
         struct Wrapper<'w> {
             name: &'w str,
-            values: MutexGuard<'w, HashMap<String, PropertyValue>>,
+            values: RwLockReadGuard<'w, HashMap<String, PropertyValue>>,
         }
 
         impl<'w> Deref for Wrapper<'w> {
@@ -163,7 +163,7 @@ impl<'a, T> PropertyChanged<'a, T> {
         }
 
         {
-            let values = self.properties.values.lock().expect("lock poisoned");
+            let values = self.properties.values.read().expect("lock poisoned");
             if values
                 .get(self.name)
                 .expect("PropertyStream with no corresponding property")
@@ -185,7 +185,7 @@ impl<'a, T> PropertyChanged<'a, T> {
             .map_err(crate::Error::from)?;
 
         // Save the new value
-        let mut values = self.properties.values.lock().expect("lock poisoned");
+        let mut values = self.properties.values.write().expect("lock poisoned");
 
         values
             .get_mut(self.name)
@@ -194,7 +194,7 @@ impl<'a, T> PropertyChanged<'a, T> {
 
         Ok(Wrapper {
             name: self.name,
-            values,
+            values: self.properties.values.read().expect("lock poisoned"),
         })
     }
 }
@@ -243,20 +243,27 @@ where
         };
         ready!(Pin::new(&mut m.event).poll(cx));
 
-        let prop_changed = PropertyChanged {
+        m.event = properties
+            .values
+            .read()
+            .expect("lock poisoned")
+            .get(m.name)
+            .expect("PropertyStream with no corresponding property")
+            .event
+            .listen();
+
+        Poll::Ready(Some(PropertyChanged {
             name: m.name,
             properties,
             proxy: m.proxy.clone(),
             phantom: std::marker::PhantomData,
-        };
-
-        Poll::Ready(Some(prop_changed))
+        }))
     }
 }
 
 impl PropertiesCache {
     fn update_cache(&self, changed: &HashMap<&str, Value<'_>>, invalidated: Vec<&str>) {
-        let mut values = self.values.lock().expect("lock poisoned");
+        let mut values = self.values.write().expect("lock poisoned");
 
         for inval in invalidated {
             if let Some(entry) = values.get_mut(&*inval) {
@@ -589,13 +596,13 @@ impl<'a> Proxy<'a> {
             .property_cache
             .as_ref()
             .and_then(OnceCell::get)
-            .map(|c| c.0.values.lock().expect("lock poisoned"))
+            .map(|c| c.0.values.read().expect("lock poisoned"))
         {
             // ensure that the property is in the cache.
             values.get(property_name)?;
 
             struct Wrapper<'a> {
-                values: MutexGuard<'a, HashMap<String, PropertyValue>>,
+                values: RwLockReadGuard<'a, HashMap<String, PropertyValue>>,
                 property_name: &'a str,
             }
 
@@ -801,7 +808,7 @@ impl<'a> Proxy<'a> {
     ) -> PropertyStream<'a, T> {
         let properties = self.get_property_cache();
         let event = if let Some(properties) = &properties {
-            let mut values = properties.values.lock().expect("lock poisoned");
+            let mut values = properties.values.write().expect("lock poisoned");
             let entry = values
                 .entry(name.to_string())
                 .or_insert_with(PropertyValue::default);
