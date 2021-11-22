@@ -93,7 +93,9 @@ mod value;
 #[proc_macro_derive(Type)]
 pub fn type_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
-    r#type::expand_derive(ast).into()
+    r#type::expand_derive(ast)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
 
 /// Derive macro to add [`Type`] implementation to structs serialized as `a{sv}` type.
@@ -116,7 +118,9 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(TypeDict)]
 pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
-    dict::expand_type_derive(ast).into()
+    dict::expand_type_derive(ast)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
 
 /// Adds [`Serialize`] implementation to structs to be serialized as `a{sv}` type.
@@ -150,7 +154,9 @@ pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(SerializeDict, attributes(zvariant))]
 pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
-    dict::expand_serialize_derive(input).into()
+    dict::expand_serialize_derive(input)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
 
 /// Adds [`Deserialize`] implementation to structs to be deserialized from `a{sv}` type.
@@ -184,7 +190,9 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(DeserializeDict, attributes(zvariant))]
 pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
-    dict::expand_deserialize_derive(input).into()
+    dict::expand_deserialize_derive(input)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
 
 /// Implements conversions for your type to/from [`Value`].
@@ -297,7 +305,9 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(Value)]
 pub fn value_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
-    value::expand_derive(ast, value::ValueType::Value).into()
+    value::expand_derive(ast, value::ValueType::Value)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
 
 /// Implements conversions for your type to/from [`OwnedValue`].
@@ -310,5 +320,7 @@ pub fn value_macro_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(OwnedValue)]
 pub fn owned_value_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
-    value::expand_derive(ast, value::ValueType::OwnedValue).into()
+    value::expand_derive(ast, value::ValueType::OwnedValue)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }

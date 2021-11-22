@@ -3,7 +3,7 @@ use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use syn::{
     self, parse_quote, punctuated::Punctuated, AngleBracketedGenericArguments, AttributeArgs,
-    FnArg, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue,
+    Error, FnArg, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue,
     NestedMeta, PatType, PathArguments, ReturnType, Signature, Token, Type, TypePath,
 };
 
@@ -48,10 +48,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             &p.path
                 .segments
                 .last()
-                .expect("Unsupported 'impl' type")
+                .ok_or_else(|| Error::new_spanned(p, "Unsupported 'impl' type"))?
                 .ident
         }
-        _ => panic!("Invalid type"),
+        _ => return Err(Error::new_spanned(&input.self_ty, "Invalid type")),
     };
 
     let mut iface_name = None;
@@ -62,13 +62,13 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     if let Str(lit) = nv.lit {
                         iface_name = Some(lit.value());
                     } else {
-                        panic!("Invalid interface argument")
+                        return Err(Error::new_spanned(&nv.lit, "Invalid interface argument"));
                     }
                 } else {
-                    panic!("Unsupported argument");
+                    return Err(Error::new_spanned(&nv.path, "Unsupported argument"));
                 }
             }
-            _ => panic!("Unknown attribute"),
+            _ => return Err(Error::new_spanned(&arg, "Unknown attribute")),
         }
     }
     let iface_name = iface_name.unwrap_or(format!("org.freedesktop.{}", ty));
@@ -88,8 +88,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             ..
         } = &mut method.sig;
 
-        let attrs = parse_item_attributes(&method.attrs, "dbus_interface")
-            .expect("bad dbus_interface attributes");
+        let attrs = parse_item_attributes(&method.attrs, "dbus_interface")?;
         method
             .attrs
             .retain(|attr| !attr.path.is_ident("dbus_interface"));
@@ -117,15 +116,18 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
         let has_inputs = inputs.len() > 1;
 
-        let is_mut = if let FnArg::Receiver(r) = inputs.first().expect("not &self method") {
+        let is_mut = if let FnArg::Receiver(r) = inputs
+            .first()
+            .ok_or_else(|| Error::new_spanned(&ident, "not &self method"))?
+        {
             r.mutability.is_some()
         } else if is_signal {
             false
         } else {
-            panic!("The method is missing a self receiver");
+            return Err(Error::new_spanned(&method, "missing receiver"));
         };
         if is_signal && !is_async {
-            return Err(syn::Error::new_spanned(&method, "signals must be async"));
+            return Err(Error::new_spanned(&method, "signals must be async"));
         }
         let method_await = if is_async {
             quote! { .await }
@@ -146,7 +148,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             .collect::<Vec<_>>();
         let signal_context_arg = if is_signal {
             if typed_inputs.is_empty() {
-                return Err(syn::Error::new_spanned(
+                return Err(Error::new_spanned(
                     &inputs,
                     "Expected a `&zbus::SignalContext<'_> argument",
                 ));
@@ -346,7 +348,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         }
     }
 
-    introspect.extend(introspect_properties(properties));
+    introspect_properties(&mut introspect, properties)?;
 
     let generics = &input.generics;
     let where_clause = &generics.where_clause;
@@ -490,7 +492,7 @@ fn get_args_from_inputs(
                 let nested = match attr.parse_meta()? {
                     Meta::List(MetaList { nested, .. }) => nested,
                     meta => {
-                        return Err(syn::Error::new_spanned(
+                        return Err(Error::new_spanned(
                             meta,
                             "Unsupported syntax\n
                              Did you mean `#[zbus(...)]`?",
@@ -510,20 +512,17 @@ fn get_args_from_inputs(
                             } else if p.is_ident("signal_context") {
                                 is_signal_context = true;
                             } else {
-                                return Err(syn::Error::new_spanned(
+                                return Err(Error::new_spanned(
                                     item,
                                     "Unrecognized zbus attribute",
                                 ));
                             }
                         }
                         NestedMeta::Meta(_) => {
-                            return Err(syn::Error::new_spanned(
-                                item,
-                                "Unrecognized zbus attribute",
-                            ));
+                            return Err(Error::new_spanned(item, "Unrecognized zbus attribute"));
                         }
                         NestedMeta::Lit(l) => {
-                            return Err(syn::Error::new_spanned(l, "Unexpected literal"))
+                            return Err(Error::new_spanned(l, "Unexpected literal"))
                         }
                     }
                 }
@@ -531,7 +530,7 @@ fn get_args_from_inputs(
 
             if is_server {
                 if server_arg_decl.is_some() {
-                    return Err(syn::Error::new_spanned(
+                    return Err(Error::new_spanned(
                         input,
                         "There can only be one object_server argument",
                     ));
@@ -541,7 +540,7 @@ fn get_args_from_inputs(
                 server_arg_decl = Some(quote! { let #server_arg = &s; });
             } else if is_conn {
                 if conn_arg_decl.is_some() {
-                    return Err(syn::Error::new_spanned(
+                    return Err(Error::new_spanned(
                         input,
                         "There can only be one connection argument",
                     ));
@@ -551,7 +550,7 @@ fn get_args_from_inputs(
                 conn_arg_decl = Some(quote! { let #conn_arg = &c; });
             } else if is_header {
                 if header_arg_decl.is_some() {
-                    return Err(syn::Error::new_spanned(
+                    return Err(Error::new_spanned(
                         input,
                         "There can only be one header argument",
                     ));
@@ -569,7 +568,7 @@ fn get_args_from_inputs(
                 });
             } else if is_signal_context {
                 if signal_context_arg_decl.is_some() {
-                    return Err(syn::Error::new_spanned(
+                    return Err(Error::new_spanned(
                         input,
                         "There can only be one `signal_context` argument",
                     ));
@@ -713,7 +712,7 @@ fn get_result_type(p: &TypePath) -> syn::Result<&Type> {
         .path
         .segments
         .last()
-        .expect("unsupported result type")
+        .ok_or_else(|| Error::new_spanned(p, "unsupported result type"))?
         .arguments
     {
         if let Some(syn::GenericArgument::Type(ty)) = args.first() {
@@ -721,7 +720,7 @@ fn get_result_type(p: &TypePath) -> syn::Result<&Type> {
         }
     }
 
-    Err(syn::Error::new_spanned(p, "unhandled Result return"))
+    Err(Error::new_spanned(p, "unhandled Result return"))
 }
 
 fn introspect_add_output_args(
@@ -739,7 +738,7 @@ fn introspect_add_output_args(
                 .path
                 .segments
                 .last()
-                .expect("unsupported output type")
+                .ok_or_else(|| Error::new_spanned(ty, "unsupported output type"))?
                 .ident
                 == "Result";
             if is_result_output {
@@ -750,6 +749,7 @@ fn introspect_add_output_args(
         if let Type::Tuple(t) = ty {
             if let Some(arg_names) = arg_names {
                 if t.elems.len() != arg_names.len() {
+                    // Turn into error
                     panic!("Number of out arg names different from out args specified")
                 }
             }
@@ -774,7 +774,7 @@ fn get_property_type(output: &ReturnType) -> syn::Result<&Type> {
                 .path
                 .segments
                 .last()
-                .expect("unsupported property type")
+                .ok_or_else(|| Error::new_spanned(ty, "unsupported property type"))?
                 .ident
                 == "Result";
             if is_result_output {
@@ -784,14 +784,15 @@ fn get_property_type(output: &ReturnType) -> syn::Result<&Type> {
 
         Ok(ty)
     } else {
-        Err(syn::Error::new_spanned(output, "Invalid property getter"))
+        Err(Error::new_spanned(output, "Invalid property getter"))
     }
 }
 
 fn introspect_properties(
+    introspection: &mut TokenStream,
     properties: BTreeMap<String, Property<'_>>,
-) -> impl Iterator<Item = TokenStream> + '_ {
-    properties.into_iter().filter_map(|(name, prop)| {
+) -> syn::Result<()> {
+    for (name, prop) in properties {
         let access = if prop.read && prop.write {
             "readwrite"
         } else if prop.read {
@@ -799,23 +800,27 @@ fn introspect_properties(
         } else if prop.write {
             "write"
         } else {
-            eprintln!("Property '{}' is not readable nor writable!", name);
-            return None;
+            return Err(Error::new_spanned(
+                name,
+                "property is neither readable nor writable",
+            ));
         };
-        let ty = prop
-            .ty
-            .expect("Write-only properties aren't supported yet.");
+        let ty = prop.ty.ok_or_else(|| {
+            Error::new_spanned(&name, "Write-only properties aren't supported yet")
+        })?;
 
         let doc_comments = prop.doc_comments;
-        Some(quote!(
+        introspection.extend(quote!(
             #doc_comments
             ::std::writeln!(
                 writer,
                 "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
                 "", #name, <#ty>::signature(), #access, indent = level,
             ).unwrap();
-        ))
-    })
+        ));
+    }
+
+    Ok(())
 }
 
 pub fn to_xml_docs(lines: Vec<String>) -> TokenStream {

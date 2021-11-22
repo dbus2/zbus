@@ -2,7 +2,7 @@ use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use regex::Regex;
 use syn::{
-    self, fold::Fold, parse_quote, spanned::Spanned, AttributeArgs, FnArg, Ident, ItemTrait,
+    self, fold::Fold, parse_quote, spanned::Spanned, AttributeArgs, Error, FnArg, Ident, ItemTrait,
     NestedMeta, ReturnType, TraitItemMethod, Type,
 };
 
@@ -29,7 +29,7 @@ impl AsyncOpts {
     }
 }
 
-pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
+pub fn expand(args: AttributeArgs, input: ItemTrait) -> Result<TokenStream, Error> {
     let (mut gen_async, mut gen_blocking) = (true, true);
     let (mut async_name, mut blocking_name) = (None, None);
     let mut iface_name = None;
@@ -42,49 +42,52 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
                     if let syn::Lit::Str(lit) = &nv.lit {
                         iface_name = Some(lit.value());
                     } else {
-                        panic!("Invalid interface argument")
+                        return Err(Error::new_spanned(&nv.lit, "invalid interface argument"));
                     }
                 } else if nv.path.is_ident("default_path") {
                     if let syn::Lit::Str(lit) = &nv.lit {
                         default_path = Some(lit.value());
                     } else {
-                        panic!("Invalid path argument")
+                        return Err(Error::new_spanned(&nv.lit, "invalid path argument"));
                     }
                 } else if nv.path.is_ident("default_service") {
                     if let syn::Lit::Str(lit) = &nv.lit {
                         default_service = Some(lit.value());
                     } else {
-                        panic!("Invalid service argument")
+                        return Err(Error::new_spanned(&nv.lit, "invalid service argument"));
                     }
                 } else if nv.path.is_ident("async_name") {
                     if let syn::Lit::Str(lit) = &nv.lit {
                         async_name = Some(lit.value());
                     } else {
-                        panic!("Invalid service argument")
+                        return Err(Error::new_spanned(&nv.lit, "invalid async_name argument"));
                     }
                 } else if nv.path.is_ident("blocking_name") {
                     if let syn::Lit::Str(lit) = &nv.lit {
                         blocking_name = Some(lit.value());
                     } else {
-                        panic!("Invalid service argument")
+                        return Err(Error::new_spanned(
+                            &nv.lit,
+                            "invalid blocking_name argument",
+                        ));
                     }
                 } else if nv.path.is_ident("gen_async") {
                     if let syn::Lit::Bool(lit) = &nv.lit {
                         gen_async = lit.value();
                     } else {
-                        panic!("Invalid gen_async argument")
+                        return Err(Error::new_spanned(&nv.lit, "invalid gen_async argument"));
                     }
                 } else if nv.path.is_ident("gen_blocking") {
                     if let syn::Lit::Bool(lit) = &nv.lit {
                         gen_blocking = lit.value();
                     } else {
-                        panic!("Invalid gen_blocking argument")
+                        return Err(Error::new_spanned(&nv.lit, "invalid gen_blocking argument"));
                     }
                 } else {
-                    panic!("Unsupported argument");
+                    return Err(Error::new_spanned(&nv.lit, "unsupported argument"));
                 }
             }
-            _ => panic!("Unknown attribute"),
+            _ => return Err(Error::new_spanned(&arg, "unknown attribute")),
         }
     }
 
@@ -121,7 +124,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             // Signal args structs are shared between the two proxies so always generate it for
             // async proxy only unless async proxy generation is disabled.
             !gen_async,
-        )
+        )?
     } else {
         quote! {}
     };
@@ -135,16 +138,16 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> TokenStream {
             &proxy_name,
             false,
             true,
-        )
+        )?
     } else {
         quote! {}
     };
 
-    quote! {
+    Ok(quote! {
         #blocking_proxy
 
         #async_proxy
-    }
+    })
 }
 
 pub fn create_proxy(
@@ -155,7 +158,7 @@ pub fn create_proxy(
     proxy_name: &str,
     blocking: bool,
     gen_sig_args: bool,
-) -> TokenStream {
+) -> Result<TokenStream, Error> {
     let zbus = zbus_path();
 
     let doc = get_doc_attrs(&input.attrs);
@@ -178,7 +181,7 @@ pub fn create_proxy(
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
             let method_name = m.sig.ident.to_string();
-            let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
+            let attrs = parse_item_attributes(&m.attrs, "dbus_proxy")?;
             let is_property = attrs.iter().any(|x| x.is_property());
             let is_signal = attrs.iter().any(|x| x.is_signal());
             let has_inputs = m.sig.inputs.len() > 1;
@@ -233,7 +236,7 @@ pub fn create_proxy(
         (proxy, connection, builder)
     };
 
-    quote! {
+    Ok(quote! {
         impl<'a> #zbus::ProxyDefault for #proxy_name<'a> {
             const INTERFACE: &'static str = #name;
             const DESTINATION: &'static str = #default_service;
@@ -324,7 +327,7 @@ pub fn create_proxy(
         }
 
         #stream_types
-    }
+    })
 }
 
 fn gen_proxy_method_call(
