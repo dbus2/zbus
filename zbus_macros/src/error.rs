@@ -1,7 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
-    Attribute, Data, DeriveInput, Fields, Lit,
+    spanned::Spanned,
+    Attribute, Data, DeriveInput, Error, Fields, Lit,
     Meta::{List, NameValue},
     NestedMeta,
     NestedMeta::Meta,
@@ -10,18 +11,21 @@ use syn::{
 
 use crate::utils::*;
 
-pub fn get_dbus_error_meta_items(attr: &Attribute) -> Result<Vec<NestedMeta>, ()> {
+pub fn get_dbus_error_meta_items(attr: &Attribute) -> Result<Vec<NestedMeta>, Error> {
     if !attr.path.is_ident("dbus_error") {
         return Ok(Vec::new());
     }
 
-    match attr.parse_meta() {
-        Ok(List(meta)) => Ok(meta.nested.into_iter().collect()),
-        _ => panic!("unsupported attribute"),
+    match attr.parse_meta()? {
+        List(meta) => Ok(meta.nested.into_iter().collect()),
+        _ => Err(Error::new(
+            attr.path.get_ident().unwrap().span(),
+            "unsupported attribute",
+        )),
     }
 }
 
-pub fn expand_derive(input: DeriveInput) -> TokenStream {
+pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     let mut prefix = "org.freedesktop.DBus".to_string();
     for meta_item in input
         .attrs
@@ -31,17 +35,27 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
     {
         match &meta_item {
             // Parse `#[dbus_error(prefix = "foo")]`
-            Meta(NameValue(m)) if m.path.is_ident("prefix") => {
-                if let Lit::Str(s) = &m.lit {
-                    prefix = s.value();
+            Meta(meta) => {
+                let value = match meta {
+                    NameValue(v) => v,
+                    _ => {
+                        return Err(Error::new(meta.span(), "unsupported attribute"));
+                    }
+                };
+                if meta.path().is_ident("prefix") {
+                    if let Lit::Str(s) = &value.lit {
+                        prefix = s.value();
+                    }
+                } else {
+                    return Err(Error::new(meta.span(), "unsupported attribute"));
                 }
             }
-            _ => panic!("unsupported attribute"),
+            NestedMeta::Lit(lit) => return Err(Error::new(lit.span(), "unsupported attribute")),
         }
     }
     let (vis, name, generics, data) = match input.data {
         Data::Enum(data) => (input.vis, input.ident, input.generics, data),
-        _ => panic!("Only works with DBus error enums"),
+        _ => return Err(Error::new(input.span(), "only enums supported")),
     };
 
     let zbus = zbus_path();
@@ -51,7 +65,7 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
     let mut error_converts = quote! {};
 
     for variant in data.variants {
-        let attrs = error_parse_item_attributes(&variant.attrs).unwrap();
+        let attrs = error_parse_item_attributes(&variant.attrs)?;
         let ident = &variant.ident;
         let name = attrs
             .iter()
@@ -88,7 +102,11 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
                 Self::#ident(desc, ..) => &desc,
             },
             Fields::Named(n) => {
-                let f = &n.named.first().unwrap().ident;
+                let f = &n
+                    .named
+                    .first()
+                    .ok_or_else(|| Error::new(n.span(), "expected at least one field"))?
+                    .ident;
                 quote! {
                     Self::#ident { #f, } => #f,
                 }
@@ -116,7 +134,7 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    quote! {
+    Ok(quote! {
         impl #impl_generics #name #ty_generics #where_clause {
             #vis fn name(&self) -> &str {
                 match self {
@@ -176,7 +194,7 @@ pub fn expand_derive(input: DeriveInput) -> TokenStream {
                 }
             }
         }
-    }
+    })
 }
 
 fn gen_reply_for_variant(variant: &Variant) -> TokenStream {
