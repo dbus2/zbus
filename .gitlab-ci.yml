@@ -10,10 +10,6 @@ variables:
 
 stages:
   - container
-  - lint
-  - test
-  - extras
-  - crosscheck
   - pages
 
 .debian:
@@ -60,87 +56,6 @@ container:
   extends:
     - .debian
     - .fdo.distribution-image@debian
-
-check:
-  extends: .debian_img
-  stage: "lint"
-  variables:
-    RUSTFLAGS: "-D warnings"
-  script:
-    - rustc --version
-    - cargo --version
-    - cargo fmt --all -- --check
-    - cargo clippy -- -D warnings -Aclippy::upper_case_acronyms
-    - cargo audit
-    - codespell
-
-.cargo_test_var: &cargo_test
-    - rustc --version
-    - cargo --version
-    - mkdir -p /run/user/$UID
-    - sed -e s/UID/$UID/ -e s/PATH/path/ gitlab/dbus-session.conf > /tmp/dbus-session.conf
-    - sed -e s/UID/$UID/ -e s/PATH/abstract/ gitlab/dbus-session.conf > /tmp/dbus-session-abstract.conf
-    - dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo test --verbose -- basic_connection
-    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
-    # check cookie-sha1 auth against dbus-daemon
-    - sed -i s/EXTERNAL/DBUS_COOKIE_SHA1/g /tmp/dbus-session.conf
-    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- basic_connection
-    # Test external executor (currently only 2 tests can handle it so only run those)
-    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --package zbus --no-default-features fdo::tests::signal_stream
-    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
-
-test:
-  extends: .debian_img
-  stage: test
-  variables:
-    RUSTFLAGS: "-D warnings"
-  script:
-    - rustup override set stable
-    - *cargo_test
-
-nightly:
-  extends: .debian_img
-  stage: test
-  allow_failure: true
-  variables:
-    RUSTFLAGS: "-D warnings"
-  script:
-    - rustup override set nightly
-    - *cargo_test
-    - cargo fmt --all -- --check
-    - cargo clippy --tests -- -D warnings -Aclippy::upper_case_acronyms
-
-coverage:
-  extends: .debian_img
-  stage: extras
-  variables:
-    RUSTFLAGS: "-Zinstrument-coverage"
-    LLVM_PROFILE_FILE: "zbus-%p-%m.profraw"
-  script:
-    - rustup override set nightly
-    - *cargo_test
-    # generate html report
-    - grcov . --binary-path ./target/debug/ -s . -t html --branch --ignore-not-existing --ignore "*cargo*" -o ./coverage/
-    # generate cobertura report for gitlab integration
-    - grcov . --binary-path ./target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "*cargo*" -o coverage.lcov
-    - python3 /usr/local/lib/python3.5/dist-packages/lcov_cobertura.py coverage.lcov
-    # output coverage summary for gitlab parsing
-    - lcov -l coverage.lcov
-    - lcov --summary coverage.lcov
-  when: manual
-  artifacts:
-    paths:
-      - 'coverage'
-    reports:
-      cobertura: coverage.xml
-
-crosscheck:
-  extends: .debian_img
-  stage: crosscheck
-  script:
-    - cargo check --target x86_64-apple-darwin
-    - cargo check --target x86_64-unknown-freebsd
-    - cargo check --target x86_64-unknown-netbsd
 
 pages:
   image: "hrektts/mdbook"
