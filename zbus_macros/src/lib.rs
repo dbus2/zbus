@@ -90,7 +90,7 @@ mod utils;
 ///     #[dbus_proxy(signal)]
 ///     fn some_signal(&self, arg1: &str, arg2: u32) -> fdo::Result<()>;
 ///
-///     #[dbus_proxy(object = "SomeOtherIface", blocking_object = "SomeOtherIterfaceBlock")]
+///     #[dbus_proxy(object = "SomeOtherIface", blocking_object = "SomeOtherInterfaceBlock")]
 ///     // The method will return a `SomeOtherIfaceProxy` or `SomeOtherIfaceProxyBlock`, depending
 ///     // on whether it is called on `SomeIfaceProxy` or `SomeIfaceProxyBlocking`, respectively.
 ///     //
@@ -103,7 +103,7 @@ mod utils;
 /// #[dbus_proxy(
 ///     interface = "org.test.SomeOtherIface",
 ///     default_service = "org.test.SomeOtherService",
-///     blocking_name = "SomeOtherIterfaceBlock",
+///     blocking_name = "SomeOtherInterfaceBlock",
 /// )]
 /// trait SomeOtherIface {}
 ///
@@ -175,7 +175,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   You can call a signal method from a an interface method, or from an [`ObjectServer::with`]
 ///   function.
 ///
-/// * `struct_return` - This attribute is depcrecated and a noop. If you want to return a single
+/// * `struct_return` - This attribute is deprecated and a noop. If you want to return a single
 ///   structure from a method, simply declare it to return a named structure or a tuple with a
 ///   tuple as the only field.
 ///
@@ -194,14 +194,14 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// will emit the "PropertiesChanged" signal with the new value for "Foo". Other changes to the
 /// "Foo" property can be signaled manually with the generated `foo_changed` method.
 ///
-/// The method arguments offers some the following `zbus` attributes:
+/// The method arguments offers some of the following `zbus` attributes:
 ///
 /// * `object_server` - This marks the method argument to receive a reference to the
-/// [`ObjectServer`] this method was called by.
+///   [`ObjectServer`] this method was called by.
 /// * `header` - This marks the method argument to receive the message header associated with the
-/// D-Bus method call being handled.
+///   D-Bus method call being handled.
 /// * `signal_context` - This marks the method argument to receive a [`SignalContext`]
-/// instance, which is needed for emitting signals the easy way.
+///   instance, which is needed for emitting signals the easy way.
 ///
 /// # Example
 ///
