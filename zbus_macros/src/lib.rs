@@ -146,8 +146,8 @@ mod utils;
 /// [`zbus::Proxy`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.Proxy.html
 /// [`zbus::blocking::Proxy`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/blocking/struct.Proxy.html
 /// [`zbus::SignalReceiver::receive_for`]:
-/// https://docs.rs/zbus/1.5.0/zbus/struct.SignalReceiver.html#method.receive_for
-/// [`ObjectPath`]: https://docs.rs/zvariant/2.5.0/zvariant/struct.ObjectPath.html
+/// https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.SignalReceiver.html#method.receive_for
+/// [`ObjectPath`]: https://docs.rs/zvariant/2.10.0/zvariant/struct.ObjectPath.html
 #[proc_macro_attribute]
 pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
@@ -258,12 +258,12 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// See also [`ObjectServer`] documentation to learn how to export an interface over a `Connection`.
 ///
-/// [`ObjectServer`]: https://docs.rs/zbus/1.0.0/zbus/struct.ObjectServer.html
-/// [`ObjectServer::with`]: https://docs.rs/zbus/1.2.0/zbus/struct.ObjectServer.html#method.with
+/// [`ObjectServer`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.ObjectServer.html
+/// [`ObjectServer::with`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.ObjectServer.html#method.with
 /// [`Connection`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.Connection.html
-/// [`Connection::emit_signal()`]: https://docs.rs/zbus/1.0.0/zbus/struct.Connection.html#method.emit_signal
+/// [`Connection::emit_signal()`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.Connection.html#method.emit_signal
 /// [`SignalContext`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.SignalContext.html
-/// [`Interface`]: https://docs.rs/zbus/1.0.0/zbus/trait.Interface.html
+/// [`Interface`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/trait.Interface.html
 #[proc_macro_attribute]
 pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
@@ -311,7 +311,7 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 ///
 /// [`Error`]: http://doc.rust-lang.org/std/error/trait.Error.html
-/// [`zbus::Error`]: https://docs.rs/zbus/1.0.0/zbus/enum.Error.html
+/// [`zbus::Error`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/enum.Error.html
 #[proc_macro_derive(DBusError, attributes(dbus_error))]
 pub fn derive_dbus_error(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
