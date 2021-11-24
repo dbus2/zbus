@@ -175,17 +175,15 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   You can call a signal method from a an interface method, or from an [`ObjectServer::with`]
 ///   function.
 ///
-/// * `struct_return` - This attribute is deprecated and a noop. If you want to return a single
-///   structure from a method, simply declare it to return a named structure or a tuple with a
-///   tuple as the only field.
-///
-///   Since it is not possible for zbus to differentiate between the case of a single structure
-///   being returned from the case of multiple out arguments returned as a named structure, nor
-///   to introspect the named structure type, the latter is not supported. you must use tuples for
-///   returning multiple values from a method.
+/// * `struct_return` - This attribute is deprecated and a noop.
+///   If you want to return a single structure from a method,
+///   declare it to return a tuple containing either a named structure or a nested tuple.
 ///
 /// * `out_args` - When returning multiple values from a method, naming the out arguments become
-///   important. You can use `out_args` for specifying names for your out arguments.
+///   important. You can use `out_args` to specify their names.
+///
+///   In such case, your method must return a tuple containing
+///   your out arguments, in the same order as passed to `out_args`.
 ///
 /// Note: a `<property_name_in_snake_case>_changed` method is generated for each property: this
 /// method emits the "PropertiesChanged" signal for the associated property. The setter (if it
@@ -194,10 +192,12 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// will emit the "PropertiesChanged" signal with the new value for "Foo". Other changes to the
 /// "Foo" property can be signaled manually with the generated `foo_changed` method.
 ///
-/// The method arguments offers some of the following `zbus` attributes:
+/// The method arguments support the following `zbus` attributes:
 ///
 /// * `object_server` - This marks the method argument to receive a reference to the
 ///   [`ObjectServer`] this method was called by.
+/// * `connection` - This marks the method argument to receive a reference to the
+///   [`Connection`] on which the method call was received.
 /// * `header` - This marks the method argument to receive the message header associated with the
 ///   D-Bus method call being handled.
 /// * `signal_context` - This marks the method argument to receive a [`SignalContext`]
@@ -260,6 +260,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// [`ObjectServer`]: https://docs.rs/zbus/1.0.0/zbus/struct.ObjectServer.html
 /// [`ObjectServer::with`]: https://docs.rs/zbus/1.2.0/zbus/struct.ObjectServer.html#method.with
+/// [`Connection`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.Connection.html
 /// [`Connection::emit_signal()`]: https://docs.rs/zbus/1.0.0/zbus/struct.Connection.html#method.emit_signal
 /// [`SignalContext`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.SignalContext.html
 /// [`Interface`]: https://docs.rs/zbus/1.0.0/zbus/trait.Interface.html
