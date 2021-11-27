@@ -12,9 +12,9 @@ use async_io::block_on;
 
 use crate::{blocking::ObjectServer, DBusError, Error, Message, Result};
 
-/// A blocking wrapper of [`zbus::blocking::Connection`].
+/// A blocking wrapper of [`zbus::Connection`].
 ///
-/// Most of the API is very similar to [`zbus::blocking::Connection`], except it's blocking. One
+/// Most of the API is very similar to [`zbus::Connection`], except it's blocking. One
 /// notable difference is that there is no equivalent of [`Sink`] implementation provided.
 ///
 /// [`Sink`]: https://docs.rs/futures/0.3.17/futures/sink/trait.Sink.html
@@ -197,7 +197,7 @@ impl Connection {
     /// [`Connection::request_name`].
     ///
     /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
-    /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
+    /// the bus through `self` and it has now been successfully deregistered, `Ok(false)` if name
     /// was not previously registered or already deregistered.
     pub fn release_name<'w, W>(&self, well_known_name: W) -> Result<bool>
     where
