@@ -90,7 +90,7 @@ mod utils;
 ///     #[dbus_proxy(signal)]
 ///     fn some_signal(&self, arg1: &str, arg2: u32) -> fdo::Result<()>;
 ///
-///     #[dbus_proxy(object = "SomeOtherIface", blocking_object = "SomeOtherIterfaceBlock")]
+///     #[dbus_proxy(object = "SomeOtherIface", blocking_object = "SomeOtherInterfaceBlock")]
 ///     // The method will return a `SomeOtherIfaceProxy` or `SomeOtherIfaceProxyBlock`, depending
 ///     // on whether it is called on `SomeIfaceProxy` or `SomeIfaceProxyBlocking`, respectively.
 ///     //
@@ -103,7 +103,7 @@ mod utils;
 /// #[dbus_proxy(
 ///     interface = "org.test.SomeOtherIface",
 ///     default_service = "org.test.SomeOtherService",
-///     blocking_name = "SomeOtherIterfaceBlock",
+///     blocking_name = "SomeOtherInterfaceBlock",
 /// )]
 /// trait SomeOtherIface {}
 ///
@@ -146,8 +146,8 @@ mod utils;
 /// [`zbus::Proxy`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.Proxy.html
 /// [`zbus::blocking::Proxy`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/blocking/struct.Proxy.html
 /// [`zbus::SignalReceiver::receive_for`]:
-/// https://docs.rs/zbus/1.5.0/zbus/struct.SignalReceiver.html#method.receive_for
-/// [`ObjectPath`]: https://docs.rs/zvariant/2.5.0/zvariant/struct.ObjectPath.html
+/// https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.SignalReceiver.html#method.receive_for
+/// [`ObjectPath`]: https://docs.rs/zvariant/2.10.0/zvariant/struct.ObjectPath.html
 #[proc_macro_attribute]
 pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
@@ -177,17 +177,15 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   You can call a signal method from a an interface method, or from an [`ObjectServer::with`]
 ///   function.
 ///
-/// * `struct_return` - This attribute is depcrecated and a noop. If you want to return a single
-///   structure from a method, simply declare it to return a named structure or a tuple with a
-///   tuple as the only field.
-///
-///   Since it is not possible for zbus to differentiate between the case of a single structure
-///   being returned from the case of multiple out arguments returned as a named structure, nor
-///   to introspect the named structure type, the latter is not supported. you must use tuples for
-///   returning multiple values from a method.
+/// * `struct_return` - This attribute is deprecated and a noop.
+///   If you want to return a single structure from a method,
+///   declare it to return a tuple containing either a named structure or a nested tuple.
 ///
 /// * `out_args` - When returning multiple values from a method, naming the out arguments become
-///   important. You can use `out_args` for specifying names for your out arguments.
+///   important. You can use `out_args` to specify their names.
+///
+///   In such case, your method must return a tuple containing
+///   your out arguments, in the same order as passed to `out_args`.
 ///
 /// Note: a `<property_name_in_snake_case>_changed` method is generated for each property: this
 /// method emits the "PropertiesChanged" signal for the associated property. The setter (if it
@@ -196,14 +194,16 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// will emit the "PropertiesChanged" signal with the new value for "Foo". Other changes to the
 /// "Foo" property can be signaled manually with the generated `foo_changed` method.
 ///
-/// The method arguments offers some the following `zbus` attributes:
+/// The method arguments support the following `zbus` attributes:
 ///
 /// * `object_server` - This marks the method argument to receive a reference to the
-/// [`ObjectServer`] this method was called by.
+///   [`ObjectServer`] this method was called by.
+/// * `connection` - This marks the method argument to receive a reference to the
+///   [`Connection`] on which the method call was received.
 /// * `header` - This marks the method argument to receive the message header associated with the
-/// D-Bus method call being handled.
+///   D-Bus method call being handled.
 /// * `signal_context` - This marks the method argument to receive a [`SignalContext`]
-/// instance, which is needed for emitting signals the easy way.
+///   instance, which is needed for emitting signals the easy way.
 ///
 /// # Example
 ///
@@ -260,11 +260,12 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// See also [`ObjectServer`] documentation to learn how to export an interface over a `Connection`.
 ///
-/// [`ObjectServer`]: https://docs.rs/zbus/1.0.0/zbus/struct.ObjectServer.html
-/// [`ObjectServer::with`]: https://docs.rs/zbus/1.2.0/zbus/struct.ObjectServer.html#method.with
-/// [`Connection::emit_signal()`]: https://docs.rs/zbus/1.0.0/zbus/struct.Connection.html#method.emit_signal
+/// [`ObjectServer`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.ObjectServer.html
+/// [`ObjectServer::with`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.ObjectServer.html#method.with
+/// [`Connection`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.Connection.html
+/// [`Connection::emit_signal()`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.Connection.html#method.emit_signal
 /// [`SignalContext`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.SignalContext.html
-/// [`Interface`]: https://docs.rs/zbus/1.0.0/zbus/trait.Interface.html
+/// [`Interface`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/trait.Interface.html
 #[proc_macro_attribute]
 pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
@@ -312,7 +313,7 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 ///
 /// [`Error`]: http://doc.rust-lang.org/std/error/trait.Error.html
-/// [`zbus::Error`]: https://docs.rs/zbus/1.0.0/zbus/enum.Error.html
+/// [`zbus::Error`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/enum.Error.html
 #[proc_macro_derive(DBusError, attributes(dbus_error))]
 pub fn derive_dbus_error(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

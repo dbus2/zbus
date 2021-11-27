@@ -85,7 +85,7 @@ impl<'a> ConnectionBuilder<'a> {
         self
     }
 
-    /// The to-be-created connection will a be server using the given GUID.
+    /// The to-be-created connection will be a server using the given GUID.
     ///
     /// The to-be-created connection will wait for incoming client authentication handshake and
     /// negotiation messages, for peer-to-peer communications after successful creation.

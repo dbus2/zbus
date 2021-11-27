@@ -548,7 +548,7 @@ impl Connection {
     /// [`Connection::request_name`].
     ///
     /// Unless an error is encountered, returns `Ok(true)` if name was previously registered with
-    /// the bus through `self` and it has now been successfully deregistered, `Ok(fasle)` if name
+    /// the bus through `self` and it has now been successfully deregistered, `Ok(false)` if name
     /// was not previously registered or already deregistered.
     pub async fn release_name<'w, W>(&self, well_known_name: W) -> Result<bool>
     where
@@ -579,7 +579,7 @@ impl Connection {
 
     /// Assigns a serial number to `msg` that is unique to this connection.
     ///
-    /// This method can fail if `msg` is corrupt.
+    /// This method can fail if `msg` is corrupted.
     pub fn assign_serial_num(&self, msg: &mut Message) -> Result<u32> {
         let mut serial = 0;
         msg.modify_primary_header(|primary| {

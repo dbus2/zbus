@@ -45,7 +45,7 @@ impl<'a> ConnectionBuilder<'a> {
         Self(self.0.p2p())
     }
 
-    /// The to-be-created connection will a be server using the given GUID.
+    /// The to-be-created connection will be a server using the given GUID.
     ///
     /// The to-be-created connection will wait for incoming client authentication handshake and
     /// negotiation messages, for peer-to-peer communications after successful creation.
@@ -79,7 +79,7 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// This is similar to [`zbus::blocking::ObjectServer::at`], except that it allows you to have
     /// your interfaces available immediately after the connection is established. Typically, this
-    /// is exactly what you'd want. Also in contrast to [`zbus::ObjectServer::at`], this method will
+    /// is exactly what you'd want. Also in contrast to [`zbus::blocking::ObjectServer::at`], this method will
     /// replace any previously added interface with the same name at the same path.
     pub fn serve_at<P, I>(self, path: P, iface: I) -> Result<Self>
     where
