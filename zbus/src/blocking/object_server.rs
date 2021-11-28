@@ -9,6 +9,73 @@ use zvariant::ObjectPath;
 
 use crate::{Error, Interface, InterfaceDeref, InterfaceDerefMut, Result, SignalContext};
 
+/// Wrapper over an interface, along with its corresponding `SignalContext`
+/// instance. A reference to the underlying interface may be obtained via
+/// [`InterfaceRef::get`] and [`InterfaceRef::get_mut`].
+pub struct InterfaceRef<I> {
+    azync: crate::InterfaceRef<I>,
+}
+
+impl<I> InterfaceRef<I>
+where
+    I: 'static,
+{
+    /// Get a reference to the underlying interface.
+    pub fn get(&self) -> InterfaceDeref<'_, I> {
+        block_on(self.azync.get())
+    }
+
+    /// Get a reference to the underlying interface.
+    ///
+    /// **WARNINGS:** Since `self` will not be able to access the interface in question until the
+    /// return value of this method is dropped, it is highly recommended to prefer
+    /// [`ObjectServer::with`] or [`ObjectServer::with_mut`] over this method. They are also more
+    /// convenient to use for emitting signals and changing properties.
+    ///
+    /// # Errors
+    ///
+    /// If the interface at this instance's path is not valid, `Error::InterfaceNotFound` error is
+    /// returned.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///# use std::error::Error;
+    ///# use async_io::block_on;
+    ///# use zbus::{SignalContext, blocking::{Connection, ObjectServer}, dbus_interface};
+    ///
+    /// struct MyIface(u32);
+    ///
+    /// #[dbus_interface(name = "org.myiface.MyIface")]
+    /// impl MyIface {
+    ///    #[dbus_interface(property)]
+    ///    fn count(&self) -> u32 {
+    ///        self.0
+    ///    }
+    /// }
+    /// // Setup connection and object_server etc here and then in another part of the code:
+    ///#
+    ///# let connection = Connection::session()?;
+    ///#
+    ///# let path = "/org/zbus/path";
+    ///# connection.object_server_mut().at(path, MyIface(22))?;
+    /// let mut object_server = connection.object_server();
+    /// let iface_ref = object_server.interface::<_, MyIface>(path)?;
+    /// let mut iface = iface_ref.get_mut();
+    /// iface.0 = 42;
+    /// block_on(iface.count_changed(iface_ref.signal_context()))?;
+    ///#
+    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// ```
+    pub fn get_mut(&self) -> InterfaceDerefMut<'_, I> {
+        block_on(self.azync.get_mut())
+    }
+
+    pub fn signal_context(&self) -> &SignalContext<'static> {
+        self.azync.signal_context()
+    }
+}
+
 /// A blocking wrapper of [`crate::ObjectServer`].
 ///
 /// # Example
@@ -106,7 +173,7 @@ impl ObjectServer {
         self.azync.remove::<I, P>(path)
     }
 
-    /// Run `func` with the given path & interface.
+    /// Get the interface at the given path.
     ///
     /// # Errors
     ///
@@ -137,146 +204,23 @@ impl ObjectServer {
     ///#
     ///# let path = "/org/zbus/path";
     ///# connection.object_server_mut().at(path, MyIface)?;
-    /// connection
+    /// let iface_ref = connection
     ///     .object_server()
-    ///     .with(path, |_iface: InterfaceDeref<'_, MyIface>, signal_ctxt| {
-    ///         block_on(MyIface::emit_signal(&signal_ctxt))
-    ///     })?;
+    ///     .interface::<_, MyIface>(path)?;
+    /// MyIface::emit_signal(iface_ref.signal_context());
     ///#
     ///#
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    pub fn with<'server, 'p, P, F, I>(&'server self, path: P, func: F) -> Result<()>
-    where
-        F: FnOnce(InterfaceDeref<'server, I>, SignalContext<'p>) -> Result<()>,
-        I: Interface,
-        P: TryInto<ObjectPath<'p>>,
-        P::Error: Into<Error>,
-    {
-        let path = path.try_into().map_err(Into::into)?;
-        let interface = self.get_interface::<_, I>(path.clone())?;
-        let conn = self.azync.connection();
-        let ctxt = SignalContext::new(&conn, path)?;
-
-        func(interface, ctxt)
-    }
-
-    /// Run `func` with the given path & interface.
-    ///
-    /// Same as [`ObjectServer::with`], except `func` gets a mutable reference.
-    ///
-    /// # Examples
-    ///
-    /// The typical use of this is property changes outside of a dispatched handler:
-    ///
-    /// ```no_run
-    ///# use std::error::Error;
-    ///# use async_io::block_on;
-    ///# use zbus::{
-    ///#    InterfaceDerefMut, SignalContext,
-    ///#    blocking::{Connection, ObjectServer},
-    ///#    dbus_interface,
-    ///# };
-    ///#
-    /// struct MyIface(u32);
-    ///
-    /// #[dbus_interface(name = "org.myiface.MyIface")]
-    /// impl MyIface {
-    ///      #[dbus_interface(property)]
-    ///      fn count(&self) -> u32 {
-    ///          self.0
-    ///      }
-    /// }
-    ///
-    ///# let connection = Connection::session()?;
-    ///#
-    ///# let path = "/org/zbus/path";
-    ///# connection.object_server_mut().at(path, MyIface(0))?;
-    /// connection
-    ///     .object_server()
-    ///     .with_mut(path, |mut iface: InterfaceDerefMut<'_, MyIface>, signal_ctxt| {
-    ///         iface.0 = 42;
-    ///         block_on(iface.count_changed(&signal_ctxt))
-    ///     })?;
-    ///#
-    ///#
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
-    /// ```
-    pub fn with_mut<'server, 'p, P, F, I>(&'server self, path: P, func: F) -> Result<()>
-    where
-        F: FnOnce(InterfaceDerefMut<'server, I>, SignalContext<'p>) -> Result<()>,
-        I: Interface,
-        P: TryInto<ObjectPath<'p>>,
-        P::Error: Into<Error>,
-    {
-        let path = path.try_into().map_err(Into::into)?;
-        let interface = self.get_interface_mut::<_, I>(path.clone())?;
-        let conn = self.azync.connection();
-        let ctxt = SignalContext::new(&conn, path)?;
-
-        func(interface, ctxt)
-    }
-
-    /// Get a reference to the interface at the given path.
-    pub fn get_interface<'p, P, I>(&self, path: P) -> Result<InterfaceDeref<'_, I>>
+    pub fn interface<'p, P, I>(&self, path: P) -> Result<InterfaceRef<I>>
     where
         I: Interface,
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
-        block_on(self.azync.get_interface(path))
-    }
-
-    /// Get a reference to the interface at the given path.
-    ///
-    /// **WARNINGS:** Since `self` will not be able to access the interface in question until the
-    /// return value of this method is dropped, it is highly recommended to prefer
-    /// [`ObjectServer::with`] or [`ObjectServer::with_mut`] over this method. They are also more
-    /// convenient to use for emitting signals and changing properties.
-    ///
-    /// # Errors
-    ///
-    /// If the interface is not registered at the given path, `Error::InterfaceNotFound` error is
-    /// returned.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///# use std::error::Error;
-    ///# use async_io::block_on;
-    ///# use zbus::{SignalContext, blocking::{Connection, ObjectServer}, dbus_interface};
-    ///
-    /// struct MyIface(u32);
-    ///
-    /// #[dbus_interface(name = "org.myiface.MyIface")]
-    /// impl MyIface {
-    ///    #[dbus_interface(property)]
-    ///    fn count(&self) -> u32 {
-    ///        self.0
-    ///    }
-    /// }
-    /// // Setup connection and object_server etc here and then in another part of the code:
-    ///#
-    ///# let connection = Connection::session()?;
-    ///#
-    ///# let path = "/org/zbus/path";
-    ///# connection.object_server_mut().at(path, MyIface(22))?;
-    /// let mut object_server = connection.object_server();
-    /// let mut iface = object_server.get_interface_mut::<_, MyIface>(path)?;
-    /// // Note: This will not be needed when using `ObjectServer::with_mut`
-    /// let ctxt = SignalContext::new(connection.inner(), path)?;
-    /// iface.0 = 42;
-    /// block_on(iface.count_changed(&ctxt))?;
-    ///#
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
-    /// ```
-    pub fn get_interface_mut<'p, P, I>(&self, path: P) -> Result<InterfaceDerefMut<'_, I>>
-    where
-        I: Interface,
-        P: TryInto<ObjectPath<'p>>,
-        P::Error: Into<Error>,
-    {
-        block_on(self.azync.get_interface_mut(path))
+        Ok(InterfaceRef {
+            azync: block_on(self.azync.interface(path))?,
+        })
     }
 
     /// Get a reference to the underlying async ObjectServer.
