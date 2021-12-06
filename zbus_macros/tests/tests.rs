@@ -89,7 +89,8 @@ fn test_derive_error() {
     #[derive(Debug, DBusError)]
     #[dbus_error(prefix = "org.freedesktop.zbus")]
     enum Test {
-        ZBus(zbus::Error),
+        #[dbus_error(zbus_error)]
+        ZBus(String, zbus::Error),
         SomeExcuse,
         #[dbus_error(name = "I.Am.Sorry.Dave")]
         IAmSorryDave(String),

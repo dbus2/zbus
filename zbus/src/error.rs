@@ -178,7 +178,7 @@ impl From<NamesError> for Error {
 impl From<fdo::Error> for Error {
     fn from(val: fdo::Error) -> Self {
         match val {
-            fdo::Error::ZBus(e) => e,
+            fdo::Error::ZBus(_, e) => e,
             e => Error::FDO(Box::new(e)),
         }
     }

@@ -643,7 +643,8 @@ assert_impl_all!(DBusProxy<'_>: Send, Sync, Unpin);
 #[allow(clippy::upper_case_acronyms)]
 pub enum Error {
     /// Unknown or fall-through ZBus error.
-    ZBus(zbus::Error),
+    #[dbus_error(zbus_error)]
+    ZBus(String, zbus::Error),
 
     /// A generic error; "something went wrong" - see the error message for more.
     Failed(String),

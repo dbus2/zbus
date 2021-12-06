@@ -1,5 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::iter;
 use syn::{
     spanned::Spanned,
     Attribute, Data, DeriveInput, Error, Fields, Lit,
@@ -64,7 +65,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             NestedMeta::Lit(lit) => return Err(Error::new(lit.span(), "unsupported attribute")),
         }
     }
-    let (vis, name, generics, data) = match input.data {
+    let (_vis, name, _generics, data) = match input.data {
         Data::Enum(data) => (input.vis, input.ident, input.generics, data),
         _ => return Err(Error::new(input.span(), "only enums supported")),
     };
@@ -74,6 +75,8 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     let mut error_names = quote! {};
     let mut error_descriptions = quote! {};
     let mut error_converts = quote! {};
+
+    let mut zbus_error_variant = None;
 
     for variant in data.variants {
         let attrs = error_parse_item_attributes(&variant.attrs)?;
@@ -85,10 +88,15 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
                 _ => None,
             })
             .unwrap_or_else(|| ident.to_string());
-        if name == "ZBus" {
-            continue;
-        }
-        let fqn = format!("{}.{}", prefix, name);
+
+        let impl_from_zbus_error = attrs.iter().any(|x| x == &ItemAttribute::ZbusError);
+
+        let fqn = if !impl_from_zbus_error {
+            format!("{}.{}", prefix, name)
+        } else {
+            // The ZBus error variant will always be a hardcoded string.
+            String::from("org.freedesktop.zbus.Error")
+        };
 
         let e = match variant.fields {
             Fields::Unit => quote! {
@@ -102,6 +110,14 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             },
         };
         error_names.extend(e);
+
+        if impl_from_zbus_error {
+            if zbus_error_variant.is_some() {
+                panic!("More than 1 `zbus_error` variant found");
+            }
+
+            zbus_error_variant = Some(quote! { #ident });
+        }
 
         // FIXME: this will error if the first field is not a string as per the dbus spec, but we
         // may support other cases?
@@ -125,23 +141,48 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         };
         error_descriptions.extend(e);
 
-        // FIXME: deserialize msg to error field instead, to support variable args
-        let e = match variant.fields {
-            Fields::Unit => quote! {
-                #fqn => Self::#ident,
-            },
-            Fields::Unnamed(_) => quote! {
-                #fqn => Self::#ident(desc),
-            },
-            Fields::Named(_) => quote! {
-                #fqn => Self::#ident { desc },
-            },
-        };
-        error_converts.extend(e);
+        // This is handled separately
+        if !impl_from_zbus_error {
+            // FIXME: deserialize msg to error field instead, to support variable args
+            let e = match variant.fields {
+                Fields::Unit => quote! {
+                    #fqn => Self::#ident,
+                },
+                Fields::Unnamed(_) => quote! {
+                    #fqn => Self::#ident(desc),
+                },
+                Fields::Named(_) => quote! {
+                    #fqn => Self::#ident { desc },
+                },
+            };
+            error_converts.extend(e);
+        }
 
-        let r = gen_reply_for_variant(&variant);
+        let r = gen_reply_for_variant(&variant, impl_from_zbus_error);
         replies.extend(r);
     }
+
+    let from_zbus_error_impl = zbus_error_variant
+        .map(|ident| {
+            quote! {
+                impl ::std::convert::From<#zbus::Error> for #name {
+                    fn from(value: #zbus::Error) -> #name {
+                        if let #zbus::Error::MethodError(name, desc, _) = &value {
+                            let desc = ::std::clone::Clone::clone(desc)
+                                .unwrap_or_else(::std::string::String::new);
+                            match name.as_str() {
+                                #error_converts
+                                _ => Self::#ident(desc, value),
+                            }
+                        } else {
+                            let desc = ::std::string::ToString::to_string(&value);
+                            Self::#ident(desc, value)
+                        }
+                    }
+                }
+            }
+        })
+        .unwrap_or_default();
 
     let display_impl = if generate_display {
         quote! {
@@ -168,7 +209,6 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             fn description(&self) -> &str {
                 match self {
                     #error_descriptions
-                    Self::ZBus(_) => "Unknown",
                 }
             }
 
@@ -176,10 +216,6 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
                 let name = self.name();
                 match self {
                     #replies
-                    Self::ZBus(e) => {
-                        let err = #zbus::fdo::Error::Failed(e.to_string());
-                        err.reply_to(call)
-                    }
                 }
             }
         }
@@ -188,24 +224,11 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
 
         impl ::std::error::Error for #name {}
 
-        impl ::std::convert::From<#zbus::Error> for #name {
-            fn from(value: #zbus::Error) -> #name {
-                if let #zbus::Error::MethodError(name, desc, _) = &value {
-                    let desc = ::std::clone::Clone::clone(desc)
-                        .unwrap_or_else(::std::string::String::new);
-                    match name.as_str() {
-                        #error_converts
-                        _ => Self::ZBus(value),
-                    }
-                } else {
-                    Self::ZBus(value)
-                }
-            }
-        }
+        #from_zbus_error_impl
     })
 }
 
-fn gen_reply_for_variant(variant: &Variant) -> TokenStream {
+fn gen_reply_for_variant(variant: &Variant, zbus_error_variant: bool) -> TokenStream {
     let zbus = zbus_path();
     let ident = &variant.ident;
     match &variant.fields {
@@ -215,12 +238,27 @@ fn gen_reply_for_variant(variant: &Variant) -> TokenStream {
             }
         }
         Fields::Unnamed(f) => {
-            let fields = (0..f.unnamed.len())
-                .map(|n| format!("f{}", n))
-                .map(|v| syn::Ident::new(&v, ident.span()))
-                .collect::<Vec<_>>();
+            let (in_fields, out_fields) = if zbus_error_variant {
+                // For zbus_error_variants, the last item is the contained error, and should
+                // not be forwarded to the reply.
+                let fields = (0..(f.unnamed.len() - 1))
+                    .map(|n| format!("f{}", n))
+                    .chain(iter::once(String::from("_zbus_error")))
+                    .map(|v| syn::Ident::new(&v, ident.span()))
+                    .collect::<Vec<_>>();
+                let out_fields = Vec::from(&fields[..(fields.len() - 1)]);
+                (fields, out_fields)
+            } else {
+                // For every other variant, just number them off with an 'f' in front.
+                let fields = (0..f.unnamed.len())
+                    .map(|n| format!("f{}", n))
+                    .map(|v| syn::Ident::new(&v, ident.span()))
+                    .collect::<Vec<_>>();
+                (fields.clone(), fields)
+            };
+
             quote! {
-                Self::#ident(#(#fields),*) => #zbus::MessageBuilder::error(call, name)?.build(&(#(#fields),*)),
+                Self::#ident(#(#in_fields),*) => #zbus::MessageBuilder::error(call, name)?.build(&(#(#out_fields),*)),
             }
         }
         Fields::Named(f) => {
