@@ -9,6 +9,10 @@ use crate::{fdo, Message, MessageHeader, MessageType};
 pub trait DBusError {
     /// Generate an error reply message for the given method call.
     fn reply_to(&self, msg: &MessageHeader<'_>) -> Result<Message>;
+
+    fn name(&self) -> &str;
+
+    fn description(&self) -> &str;
 }
 
 /// The error type for `zbus`.

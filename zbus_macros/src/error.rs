@@ -132,18 +132,15 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         replies.extend(r);
     }
 
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
     Ok(quote! {
-        impl #impl_generics #name #ty_generics #where_clause {
-            #vis fn name(&self) -> &str {
+        impl #zbus::DBusError for #name {
+            fn name(&self) -> &str {
                 match self {
                     #error_names
-                    Self::ZBus(_) => "Unknown",
                 }
             }
 
-            #vis fn description(&self) -> &str {
+            fn description(&self) -> &str {
                 match self {
                     #error_descriptions
                     Self::ZBus(_) => "Unknown",
