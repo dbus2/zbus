@@ -639,7 +639,7 @@ assert_impl_all!(DBusProxy<'_>: Send, Sync, Unpin);
 
 /// Errors from <https://gitlab.freedesktop.org/dbus/dbus/-/blob/master/dbus/dbus-protocol.h>
 #[derive(Debug, DBusError, PartialEq)]
-#[dbus_error(prefix = "org.freedesktop.DBus.Error")]
+#[dbus_error(prefix = "org.freedesktop.DBus.Error", impl_display = true)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum Error {
     /// Unknown or fall-through ZBus error.

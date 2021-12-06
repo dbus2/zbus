@@ -27,6 +27,7 @@ pub fn get_dbus_error_meta_items(attr: &Attribute) -> Result<Vec<NestedMeta>, Er
 
 pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     let mut prefix = "org.freedesktop.DBus".to_string();
+    let mut generate_display = true;
     for meta_item in input
         .attrs
         .iter()
@@ -34,7 +35,6 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         .flatten()
     {
         match &meta_item {
-            // Parse `#[dbus_error(prefix = "foo")]`
             Meta(meta) => {
                 let value = match meta {
                     NameValue(v) => v,
@@ -43,8 +43,19 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
                     }
                 };
                 if meta.path().is_ident("prefix") {
+                    // Parse `#[dbus_error(prefix = "foo")]`
                     if let Lit::Str(s) = &value.lit {
                         prefix = s.value();
+                    }
+                } else if meta.path().is_ident("impl_display") {
+                    // Parse `#[dbus_error(impl_display = bool)]`
+                    if let Lit::Bool(b) = &value.lit {
+                        generate_display = b.value;
+                    } else {
+                        return Err(Error::new(
+                            meta.span(),
+                            "`impl_display` must be `true` or `false`",
+                        ));
                     }
                 } else {
                     return Err(Error::new(meta.span(), "unsupported attribute"));
@@ -132,6 +143,20 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         replies.extend(r);
     }
 
+    let display_impl = if generate_display {
+        quote! {
+            impl ::std::fmt::Display for #name {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                    let name = #zbus::DBusError::name(self);
+                    let description = #zbus::DBusError::description(self);
+                    ::std::write!(f, "{}: {}", name, description)
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         impl #zbus::DBusError for #name {
             fn name(&self) -> &str {
@@ -169,11 +194,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             }
         }
 
-        impl ::std::fmt::Display for #name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                ::std::write!(f, "{}: {}", self.name(), self.description())
-            }
-        }
+        #display_impl
 
         impl ::std::error::Error for #name {}
 
