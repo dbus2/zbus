@@ -172,16 +172,6 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
                 }
             }
 
-            #vis async fn reply(
-                &self,
-                c: &#zbus::Connection,
-                call: &#zbus::Message,
-            ) -> ::std::result::Result<u32, #zbus::Error> {
-                c.send_message(#zbus::DBusError::reply_to(self, &call.header()?)?).await
-            }
-        }
-
-        impl #zbus::DBusError for #name {
             fn reply_to(&self, call: &#zbus::MessageHeader) -> #zbus::Result<#zbus::Message> {
                 let name = self.name();
                 match self {

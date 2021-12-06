@@ -682,7 +682,11 @@ impl ObjectServer {
 
     async fn dispatch_method_call(&self, connection: &Connection, msg: &Message) -> Result<()> {
         match self.dispatch_method_call_try(connection, msg).await {
-            Err(e) => e.reply(connection, msg).await.map(|_seq| ()),
+            Err(e) => {
+                let hdr = msg.header()?;
+                connection.reply_dbus_error(&hdr, e).await?;
+                Ok(())
+            }
             Ok(r) => r,
         }
     }

@@ -171,7 +171,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             quote!(match reply {
                 ::std::result::Result::Ok(r) => c.reply(m, &#ret).await,
-                ::std::result::Result::Err(e) => e.reply(c, m).await,
+                ::std::result::Result::Err(e) => {
+                    let hdr = m.header()?;
+                    c.reply_dbus_error(&hdr, e).await
+                }
             })
         } else {
             quote!(c.reply(m, &reply).await)
@@ -559,12 +562,7 @@ fn get_args_from_inputs(
                 let header_arg = &input.pat;
 
                 header_arg_decl = Some(quote! {
-                    let #header_arg = match m.header() {
-                        ::std::result::Result::Ok(r) => r,
-                        ::std::result::Result::Err(e) => {
-                            return <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await;
-                        }
-                    };
+                    let #header_arg = m.header()?;
                 });
             } else if is_signal_context {
                 if signal_context_arg_decl.is_some() {
@@ -582,10 +580,14 @@ fn get_args_from_inputs(
                             #zbus::SignalContext::new(c, p).expect("Infallible conversion failed")
                         }
                         ::std::result::Result::Ok(::std::option::Option::None) => {
-                            return #zbus::fdo::Error::UnknownObject("Path Required".into()).reply(c, m).await;
+                            let hdr = m.header()?;
+                            let err = #zbus::fdo::Error::UnknownObject("Path Required".into());
+                            return c.reply_dbus_error(&hdr, err).await;
                         }
                         ::std::result::Result::Err(e) => {
-                            return <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await;
+                            let hdr = m.header()?;
+                            let err = <#zbus::fdo::Error as ::std::convert::From<_>>::from(e);
+                            return c.reply_dbus_error(&hdr, err).await;
                         }
                     };
                 });
@@ -608,7 +610,9 @@ fn get_args_from_inputs(
                 match m.body() {
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
-                        return <#zbus::fdo::Error as ::std::convert::From<_>>::from(e).reply(c, m).await;
+                        let hdr = m.header()?;
+                        let err = <#zbus::fdo::Error as ::std::convert::From<_>>::from(e);
+                        return c.reply_dbus_error(&hdr, err).await;
                     }
                 };
         };
