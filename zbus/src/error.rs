@@ -8,7 +8,7 @@ use crate::{fdo, Message, MessageHeader, MessageType};
 /// An error type suitable for a dbus reply method
 pub trait DBusError {
     /// Generate an error reply message for the given method call.
-    fn reply_to(&self, msg: &MessageHeader<'_>) -> Result<Message>;
+    fn create_reply(&self, msg: &MessageHeader<'_>) -> Result<Message>;
 
     fn name(&self) -> &str;
 

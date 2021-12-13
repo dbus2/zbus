@@ -492,7 +492,7 @@ impl Connection {
         call: &zbus::MessageHeader<'_>,
         err: impl DBusError,
     ) -> Result<u32> {
-        let m = err.reply_to(call);
+        let m = err.create_reply(call);
         self.send_message(m?).await
     }
 
