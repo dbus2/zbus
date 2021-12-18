@@ -640,6 +640,7 @@ mod tests {
         // Array of u8
         //
         // First a normal Rust array that is actually serialized as a struct (thank you Serde!)
+        assert_eq!(<[u8; 2]>::signature(), "(yy)");
         let ay = [77u8, 88];
         let ctxt = Context::<LE>::new_dbus(0);
         let encoded = to_bytes(ctxt, &ay).unwrap();
