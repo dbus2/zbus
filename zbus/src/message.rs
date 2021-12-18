@@ -228,10 +228,13 @@ impl<'a> MessageBuilder<'a> {
         zvariant::to_writer(&mut cursor, ctxt, &header)?;
 
         let (_, fds) = zvariant::to_writer_fds(&mut cursor, ctxt, body)?;
+        let primary_header = header.into_primary();
+        let header: MessageHeader<'_> = zvariant::from_slice(&bytes, ctxt)?;
+        let quick_fields = QuickMessageFields::new(&bytes, &header)?;
 
         Ok(Message {
-            primary_header: header.into_primary(),
-            quick_fields: QuickMessageFields::default(),
+            primary_header,
+            quick_fields,
             bytes,
             body_offset: hdr_len,
             fds: Arc::new(RwLock::new(Fds::Raw(fds))),
