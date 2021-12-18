@@ -260,7 +260,6 @@ impl<'a> Debug for Signature<'a> {
 impl<'a> Basic for Signature<'a> {
     const SIGNATURE_CHAR: char = 'g';
     const SIGNATURE_STR: &'static str = "g";
-    const ALIGNMENT: usize = 1;
 
     fn alignment(format: EncodingFormat) -> usize {
         match format {
