@@ -247,34 +247,22 @@ tuple_impls! {
 // Arrays are serialized as tuples/structs by Serde so we treat them as such too even though
 // it's very strange. Slices and arrayvec::ArrayVec can be used anyway so I guess it's no big
 // deal.
-macro_rules! array_impls {
-    ($($len:tt)+) => {
-        $(
-            impl<T> Type for [T; $len]
-            where
-                T: Type,
-            {
-                #[inline]
-                #[allow(clippy::reversed_empty_ranges)]
-                fn signature() -> Signature<'static> {
-                    let mut sig = String::with_capacity(255);
-                    sig.push(STRUCT_SIG_START_CHAR);
-                    if $len > 0 {
-                        for _ in 0..$len {
-                            sig.push_str(T::signature().as_str());
-                        }
-                    }
-                    sig.push(STRUCT_SIG_END_CHAR);
+impl<T, const N: usize> Type for [T; N]
+where
+    T: Type,
+{
+    #[inline]
+    #[allow(clippy::reversed_empty_ranges)]
+    fn signature() -> Signature<'static> {
+        let mut sig = String::with_capacity(255);
+        sig.push(STRUCT_SIG_START_CHAR);
+        for _ in 0..N {
+            sig.push_str(T::signature().as_str());
+        }
+        sig.push(STRUCT_SIG_END_CHAR);
 
-                    Signature::from_string_unchecked(sig)
-                }
-            }
-        )+
+        Signature::from_string_unchecked(sig)
     }
-}
-
-array_impls! {
-    0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
 }
 
 ////////////////////////////////////////////////////////////////////////////////
