@@ -3,8 +3,8 @@ use static_assertions::assert_impl_all;
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 use crate::{
-    derive::Type, Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str,
-    Structure, Value,
+    Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure, Type,
+    Value,
 };
 
 #[cfg(feature = "gvariant")]

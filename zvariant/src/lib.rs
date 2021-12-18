@@ -199,10 +199,7 @@ mod framing_offset_size;
 mod framing_offsets;
 mod signature_parser;
 
-// FIXME: Re-export derive macros from the crate root with the next breaking-change release.
-pub mod derive {
-    pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, TypeDict, Value};
-}
+pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, TypeDict, Value};
 
 // Required for the macros to function within this crate.
 extern crate self as zvariant;
@@ -231,16 +228,15 @@ mod tests {
     use glib::{Bytes, FromVariant, Variant};
     use serde::{Deserialize, Serialize};
 
-    use zvariant_derive::{DeserializeDict, SerializeDict, Type, TypeDict};
-
     use crate::{
         from_slice, from_slice_fds, from_slice_for_signature, to_bytes, to_bytes_fds,
         to_bytes_for_signature,
     };
 
     use crate::{
-        Array, Basic, DeserializeValue, Dict, EncodingContext as Context, EncodingFormat, Error,
-        Fd, ObjectPath, Result, SerializeValue, Signature, Str, Structure, Type, Value,
+        Array, Basic, DeserializeDict, DeserializeValue, Dict, EncodingContext as Context,
+        EncodingFormat, Error, Fd, ObjectPath, Result, SerializeDict, SerializeValue, Signature,
+        Str, Structure, Type, TypeDict, Value,
     };
 
     // Test through both generic and specific API (wrt byte order)

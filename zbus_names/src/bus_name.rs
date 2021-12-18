@@ -7,7 +7,7 @@ use core::{
 use crate::{Error, OwnedUniqueName, OwnedWellKnownName, Result, UniqueName, WellKnownName};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
-use zvariant::{derive::Type, NoneValue, OwnedValue, Str, Type, Value};
+use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 
 /// String that identifies a [bus name].
 ///

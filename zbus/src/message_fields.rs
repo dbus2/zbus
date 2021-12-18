@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::convert::{TryFrom, TryInto};
 use zbus_names::{InterfaceName, MemberName};
-use zvariant::{derive::Type, ObjectPath};
+use zvariant::{ObjectPath, Type};
 
 use crate::{Message, MessageField, MessageFieldCode, MessageHeader, Result};
 

@@ -302,7 +302,7 @@ fn ensure_correct_object_path_str(path: &[u8]) -> Result<()> {
 }
 
 /// Owned [`ObjectPath`](struct.ObjectPath.html)
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, serde::Serialize, zvariant_derive::Type)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, serde::Serialize, Type)]
 pub struct OwnedObjectPath(ObjectPath<'static>);
 
 assert_impl_all!(OwnedObjectPath: Send, Sync, Unpin);

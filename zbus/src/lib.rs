@@ -742,7 +742,7 @@ mod tests {
     #[ignore]
     fn issue_81() {
         use zbus::dbus_proxy;
-        use zvariant::derive::{OwnedValue, Type};
+        use zvariant::{OwnedValue, Type};
 
         #[derive(
             Debug, PartialEq, Clone, Type, OwnedValue, serde::Serialize, serde::Deserialize,
