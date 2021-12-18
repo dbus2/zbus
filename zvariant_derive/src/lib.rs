@@ -20,9 +20,7 @@ mod value;
 /// For structs it works just like serde's [`Serialize`] and [`Deserialize`] macros:
 ///
 /// ```
-/// use zvariant::{EncodingContext, from_slice, to_bytes};
-/// use zvariant::Type;
-/// use zvariant_derive::Type;
+/// use zvariant::{EncodingContext, from_slice, to_bytes, Type};
 /// use serde::{Deserialize, Serialize};
 /// use byteorder::LE;
 ///
@@ -50,9 +48,7 @@ mod value;
 /// you'll also need [serde_repr] crate.
 ///
 /// ```
-/// use zvariant::{EncodingContext, from_slice, to_bytes};
-/// use zvariant::Type;
-/// use zvariant_derive::Type;
+/// use zvariant::{EncodingContext, from_slice, to_bytes, Type};
 /// use serde::{Deserialize, Serialize};
 /// use serde_repr::{Deserialize_repr, Serialize_repr};
 /// use byteorder::LE;
@@ -103,8 +99,7 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// # Examples
 ///
 /// ```
-/// use zvariant::{Signature, Type};
-/// use zvariant_derive::TypeDict;
+/// use zvariant::{Signature, Type, TypeDict};
 ///
 /// #[derive(TypeDict)]
 /// struct Struct {
@@ -135,8 +130,7 @@ pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// For structs it works just like serde's [`Serialize`] macros:
 ///
 /// ```
-/// use zvariant::{EncodingContext, to_bytes};
-/// use zvariant_derive::{SerializeDict, TypeDict};
+/// use zvariant::{EncodingContext, to_bytes, SerializeDict, TypeDict};
 ///
 /// #[derive(SerializeDict, TypeDict)]
 /// struct Struct {
@@ -171,8 +165,7 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// For structs it works just like serde's [`Deserialize`] macros:
 ///
 /// ```
-/// use zvariant::{EncodingContext, to_bytes};
-/// use zvariant_derive::{DeserializeDict, TypeDict};
+/// use zvariant::{EncodingContext, to_bytes, DeserializeDict, TypeDict};
 ///
 /// #[derive(DeserializeDict, TypeDict)]
 /// struct Struct {
@@ -206,7 +199,6 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// ```
 /// use std::convert::TryFrom;
 /// use zvariant::{OwnedObjectPath, OwnedValue, Value};
-/// use zvariant_derive::{OwnedValue, Value};
 ///
 /// #[derive(Clone, Value, OwnedValue)]
 /// struct OwnedStruct {
@@ -232,7 +224,6 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 ///# use std::convert::TryFrom;
 /// use zvariant::{ObjectPath, Str};
 ///# use zvariant::{OwnedValue, Value};
-///# use zvariant_derive::{OwnedValue, Value};
 ///#
 /// #[derive(Clone, Value, OwnedValue)]
 /// struct UnownedStruct<'a> {
@@ -259,7 +250,6 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// ```
 ///# use std::convert::TryFrom;
 ///# use zvariant::{OwnedObjectPath, OwnedValue, Value};
-///# use zvariant_derive::{OwnedValue, Value};
 ///#
 /// #[derive(Clone, Value, OwnedValue)]
 /// struct GenericStruct<S, O> {
@@ -284,7 +274,6 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// ```
 ///# use std::convert::TryFrom;
 ///# use zvariant::{OwnedObjectPath, OwnedValue, Value};
-///# use zvariant_derive::{OwnedValue, Value};
 ///#
 /// #[derive(Debug, PartialEq, Value, OwnedValue)]
 /// #[repr(u8)]

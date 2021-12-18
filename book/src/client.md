@@ -521,7 +521,7 @@ For example, the generated `GetServerInformation` method can be improved to a ni
 
 ```rust
 # use serde::{Serialize, Deserialize};
-# use zvariant::derive::Type;
+# use zvariant::Type;
 # use zbus::dbus_proxy;
 #
 #[derive(Debug, Type, Serialize, Deserialize)]

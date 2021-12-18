@@ -13,8 +13,8 @@ use zbus_names::{
     WellKnownName,
 };
 use zvariant::{
-    derive::{DeserializeDict, SerializeDict, Type, TypeDict},
-    ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value,
+    DeserializeDict, ObjectPath, Optional, OwnedObjectPath, OwnedValue, SerializeDict, Type,
+    TypeDict, Value,
 };
 
 use crate::{dbus_interface, dbus_proxy, DBusError, MessageHeader, ObjectServer, SignalContext};

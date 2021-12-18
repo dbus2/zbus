@@ -730,7 +730,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use test_log::test;
     use zbus::DBusError;
-    use zvariant::{derive::Type, Value};
+    use zvariant::{Type, Value};
 
     use crate::{
         dbus_interface, dbus_proxy, CacheProperties, Connection, ConnectionBuilder, InterfaceDeref,

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
 use zbus::{dbus_proxy, fdo};
-use zvariant::{derive::Type, OwnedValue, Value};
+use zvariant::{OwnedValue, Type, Value};
 
 use crate::Error;
 
