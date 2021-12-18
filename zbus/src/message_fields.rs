@@ -84,10 +84,6 @@ pub(crate) struct FieldPos {
 }
 
 impl FieldPos {
-    pub fn new_unknown() -> Self {
-        Self { start: 0, end: 0 }
-    }
-
     pub fn new_not_present() -> Self {
         Self { start: 1, end: 0 }
     }
@@ -110,10 +106,9 @@ impl FieldPos {
     where
         T: std::ops::Deref<Target = str>,
     {
-        match field {
-            Some(value) => Self::build(msg_buf, value).unwrap_or_else(Self::new_unknown),
-            None => Self::new_not_present(),
-        }
+        field
+            .and_then(|f| Self::build(msg_buf, f.deref()))
+            .unwrap_or_else(Self::new_not_present)
     }
 
     /// Reassemble a previously cached field.
