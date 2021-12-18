@@ -265,6 +265,9 @@ mod tests {
             &(),
         )
         .unwrap();
+        assert_eq!(m.path().unwrap(), "/org/freedesktop/DBus");
+        assert_eq!(m.interface().unwrap(), "org.freedesktop.DBus.Peer");
+        assert_eq!(m.member().unwrap(), "GetMachineId");
         m.modify_primary_header(|primary| {
             primary.set_flags(BitFlags::from(MessageFlags::NoAutoStart));
             primary.serial_num_or_init(|| 11);
