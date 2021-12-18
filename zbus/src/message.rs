@@ -32,10 +32,10 @@ pub struct MessageBuilder<'a> {
 }
 
 impl<'a> MessageBuilder<'a> {
-    fn new(ty: MessageType) -> Self {
-        let ph = MessagePrimaryHeader::new(ty, 0);
+    fn new(msg_type: MessageType) -> Self {
+        let primary = MessagePrimaryHeader::new(msg_type, 0);
         let fields = MessageFields::new();
-        let header = MessageHeader::new(ph, fields);
+        let header = MessageHeader::new(primary, fields);
         Self { header }
     }
 
