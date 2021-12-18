@@ -360,7 +360,7 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// Unique name of the sending connection.
-    pub fn sender<'s>(&'s self) -> Result<Option<&UniqueName<'s>>, Error> {
+    pub fn sender<'s>(&'s self) -> Result<Option<&UniqueName<'m>>, Error> {
         get_field!(self, Sender)
     }
 

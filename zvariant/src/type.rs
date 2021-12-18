@@ -151,9 +151,8 @@ array_type!([T]);
 array_type!(Vec<T>);
 
 #[cfg(feature = "arrayvec")]
-impl<A, T> Type for arrayvec::ArrayVec<A>
+impl<T, const CAP: usize> Type for arrayvec::ArrayVec<T, CAP>
 where
-    A: arrayvec::Array<Item = T>,
     T: Type,
 {
     #[inline]
@@ -163,10 +162,7 @@ where
 }
 
 #[cfg(feature = "arrayvec")]
-impl<A> Type for arrayvec::ArrayString<A>
-where
-    A: arrayvec::Array<Item = u8> + Copy,
-{
+impl<const CAP: usize> Type for arrayvec::ArrayString<CAP> {
     #[inline]
     fn signature() -> Signature<'static> {
         <&str>::signature()

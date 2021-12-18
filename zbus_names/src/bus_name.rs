@@ -280,9 +280,21 @@ impl From<BusName<'static>> for OwnedValue {
     }
 }
 
+impl From<OwnedUniqueName> for BusName<'static> {
+    fn from(name: OwnedUniqueName) -> Self {
+        BusName::Unique(name.into())
+    }
+}
+
 impl<'a> From<&'a OwnedUniqueName> for BusName<'a> {
     fn from(name: &'a OwnedUniqueName) -> Self {
         BusName::Unique(name.into())
+    }
+}
+
+impl From<OwnedWellKnownName> for BusName<'static> {
+    fn from(name: OwnedWellKnownName) -> Self {
+        BusName::WellKnown(name.into())
     }
 }
 

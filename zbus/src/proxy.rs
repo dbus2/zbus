@@ -845,7 +845,7 @@ impl<'a> SignalStream<'a> {
     fn filter(&mut self, msg: &Message) -> Result<bool> {
         if msg.message_type() == zbus::MessageType::MethodReturn
             && self.src_query.is_some()
-            && msg.reply_serial()? == self.src_query
+            && msg.reply_serial() == self.src_query
         {
             self.src_query = None;
             self.src_unique_name = Some(OwnedUniqueName::into(msg.body()?));
@@ -853,9 +853,9 @@ impl<'a> SignalStream<'a> {
         if msg.message_type() != zbus::MessageType::Signal {
             return Ok(false);
         }
-        let memb = msg.member()?;
-        let iface = msg.interface()?;
-        let path = msg.path()?;
+        let memb = msg.member();
+        let iface = msg.interface();
+        let path = msg.path();
 
         if (self.member.is_none() || memb == self.member)
             && path.as_ref() == Some(self.proxy.path())
