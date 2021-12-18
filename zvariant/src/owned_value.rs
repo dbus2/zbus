@@ -110,8 +110,8 @@ where
 #[cfg(feature = "enumflags2")]
 impl<'a, F> TryFrom<OwnedValue> for enumflags2::BitFlags<F>
 where
-    F: enumflags2::RawBitFlags,
-    F::Type: TryFrom<Value<'a>, Error = crate::Error>,
+    F: enumflags2::BitFlag,
+    F::Numeric: TryFrom<Value<'a>, Error = crate::Error>,
 {
     type Error = crate::Error;
 
@@ -217,7 +217,8 @@ mod tests {
     #[test]
     fn bitflags() -> Result<(), Box<dyn Error>> {
         #[repr(u32)]
-        #[derive(enumflags2::BitFlags, Copy, Clone, Debug)]
+        #[enumflags2::bitflags]
+        #[derive(Copy, Clone, Debug)]
         pub enum Flaggy {
             One = 0x1,
             Two = 0x2,
