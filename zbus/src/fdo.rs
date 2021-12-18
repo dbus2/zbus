@@ -3,7 +3,7 @@
 //! The D-Bus specification defines the message bus messages and some standard interfaces that may
 //! be useful across various D-Bus applications. This module provides their proxy.
 
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
@@ -368,8 +368,9 @@ assert_impl_all!(StatsProxy<'_>: Send, Sync, Unpin);
 /// The flags used by the bus [`request_name`] method.
 ///
 /// [`request_name`]: struct.DBusProxy.html#method.request_name
+#[bitflags]
 #[repr(u32)]
-#[derive(Type, BitFlags, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Type, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum RequestNameFlags {
     /// If an application A specifies this flag and succeeds in becoming the owner of the name, and
     /// another application B later calls [`request_name`] with the [`ReplaceExisting`] flag, then
