@@ -6,10 +6,7 @@ use std::{
     fmt::{self, Display, Formatter},
     ops::Deref,
 };
-use zvariant::{
-    derive::{OwnedValue, Type, Value},
-    NoneValue, Str,
-};
+use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 
 /// String that identifies an [member (method or signal) name][in] on the bus.
 ///
