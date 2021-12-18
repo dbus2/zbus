@@ -315,7 +315,7 @@ impl OrderedFuture for PendingMethodCall {
                         data: Ok(msg),
                         ordering,
                     }) => {
-                        if msg.reply_serial() != Ok(Some(this.serial)) {
+                        if msg.reply_serial() != Some(this.serial) {
                             continue;
                         }
                         let res = match msg.message_type() {
