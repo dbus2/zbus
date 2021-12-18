@@ -626,13 +626,9 @@ impl ObjectServer {
     ) -> fdo::Result<Result<()>> {
         let path = msg
             .path()
-            .ok()
-            .flatten()
             .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
         let iface = msg
             .interface()
-            .ok()
-            .flatten()
             // TODO: In the absence of an INTERFACE field, if two or more interfaces on the same object
             // have a method with the same name, it is undefined which of those methods will be
             // invoked. Implementations may choose to either return an error, or deliver the message
@@ -640,8 +636,6 @@ impl ObjectServer {
             .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
         let member = msg
             .member()
-            .ok()
-            .flatten()
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
 
         let node = self

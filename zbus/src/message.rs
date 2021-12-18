@@ -503,23 +503,23 @@ impl Message {
     }
 
     /// The object to send a call to, or the object a signal is emitted from.
-    pub fn path(&self) -> Result<Option<ObjectPath<'_>>> {
+    pub fn path(&self) -> Option<ObjectPath<'_>> {
         self.quick_fields.path(self)
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
-    pub fn interface(&self) -> Result<Option<InterfaceName<'_>>> {
+    pub fn interface(&self) -> Option<InterfaceName<'_>> {
         self.quick_fields.interface(self)
     }
 
     /// The member, either the method name or signal name.
-    pub fn member(&self) -> Result<Option<MemberName<'_>>> {
+    pub fn member(&self) -> Option<MemberName<'_>> {
         self.quick_fields.member(self)
     }
 
     /// The serial number of the message this message is a reply to.
-    pub fn reply_serial(&self) -> Result<Option<u32>> {
-        self.quick_fields.reply_serial(self)
+    pub fn reply_serial(&self) -> Option<u32> {
+        self.quick_fields.reply_serial()
     }
 
     /// Deserialize the body (without checking signature matching).
