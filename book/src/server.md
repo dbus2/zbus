@@ -3,7 +3,7 @@
 > This version of the book is based on zbus 2.0 API, which is currently in beta stages. For using the
 > sample code in this book, you'll need to explicitly depend on the
 > [latest beta](https://crates.io/crates/zbus/2.0.0-beta.7).
-> 
+>
 > The 1.0 version of this book is available [here](https://dbus.pages.freedesktop.org/zbus/1.0/).
 
 # Writing a server interface
@@ -133,9 +133,9 @@ async fn main() -> Result<()> {
     let connection = Connection::session().await?;
     // setup the server
     connection
-        .object_server_mut()
-        .await
-        .at("/org/zbus/MyGreeter", Greeter)?;
+        .object_server()
+        .at("/org/zbus/MyGreeter", Greeter)
+        .await?;
     // before requesting the name
     connection
         .request_name("org.zbus.MyGreeter")
@@ -318,18 +318,18 @@ example code:
 
 ```rust,no_run
 # use zbus::dbus_interface;
-# 
+#
 # struct Greeter {
 #     name: String
 # }
-# 
+#
 # #[dbus_interface(name = "org.zbus.MyGreeter1")]
 # impl Greeter {
 #     #[dbus_interface(property)]
 #     async fn greeter_name(&self) -> &str {
 #         &self.name
 #     }
-# 
+#
 #     #[dbus_interface(property)]
 #     async fn set_greeter_name(&mut self, name: String) {
 #         self.name = name;
@@ -339,16 +339,13 @@ example code:
 # #[async_std::main]
 # async fn main() -> zbus::Result<()> {
 # let connection = zbus::Connection::session().await?;
-# let mut object_server = connection.object_server_mut().await;
+# let object_server = connection.object_server();
 use zbus::InterfaceDerefMut;
 
-object_server.with_mut(
-    "/org/zbus/MyGreeter",
-    |mut iface: InterfaceDerefMut<Greeter>, signal_ctxt| async move {
-        iface.name = String::from("👋");
-        iface.greeter_name_changed(&signal_ctxt).await
-    },
-).await?;
+let iface_ref = object_server.interface::<_, Greeter>("/org/zbus/MyGreeter").await?;
+let mut iface = iface_ref.get_mut().await;
+iface.name = String::from("👋");
+iface.greeter_name_changed(iface_ref.signal_context()).await?;
 # Ok(())
 # }
 ```

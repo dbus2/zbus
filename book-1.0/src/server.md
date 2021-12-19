@@ -116,7 +116,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 #         fdo::RequestNameFlags::ReplaceExisting.into(),
 #     )?;
 
-    let mut object_server = zbus::ObjectServer::new(&connection);
+    let object_server = zbus::ObjectServer::new(&connection);
     object_server.at(&"/org/zbus/MyGreeter".try_into()?, Greeter)?;
     loop {
         if let Err(err) = object_server.try_handle_next() {
