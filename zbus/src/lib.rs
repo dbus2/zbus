@@ -251,7 +251,7 @@ mod tests {
     use crate::{
         blocking::{self, MessageIterator},
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, InterfaceDeref, Message, MessageFlags, Result, SignalContext,
+        Connection, Message, MessageFlags, Result, SignalContext,
     };
 
     #[test]
@@ -813,12 +813,12 @@ mod tests {
                 .unwrap()
                 .build()
                 .unwrap();
-            conn.object_server_mut()
-                .with(
-                    "/org/freedesktop/zbus/ComeAndGo",
-                    |_: InterfaceDeref<'_, ComeAndGo>, ctxt| block_on(ComeAndGo::the_signal(&ctxt)),
-                )
+
+            let iface_ref = conn
+                .object_server()
+                .interface::<_, ComeAndGo>("/org/freedesktop/zbus/ComeAndGo")
                 .unwrap();
+            block_on(ComeAndGo::the_signal(iface_ref.signal_context())).unwrap();
 
             rx.recv().unwrap();
 
