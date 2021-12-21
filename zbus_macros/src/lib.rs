@@ -177,22 +177,22 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   You can call a signal method from a an interface method, or from an [`ObjectServer::with`]
 ///   function.
 ///
-/// * `struct_return` - This attribute is deprecated and a noop.
-///   If you want to return a single structure from a method,
-///   declare it to return a tuple containing either a named structure or a nested tuple.
-///
 /// * `out_args` - When returning multiple values from a method, naming the out arguments become
 ///   important. You can use `out_args` to specify their names.
 ///
 ///   In such case, your method must return a tuple containing
 ///   your out arguments, in the same order as passed to `out_args`.
 ///
+/// The `struct_return` attribute (from zbus 1.x) is no longer supported. If you want to return a
+/// single structure from a method, declare it to return a tuple containing either a named structure
+/// or a nested tuple.
+///
 /// Note: a `<property_name_in_snake_case>_changed` method is generated for each property: this
 /// method emits the "PropertiesChanged" signal for the associated property. The setter (if it
-/// exists) will automatically call this method.
-/// For instance, a property setter named `set_foo` will be called to set the property "Foo", and
-/// will emit the "PropertiesChanged" signal with the new value for "Foo". Other changes to the
-/// "Foo" property can be signaled manually with the generated `foo_changed` method.
+/// exists) will automatically call this method. For instance, a property setter named `set_foo`
+/// will be called to set the property "Foo", and will emit the "PropertiesChanged" signal with the
+/// new value for "Foo". Other changes to the "Foo" property can be signaled manually with the
+/// generated `foo_changed` method.
 ///
 /// The method arguments support the following `zbus` attributes:
 ///

@@ -776,8 +776,6 @@ mod tests {
             Ok(())
         }
 
-        // This attribute is a noop but add to ensure user specifying it doesn't break anything.
-        #[dbus_interface(struct_return)]
         fn test_single_struct_ret(&self) -> zbus::fdo::Result<ArgStructTest> {
             Ok(ArgStructTest {
                 foo: 42,
