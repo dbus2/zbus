@@ -177,15 +177,15 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   You can call a signal method from a an interface method, or from an [`ObjectServer::with`]
 ///   function.
 ///
-/// * `struct_return` - This attribute is deprecated and a noop.
-///   If you want to return a single structure from a method,
-///   declare it to return a tuple containing either a named structure or a nested tuple.
-///
 /// * `out_args` - When returning multiple values from a method, naming the out arguments become
 ///   important. You can use `out_args` to specify their names.
 ///
 ///   In such case, your method must return a tuple containing
 ///   your out arguments, in the same order as passed to `out_args`.
+///
+/// The `struct_return` attribute (from zbus 1.x) is no longer supported. If you want to return a
+/// single structure from a method, declare it to return a tuple containing either a named structure
+/// or a nested tuple.
 ///
 /// Note: a `<property_name_in_snake_case>_changed` method is generated for each property: this
 /// method emits the "PropertiesChanged" signal for the associated property. The setter (if it
