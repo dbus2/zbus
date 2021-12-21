@@ -826,6 +826,16 @@ impl<'a> Proxy<'a> {
     }
 
     /// Get a stream to receive destination owner changed events.
+    ///
+    /// If the proxy destination is a unique name, the stream will be notified of the peer
+    /// disconnection from the bus (with a `None` value).
+    ///
+    /// If the proxy destination is a well-known name, the stream will be notified whenever the name
+    /// owner is changed, either by a new peer being granted ownership (`Some` value) or when the
+    /// name is released (with a `None` value).
+    ///
+    /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
+    /// will only receive the last update.
     pub async fn receive_owner_changed(&self) -> Result<OwnerChangedStream<'_>> {
         use futures_util::StreamExt;
         use std::future::ready;
@@ -837,7 +847,9 @@ impl<'a> Proxy<'a> {
         let dest = self.destination().to_owned();
         Ok(OwnerChangedStream(
             dbus_proxy
-                // FIXME: use an adhoc signal filter?
+                // TODO: this signal stream matches all arguments, but we are interested only by a
+                // specific arg0. Rewrite with a custom match, or teach a signal stream to filter by
+                // arg?
                 .receive_name_owner_changed()
                 .await?
                 .filter_map(Box::new(move |signal| {
