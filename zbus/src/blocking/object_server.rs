@@ -24,10 +24,9 @@ where
 
     /// Get a reference to the underlying interface.
     ///
-    /// **WARNINGS:** Since `self` will not be able to access the interface in question until the
-    /// return value of this method is dropped, it is highly recommended to prefer
-    /// [`ObjectServer::with`] or [`ObjectServer::with_mut`] over this method. They are also more
-    /// convenient to use for emitting signals and changing properties.
+    /// **WARNINGS:** Since the `ObjectServer` will not be able to access the interface in question
+    /// until the return value of this method is dropped, it is highly recommended that the scope
+    /// of the interface returned is restricted.
     ///
     /// # Errors
     ///
