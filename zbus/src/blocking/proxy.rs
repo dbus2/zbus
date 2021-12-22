@@ -389,6 +389,13 @@ where
 /// Use [`Proxy::receive_owner_changed`] to create an instance of this type.
 pub struct OwnerChangedIterator<'a>(crate::OwnerChangedStream<'a>);
 
+impl OwnerChangedIterator<'_> {
+    /// The bus name being tracked.
+    pub fn name(&self) -> &BusName<'_> {
+        self.0.name()
+    }
+}
+
 impl<'a> std::iter::Iterator for OwnerChangedIterator<'a> {
     type Item = Option<UniqueName<'static>>;
 
