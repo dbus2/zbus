@@ -845,8 +845,8 @@ impl<'a> Proxy<'a> {
             .build()
             .await?;
         let dest = self.destination().to_owned();
-        Ok(OwnerChangedStream(
-            dbus_proxy
+        Ok(OwnerChangedStream {
+            filter_stream: dbus_proxy
                 // TODO: this signal stream matches all arguments, but we are interested only by a
                 // specific arg0. Rewrite with a custom match, or teach a signal stream to filter by
                 // arg?
@@ -861,7 +861,8 @@ impl<'a> Proxy<'a> {
                     let new_owner = args.new_owner().as_ref().map(|owner| owner.to_owned());
                     ready(Some(new_owner))
                 })),
-        ))
+            name: self.destination().clone(),
+        })
     }
 }
 
@@ -874,14 +875,24 @@ type OwnerChangedStreamFilter<'a> = FilterMap<
 /// A [`stream::Stream`] implementation that yields `UniqueName` when the bus owner changes.
 ///
 /// Use [`Proxy::receive_owner_changed`] to create an instance of this type.
-pub struct OwnerChangedStream<'a>(OwnerChangedStreamFilter<'a>);
+pub struct OwnerChangedStream<'a> {
+    filter_stream: OwnerChangedStreamFilter<'a>,
+    name: BusName<'a>,
+}
+
+impl OwnerChangedStream<'_> {
+    /// The bus name being tracked.
+    pub fn name(&self) -> &BusName<'_> {
+        &self.name
+    }
+}
 
 impl<'a> stream::Stream for OwnerChangedStream<'a> {
     type Item = Option<UniqueName<'static>>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         use futures_util::StreamExt;
-        self.get_mut().0.poll_next_unpin(cx)
+        self.get_mut().filter_stream.poll_next_unpin(cx)
     }
 }
 
