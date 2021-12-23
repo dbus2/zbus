@@ -8,7 +8,11 @@ use crate::{fdo, Message, MessageHeader, MessageType};
 /// An error type suitable for a dbus reply method
 pub trait DBusError {
     /// Generate an error reply message for the given method call.
-    fn reply_to(&self, msg: &MessageHeader<'_>) -> Result<Message>;
+    fn create_reply(&self, msg: &MessageHeader<'_>) -> Result<Message>;
+
+    fn name(&self) -> &str;
+
+    fn description(&self) -> &str;
 }
 
 /// The error type for `zbus`.
@@ -174,7 +178,7 @@ impl From<NamesError> for Error {
 impl From<fdo::Error> for Error {
     fn from(val: fdo::Error) -> Self {
         match val {
-            fdo::Error::ZBus(e) => e,
+            fdo::Error::ZBus(_, e) => e,
             e => Error::FDO(Box::new(e)),
         }
     }

@@ -295,10 +295,10 @@ method calls, where the return type is a directly serializable value, like the `
 `say_hello()` above.
 
 The second is a result return value, where the `Ok` variant is the serializable value, and the
-error is any error type that has an async `reply(&self, &zbus::Connection, &zbus::Message)`
-method. The `zbus::fdo::Error` type implements this method, and should cover most common use cases.
-However, when a custom error type needs to be emitted from the method as an error reply, it
-can be created with `derive(zbus::DBusError)`, and used in the returned `Result<T, E>`.
+error is any type that implements `zbus::DBusError`. The `zbus::fdo::Error` type implements this
+trait, and should cover most common use cases. However, when a custom error type needs to be emitted
+from the method as an error reply, it can be created using `derive(zbus::DBusError)`, and used in
+the returned `Result<T, E>`.
 
 ### Sending signals
 

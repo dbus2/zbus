@@ -306,7 +306,8 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[derive(DBusError, Debug)]
 /// #[dbus_error(prefix = "org.myservice.App")]
 /// enum Error {
-///     ZBus(zbus::Error),
+///     #[dbus_error(zbus_error)]
+///     ZBus(String, zbus::Error),
 ///     FileNotFound(String),
 ///     OutOfMemory,
 /// }
