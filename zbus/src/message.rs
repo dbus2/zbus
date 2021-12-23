@@ -431,7 +431,7 @@ impl Message {
         })
     }
 
-    /// Disown the associated file descriptors from the message.
+    /// Take ownership of the associated file descriptors in the message.
     ///
     /// When a message is received over a AF_UNIX socket, it may contain associated FDs. To prevent
     /// the message from closing those FDs on drop, call this method that returns all the received
@@ -439,7 +439,7 @@ impl Message {
     ///
     /// Note: the message will continue to reference the files, so you must keep them open for as
     /// long as the message itself.
-    pub fn disown_fds(&self) -> Vec<OwnedFd> {
+    pub fn take_fds(&self) -> Vec<OwnedFd> {
         let mut fds_lock = self.fds.write().expect(LOCK_PANIC_MSG);
         if let Fds::Owned(ref mut fds) = *fds_lock {
             // From now on, it's the caller responsibility to close the fds
