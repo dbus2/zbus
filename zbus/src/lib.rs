@@ -353,7 +353,7 @@ mod tests {
             .unwrap());
 
         let fd: Fd = reply.body().unwrap();
-        let _fds = reply.disown_fds();
+        let _fds = reply.take_fds();
         assert!(fd.as_raw_fd() >= 0);
         let f = unsafe { File::from_raw_fd(fd.as_raw_fd()) };
         f.metadata().unwrap();
