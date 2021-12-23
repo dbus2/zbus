@@ -3,17 +3,7 @@ use std::{convert::Infallible, error, fmt, io, sync::Arc};
 use zbus_names::{Error as NamesError, OwnedErrorName};
 use zvariant::Error as VariantError;
 
-use crate::{fdo, Message, MessageHeader, MessageType};
-
-/// An error type suitable for a dbus reply method
-pub trait DBusError {
-    /// Generate an error reply message for the given method call.
-    fn create_reply(&self, msg: &MessageHeader<'_>) -> Result<Message>;
-
-    fn name(&self) -> &str;
-
-    fn description(&self) -> &str;
-}
+use crate::{fdo, Message, MessageType};
 
 /// The error type for `zbus`.
 ///
