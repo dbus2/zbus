@@ -251,7 +251,7 @@ mod tests {
     use crate::{
         blocking::{self, MessageIterator},
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, InterfaceDeref, Message, MessageFlags, Result, SignalContext,
+        Connection, Message, MessageFlags, Result, SignalContext,
     };
 
     #[test]
@@ -265,6 +265,9 @@ mod tests {
             &(),
         )
         .unwrap();
+        assert_eq!(m.path().unwrap(), "/org/freedesktop/DBus");
+        assert_eq!(m.interface().unwrap(), "org.freedesktop.DBus.Peer");
+        assert_eq!(m.member().unwrap(), "GetMachineId");
         m.modify_primary_header(|primary| {
             primary.set_flags(BitFlags::from(MessageFlags::NoAutoStart));
             primary.serial_num_or_init(|| 11);
@@ -742,7 +745,7 @@ mod tests {
     #[ignore]
     fn issue_81() {
         use zbus::dbus_proxy;
-        use zvariant::derive::{OwnedValue, Type};
+        use zvariant::{OwnedValue, Type};
 
         #[derive(
             Debug, PartialEq, Clone, Type, OwnedValue, serde::Serialize, serde::Deserialize,
@@ -810,12 +813,12 @@ mod tests {
                 .unwrap()
                 .build()
                 .unwrap();
-            conn.object_server_mut()
-                .with(
-                    "/org/freedesktop/zbus/ComeAndGo",
-                    |_: InterfaceDeref<'_, ComeAndGo>, ctxt| block_on(ComeAndGo::the_signal(&ctxt)),
-                )
+
+            let iface_ref = conn
+                .object_server()
+                .interface::<_, ComeAndGo>("/org/freedesktop/zbus/ComeAndGo")
                 .unwrap();
+            block_on(ComeAndGo::the_signal(iface_ref.signal_context())).unwrap();
 
             rx.recv().unwrap();
 

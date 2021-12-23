@@ -3,7 +3,7 @@
 //! The D-Bus specification defines the message bus messages and some standard interfaces that may
 //! be useful across various D-Bus applications. This module provides their proxy.
 
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
@@ -13,8 +13,8 @@ use zbus_names::{
     WellKnownName,
 };
 use zvariant::{
-    derive::{DeserializeDict, SerializeDict, Type, TypeDict},
-    ObjectPath, Optional, OwnedObjectPath, OwnedValue, Value,
+    DeserializeDict, ObjectPath, Optional, OwnedObjectPath, OwnedValue, SerializeDict, Type,
+    TypeDict, Value,
 };
 
 use crate::{dbus_interface, dbus_proxy, DBusError, MessageHeader, ObjectServer, SignalContext};
@@ -53,8 +53,9 @@ impl Introspectable {
         #[zbus(header)] header: MessageHeader<'_>,
     ) -> Result<String> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
-        let node = server
-            .get_node(path)
+        let root = server.root().read().await;
+        let node = root
+            .get_child(path)
             .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{}'", path)))?;
 
         Ok(node.introspect().await)
@@ -123,8 +124,9 @@ impl Properties {
         #[zbus(header)] header: MessageHeader<'_>,
     ) -> Result<OwnedValue> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
-        let iface = server
-            .get_node(path)
+        let root = server.root().read().await;
+        let iface = root
+            .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
@@ -149,8 +151,9 @@ impl Properties {
         #[zbus(signal_context)] ctxt: SignalContext<'_>,
     ) -> Result<()> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
-        let iface = server
-            .get_node(path)
+        let root = server.root().read().await;
+        let iface = root
+            .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
@@ -188,8 +191,9 @@ impl Properties {
         #[zbus(header)] header: MessageHeader<'_>,
     ) -> Result<HashMap<String, OwnedValue>> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
-        let iface = server
-            .get_node(path)
+        let root = server.root().read().await;
+        let iface = root
+            .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
@@ -368,8 +372,9 @@ assert_impl_all!(StatsProxy<'_>: Send, Sync, Unpin);
 /// The flags used by the bus [`request_name`] method.
 ///
 /// [`request_name`]: struct.DBusProxy.html#method.request_name
+#[bitflags]
 #[repr(u32)]
-#[derive(Type, BitFlags, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Type, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum RequestNameFlags {
     /// If an application A specifies this flag and succeeds in becoming the owner of the name, and
     /// another application B later calls [`request_name`] with the [`ReplaceExisting`] flag, then

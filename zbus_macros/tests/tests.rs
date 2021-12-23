@@ -205,7 +205,7 @@ fn test_interface() {
         block_on(async {
             // check compilation
             let c = zbus::Connection::session().await.unwrap();
-            let s = c.object_server().await;
+            let s = c.object_server();
             let m =
                 zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
                     .unwrap();

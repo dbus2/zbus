@@ -6,7 +6,7 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-use zbus_names::{BusName, InterfaceName, MemberName};
+use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{blocking::Connection, Error, Message, Result};
@@ -263,7 +263,14 @@ impl<'a> Proxy<'a> {
         block_on(self.azync.receive_all_signals()).map(SignalIterator)
     }
 
-    /// Get an iterator to receive property changed events.
+    /// Get an iterator to receive owner changed events.
+    ///
+    /// If the proxy destination is a unique name, the stream will be notified of the peer
+    /// disconnection from the bus (with a `None` value).
+    ///
+    /// If the proxy destination is a well-known name, the stream will be notified whenever the name
+    /// owner is changed, either by a new peer being granted ownership (`Some` value) or when the
+    /// name is released (with a `None` value).
     ///
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
@@ -272,6 +279,14 @@ impl<'a> Proxy<'a> {
         name: &'name str,
     ) -> PropertyIterator<'a, T> {
         PropertyIterator(block_on(self.azync.receive_property_changed(name)))
+    }
+
+    /// Get an iterator to receive property changed events.
+    ///
+    /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
+    /// will only receive the last update.
+    pub fn receive_owner_changed(&self) -> Result<OwnerChangedIterator<'_>> {
+        block_on(self.azync.receive_owner_changed()).map(OwnerChangedIterator)
     }
 
     /// Get a reference to the underlying async Proxy.
@@ -366,6 +381,26 @@ where
     // and cache the new value.
     pub fn get(&self) -> Result<T> {
         block_on(self.0.get())
+    }
+}
+
+/// An [`std::iter::Iterator`] implementation that yields owner change notifications.
+///
+/// Use [`Proxy::receive_owner_changed`] to create an instance of this type.
+pub struct OwnerChangedIterator<'a>(crate::OwnerChangedStream<'a>);
+
+impl OwnerChangedIterator<'_> {
+    /// The bus name being tracked.
+    pub fn name(&self) -> &BusName<'_> {
+        self.0.name()
+    }
+}
+
+impl<'a> std::iter::Iterator for OwnerChangedIterator<'a> {
+    type Item = Option<UniqueName<'static>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        block_on(self.0.next())
     }
 }
 

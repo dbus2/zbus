@@ -7,7 +7,7 @@ use core::{
 use crate::{Error, OwnedUniqueName, OwnedWellKnownName, Result, UniqueName, WellKnownName};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
-use zvariant::{derive::Type, NoneValue, OwnedValue, Str, Type, Value};
+use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 
 /// String that identifies a [bus name].
 ///
@@ -280,9 +280,21 @@ impl From<BusName<'static>> for OwnedValue {
     }
 }
 
+impl From<OwnedUniqueName> for BusName<'static> {
+    fn from(name: OwnedUniqueName) -> Self {
+        BusName::Unique(name.into())
+    }
+}
+
 impl<'a> From<&'a OwnedUniqueName> for BusName<'a> {
     fn from(name: &'a OwnedUniqueName) -> Self {
         BusName::Unique(name.into())
+    }
+}
+
+impl From<OwnedWellKnownName> for BusName<'static> {
+    fn from(name: OwnedWellKnownName) -> Self {
+        BusName::WellKnown(name.into())
     }
 }
 

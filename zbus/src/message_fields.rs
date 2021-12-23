@@ -2,9 +2,9 @@ use serde::{Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::convert::{TryFrom, TryInto};
 use zbus_names::{InterfaceName, MemberName};
-use zvariant::{derive::Type, ObjectPath};
+use zvariant::{ObjectPath, Type};
 
-use crate::{Error, Message, MessageField, MessageFieldCode, MessageHeader, Result};
+use crate::{Message, MessageField, MessageFieldCode, MessageHeader, Result};
 
 // It's actually 10 (and even not that) but let's round it to next 8-byte alignment
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
@@ -84,10 +84,6 @@ pub(crate) struct FieldPos {
 }
 
 impl FieldPos {
-    pub fn new_unknown() -> Self {
-        Self { start: 0, end: 0 }
-    }
-
     pub fn new_not_present() -> Self {
         Self { start: 1, end: 0 }
     }
@@ -110,29 +106,32 @@ impl FieldPos {
     where
         T: std::ops::Deref<Target = str>,
     {
-        match field {
-            Some(value) => Self::build(msg_buf, value).unwrap_or_else(Self::new_unknown),
-            None => Self::new_not_present(),
-        }
+        field
+            .and_then(|f| Self::build(msg_buf, f.deref()))
+            .unwrap_or_else(Self::new_not_present)
     }
 
-    /// Reassemble a previously cached field, or generate it with the fallback closure.
-    pub fn read<'m, T>(
-        &self,
-        msg_buf: &'m [u8],
-        fallback: impl FnOnce() -> Result<Option<T>>,
-    ) -> Result<Option<T>>
+    /// Reassemble a previously cached field.
+    ///
+    /// **NOTE**: The caller must ensure that the `msg_buff` is the same one `build` was called for.
+    /// Otherwise, you'll get a panic.
+    pub fn read<'m, T>(&self, msg_buf: &'m [u8]) -> Option<T>
     where
         T: TryFrom<&'m str>,
-        T::Error: Into<Error>,
+        T::Error: std::fmt::Debug,
     {
         match self {
-            Self { start: 0, end: 0 } => fallback(),
-            Self { start: 1, end: 0 } => Ok(None),
+            Self {
+                start: 0..=1,
+                end: 0,
+            } => None,
             Self { start, end } => {
                 let s = std::str::from_utf8(&msg_buf[(*start as usize)..(*end as usize)])
                     .expect("Invalid utf8 when reconstructing string");
-                T::try_from(s).map(Some).map_err(Into::into)
+                // We already check the fields during the construction of `Self`.
+                T::try_from(s)
+                    .map(Some)
+                    .expect("Invalid field reconstruction")
             }
         }
     }
@@ -144,7 +143,7 @@ pub(crate) struct QuickMessageFields {
     path: FieldPos,
     interface: FieldPos,
     member: FieldPos,
-    reply_serial: Option<Option<u32>>,
+    reply_serial: Option<u32>,
 }
 
 impl QuickMessageFields {
@@ -153,29 +152,24 @@ impl QuickMessageFields {
             path: FieldPos::new(buf, header.path()?),
             interface: FieldPos::new(buf, header.interface()?),
             member: FieldPos::new(buf, header.member()?),
-            reply_serial: Some(header.reply_serial()?),
+            reply_serial: header.reply_serial()?,
         })
     }
 
-    pub fn path<'m>(&self, msg: &'m Message) -> Result<Option<ObjectPath<'m>>> {
-        self.path
-            .read(msg.as_bytes(), || Ok(msg.header()?.path()?.cloned()))
+    pub fn path<'m>(&self, msg: &'m Message) -> Option<ObjectPath<'m>> {
+        self.path.read(msg.as_bytes())
     }
 
-    pub fn interface<'m>(&self, msg: &'m Message) -> Result<Option<InterfaceName<'m>>> {
-        self.interface
-            .read(msg.as_bytes(), || Ok(msg.header()?.interface()?.cloned()))
+    pub fn interface<'m>(&self, msg: &'m Message) -> Option<InterfaceName<'m>> {
+        self.interface.read(msg.as_bytes())
     }
 
-    pub fn member<'m>(&self, msg: &'m Message) -> Result<Option<MemberName<'m>>> {
-        self.member
-            .read(msg.as_bytes(), || Ok(msg.header()?.member()?.cloned()))
+    pub fn member<'m>(&self, msg: &'m Message) -> Option<MemberName<'m>> {
+        self.member.read(msg.as_bytes())
     }
 
-    pub fn reply_serial(&self, msg: &Message) -> Result<Option<u32>> {
+    pub fn reply_serial(&self) -> Option<u32> {
         self.reply_serial
-            .map(Ok)
-            .unwrap_or_else(|| msg.header()?.reply_serial())
     }
 }
 

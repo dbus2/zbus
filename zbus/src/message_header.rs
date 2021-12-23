@@ -1,13 +1,13 @@
 use std::convert::TryFrom;
 
-use enumflags2::BitFlags;
+use enumflags2::{bitflags, BitFlags};
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{derive::Type, EncodingContext, ObjectPath, Signature};
+use zvariant::{EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{Error, MessageField, MessageFieldCode, MessageFields};
 
@@ -79,8 +79,9 @@ impl From<u8> for MessageType {
 }
 
 /// Pre-defined flags that can be passed in Message header.
+#[bitflags]
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, BitFlags, Type)]
+#[derive(Debug, Copy, Clone, PartialEq, Type)]
 pub enum MessageFlags {
     /// This message does not expect method return replies or error replies, even if it is of a type
     /// that can have a reply; the reply should be omitted.
@@ -104,7 +105,7 @@ assert_impl_all!(MessageFlags: Send, Sync, Unpin);
 #[derive(Clone, Debug)]
 struct SerialNum(OnceCell<u32>);
 
-// FIXME: Can use `zvariant::derive::Type` after `zvariant` provides a blanket implementation for
+// FIXME: Can use `zvariant::Type` macro after `zvariant` provides a blanket implementation for
 // `OnceCell<T>`.
 impl zvariant::Type for SerialNum {
     fn signature() -> Signature<'static> {
@@ -359,7 +360,7 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// Unique name of the sending connection.
-    pub fn sender<'s>(&'s self) -> Result<Option<&UniqueName<'s>>, Error> {
+    pub fn sender<'s>(&'s self) -> Result<Option<&UniqueName<'m>>, Error> {
         get_field!(self, Sender)
     }
 

@@ -32,10 +32,10 @@ pub struct MessageBuilder<'a> {
 }
 
 impl<'a> MessageBuilder<'a> {
-    fn new(ty: MessageType) -> Self {
-        let ph = MessagePrimaryHeader::new(ty, 0);
+    fn new(msg_type: MessageType) -> Self {
+        let primary = MessagePrimaryHeader::new(msg_type, 0);
         let fields = MessageFields::new();
-        let header = MessageHeader::new(ph, fields);
+        let header = MessageHeader::new(primary, fields);
         Self { header }
     }
 
@@ -228,10 +228,13 @@ impl<'a> MessageBuilder<'a> {
         zvariant::to_writer(&mut cursor, ctxt, &header)?;
 
         let (_, fds) = zvariant::to_writer_fds(&mut cursor, ctxt, body)?;
+        let primary_header = header.into_primary();
+        let header: MessageHeader<'_> = zvariant::from_slice(&bytes, ctxt)?;
+        let quick_fields = QuickMessageFields::new(&bytes, &header)?;
 
         Ok(Message {
-            primary_header: header.into_primary(),
-            quick_fields: QuickMessageFields::default(),
+            primary_header,
+            quick_fields,
             bytes,
             body_offset: hdr_len,
             fds: Arc::new(RwLock::new(Fds::Raw(fds))),
@@ -503,23 +506,23 @@ impl Message {
     }
 
     /// The object to send a call to, or the object a signal is emitted from.
-    pub fn path(&self) -> Result<Option<ObjectPath<'_>>> {
+    pub fn path(&self) -> Option<ObjectPath<'_>> {
         self.quick_fields.path(self)
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
-    pub fn interface(&self) -> Result<Option<InterfaceName<'_>>> {
+    pub fn interface(&self) -> Option<InterfaceName<'_>> {
         self.quick_fields.interface(self)
     }
 
     /// The member, either the method name or signal name.
-    pub fn member(&self) -> Result<Option<MemberName<'_>>> {
+    pub fn member(&self) -> Option<MemberName<'_>> {
         self.quick_fields.member(self)
     }
 
     /// The serial number of the message this message is a reply to.
-    pub fn reply_serial(&self) -> Result<Option<u32>> {
-        self.quick_fields.reply_serial(self)
+    pub fn reply_serial(&self) -> Option<u32> {
+        self.quick_fields.reply_serial()
     }
 
     /// Deserialize the body (without checking signature matching).
