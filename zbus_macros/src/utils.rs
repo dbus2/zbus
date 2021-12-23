@@ -68,6 +68,7 @@ pub enum ItemAttribute {
     NoReply,
     OutArgs(Vec<String>),
     Name(String),
+    ZbusError,
     Object(String),
     AsyncObject(String),
     BlockingObject(String),
@@ -183,6 +184,7 @@ fn error_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
 
     match ident.as_ref() {
         "name" => Ok(ItemAttribute::Name(values.remove(0))),
+        "zbus_error" => Ok(ItemAttribute::ZbusError),
         s => panic!("Unknown item meta {}", s),
     }
 }
