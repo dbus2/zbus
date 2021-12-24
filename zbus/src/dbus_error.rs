@@ -12,6 +12,9 @@ pub trait DBusError {
     /// Generate an error reply message for the given method call.
     fn create_reply(&self, msg: &MessageHeader<'_>) -> Result<Message>;
 
+    // The name of the error.
+    //
+    // Every D-Bus error must have a name. See [`ErrorName`] for more information.
     fn name(&self) -> ErrorName<'_>;
 
     fn description(&self) -> &str;
