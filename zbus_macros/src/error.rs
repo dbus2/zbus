@@ -98,15 +98,18 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             String::from("org.freedesktop.zbus.Error")
         };
 
+        let error_name = quote! {
+            #zbus::names::ErrorName::from_static_str_unchecked(#fqn)
+        };
         let e = match variant.fields {
             Fields::Unit => quote! {
-                Self::#ident => #fqn,
+                Self::#ident => #error_name,
             },
             Fields::Unnamed(_) => quote! {
-                Self::#ident(..) => #fqn,
+                Self::#ident(..) => #error_name,
             },
             Fields::Named(_) => quote! {
-                Self::#ident { .. } => #fqn,
+                Self::#ident { .. } => #error_name,
             },
         };
         error_names.extend(e);
@@ -200,7 +203,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
 
     Ok(quote! {
         impl #zbus::DBusError for #name {
-            fn name(&self) -> &str {
+            fn name(&self) -> #zbus::names::ErrorName {
                 match self {
                     #error_names
                 }

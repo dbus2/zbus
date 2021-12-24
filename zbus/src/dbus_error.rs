@@ -1,4 +1,4 @@
-use crate::{Message, MessageHeader, Result};
+use crate::{names::ErrorName, Message, MessageHeader, Result};
 
 /// A trait that needs to be implemented by error types to be returned from D-Bus methods.
 ///
@@ -12,7 +12,7 @@ pub trait DBusError {
     /// Generate an error reply message for the given method call.
     fn create_reply(&self, msg: &MessageHeader<'_>) -> Result<Message>;
 
-    fn name(&self) -> &str;
+    fn name(&self) -> ErrorName<'_>;
 
     fn description(&self) -> &str;
 }
