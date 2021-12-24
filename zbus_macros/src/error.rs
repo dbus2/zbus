@@ -126,10 +126,10 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         // may support other cases?
         let e = match &variant.fields {
             Fields::Unit => quote! {
-                Self::#ident => &"",
+                Self::#ident => None,
             },
             Fields::Unnamed(_) => quote! {
-                Self::#ident(desc, ..) => &desc,
+                Self::#ident(desc, ..) => Some(&desc),
             },
             Fields::Named(n) => {
                 let f = &n
@@ -138,7 +138,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
                     .ok_or_else(|| Error::new(n.span(), "expected at least one field"))?
                     .ident;
                 quote! {
-                    Self::#ident { #f, } => #f,
+                    Self::#ident { #f, } => Some(#f),
                 }
             }
         };
@@ -192,7 +192,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             impl ::std::fmt::Display for #name {
                 fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                     let name = #zbus::DBusError::name(self);
-                    let description = #zbus::DBusError::description(self);
+                    let description = #zbus::DBusError::description(self).unwrap_or("no description");
                     ::std::write!(f, "{}: {}", name, description)
                 }
             }
@@ -209,7 +209,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
                 }
             }
 
-            fn description(&self) -> &str {
+            fn description(&self) -> Option<&str> {
                 match self {
                     #error_descriptions
                 }

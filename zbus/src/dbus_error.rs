@@ -17,5 +17,5 @@ pub trait DBusError {
     // Every D-Bus error must have a name. See [`ErrorName`] for more information.
     fn name(&self) -> ErrorName<'_>;
 
-    fn description(&self) -> &str;
+    fn description(&self) -> Option<&str>;
 }
