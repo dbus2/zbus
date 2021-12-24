@@ -3,7 +3,7 @@ use quote::quote;
 use std::iter;
 use syn::{
     spanned::Spanned,
-    Attribute, Data, DeriveInput, Error, Fields, Lit,
+    Attribute, Data, DeriveInput, Error, Fields, Ident, Lit,
     Meta::{List, NameValue},
     NestedMeta,
     NestedMeta::Meta,
@@ -241,23 +241,25 @@ fn gen_reply_for_variant(variant: &Variant, zbus_error_variant: bool) -> TokenSt
             }
         }
         Fields::Unnamed(f) => {
+            // Name the unnamed fields as the number of the field with an 'f' in front.
             let (in_fields, out_fields) = if zbus_error_variant {
-                // For zbus_error_variants, the last item is the contained error, and should
-                // not be forwarded to the reply.
-                let fields = (0..(f.unnamed.len() - 1))
-                    .map(|n| format!("f{}", n))
-                    .chain(iter::once(String::from("_zbus_error")))
-                    .map(|v| syn::Ident::new(&v, ident.span()))
+                // For zbus_error variant, the last item is the contained error, and should not be
+                // forwarded to the reply body.
+                let in_fields = (0..(f.unnamed.len() - 1))
+                    .map(|n| Ident::new(&format!("f{}", n), ident.span()))
+                    // The ignored zbus_error field is the last one.
+                    .chain(iter::once(Ident::new("_zbus_error", ident.span())))
                     .collect::<Vec<_>>();
-                let out_fields = Vec::from(&fields[..(fields.len() - 1)]);
-                (fields, out_fields)
+                let out_fields = Vec::from(&in_fields[..(in_fields.len() - 1)]);
+
+                (in_fields, out_fields)
             } else {
-                // For every other variant, just number them off with an 'f' in front.
-                let fields = (0..f.unnamed.len())
-                    .map(|n| format!("f{}", n))
-                    .map(|v| syn::Ident::new(&v, ident.span()))
+                let in_fields = (0..f.unnamed.len())
+                    .map(|n| Ident::new(&format!("f{}", n), ident.span()))
                     .collect::<Vec<_>>();
-                (fields.clone(), fields)
+                let out_fields = in_fields.clone();
+
+                (in_fields, out_fields)
             };
 
             quote! {
