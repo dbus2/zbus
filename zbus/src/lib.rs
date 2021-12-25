@@ -156,6 +156,9 @@ mod doctests {
     doc_comment::doctest!("../../book/src/blocking.md");
 }
 
+mod dbus_error;
+pub use dbus_error::*;
+
 mod error;
 pub use error::*;
 
