@@ -275,28 +275,20 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Derive macro for defining a D-Bus error.
+/// Derive macro for implementing [`zbus::DBusError`] trait.
 ///
-/// This macro helps to implement an [`Error`] suitable for D-Bus handling with zbus. It will expand
-/// an `enum E` with [`Error`] traits implementation, and `From<zbus::Error>`. The latter makes it
-/// possible for you to declare proxy methods to directly return this type, rather than
-/// [`zbus::Error`]. However, for this to work, we require a variant by the name `ZBus` that
-/// contains an unnamed field of type [`zbus::Error`].
+/// This macro makes it easy to implement the [`zbus::DBusError`] trait for your custom error type
+/// (currently only enums are supported).
 ///
-/// The `DBusError` trait is also implemented.
+/// If a special variant marked with the `dbus_error` attribute is present, `From<zbus::Error>` is
+/// also implemented for your type. This variant can only have a single unnamed field of type
+/// [`zbus::Error`]. This implementation makes it possible for you to declare proxy methods to
+/// directly return this type, rather than [`zbus::Error`].
 ///
-/// Additionally, the derived `impl E` will provide the following convenience methods:
-///
-/// * `name(&self)` - get the associated D-Bus error name.
-///
-/// * `description(&self)` - get the associated error description (the first argument of an error
-///   message)
-///
-/// * `reply(&self, &zbus::Connection, &zbus::Message)` - send this error as reply to the
-///   message.
-///
-/// Note: it is recommended that errors take a single argument `String` which describes it in
-/// a human-friendly fashion (support for other arguments is limited or TODO currently).
+/// If a variant (except for the special `dbus_error` one) has arguments, the first one must be a
+/// `String` (which is used as the description). All other arguments are serialized verbatim into
+/// the D-Bus message generated for the errors. Therefore, fields can only be of types that
+/// implement [`serde::Serialize`] and [`zvariant::Type`] traits.
 ///
 /// # Example
 ///
@@ -307,14 +299,16 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// #[dbus_error(prefix = "org.myservice.App")]
 /// enum Error {
 ///     #[dbus_error(zbus_error)]
-///     ZBus(String, zbus::Error),
+///     ZBus(zbus::Error),
 ///     FileNotFound(String),
 ///     OutOfMemory,
 /// }
 /// ```
 ///
-/// [`Error`]: http://doc.rust-lang.org/std/error/trait.Error.html
+/// [`zbus::DBusError`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/trait.DBusError.html
 /// [`zbus::Error`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/enum.Error.html
+/// [`zvariant::Type`]: https://docs.rs/zvariant/3.0.0/zvariant/trait.Type.html
+/// [`serde::Serialize`]: https://docs.rs/serde/1.0.132/serde/trait.Serialize.html
 #[proc_macro_derive(DBusError, attributes(dbus_error))]
 pub fn derive_dbus_error(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
