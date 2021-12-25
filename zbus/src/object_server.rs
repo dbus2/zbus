@@ -737,7 +737,7 @@ mod tests {
     enum MyIfaceError {
         SomethingWentWrong(String),
         #[dbus_error(zbus_error)]
-        ZBus(String, zbus::Error),
+        ZBus(zbus::Error),
     }
 
     #[dbus_interface(interface = "org.freedesktop.MyIface")]
