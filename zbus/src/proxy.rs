@@ -78,14 +78,11 @@ pub(crate) struct PropertiesCache {
 ///
 /// ## Current limitations:
 ///
-/// At the moment, `Proxy` doesn't:
-///
-/// * cache properties
-/// * track the current name owner
-/// * prevent auto-launching
+/// At the moment, `Proxy` doesn't prevent [auto-launching][al].
 ///
 /// [`futures` crate]: https://crates.io/crates/futures
 /// [`dbus_proxy`]: attr.dbus_proxy.html
+/// [al]: https://gitlab.freedesktop.org/dbus/zbus/-/issues/54
 #[derive(Clone, Debug)]
 pub struct Proxy<'a> {
     pub(crate) inner: Arc<ProxyInner<'a>>,

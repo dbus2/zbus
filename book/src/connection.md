@@ -2,7 +2,7 @@
 >
 > This version of the book is based on zbus 2.0 API, which is currently in beta stages. For using the
 > sample code in this book, you'll need to explicitly depend on the
-> [latest beta](https://crates.io/crates/zbus/2.0.0-beta.7).
+> [latest beta](https://crates.io/crates/zbus/2.0.0-beta.8).
 >
 > The 1.0 version of this book is available [here](https://dbus.pages.freedesktop.org/zbus/1.0/).
 
@@ -51,6 +51,6 @@ See the `unix_p2p` test in the [zbus source code] for a simple example.
 [zbus source code]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/zbus/src/connection.rs
 [`futures::stream::Stream`]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
 [`futures::sink::Sink`]: https://docs.rs/futures/latest/futures/sink/trait.Sink.html
-[`MessageStream`]: https://docs.rs/zbus/2.0.0-beta.7/zbus/struct.MessageStream.html
+[`MessageStream`]: https://docs.rs/zbus/2.0.0-beta.8/zbus/struct.MessageStream.html
 
 [^bus-less] Unless you implemented them, none of the bus methods will exist.
