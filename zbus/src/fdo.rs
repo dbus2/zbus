@@ -820,10 +820,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod tests {
-    use crate::{fdo, Error, Message};
+    use crate::{fdo, DBusError, Error, Message};
     use futures_util::StreamExt;
     use ntest::timeout;
-    use std::{convert::TryInto, future::ready, sync::Arc};
+    use std::{convert::TryInto, future::ready};
     use test_log::test;
     use tokio::runtime;
     use zbus_names::WellKnownName;
@@ -838,17 +838,11 @@ mod tests {
             &("so long"),
         )
         .unwrap();
-        let m_clone = m.clone();
         let e: Error = m.into();
         let e: fdo::Error = e.try_into().unwrap();
-        assert_eq!(
-            e,
-            fdo::Error::ZBus(zbus::Error::MethodError(
-                "org.freedesktop.DBus.Error.TimedOut".try_into().unwrap(),
-                Some("so long".to_string()),
-                Arc::new(m_clone),
-            ))
-        );
+        assert_eq!(e, fdo::Error::TimedOut("so long".to_string()),);
+        assert_eq!(e.name(), "org.freedesktop.DBus.Error.TimedOut");
+        assert_eq!(e.description(), Some("so long"));
     }
 
     #[test]
