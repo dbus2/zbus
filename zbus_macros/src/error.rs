@@ -73,6 +73,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     let mut replies = quote! {};
     let mut error_names = quote! {};
     let mut error_descriptions = quote! {};
+    let mut error_converts = quote! {};
 
     let mut zbus_error_variant = None;
 
@@ -151,6 +152,34 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         };
         error_descriptions.extend(e);
 
+        // The conversion for zbus_error variant is handled separately/explicitly.
+        if !impl_from_zbus_error {
+            // FIXME: deserialize msg to error field instead, to support variable args
+            let e = match &variant.fields {
+                Fields::Unit => quote! {
+                    #fqn => Self::#ident,
+                },
+                Fields::Unnamed(_) => quote! {
+                    #fqn => { Self::#ident(::std::clone::Clone::clone(desc).unwrap_or_default()) },
+                },
+                Fields::Named(n) => {
+                    let f = &n
+                        .named
+                        .first()
+                        .ok_or_else(|| Error::new(n.span(), "expected at least one field"))?
+                        .ident;
+                    quote! {
+                        #fqn => {
+                            let desc = ::std::clone::Clone::clone(desc).unwrap_or_default();
+
+                            Self::#ident { #f: desc }
+                        }
+                    }
+                }
+            };
+            error_converts.extend(e);
+        }
+
         let r = gen_reply_for_variant(&variant, impl_from_zbus_error)?;
         replies.extend(r);
     }
@@ -160,7 +189,14 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             quote! {
                 impl ::std::convert::From<#zbus::Error> for #name {
                     fn from(value: #zbus::Error) -> #name {
-                        Self::#ident(value)
+                        if let #zbus::Error::MethodError(name, desc, _) = &value {
+                            match name.as_str() {
+                                #error_converts
+                                _ => Self::#ident(value),
+                            }
+                        } else {
+                            Self::#ident(value)
+                        }
                     }
                 }
             }

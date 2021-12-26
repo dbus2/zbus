@@ -86,7 +86,6 @@ fn test_proxy() {
 
 #[test]
 fn test_derive_error() {
-    #[allow(dead_code)]
     #[derive(Debug, DBusError)]
     #[dbus_error(prefix = "org.freedesktop.zbus")]
     enum Test {
