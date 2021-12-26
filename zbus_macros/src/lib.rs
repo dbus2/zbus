@@ -285,10 +285,8 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [`zbus::Error`]. This implementation makes it possible for you to declare proxy methods to
 /// directly return this type, rather than [`zbus::Error`].
 ///
-/// If a variant (except for the special `dbus_error` one) has arguments, the first one must be a
-/// `String` (which is used as the description). All other arguments are serialized verbatim into
-/// the D-Bus message generated for the errors. Therefore, fields can only be of types that
-/// implement [`serde::Serialize`] and [`zvariant::Type`] traits.
+/// Each variant (except for the special `dbus_error` one) can optionally have a (named or unnamed)
+/// `String` field (which is used as the human-readable error description).
 ///
 /// # Example
 ///
