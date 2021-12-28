@@ -130,7 +130,7 @@ pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// For structs it works just like serde's [`Serialize`] macros:
 ///
 /// ```
-/// use zvariant::{EncodingContext, to_bytes, SerializeDict, TypeDict};
+/// use zvariant::{SerializeDict, TypeDict};
 ///
 /// #[derive(SerializeDict, TypeDict)]
 /// struct Struct {
@@ -165,7 +165,7 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// For structs it works just like serde's [`Deserialize`] macros:
 ///
 /// ```
-/// use zvariant::{EncodingContext, to_bytes, DeserializeDict, TypeDict};
+/// use zvariant::{DeserializeDict, TypeDict};
 ///
 /// #[derive(DeserializeDict, TypeDict)]
 /// struct Struct {
