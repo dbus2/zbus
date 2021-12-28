@@ -150,6 +150,7 @@ mod doctests {
     doc_comment::doctest!("../../book/src/client.md");
     doc_comment::doctest!("../../book/src/concepts.md");
     doc_comment::doctest!("../../book/src/connection.md");
+    doc_comment::doctest!("../../book/src/faq.md");
     doc_comment::doctest!("../../book/src/contributors.md");
     doc_comment::doctest!("../../book/src/introduction.md");
     doc_comment::doctest!("../../book/src/server.md");
