@@ -6,6 +6,7 @@
 - [Writing a client proxy](client.md)
 - [Writing a server interface](server.md)
 - [Blocking API](blocking.md)
+- [FAQ](faq.md)
 
 -----------
 
