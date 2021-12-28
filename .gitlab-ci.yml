@@ -107,8 +107,6 @@ nightly:
   script:
     - rustup override set nightly
     - *cargo_test
-    - cargo fmt --all -- --check
-    - cargo clippy --tests -- -D warnings -Aclippy::upper_case_acronyms
 
 coverage:
   extends: .debian_img
