@@ -29,7 +29,7 @@ use futures_sink::Sink;
 use futures_util::{
     future::{select, Either},
     sink::SinkExt,
-    StreamExt,
+    StreamExt, TryFutureExt,
 };
 
 use crate::{
@@ -772,29 +772,8 @@ impl Connection {
             .cache_properties(CacheProperties::No)
             .build()
             .await?;
-        let future = dbus_proxy.hello();
-
-        // With external executor, our executor is only run after the connection construction is
-        // completed and this method is (and must) run before that so we need to tick the executor
-        // ourselves in parallel to making the method call.  With the internal executor, this is
-        // not needed but harmless.
-        let name = {
-            let executor = self.inner.executor.clone();
-            let ticking_future = async move {
-                // Keep running as long as this task/future is not cancelled.
-                loop {
-                    executor.tick().await;
-                }
-            };
-
-            futures_util::pin_mut!(future);
-            futures_util::pin_mut!(ticking_future);
-
-            match select(future, ticking_future).await {
-                Either::Left((res, _)) => res?,
-                Either::Right((_, _)) => unreachable!("ticking task future shouldn't finish"),
-            }
-        };
+        let future = dbus_proxy.hello().map_err(Into::into);
+        let name = self.run_future_at_init(future).await?;
 
         self.inner
             .unique_name
@@ -803,6 +782,31 @@ impl Connection {
             .expect("Attempted to set unique_name twice");
 
         Ok(())
+    }
+
+    // With external executor, our executor is only run after the connection construction is
+    // completed and some futures need to run to completion before that is done so we need to tick
+    // the executor ourselves in parallel to making the method call. With the internal executor,
+    /// this is not needed but harmless.
+    pub(crate) async fn run_future_at_init<F, O>(&self, future: F) -> Result<O>
+    where
+        F: Future<Output = Result<O>>,
+    {
+        let executor = self.inner.executor.clone();
+        let ticking_future = async move {
+            // Keep running as long as this task/future is not cancelled.
+            loop {
+                executor.tick().await;
+            }
+        };
+
+        futures_util::pin_mut!(future);
+        futures_util::pin_mut!(ticking_future);
+
+        match select(future, ticking_future).await {
+            Either::Left((res, _)) => res,
+            Either::Right((_, _)) => unreachable!("ticking task future shouldn't finish"),
+        }
     }
 
     pub(crate) async fn new(
