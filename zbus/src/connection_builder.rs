@@ -233,7 +233,8 @@ impl<'a> ConnectionBuilder<'a> {
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
                     // FIXME: Log warning message on `at` returning `false`.
-                    let added = object_server.at_ready(path.to_owned(), name, iface).await?;
+                    let future = object_server.at_ready(path.to_owned(), name, iface);
+                    let added = conn.run_future_at_init(future).await?;
                     // Duplicates shouldn't happen.
                     assert!(added);
                 }
@@ -243,7 +244,8 @@ impl<'a> ConnectionBuilder<'a> {
         }
 
         for name in self.names {
-            conn.request_name(name).await?;
+            let future = conn.request_name(name);
+            conn.run_future_at_init(future).await?;
         }
 
         Ok(conn)
