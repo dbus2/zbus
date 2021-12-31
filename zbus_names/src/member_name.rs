@@ -2,7 +2,8 @@ use crate::{Error, Result};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
-    convert::TryFrom,
+    borrow::Borrow,
+    convert::{AsRef, TryFrom},
     fmt::{self, Display, Formatter},
     ops::Deref,
 };
@@ -91,6 +92,18 @@ impl Deref for MemberName<'_> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl Borrow<str> for MemberName<'_> {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsRef<str> for MemberName<'_> {
+    fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
@@ -233,6 +246,18 @@ impl Deref for OwnedMemberName {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl Borrow<str> for OwnedMemberName {
+    fn borrow(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl AsRef<str> for OwnedMemberName {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
     }
 }
 
