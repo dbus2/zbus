@@ -1,6 +1,6 @@
 use core::{
     borrow::Borrow,
-    convert::{AsRef, TryFrom},
+    convert::TryFrom,
     fmt::{self, Display, Formatter},
     ops::Deref,
 };
@@ -109,12 +109,6 @@ impl Deref for BusName<'_> {
 
 impl Borrow<str> for BusName<'_> {
     fn borrow(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl AsRef<str> for BusName<'_> {
-    fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
@@ -338,12 +332,6 @@ impl Deref for OwnedBusName {
 
 impl Borrow<str> for OwnedBusName {
     fn borrow(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl AsRef<str> for OwnedBusName {
-    fn as_ref(&self) -> &str {
         self.0.as_str()
     }
 }
