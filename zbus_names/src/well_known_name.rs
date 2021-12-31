@@ -3,7 +3,7 @@ use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::Borrow,
-    convert::TryFrom,
+    convert::{AsRef, TryFrom},
     fmt::{self, Display, Formatter},
     ops::Deref,
 };
@@ -98,6 +98,12 @@ impl Deref for WellKnownName<'_> {
 
 impl Borrow<str> for WellKnownName<'_> {
     fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsRef<str> for WellKnownName<'_> {
+    fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
@@ -269,6 +275,12 @@ impl Deref for OwnedWellKnownName {
 
 impl Borrow<str> for OwnedWellKnownName {
     fn borrow(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl AsRef<str> for OwnedWellKnownName {
+    fn as_ref(&self) -> &str {
         self.0.as_str()
     }
 }

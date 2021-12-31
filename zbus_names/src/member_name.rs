@@ -3,7 +3,7 @@ use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::Borrow,
-    convert::TryFrom,
+    convert::{AsRef, TryFrom},
     fmt::{self, Display, Formatter},
     ops::Deref,
 };
@@ -98,6 +98,12 @@ impl Deref for MemberName<'_> {
 
 impl Borrow<str> for MemberName<'_> {
     fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsRef<str> for MemberName<'_> {
+    fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
@@ -245,6 +251,12 @@ impl Deref for OwnedMemberName {
 
 impl Borrow<str> for OwnedMemberName {
     fn borrow(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl AsRef<str> for OwnedMemberName {
+    fn as_ref(&self) -> &str {
         self.0.as_str()
     }
 }
