@@ -3,7 +3,7 @@ use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::Borrow,
-    convert::{AsRef, TryFrom},
+    convert::TryFrom,
     fmt::{self, Display, Formatter},
     ops::Deref,
 };
@@ -98,12 +98,6 @@ impl Deref for WellKnownName<'_> {
 
 impl Borrow<str> for WellKnownName<'_> {
     fn borrow(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl AsRef<str> for WellKnownName<'_> {
-    fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
