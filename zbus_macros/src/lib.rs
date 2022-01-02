@@ -47,9 +47,8 @@ mod utils;
 /// * `property` - expose the method as a property. If the method takes an argument, it must be a
 ///   setter, with a `set_` prefix. Otherwise, it's a getter.
 ///
-/// * `signal` - declare a signal just like a D-Bus method. The macro will provide a method to
-///   register and deregister a handler for the signal, whose signature must match that of the
-///   signature declaration.
+/// * `signal` - declare a signal just like a D-Bus method. Read the [Signals](#signals) section
+///    below for details.
 ///
 /// * `no_reply` - declare a method call that does not wait for a reply.
 ///
@@ -63,6 +62,15 @@ mod utils;
 ///   blocking proxy type, don't fit your bill, you can use this to specify its exact name.
 ///
 ///   NB: Any doc comments provided shall be appended to the ones added by the macro.
+///
+/// # Signals
+///
+/// For each signal method declared, this macro will provide a method, named `receive_<method_name>`
+/// to create a [`zbus::SignalStream`] ([`zbus::blocking::SignalIterator`] for the blocking proxy)
+/// wrapper, named `<SignalName>Stream` (`<SignalName>Iterator` for the blocking proxy) that yield
+/// a [`zbus::Message`] wrapper, named `<SignalName>`. This wrapper provides type safe access to the
+/// signal arguments. It also implements `Deref<Target = Message>` to allow easy access to the
+/// underlying [`zbus::Message`].
 ///
 /// # Example
 ///
@@ -144,7 +152,10 @@ mod utils;
 ///
 /// [`zbus_polkit`]: https://docs.rs/zbus_polkit/1.0.0/zbus_polkit/policykit1/index.html
 /// [`zbus::Proxy`]: https://docs.rs/zbus/2.0.0-beta.8/zbus/struct.Proxy.html
+/// [`zbus::Message`]: https://docs.rs/zbus/2.0.0-beta.8/zbus/struct.Message.html
 /// [`zbus::blocking::Proxy`]: https://docs.rs/zbus/2.0.0-beta.8/zbus/blocking/struct.Proxy.html
+/// [`zbus::SignalStream`]: https://docs.rs/zbus/2.0.0-beta.8/zbus/struct.SignalStream.html
+/// [`zbus::blocking::SignalIterator`]: https://docs.rs/zbus/2.0.0-beta.8/zbus/blocking/struct.SignalIterator.html
 /// [`zbus::SignalReceiver::receive_for`]:
 /// https://docs.rs/zbus/2.0.0-beta.8/zbus/struct.SignalReceiver.html#method.receive_for
 /// [`ObjectPath`]: https://docs.rs/zvariant/2.10.0/zvariant/struct.ObjectPath.html

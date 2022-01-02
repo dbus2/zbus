@@ -17,6 +17,7 @@ assert_impl_all!(ProxyBuilder<'_>: Send, Sync, Unpin);
 
 impl<'a, T> ProxyBuilder<'a, T> {
     /// Create a new [`ProxyBuilder`] for the given connection.
+    #[must_use]
     pub fn new_bare(conn: &Connection) -> Self {
         Self(crate::ProxyBuilder::new_bare(&conn.clone().into()))
     }
@@ -51,6 +52,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
     }
 
     /// Set whether to cache properties.
+    #[must_use]
     pub fn cache_properties(self, cache: CacheProperties) -> Self {
         Self(self.0.cache_properties(cache))
     }
@@ -73,6 +75,7 @@ where
     T: ProxyDefault,
 {
     /// Create a new [`ProxyBuilder`] for the given connection.
+    #[must_use]
     pub fn new(conn: &Connection) -> Self {
         Self(crate::ProxyBuilder::new(&conn.clone().into()))
     }
