@@ -36,11 +36,13 @@ impl<'a> ConnectionBuilder<'a> {
     }
 
     /// Create a builder for connection that will use the given unix stream.
+    #[must_use]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self(crate::ConnectionBuilder::unix_stream(stream))
     }
 
     /// The to-be-created connection will be a peer-to-peer connection.
+    #[must_use]
     pub fn p2p(self) -> Self {
         Self(self.0.p2p())
     }
@@ -49,6 +51,7 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// The to-be-created connection will wait for incoming client authentication handshake and
     /// negotiation messages, for peer-to-peer communications after successful creation.
+    #[must_use]
     pub fn server(self, guid: &'a Guid) -> Self {
         Self(self.0.server(guid))
     }
@@ -71,6 +74,7 @@ impl<'a> ConnectionBuilder<'a> {
     /// // Do something useful with `conn`..
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
+    #[must_use]
     pub fn max_queued(self, max: usize) -> Self {
         Self(self.0.max_queued(max))
     }

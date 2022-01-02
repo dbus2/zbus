@@ -206,6 +206,7 @@ impl<'a> Signature<'a> {
     /// # Panics
     ///
     /// Requires that begin <= end and end <= self.len(), otherwise slicing will panic.
+    #[must_use]
     pub fn slice(&self, range: impl RangeBounds<usize>) -> Self {
         let len = self.len();
 
