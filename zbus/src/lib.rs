@@ -136,7 +136,7 @@
 //!   * Ensure the [internal executor keeps ticking continuously][iektc].
 //!
 //! [book]: https://dbus.pages.freedesktop.org/zbus/
-//! [bw]: https://docs.rs/zbus/2.0.0-beta.8/zbus/blocking/index.html
+//! [bw]: https://docs.rs/zbus/2.0.0/zbus/blocking/index.html
 //! [iektc]: `Connection::executor`
 //!
 //! [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus

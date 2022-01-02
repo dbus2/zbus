@@ -331,9 +331,9 @@ build host.
 MIT license [LICENSE-MIT](LICENSE-MIT)
 
 [PolicyKit]: https://gitlab.freedesktop.org/polkit/polkit/
-[bw]: https://docs.rs/zbus/2.0.0-beta.8/zbus/blocking/index.html
-[iektc]: https://docs.rs/zbus/2.0.0-beta.8/zbus/azync/struct.Connection.html#method.executor
-[`ConnectionBuilder`]: https://docs.rs/zbus/2.0.0-beta.8/zbus/struct.ConnectionBuilder.html
+[bw]: https://docs.rs/zbus/2.0.0/zbus/blocking/index.html
+[iektc]: https://docs.rs/zbus/2.0.0/zbus/azync/struct.Connection.html#method.executor
+[`ConnectionBuilder`]: https://docs.rs/zbus/2.0.0/zbus/struct.ConnectionBuilder.html
 [dbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names
 
 [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus clients in
