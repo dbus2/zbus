@@ -53,6 +53,7 @@ assert_impl_all!(ProxyBuilder<'_>: Send, Sync, Unpin);
 
 impl<'a, T> ProxyBuilder<'a, T> {
     /// Create a new [`ProxyBuilder`] for the given connection.
+    #[must_use]
     pub fn new_bare(conn: &Connection) -> Self {
         Self {
             conn: conn.clone(),
@@ -97,6 +98,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
     }
 
     /// Set the properties caching mode.
+    #[must_use]
     pub fn cache_properties(mut self, cache: CacheProperties) -> Self {
         self.cache = cache;
         self
@@ -143,6 +145,7 @@ where
     T: ProxyDefault,
 {
     /// Create a new [`ProxyBuilder`] for the given connection.
+    #[must_use]
     pub fn new(conn: &Connection) -> Self {
         Self {
             conn: conn.clone(),
