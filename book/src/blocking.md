@@ -190,11 +190,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-[asynchronous `Connection` API]: https://docs.rs/zbus/2.0.0-beta.8/zbus/struct.Connection.html
-[`blocking::Connection`]: https://docs.rs/zbus/2.0.0-beta.8/zbus/blocking/struct.Connection.html
+[asynchronous `Connection` API]: https://docs.rs/zbus/2.0.0/zbus/struct.Connection.html
+[`blocking::Connection`]: https://docs.rs/zbus/2.0.0/zbus/blocking/struct.Connection.html
 [`futures::sink::Sink`]: https://docs.rs/futures/latest/futures/sink/trait.Sink.html
 [`std::iter::Iterator`]: https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html
-[blocking module]: https://docs.rs/zbus/2.0.0-beta.8/zbus/blocking/index.html
+[blocking module]: https://docs.rs/zbus/2.0.0/zbus/blocking/index.html
 [wkgp]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
 [`blocking` crate]: https://docs.rs/blocking/
 [`futures::stream::Stream`]: https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html
