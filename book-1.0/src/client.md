@@ -1,3 +1,8 @@
+> **Note**
+>
+> This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
+> [here](https://dbus.pages.freedesktop.org/zbus/).
+
 # Writing a client proxy
 
 In this chapter, we are going to see how to make low-level D-Bus method calls. Then we are going to

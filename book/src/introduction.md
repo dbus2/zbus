@@ -1,13 +1,5 @@
 <img src="zbus-pixels.gif" alt="zbus illustration" style="width: 100%;">
 
-> **Note**
->
-> This version of the book is based on zbus 2.0 API, which is currently in beta stages. For using the
-> sample code in this book, you'll need to explicitly depend on the
-> [latest beta](https://crates.io/crates/zbus/2.0.0-beta.8).
->
-> The 1.0 version of this book is available [here](https://dbus.pages.freedesktop.org/zbus/1.0/).
-
 # Introduction
 
 **[zbus]** is a **[Rust]** crate for **[D-Bus]**. If you are not familiar with D-Bus, you should

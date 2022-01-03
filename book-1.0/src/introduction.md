@@ -3,6 +3,11 @@
        width="128" height="128"/>
 </p>
 
+> **Note**
+>
+> This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
+> [here](https://dbus.pages.freedesktop.org/zbus/).
+
 # Introduction
 
 **[zbus]** is a **[Rust]** crate for **[D-Bus]**. If you are not familiar with D-Bus, you should
