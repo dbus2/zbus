@@ -524,7 +524,9 @@ impl Connection {
             // method).
             self.object_server();
 
-            let reply = fdo::DBusProxy::new(self)
+            let reply = fdo::DBusProxy::builder(self)
+                .cache_properties(CacheProperties::No)
+                .build()
                 .await?
                 .request_name(
                     well_known_name.clone(),
@@ -562,7 +564,9 @@ impl Connection {
             return Ok(false);
         }
 
-        fdo::DBusProxy::new(self)
+        fdo::DBusProxy::builder(self)
+            .cache_properties(CacheProperties::No)
+            .build()
             .await?
             .release_name(well_known_name)
             .await
