@@ -164,6 +164,7 @@ impl<S: Socket> ClientHandshake<S> {
         use ClientHandshakeStep::*;
         let mech = self.mechanism()?;
         match mech {
+            AuthMechanism::Anonymous => Ok((WaitingForOK, Command::Auth(Some(*mech), None))),
             AuthMechanism::External => Ok((
                 WaitingForOK,
                 Command::Auth(Some(*mech), Some(sasl_auth_id())),
@@ -172,7 +173,6 @@ impl<S: Socket> ClientHandshake<S> {
                 WaitingForData,
                 Command::Auth(Some(*mech), Some(sasl_auth_id())),
             )),
-            _ => Err(Error::Handshake("Unimplemented AUTH mechanisms".into())),
         }
     }
 
