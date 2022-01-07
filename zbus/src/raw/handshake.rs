@@ -456,6 +456,16 @@ impl<S: Socket> ServerHandshake<S> {
         }
         Poll::Ready(Ok(()))
     }
+
+    fn unsupported_command_error(&mut self) {
+        self.buffer = Vec::from(&b"ERROR Unsupported command\r\n"[..]);
+        self.step = ServerHandshakeStep::SendingAuthError;
+    }
+
+    fn rejected_error(&mut self) {
+        self.buffer = Vec::from(&b"REJECTED EXTERNAL\r\n"[..]);
+        self.step = ServerHandshakeStep::SendingAuthError;
+    }
 }
 
 impl<S: Socket> Handshake<S> for ServerHandshake<S> {
@@ -479,31 +489,27 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                     let mut reply = String::new();
                     (&self.buffer[..]).read_line(&mut reply)?;
                     let mut words = reply.split_whitespace();
-                    match (words.next(), words.next(), words.next(), words.next()) {
-                        (Some("AUTH"), Some("EXTERNAL"), Some(uid), None) => {
-                            let uid = id_from_str(uid)
-                                .map_err(|e| Error::Handshake(format!("Invalid UID: {}", e)))?;
-                            if uid == self.client_uid {
-                                self.buffer = format!("OK {}\r\n", self.server_guid).into();
-                                self.step = ServerHandshakeStep::SendingAuthOK;
-                            } else {
-                                self.buffer = Vec::from(&b"REJECTED EXTERNAL\r\n"[..]);
-                                self.step = ServerHandshakeStep::SendingAuthError;
+                    match words.next() {
+                        Some("AUTH") => match (words.next(), words.next(), words.next()) {
+                            (Some("EXTERNAL"), Some(uid), None) => {
+                                let uid = id_from_str(uid)
+                                    .map_err(|e| Error::Handshake(format!("Invalid UID: {}", e)))?;
+                                if uid == self.client_uid {
+                                    self.buffer = format!("OK {}\r\n", self.server_guid).into();
+                                    self.step = ServerHandshakeStep::SendingAuthOK;
+                                } else {
+                                    self.rejected_error();
+                                }
                             }
-                        }
-                        (Some("AUTH"), _, _, _) | (Some("ERROR"), _, _, _) => {
-                            self.buffer = Vec::from(&b"REJECTED EXTERNAL\r\n"[..]);
-                            self.step = ServerHandshakeStep::SendingAuthError;
-                        }
-                        (Some("BEGIN"), None, None, None) => {
+                            _ => self.rejected_error(),
+                        },
+                        Some("ERROR") => self.rejected_error(),
+                        Some("BEGIN") => {
                             return Poll::Ready(Err(Error::Handshake(
                                 "Received BEGIN while not authenticated".to_string(),
                             )));
                         }
-                        _ => {
-                            self.buffer = Vec::from(&b"ERROR Unsupported command\r\n"[..]);
-                            self.step = ServerHandshakeStep::SendingAuthError;
-                        }
+                        _ => self.unsupported_command_error(),
                     }
                 }
                 ServerHandshakeStep::SendingAuthError => {
@@ -523,23 +529,13 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                         (Some("BEGIN"), None) => {
                             self.step = ServerHandshakeStep::Done;
                         }
-                        (Some("CANCEL"), None) => {
-                            self.buffer = Vec::from(&b"REJECTED EXTERNAL\r\n"[..]);
-                            self.step = ServerHandshakeStep::SendingAuthError;
-                        }
-                        (Some("ERROR"), _) => {
-                            self.buffer = Vec::from(&b"REJECTED EXTERNAL\r\n"[..]);
-                            self.step = ServerHandshakeStep::SendingAuthError;
-                        }
+                        (Some("CANCEL"), None) | (Some("ERROR"), _) => self.rejected_error(),
                         (Some("NEGOTIATE_UNIX_FD"), None) => {
                             self.cap_unix_fd = true;
                             self.buffer = Vec::from(&b"AGREE_UNIX_FD\r\n"[..]);
                             self.step = ServerHandshakeStep::SendingBeginMessage;
                         }
-                        _ => {
-                            self.buffer = Vec::from(&b"ERROR Unsupported command\r\n"[..]);
-                            self.step = ServerHandshakeStep::SendingBeginMessage;
-                        }
+                        _ => self.unsupported_command_error(),
                     }
                 }
                 ServerHandshakeStep::SendingBeginMessage => {
