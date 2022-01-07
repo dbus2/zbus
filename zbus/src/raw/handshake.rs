@@ -442,9 +442,7 @@ impl<S: Socket> ServerHandshake<S> {
             mechanisms
         });
 
-        if mechanisms.contains(&AuthMechanism::Anonymous)
-            || mechanisms.contains(&AuthMechanism::Cookie)
-        {
+        if mechanisms.contains(&AuthMechanism::Cookie) {
             return Err(Error::Unsupported);
         }
 
@@ -474,6 +472,11 @@ impl<S: Socket> ServerHandshake<S> {
             self.buffer.extend(&buf[..read]);
         }
         Poll::Ready(Ok(()))
+    }
+
+    fn auth_ok(&mut self) {
+        self.buffer = format!("OK {}\r\n", self.server_guid).into();
+        self.step = ServerHandshakeStep::SendingAuthOK;
     }
 
     fn unsupported_command_error(&mut self) {
@@ -522,13 +525,15 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                                 .filter(|m| self.mechanisms.contains(m));
 
                             match (mech, words.next(), words.next()) {
+                                (Some(AuthMechanism::Anonymous), None, None) => {
+                                    self.auth_ok();
+                                }
                                 (Some(AuthMechanism::External), Some(uid), None) => {
                                     let uid = id_from_str(uid).map_err(|e| {
                                         Error::Handshake(format!("Invalid UID: {}", e))
                                     })?;
                                     if uid == self.client_uid {
-                                        self.buffer = format!("OK {}\r\n", self.server_guid).into();
-                                        self.step = ServerHandshakeStep::SendingAuthOK;
+                                        self.auth_ok();
                                     } else {
                                         self.rejected_error();
                                     }
