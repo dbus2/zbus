@@ -196,8 +196,12 @@ impl<'a> ConnectionBuilder<'a> {
         let stream = match self.target {
             Target::UnixStream(stream) => Box::new(Async::new(stream)?),
             Target::Address(address) => match address.connect().await? {
-                address::Stream::Unix(stream) => Box::new(Async::new(stream.into_inner()?)?),
-                _ => unimplemented!(),
+                address::Stream::Unix(stream) => {
+                    Box::new(Async::new(stream.into_inner()?)?) as Box<dyn Socket>
+                }
+                address::Stream::Tcp(stream) => {
+                    Box::new(Async::new(stream.into_inner()?)?) as Box<dyn Socket>
+                }
             },
             Target::Socket(stream) => stream,
         };

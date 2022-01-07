@@ -1,6 +1,8 @@
 use async_io::Async;
+use futures_core::ready;
 use std::{
-    io,
+    io::{self, Read, Write},
+    net::TcpStream,
     os::unix::{
         io::{FromRawFd, RawFd},
         net::UnixStream,
@@ -238,5 +240,59 @@ impl Socket for tokio::net::UnixStream {
     fn as_raw_fd(&self) -> RawFd {
         // This causes a name collision if imported
         std::os::unix::io::AsRawFd::as_raw_fd(self)
+    }
+}
+
+impl Socket for Async<TcpStream> {
+    fn can_pass_unix_fd(&self) -> bool {
+        false
+    }
+
+    fn poll_recvmsg(
+        &mut self,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<(usize, Vec<OwnedFd>)>> {
+        let fds = vec![];
+
+        loop {
+            match (&mut *self).get_mut().read(buf) {
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                Err(e) => return Poll::Ready(Err(e)),
+                Ok(len) => return Poll::Ready(Ok((len, fds))),
+            }
+            ready!(self.poll_readable(cx))?;
+        }
+    }
+
+    fn poll_sendmsg(
+        &mut self,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+        fds: &[RawFd],
+    ) -> Poll<io::Result<usize>> {
+        if !fds.is_empty() {
+            return Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "fds cannot be sent with a tcp stream",
+            )));
+        }
+
+        loop {
+            match (&mut *self).get_mut().write(buf) {
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                res => return Poll::Ready(res),
+            }
+            ready!(self.poll_writable(cx))?;
+        }
+    }
+
+    fn close(&self) -> io::Result<()> {
+        self.get_ref().shutdown(std::net::Shutdown::Both)
+    }
+
+    fn as_raw_fd(&self) -> RawFd {
+        // This causes a name collision if imported
+        std::os::unix::io::AsRawFd::as_raw_fd(self.get_ref())
     }
 }
