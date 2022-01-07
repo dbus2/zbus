@@ -1,6 +1,7 @@
 use futures_core::ready;
 
 use std::{
+    collections::VecDeque,
     fmt::Debug,
     future::Future,
     marker::PhantomData,
@@ -69,9 +70,19 @@ where
     }
 
     /// Create a server-side `Authenticated` for the given `socket`.
-    pub async fn server(socket: S, guid: Guid, client_uid: u32) -> Result<Self> {
+    pub async fn server(
+        socket: S,
+        guid: Guid,
+        client_uid: u32,
+        auth_mechanisms: Option<VecDeque<AuthMechanism>>,
+    ) -> Result<Self> {
         Handshake {
-            handshake: Some(raw::ServerHandshake::new(socket, guid, client_uid)),
+            handshake: Some(raw::ServerHandshake::new(
+                socket,
+                guid,
+                client_uid,
+                auth_mechanisms,
+            )?),
             phantom: PhantomData,
         }
         .await
@@ -133,8 +144,12 @@ mod tests {
 
         // initialize both handshakes
         let client = Authenticated::client(Async::new(p0)?);
-        let server =
-            Authenticated::server(Async::new(p1)?, Guid::generate(), Uid::current().into());
+        let server = Authenticated::server(
+            Async::new(p1)?,
+            Guid::generate(),
+            Uid::current().into(),
+            None,
+        );
 
         // proceed to the handshakes
         let (client_auth, server_auth) = futures_util::try_join!(client, server)?;

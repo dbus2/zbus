@@ -13,7 +13,7 @@ use nix::unistd::Uid;
 use crate::{
     guid::Guid,
     raw::{Connection, Socket},
-    Error, AuthMechanism, Result,
+    AuthMechanism, Error, Result,
 };
 
 use futures_core::ready;
@@ -426,18 +426,37 @@ pub struct ServerHandshake<S> {
     server_guid: Guid,
     cap_unix_fd: bool,
     client_uid: u32,
+    mechanisms: VecDeque<AuthMechanism>,
 }
 
 impl<S: Socket> ServerHandshake<S> {
-    pub fn new(socket: S, guid: Guid, client_uid: u32) -> ServerHandshake<S> {
-        ServerHandshake {
+    pub fn new(
+        socket: S,
+        guid: Guid,
+        client_uid: u32,
+        mechanisms: Option<VecDeque<AuthMechanism>>,
+    ) -> Result<ServerHandshake<S>> {
+        let mechanisms = mechanisms.unwrap_or_else(|| {
+            let mut mechanisms = VecDeque::new();
+            mechanisms.push_back(AuthMechanism::External);
+            mechanisms
+        });
+
+        if mechanisms.contains(&AuthMechanism::Anonymous)
+            || mechanisms.contains(&AuthMechanism::Cookie)
+        {
+            return Err(Error::Unsupported);
+        }
+
+        Ok(ServerHandshake {
             socket,
             buffer: Vec::new(),
             step: ServerHandshakeStep::WaitingForNull,
             server_guid: guid,
             cap_unix_fd: false,
             client_uid,
-        }
+            mechanisms,
+        })
     }
 
     fn flush_buffer(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
@@ -463,7 +482,13 @@ impl<S: Socket> ServerHandshake<S> {
     }
 
     fn rejected_error(&mut self) {
-        self.buffer = Vec::from(&b"REJECTED EXTERNAL\r\n"[..]);
+        let mechanisms = self
+            .mechanisms
+            .iter()
+            .map(|m| m.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        self.buffer = format!("REJECTED {}\r\n", mechanisms).into();
         self.step = ServerHandshakeStep::SendingAuthError;
     }
 }
@@ -490,19 +515,27 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                     (&self.buffer[..]).read_line(&mut reply)?;
                     let mut words = reply.split_whitespace();
                     match words.next() {
-                        Some("AUTH") => match (words.next(), words.next(), words.next()) {
-                            (Some("EXTERNAL"), Some(uid), None) => {
-                                let uid = id_from_str(uid)
-                                    .map_err(|e| Error::Handshake(format!("Invalid UID: {}", e)))?;
-                                if uid == self.client_uid {
-                                    self.buffer = format!("OK {}\r\n", self.server_guid).into();
-                                    self.step = ServerHandshakeStep::SendingAuthOK;
-                                } else {
-                                    self.rejected_error();
+                        Some("AUTH") => {
+                            let mech = words
+                                .next()
+                                .and_then(|m| AuthMechanism::from_str(m).ok())
+                                .filter(|m| self.mechanisms.contains(m));
+
+                            match (mech, words.next(), words.next()) {
+                                (Some(AuthMechanism::External), Some(uid), None) => {
+                                    let uid = id_from_str(uid).map_err(|e| {
+                                        Error::Handshake(format!("Invalid UID: {}", e))
+                                    })?;
+                                    if uid == self.client_uid {
+                                        self.buffer = format!("OK {}\r\n", self.server_guid).into();
+                                        self.step = ServerHandshakeStep::SendingAuthOK;
+                                    } else {
+                                        self.rejected_error();
+                                    }
                                 }
+                                _ => self.rejected_error(),
                             }
-                            _ => self.rejected_error(),
-                        },
+                        }
                         Some("ERROR") => self.rejected_error(),
                         Some("BEGIN") => {
                             return Poll::Ready(Err(Error::Handshake(
@@ -707,7 +740,9 @@ mod tests {
             Async::new(p1).unwrap(),
             Guid::generate(),
             Uid::current().into(),
-        );
+            None,
+        )
+        .unwrap();
 
         // proceed to the handshakes
         let mut client_done = false;

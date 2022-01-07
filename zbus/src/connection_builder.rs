@@ -228,7 +228,7 @@ impl<'a> ConnectionBuilder<'a> {
                     .0
                     .into();
 
-                Authenticated::server(stream, guid.clone(), client_uid).await?
+                Authenticated::server(stream, guid.clone(), client_uid, None).await?
             }
         };
 
