@@ -131,6 +131,7 @@ use zbus::{Address, ConnectionBuilder};
 async fn main() -> std::result::Result<(), Box<dyn Error>> {
     let stream = match Address::session()? {
         Address::Unix(s) => UnixStream::connect(s).await?,
+        _ => unimplemented!(),
     };
     let conn = ConnectionBuilder::socket(stream)
         .internal_executor(false)
