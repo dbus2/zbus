@@ -4,6 +4,7 @@ use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     convert::TryInto,
+    net::TcpStream,
     os::unix::net::UnixStream,
     sync::Arc,
 };
@@ -21,6 +22,7 @@ const DEFAULT_MAX_QUEUED: usize = 64;
 #[derive(Debug)]
 enum Target {
     UnixStream(UnixStream),
+    TcpStream(TcpStream),
     Address(Address),
     Socket(Box<dyn Socket>),
 }
@@ -73,6 +75,12 @@ impl<'a> ConnectionBuilder<'a> {
     #[must_use]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self::new(Target::UnixStream(stream))
+    }
+
+    /// Create a builder for connection that will use the given TCP stream.
+    #[must_use]
+    pub fn tcp_stream(stream: TcpStream) -> Self {
+        Self::new(Target::TcpStream(stream))
     }
 
     /// Create a builder for connection that will use the given socket.
@@ -194,7 +202,8 @@ impl<'a> ConnectionBuilder<'a> {
     /// result in [`Error::Unsupported`] error.
     pub async fn build(self) -> Result<Connection> {
         let stream = match self.target {
-            Target::UnixStream(stream) => Box::new(Async::new(stream)?),
+            Target::UnixStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            Target::TcpStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
             Target::Address(address) => match address.connect().await? {
                 address::Stream::Unix(stream) => {
                     Box::new(Async::new(stream.into_inner()?)?) as Box<dyn Socket>
