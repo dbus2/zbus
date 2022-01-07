@@ -13,7 +13,7 @@ use nix::unistd::Uid;
 use crate::{
     guid::Guid,
     raw::{Connection, Socket},
-    Error, Result,
+    Error, AuthMechanism, Result,
 };
 
 use futures_core::ready;
@@ -33,14 +33,6 @@ enum ClientHandshakeStep {
     Done,
 }
 
-// See <https://dbus.freedesktop.org/doc/dbus-specification.html#auth-mechanisms>
-#[derive(Clone, Copy, Debug)]
-enum Mechanism {
-    External,
-    Cookie,
-    Anonymous,
-}
-
 // The plain-text SASL profile authentication protocol described here:
 // <https://dbus.freedesktop.org/doc/dbus-specification.html#auth-protocol>
 //
@@ -48,13 +40,13 @@ enum Mechanism {
 #[derive(Debug)]
 #[allow(clippy::upper_case_acronyms)]
 enum Command {
-    Auth(Option<Mechanism>, Option<String>),
+    Auth(Option<AuthMechanism>, Option<String>),
     Cancel,
     Begin,
     Data(Vec<u8>),
     Error(String),
     NegotiateUnixFD,
-    Rejected(Vec<Mechanism>),
+    Rejected(Vec<AuthMechanism>),
     Ok(Guid),
     AgreeUnixFD,
 }
@@ -80,7 +72,7 @@ pub struct ClientHandshake<S> {
     server_guid: Option<Guid>,
     cap_unix_fd: bool,
     // the current AUTH mechanism is front, ordered by priority
-    mechanisms: VecDeque<Mechanism>,
+    mechanisms: VecDeque<AuthMechanism>,
 }
 
 /// The result of a finalized handshake
@@ -124,8 +116,8 @@ impl<S: Socket> ClientHandshake<S> {
     /// Start a handshake on this client socket
     pub fn new(socket: S) -> ClientHandshake<S> {
         let mut mechanisms = VecDeque::new();
-        mechanisms.push_back(Mechanism::External);
-        mechanisms.push_back(Mechanism::Cookie);
+        mechanisms.push_back(AuthMechanism::External);
+        mechanisms.push_back(AuthMechanism::Cookie);
         ClientHandshake {
             socket,
             recv_buffer: Vec::new(),
@@ -162,7 +154,7 @@ impl<S: Socket> ClientHandshake<S> {
         Poll::Ready(line.parse())
     }
 
-    fn mechanism(&self) -> Result<&Mechanism> {
+    fn mechanism(&self) -> Result<&AuthMechanism> {
         self.mechanisms
             .front()
             .ok_or_else(|| Error::Handshake("Exhausted available AUTH mechanisms".into()))
@@ -172,11 +164,11 @@ impl<S: Socket> ClientHandshake<S> {
         use ClientHandshakeStep::*;
         let mech = self.mechanism()?;
         match mech {
-            Mechanism::External => Ok((
+            AuthMechanism::External => Ok((
                 WaitingForOK,
                 Command::Auth(Some(*mech), Some(sasl_auth_id())),
             )),
-            Mechanism::Cookie => Ok((
+            AuthMechanism::Cookie => Ok((
                 WaitingForData,
                 Command::Auth(Some(*mech), Some(sasl_auth_id())),
             )),
@@ -188,7 +180,7 @@ impl<S: Socket> ClientHandshake<S> {
         use ClientHandshakeStep::*;
         let mech = self.mechanism()?;
         match mech {
-            Mechanism::Cookie => {
+            AuthMechanism::Cookie => {
                 let context = String::from_utf8_lossy(&data);
                 let mut split = context.split_ascii_whitespace();
                 let name = split
@@ -581,25 +573,25 @@ fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> 
     Ok(id.parse::<u32>()?)
 }
 
-impl fmt::Display for Mechanism {
+impl fmt::Display for AuthMechanism {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mech = match self {
-            Mechanism::External => "EXTERNAL",
-            Mechanism::Cookie => "DBUS_COOKIE_SHA1",
-            Mechanism::Anonymous => "ANONYMOUS",
+            AuthMechanism::External => "EXTERNAL",
+            AuthMechanism::Cookie => "DBUS_COOKIE_SHA1",
+            AuthMechanism::Anonymous => "ANONYMOUS",
         };
         write!(f, "{}", mech)
     }
 }
 
-impl FromStr for Mechanism {
+impl FromStr for AuthMechanism {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self> {
         match s {
-            "EXTERNAL" => Ok(Mechanism::External),
-            "DBUS_COOKIE_SHA1" => Ok(Mechanism::Cookie),
-            "ANONYMOUS" => Ok(Mechanism::Anonymous),
+            "EXTERNAL" => Ok(AuthMechanism::External),
+            "DBUS_COOKIE_SHA1" => Ok(AuthMechanism::Cookie),
+            "ANONYMOUS" => Ok(AuthMechanism::Anonymous),
             _ => Err(Error::Handshake(format!("Unknown mechanism: {}", s))),
         }
     }
