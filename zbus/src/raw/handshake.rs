@@ -118,6 +118,7 @@ impl<S: Socket> ClientHandshake<S> {
         let mut mechanisms = VecDeque::new();
         mechanisms.push_back(AuthMechanism::External);
         mechanisms.push_back(AuthMechanism::Cookie);
+        mechanisms.push_back(AuthMechanism::Anonymous);
         ClientHandshake {
             socket,
             recv_buffer: Vec::new(),
