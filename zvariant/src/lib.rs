@@ -26,7 +26,9 @@ pub use dict::*;
 mod encoding_context;
 pub use encoding_context::*;
 
+#[cfg(unix)]
 mod fd;
+#[cfg(unix)]
 pub use fd::*;
 
 mod object_path;

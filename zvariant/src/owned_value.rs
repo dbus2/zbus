@@ -3,9 +3,12 @@ use static_assertions::assert_impl_all;
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 use crate::{
-    Array, Dict, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure, Type,
+    Array, Dict, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure, Type,
     Value,
 };
+
+#[cfg(unix)]
+use crate::Fd;
 
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
@@ -69,6 +72,7 @@ ov_try_from!(Dict<'a, 'a>);
 ov_try_from!(Maybe<'a>);
 ov_try_from!(Str<'a>);
 ov_try_from!(Structure<'a>);
+#[cfg(unix)]
 ov_try_from!(Fd);
 
 ov_try_from_ref!(u8);
@@ -89,6 +93,7 @@ ov_try_from_ref!(&'a Str<'a>);
 ov_try_from_ref!(&'a Structure<'a>);
 #[cfg(feature = "gvariant")]
 ov_try_from_ref!(&'a Maybe<'a>);
+#[cfg(unix)]
 ov_try_from_ref!(Fd);
 
 impl<'a, T> TryFrom<OwnedValue> for Vec<T>
@@ -192,6 +197,7 @@ to_value!(Str<'a>);
 to_value!(Signature<'a>);
 to_value!(Structure<'a>);
 to_value!(ObjectPath<'a>);
+#[cfg(unix)]
 to_value!(Fd);
 
 impl From<OwnedValue> for Value<'static> {

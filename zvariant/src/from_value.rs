@@ -1,9 +1,13 @@
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
 use crate::{
-    Array, Dict, Error, Fd, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure,
+    Array, Dict, Error, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure,
     Value,
 };
+
+#[cfg(unix)]
+use crate::Fd;
+
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
 macro_rules! value_try_from {
@@ -71,6 +75,7 @@ value_try_from_all!(U32, u32);
 value_try_from_all!(I64, i64);
 value_try_from_all!(U64, u64);
 value_try_from_all!(F64, f64);
+#[cfg(unix)]
 value_try_from_all!(Fd, Fd);
 
 value_try_from_all!(Str, Str<'a>);
