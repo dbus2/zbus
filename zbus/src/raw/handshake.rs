@@ -114,11 +114,15 @@ pub trait Handshake<S> {
 
 impl<S: Socket> ClientHandshake<S> {
     /// Start a handshake on this client socket
-    pub fn new(socket: S) -> ClientHandshake<S> {
-        let mut mechanisms = VecDeque::new();
-        mechanisms.push_back(AuthMechanism::External);
-        mechanisms.push_back(AuthMechanism::Cookie);
-        mechanisms.push_back(AuthMechanism::Anonymous);
+    pub fn new(socket: S, mechanisms: Option<VecDeque<AuthMechanism>>) -> ClientHandshake<S> {
+        let mechanisms = mechanisms.unwrap_or_else(|| {
+            let mut mechanisms = VecDeque::new();
+            mechanisms.push_back(AuthMechanism::External);
+            mechanisms.push_back(AuthMechanism::Cookie);
+            mechanisms.push_back(AuthMechanism::Anonymous);
+            mechanisms
+        });
+
         ClientHandshake {
             socket,
             recv_buffer: Vec::new(),
@@ -741,7 +745,7 @@ mod tests {
         p1.set_nonblocking(true).unwrap();
 
         // initialize both handshakes
-        let mut client = ClientHandshake::new(Async::new(p0).unwrap());
+        let mut client = ClientHandshake::new(Async::new(p0).unwrap(), None);
         let mut server = ServerHandshake::new(
             Async::new(p1).unwrap(),
             Guid::generate(),

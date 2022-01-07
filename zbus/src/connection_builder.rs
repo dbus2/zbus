@@ -196,7 +196,7 @@ impl<'a> ConnectionBuilder<'a> {
         let auth = match self.guid {
             None => {
                 // SASL Handshake
-                Authenticated::client(stream).await?
+                Authenticated::client(stream, None).await?
             }
             Some(guid) => {
                 if !self.p2p {

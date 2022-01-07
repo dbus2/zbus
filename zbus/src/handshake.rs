@@ -61,9 +61,9 @@ where
     S: Socket + Unpin,
 {
     /// Create a client-side `Authenticated` for the given `socket`.
-    pub async fn client(socket: S) -> Result<Self> {
+    pub async fn client(socket: S, mechanisms: Option<VecDeque<AuthMechanism>>) -> Result<Self> {
         Handshake {
-            handshake: Some(raw::ClientHandshake::new(socket)),
+            handshake: Some(raw::ClientHandshake::new(socket, mechanisms)),
             phantom: PhantomData,
         }
         .await
@@ -143,7 +143,7 @@ mod tests {
         let (p0, p1) = UnixStream::pair()?;
 
         // initialize both handshakes
-        let client = Authenticated::client(Async::new(p0)?);
+        let client = Authenticated::client(Async::new(p0)?, None);
         let server = Authenticated::server(
             Async::new(p1)?,
             Guid::generate(),
