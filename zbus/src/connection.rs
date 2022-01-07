@@ -44,6 +44,7 @@ const DEFAULT_MAX_QUEUED: usize = 64;
 #[derive(Debug)]
 pub(crate) struct ConnectionInner {
     server_guid: Guid,
+    #[cfg(unix)]
     cap_unix_fd: bool,
     bus_conn: bool,
     unique_name: OnceCell<OwnedUniqueName>,
@@ -822,6 +823,7 @@ impl Connection {
         internal_executor: bool,
     ) -> Result<Self> {
         let auth = auth.into_inner();
+        #[cfg(unix)]
         let cap_unix_fd = auth.cap_unix_fd;
 
         let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
@@ -840,6 +842,7 @@ impl Connection {
             inner: Arc::new(ConnectionInner {
                 raw_conn,
                 server_guid: auth.server_guid,
+                #[cfg(unix)]
                 cap_unix_fd,
                 bus_conn: bus_connection,
                 serial: AtomicU32::new(1),
@@ -934,6 +937,7 @@ impl<'a> Sink<Message> for &'a Connection {
     }
 
     fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
+        #[cfg(unix)]
         if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);
         }
