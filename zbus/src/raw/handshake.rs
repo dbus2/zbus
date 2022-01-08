@@ -322,7 +322,11 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                         }
                         (WaitingForOK, Command::Ok(guid)) => {
                             self.server_guid = Some(guid);
-                            (WaitingForAgreeUnixFD, Command::NegotiateUnixFD)
+                            if self.socket.can_pass_unix_fd() {
+                                (WaitingForAgreeUnixFD, Command::NegotiateUnixFD)
+                            } else {
+                                (Done, Command::Begin)
+                            }
                         }
                         (_, reply) => {
                             return Poll::Ready(Err(Error::Handshake(format!(

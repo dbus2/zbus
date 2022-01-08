@@ -73,6 +73,11 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
 /// rules don't force the use of a wrapper struct (and to avoid duplicating the work across many
 /// projects).
 pub trait Socket: std::fmt::Debug + Send + Sync {
+    /// Supports passing file descriptors.
+    fn can_pass_unix_fd(&self) -> bool {
+        true
+    }
+
     /// Attempt to receive a message from the socket.
     ///
     /// On success, returns the number of bytes read as well as a `Vec` containing
