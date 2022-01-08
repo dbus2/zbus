@@ -763,15 +763,20 @@ impl fmt::Display for Message {
 
 #[cfg(test)]
 mod tests {
-    use crate::Error;
-
-    use super::{Fds, Message};
+    #[cfg(unix)]
     use std::os::unix::io::AsRawFd;
     use test_log::test;
+    #[cfg(unix)]
     use zvariant::Fd;
+
+    #[cfg(unix)]
+    use super::Fds;
+    use super::Message;
+    use crate::Error;
 
     #[test]
     fn test() {
+        #[cfg(unix)]
         let stdout = std::io::stdout();
         let m = Message::method(
             Some(":1.72"),
@@ -779,10 +784,18 @@ mod tests {
             "/",
             None::<()>,
             "do",
-            &(Fd::from(&stdout), "foo"),
+            &(
+                #[cfg(unix)]
+                Fd::from(&stdout),
+                "foo",
+            ),
         )
         .unwrap();
-        assert_eq!(m.body_signature().unwrap().to_string(), "hs");
+        assert_eq!(
+            m.body_signature().unwrap().to_string(),
+            if cfg!(unix) { "hs" } else { "s" }
+        );
+        #[cfg(unix)]
         assert_eq!(*m.fds.read().unwrap(), Fds::Raw(vec![stdout.as_raw_fd()]));
 
         let body: Result<u32, Error> = m.body();

@@ -108,9 +108,12 @@ mod tests {
     use std::{
         collections::HashMap,
         convert::{TryFrom, TryInto},
+        sync::{mpsc::channel, Arc, Condvar, Mutex},
+    };
+    #[cfg(unix)]
+    use std::{
         fs::File,
         os::unix::io::{AsRawFd, FromRawFd},
-        sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
 
     use crate::utils::block_on;
@@ -119,7 +122,9 @@ mod tests {
     use test_log::test;
 
     use zbus_names::UniqueName;
-    use zvariant::{Fd, OwnedObjectPath, OwnedValue, Type};
+    #[cfg(unix)]
+    use zvariant::Fd;
+    use zvariant::{OwnedObjectPath, OwnedValue, Type};
 
     use crate::{
         blocking::{self, MessageIterator},
@@ -205,6 +210,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(unix)]
     #[test]
     #[timeout(15000)]
     fn fdpass_systemd() {
@@ -328,8 +334,11 @@ mod tests {
         let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
         println!("DBus bus PID: {}", pid);
 
-        let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
-        println!("DBus bus UID: {}", uid);
+        #[cfg(unix)]
+        {
+            let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
+            println!("DBus bus UID: {}", uid);
+        }
     }
 
     #[test]
@@ -431,8 +440,11 @@ mod tests {
         let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
         println!("DBus bus PID: {}", pid);
 
-        let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
-        println!("DBus bus UID: {}", uid);
+        #[cfg(unix)]
+        {
+            let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
+            println!("DBus bus UID: {}", uid);
+        }
 
         Ok(())
     }

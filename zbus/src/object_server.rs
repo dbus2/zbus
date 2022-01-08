@@ -658,10 +658,10 @@ impl From<crate::blocking::ObjectServer> for ObjectServer {
 #[cfg(test)]
 #[allow(clippy::blacklisted_name)]
 mod tests {
-    #[cfg(feature = "async-io")]
+    #[cfg(all(unix, feature = "async-io"))]
     use std::os::unix::net::UnixStream;
     use std::{collections::HashMap, convert::TryInto};
-    #[cfg(not(feature = "async-io"))]
+    #[cfg(all(unix, not(feature = "async-io")))]
     use tokio::net::UnixStream;
 
     use crate::utils::block_on;
@@ -1027,6 +1027,7 @@ mod tests {
         block_on(basic_iface_(false));
     }
 
+    #[cfg(unix)]
     #[test]
     #[timeout(15000)]
     fn basic_iface_unix_p2p() {
@@ -1035,15 +1036,30 @@ mod tests {
 
     async fn basic_iface_(p2p: bool) {
         let event = event_listener::Event::new();
-
         let guid = zbus::Guid::generate();
-        let (service_conn_builder, client_conn_builder) = if p2p {
-            let (p0, p1) = UnixStream::pair().unwrap();
 
-            (
-                ConnectionBuilder::unix_stream(p0).server(&guid).p2p(),
-                ConnectionBuilder::unix_stream(p1).p2p(),
-            )
+        let (service_conn_builder, client_conn_builder) = if p2p {
+            #[cfg(unix)]
+            {
+                let (p0, p1) = UnixStream::pair().unwrap();
+
+                (
+                    ConnectionBuilder::unix_stream(p0).server(&guid).p2p(),
+                    ConnectionBuilder::unix_stream(p1).p2p(),
+                )
+            }
+            #[cfg(windows)]
+            {
+                let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+                let addr = listener.local_addr().unwrap();
+                let p1 = std::net::TcpStream::connect(addr).unwrap();
+                let p0 = listener.incoming().next().unwrap().unwrap();
+
+                (
+                    ConnectionBuilder::tcp_stream(p0).server(&guid).p2p(),
+                    ConnectionBuilder::tcp_stream(p1).p2p(),
+                )
+            }
         } else {
             let service_conn_builder = ConnectionBuilder::session()
                 .unwrap()

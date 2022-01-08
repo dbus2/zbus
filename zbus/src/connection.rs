@@ -1018,11 +1018,7 @@ impl From<&Connection> for WeakConnection {
 mod tests {
     use futures_util::stream::TryStreamExt;
     use ntest::timeout;
-    #[cfg(feature = "async-io")]
-    use std::os::unix::net::UnixStream;
     use test_log::test;
-    #[cfg(not(feature = "async-io"))]
-    use tokio::net::UnixStream;
 
     #[cfg(feature = "async-io")]
     use crate::AuthMechanism;
@@ -1095,13 +1091,20 @@ mod tests {
         test_p2p(server, client).await
     }
 
+    #[cfg(unix)]
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
         crate::utils::block_on(test_unix_p2p()).unwrap();
     }
 
+    #[cfg(unix)]
     async fn test_unix_p2p() -> Result<()> {
+        #[cfg(feature = "async-io")]
+        use std::os::unix::net::UnixStream;
+        #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+        use tokio::net::UnixStream;
+
         let guid = Guid::generate();
 
         let (p0, p1) = UnixStream::pair().unwrap();

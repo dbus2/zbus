@@ -782,6 +782,7 @@ impl FromStr for Command {
     }
 }
 
+#[cfg(unix)]
 #[cfg(test)]
 mod tests {
     use futures_util::future::poll_fn;

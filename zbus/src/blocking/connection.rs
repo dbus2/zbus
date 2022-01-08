@@ -239,6 +239,7 @@ impl From<crate::Connection> for Connection {
     }
 }
 
+#[cfg(unix)]
 #[cfg(test)]
 mod tests {
     use ntest::timeout;
@@ -253,6 +254,7 @@ mod tests {
         blocking::{ConnectionBuilder, MessageIterator},
         Guid,
     };
+
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
