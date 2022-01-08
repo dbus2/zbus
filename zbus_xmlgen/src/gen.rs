@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 
 use zbus::xml::{Arg, Interface};
 use zvariant::{
-    Basic, Fd, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
+    Basic, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
     DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_CHAR, STRUCT_SIG_START_CHAR, VARIANT_SIGNATURE_CHAR,
 };
 
@@ -167,7 +167,8 @@ fn to_rust_type(ty: &str, input: bool, as_ref: bool) -> String {
             i64::SIGNATURE_CHAR => "i64".into(),
             u64::SIGNATURE_CHAR => "u64".into(),
             f64::SIGNATURE_CHAR => "f64".into(),
-            Fd::SIGNATURE_CHAR => (if input {
+            // xmlgen accepts 'h' on Windows, only for code generation
+            'h' => (if input {
                 "zbus::zvariant::Fd"
             } else {
                 "zbus::zvariant::OwnedFd"
