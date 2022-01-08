@@ -19,7 +19,7 @@ stages:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: '2022-01-29.1'
+    FDO_DISTRIBUTION_TAG: '2022-02-01.1'
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
@@ -35,6 +35,7 @@ stages:
       lcov
       python3-pip
       python3-setuptools
+      gcc-mingw-w64-x86-64
     FDO_DISTRIBUTION_EXEC: >-
       gitlab/install-rust.sh stable &&
       pip3 install lcov_cobertura &&
@@ -139,6 +140,7 @@ crosscheck:
     - cargo check --target x86_64-apple-darwin
     - cargo check --target x86_64-unknown-freebsd
     - cargo check --target x86_64-unknown-netbsd
+    - cargo check --target x86_64-pc-windows-gnu
 
 pages:
   image: "hrektts/mdbook"
