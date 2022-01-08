@@ -7,6 +7,19 @@ include:
 
 variables:
   FDO_UPSTREAM_REPO: dbus/zbus
+  UPSTREAM_BRANCH: 'main'
+
+  ###
+  # IMPORTANT
+  # These are the version tags for the docker images the CI runs against.
+  # If you are hacking on them or need a them to rebuild, its enough
+  # to change any part of the string of the image you want.
+  ###
+  WINDOWS_TAG: "2022-01-28.1"
+
+  WINDOWS_AMD64_SUFFIX: 'amd64/windows'
+  WINDOWS_IMAGE: "$CI_REGISTRY_IMAGE/$WINDOWS_AMD64_SUFFIX:$WINDOWS_TAG-$UPSTREAM_BRANCH"
+  WINDOWS_UPSTREAM_IMAGE: "$CI_REGISTRY/$UPSTREAM_REPO/$WINDOWS_AMD64_SUFFIX:$WINDOWS_TAG-$UPSTREAM_BRANCH"
 
 stages:
   - container
@@ -56,6 +69,27 @@ container:
     - .debian
     - .fdo.container-build@debian
   stage: container
+
+windows amd64 docker:
+  stage: container
+  variables:
+    # this file needs to be relative to docker/windows/ subdir
+    # as it makes life easier in the powershell script
+    DOCKERFILE: "gitlab/docker/windows/Dockerfile"
+  timeout: 2h 30m
+  tags:
+    - windows
+    - shell
+    - "1809"
+  script:
+    # We need to pass an array and to resolve the env vars, so we can't use a variable:
+    - $DOCKER_BUILD_ARGS = @("--build-arg", "DEFAULT_BRANCH=$UPSTREAM_BRANCH")
+    - "& gitlab/docker/windows/container.ps1 $CI_REGISTRY $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD $WINDOWS_IMAGE $WINDOWS_UPSTREAM_IMAGE $DOCKERFILE"
+    - |
+      if (!($?)) {
+        echo "Failed to build the image"
+        Exit 1
+      }
 
 .debian_img:
   extends:
