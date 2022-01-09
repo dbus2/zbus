@@ -30,7 +30,7 @@ The [zbus crate] provides the main API you will use to interact with D-Bus from 
 of the establishment of a connection, the creation, sending and receiving of different kind of D-Bus
 messages (method calls, signals etc) for you.
 
-zbus crate is currently Linux-specific[^otheros].
+zbus crate is currently Unix-specific, with Linux as our main (and tested) target.
 
 [zbus]: https://gitlab.freedesktop.org/dbus/zbus
 [Rust]: https://www.rust-lang.org/
@@ -46,11 +46,6 @@ zbus crate is currently Linux-specific[^otheros].
 
 [^high-level-api]: These concepts are explained in the
 [following chapter](concepts.html#interfaces).
-
-[^otheros]: Support for other OS exist, but it is not supported to the same
-    extent. D-Bus clients in javascript (running from any browser) do exist
-    though. And zbus may also be working from the browser sometime in the future
-    too, thanks to Rust 🦀 and WebAssembly 🕸.
 
 <p align="center">
   <img src="https://www.freedesktop.org/png/freedesktop-logo.png" height="32"/>
