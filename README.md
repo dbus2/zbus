@@ -19,9 +19,7 @@ The zbus crate provides the main API you will use to interact with D-Bus from Ru
 the establishment of a connection, the creation, sending and receiving of different kind of D-Bus
 messages (method calls, signals etc) for you.
 
-zbus crate is currently Linux-specific[^otheros].
-
-**Status:** Stable[^stability].
+**Status:** Stable.
 
 ### Getting Started
 
@@ -322,9 +320,9 @@ right, please [file an issue](https://gitlab.freedesktop.org/dbus/zbus/-/issues/
 
 # Portability
 
-All crates are currently Unix-only and will fail to build on non-unix. This is hopefully a temporary
-limitation. Moreover, integration tests of zbus crate currently require a session bus running on the
-build host.
+All crates are currently Unix-only with Linux as the main (and tested) target and will fail to build
+on non-unix. This is hopefully a temporary limitation. Moreover, integration tests of zbus crate
+currently require a session bus running on the build host.
 
 # License
 
@@ -335,10 +333,3 @@ MIT license [LICENSE-MIT](LICENSE-MIT)
 [iektc]: https://docs.rs/zbus/2.0.0/zbus/azync/struct.Connection.html#method.executor
 [`ConnectionBuilder`]: https://docs.rs/zbus/2.0.0/zbus/struct.ConnectionBuilder.html
 [dbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names
-
-[^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus clients in
-  javascript (running from any browser) do exist though. And zbus may also be working from the
-  browser sometime in the future too, thanks to Rust 🦀 and WebAssembly 🕸.
-
-[^stability]: We might have to change the API but zbus follows semver convention so your code
-  won't just break out of the blue. Just make sure you depend on a specific major version of zbus.

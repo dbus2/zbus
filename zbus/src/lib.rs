@@ -7,7 +7,7 @@
 //! the establishment of a connection, the creation, sending and receiving of different kind of
 //! D-Bus messages (method calls, signals etc) for you.
 //!
-//! zbus crate is currently Linux-specific[^otheros].
+//! zbus crate is currently Unix-specific, with Linux as our main (and tested) target.
 //!
 //! ### Getting Started
 //!
@@ -138,10 +138,6 @@
 //! [book]: https://dbus.pages.freedesktop.org/zbus/
 //! [bw]: https://docs.rs/zbus/2.0.0/zbus/blocking/index.html
 //! [iektc]: `Connection::executor`
-//!
-//! [^otheros]: Support for other OS exist, but it is not supported to the same extent. D-Bus
-//!   clients in javascript (running from any browser) do exist though. And zbus may also be
-//!   working from the browser sometime in the future too, thanks to Rust 🦀 and WebAssembly 🕸.
 //!
 
 #[cfg(doctest)]
