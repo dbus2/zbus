@@ -11,7 +11,7 @@ use futures_util::stream::FusedStream;
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 
-use crate::{Connection, Error, Message, MessageSequence, Result};
+use crate::{Connection, ConnectionInner, Error, Message, MessageSequence, Result};
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
@@ -26,6 +26,7 @@ use crate::{Connection, Error, Message, MessageSequence, Result};
 #[derive(Clone, Debug)]
 #[must_use = "streams do nothing unless polled"]
 pub struct MessageStream {
+    conn_inner: Arc<ConnectionInner>,
     msg_receiver: ActiveReceiver<Arc<Message>>,
     error_receiver: Receiver<Error>,
     last_seq: MessageSequence,
@@ -86,10 +87,12 @@ impl FusedStream for MessageStream {
 
 impl From<Connection> for MessageStream {
     fn from(conn: Connection) -> Self {
+        let conn_inner = conn.inner.clone();
         let msg_receiver = conn.msg_receiver.activate();
         let error_receiver = conn.error_receiver;
 
         Self {
+            conn_inner,
             msg_receiver,
             error_receiver,
             last_seq: Default::default(),
