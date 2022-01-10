@@ -2,20 +2,13 @@
 
 # zbus
 
-[![pipeline status](https://gitlab.freedesktop.org/dbus/zbus/badges/main/pipeline.svg)](https://gitlab.freedesktop.org/dbus/zbus/-/commits/main)
+[![](https://docs.rs/zbus/badge.svg)](https://docs.rs/zbus/) [![](https://img.shields.io/crates/v/zbus)](https://crates.io/crates/zbus)
 
-A Rust API for [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html) communication. The
-goal is to provide a safe and simple high- and low-level API akin to
-[GDBus](https://developer.gnome.org/gio/stable/gdbus-convenience.html), that doesn't depend on C
-libraries.
+This is the main subcrate of the [zbus] project, that provides the main API you will use to interact
+with D-Bus from Rust. It takes care of the establishment of a connection, the creation, sending and
+receiving of different kind of D-Bus messages (method calls, signals etc) for you.
 
-The project is divided into the following subcrates:
-
-* [`zbus`] and [`zbus_macros`]
-* [`zvariant`] and [`zvariant_derive`]
-* [`zbus_names`]
-* [`zbus_xmlgen`]
-* [`zbus_polkit`]
+**Status:** Stable.
 
 ## Getting Started
 
@@ -126,28 +119,21 @@ Hello Maria!
 s
 ```
 
-## Getting Help
+## Blocking API
 
-If you need help in using these crates, are looking for ways to contribute, or just want to hang out
-with the cool kids, please come chat with us in the
-[`#zbus:matrix.org`](https://matrix.to/#/#zbus:matrix.org) Matrix room. If something doesn't seem
-right, please [file an issue](https://gitlab.freedesktop.org/dbus/zbus/-/issues/new).
+While zbus is primarily asynchronous (since 2.0), [blocking wrappers][bw] are provided for
+convenience.
 
-## Portability
+## Compatibility with async runtimes
 
-All crates are currently Unix-only with Linux as the main (and tested) target and will fail to build
-on non-unix. This is hopefully a temporary limitation. Moreover, integration tests of zbus crate
-currently require a session bus running on the build host.
+zbus is runtime-agnostic and should work out of the box with different Rust async runtimes. However,
+in order to achieve that, zbus spawns a thread per connection to handle various internal tasks. If
+that is something you would like to avoid, you need to:
+  * Use [`ConnectionBuilder`] and disable the `internal_executor` flag.
+  * Ensure the [internal executor keeps ticking continuously][iektc].
 
-## License
-
-MIT license [LICENSE-MIT](LICENSE-MIT)
-
-[`zbus`]: zbus/README.md
-[`zbus_macros`]: zbus_macros/README.md
-[`zbus_names`]: zbus_names/README.md
-[`zbus_polkit`]: zbus_polkit/README.md
-[`zbus_xmlgen`]: zbus_xmlgen/README.md
-[`zvariant`]: zvariant/README.md
-[`zvariant_derive`]: zvariant_derive/README.md
-[dbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names
+[zbus]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/README.md
+[bw]: https://docs.rs/zbus/2.0.0/zbus/blocking/index.html
+[iektc]: https://docs.rs/zbus/2.0.0/zbus/azync/struct.Connection.html#method.executor
+[`ConnectionBuilder`]: https://docs.rs/zbus/2.0.0/zbus/struct.ConnectionBuilder.html
+[LICENSE-MIT]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/LICENSE-MIT

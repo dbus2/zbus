@@ -9,7 +9,7 @@ repository = "https://gitlab.freedesktop.org/dbus/zbus/"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"
 categories = ["os::unix-apis"]
-readme = "../README.md"
+readme = "README.md"
 
 [dependencies]
 #zbus = { path = "../zbus", version = "2" }
