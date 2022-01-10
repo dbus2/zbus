@@ -17,7 +17,7 @@ documentation = "https://dbus.pages.freedesktop.org/zbus/"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"
 categories = ["os::unix-apis", "development-tools"]
-readme = "../README.md"
+readme = "README.md"
 
 [[bin]]
 name = "zbus-xmlgen"

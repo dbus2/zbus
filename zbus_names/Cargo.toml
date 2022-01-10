@@ -9,12 +9,15 @@ repository = "https://gitlab.freedesktop.org/dbus/zbus/"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"
 categories = ["os::unix-apis"]
-readme = "../README.md"
+readme = "README.md"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 zvariant = { path = "../zvariant", version = "3", default-features = false, features = ["enumflags2"] }
 static_assertions = "1.1.0"
+
+[dev-dependencies]
+doc-comment = "0.3.3"
 
 [package.metadata.docs.rs]
 all-features = true
