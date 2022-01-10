@@ -15,7 +15,7 @@ use crate::{Connection, ConnectionInner, Error, Message, MessageSequence, Result
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
-/// You can convert a [`Connection`] to this type.
+/// You can convert a [`Connection`] to this type and back to [`Connection`].
 ///
 /// **NOTE**: You must ensure a `MessageStream` is continuously polled or you will experience hangs.
 /// If you don't need to continuously poll the `MessageStream` but need to keep it around for later
@@ -103,5 +103,15 @@ impl From<Connection> for MessageStream {
 impl From<&Connection> for MessageStream {
     fn from(conn: &Connection) -> Self {
         Self::from(conn.clone())
+    }
+}
+
+impl From<MessageStream> for Connection {
+    fn from(stream: MessageStream) -> Connection {
+        Connection {
+            msg_receiver: stream.msg_receiver.deactivate(),
+            error_receiver: stream.error_receiver,
+            inner: stream.conn_inner,
+        }
     }
 }
