@@ -143,6 +143,27 @@ nightly:
     - rustup override set nightly
     - *cargo_test
 
+msvc:
+  image: $WINDOWS_IMAGE
+  stage: test
+  tags:
+    - 'docker'
+    - 'windows'
+    - '1809'
+  needs:
+    - "windows amd64 docker"
+  variables:
+    ErrorActionPreference: 'Stop'
+    WarningPreference: 'Stop'
+    PKG_CONFIG_PATH: 'C:/lib/pkgconfig'
+    DBUS_SESSION_BUS_ADDRESS: 'tcp:host=127.0.0.1,port=9876'
+    TRYBUILD: 'overwrite' # ignore ui tests
+  timeout: '45min'
+  script:
+    - $env:PATH += ";C:\bin"
+    - Start-Process dbus-daemon.exe --config-file=gitlab/win32-session.conf
+    - cargo test
+
 coverage:
   extends: .debian_img
   stage: extras
