@@ -214,7 +214,7 @@ fn to_rust_type(ty: &str, input: bool, as_ref: bool) -> String {
                     _ => {
                         let ty = iter_to_rust_type(it, input, false);
                         if input {
-                            format!("{}[{}]", if as_ref { "&" } else { "" }, ty)
+                            format!("&[{}]", ty)
                         } else {
                             format!("{}Vec<{}>", if as_ref { "&" } else { "" }, ty)
                         }
