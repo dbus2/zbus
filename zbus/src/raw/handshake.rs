@@ -10,6 +10,8 @@ use std::{
     task::{Context, Poll},
 };
 
+#[cfg(windows)]
+use crate::win32;
 use crate::{
     guid::Guid,
     raw::{Connection, Socket},
@@ -189,11 +191,11 @@ impl<S: Socket> ClientHandshake<S> {
             AuthMechanism::Anonymous => Ok((WaitingForOK, Command::Auth(Some(*mech), None))),
             AuthMechanism::External => Ok((
                 WaitingForOK,
-                Command::Auth(Some(*mech), Some(sasl_auth_id())),
+                Command::Auth(Some(*mech), Some(sasl_auth_id()?)),
             )),
             AuthMechanism::Cookie => Ok((
                 WaitingForData,
-                Command::Auth(Some(*mech), Some(sasl_auth_id())),
+                Command::Auth(Some(*mech), Some(sasl_auth_id()?)),
             )),
         }
     }
@@ -239,20 +241,20 @@ fn random_ascii(len: usize) -> String {
         .collect()
 }
 
-fn sasl_auth_id() -> String {
-    #[cfg(unix)]
-    {
-        Uid::current()
-            .to_string()
-            .chars()
-            .map(|c| format!("{:x}", c as u32))
-            .collect::<String>()
-    }
+fn sasl_auth_id() -> Result<String> {
+    let id = {
+        #[cfg(unix)]
+        {
+            Uid::current().to_string()
+        }
 
-    #[cfg(not(unix))]
-    {
-        unimplemented!()
-    }
+        #[cfg(windows)]
+        {
+            win32::ProcessToken::open(None)?.sid()?
+        }
+    };
+
+    Ok(hex::encode(id))
 }
 
 #[derive(Debug)]
