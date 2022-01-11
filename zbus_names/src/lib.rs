@@ -26,3 +26,6 @@ pub use member_name::*;
 
 mod error;
 pub use error::*;
+
+mod error_name;
+pub use error_name::*;

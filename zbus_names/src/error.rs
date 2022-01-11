@@ -21,6 +21,8 @@ pub enum Error {
     InvalidInterfaceName(String),
     /// Invalid member (method or signal) name.
     InvalidMemberName(String),
+    /// Invalid error name.
+    InvalidErrorName(String),
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -33,6 +35,7 @@ impl PartialEq for Error {
             (Self::InvalidUniqueName(_), Self::InvalidUniqueName(_)) => true,
             (Self::InvalidInterfaceName(_), Self::InvalidInterfaceName(_)) => true,
             (Self::InvalidMemberName(_), Self::InvalidMemberName(_)) => true,
+            (Self::InvalidErrorName(_), Self::InvalidErrorName(_)) => true,
             (Self::Variant(s), Self::Variant(o)) => s == o,
             (_, _) => false,
         }
@@ -46,6 +49,7 @@ impl error::Error for Error {
             Error::InvalidWellKnownName(_) => None,
             Error::InvalidUniqueName(_) => None,
             Error::InvalidInterfaceName(_) => None,
+            Error::InvalidErrorName(_) => None,
             Error::InvalidMemberName(_) => None,
             Error::Variant(e) => Some(e),
         }
@@ -66,6 +70,7 @@ impl fmt::Display for Error {
             Error::InvalidWellKnownName(s) => write!(f, "Invalid well-known bus name: {}", s),
             Error::InvalidUniqueName(s) => write!(f, "Invalid unique bus name: {}", s),
             Error::InvalidInterfaceName(s) => write!(f, "Invalid interface or error name: {}", s),
+            Error::InvalidErrorName(s) => write!(f, "Invalid interface or error name: {}", s),
             Error::InvalidMemberName(s) => write!(f, "Invalid method or signal name: {}", s),
         }
     }
