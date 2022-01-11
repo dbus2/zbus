@@ -23,6 +23,9 @@ mod doctests {
 #[cfg(all(not(feature = "async-io"), not(feature = "tokio")))]
 compile_error!("Either \"async-io\" (default) or \"tokio\" must be enabled.");
 
+#[cfg(windows)]
+mod win32;
+
 mod dbus_error;
 pub use dbus_error::*;
 
