@@ -115,6 +115,48 @@ async fn main() -> Result<()> {
 }
 ```
 
+Please note that by default zbus relies on `async-io` crate to communicate with the bus, which uses
+its own thread. If you'd like to avoid that and have a fuller integration with `tokio`, you need to
+do **a bit** more work:
+
+1. Enable `tokio` feature of zbus.
+2. Manually create the `tokio::net::UnixStream` for the `zbus::Connection` to use:
+
+```rust
+use std::error::Error;
+use tokio::net::UnixStream;
+use zbus::{Address, ConnectionBuilder};
+
+#[tokio::main]
+async fn main() -> std::result::Result<(), Box<dyn Error>> {
+    let stream = match Address::session()? {
+        Address::Unix(s) => UnixStream::connect(s).await?,
+    };
+    let conn = ConnectionBuilder::socket(stream)
+        .internal_executor(false)
+        .build()
+        .await?;
+    let executor_conn = conn.clone();
+    tokio::task::spawn(async move {
+        loop {
+            executor_conn.executor().tick().await;
+        }
+    });
+    let proxy = zbus::fdo::DBusProxy::new(&conn).await?;
+    let features = proxy.features().await?;
+    print!("Bus Features: ");
+    for (i, feature) in features.iter().enumerate() {
+        if i != 0 {
+            print!(", ");
+        }
+        print!("{}", feature);
+    }
+    println!(".");
+
+    Ok(())
+}
+```
+
 [`TypeDict`]: https://docs.rs/zvariant/3.0.0/zvariant/derive.TypeDict.html
 [`SerializeDict`]: https://docs.rs/zvariant/3.0.0/zvariant/derive.SerializeDict.html
 [`DeserializeDict`]: https://docs.rs/zvariant/3.0.0/zvariant/derive.DeserializeDict.html
