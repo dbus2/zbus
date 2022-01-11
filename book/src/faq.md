@@ -16,7 +16,7 @@ use zbus::{
 };
 
 #[derive(DeserializeDict, SerializeDict, TypeDict)]
-struct Dictionary {
+pub struct Dictionary {
     field1: u16,
     #[zvariant(rename = "another-name")]
     field2: i64,
@@ -73,14 +73,14 @@ struct OurInterface(Sender<()>);
 
 #[dbus_interface(interface = "org.fdo.OurInterface")]
 impl OurInterface {
-    pub async fn quit(&self) -> fdo::Result<()> {
+    async fn quit(&self) -> fdo::Result<()> {
         self.0
             .send(())
             .await
             .map_err(|_| fdo::Error::Failed("shouldn't happen".to_string()))
     }
 
-    pub async fn read_file(&self, path: &str) -> fdo::Result<String> {
+    async fn read_file(&self, path: &str) -> fdo::Result<String> {
         let mut file = tokio::fs::File::open(path)
             .await
             .map_err(|_| fdo::Error::FileNotFound(format!("Failed to open {}", path)))?;
