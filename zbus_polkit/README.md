@@ -1,5 +1,3 @@
-<img src="https://gitlab.freedesktop.org/dbus/zbus/-/raw/main/zbus-pixels.gif" alt="zbus illustration" style="width: 100%;">
-
 # zbus_polkit
 
 [![](https://docs.rs/zbus_polkit/badge.svg)](https://docs.rs/zbus_polkit/) [![](https://img.shields.io/crates/v/zbus_polkit)](https://crates.io/crates/zbus_polkit)

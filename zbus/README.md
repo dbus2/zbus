@@ -1,5 +1,3 @@
-<img src="https://gitlab.freedesktop.org/dbus/zbus/-/raw/main/zbus-pixels.gif" alt="zbus illustration" style="width: 100%;">
-
 # zbus
 
 [![](https://docs.rs/zbus/badge.svg)](https://docs.rs/zbus/) [![](https://img.shields.io/crates/v/zbus)](https://crates.io/crates/zbus)

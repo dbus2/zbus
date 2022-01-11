@@ -1,5 +1,3 @@
-<img src="https://gitlab.freedesktop.org/dbus/zbus/-/raw/main/zbus-pixels.gif" alt="zbus illustration" style="width: 100%;">
-
 # zbus_xmlgen
 
 [![](https://img.shields.io/crates/v/zbus_xmlgen)](https://crates.io/crates/zbus_xmlgen)
