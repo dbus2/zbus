@@ -130,6 +130,12 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
     /// This is used to back some internal platform-specific functions.
     #[cfg(unix)]
     fn as_raw_fd(&self) -> RawFd;
+
+    /// Return the peer process SID, if any.
+    #[cfg(windows)]
+    fn peer_sid(&self) -> Option<String> {
+        None
+    }
 }
 
 impl Socket for Box<dyn Socket> {
@@ -162,6 +168,10 @@ impl Socket for Box<dyn Socket> {
     #[cfg(unix)]
     fn as_raw_fd(&self) -> RawFd {
         (&**self).as_raw_fd()
+    }
+    #[cfg(windows)]
+    fn peer_sid(&self) -> Option<String> {
+        (&**self).peer_sid()
     }
 }
 
@@ -325,6 +335,19 @@ impl Socket for Async<TcpStream> {
     fn as_raw_fd(&self) -> RawFd {
         // This causes a name collision if imported
         std::os::unix::io::AsRawFd::as_raw_fd(self.get_ref())
+    }
+
+    #[cfg(windows)]
+    fn peer_sid(&self) -> Option<String> {
+        use crate::win32::{tcp_stream_get_peer_pid, ProcessToken};
+
+        if let Ok(pid) = tcp_stream_get_peer_pid(&self.get_ref()) {
+            if let Ok(process_token) = ProcessToken::open(if pid != 0 { Some(pid) } else { None }) {
+                return process_token.sid().ok();
+            }
+        }
+
+        None
     }
 }
 
