@@ -296,3 +296,67 @@ impl Socket for Async<TcpStream> {
         std::os::unix::io::AsRawFd::as_raw_fd(self.get_ref())
     }
 }
+
+#[cfg(feature = "tokio")]
+impl Socket for tokio::net::TcpStream {
+    fn can_pass_unix_fd(&self) -> bool {
+        false
+    }
+
+    fn poll_recvmsg(
+        &mut self,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<(usize, Vec<OwnedFd>)>> {
+        #[cfg(unix)]
+        let fds = vec![];
+
+        loop {
+            match self.try_read(buf) {
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                Err(e) => return Poll::Ready(Err(e)),
+                Ok(len) => {
+                    #[cfg(unix)]
+                    let ret = (len, fds);
+                    #[cfg(not(unix))]
+                    let ret = len;
+                    return Poll::Ready(Ok(ret));
+                }
+            }
+            ready!(self.poll_read_ready(cx))?;
+        }
+    }
+
+    fn poll_sendmsg(
+        &mut self,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+        #[cfg(unix)] fds: &[RawFd],
+    ) -> Poll<io::Result<usize>> {
+        #[cfg(unix)]
+        if !fds.is_empty() {
+            return Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "fds cannot be sent with a tcp stream",
+            )));
+        }
+
+        loop {
+            match self.try_write(buf) {
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                res => return Poll::Ready(res),
+            }
+            ready!(self.poll_write_ready(cx))?;
+        }
+    }
+
+    fn close(&self) -> io::Result<()> {
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn as_raw_fd(&self) -> RawFd {
+        // This causes a name collision if imported
+        std::os::unix::io::AsRawFd::as_raw_fd(self)
+    }
+}
