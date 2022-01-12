@@ -76,6 +76,7 @@ where
         socket: S,
         guid: Guid,
         #[cfg(unix)] client_uid: u32,
+        #[cfg(windows)] client_sid: Option<String>,
         auth_mechanisms: Option<VecDeque<AuthMechanism>>,
     ) -> Result<Self> {
         Handshake {
@@ -84,6 +85,8 @@ where
                 guid,
                 #[cfg(unix)]
                 client_uid,
+                #[cfg(windows)]
+                client_sid,
                 auth_mechanisms,
             )?),
             phantom: PhantomData,

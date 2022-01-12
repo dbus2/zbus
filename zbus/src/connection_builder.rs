@@ -244,36 +244,49 @@ impl<'a> ConnectionBuilder<'a> {
                     return Err(Error::Unsupported);
                 }
 
-                #[cfg(any(target_os = "android", target_os = "linux"))]
+                #[cfg(unix)]
                 let client_uid = {
-                    use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+                    #[cfg(any(target_os = "android", target_os = "linux"))]
+                    {
+                        use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
 
-                    let creds = getsockopt(stream.as_raw_fd(), PeerCredentials).map_err(|e| {
-                        Error::Handshake(format!("Failed to get peer credentials: {}", e))
-                    })?;
+                        let creds =
+                            getsockopt(stream.as_raw_fd(), PeerCredentials).map_err(|e| {
+                                Error::Handshake(format!("Failed to get peer credentials: {}", e))
+                            })?;
 
-                    creds.uid()
+                        creds.uid()
+                    }
+
+                    #[cfg(any(
+                        target_os = "macos",
+                        target_os = "ios",
+                        target_os = "freebsd",
+                        target_os = "dragonfly",
+                        target_os = "openbsd",
+                        target_os = "netbsd"
+                    ))]
+                    {
+                        let uid = nix::unistd::getpeereid(stream.as_raw_fd())
+                            .map_err(|e| {
+                                Error::Handshake(format!("Failed to get peer credentials: {}", e))
+                            })?
+                            .0;
+
+                        uid.into()
+                    }
                 };
-                #[cfg(any(
-                    target_os = "macos",
-                    target_os = "ios",
-                    target_os = "freebsd",
-                    target_os = "dragonfly",
-                    target_os = "openbsd",
-                    target_os = "netbsd"
-                ))]
-                let client_uid = nix::unistd::getpeereid(stream.as_raw_fd())
-                    .map_err(|e| {
-                        Error::Handshake(format!("Failed to get peer credentials: {}", e))
-                    })?
-                    .0
-                    .into();
+
+                #[cfg(windows)]
+                let client_sid = stream.peer_sid();
 
                 Authenticated::server(
                     stream,
                     guid.clone(),
                     #[cfg(unix)]
                     client_uid,
+                    #[cfg(windows)]
+                    client_sid,
                     self.auth_mechanisms,
                 )
                 .await?

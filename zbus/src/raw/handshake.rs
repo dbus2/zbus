@@ -473,6 +473,8 @@ pub struct ServerHandshake<S> {
     cap_unix_fd: bool,
     #[cfg(unix)]
     client_uid: u32,
+    #[cfg(windows)]
+    client_sid: Option<String>,
     mechanisms: VecDeque<AuthMechanism>,
 }
 
@@ -481,15 +483,32 @@ impl<S: Socket> ServerHandshake<S> {
         socket: S,
         guid: Guid,
         #[cfg(unix)] client_uid: u32,
+        #[cfg(windows)] client_sid: Option<String>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
     ) -> Result<ServerHandshake<S>> {
+        let can_external = (|| {
+            #[cfg(unix)]
+            return true;
+
+            #[cfg(windows)]
+            return client_sid.is_some();
+
+            #[cfg(not(any(unix, windows)))]
+            return false;
+        })();
         let mechanisms = mechanisms.unwrap_or_else(|| {
             let mut mechanisms = VecDeque::new();
-            mechanisms.push_back(AuthMechanism::External);
+            if can_external {
+                mechanisms.push_back(AuthMechanism::External);
+            }
             mechanisms
         });
 
         if mechanisms.contains(&AuthMechanism::Cookie) {
+            return Err(Error::Unsupported);
+        }
+
+        if mechanisms.contains(&AuthMechanism::External) && !can_external {
             return Err(Error::Unsupported);
         }
 
@@ -502,6 +521,8 @@ impl<S: Socket> ServerHandshake<S> {
             cap_unix_fd: false,
             #[cfg(unix)]
             client_uid,
+            #[cfg(windows)]
+            client_sid,
             mechanisms,
         })
     }
@@ -586,12 +607,28 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                                 (Some(AuthMechanism::Anonymous), None, None) => {
                                     self.auth_ok();
                                 }
-                                #[cfg(unix)]
-                                (Some(AuthMechanism::External), Some(uid), None) => {
-                                    let uid = id_from_str(uid).map_err(|e| {
-                                        Error::Handshake(format!("Invalid UID: {}", e))
-                                    })?;
-                                    if uid == self.client_uid {
+                                (Some(AuthMechanism::External), Some(sasl_id), None) => {
+                                    let auth_ok = {
+                                        #[cfg(unix)]
+                                        {
+                                            let uid = id_from_str(sasl_id).map_err(|e| {
+                                                Error::Handshake(format!("Invalid UID: {}", e))
+                                            })?;
+                                            // Safe to unwrap since we checked earlier external & UID
+                                            uid == self.client_uid
+                                        }
+                                        #[cfg(windows)]
+                                        {
+                                            let sid = hex::decode(sasl_id)?;
+                                            let sid = std::str::from_utf8(&sid).map_err(|e| {
+                                                Error::Handshake(format!("Invalid SID: {}", e))
+                                            })?;
+                                            // Safe to unwrap since we checked earlier external & SID
+                                            sid == self.client_sid.as_ref().unwrap()
+                                        }
+                                    };
+
+                                    if auth_ok {
                                         self.auth_ok();
                                     } else {
                                         self.rejected_error();

@@ -1020,7 +1020,7 @@ mod tests {
     use ntest::timeout;
     use test_log::test;
 
-    #[cfg(feature = "async-io")]
+    #[cfg(all(unix, feature = "async-io"))]
     use crate::AuthMechanism;
 
     use super::*;
@@ -1080,11 +1080,15 @@ mod tests {
         let client = std::net::TcpStream::connect(addr).unwrap();
         let server = listener.incoming().next().unwrap().unwrap();
 
-        let server = ConnectionBuilder::tcp_stream(server)
-            .server(&guid)
-            .auth_mechanisms(&[AuthMechanism::Anonymous])
-            .p2p()
-            .build();
+        let server = {
+            let c = ConnectionBuilder::tcp_stream(server).server(&guid).p2p();
+
+            // EXTERNAL is only implemented on win32 with TCP sockets
+            #[cfg(unix)]
+            let c = c.auth_mechanisms(&[AuthMechanism::Anonymous]);
+
+            c.build()
+        };
         let client = ConnectionBuilder::tcp_stream(client).p2p().build();
         let (client, server) = futures_util::try_join!(client, server)?;
 
