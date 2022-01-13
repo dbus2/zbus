@@ -189,6 +189,7 @@ impl<'a> ConnectionBuilder<'a> {
             Target::UnixStream(stream) => Box::new(Async::new(stream)?),
             Target::Address(address) => match address.connect().await? {
                 address::Stream::Unix(stream) => Box::new(Async::new(stream.into_inner()?)?),
+                _ => unimplemented!(),
             },
             Target::Socket(stream) => stream,
         };

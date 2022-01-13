@@ -2,7 +2,12 @@ use crate::{Error, Result};
 use async_io::Async;
 use nix::unistd::Uid;
 use std::{
-    collections::HashMap, convert::TryFrom, env, ffi::OsString, os::unix::net::UnixStream,
+    collections::HashMap,
+    convert::TryFrom,
+    env,
+    ffi::OsString,
+    net::{SocketAddr, TcpStream, ToSocketAddrs},
+    os::unix::net::UnixStream,
     str::FromStr,
 };
 
@@ -56,16 +61,55 @@ pub enum Address {
 #[derive(Debug)]
 pub(crate) enum Stream {
     Unix(Async<UnixStream>),
+    Tcp(Async<TcpStream>),
 }
 
 impl Address {
     pub(crate) async fn connect(&self) -> Result<Stream> {
-        match self {
+        match self.clone() {
             Address::Unix(p) => Async::<UnixStream>::connect(p)
                 .await
                 .map(Stream::Unix)
                 .map_err(Error::Io),
-            _ => unimplemented!(),
+            Address::Tcp(TcpAddress {
+                host, port, family, ..
+            }) => {
+                let (s, r) = async_channel::bounded(1);
+
+                std::thread::spawn(move || {
+                    let to_socket_addrs = || -> Result<Vec<SocketAddr>> {
+                        let addrs = (host.as_str(), port).to_socket_addrs()?.filter(|a| {
+                            if let Some(family) = family {
+                                if family == TcpAddressFamily::Ipv4 {
+                                    a.is_ipv4()
+                                } else {
+                                    a.is_ipv6()
+                                }
+                            } else {
+                                true
+                            }
+                        });
+                        Ok(addrs.collect::<Vec<_>>())
+                    };
+                    s.try_send(to_socket_addrs())
+                        .expect("Failed to send resolved TCP address");
+                });
+
+                let addrs = r.recv().await.map_err(|e| {
+                    Error::Address(format!("Failed to receive TCP addresses: {}", e))
+                })??;
+
+                // we could attempt connections in parallel?
+                let mut last_err = Error::Address("Failed to connect".into());
+                for addr in addrs {
+                    match Async::<TcpStream>::connect(addr).await {
+                        Ok(stream) => return Ok(Stream::Tcp(stream)),
+                        Err(e) => last_err = e.into(),
+                    }
+                }
+
+                Err(last_err)
+            }
         }
     }
 
@@ -287,5 +331,13 @@ mod tests {
             }),
             Address::from_str("tcp:host=localhost,port=4142,family=ipv6").unwrap()
         );
+    }
+
+    #[test]
+    fn connect_tcp() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let addr = Address::from_str(&format!("tcp:host=localhost,port={}", port)).unwrap();
+        async_io::block_on(async { addr.connect().await }).unwrap();
     }
 }
