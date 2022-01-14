@@ -45,7 +45,7 @@ impl TcpAddress {
 }
 
 /// A bus address
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Address {
     /// A path on the filesystem
     Unix(OsString),
