@@ -164,9 +164,10 @@ pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// For structs it works just like serde's [`Serialize`] macros:
 ///
 /// ```
-/// use zvariant::{SerializeDict, TypeDict};
+/// use zvariant::{SerializeDict, Type};
 ///
-/// #[derive(SerializeDict, TypeDict)]
+/// #[derive(SerializeDict, Type)]
+/// #[zvariant(signature = "a{sv}")]
 /// struct Struct {
 ///     field1: u16,
 ///     #[zvariant(rename = "another-name")]
@@ -199,9 +200,10 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// For structs it works just like serde's [`Deserialize`] macros:
 ///
 /// ```
-/// use zvariant::{DeserializeDict, TypeDict};
+/// use zvariant::{DeserializeDict, Type};
 ///
-/// #[derive(DeserializeDict, TypeDict)]
+/// #[derive(DeserializeDict, Type)]
+/// #[zvariant(signature = "a{sv}")]
 /// struct Struct {
 ///     field1: u16,
 ///     #[zvariant(rename = "another-name")]

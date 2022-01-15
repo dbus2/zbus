@@ -6,16 +6,18 @@ Since the use of a dictionary, specifically one with strings as keys and variant
 `a{sv}`) is very common in the D-Bus world and use of HashMaps isn't as convenient and type-safe as
 a struct, you might find yourself wanting to use a struct as a dictionary.
 
-`zvariant` provides convenient macros for making this possible: [`TypeDict`], [`SerializeDict`] and
-[`DeserializeDict`]. Here is a simple example:
+`zvariant` provides convenient macros for making this possible: [`SerializeDict`] and
+[`DeserializeDict`]. You'll also need to tell [`Type`] macro to treat the type as a dictionary using
+the `signature` attribute. Here is a simple example:
 
 ```rust
 use zbus::{
     dbus_proxy, dbus_interface, fdo::Result,
-    zvariant::{DeserializeDict, SerializeDict, TypeDict},
+    zvariant::{DeserializeDict, SerializeDict, Type},
 };
 
-#[derive(DeserializeDict, SerializeDict, TypeDict)]
+#[derive(DeserializeDict, SerializeDict, Type)]
+#[zvariant(signature = "a{sv}")]
 pub struct Dictionary {
     field1: u16,
     #[zvariant(rename = "another-name")]
@@ -157,6 +159,6 @@ async fn main() -> std::result::Result<(), Box<dyn Error>> {
 }
 ```
 
-[`TypeDict`]: https://docs.rs/zvariant/3.0.0/zvariant/derive.TypeDict.html
+[`Type`]: https://docs.rs/zvariant/3.1.0/zvariant/derive.Type.html
 [`SerializeDict`]: https://docs.rs/zvariant/3.0.0/zvariant/derive.SerializeDict.html
 [`DeserializeDict`]: https://docs.rs/zvariant/3.0.0/zvariant/derive.DeserializeDict.html

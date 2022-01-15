@@ -127,7 +127,7 @@ mod tests {
     use crate::{
         Array, Basic, DeserializeDict, DeserializeValue, Dict, EncodingContext as Context,
         EncodingFormat, Error, Fd, ObjectPath, Result, SerializeDict, SerializeValue, Signature,
-        Str, Structure, Type, TypeDict, Value,
+        Str, Structure, Type, Value,
     };
 
     // Test through both generic and specific API (wrt byte order)
@@ -1069,7 +1069,8 @@ mod tests {
             panic!();
         }
 
-        #[derive(SerializeDict, DeserializeDict, TypeDict, PartialEq, Debug)]
+        #[derive(SerializeDict, DeserializeDict, Type, PartialEq, Debug)]
+        #[zvariant(signature = "a{sv}")]
         struct Test {
             process_id: Option<u32>,
             group_id: Option<u32>,
@@ -1092,7 +1093,8 @@ mod tests {
         let decoded: Test = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(decoded, test);
 
-        #[derive(SerializeDict, DeserializeDict, TypeDict, PartialEq, Debug)]
+        #[derive(SerializeDict, DeserializeDict, Type, PartialEq, Debug)]
+        #[zvariant(signature = "a{sv}")]
         struct TestMissing {
             process_id: Option<u32>,
             group_id: Option<u32>,
@@ -1105,15 +1107,16 @@ mod tests {
             Error::Message("missing field `quota`".to_string())
         );
 
-        #[derive(SerializeDict, DeserializeDict, TypeDict, PartialEq, Debug)]
+        #[derive(SerializeDict, DeserializeDict, Type, PartialEq, Debug)]
+        #[zvariant(signature = "a{sv}")]
         struct TestSkipUnknown {
             process_id: Option<u32>,
             group_id: Option<u32>,
         }
         let _: TestSkipUnknown = from_slice(&encoded, ctxt).unwrap();
 
-        #[derive(SerializeDict, DeserializeDict, TypeDict, PartialEq, Debug)]
-        #[zvariant(deny_unknown_fields)]
+        #[derive(SerializeDict, DeserializeDict, Type, PartialEq, Debug)]
+        #[zvariant(deny_unknown_fields, signature = "a{sv}")]
         struct TestUnknown {
             process_id: Option<u32>,
             group_id: Option<u32>,
