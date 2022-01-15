@@ -86,6 +86,36 @@ mod value;
 /// assert_eq!(NoReprEnum::signature(), u32::signature());
 /// ```
 ///
+/// # Custom signatures
+///
+/// There are times when you'd find yourself wanting to specify a hardcoded signature yourself for
+/// the type. The `signature` attribute exists for this purpose. A typical use case is when you'd
+/// need to encode your type as a dictionary (signature `a{sv}`) type:
+///
+/// ```
+/// use zvariant::{SerializeDict, DeserializeDict, EncodingContext, from_slice, to_bytes, Type};
+/// use byteorder::LE;
+///
+/// #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug)]
+/// #[zvariant(signature = "a{sv}")]
+/// struct Struct {
+///     field1: u16,
+///     field2: i64,
+///     field3: String,
+/// }
+///
+/// assert_eq!(Struct::signature(), "a{sv}");
+/// let s = Struct {
+///     field1: 42,
+///     field2: i64::max_value(),
+///     field3: "hello".to_string(),
+/// };
+/// let ctxt = EncodingContext::<LE>::new_dbus(0);
+/// let encoded = to_bytes(ctxt, &s).unwrap();
+/// let decoded: Struct = from_slice(&encoded, ctxt).unwrap();
+/// assert_eq!(decoded, s);
+/// ```
+///
 /// [`Type`]: https://docs.rs/zvariant/2.10.0/zvariant/trait.Type.html
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html

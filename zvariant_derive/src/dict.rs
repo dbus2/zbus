@@ -1,8 +1,12 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    punctuated::Punctuated, spanned::Spanned, Data, DeriveInput, Error, Meta::Path,
-    NestedMeta::Meta, Type, TypePath,
+    punctuated::Punctuated,
+    spanned::Spanned,
+    Data, DeriveInput, Error,
+    Meta::{NameValue, Path},
+    NestedMeta::Meta,
+    Type, TypePath,
 };
 
 use crate::utils::*;
@@ -44,6 +48,9 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
             .iter()
             .find_map(|x| match x {
                 ItemAttribute::Rename(n) => Some(n.to_string()),
+                ItemAttribute::Signature(_) => {
+                    unreachable!("`signature` not applicable to fields")
+                }
             })
             .unwrap_or_else(|| f.ident.as_ref().unwrap().to_string());
 
@@ -104,6 +111,18 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
             Meta(Path(p)) if p.is_ident("deny_unknown_fields") => {
                 deny_unknown_fields = true;
             }
+            Meta(NameValue(name_val)) => {
+                match name_val
+                    .path
+                    .get_ident()
+                    .map(ToString::to_string)
+                    .unwrap_or_default()
+                    .as_str()
+                {
+                    "signature" => continue,
+                    _ => return Err(Error::new(meta_item.span(), "unsupported attribute")),
+                }
+            }
             _ => return Err(Error::new(meta_item.span(), "unsupported attribute")),
         }
     }
@@ -122,6 +141,9 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
             .iter()
             .find_map(|x| match x {
                 ItemAttribute::Rename(n) => Some(n.to_string()),
+                ItemAttribute::Signature(_) => {
+                    unreachable!("`signature` not applicable to fields")
+                }
             })
             .unwrap_or_else(|| f.ident.as_ref().unwrap().to_string());
 

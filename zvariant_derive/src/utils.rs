@@ -51,13 +51,16 @@ fn parse_attribute(meta: &NestedMeta) -> (String, String) {
 #[derive(Debug, PartialEq)]
 pub enum ItemAttribute {
     Rename(String),
+    Signature(String),
 }
 
-fn parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
+fn parse_item_attribute(meta: &NestedMeta) -> Result<Option<ItemAttribute>> {
     let (ident, v) = parse_attribute(meta);
 
     match ident.as_ref() {
-        "rename" => Ok(ItemAttribute::Rename(v)),
+        "rename" => Ok(Some(ItemAttribute::Rename(v))),
+        "signature" => Ok(Some(ItemAttribute::Signature(v))),
+        "deny_unknown_fields" => Ok(None),
         s => panic!("Unknown item meta {}", s),
     }
 }
@@ -71,7 +74,7 @@ pub fn parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> 
         Some(meta) => meta
             .nested
             .iter()
-            .map(|m| parse_item_attribute(m).unwrap())
+            .filter_map(|m| parse_item_attribute(m).unwrap())
             .collect(),
         None => Vec::new(),
     };

@@ -4,10 +4,32 @@ use syn::{
     self, spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Fields, Generics, Ident,
 };
 
-use crate::utils::zvariant_path;
+use crate::utils::{parse_item_attributes, zvariant_path, ItemAttribute};
 
 pub fn expand_derive(ast: DeriveInput) -> Result<TokenStream, Error> {
     let zv = zvariant_path();
+    let attrs = parse_item_attributes(&ast.attrs)?;
+    if let Some(signature) = attrs.into_iter().find_map(|x| match x {
+        ItemAttribute::Signature(s) => Some(s),
+        ItemAttribute::Rename(_) => unreachable!("`rename` not applicable to structs"),
+    }) {
+        // Signature already provided, easy then!
+        let name = ast.ident;
+        let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
+        return Ok(quote! {
+            impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
+                #[inline]
+                fn signature() -> #zv::Signature<'static> {
+                    // FIXME: Would be nice if we had a parsed `Signature` in the macro code already so
+                    // it's checked at the build time but currently that's not easily possible w/o
+                    // zvariant_derive requiring zvaraint and we don't want it as it creates a cyclic
+                    // dep. Maybe we can find a way to share the `Signature` type between the two
+                    // crates?
+                    ::std::convert::TryFrom::try_from(#signature).unwrap()
+                }
+            }
+        });
+    }
 
     match ast.data {
         Data::Struct(ds) => match ds.fields {
