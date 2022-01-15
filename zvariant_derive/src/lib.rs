@@ -145,6 +145,10 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// [`Type`]: ../zvariant/trait.Type.html
 #[proc_macro_derive(TypeDict)]
+#[deprecated(
+    since = "3.1.0",
+    note = "Please use `Type` macro with `#[zvariant(signature = \"a{sv}\")]` attribute instead."
+)]
 pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
     dict::expand_type_derive(ast)
