@@ -297,7 +297,7 @@ trait SystemdManager {
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    let connection = Connection::session().await?;
+    let connection = Connection::system().await?;
 
     let proxy = SystemdManagerProxy::new(&connection).await?;
     println!("Host architecture: {}", proxy.architecture().await?);
@@ -354,7 +354,7 @@ Here is an example:
         fn log_level(&self) -> Result<String>;
     }
 
-    let connection = Connection::session().await?;
+    let connection = Connection::system().await?;
 
     let proxy = SystemdManagerProxy::new(&connection).await?;
     let mut stream = proxy.receive_log_level_changed().await;
