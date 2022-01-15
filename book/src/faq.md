@@ -17,7 +17,8 @@ use zbus::{
 };
 
 #[derive(DeserializeDict, SerializeDict, Type)]
-#[zvariant(signature = "a{sv}")]
+// `Type` treats `dict` is an alias for `a{sv}`.
+#[zvariant(signature = "dict")]
 pub struct Dictionary {
     field1: u16,
     #[zvariant(rename = "another-name")]

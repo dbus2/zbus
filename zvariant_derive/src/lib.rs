@@ -90,14 +90,16 @@ mod value;
 ///
 /// There are times when you'd find yourself wanting to specify a hardcoded signature yourself for
 /// the type. The `signature` attribute exists for this purpose. A typical use case is when you'd
-/// need to encode your type as a dictionary (signature `a{sv}`) type:
+/// need to encode your type as a dictionary (signature `a{sv}`) type. For convenience, `dict` is
+/// an alias for `a{sv}`. Here is an example:
 ///
 /// ```
 /// use zvariant::{SerializeDict, DeserializeDict, EncodingContext, from_slice, to_bytes, Type};
 /// use byteorder::LE;
 ///
 /// #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug)]
-/// #[zvariant(signature = "a{sv}")]
+/// // `#[zvariant(signature = "a{sv}")]` would be the same.
+/// #[zvariant(signature = "dict")]
 /// struct Struct {
 ///     field1: u16,
 ///     field2: i64,
@@ -147,7 +149,7 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(TypeDict)]
 #[deprecated(
     since = "3.1.0",
-    note = "Please use `Type` macro with `#[zvariant(signature = \"a{sv}\")]` attribute instead."
+    note = "Please use `Type` macro with `#[zvariant(signature = \"dict\")]` attribute instead."
 )]
 pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();

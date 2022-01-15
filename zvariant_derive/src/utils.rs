@@ -59,7 +59,13 @@ fn parse_item_attribute(meta: &NestedMeta) -> Result<Option<ItemAttribute>> {
 
     match ident.as_ref() {
         "rename" => Ok(Some(ItemAttribute::Rename(v))),
-        "signature" => Ok(Some(ItemAttribute::Signature(v))),
+        "signature" => {
+            let signature = match v.as_str() {
+                "dict" => "a{sv}".to_string(),
+                _ => v,
+            };
+            Ok(Some(ItemAttribute::Signature(signature)))
+        }
         "deny_unknown_fields" => Ok(None),
         s => panic!("Unknown item meta {}", s),
     }
