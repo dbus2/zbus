@@ -1,4 +1,4 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
 use syn::{Attribute, Lit, Meta, Meta::List, MetaList, NestedMeta, Result};
@@ -86,6 +86,34 @@ pub fn parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> 
     };
 
     Ok(v)
+}
+
+pub fn get_signature_attribute(attrs: &[Attribute], span: Span) -> Result<Option<String>> {
+    let attrs = parse_item_attributes(attrs)?;
+    attrs
+        .into_iter()
+        .find_map(|x| match x {
+            ItemAttribute::Signature(s) => Some(Ok(s)),
+            ItemAttribute::Rename(_) => Some(Err(syn::Error::new(
+                span,
+                "`rename` attribute is not applicable to type declarations",
+            ))),
+        })
+        .transpose()
+}
+
+pub fn get_rename_attribute(attrs: &[Attribute], span: Span) -> Result<Option<String>> {
+    let attrs = parse_item_attributes(attrs)?;
+    attrs
+        .into_iter()
+        .find_map(|x| match x {
+            ItemAttribute::Rename(s) => Some(Ok(s)),
+            ItemAttribute::Signature(_) => Some(Err(syn::Error::new(
+                span,
+                "`signature` not applicable to fields",
+            ))),
+        })
+        .transpose()
 }
 
 pub fn get_meta_items(attr: &Attribute) -> Result<Vec<NestedMeta>> {

@@ -42,16 +42,8 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
     let mut entries = quote! {};
 
     for f in &data.fields {
-        let attrs = parse_item_attributes(&f.attrs)?;
         let name = &f.ident;
-        let dict_name = attrs
-            .iter()
-            .find_map(|x| match x {
-                ItemAttribute::Rename(n) => Some(n.to_string()),
-                ItemAttribute::Signature(_) => {
-                    unreachable!("`signature` not applicable to fields")
-                }
-            })
+        let dict_name = get_rename_attribute(&f.attrs, f.span())?
             .unwrap_or_else(|| f.ident.as_ref().unwrap().to_string());
 
         let is_option = match &f.ty {
@@ -135,16 +127,8 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
     let mut entries = Vec::new();
 
     for f in &data.fields {
-        let attrs = parse_item_attributes(&f.attrs).unwrap();
         let name = &f.ident;
-        let dict_name = attrs
-            .iter()
-            .find_map(|x| match x {
-                ItemAttribute::Rename(n) => Some(n.to_string()),
-                ItemAttribute::Signature(_) => {
-                    unreachable!("`signature` not applicable to fields")
-                }
-            })
+        let dict_name = get_rename_attribute(&f.attrs, f.span())?
             .unwrap_or_else(|| f.ident.as_ref().unwrap().to_string());
 
         let is_option = match &f.ty {

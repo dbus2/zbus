@@ -4,15 +4,11 @@ use syn::{
     self, spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Fields, Generics, Ident,
 };
 
-use crate::utils::{parse_item_attributes, zvariant_path, ItemAttribute};
+use crate::utils::{get_signature_attribute, zvariant_path};
 
 pub fn expand_derive(ast: DeriveInput) -> Result<TokenStream, Error> {
     let zv = zvariant_path();
-    let attrs = parse_item_attributes(&ast.attrs)?;
-    if let Some(signature) = attrs.into_iter().find_map(|x| match x {
-        ItemAttribute::Signature(s) => Some(s),
-        ItemAttribute::Rename(_) => unreachable!("`rename` not applicable to structs"),
-    }) {
+    if let Some(signature) = get_signature_attribute(&ast.attrs, ast.span())? {
         // Signature already provided, easy then!
         let name = ast.ident;
         let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
