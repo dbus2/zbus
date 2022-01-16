@@ -1011,7 +1011,72 @@ mod tests {
     use std::os::unix::net::UnixStream;
     use test_log::test;
 
+    use crate::AuthMechanism;
+
     use super::*;
+
+    async fn test_p2p(server: Connection, client: Connection) -> Result<()> {
+        let server_future = async {
+            let mut method: Option<Arc<Message>> = None;
+            let mut stream = MessageStream::from(&server);
+            while let Some(m) = stream.try_next().await? {
+                if m.to_string() == "Method call Test" {
+                    method.replace(m);
+
+                    break;
+                }
+            }
+            let method = method.unwrap();
+
+            // Send another message first to check the queueing function on client side.
+            server
+                .emit_signal(None::<()>, "/", "org.zbus.p2p", "ASignalForYou", &())
+                .await?;
+            server.reply(&method, &("yay")).await
+        };
+
+        let client_future = async {
+            let mut stream = MessageStream::from(&client);
+            let reply = client
+                .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
+                .await?;
+            assert_eq!(reply.to_string(), "Method return");
+            // Check we didn't miss the signal that was sent during the call.
+            let m = stream.try_next().await?.unwrap();
+            assert_eq!(m.to_string(), "Signal ASignalForYou");
+            reply.body::<String>()
+        };
+
+        let (val, _) = futures_util::try_join!(client_future, server_future)?;
+        assert_eq!(val, "yay");
+
+        Ok(())
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn tcp_p2p() {
+        async_io::block_on(test_tcp_p2p()).unwrap();
+    }
+
+    async fn test_tcp_p2p() -> Result<()> {
+        let guid = Guid::generate();
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let client = std::net::TcpStream::connect(addr).unwrap();
+        let server = listener.incoming().next().unwrap().unwrap();
+
+        let server = ConnectionBuilder::tcp_stream(server)
+            .server(&guid)
+            .auth_mechanisms(&[AuthMechanism::Anonymous])
+            .p2p()
+            .build();
+        let client = ConnectionBuilder::tcp_stream(client).p2p().build();
+        let (client, server) = futures_util::try_join!(client, server)?;
+
+        test_p2p(server, client).await
+    }
 
     #[test]
     #[timeout(15000)]
@@ -1029,44 +1094,9 @@ mod tests {
             .p2p()
             .build();
         let client = ConnectionBuilder::unix_stream(p1).p2p().build();
+        let (client, server) = futures_util::try_join!(client, server)?;
 
-        let (client_conn, server_conn) = futures_util::try_join!(client, server)?;
-
-        let server_future = async {
-            let mut method: Option<Arc<Message>> = None;
-            let mut stream = MessageStream::from(&server_conn);
-            while let Some(m) = stream.try_next().await? {
-                if m.to_string() == "Method call Test" {
-                    method.replace(m);
-
-                    break;
-                }
-            }
-            let method = method.unwrap();
-
-            // Send another message first to check the queueing function on client side.
-            server_conn
-                .emit_signal(None::<()>, "/", "org.zbus.p2p", "ASignalForYou", &())
-                .await?;
-            server_conn.reply(&method, &("yay")).await
-        };
-
-        let client_future = async {
-            let mut stream = MessageStream::from(&client_conn);
-            let reply = client_conn
-                .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
-                .await?;
-            assert_eq!(reply.to_string(), "Method return");
-            // Check we didn't miss the signal that was sent during the call.
-            let m = stream.try_next().await?.unwrap();
-            assert_eq!(m.to_string(), "Signal ASignalForYou");
-            reply.body::<String>()
-        };
-
-        let (val, _) = futures_util::try_join!(client_future, server_future)?;
-        assert_eq!(val, "yay");
-
-        Ok(())
+        test_p2p(server, client).await
     }
 
     #[test]
