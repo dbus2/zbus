@@ -21,7 +21,7 @@ pub fn expand_derive(ast: DeriveInput) -> Result<TokenStream, Error> {
                     // zvariant_derive requiring zvaraint and we don't want it as it creates a cyclic
                     // dep. Maybe we can find a way to share the `Signature` type between the two
                     // crates?
-                    ::std::convert::TryFrom::try_from(#signature).unwrap()
+                    #zv::Signature::from_static_str(#signature).unwrap()
                 }
             }
         });
