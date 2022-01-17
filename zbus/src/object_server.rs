@@ -668,7 +668,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use test_log::test;
     use zbus::DBusError;
-    use zvariant::{Type, Value};
+    use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Type, Value};
 
     use crate::{
         dbus_interface, dbus_proxy, CacheProperties, Connection, ConnectionBuilder, InterfaceRef,
@@ -679,6 +679,15 @@ mod tests {
     pub struct ArgStructTest {
         foo: i32,
         bar: String,
+    }
+
+    // Mimic a NetworkManager interface property that's a dict. This tests ability to use a custom
+    // dict type using the `Type` And `*Dict` macros (issue #241).
+    #[derive(DeserializeDict, SerializeDict, Type, Debug, Value, OwnedValue, PartialEq)]
+    #[zvariant(signature = "dict")]
+    pub struct IP4Adress {
+        prefix: u32,
+        address: String,
     }
 
     #[dbus_proxy(gen_blocking = false)]
@@ -711,6 +720,12 @@ mod tests {
 
         #[dbus_proxy(property)]
         fn hash_map(&self) -> zbus::Result<HashMap<String, String>>;
+
+        #[dbus_proxy(property)]
+        fn address_data(&self) -> zbus::Result<IP4Adress>;
+
+        #[dbus_proxy(property)]
+        fn address_data2(&self) -> zbus::Result<IP4Adress>;
     }
 
     #[derive(Debug, Clone)]
@@ -845,6 +860,25 @@ mod tests {
             self.test_hashmap_return().await.unwrap()
         }
 
+        #[dbus_interface(property)]
+        fn address_data(&self) -> IP4Adress {
+            IP4Adress {
+                address: "127.0.0.1".to_string(),
+                prefix: 1234,
+            }
+        }
+
+        // On the bus, this should return the same value as address_data above. We want to test if
+        // this works both ways.
+        #[dbus_interface(property)]
+        fn address_data2(&self) -> HashMap<String, OwnedValue> {
+            let mut map = HashMap::new();
+            map.insert("address".into(), Value::from("127.0.0.1").into());
+            map.insert("prefix".into(), 1234u32.into());
+
+            map
+        }
+
         #[dbus_interface(signal)]
         async fn alert_count(ctxt: &SignalContext<'_>, val: u32) -> zbus::Result<()>;
     }
@@ -852,6 +886,16 @@ mod tests {
     fn check_hash_map(map: HashMap<String, String>) {
         assert_eq!(map["hi"], "hello");
         assert_eq!(map["bye"], "now");
+    }
+
+    fn check_ipv4_address(address: IP4Adress) {
+        assert_eq!(
+            address,
+            IP4Adress {
+                address: "127.0.0.1".to_string(),
+                prefix: 1234,
+            }
+        );
     }
 
     async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
@@ -894,6 +938,9 @@ mod tests {
             .await?;
         check_hash_map(proxy.test_hashmap_return().await?);
         check_hash_map(proxy.hash_map().await?);
+        check_ipv4_address(proxy.address_data().await?);
+        check_ipv4_address(proxy.address_data2().await?);
+
         #[cfg(feature = "xml")]
         {
             let xml = proxy.introspect().await?;
