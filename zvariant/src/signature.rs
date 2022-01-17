@@ -163,6 +163,22 @@ impl<'a> Signature<'a> {
         }
     }
 
+    /// Same as `from_static_str_unchecked`, except it checks validity of the signature.
+    ///
+    /// It's recommended to use this method instead of `TryFrom<&str>` implementation for
+    /// `&'static str`. The former will ensure that [`Signature::to_owned`] and
+    /// [`Signature::into_owned`] do not clone the underlying bytes.
+    pub fn from_static_str(signature: &'static str) -> Result<Self> {
+        let bytes = signature.as_bytes();
+        ensure_correct_signature_str(bytes)?;
+
+        Ok(Self {
+            bytes: Bytes::Static(bytes),
+            pos: 0,
+            end: signature.len(),
+        })
+    }
+
     /// the signature's length.
     pub fn len(&self) -> usize {
         self.end - self.pos
