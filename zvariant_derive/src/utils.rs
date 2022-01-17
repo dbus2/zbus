@@ -7,6 +7,9 @@ pub fn zvariant_path() -> TokenStream {
     if let Ok(FoundCrate::Name(name)) = crate_name("zvariant") {
         let ident = format_ident!("{}", name);
         quote! { ::#ident }
+    } else if let Ok(FoundCrate::Name(name)) = crate_name("zbus") {
+        let ident = format_ident!("{}", name);
+        quote! { ::#ident::zvariant }
     } else {
         quote! { ::zvariant }
     }
