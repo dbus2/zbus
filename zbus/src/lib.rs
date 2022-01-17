@@ -48,9 +48,7 @@ mod message_fields;
 pub use message_fields::*;
 
 mod handshake;
-pub use handshake::AuthMechanism;
 pub(crate) use handshake::*;
-
 mod connection;
 pub use connection::*;
 mod connection_builder;

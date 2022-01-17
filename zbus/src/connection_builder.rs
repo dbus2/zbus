@@ -2,9 +2,8 @@ use async_io::Async;
 use async_lock::RwLock;
 use static_assertions::assert_impl_all;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     convert::TryInto,
-    net::TcpStream,
     os::unix::net::UnixStream,
     sync::Arc,
 };
@@ -14,7 +13,7 @@ use crate::{
     address::{self, Address},
     names::{InterfaceName, WellKnownName},
     raw::Socket,
-    AuthMechanism, Authenticated, Connection, Error, Guid, Interface, Result,
+    Authenticated, Connection, Error, Guid, Interface, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -22,7 +21,6 @@ const DEFAULT_MAX_QUEUED: usize = 64;
 #[derive(Debug)]
 enum Target {
     UnixStream(UnixStream),
-    TcpStream(TcpStream),
     Address(Address),
     Socket(Box<dyn Socket>),
 }
@@ -42,7 +40,6 @@ pub struct ConnectionBuilder<'a> {
     #[derivative(Debug = "ignore")]
     interfaces: Interfaces<'a>,
     names: HashSet<WellKnownName<'a>>,
-    auth_mechanisms: Option<VecDeque<AuthMechanism>>,
 }
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -77,25 +74,12 @@ impl<'a> ConnectionBuilder<'a> {
         Self::new(Target::UnixStream(stream))
     }
 
-    /// Create a builder for connection that will use the given TCP stream.
-    #[must_use]
-    pub fn tcp_stream(stream: TcpStream) -> Self {
-        Self::new(Target::TcpStream(stream))
-    }
-
     /// Create a builder for connection that will use the given socket.
     #[must_use]
     pub fn socket<S: Socket + 'static>(socket: S) -> Self {
         Self::new(Target::Socket(Box::new(socket)))
     }
 
-    /// Specify the mechanisms to use during authentication.
-    #[must_use]
-    pub fn auth_mechanisms(mut self, auth_mechanisms: &[AuthMechanism]) -> Self {
-        self.auth_mechanisms = Some(VecDeque::from(auth_mechanisms.to_vec()));
-
-        self
-    }
     /// The to-be-created connection will be a peer-to-peer connection.
     #[must_use]
     pub fn p2p(mut self) -> Self {
@@ -202,22 +186,16 @@ impl<'a> ConnectionBuilder<'a> {
     /// result in [`Error::Unsupported`] error.
     pub async fn build(self) -> Result<Connection> {
         let stream = match self.target {
-            Target::UnixStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
-            Target::TcpStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            Target::UnixStream(stream) => Box::new(Async::new(stream)?),
             Target::Address(address) => match address.connect().await? {
-                address::Stream::Unix(stream) => {
-                    Box::new(Async::new(stream.into_inner()?)?) as Box<dyn Socket>
-                }
-                address::Stream::Tcp(stream) => {
-                    Box::new(Async::new(stream.into_inner()?)?) as Box<dyn Socket>
-                }
+                address::Stream::Unix(stream) => Box::new(Async::new(stream.into_inner()?)?),
             },
             Target::Socket(stream) => stream,
         };
         let auth = match self.guid {
             None => {
                 // SASL Handshake
-                Authenticated::client(stream, self.auth_mechanisms).await?
+                Authenticated::client(stream).await?
             }
             Some(guid) => {
                 if !self.p2p {
@@ -249,8 +227,7 @@ impl<'a> ConnectionBuilder<'a> {
                     .0
                     .into();
 
-                Authenticated::server(stream, guid.clone(), client_uid, self.auth_mechanisms)
-                    .await?
+                Authenticated::server(stream, guid.clone(), client_uid).await?
             }
         };
 
@@ -289,7 +266,6 @@ impl<'a> ConnectionBuilder<'a> {
             internal_executor: true,
             interfaces: HashMap::new(),
             names: HashSet::new(),
-            auth_mechanisms: None,
         }
     }
 }

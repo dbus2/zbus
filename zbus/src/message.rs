@@ -275,11 +275,11 @@ pub struct MessageSequence {
 /// and hence use the API provided by [`Connection`], even when using the low-level API.
 ///
 /// **Note**: The message owns the received FDs and will close them when dropped. You can call
-/// [`take_fds`] after deserializing to `RawFD` using [`body`] if you want to take the ownership.
+/// [`disown_fds`] after deserializing to `RawFD` using [`body`] if you want to take the ownership.
 /// Moreover, a clone of a message with owned FDs will only receive unowned copies of the FDs.
 ///
 /// [`body`]: #method.body
-/// [`take_fds`]: #method.take_fds
+/// [`disown_fds`]: #method.disown_fds
 /// [`Connection`]: struct.Connection#method.call_method
 #[derive(Clone)]
 pub struct Message {

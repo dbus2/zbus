@@ -123,20 +123,17 @@ its own thread. If you'd like to avoid that and have a fuller integration with `
 do **a bit** more work:
 
 1. Enable `tokio` feature of zbus.
-2. Manually create the `tokio::net` stream for the `zbus::Connection` to use:
+2. Manually create the `tokio::net::UnixStream` for the `zbus::Connection` to use:
 
 ```rust
 use std::error::Error;
-use tokio::net::{UnixStream, TcpStream};
-use zbus::{Address, ConnectionBuilder, Socket, TcpAddress};
+use tokio::net::UnixStream;
+use zbus::{Address, ConnectionBuilder};
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn Error>> {
     let stream = match Address::session()? {
-        Address::Unix(s) => Box::new(UnixStream::connect(s).await?) as Box<dyn Socket>,
-        Address::Tcp(addr) => {
-            Box::new(TcpStream::connect((addr.host(), addr.port())).await?) as Box<dyn Socket>
-        }
+        Address::Unix(s) => UnixStream::connect(s).await?,
         _ => return Err(zbus::Error::Unsupported.into()),
     };
     let conn = ConnectionBuilder::socket(stream)

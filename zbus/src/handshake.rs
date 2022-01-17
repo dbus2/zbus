@@ -1,7 +1,6 @@
 use futures_core::ready;
 
 use std::{
-    collections::VecDeque,
     fmt::Debug,
     future::Future,
     marker::PhantomData,
@@ -15,25 +14,6 @@ use crate::{
     raw::{self, Handshake as SyncHandshake, Socket},
     Result,
 };
-
-/// Authentication mechanisms
-///
-/// See <https://dbus.freedesktop.org/doc/dbus-specification.html#auth-mechanisms>
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum AuthMechanism {
-    /// This is the recommended authentication mechanism on platforms where credentials can be
-    /// transferred out-of-band, in particular Unix platforms that can perform credentials-passing
-    /// over the `unix:` transport.
-    External,
-
-    /// This mechanism is designed to establish that a client has the ability to read a private file
-    /// owned by the user being authenticated.
-    Cookie,
-
-    /// Does not perform any authentication at all, and should not be accepted by message buses.
-    /// However, it might sometimes be useful for non-message-bus uses of D-Bus.
-    Anonymous,
-}
 
 /// The asynchronous authentication implementation based on non-blocking [`raw::Handshake`].
 ///
@@ -61,28 +41,18 @@ where
     S: Socket + Unpin,
 {
     /// Create a client-side `Authenticated` for the given `socket`.
-    pub async fn client(socket: S, mechanisms: Option<VecDeque<AuthMechanism>>) -> Result<Self> {
+    pub async fn client(socket: S) -> Result<Self> {
         Handshake {
-            handshake: Some(raw::ClientHandshake::new(socket, mechanisms)),
+            handshake: Some(raw::ClientHandshake::new(socket)),
             phantom: PhantomData,
         }
         .await
     }
 
     /// Create a server-side `Authenticated` for the given `socket`.
-    pub async fn server(
-        socket: S,
-        guid: Guid,
-        client_uid: u32,
-        auth_mechanisms: Option<VecDeque<AuthMechanism>>,
-    ) -> Result<Self> {
+    pub async fn server(socket: S, guid: Guid, client_uid: u32) -> Result<Self> {
         Handshake {
-            handshake: Some(raw::ServerHandshake::new(
-                socket,
-                guid,
-                client_uid,
-                auth_mechanisms,
-            )?),
+            handshake: Some(raw::ServerHandshake::new(socket, guid, client_uid)),
             phantom: PhantomData,
         }
         .await
@@ -143,13 +113,9 @@ mod tests {
         let (p0, p1) = UnixStream::pair()?;
 
         // initialize both handshakes
-        let client = Authenticated::client(Async::new(p0)?, None);
-        let server = Authenticated::server(
-            Async::new(p1)?,
-            Guid::generate(),
-            Uid::current().into(),
-            None,
-        );
+        let client = Authenticated::client(Async::new(p0)?);
+        let server =
+            Authenticated::server(Async::new(p1)?, Guid::generate(), Uid::current().into());
 
         // proceed to the handshakes
         let (client_auth, server_auth) = futures_util::try_join!(client, server)?;
