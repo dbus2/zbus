@@ -137,6 +137,7 @@ async fn main() -> std::result::Result<(), Box<dyn Error>> {
         Address::Tcp(addr) => {
             Box::new(TcpStream::connect((addr.host(), addr.port())).await?) as Box<dyn Socket>
         }
+        _ => return Err(zbus::Error::Unsupported.into()),
     };
     let conn = ConnectionBuilder::socket(stream)
         .internal_executor(false)
