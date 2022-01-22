@@ -92,7 +92,7 @@ where
     'k: 'a,
     'v: 'a,
     K: Type + Into<Value<'k>> + std::hash::Hash + std::cmp::Eq,
-    V: Type + Into<Value<'k>>,
+    V: Type + Into<Value<'v>>,
 {
     fn from(value: HashMap<K, V>) -> Self {
         Self::Dict(value.into())
