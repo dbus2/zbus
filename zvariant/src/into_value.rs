@@ -45,7 +45,7 @@ into_value!(Dict<'a, 'a>, Dict);
 #[cfg(feature = "gvariant")]
 into_value!(Maybe<'a>, Maybe);
 
-impl<'s> From<String> for Value<'s> {
+impl From<String> for Value<'static> {
     fn from(v: String) -> Self {
         Value::Str(crate::Str::from(v))
     }
