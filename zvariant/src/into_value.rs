@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::BuildHasher};
 
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
@@ -87,14 +87,15 @@ where
     }
 }
 
-impl<'a, 'k, 'v, K, V> From<HashMap<K, V>> for Value<'a>
+impl<'a, 'k, 'v, K, V, H> From<HashMap<K, V, H>> for Value<'a>
 where
     'k: 'a,
     'v: 'a,
     K: Type + Into<Value<'k>> + std::hash::Hash + std::cmp::Eq,
     V: Type + Into<Value<'v>>,
+    H: BuildHasher + Default,
 {
-    fn from(value: HashMap<K, V>) -> Self {
+    fn from(value: HashMap<K, V, H>) -> Self {
         Self::Dict(value.into())
     }
 }
