@@ -139,6 +139,17 @@ where
     }
 }
 
+impl<K, V, H> From<HashMap<K, V, H>> for OwnedValue
+where
+    K: Type + Into<Value<'static>> + std::hash::Hash + std::cmp::Eq,
+    V: Type + Into<Value<'static>>,
+    H: BuildHasher + Default,
+{
+    fn from(value: HashMap<K, V, H>) -> Self {
+        Self(value.into())
+    }
+}
+
 // tuple conversions in `structure` module for avoiding code-duplication.
 
 impl<'a> From<Value<'a>> for OwnedValue {
