@@ -596,7 +596,7 @@ impl<'a> Proxy<'a> {
             .map(|c| c.0.values.read().expect("lock poisoned"))
         {
             // ensure that the property is in the cache.
-            values.get(property_name)?;
+            values.get(property_name).and_then(|e| e.value.as_ref())?;
 
             struct Wrapper<'a> {
                 values: RwLockReadGuard<'a, HashMap<String, PropertyValue>>,
