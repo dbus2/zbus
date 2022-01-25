@@ -1,6 +1,6 @@
 use async_io::block_on;
 use static_assertions::assert_impl_all;
-use std::{convert::TryInto, os::unix::net::UnixStream};
+use std::{convert::TryInto, net::TcpStream, os::unix::net::UnixStream};
 use zvariant::ObjectPath;
 
 use crate::{
@@ -39,6 +39,12 @@ impl<'a> ConnectionBuilder<'a> {
     #[must_use]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self(crate::ConnectionBuilder::unix_stream(stream))
+    }
+
+    /// Create a builder for connection that will use the given TCP stream.
+    #[must_use]
+    pub fn tcp_stream(stream: TcpStream) -> Self {
+        Self(crate::ConnectionBuilder::tcp_stream(stream))
     }
 
     /// The to-be-created connection will be a peer-to-peer connection.
