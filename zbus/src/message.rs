@@ -1,7 +1,7 @@
 use std::{
     convert::{TryFrom, TryInto},
     fmt,
-    io::Cursor,
+    io::{Cursor, Write},
     os::unix::io::{AsRawFd, RawFd},
     sync::{Arc, RwLock},
 };
@@ -182,6 +182,54 @@ impl<'a> MessageBuilder<'a> {
         } else {
             Ok(self)
         }
+    }
+
+    /// Create a new message from raw parts.
+    pub fn build_raw_body(
+        self,
+        body_bytes: &[u8],
+        signature: &[u8],
+        fds: Vec<RawFd>,
+    ) -> Result<Message> {
+        let ctxt = dbus_context!(0);
+        let mut header = self.header;
+        let mut signature = Signature::try_from(signature)?;
+        if !signature.is_empty() {
+            if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
+                // Remove leading and trailing STRUCT delimiters
+                signature = signature.slice(1..signature.len() - 1);
+            }
+            header.fields_mut().add(MessageField::Signature(signature));
+        }
+        let body_len = body_bytes.len();
+        let fds_len = fds.len();
+        let body_len_u32 = body_len.try_into().map_err(|_| Error::ExcessData)?;
+        let fds_len_u32 = fds_len.try_into().map_err(|_| Error::ExcessData)?;
+        header.primary_mut().set_body_len(body_len_u32);
+
+        if fds_len != 0 {
+            header.fields_mut().add(MessageField::UnixFDs(fds_len_u32));
+        }
+
+        let hdr_len = zvariant::serialized_size(ctxt, &header)?;
+
+        let mut bytes: Vec<u8> = Vec::with_capacity(hdr_len + body_len);
+        let mut cursor = Cursor::new(&mut bytes);
+        zvariant::to_writer(&mut cursor, ctxt, &header)?;
+
+        cursor.write(body_bytes)?;
+        let primary_header = header.into_primary();
+        let header: MessageHeader<'_> = zvariant::from_slice(&bytes, ctxt)?;
+        let quick_fields = QuickMessageFields::new(&bytes, &header)?;
+
+        Ok(Message {
+            primary_header,
+            quick_fields,
+            bytes,
+            body_offset: hdr_len,
+            fds: Arc::new(RwLock::new(Fds::Raw(fds))),
+            recv_seq: MessageSequence::default(),
+        })
     }
 
     /// Build the [`Message`] with the given body.
