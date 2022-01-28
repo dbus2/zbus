@@ -123,6 +123,10 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
 }
 
 impl Socket for Box<dyn Socket> {
+    fn can_pass_unix_fd(&self) -> bool {
+        (&**self).can_pass_unix_fd()
+    }
+
     fn poll_recvmsg(
         &mut self,
         cx: &mut Context<'_>,
