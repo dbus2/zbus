@@ -34,7 +34,6 @@ use futures_util::{
 use crate::{
     blocking, fdo,
     raw::{Connection as RawConnection, Socket},
-    utils::block_on,
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Guid, Message,
     MessageStream, MessageType, ObjectServer, Result,
 };
@@ -851,16 +850,19 @@ impl Connection {
         };
 
         if internal_executor {
+            let ticker_future = async move {
+                // Run as long as there is a task to run.
+                while !executor.is_empty() {
+                    executor.tick().await;
+                }
+            };
+            #[cfg(feature = "async-io")]
             std::thread::Builder::new()
                 .name("zbus::Connection executor".into())
-                .spawn(move || {
-                    block_on(async move {
-                        // Run as long as there is a task to run.
-                        while !executor.is_empty() {
-                            executor.tick().await;
-                        }
-                    })
-                })?;
+                .spawn(move || crate::utils::block_on(ticker_future))?;
+
+            #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+            tokio::task::spawn(ticker_future);
         }
 
         if !bus_connection {
