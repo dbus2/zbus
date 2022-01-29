@@ -85,8 +85,8 @@ check:
     # check cookie-sha1 auth against dbus-daemon
     - sed -i s/EXTERNAL/DBUS_COOKIE_SHA1/g /tmp/dbus-session.conf
     - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- basic_connection
-    # Test external executor (currently only 2 tests can handle it so only run those)
-    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --package zbus --no-default-features fdo::tests::signal_stream
+    # Test tokio support.
+    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --tests -p zbus --no-default-features --features tokio -- --skip fdpass_systemd
     - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
 
 test:
