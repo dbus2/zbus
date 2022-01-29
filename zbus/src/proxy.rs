@@ -1035,7 +1035,7 @@ mod tests {
     use zbus_names::UniqueName;
 
     use super::*;
-    use async_io::block_on;
+    use crate::utils::block_on;
     use ntest::timeout;
     use std::future::ready;
     use test_log::test;
