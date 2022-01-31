@@ -25,6 +25,10 @@ jobs:
           toolchain: stable
           components: clippy, rustfmt
           override: true
+    - name: Check formatting
+      run: cargo fmt -- --check
+    - name: Catch common mistakes and unwrap calls
+      run: cargo clippy -- -D warnings
     - name: Build and Test
       run: |
          dbus-run-session --config-file  /tmp/dbus-session-abstract.conf -- cargo test --verbose -- --skip fdpass_systemd
@@ -32,10 +36,6 @@ jobs:
          # Test external executor (currently only 2 tests can handle it so only run those)
          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --package zbus --no-default-features fdo::tests::signal_stream
          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
-    - name: Check formatting
-      run: cargo fmt -- --check
-    - name: Catch common mistakes and unwrap calls
-      run: cargo clippy -- -D warnings
     - name: Check portability
       run: |
          rustup target add x86_64-apple-darwin x86_64-unknown-freebsd x86_64-unknown-netbsd
