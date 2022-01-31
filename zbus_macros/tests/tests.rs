@@ -104,8 +104,10 @@ fn test_derive_error() {
 fn test_interface() {
     use serde::{Deserialize, Serialize};
     use std::convert::TryFrom;
-    use zbus::zvariant::{Type, Value};
-    use zbus::Interface;
+    use zbus::{
+        zvariant::{Type, Value},
+        Interface,
+    };
 
     struct Test<T> {
         something: String,
