@@ -651,6 +651,10 @@ impl Connection {
     /// });
     /// ```
     ///
+    /// **Note**: zbus 2.1 added support for tight integration with tokio. This means, if you use
+    /// zbus with tokio, you do not need to worry about this at all. All you need to do is enable
+    /// `tokio` feature and disable the (default) `async-io` feature in your `Cargo.toml`.
+    ///
     /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
     pub fn executor(&self) -> &Executor<'static> {
         &self.inner.executor
