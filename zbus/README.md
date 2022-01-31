@@ -132,6 +132,6 @@ that is something you would like to avoid, you need to:
 
 [zbus]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/README.md
 [bw]: https://docs.rs/zbus/2.0.0/zbus/blocking/index.html
-[iektc]: https://docs.rs/zbus/2.0.0/zbus/struct.Connection.html#method.executor
+[iektc]: https://docs.rs/zbus/2.0.0/zbus/struct.Connection.html#examples-1
 [`ConnectionBuilder`]: https://docs.rs/zbus/2.0.0/zbus/struct.ConnectionBuilder.html
 [LICENSE-MIT]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/LICENSE-MIT
