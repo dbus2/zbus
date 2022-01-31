@@ -23,6 +23,9 @@ mod doctests {
     doc_comment::doctest!("../../book/src/faq.md");
 }
 
+#[cfg(all(not(feature = "async-io"), not(feature = "tokio")))]
+compile_error!("Either \"async-io\" (default) or \"tokio\" must be enabled.");
+
 mod dbus_error;
 pub use dbus_error::*;
 
@@ -112,7 +115,7 @@ mod tests {
         sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
 
-    use async_io::block_on;
+    use crate::utils::block_on;
     use enumflags2::BitFlags;
     use ntest::timeout;
     use test_log::test;
@@ -180,7 +183,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn basic_connection_async() {
-        async_io::block_on(test_basic_connection()).unwrap();
+        block_on(test_basic_connection()).unwrap();
     }
 
     async fn test_basic_connection() -> Result<()> {
@@ -334,7 +337,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn freedesktop_api_async() {
-        async_io::block_on(test_freedesktop_api()).unwrap();
+        block_on(test_freedesktop_api()).unwrap();
     }
 
     async fn test_freedesktop_api() -> Result<()> {

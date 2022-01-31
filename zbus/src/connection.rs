@@ -1,7 +1,6 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
 use async_executor::Executor;
-use async_io::block_on;
 use async_lock::Mutex;
 use async_task::Task;
 use event_listener::EventListener;
@@ -652,6 +651,10 @@ impl Connection {
     /// });
     /// ```
     ///
+    /// **Note**: zbus 2.1 added support for tight integration with tokio. This means, if you use
+    /// zbus with tokio, you do not need to worry about this at all. All you need to do is enable
+    /// `tokio` feature and disable the (default) `async-io` feature in your `Cargo.toml`.
+    ///
     /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
     pub fn executor(&self) -> &Executor<'static> {
         &self.inner.executor
@@ -851,16 +854,19 @@ impl Connection {
         };
 
         if internal_executor {
+            let ticker_future = async move {
+                // Run as long as there is a task to run.
+                while !executor.is_empty() {
+                    executor.tick().await;
+                }
+            };
+            #[cfg(feature = "async-io")]
             std::thread::Builder::new()
                 .name("zbus::Connection executor".into())
-                .spawn(move || {
-                    block_on(async move {
-                        // Run as long as there is a task to run.
-                        while !executor.is_empty() {
-                            executor.tick().await;
-                        }
-                    })
-                })?;
+                .spawn(move || crate::utils::block_on(ticker_future))?;
+
+            #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+            tokio::task::spawn(ticker_future);
         }
 
         if !bus_connection {
@@ -1008,9 +1014,13 @@ impl From<&Connection> for WeakConnection {
 mod tests {
     use futures_util::stream::TryStreamExt;
     use ntest::timeout;
+    #[cfg(feature = "async-io")]
     use std::os::unix::net::UnixStream;
     use test_log::test;
+    #[cfg(not(feature = "async-io"))]
+    use tokio::net::UnixStream;
 
+    #[cfg(feature = "async-io")]
     use crate::AuthMechanism;
 
     use super::*;
@@ -1053,12 +1063,15 @@ mod tests {
         Ok(())
     }
 
+    // FIXME: Make it work with tokio as well.
+    #[cfg(feature = "async-io")]
     #[test]
     #[timeout(15000)]
     fn tcp_p2p() {
-        async_io::block_on(test_tcp_p2p()).unwrap();
+        crate::utils::block_on(test_tcp_p2p()).unwrap();
     }
 
+    #[cfg(feature = "async-io")]
     async fn test_tcp_p2p() -> Result<()> {
         let guid = Guid::generate();
 
@@ -1081,7 +1094,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
-        async_io::block_on(test_unix_p2p()).unwrap();
+        crate::utils::block_on(test_unix_p2p()).unwrap();
     }
 
     async fn test_unix_p2p() -> Result<()> {
@@ -1102,7 +1115,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn serial_monotonically_increases() {
-        async_io::block_on(test_serial_monotonically_increases());
+        crate::utils::block_on(test_serial_monotonically_increases());
     }
 
     async fn test_serial_monotonically_increases() {

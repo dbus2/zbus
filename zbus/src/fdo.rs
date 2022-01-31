@@ -853,6 +853,7 @@ mod tests {
 
         // single-threaded scheduler.
         runtime::Builder::new_current_thread()
+            .enable_io()
             .build()
             .unwrap()
             .block_on(test_signal());

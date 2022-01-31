@@ -53,115 +53,16 @@ impl DictionaryGiverInterface {
 
 Many of the tokio (and tokio-based) APIs assume the tokio runtime to be driving the async machinery
 and since by default, zbus runs the `ObjectServer` in its own internal runtime thread, it's not
-possible to use these APIs from interface methods.
+possible to use these APIs from interface methods. Moreover, by default zbus relies on `async-io`
+crate to communicate with the bus, which uses its own thread.
 
-Not to worry, though! There is a very easy way around this unfortunate issue:
+Not to worry, though! You can enable tight integration between tokio and zbus by enabling `tokio`
+feature and disabling `async-io` feature:
 
-* Disable the internal runtime thread.
-* Launch a tokio task to tick the internal runtime.
-
-Here is an example:
-
-```rust,no_run
-use tokio::{
-    io::AsyncReadExt,
-    sync::mpsc::{channel, Sender},
-};
-use zbus::{
-    dbus_interface,
-    fdo::{self, Result},
-};
-
-struct OurInterface(Sender<()>);
-
-#[dbus_interface(interface = "org.fdo.OurInterface")]
-impl OurInterface {
-    async fn quit(&self) -> fdo::Result<()> {
-        self.0
-            .send(())
-            .await
-            .map_err(|_| fdo::Error::Failed("shouldn't happen".to_string()))
-    }
-
-    async fn read_file(&self, path: &str) -> fdo::Result<String> {
-        let mut file = tokio::fs::File::open(path)
-            .await
-            .map_err(|_| fdo::Error::FileNotFound(format!("Failed to open {}", path)))?;
-        let mut contents = String::new();
-        file.read_to_string(&mut contents)
-            .await
-            .map_err(|_| fdo::Error::Failed(format!("Failed to read {}", path)))?;
-
-        Ok(contents)
-    }
-}
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    let (sender, mut receiver) = channel::<()>(1);
-    let conn = zbus::ConnectionBuilder::session()?
-        .serve_at("/our", OurInterface(sender))?
-        .name("org.fdo.OurInterface")?
-        .internal_executor(false)
-        .build()
-        .await?;
-
-    tokio::spawn(async move {
-        loop {
-            conn.executor().tick().await;
-        }
-    });
-
-    receiver.recv().await.unwrap();
-
-    Ok(())
-}
-```
-
-Please note that by default zbus relies on `async-io` crate to communicate with the bus, which uses
-its own thread. If you'd like to avoid that and have a fuller integration with `tokio`, you need to
-do **a bit** more work:
-
-1. Enable `tokio` feature of zbus.
-2. Manually create the `tokio::net` stream for the `zbus::Connection` to use:
-
-```rust
-use std::error::Error;
-use tokio::net::{UnixStream, TcpStream};
-use zbus::{Address, ConnectionBuilder, Socket, TcpAddress};
-
-#[tokio::main]
-async fn main() -> std::result::Result<(), Box<dyn Error>> {
-    let stream = match Address::session()? {
-        Address::Unix(s) => Box::new(UnixStream::connect(s).await?) as Box<dyn Socket>,
-        Address::Tcp(addr) => {
-            Box::new(TcpStream::connect((addr.host(), addr.port())).await?) as Box<dyn Socket>
-        }
-        _ => return Err(zbus::Error::Unsupported.into()),
-    };
-    let conn = ConnectionBuilder::socket(stream)
-        .internal_executor(false)
-        .build()
-        .await?;
-    let executor_conn = conn.clone();
-    tokio::task::spawn(async move {
-        loop {
-            executor_conn.executor().tick().await;
-        }
-    });
-    let proxy = zbus::fdo::DBusProxy::new(&conn).await?;
-    let features = proxy.features().await?;
-    print!("Bus Features: ");
-    for (i, feature) in features.iter().enumerate() {
-        if i != 0 {
-            print!(", ");
-        }
-        print!("{}", feature);
-    }
-    println!(".");
-
-    Ok(())
-}
+```toml
+# Sample Cargo.toml snippet.
+[dependencies]
+zbus = { version = "2", default-features = false, features = ["tokio"] }
 ```
 
 [`Type`]: https://docs.rs/zvariant/3.1.0/zvariant/derive.Type.html
