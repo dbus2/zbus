@@ -122,6 +122,7 @@ where
     }
 }
 
+#[cfg(feature = "async-io")]
 #[cfg(test)]
 mod tests {
     use async_io::Async;
@@ -135,7 +136,7 @@ mod tests {
 
     #[test]
     fn async_handshake() {
-        async_io::block_on(handshake()).unwrap();
+        crate::utils::block_on(handshake()).unwrap();
     }
 
     async fn handshake() -> Result<()> {

@@ -1,13 +1,16 @@
+#[cfg(feature = "async-io")]
 use async_io::Async;
 use async_lock::RwLock;
 use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     convert::TryInto,
-    net::TcpStream,
-    os::unix::net::UnixStream,
     sync::Arc,
 };
+#[cfg(feature = "async-io")]
+use std::{net::TcpStream, os::unix::net::UnixStream};
+#[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+use tokio::net::{TcpStream, UnixStream};
 use zvariant::ObjectPath;
 
 use crate::{
@@ -72,12 +75,20 @@ impl<'a> ConnectionBuilder<'a> {
     }
 
     /// Create a builder for connection that will use the given unix stream.
+    ///
+    /// If the default `async-io` feature is disabled, this method will expect
+    /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
+    /// argument.
     #[must_use]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self::new(Target::UnixStream(stream))
     }
 
     /// Create a builder for connection that will use the given TCP stream.
+    ///
+    /// If the default `async-io` feature is disabled, this method will expect
+    /// [`tokio::net::TcpStream`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html)
+    /// argument.
     #[must_use]
     pub fn tcp_stream(stream: TcpStream) -> Self {
         Self::new(Target::TcpStream(stream))
@@ -202,15 +213,17 @@ impl<'a> ConnectionBuilder<'a> {
     /// result in [`Error::Unsupported`] error.
     pub async fn build(self) -> Result<Connection> {
         let stream = match self.target {
+            #[cfg(feature = "async-io")]
             Target::UnixStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+            Target::UnixStream(stream) => Box::new(stream) as Box<dyn Socket>,
+            #[cfg(feature = "async-io")]
             Target::TcpStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+            Target::TcpStream(stream) => Box::new(stream) as Box<dyn Socket>,
             Target::Address(address) => match address.connect().await? {
-                address::Stream::Unix(stream) => {
-                    Box::new(Async::new(stream.into_inner()?)?) as Box<dyn Socket>
-                }
-                address::Stream::Tcp(stream) => {
-                    Box::new(Async::new(stream.into_inner()?)?) as Box<dyn Socket>
-                }
+                address::Stream::Unix(stream) => Box::new(stream) as Box<dyn Socket>,
+                address::Stream::Tcp(stream) => Box::new(stream) as Box<dyn Socket>,
             },
             Target::Socket(stream) => stream,
         };

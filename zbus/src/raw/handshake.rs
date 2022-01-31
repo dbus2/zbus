@@ -732,10 +732,12 @@ impl FromStr for Command {
 
 #[cfg(test)]
 mod tests {
-    use async_io::Async;
     use futures_util::future::poll_fn;
+    #[cfg(feature = "async-io")]
     use std::os::unix::net::UnixStream;
     use test_log::test;
+    #[cfg(not(feature = "async-io"))]
+    use tokio::net::UnixStream;
 
     use super::*;
 
@@ -743,25 +745,28 @@ mod tests {
 
     #[test]
     fn handshake() {
-        // a pair of non-blocking connection UnixStream
-        let (p0, p1) = UnixStream::pair().unwrap();
-        p0.set_nonblocking(true).unwrap();
-        p1.set_nonblocking(true).unwrap();
+        // Tokio needs us to call the sync function from async context. :shrug:
+        let (p0, p1) = crate::utils::block_on(async { UnixStream::pair().unwrap() });
 
         // initialize both handshakes
-        let mut client = ClientHandshake::new(Async::new(p0).unwrap(), None);
-        let mut server = ServerHandshake::new(
-            Async::new(p1).unwrap(),
-            Guid::generate(),
-            Uid::current().into(),
-            None,
-        )
-        .unwrap();
+        #[cfg(feature = "async-io")]
+        let (p0, p1) = {
+            p0.set_nonblocking(true).unwrap();
+            p1.set_nonblocking(true).unwrap();
+
+            (
+                async_io::Async::new(p0).unwrap(),
+                async_io::Async::new(p1).unwrap(),
+            )
+        };
+        let mut client = ClientHandshake::new(p0, None);
+        let mut server =
+            ServerHandshake::new(p1, Guid::generate(), Uid::current().into(), None).unwrap();
 
         // proceed to the handshakes
         let mut client_done = false;
         let mut server_done = false;
-        async_io::block_on(poll_fn(|cx| {
+        crate::utils::block_on(poll_fn(|cx| {
             match client.advance_handshake(cx) {
                 Poll::Ready(Ok(())) => client_done = true,
                 Poll::Ready(Err(e)) => panic!("Unexpected error: {:?}", e),

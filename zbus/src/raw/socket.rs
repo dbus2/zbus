@@ -1,13 +1,16 @@
+#[cfg(feature = "async-io")]
 use async_io::Async;
 use futures_core::ready;
 use std::{
-    io::{self, Read, Write},
-    net::TcpStream,
-    os::unix::{
-        io::{FromRawFd, RawFd},
-        net::UnixStream,
-    },
+    io,
+    os::unix::io::{FromRawFd, RawFd},
     task::{Context, Poll},
+};
+#[cfg(feature = "async-io")]
+use std::{
+    io::{Read, Write},
+    net::TcpStream,
+    os::unix::net::UnixStream,
 };
 
 use nix::{
@@ -143,6 +146,7 @@ impl Socket for Box<dyn Socket> {
     }
 }
 
+#[cfg(feature = "async-io")]
 impl Socket for Async<UnixStream> {
     fn poll_recvmsg(
         &mut self,
@@ -243,6 +247,7 @@ impl Socket for tokio::net::UnixStream {
     }
 }
 
+#[cfg(feature = "async-io")]
 impl Socket for Async<TcpStream> {
     fn can_pass_unix_fd(&self) -> bool {
         false

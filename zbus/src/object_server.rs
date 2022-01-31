@@ -658,10 +658,14 @@ impl From<crate::blocking::ObjectServer> for ObjectServer {
 #[cfg(test)]
 #[allow(clippy::blacklisted_name)]
 mod tests {
-    use std::{collections::HashMap, convert::TryInto, os::unix::net::UnixStream};
+    #[cfg(feature = "async-io")]
+    use std::os::unix::net::UnixStream;
+    use std::{collections::HashMap, convert::TryInto};
+    #[cfg(not(feature = "async-io"))]
+    use tokio::net::UnixStream;
 
+    use crate::utils::block_on;
     use async_channel::{bounded, Sender};
-    use async_io::block_on;
     use event_listener::Event;
     use futures_util::StreamExt;
     use ntest::timeout;

@@ -25,3 +25,23 @@ impl<T, E> ResultAdapter for Result<T, E> {
     type Ok = T;
     type Err = E;
 }
+
+#[cfg(feature = "async-io")]
+pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    async_io::block_on(future)
+}
+
+#[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+lazy_static::lazy_static! {
+    static ref TOKIO_RT: tokio::runtime::Runtime = {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_io()
+            .build()
+            .expect("launch of single-threaded tokio runtime")
+    };
+}
+
+#[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    TOKIO_RT.block_on(future)
+}
