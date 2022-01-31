@@ -102,11 +102,23 @@ fn test_derive_error() {
 
 #[test]
 fn test_interface() {
+    use serde::{Deserialize, Serialize};
+    use std::convert::TryFrom;
+    use zbus::zvariant::{Type, Value};
     use zbus::Interface;
 
     struct Test<T> {
         something: String,
         generic: T,
+    }
+
+    #[derive(Serialize, Deserialize, Type, Value)]
+    struct MyCustomPropertyType(u32);
+
+    impl From<&zbus::zvariant::Value<'_>> for MyCustomPropertyType {
+        fn from(value: &zbus::zvariant::Value<'_>) -> Self {
+            Self::try_from(value).unwrap()
+        }
     }
 
     #[dbus_interface(name = "org.freedesktop.zbus.Test")]
@@ -132,6 +144,14 @@ fn test_interface() {
         fn pair_output(&self) -> zbus::fdo::Result<((u32, String),)> {
             unimplemented!()
         }
+
+        #[dbus_interface(property)]
+        fn my_custom_property(&self) -> MyCustomPropertyType {
+            unimplemented!()
+        }
+
+        #[dbus_interface(property)]
+        fn set_my_custom_property(&self, _value: MyCustomPropertyType) {}
 
         #[dbus_interface(name = "CheckVEC")]
         fn check_vec(&self) -> Vec<u8> {
@@ -183,6 +203,7 @@ fn test_interface() {
     <arg name="arg" type="y"/>
     <arg name="other" type="s"/>
   </signal>
+  <property name="MyCustomProperty" type="u" access="readwrite"/>
   <!--
    Testing my_prop documentation is reflected in XML.
 
