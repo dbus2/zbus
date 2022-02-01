@@ -17,9 +17,6 @@ mod doctests {
     doc_comment::doctest!("../../book/src/introduction.md");
     doc_comment::doctest!("../../book/src/server.md");
     doc_comment::doctest!("../../book/src/blocking.md");
-
-    // FAQ contains a code sample that requires our tokio support.
-    #[cfg(feature = "tokio")]
     doc_comment::doctest!("../../book/src/faq.md");
 }
 
