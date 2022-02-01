@@ -33,8 +33,8 @@ jobs:
       run: |
          dbus-run-session --config-file  /tmp/dbus-session-abstract.conf -- cargo test --verbose -- --skip fdpass_systemd
          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
-         # Test external executor (currently only 2 tests can handle it so only run those)
-         dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --package zbus --no-default-features fdo::tests::signal_stream
+         # Test tokio support.
+         dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --tests -p zbus --no-default-features --features tokio -- --skip fdpass_systemd
          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
     - name: Check portability
       run: |
