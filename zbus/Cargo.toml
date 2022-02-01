@@ -49,6 +49,18 @@ tokio = { version = "1.10.0", optional = true, features = ["rt", "net"] }
 # FIXME: Only enable when tokio is enabled.
 lazy_static = "1.4.0"
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+  "handleapi",
+  "iphlpapi",
+  "processthreadsapi",
+  "sddl",
+  "securitybaseapi",
+  "tcpmib",
+  "winbase",
+  "winerror",
+] }
+
 [dev-dependencies]
 doc-comment = "0.3.3"
 futures-util = "0.3.8" # activate default features
