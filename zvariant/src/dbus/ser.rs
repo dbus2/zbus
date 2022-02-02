@@ -4,14 +4,19 @@ use static_assertions::assert_impl_all;
 use std::{
     io::{Seek, Write},
     marker::PhantomData,
-    os::unix::io::RawFd,
     str,
 };
 
+#[cfg(unix)]
+use std::os::unix::io::RawFd;
+
 use crate::{
-    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error, Fd,
+    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error,
     ObjectPath, Result, Signature,
 };
+
+#[cfg(unix)]
+use crate::Fd;
 
 /// Our D-Bus serialization implementation.
 pub struct Serializer<'ser, 'sig, B, W>(pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>);
@@ -24,10 +29,12 @@ where
     W: Write + Seek,
 {
     /// Create a D-Bus Serializer struct instance.
+    ///
+    /// On Windows, there is no `fds` argument.
     pub fn new<'w: 'ser, 'f: 'ser>(
         signature: &Signature<'sig>,
         writer: &'w mut W,
-        fds: &'f mut Vec<RawFd>,
+        #[cfg(unix)] fds: &'f mut Vec<RawFd>,
         ctxt: EncodingContext<B>,
     ) -> Self {
         assert_eq!(ctxt.format(), EncodingFormat::DBus);
@@ -37,6 +44,7 @@ where
             ctxt,
             sig_parser,
             writer,
+            #[cfg(unix)]
             fds,
             bytes_written: 0,
             value_sign: None,
@@ -81,6 +89,7 @@ where
 
     fn serialize_i32(self, v: i32) -> Result<()> {
         match self.0.sig_parser.next_char() {
+            #[cfg(unix)]
             Fd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
                 self.0.add_padding(u32::alignment(EncodingFormat::DBus))?;
@@ -413,11 +422,13 @@ where
 
                 let sig_parser = SignatureParser::new(signature.clone());
                 let bytes_written = self.ser.0.bytes_written;
+                #[cfg(unix)]
                 let mut fds = vec![];
                 let mut ser = Serializer(crate::SerializerCommon::<B, W> {
                     ctxt: self.ser.0.ctxt,
                     sig_parser,
                     writer: self.ser.0.writer,
+                    #[cfg(unix)]
                     fds: &mut fds,
                     bytes_written,
                     value_sign: None,
@@ -425,6 +436,7 @@ where
                 });
                 value.serialize(&mut ser)?;
                 self.ser.0.bytes_written = ser.0.bytes_written;
+                #[cfg(unix)]
                 self.ser.0.fds.extend(fds.iter());
 
                 Ok(())

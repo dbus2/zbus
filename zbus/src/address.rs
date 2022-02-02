@@ -1,15 +1,20 @@
 use crate::{Error, Result};
 #[cfg(feature = "async-io")]
 use async_io::Async;
+#[cfg(unix)]
 use nix::unistd::Uid;
-use std::{collections::HashMap, convert::TryFrom, env, ffi::OsString, str::FromStr};
 #[cfg(feature = "async-io")]
-use std::{
-    net::{SocketAddr, TcpStream, ToSocketAddrs},
-    os::unix::net::UnixStream,
-};
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+#[cfg(all(unix, feature = "async-io"))]
+use std::os::unix::net::UnixStream;
+use std::{collections::HashMap, convert::TryFrom, env, str::FromStr};
 #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
-use tokio::net::{TcpStream, UnixStream};
+use tokio::net::TcpStream;
+#[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
+use tokio::net::UnixStream;
+
+#[cfg(unix)]
+use std::ffi::OsString;
 
 /// A `tcp:` address family.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -54,6 +59,7 @@ impl TcpAddress {
 #[non_exhaustive]
 pub enum Address {
     /// A path on the filesystem
+    #[cfg(unix)]
     Unix(OsString),
     /// TCP address details
     Tcp(TcpAddress),
@@ -62,6 +68,7 @@ pub enum Address {
 #[cfg(feature = "async-io")]
 #[derive(Debug)]
 pub(crate) enum Stream {
+    #[cfg(unix)]
     Unix(Async<UnixStream>),
     Tcp(Async<TcpStream>),
 }
@@ -76,6 +83,7 @@ pub(crate) enum Stream {
 impl Address {
     pub(crate) async fn connect(&self) -> Result<Stream> {
         match self.clone() {
+            #[cfg(unix)]
             Address::Unix(p) => {
                 #[cfg(feature = "async-io")]
                 {
@@ -151,11 +159,18 @@ impl Address {
         match env::var("DBUS_SESSION_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
             _ => {
-                let runtime_dir = env::var("XDG_RUNTIME_DIR")
-                    .unwrap_or_else(|_| format!("/run/user/{}", Uid::current()));
-                let path = format!("unix:path={}/bus", runtime_dir);
+                #[cfg(unix)]
+                {
+                    let runtime_dir = env::var("XDG_RUNTIME_DIR")
+                        .unwrap_or_else(|_| format!("/run/user/{}", Uid::current()));
+                    let path = format!("unix:path={}/bus", runtime_dir);
 
-                Self::from_str(&path)
+                    Self::from_str(&path)
+                }
+                #[cfg(not(unix))]
+                {
+                    Err(Error::Unsupported)
+                }
             }
         }
     }
@@ -171,6 +186,7 @@ impl Address {
     }
 
     // Helper for FromStr
+    #[cfg(unix)]
     fn from_unix(opts: HashMap<&str, &str>) -> Result<Self> {
         let path = if let Some(abs) = opts.get("abstract") {
             if opts.get("path").is_some() {
@@ -262,6 +278,7 @@ impl FromStr for Address {
         }
 
         match transport {
+            #[cfg(unix)]
             "unix" => Self::from_unix(options),
             "tcp" => Self::from_tcp(options),
             _ => Err(Error::Address(format!(
@@ -317,20 +334,24 @@ mod tests {
             Error::Address(e) => assert_eq!(e, "invalid tcp address `family`: ipv7"),
             _ => panic!(),
         }
+        #[cfg(unix)]
         match Address::from_str("unix:foo=blah").unwrap_err() {
             Error::Address(e) => assert_eq!(e, "unix address is missing path or abstract"),
             _ => panic!(),
         }
+        #[cfg(unix)]
         match Address::from_str("unix:path=/tmp,abstract=foo").unwrap_err() {
             Error::Address(e) => {
                 assert_eq!(e, "`path` and `abstract` cannot be specified together")
             }
             _ => panic!(),
         }
+        #[cfg(unix)]
         assert_eq!(
             Address::Unix("/tmp/dbus-foo".into()),
             Address::from_str("unix:path=/tmp/dbus-foo").unwrap()
         );
+        #[cfg(unix)]
         assert_eq!(
             Address::Unix("/tmp/dbus-foo".into()),
             Address::from_str("unix:path=/tmp/dbus-foo,guid=123").unwrap()

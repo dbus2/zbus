@@ -1,6 +1,9 @@
 use std::ops::{Bound, RangeBounds};
 
-use crate::{Basic, Fd, ObjectPath, Result, Signature};
+use crate::{Basic, ObjectPath, Result, Signature};
+
+#[cfg(unix)]
+use crate::Fd;
 
 #[cfg(feature = "gvariant")]
 use crate::utils::MAYBE_SIGNATURE_CHAR;
@@ -146,8 +149,9 @@ impl<'s> SignatureParser<'s> {
             | <&str>::SIGNATURE_CHAR
             | ObjectPath::SIGNATURE_CHAR
             | Signature::SIGNATURE_CHAR
-            | Fd::SIGNATURE_CHAR
             | VARIANT_SIGNATURE_CHAR => Ok(self.signature_slice(0, 1)),
+            #[cfg(unix)]
+            Fd::SIGNATURE_CHAR => Ok(self.signature_slice(0, 1)),
             ARRAY_SIGNATURE_CHAR => self.next_array_signature(),
             STRUCT_SIG_START_CHAR => self.next_structure_signature(),
             DICT_ENTRY_SIG_START_CHAR => self.next_dict_entry_signature(),

@@ -1,3 +1,5 @@
+#[cfg(unix)]
+use nix::unistd::Uid;
 use std::{
     collections::VecDeque,
     fmt,
@@ -8,8 +10,8 @@ use std::{
     task::{Context, Poll},
 };
 
-use nix::unistd::Uid;
-
+#[cfg(windows)]
+use crate::win32;
 use crate::{
     guid::Guid,
     raw::{Connection, Socket},
@@ -89,6 +91,7 @@ pub struct Authenticated<S> {
     /// The server Guid
     pub(crate) server_guid: Guid,
     /// Whether file descriptor passing has been accepted by both sides
+    #[cfg(unix)]
     pub(crate) cap_unix_fd: bool,
 }
 
@@ -136,7 +139,12 @@ impl<S: Socket> ClientHandshake<S> {
 
     fn flush_buffer(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         while !self.send_buffer.is_empty() {
-            let written = ready!(self.socket.poll_sendmsg(cx, &self.send_buffer, &[]))?;
+            let written = ready!(self.socket.poll_sendmsg(
+                cx,
+                &self.send_buffer,
+                #[cfg(unix)]
+                &[]
+            ))?;
             self.send_buffer.drain(..written);
         }
         Ok(()).into()
@@ -146,12 +154,23 @@ impl<S: Socket> ClientHandshake<S> {
         self.recv_buffer.clear(); // maybe until \r\n instead?
         while !self.recv_buffer.ends_with(b"\r\n") {
             let mut buf = [0; 40];
-            let (read, fds) = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
-            if !fds.is_empty() {
-                return Poll::Ready(Err(Error::Handshake(
-                    "Unexpected FDs during handshake".into(),
-                )));
-            }
+            let res = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
+            let read = {
+                #[cfg(unix)]
+                {
+                    let (read, fds) = res;
+                    if !fds.is_empty() {
+                        return Poll::Ready(Err(Error::Handshake(
+                            "Unexpected FDs during handshake".into(),
+                        )));
+                    }
+                    read
+                }
+                #[cfg(not(unix))]
+                {
+                    res
+                }
+            };
             self.recv_buffer.extend(&buf[..read]);
         }
 
@@ -172,11 +191,11 @@ impl<S: Socket> ClientHandshake<S> {
             AuthMechanism::Anonymous => Ok((WaitingForOK, Command::Auth(Some(*mech), None))),
             AuthMechanism::External => Ok((
                 WaitingForOK,
-                Command::Auth(Some(*mech), Some(sasl_auth_id())),
+                Command::Auth(Some(*mech), Some(sasl_auth_id()?)),
             )),
             AuthMechanism::Cookie => Ok((
                 WaitingForData,
-                Command::Auth(Some(*mech), Some(sasl_auth_id())),
+                Command::Auth(Some(*mech), Some(sasl_auth_id()?)),
             )),
         }
     }
@@ -222,12 +241,20 @@ fn random_ascii(len: usize) -> String {
         .collect()
 }
 
-fn sasl_auth_id() -> String {
-    Uid::current()
-        .to_string()
-        .chars()
-        .map(|c| format!("{:x}", c as u32))
-        .collect::<String>()
+fn sasl_auth_id() -> Result<String> {
+    let id = {
+        #[cfg(unix)]
+        {
+            Uid::current().to_string()
+        }
+
+        #[cfg(windows)]
+        {
+            win32::ProcessToken::open(None)?.sid()?
+        }
+    };
+
+    Ok(hex::encode(id))
 }
 
 #[derive(Debug)]
@@ -247,14 +274,21 @@ impl Cookie {
     }
 
     fn read_keyring(name: &str) -> Result<Vec<Cookie>> {
-        use std::os::unix::fs::PermissionsExt;
-
         let mut path = Cookie::keyring_path()?;
-        let perms = std::fs::metadata(&path)?.permissions().mode();
-        if perms & 0o066 != 0 {
-            return Err(Error::Handshake(
-                "DBus keyring has invalid permissions".into(),
-            ));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let perms = std::fs::metadata(&path)?.permissions().mode();
+            if perms & 0o066 != 0 {
+                return Err(Error::Handshake(
+                    "DBus keyring has invalid permissions".into(),
+                ));
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            // FIXME: add code to check directory permissions
         }
         path.push(name);
         let file = File::open(&path)?;
@@ -389,6 +423,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
             Ok(Authenticated {
                 conn: Connection::wrap(self.socket),
                 server_guid: self.server_guid.unwrap(),
+                #[cfg(unix)]
                 cap_unix_fd: self.cap_unix_fd,
             })
         } else {
@@ -409,6 +444,7 @@ enum ServerHandshakeStep {
     SendingAuthOK,
     SendingAuthError,
     WaitingForBegin,
+    #[cfg(unix)]
     SendingBeginMessage,
     Done,
 }
@@ -433,8 +469,12 @@ pub struct ServerHandshake<S> {
     buffer: Vec<u8>,
     step: ServerHandshakeStep,
     server_guid: Guid,
+    #[cfg(unix)]
     cap_unix_fd: bool,
+    #[cfg(unix)]
     client_uid: u32,
+    #[cfg(windows)]
+    client_sid: Option<String>,
     mechanisms: VecDeque<AuthMechanism>,
 }
 
@@ -442,16 +482,33 @@ impl<S: Socket> ServerHandshake<S> {
     pub fn new(
         socket: S,
         guid: Guid,
-        client_uid: u32,
+        #[cfg(unix)] client_uid: u32,
+        #[cfg(windows)] client_sid: Option<String>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
     ) -> Result<ServerHandshake<S>> {
+        let can_external = (|| {
+            #[cfg(unix)]
+            return true;
+
+            #[cfg(windows)]
+            return client_sid.is_some();
+
+            #[cfg(not(any(unix, windows)))]
+            return false;
+        })();
         let mechanisms = mechanisms.unwrap_or_else(|| {
             let mut mechanisms = VecDeque::new();
-            mechanisms.push_back(AuthMechanism::External);
+            if can_external {
+                mechanisms.push_back(AuthMechanism::External);
+            }
             mechanisms
         });
 
         if mechanisms.contains(&AuthMechanism::Cookie) {
+            return Err(Error::Unsupported);
+        }
+
+        if mechanisms.contains(&AuthMechanism::External) && !can_external {
             return Err(Error::Unsupported);
         }
 
@@ -460,15 +517,24 @@ impl<S: Socket> ServerHandshake<S> {
             buffer: Vec::new(),
             step: ServerHandshakeStep::WaitingForNull,
             server_guid: guid,
+            #[cfg(unix)]
             cap_unix_fd: false,
+            #[cfg(unix)]
             client_uid,
+            #[cfg(windows)]
+            client_sid,
             mechanisms,
         })
     }
 
     fn flush_buffer(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         while !self.buffer.is_empty() {
-            let written = ready!(self.socket.poll_sendmsg(cx, &self.buffer, &[]))?;
+            let written = ready!(self.socket.poll_sendmsg(
+                cx,
+                &self.buffer,
+                #[cfg(unix)]
+                &[]
+            ))?;
             self.buffer.drain(..written);
         }
         Poll::Ready(Ok(()))
@@ -477,7 +543,9 @@ impl<S: Socket> ServerHandshake<S> {
     fn read_command(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         while !self.buffer.ends_with(b"\r\n") {
             let mut buf = [0; 40];
-            let (read, _) = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
+            let read = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
+            #[cfg(unix)]
+            let read = read.0;
             self.buffer.extend(&buf[..read]);
         }
         Poll::Ready(Ok(()))
@@ -511,7 +579,9 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
             match self.step {
                 ServerHandshakeStep::WaitingForNull => {
                     let mut buffer = [0; 1];
-                    let (read, _) = ready!(self.socket.poll_recvmsg(cx, &mut buffer))?;
+                    let read = ready!(self.socket.poll_recvmsg(cx, &mut buffer))?;
+                    #[cfg(unix)]
+                    let read = read.0;
                     // recvmsg cannot return anything else than Ok(1) or Err
                     debug_assert!(read == 1);
                     if buffer[0] != 0 {
@@ -537,11 +607,28 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                                 (Some(AuthMechanism::Anonymous), None, None) => {
                                     self.auth_ok();
                                 }
-                                (Some(AuthMechanism::External), Some(uid), None) => {
-                                    let uid = id_from_str(uid).map_err(|e| {
-                                        Error::Handshake(format!("Invalid UID: {}", e))
-                                    })?;
-                                    if uid == self.client_uid {
+                                (Some(AuthMechanism::External), Some(sasl_id), None) => {
+                                    let auth_ok = {
+                                        #[cfg(unix)]
+                                        {
+                                            let uid = id_from_str(sasl_id).map_err(|e| {
+                                                Error::Handshake(format!("Invalid UID: {}", e))
+                                            })?;
+                                            // Safe to unwrap since we checked earlier external & UID
+                                            uid == self.client_uid
+                                        }
+                                        #[cfg(windows)]
+                                        {
+                                            let sid = hex::decode(sasl_id)?;
+                                            let sid = std::str::from_utf8(&sid).map_err(|e| {
+                                                Error::Handshake(format!("Invalid SID: {}", e))
+                                            })?;
+                                            // Safe to unwrap since we checked earlier external & SID
+                                            sid == self.client_sid.as_ref().unwrap()
+                                        }
+                                    };
+
+                                    if auth_ok {
                                         self.auth_ok();
                                     } else {
                                         self.rejected_error();
@@ -577,6 +664,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                             self.step = ServerHandshakeStep::Done;
                         }
                         (Some("CANCEL"), None) | (Some("ERROR"), _) => self.rejected_error(),
+                        #[cfg(unix)]
                         (Some("NEGOTIATE_UNIX_FD"), None) => {
                             self.cap_unix_fd = true;
                             self.buffer = Vec::from(&b"AGREE_UNIX_FD\r\n"[..]);
@@ -585,6 +673,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                         _ => self.unsupported_command_error(),
                     }
                 }
+                #[cfg(unix)]
                 ServerHandshakeStep::SendingBeginMessage => {
                     ready!(self.flush_buffer(cx))?;
                     self.step = ServerHandshakeStep::WaitingForBegin;
@@ -599,6 +688,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
             Ok(Authenticated {
                 conn: Connection::wrap(self.socket),
                 server_guid: self.server_guid,
+                #[cfg(unix)]
                 cap_unix_fd: self.cap_unix_fd,
             })
         } else {
@@ -607,6 +697,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
     }
 }
 
+#[cfg(unix)]
 fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
     let mut id = String::new();
     for s in s.as_bytes().chunks(2) {
@@ -730,6 +821,7 @@ impl FromStr for Command {
     }
 }
 
+#[cfg(unix)]
 #[cfg(test)]
 mod tests {
     use futures_util::future::poll_fn;

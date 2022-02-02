@@ -3,12 +3,18 @@ use core::convert::TryFrom;
 use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, Visitor};
 use static_assertions::assert_impl_all;
 
-use std::{marker::PhantomData, os::unix::io::RawFd, str};
+use std::{marker::PhantomData, str};
+
+#[cfg(unix)]
+use std::os::unix::io::RawFd;
 
 use crate::{
     de::ValueParseStage, signature_parser::SignatureParser, utils::*, Basic, EncodingContext,
-    EncodingFormat, Error, Fd, ObjectPath, Result, Signature,
+    EncodingFormat, Error, ObjectPath, Result, Signature,
 };
+
+#[cfg(unix)]
+use crate::Fd;
 
 /// Our D-Bus deserialization implementation.
 #[derive(Debug)]
@@ -21,9 +27,11 @@ where
     B: byteorder::ByteOrder,
 {
     /// Create a Deserializer struct instance.
+    ///
+    /// On Windows, there is no `fds` argument.
     pub fn new<'r: 'de>(
         bytes: &'r [u8],
-        fds: Option<&'f [RawFd]>,
+        #[cfg(unix)] fds: Option<&'f [RawFd]>,
         signature: &Signature<'sig>,
         ctxt: EncodingContext<B>,
     ) -> Self {
@@ -34,7 +42,10 @@ where
             ctxt,
             sig_parser,
             bytes,
+            #[cfg(unix)]
             fds,
+            #[cfg(not(unix))]
+            fds: PhantomData,
             pos: 0,
             b: PhantomData,
         })
@@ -147,6 +158,7 @@ where
         V: Visitor<'de>,
     {
         let v = match self.0.sig_parser.next_char() {
+            #[cfg(unix)]
             Fd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
                 let alignment = u32::alignment(EncodingFormat::DBus);
@@ -314,8 +326,16 @@ where
         // Not using serialize_u32 cause identifier isn't part of the signature
         let alignment = u32::alignment(EncodingFormat::DBus);
         self.0.parse_padding(alignment)?;
-        let variant_index =
-            crate::from_slice_fds::<B, _>(&self.0.bytes[self.0.pos..], self.0.fds, self.0.ctxt)?;
+        let variant_index = {
+            #[cfg(unix)]
+            {
+                crate::from_slice_fds::<B, _>(&self.0.bytes[self.0.pos..], self.0.fds, self.0.ctxt)?
+            }
+            #[cfg(not(unix))]
+            {
+                crate::from_slice::<B, _>(&self.0.bytes[self.0.pos..], self.0.ctxt)?
+            }
+        };
         self.0.pos += alignment;
 
         visitor.visit_u32(variant_index)
