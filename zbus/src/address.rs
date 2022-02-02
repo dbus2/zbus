@@ -76,6 +76,7 @@ pub(crate) enum Stream {
 #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
 #[derive(Debug)]
 pub(crate) enum Stream {
+    #[cfg(unix)]
     Unix(UnixStream),
     Tcp(TcpStream),
 }
