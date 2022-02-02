@@ -11,6 +11,9 @@ use std::{
     net::TcpStream,
 };
 
+#[cfg(windows)]
+use uds_windows::UnixStream;
+
 #[cfg(unix)]
 use nix::{
     cmsg_space,
@@ -276,6 +279,41 @@ impl Socket for tokio::net::UnixStream {
     fn as_raw_fd(&self) -> RawFd {
         // This causes a name collision if imported
         std::os::unix::io::AsRawFd::as_raw_fd(self)
+    }
+}
+
+#[cfg(windows)]
+impl Socket for Async<UnixStream> {
+    fn can_pass_unix_fd(&self) -> bool {
+        false
+    }
+
+    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
+        loop {
+            match (&mut *self).get_mut().read(buf) {
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                Err(e) => return Poll::Ready(Err(e)),
+                Ok(len) => {
+                    let ret = len;
+                    return Poll::Ready(Ok(ret));
+                }
+            }
+            ready!(self.poll_readable(cx))?;
+        }
+    }
+
+    fn poll_sendmsg(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+        loop {
+            match (&mut *self).get_mut().write(buf) {
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                res => return Poll::Ready(res),
+            }
+            ready!(self.poll_writable(cx))?;
+        }
+    }
+
+    fn close(&self) -> io::Result<()> {
+        self.get_ref().shutdown(std::net::Shutdown::Both)
     }
 }
 
