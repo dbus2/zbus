@@ -239,16 +239,17 @@ impl From<crate::Connection> for Connection {
     }
 }
 
-#[cfg(unix)]
 #[cfg(test)]
 mod tests {
     use ntest::timeout;
-    #[cfg(feature = "async-io")]
+    #[cfg(all(unix, feature = "async-io"))]
     use std::os::unix::net::UnixStream;
     use std::thread;
     use test_log::test;
     #[cfg(not(feature = "async-io"))]
     use tokio::net::UnixStream;
+    #[cfg(windows)]
+    use uds_windows::UnixStream;
 
     use crate::{
         blocking::{ConnectionBuilder, MessageIterator},
