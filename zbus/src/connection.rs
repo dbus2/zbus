@@ -44,6 +44,7 @@ const DEFAULT_MAX_QUEUED: usize = 64;
 #[derive(Debug)]
 pub(crate) struct ConnectionInner {
     server_guid: Guid,
+    #[cfg(unix)]
     cap_unix_fd: bool,
     bus_conn: bool,
     unique_name: OnceCell<OwnedUniqueName>,
@@ -822,6 +823,7 @@ impl Connection {
         internal_executor: bool,
     ) -> Result<Self> {
         let auth = auth.into_inner();
+        #[cfg(unix)]
         let cap_unix_fd = auth.cap_unix_fd;
 
         let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
@@ -840,6 +842,7 @@ impl Connection {
             inner: Arc::new(ConnectionInner {
                 raw_conn,
                 server_guid: auth.server_guid,
+                #[cfg(unix)]
                 cap_unix_fd,
                 bus_conn: bus_connection,
                 serial: AtomicU32::new(1),
@@ -934,6 +937,7 @@ impl<'a> Sink<Message> for &'a Connection {
     }
 
     fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
+        #[cfg(unix)]
         if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);
         }
@@ -1014,13 +1018,9 @@ impl From<&Connection> for WeakConnection {
 mod tests {
     use futures_util::stream::TryStreamExt;
     use ntest::timeout;
-    #[cfg(feature = "async-io")]
-    use std::os::unix::net::UnixStream;
     use test_log::test;
-    #[cfg(not(feature = "async-io"))]
-    use tokio::net::UnixStream;
 
-    #[cfg(feature = "async-io")]
+    #[cfg(all(unix, feature = "async-io"))]
     use crate::AuthMechanism;
 
     use super::*;
@@ -1080,24 +1080,35 @@ mod tests {
         let client = std::net::TcpStream::connect(addr).unwrap();
         let server = listener.incoming().next().unwrap().unwrap();
 
-        let server = ConnectionBuilder::tcp_stream(server)
-            .server(&guid)
-            .auth_mechanisms(&[AuthMechanism::Anonymous])
-            .p2p()
-            .build();
+        let server = {
+            let c = ConnectionBuilder::tcp_stream(server).server(&guid).p2p();
+
+            // EXTERNAL is only implemented on win32 with TCP sockets
+            #[cfg(unix)]
+            let c = c.auth_mechanisms(&[AuthMechanism::Anonymous]);
+
+            c.build()
+        };
         let client = ConnectionBuilder::tcp_stream(client).p2p().build();
         let (client, server) = futures_util::try_join!(client, server)?;
 
         test_p2p(server, client).await
     }
 
+    #[cfg(unix)]
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
         crate::utils::block_on(test_unix_p2p()).unwrap();
     }
 
+    #[cfg(unix)]
     async fn test_unix_p2p() -> Result<()> {
+        #[cfg(feature = "async-io")]
+        use std::os::unix::net::UnixStream;
+        #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+        use tokio::net::UnixStream;
+
         let guid = Guid::generate();
 
         let (p0, p1) = UnixStream::pair().unwrap();

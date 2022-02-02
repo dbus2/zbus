@@ -4,21 +4,29 @@ use serde::{
 };
 use static_assertions::assert_impl_all;
 
-use std::{marker::PhantomData, os::unix::io::RawFd, str};
+use std::{marker::PhantomData, str};
+
+#[cfg(unix)]
+use std::os::unix::io::RawFd;
 
 #[cfg(feature = "gvariant")]
 use crate::gvariant::Deserializer as GVDeserializer;
 use crate::{
     dbus::Deserializer as DBusDeserializer, signature_parser::SignatureParser, utils::*, Basic,
-    DynamicDeserialize, DynamicType, EncodingContext, EncodingFormat, Error, Fd, ObjectPath,
-    Result, Signature, Type,
+    DynamicDeserialize, DynamicType, EncodingContext, EncodingFormat, Error, ObjectPath, Result,
+    Signature, Type,
 };
+
+#[cfg(unix)]
+use crate::Fd;
 
 /// Deserialize `T` from a given slice of bytes, containing file descriptor indices.
 ///
 /// Please note that actual file descriptors are not part of the encoding and need to be transferred
 /// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
 /// file descriptors and hence the reason, caller must pass a slice of file descriptors.
+///
+/// This function is not available on Windows.
 ///
 /// # Examples
 ///
@@ -33,6 +41,7 @@ use crate::{
 /// ```
 ///
 /// [`from_slice`]: fn.from_slice.html
+#[cfg(unix)]
 pub fn from_slice_fds<'d, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
     fds: Option<&[RawFd]>,
@@ -134,7 +143,13 @@ where
     B: byteorder::ByteOrder,
     T: Deserialize<'d>,
 {
-    from_slice_fds_for_signature(bytes, None, ctxt, signature)
+    _from_slice_fds_for_signature(
+        bytes,
+        #[cfg(unix)]
+        None,
+        ctxt,
+        signature,
+    )
 }
 
 /// Deserialize `T` from a given slice of bytes containing file descriptor indices, with the given signature.
@@ -143,9 +158,12 @@ where
 /// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
 /// file descriptors and hence the reason, caller must pass a slice of file descriptors.
 ///
+/// This function is not available on Windows.
+///
 /// [`from_slice`]: fn.from_slice.html
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html
 // TODO: Return number of bytes parsed?
+#[cfg(unix)]
 pub fn from_slice_fds_for_signature<'d, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
     fds: Option<&[RawFd]>,
@@ -156,14 +174,35 @@ where
     B: byteorder::ByteOrder,
     T: Deserialize<'d>,
 {
+    _from_slice_fds_for_signature(bytes, fds, ctxt, signature)
+}
+
+fn _from_slice_fds_for_signature<'d, 'r: 'd, B, T: ?Sized>(
+    bytes: &'r [u8],
+    #[cfg(unix)] fds: Option<&[RawFd]>,
+    ctxt: EncodingContext<B>,
+    signature: &Signature<'_>,
+) -> Result<T>
+where
+    B: byteorder::ByteOrder,
+    T: Deserialize<'d>,
+{
     let mut de = match ctxt.format() {
         #[cfg(feature = "gvariant")]
-        EncodingFormat::GVariant => {
-            Deserializer::GVariant(GVDeserializer::new(bytes, fds, signature, ctxt))
-        }
-        EncodingFormat::DBus => {
-            Deserializer::DBus(DBusDeserializer::new(bytes, fds, signature, ctxt))
-        }
+        EncodingFormat::GVariant => Deserializer::GVariant(GVDeserializer::new(
+            bytes,
+            #[cfg(unix)]
+            fds,
+            signature,
+            ctxt,
+        )),
+        EncodingFormat::DBus => Deserializer::DBus(DBusDeserializer::new(
+            bytes,
+            #[cfg(unix)]
+            fds,
+            signature,
+            ctxt,
+        )),
     };
 
     T::deserialize(&mut de)
@@ -184,7 +223,9 @@ where
     B: byteorder::ByteOrder,
     T: DynamicDeserialize<'d>,
 {
-    from_slice_fds_for_dynamic_signature(bytes, None, ctxt, signature)
+    let seed = T::deserializer_for_signature(signature)?;
+
+    from_slice_with_seed(bytes, ctxt, seed)
 }
 
 /// Deserialize `T` from a given slice of bytes containing file descriptor indices, with the given
@@ -193,6 +234,9 @@ where
 /// Please note that actual file descriptors are not part of the encoding and need to be transferred
 /// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
 /// file descriptors and hence the reason, caller must pass a slice of file descriptors.
+///
+/// This function is not available on Windows.
+#[cfg(unix)]
 pub fn from_slice_fds_for_dynamic_signature<'d, B, T>(
     bytes: &'d [u8],
     fds: Option<&[RawFd]>,
@@ -223,7 +267,13 @@ where
     B: byteorder::ByteOrder,
     S: DeserializeSeed<'d> + DynamicType,
 {
-    from_slice_fds_with_seed(bytes, None, ctxt, seed)
+    _from_slice_fds_with_seed(
+        bytes,
+        #[cfg(unix)]
+        None,
+        ctxt,
+        seed,
+    )
 }
 
 /// Deserialize `T` from a given slice of bytes containing file descriptor indices, using the given
@@ -232,9 +282,25 @@ where
 /// Please note that actual file descriptors are not part of the encoding and need to be transferred
 /// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
 /// file descriptors and hence the reason, caller must pass a slice of file descriptors.
+///
+/// This function is not available on Windows.
+#[cfg(unix)]
 pub fn from_slice_fds_with_seed<'d, B, S>(
     bytes: &'d [u8],
     fds: Option<&[RawFd]>,
+    ctxt: EncodingContext<B>,
+    seed: S,
+) -> Result<S::Value>
+where
+    B: byteorder::ByteOrder,
+    S: DeserializeSeed<'d> + DynamicType,
+{
+    _from_slice_fds_with_seed(bytes, fds, ctxt, seed)
+}
+
+fn _from_slice_fds_with_seed<'d, B, S>(
+    bytes: &'d [u8],
+    #[cfg(unix)] fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
     seed: S,
 ) -> Result<S::Value>
@@ -246,12 +312,20 @@ where
 
     let mut de = match ctxt.format() {
         #[cfg(feature = "gvariant")]
-        EncodingFormat::GVariant => {
-            Deserializer::GVariant(GVDeserializer::new(bytes, fds, &signature, ctxt))
-        }
-        EncodingFormat::DBus => {
-            Deserializer::DBus(DBusDeserializer::new(bytes, fds, &signature, ctxt))
-        }
+        EncodingFormat::GVariant => Deserializer::GVariant(GVDeserializer::new(
+            bytes,
+            #[cfg(unix)]
+            fds,
+            &signature,
+            ctxt,
+        )),
+        EncodingFormat::DBus => Deserializer::DBus(DBusDeserializer::new(
+            bytes,
+            #[cfg(unix)]
+            fds,
+            &signature,
+            ctxt,
+        )),
     };
 
     seed.deserialize(&mut de)
@@ -262,7 +336,12 @@ where
 pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B> {
     pub(crate) ctxt: EncodingContext<B>,
     pub(crate) bytes: &'de [u8],
+
+    #[cfg(unix)]
     pub(crate) fds: Option<&'f [RawFd]>,
+    #[cfg(not(unix))]
+    pub(crate) fds: PhantomData<&'f ()>,
+
     pub(crate) pos: usize,
 
     pub(crate) sig_parser: SignatureParser<'sig>,
@@ -288,18 +367,30 @@ where
     B: byteorder::ByteOrder,
 {
     /// Create a Deserializer struct instance.
+    ///
+    /// On Windows, there is no `fds` argument.
     pub fn new<'r: 'de>(
         bytes: &'r [u8],
-        fds: Option<&'f [RawFd]>,
+        #[cfg(unix)] fds: Option<&'f [RawFd]>,
         signature: &Signature<'sig>,
         ctxt: EncodingContext<B>,
     ) -> Self {
         match ctxt.format() {
             #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => {
-                Self::GVariant(GVDeserializer::new(bytes, fds, signature, ctxt))
-            }
-            EncodingFormat::DBus => Self::DBus(DBusDeserializer::new(bytes, fds, signature, ctxt)),
+            EncodingFormat::GVariant => Self::GVariant(GVDeserializer::new(
+                bytes,
+                #[cfg(unix)]
+                fds,
+                signature,
+                ctxt,
+            )),
+            EncodingFormat::DBus => Self::DBus(DBusDeserializer::new(
+                bytes,
+                #[cfg(unix)]
+                fds,
+                signature,
+                ctxt,
+            )),
         }
     }
 }
@@ -308,6 +399,7 @@ impl<'de, 'sig, 'f, B> DeserializerCommon<'de, 'sig, 'f, B>
 where
     B: byteorder::ByteOrder,
 {
+    #[cfg(unix)]
     pub fn get_fd(&self, idx: u32) -> Result<i32> {
         self.fds
             .and_then(|fds| fds.get(idx as usize))
@@ -460,7 +552,9 @@ where
         bool::SIGNATURE_CHAR => de.deserialize_bool(visitor),
         i16::SIGNATURE_CHAR => de.deserialize_i16(visitor),
         u16::SIGNATURE_CHAR => de.deserialize_u16(visitor),
-        i32::SIGNATURE_CHAR | Fd::SIGNATURE_CHAR => de.deserialize_i32(visitor),
+        i32::SIGNATURE_CHAR => de.deserialize_i32(visitor),
+        #[cfg(unix)]
+        Fd::SIGNATURE_CHAR => de.deserialize_i32(visitor),
         u32::SIGNATURE_CHAR => de.deserialize_u32(visitor),
         i64::SIGNATURE_CHAR => de.deserialize_i64(visitor),
         u64::SIGNATURE_CHAR => de.deserialize_u64(visitor),

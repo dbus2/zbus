@@ -4,9 +4,11 @@ use static_assertions::assert_impl_all;
 use std::{
     io::{Seek, Write},
     marker::PhantomData,
-    os::unix::io::RawFd,
     str,
 };
+
+#[cfg(unix)]
+use std::os::unix::io::RawFd;
 
 #[cfg(feature = "gvariant")]
 use crate::gvariant::{self, Serializer as GVSerializer};
@@ -69,6 +71,9 @@ where
 /// Calculate the serialized size of `T` that (potentially) contains FDs.
 ///
 /// Returns the serialized size of `T` and the number of FDs.
+///
+/// This function is not available on Windows.
+#[cfg(unix)]
 pub fn serialized_size_fds<B, T: ?Sized>(
     ctxt: EncodingContext<B>,
     value: &T,
@@ -124,6 +129,9 @@ where
 ///
 /// This function returns the number of bytes written to the given `writer` and the file descriptor
 /// vector, which needs to be transferred via an out-of-band platform specific mechanism.
+///
+/// This function is not available on Windows.
+#[cfg(unix)]
 pub fn to_writer_fds<B, W, T: ?Sized>(
     writer: &mut W,
     ctxt: EncodingContext<B>,
@@ -155,18 +163,18 @@ where
     B: byteorder::ByteOrder,
     T: Serialize + DynamicType,
 {
-    let (bytes, fds) = to_bytes_fds(ctxt, value)?;
-    if !fds.is_empty() {
-        panic!("can't serialize with FDs")
-    }
-
-    Ok(bytes)
+    let mut cursor = std::io::Cursor::new(vec![]);
+    to_writer(&mut cursor, ctxt, value)?;
+    Ok(cursor.into_inner())
 }
 
 /// Serialize `T` that (potentially) contains FDs, as a byte vector.
 ///
 /// The returned file descriptor needs to be transferred via an out-of-band platform specific
 /// mechanism.
+///
+/// This function is not available on Windows.
+#[cfg(unix)]
 pub fn to_bytes_fds<B, T: ?Sized>(
     ctxt: EncodingContext<B>,
     value: &T,
@@ -200,12 +208,31 @@ where
     W: Write + Seek,
     T: Serialize,
 {
-    let (len, fds) = to_writer_fds_for_signature(writer, ctxt, signature, value)?;
-    if !fds.is_empty() {
-        panic!("can't serialize with FDs")
+    #[cfg(unix)]
+    {
+        let (len, fds) = to_writer_fds_for_signature(writer, ctxt, signature, value)?;
+        if !fds.is_empty() {
+            panic!("can't serialize with FDs")
+        }
+        Ok(len)
     }
 
-    Ok(len)
+    #[cfg(not(unix))]
+    {
+        match ctxt.format() {
+            EncodingFormat::DBus => {
+                let mut ser = DBusSerializer::<B, W>::new(signature, writer, ctxt);
+                value.serialize(&mut ser)?;
+                Ok(ser.0.bytes_written)
+            }
+            #[cfg(feature = "gvariant")]
+            EncodingFormat::GVariant => {
+                let mut ser = GVSerializer::<B, W>::new(signature, writer, ctxt);
+                value.serialize(&mut ser)?;
+                Ok(ser.0.bytes_written)
+            }
+        }
+    }
 }
 
 /// Serialize `T` that (potentially) contains FDs and has the given signature, to the given `writer`.
@@ -216,8 +243,11 @@ where
 /// This function returns the number of bytes written to the given `writer` and the file descriptor
 /// vector, which needs to be transferred via an out-of-band platform specific mechanism.
 ///
+/// This function is not available on Windows.
+///
 /// [`to_writer_fds`]: fn.to_writer_fds.html
 /// [`Type`]: trait.Type.html
+#[cfg(unix)]
 pub fn to_writer_fds_for_signature<B, W, T: ?Sized>(
     writer: &mut W,
     ctxt: EncodingContext<B>,
@@ -268,12 +298,21 @@ where
     B: byteorder::ByteOrder,
     T: Serialize,
 {
-    let (bytes, fds) = to_bytes_fds_for_signature(ctxt, signature, value)?;
-    if !fds.is_empty() {
-        panic!("can't serialize with FDs")
+    #[cfg(unix)]
+    {
+        let (bytes, fds) = to_bytes_fds_for_signature(ctxt, signature, value)?;
+        if !fds.is_empty() {
+            panic!("can't serialize with FDs")
+        }
+        Ok(bytes)
     }
 
-    Ok(bytes)
+    #[cfg(not(unix))]
+    {
+        let mut cursor = std::io::Cursor::new(vec![]);
+        to_writer_for_signature(&mut cursor, ctxt, signature, value)?;
+        Ok(cursor.into_inner())
+    }
 }
 
 /// Serialize `T` that (potentially) contains FDs and has the given signature, to a new byte vector.
@@ -285,8 +324,11 @@ where
 /// returned file descriptor vector, which needs to be transferred via an out-of-band platform
 /// specific mechanism.
 ///
+/// This function is not available on Windows.
+///
 /// [`to_bytes_fds`]: fn.to_bytes_fds.html
 /// [`Type`]: trait.Type.html
+#[cfg(unix)]
 pub fn to_bytes_fds_for_signature<B, T: ?Sized>(
     ctxt: EncodingContext<B>,
     signature: &Signature<'_>,
@@ -306,6 +348,7 @@ pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
     pub(crate) ctxt: EncodingContext<B>,
     pub(crate) writer: &'ser mut W,
     pub(crate) bytes_written: usize,
+    #[cfg(unix)]
     pub(crate) fds: &'ser mut Vec<RawFd>,
 
     pub(crate) sig_parser: SignatureParser<'sig>,
@@ -337,15 +380,25 @@ where
     pub fn new<'w: 'ser, 'f: 'ser>(
         signature: &Signature<'sig>,
         writer: &'w mut W,
-        fds: &'f mut Vec<RawFd>,
+        #[cfg(unix)] fds: &'f mut Vec<RawFd>,
         ctxt: EncodingContext<B>,
     ) -> Self {
         match ctxt.format() {
             #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => {
-                Self::GVariant(GVSerializer::new(signature, writer, fds, ctxt))
-            }
-            EncodingFormat::DBus => Self::DBus(DBusSerializer::new(signature, writer, fds, ctxt)),
+            EncodingFormat::GVariant => Self::GVariant(GVSerializer::new(
+                signature,
+                writer,
+                #[cfg(unix)]
+                fds,
+                ctxt,
+            )),
+            EncodingFormat::DBus => Self::DBus(DBusSerializer::new(
+                signature,
+                writer,
+                #[cfg(unix)]
+                fds,
+                ctxt,
+            )),
         }
     }
 
@@ -365,6 +418,7 @@ where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
+    #[cfg(unix)]
     pub(crate) fn add_fd(&mut self, fd: RawFd) -> u32 {
         if let Some(idx) = self.fds.iter().position(|&x| x == fd) {
             return idx as u32;

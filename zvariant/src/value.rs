@@ -13,9 +13,12 @@ use static_assertions::assert_impl_all;
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
 use crate::{
-    signature_parser::SignatureParser, utils::*, Array, Basic, Dict, DynamicType, Fd, ObjectPath,
+    signature_parser::SignatureParser, utils::*, Array, Basic, Dict, DynamicType, ObjectPath,
     OwnedValue, Signature, Str, Structure, StructureBuilder, Type,
 };
+
+#[cfg(unix)]
+use crate::Fd;
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
@@ -91,6 +94,7 @@ pub enum Value<'a> {
     #[cfg(feature = "gvariant")]
     Maybe(Maybe<'a>),
 
+    #[cfg(unix)]
     Fd(Fd),
 }
 
@@ -120,6 +124,7 @@ macro_rules! serialize_value {
             #[cfg(feature = "gvariant")]
             Value::Maybe(value) => $serializer.$method($($first_arg,)* value),
 
+            #[cfg(unix)]
             Value::Fd(value) => $serializer.$method($($first_arg,)* value),
         }
     }
@@ -180,6 +185,7 @@ impl<'a> Value<'a> {
             Value::Structure(v) => Value::Structure(v.to_owned()),
             #[cfg(feature = "gvariant")]
             Value::Maybe(v) => Value::Maybe(v.to_owned()),
+            #[cfg(unix)]
             Value::Fd(v) => Value::Fd(*v),
         }
     }
@@ -208,6 +214,7 @@ impl<'a> Value<'a> {
             #[cfg(feature = "gvariant")]
             Value::Maybe(value) => value.full_signature().clone(),
 
+            #[cfg(unix)]
             Value::Fd(_) => Fd::signature(),
         }
     }
@@ -600,6 +607,7 @@ where
                 &"i32 or fd signature character",
             )
         })? {
+            #[cfg(unix)]
             b'h' => Fd::from(value).into(),
             _ => value.into(),
         };

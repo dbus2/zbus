@@ -70,17 +70,23 @@ where
     }
 
     /// Create a server-side `Authenticated` for the given `socket`.
+    ///
+    /// The function takes `client_uid` on Unix only.
     pub async fn server(
         socket: S,
         guid: Guid,
-        client_uid: u32,
+        #[cfg(unix)] client_uid: u32,
+        #[cfg(windows)] client_sid: Option<String>,
         auth_mechanisms: Option<VecDeque<AuthMechanism>>,
     ) -> Result<Self> {
         Handshake {
             handshake: Some(raw::ServerHandshake::new(
                 socket,
                 guid,
+                #[cfg(unix)]
                 client_uid,
+                #[cfg(windows)]
+                client_sid,
                 auth_mechanisms,
             )?),
             phantom: PhantomData,
@@ -122,7 +128,7 @@ where
     }
 }
 
-#[cfg(feature = "async-io")]
+#[cfg(all(unix, feature = "async-io"))]
 #[cfg(test)]
 mod tests {
     use async_io::Async;

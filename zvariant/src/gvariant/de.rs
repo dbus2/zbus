@@ -3,7 +3,10 @@ use core::convert::TryFrom;
 use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, Visitor};
 use static_assertions::assert_impl_all;
 
-use std::{ffi::CStr, marker::PhantomData, os::unix::io::RawFd, str};
+use std::{ffi::CStr, marker::PhantomData, str};
+
+#[cfg(unix)]
+use std::os::unix::io::RawFd;
 
 use crate::{
     de::ValueParseStage, framing_offset_size::FramingOffsetSize, framing_offsets::FramingOffsets,
@@ -22,9 +25,11 @@ where
     B: byteorder::ByteOrder,
 {
     /// Create a Deserializer struct instance.
+    ///
+    /// On Windows, the function doesn't have `fds` argument.
     pub fn new<'r: 'de>(
         bytes: &'r [u8],
-        fds: Option<&'f [RawFd]>,
+        #[cfg(unix)] fds: Option<&'f [RawFd]>,
         signature: &Signature<'sig>,
         ctxt: EncodingContext<B>,
     ) -> Self {
@@ -35,7 +40,10 @@ where
             ctxt,
             sig_parser,
             bytes,
+            #[cfg(unix)]
             fds,
+            #[cfg(not(unix))]
+            fds: PhantomData,
             pos: 0,
             b: PhantomData,
         })

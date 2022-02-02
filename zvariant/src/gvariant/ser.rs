@@ -3,9 +3,11 @@ use static_assertions::assert_impl_all;
 use std::{
     io::{Seek, Write},
     marker::PhantomData,
-    os::unix::io::RawFd,
     str,
 };
+
+#[cfg(unix)]
+use std::os::unix::io::RawFd;
 
 use crate::{
     framing_offset_size::FramingOffsetSize, framing_offsets::FramingOffsets,
@@ -24,10 +26,12 @@ where
     W: Write + Seek,
 {
     /// Create a GVariant Serializer struct instance.
+    ///
+    /// On Windows, the method doesn't have `fds` argument.
     pub fn new<'w: 'ser, 'f: 'ser>(
         signature: &Signature<'sig>,
         writer: &'w mut W,
-        fds: &'f mut Vec<RawFd>,
+        #[cfg(unix)] fds: &'f mut Vec<RawFd>,
         ctxt: EncodingContext<B>,
     ) -> Self {
         assert_eq!(ctxt.format(), EncodingFormat::GVariant);
@@ -37,6 +41,7 @@ where
             ctxt,
             sig_parser,
             writer,
+            #[cfg(unix)]
             fds,
             bytes_written: 0,
             value_sign: None,
@@ -82,11 +87,13 @@ macro_rules! serialize_basic {
         fn $method(self, v: $type) -> Result<()> {
             let ctxt = EncodingContext::new_dbus(self.0.ctxt.position());
             let bytes_written = self.0.bytes_written;
+            #[cfg(unix)]
             let mut fds = vec![];
             let mut dbus_ser = crate::dbus::Serializer(crate::SerializerCommon::<B, W> {
                 ctxt,
                 sig_parser: self.0.sig_parser.clone(),
                 writer: &mut self.0.writer,
+                #[cfg(unix)]
                 fds: &mut fds,
                 bytes_written,
                 value_sign: None,
@@ -97,6 +104,7 @@ macro_rules! serialize_basic {
 
             self.0.bytes_written = dbus_ser.0.bytes_written;
             self.0.sig_parser = dbus_ser.0.sig_parser;
+            #[cfg(unix)]
             self.0.fds.extend(fds.iter());
 
             Ok(())
@@ -458,11 +466,13 @@ where
 
                 let sig_parser = SignatureParser::new(signature.clone());
                 let bytes_written = self.ser.0.bytes_written;
+                #[cfg(unix)]
                 let mut fds = vec![];
                 let mut ser = Serializer(crate::SerializerCommon::<B, W> {
                     ctxt: self.ser.0.ctxt,
                     sig_parser,
                     writer: self.ser.0.writer,
+                    #[cfg(unix)]
                     fds: &mut fds,
                     bytes_written,
                     value_sign: None,
@@ -470,6 +480,7 @@ where
                 });
                 value.serialize(&mut ser)?;
                 self.ser.0.bytes_written = ser.0.bytes_written;
+                #[cfg(unix)]
                 self.ser.0.fds.extend(fds.iter());
 
                 self.ser.0.write_all(&b"\0"[..]).map_err(Error::Io)?;

@@ -7,6 +7,19 @@ include:
 
 variables:
   FDO_UPSTREAM_REPO: dbus/zbus
+  UPSTREAM_BRANCH: 'main'
+
+  ###
+  # IMPORTANT
+  # These are the version tags for the docker images the CI runs against.
+  # If you are hacking on them or need a them to rebuild, its enough
+  # to change any part of the string of the image you want.
+  ###
+  WINDOWS_TAG: "2022-01-28.1"
+
+  WINDOWS_AMD64_SUFFIX: 'amd64/windows'
+  WINDOWS_IMAGE: "$CI_REGISTRY_IMAGE/$WINDOWS_AMD64_SUFFIX:$WINDOWS_TAG-$UPSTREAM_BRANCH"
+  WINDOWS_UPSTREAM_IMAGE: "$CI_REGISTRY/$UPSTREAM_REPO/$WINDOWS_AMD64_SUFFIX:$WINDOWS_TAG-$UPSTREAM_BRANCH"
 
 stages:
   - container
@@ -19,7 +32,7 @@ stages:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: '2022-01-29.1'
+    FDO_DISTRIBUTION_TAG: '2022-02-01.1'
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
@@ -35,6 +48,7 @@ stages:
       lcov
       python3-pip
       python3-setuptools
+      gcc-mingw-w64-x86-64
     FDO_DISTRIBUTION_EXEC: >-
       gitlab/install-rust.sh stable &&
       pip3 install lcov_cobertura &&
@@ -55,6 +69,27 @@ container:
     - .debian
     - .fdo.container-build@debian
   stage: container
+
+windows amd64 docker:
+  stage: container
+  variables:
+    # this file needs to be relative to docker/windows/ subdir
+    # as it makes life easier in the powershell script
+    DOCKERFILE: "gitlab/docker/windows/Dockerfile"
+  timeout: 2h 30m
+  tags:
+    - windows
+    - shell
+    - "1809"
+  script:
+    # We need to pass an array and to resolve the env vars, so we can't use a variable:
+    - $DOCKER_BUILD_ARGS = @("--build-arg", "DEFAULT_BRANCH=$UPSTREAM_BRANCH")
+    - "& gitlab/docker/windows/container.ps1 $CI_REGISTRY $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD $WINDOWS_IMAGE $WINDOWS_UPSTREAM_IMAGE $DOCKERFILE"
+    - |
+      if (!($?)) {
+        echo "Failed to build the image"
+        Exit 1
+      }
 
 .debian_img:
   extends:
@@ -108,6 +143,27 @@ nightly:
     - rustup override set nightly
     - *cargo_test
 
+msvc:
+  image: $WINDOWS_IMAGE
+  stage: test
+  tags:
+    - 'docker'
+    - 'windows'
+    - '1809'
+  needs:
+    - "windows amd64 docker"
+  variables:
+    ErrorActionPreference: 'Stop'
+    WarningPreference: 'Stop'
+    PKG_CONFIG_PATH: 'C:/lib/pkgconfig'
+    DBUS_SESSION_BUS_ADDRESS: 'tcp:host=127.0.0.1,port=9876'
+    TRYBUILD: 'overwrite' # ignore ui tests
+  timeout: '45min'
+  script:
+    - $env:PATH += ";C:\bin"
+    - Start-Process dbus-daemon.exe --config-file=gitlab/win32-session.conf
+    - cargo test
+
 coverage:
   extends: .debian_img
   stage: extras
@@ -139,6 +195,7 @@ crosscheck:
     - cargo check --target x86_64-apple-darwin
     - cargo check --target x86_64-unknown-freebsd
     - cargo check --target x86_64-unknown-netbsd
+    - cargo check --target x86_64-pc-windows-gnu
 
 pages:
   image: "hrektts/mdbook"
