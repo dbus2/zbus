@@ -1,7 +1,7 @@
 use std::{
     ffi::CStr,
     io::{Error, ErrorKind},
-    net::TcpStream,
+    net::{SocketAddr, TcpStream},
     ptr,
 };
 
@@ -106,11 +106,9 @@ impl ProcessToken {
     }
 }
 
-// Get the process ID of the connected peer
+// Get the process ID of the local socket address
 // TODO: add ipv6 support
-pub fn tcp_stream_get_peer_pid(stream: &TcpStream) -> Result<DWORD, Error> {
-    let peer_addr = stream.peer_addr()?;
-
+pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<DWORD, Error> {
     let mut len = 4096;
     let mut tcp_table = vec![];
     let res = loop {
@@ -135,13 +133,20 @@ pub fn tcp_stream_get_peer_pid(stream: &TcpStream) -> Result<DWORD, Error> {
         if entry.dwState == MIB_TCP_STATE_ESTAB
             && u32::from_be(entry.dwLocalAddr) == INADDR_LOOPBACK
             && u32::from_be(entry.dwRemoteAddr) == INADDR_LOOPBACK
-            && port == peer_addr.port()
+            && port == addr.port()
         {
             return Ok(entry.dwOwningPid);
         }
     }
 
-    Err(Error::new(ErrorKind::Other, "TCP peer not found"))
+    Err(Error::new(ErrorKind::Other, "PID of TCP address not found"))
+}
+
+// Get the process ID of the connected peer
+pub fn tcp_stream_get_peer_pid(stream: &TcpStream) -> Result<DWORD, Error> {
+    let peer_addr = stream.peer_addr()?;
+
+    socket_addr_get_pid(&peer_addr)
 }
 
 #[cfg(test)]
