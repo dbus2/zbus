@@ -113,6 +113,7 @@ impl<'a> ConnectionBuilder<'a> {
 
         self
     }
+
     /// The to-be-created connection will be a peer-to-peer connection.
     #[must_use]
     pub fn p2p(mut self) -> Self {
