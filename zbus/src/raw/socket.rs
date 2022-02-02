@@ -315,6 +315,19 @@ impl Socket for Async<UnixStream> {
     fn close(&self) -> io::Result<()> {
         self.get_ref().shutdown(std::net::Shutdown::Both)
     }
+
+    #[cfg(windows)]
+    fn peer_sid(&self) -> Option<String> {
+        use crate::win32::{unix_stream_get_peer_pid, ProcessToken};
+
+        if let Ok(pid) = unix_stream_get_peer_pid(&self.get_ref()) {
+            if let Ok(process_token) = ProcessToken::open(if pid != 0 { Some(pid) } else { None }) {
+                return process_token.sid().ok();
+            }
+        }
+
+        None
+    }
 }
 
 #[cfg(feature = "async-io")]
