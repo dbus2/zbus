@@ -169,6 +169,7 @@ impl Socket for Box<dyn Socket> {
     fn as_raw_fd(&self) -> RawFd {
         (&**self).as_raw_fd()
     }
+
     #[cfg(windows)]
     fn peer_sid(&self) -> Option<String> {
         (&**self).peer_sid()
@@ -408,5 +409,23 @@ impl Socket for tokio::net::TcpStream {
     fn as_raw_fd(&self) -> RawFd {
         // This causes a name collision if imported
         std::os::unix::io::AsRawFd::as_raw_fd(self)
+    }
+
+    #[cfg(windows)]
+    fn peer_sid(&self) -> Option<String> {
+        use crate::win32::{socket_addr_get_pid, ProcessToken};
+
+        let peer_addr = match self.peer_addr() {
+            Ok(addr) => addr,
+            Err(_) => return None,
+        };
+
+        if let Ok(pid) = socket_addr_get_pid(&peer_addr) {
+            if let Ok(process_token) = ProcessToken::open(if pid != 0 { Some(pid) } else { None }) {
+                return process_token.sid().ok();
+            }
+        }
+
+        None
     }
 }

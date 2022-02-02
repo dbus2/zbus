@@ -11,8 +11,8 @@ use tokio::net::UnixStream;
 use zvariant::ObjectPath;
 
 use crate::{
-    address::Address, blocking::Connection, names::WellKnownName, utils::block_on, Error, Guid,
-    Interface, Result,
+    address::Address, blocking::Connection, names::WellKnownName, utils::block_on, AuthMechanism,
+    Error, Guid, Interface, Result,
 };
 
 /// A builder for [`zbus::blocking::Connection`].
@@ -62,6 +62,12 @@ impl<'a> ConnectionBuilder<'a> {
     #[must_use]
     pub fn tcp_stream(stream: TcpStream) -> Self {
         Self(crate::ConnectionBuilder::tcp_stream(stream))
+    }
+
+    /// Specify the mechanisms to use during authentication.
+    #[must_use]
+    pub fn auth_mechanisms(self, auth_mechanisms: &[AuthMechanism]) -> Self {
+        Self(self.0.auth_mechanisms(auth_mechanisms))
     }
 
     /// The to-be-created connection will be a peer-to-peer connection.
