@@ -14,8 +14,9 @@ use std::{collections::HashMap, convert::TryFrom, env, str::FromStr};
 use tokio::net::TcpStream;
 #[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
 use tokio::net::UnixStream;
+#[cfg(windows)]
+use uds_windows::UnixStream;
 
-#[cfg(unix)]
 use std::ffi::OsString;
 
 /// A `tcp:` address family.
@@ -61,7 +62,6 @@ impl TcpAddress {
 #[non_exhaustive]
 pub enum Address {
     /// A path on the filesystem
-    #[cfg(unix)]
     Unix(OsString),
     /// TCP address details
     Tcp(TcpAddress),
@@ -70,7 +70,6 @@ pub enum Address {
 #[cfg(feature = "async-io")]
 #[derive(Debug)]
 pub(crate) enum Stream {
-    #[cfg(unix)]
     Unix(Async<UnixStream>),
     Tcp(Async<TcpStream>),
 }
@@ -86,14 +85,22 @@ pub(crate) enum Stream {
 impl Address {
     pub(crate) async fn connect(&self) -> Result<Stream> {
         match self.clone() {
-            #[cfg(unix)]
             Address::Unix(p) => {
                 #[cfg(feature = "async-io")]
                 {
-                    Async::<UnixStream>::connect(p)
-                        .await
-                        .map(Stream::Unix)
-                        .map_err(Error::Io)
+                    #[cfg(windows)]
+                    {
+                        let stream = run_in_thread(move || UnixStream::connect(p)).await?;
+                        Async::new(stream).map(Stream::Unix).map_err(Error::Io)
+                    }
+
+                    #[cfg(not(windows))]
+                    {
+                        Async::<UnixStream>::connect(p)
+                            .await
+                            .map(Stream::Unix)
+                            .map_err(Error::Io)
+                    }
                 }
 
                 #[cfg(all(not(feature = "async-io"), feature = "tokio"))]

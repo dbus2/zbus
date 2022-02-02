@@ -15,6 +15,9 @@ use std::{
 use tokio::net::TcpStream;
 #[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
 use tokio::net::UnixStream;
+#[cfg(windows)]
+use uds_windows::UnixStream;
+
 use zvariant::ObjectPath;
 
 use crate::{
@@ -28,7 +31,6 @@ const DEFAULT_MAX_QUEUED: usize = 64;
 
 #[derive(Debug)]
 enum Target {
-    #[cfg(unix)]
     UnixStream(UnixStream),
     TcpStream(TcpStream),
     Address(Address),
@@ -84,7 +86,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// If the default `async-io` feature is disabled, this method will expect
     /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
     /// argument.
-    #[cfg(unix)]
     #[must_use]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self::new(Target::UnixStream(stream))
@@ -220,7 +221,7 @@ impl<'a> ConnectionBuilder<'a> {
     /// result in [`Error::Unsupported`] error.
     pub async fn build(self) -> Result<Connection> {
         let stream = match self.target {
-            #[cfg(all(unix, feature = "async-io"))]
+            #[cfg(all(feature = "async-io"))]
             Target::UnixStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
             #[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
             Target::UnixStream(stream) => Box::new(stream) as Box<dyn Socket>,
@@ -229,7 +230,6 @@ impl<'a> ConnectionBuilder<'a> {
             #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
             Target::TcpStream(stream) => Box::new(stream) as Box<dyn Socket>,
             Target::Address(address) => match address.connect().await? {
-                #[cfg(unix)]
                 address::Stream::Unix(stream) => Box::new(stream) as Box<dyn Socket>,
                 address::Stream::Tcp(stream) => Box::new(stream) as Box<dyn Socket>,
             },
