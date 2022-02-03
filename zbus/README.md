@@ -74,7 +74,7 @@ A simple service that politely greets whoever calls its `SayHello` method:
 ```rust,no_run
 use std::{
     error::Error,
-    thread::sleep,
+    future::pending,
     time::Duration,
 };
 use zbus::{ObjectServer, ConnectionBuilder, dbus_interface, fdo};
@@ -102,8 +102,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build()
         .await?;
 
-    // Do other things or go to sleep.
-    sleep(Duration::from_secs(60));
+    // Do other things or go to wait forever
+    pending::<()>().await;
 
     Ok(())
 }
