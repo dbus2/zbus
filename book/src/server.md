@@ -134,9 +134,9 @@ async fn main() -> Result<()> {
         .await?;
 
     loop {
-        // do something else, sleep or timeout here:
+        // do something else, wait forever or timeout here:
         // handling D-Bus messages is done in the background
-        std::thread::park();
+        std::future::pending::<()>().await;
     }
 }
 ```
@@ -169,9 +169,9 @@ setting up your interfaces and requesting names, and not have to care about this
         .build()
         .await?;
 #     loop {
-#         // do something else, sleep or timeout here:
+#         // do something else, wait forever or timeout here:
 #         // handling D-Bus messages is done in the background
-#         std::thread::park();
+#         std::future::pending::<()>().await;
 #     }
 # }
 ```
