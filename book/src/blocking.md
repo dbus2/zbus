@@ -95,7 +95,6 @@ implement [`std::iter::Iterator`] trait instead of [`futrues::stream::Stream`].
 That's almost the same as receiving signals:
 
 ```rust,no_run
-# use std::{thread::sleep, time::Duration};
 # use zbus::{blocking::Connection, dbus_proxy, Result};
 #
 #[dbus_proxy(
