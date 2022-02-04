@@ -23,6 +23,8 @@ use winapi::{
     },
 };
 
+use uds_windows::UnixStream;
+
 // A process token
 //
 // See MSDN documentation:
@@ -147,6 +149,53 @@ pub fn tcp_stream_get_peer_pid(stream: &TcpStream) -> Result<DWORD, Error> {
     let peer_addr = stream.peer_addr()?;
 
     socket_addr_get_pid(&peer_addr)
+}
+
+fn last_err() -> std::io::Error {
+    use winapi::um::winsock2::WSAGetLastError;
+
+    let err = unsafe { WSAGetLastError() };
+    std::io::Error::from_raw_os_error(err)
+}
+
+// Get the process ID of the connected peer
+pub fn unix_stream_get_peer_pid(stream: &UnixStream) -> Result<DWORD, Error> {
+    use std::os::windows::io::AsRawSocket;
+    use winapi::{
+        shared::ws2def::IOC_VENDOR,
+        um::winsock2::{WSAIoctl, SOCKET_ERROR},
+    };
+
+    macro_rules! _WSAIOR {
+        ($x:expr, $y:expr) => {
+            winapi::shared::ws2def::IOC_OUT | $x | $y
+        };
+    }
+
+    let socket = stream.as_raw_socket();
+    const SIO_AF_UNIX_GETPEERPID: DWORD = _WSAIOR!(IOC_VENDOR, 256);
+    let mut ret = 0 as DWORD;
+    let mut bytes = 0;
+
+    let r = unsafe {
+        WSAIoctl(
+            socket as _,
+            SIO_AF_UNIX_GETPEERPID,
+            0 as *mut _,
+            0,
+            &mut ret as *mut _ as *mut _,
+            std::mem::size_of_val(&ret) as DWORD,
+            &mut bytes,
+            0 as *mut _,
+            None,
+        )
+    };
+
+    if r == SOCKET_ERROR {
+        return Err(last_err());
+    }
+
+    Ok(ret)
 }
 
 #[cfg(test)]

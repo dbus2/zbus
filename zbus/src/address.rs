@@ -1,3 +1,5 @@
+#[cfg(feature = "async-io")]
+use crate::run_in_thread;
 use crate::{Error, Result};
 #[cfg(feature = "async-io")]
 use async_io::Async;
@@ -12,8 +14,9 @@ use std::{collections::HashMap, convert::TryFrom, env, str::FromStr};
 use tokio::net::TcpStream;
 #[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
 use tokio::net::UnixStream;
+#[cfg(windows)]
+use uds_windows::UnixStream;
 
-#[cfg(unix)]
 use std::ffi::OsString;
 
 /// A `tcp:` address family.
@@ -59,7 +62,6 @@ impl TcpAddress {
 #[non_exhaustive]
 pub enum Address {
     /// A path on the filesystem
-    #[cfg(unix)]
     Unix(OsString),
     /// TCP address details
     Tcp(TcpAddress),
@@ -68,7 +70,6 @@ pub enum Address {
 #[cfg(feature = "async-io")]
 #[derive(Debug)]
 pub(crate) enum Stream {
-    #[cfg(unix)]
     Unix(Async<UnixStream>),
     Tcp(Async<TcpStream>),
 }
@@ -84,14 +85,22 @@ pub(crate) enum Stream {
 impl Address {
     pub(crate) async fn connect(&self) -> Result<Stream> {
         match self.clone() {
-            #[cfg(unix)]
             Address::Unix(p) => {
                 #[cfg(feature = "async-io")]
                 {
-                    Async::<UnixStream>::connect(p)
-                        .await
-                        .map(Stream::Unix)
-                        .map_err(Error::Io)
+                    #[cfg(windows)]
+                    {
+                        let stream = run_in_thread(move || UnixStream::connect(p)).await?;
+                        Async::new(stream).map(Stream::Unix).map_err(Error::Io)
+                    }
+
+                    #[cfg(not(windows))]
+                    {
+                        Async::<UnixStream>::connect(p)
+                            .await
+                            .map(Stream::Unix)
+                            .map_err(Error::Io)
+                    }
                 }
 
                 #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
@@ -105,30 +114,24 @@ impl Address {
             Address::Tcp(addr) => {
                 #[cfg(feature = "async-io")]
                 {
-                    let (s, r) = async_channel::bounded(1);
-
-                    std::thread::spawn(move || {
-                        let to_socket_addrs = || -> Result<Vec<SocketAddr>> {
-                            let addrs = (addr.host(), addr.port()).to_socket_addrs()?.filter(|a| {
-                                if let Some(family) = addr.family() {
-                                    if family == TcpAddressFamily::Ipv4 {
-                                        a.is_ipv4()
-                                    } else {
-                                        a.is_ipv6()
-                                    }
+                    let addrs = run_in_thread(move || -> Result<Vec<SocketAddr>> {
+                        let addrs = (addr.host(), addr.port()).to_socket_addrs()?.filter(|a| {
+                            if let Some(family) = addr.family() {
+                                if family == TcpAddressFamily::Ipv4 {
+                                    a.is_ipv4()
                                 } else {
-                                    true
+                                    a.is_ipv6()
                                 }
-                            });
-                            Ok(addrs.collect::<Vec<_>>())
-                        };
-                        s.try_send(to_socket_addrs())
-                            .expect("Failed to send resolved TCP address");
-                    });
-
-                    let addrs = r.recv().await.map_err(|e| {
+                            } else {
+                                true
+                            }
+                        });
+                        Ok(addrs.collect())
+                    })
+                    .await
+                    .map_err(|e| {
                         Error::Address(format!("Failed to receive TCP addresses: {}", e))
-                    })??;
+                    })?;
 
                     // we could attempt connections in parallel?
                     let mut last_err = Error::Address("Failed to connect".into());

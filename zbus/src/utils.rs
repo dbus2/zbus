@@ -46,3 +46,21 @@ lazy_static::lazy_static! {
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
     TOKIO_RT.block_on(future)
 }
+
+#[cfg(feature = "async-io")]
+pub(crate) async fn run_in_thread<F, T>(f: F) -> T
+where
+    F: FnOnce() -> T,
+    F: Send + 'static,
+    T: Send + 'static,
+{
+    let (s, r) = async_channel::bounded(1);
+
+    std::thread::spawn(move || {
+        let res = f();
+
+        s.try_send(res).expect("Failed to send result");
+    });
+
+    r.recv().await.expect("Failed to receive result")
+}

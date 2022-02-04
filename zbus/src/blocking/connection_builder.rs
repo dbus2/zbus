@@ -8,6 +8,9 @@ use std::os::unix::net::UnixStream;
 use tokio::net::TcpStream;
 #[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
 use tokio::net::UnixStream;
+#[cfg(windows)]
+use uds_windows::UnixStream;
+
 use zvariant::ObjectPath;
 
 use crate::{
@@ -48,7 +51,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// If the default `async-io` feature is disabled, this method will expect
     /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
     /// argument.
-    #[cfg(unix)]
     #[must_use]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self(crate::ConnectionBuilder::unix_stream(stream))

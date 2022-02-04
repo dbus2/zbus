@@ -1095,19 +1095,19 @@ mod tests {
         test_p2p(server, client).await
     }
 
-    #[cfg(unix)]
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
         crate::utils::block_on(test_unix_p2p()).unwrap();
     }
 
-    #[cfg(unix)]
     async fn test_unix_p2p() -> Result<()> {
-        #[cfg(feature = "async-io")]
+        #[cfg(all(unix, feature = "async-io"))]
         use std::os::unix::net::UnixStream;
         #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
         use tokio::net::UnixStream;
+        #[cfg(all(windows, feature = "async-io"))]
+        use uds_windows::UnixStream;
 
         let guid = Guid::generate();
 
