@@ -1,3 +1,5 @@
+#[cfg(feature = "async-io")]
+use crate::run_in_thread;
 use crate::{Error, Result};
 #[cfg(feature = "async-io")]
 use async_io::Async;
@@ -105,30 +107,24 @@ impl Address {
             Address::Tcp(addr) => {
                 #[cfg(feature = "async-io")]
                 {
-                    let (s, r) = async_channel::bounded(1);
-
-                    std::thread::spawn(move || {
-                        let to_socket_addrs = || -> Result<Vec<SocketAddr>> {
-                            let addrs = (addr.host(), addr.port()).to_socket_addrs()?.filter(|a| {
-                                if let Some(family) = addr.family() {
-                                    if family == TcpAddressFamily::Ipv4 {
-                                        a.is_ipv4()
-                                    } else {
-                                        a.is_ipv6()
-                                    }
+                    let addrs = run_in_thread(move || -> Result<Vec<SocketAddr>> {
+                        let addrs = (addr.host(), addr.port()).to_socket_addrs()?.filter(|a| {
+                            if let Some(family) = addr.family() {
+                                if family == TcpAddressFamily::Ipv4 {
+                                    a.is_ipv4()
                                 } else {
-                                    true
+                                    a.is_ipv6()
                                 }
-                            });
-                            Ok(addrs.collect::<Vec<_>>())
-                        };
-                        s.try_send(to_socket_addrs())
-                            .expect("Failed to send resolved TCP address");
-                    });
-
-                    let addrs = r.recv().await.map_err(|e| {
+                            } else {
+                                true
+                            }
+                        });
+                        Ok(addrs.collect())
+                    })
+                    .await
+                    .map_err(|e| {
                         Error::Address(format!("Failed to receive TCP addresses: {}", e))
-                    })??;
+                    })?;
 
                     // we could attempt connections in parallel?
                     let mut last_err = Error::Address("Failed to connect".into());
