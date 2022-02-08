@@ -13,6 +13,7 @@ use crate::{Error, MessageField, MessageFieldCode, MessageFields};
 
 pub(crate) const PRIMARY_HEADER_SIZE: usize = 12;
 pub(crate) const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
+pub(crate) const MAX_MESSAGE_SIZE: usize = 0x0800_0000;
 
 /// D-Bus code for endianness.
 #[repr(u8)]
@@ -170,10 +171,20 @@ impl MessagePrimaryHeader {
     }
 
     pub(crate) fn read(buf: &[u8]) -> Result<(MessagePrimaryHeader, u32), Error> {
-        let ctx = EncodingContext::<byteorder::NativeEndian>::new_dbus(0);
-        let primary_header = zvariant::from_slice(buf, ctx)?;
-        let fields_len = zvariant::from_slice(&buf[PRIMARY_HEADER_SIZE..], ctx)?;
-        Ok((primary_header, fields_len))
+        fn read_internal<B: byteorder::ByteOrder>(
+            buf: &[u8],
+        ) -> Result<(MessagePrimaryHeader, u32), Error> {
+            let ctxt = EncodingContext::<B>::new_dbus(0);
+            let primary_header = zvariant::from_slice(buf, ctxt)?;
+            let fields_len = zvariant::from_slice(&buf[PRIMARY_HEADER_SIZE..], ctxt)?;
+            Ok((primary_header, fields_len))
+        }
+
+        let endian_sig = EndianSig::try_from(buf[0])?;
+        match endian_sig {
+            EndianSig::Little => read_internal::<byteorder::LittleEndian>(buf),
+            EndianSig::Big => read_internal::<byteorder::BigEndian>(buf),
+        }
     }
 
     /// D-Bus code for bytorder encoding of the message.
