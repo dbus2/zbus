@@ -1,7 +1,7 @@
 use std::{
-    convert::{TryFrom, TryInto},
+    convert::{Into, TryFrom, TryInto},
     fmt,
-    io::Cursor,
+    io::{Cursor, Write},
 };
 
 #[cfg(unix)]
@@ -25,6 +25,12 @@ use crate::{
 
 #[cfg(unix)]
 const LOCK_PANIC_MSG: &str = "lock poisoned";
+
+#[cfg(unix)]
+type BuildGenericResult = Vec<RawFd>;
+
+#[cfg(not(unix))]
+type BuildGenericResult = ();
 
 macro_rules! dbus_context {
     ($n_bytes_before: expr) => {
@@ -206,21 +212,86 @@ impl<'a> MessageBuilder<'a> {
         B: serde::ser::Serialize + DynamicType,
     {
         let ctxt = dbus_context!(0);
-        let mut header = self.header;
+
         // Note: this iterates the body twice, but we prefer efficient handling of large messages
         // to efficient handling of ones that are complex to serialize.
-        let (body_len, fds_len) = {
-            #[cfg(unix)]
-            {
-                zvariant::serialized_size_fds(ctxt, body)?
-            }
-            #[cfg(not(unix))]
-            {
-                (zvariant::serialized_size(ctxt, body)?, 0)
-            }
-        };
+        #[cfg(unix)]
+        let (body_len, fds_len) = zvariant::serialized_size_fds(ctxt, body)?;
+        #[cfg(not(unix))]
+        let body_len = zvariant::serialized_size(ctxt, body)?;
 
-        let mut signature = body.dynamic_signature();
+        let signature = body.dynamic_signature();
+
+        self.build_generic(
+            signature,
+            body_len,
+            move |cursor| {
+                #[cfg(unix)]
+                {
+                    let (_, fds) = zvariant::to_writer_fds(cursor, ctxt, body)?;
+                    Ok::<Vec<RawFd>, Error>(fds)
+                }
+                #[cfg(not(unix))]
+                {
+                    zvariant::to_writer(cursor, ctxt, body)?;
+                    Ok::<(), Error>(())
+                }
+            },
+            #[cfg(unix)]
+            fds_len,
+        )
+    }
+
+    /// Create a new message from a raw slice of bytes to populate the body with, rather than by
+    /// serializing a value. The message body will be the exact bytes.
+    ///
+    /// # Safety
+    ///
+    /// This method is unsafe because it can be used to build an invalid message.
+    pub unsafe fn build_raw_body<'b, S>(
+        self,
+        body_bytes: &[u8],
+        signature: S,
+        #[cfg(unix)] fds: Vec<RawFd>,
+    ) -> Result<Message>
+    where
+        S: TryInto<Signature<'b>>,
+        S::Error: Into<Error>,
+    {
+        let signature: Signature<'b> = signature.try_into().map_err(Into::into)?;
+        #[cfg(unix)]
+        let fds_len = fds.len();
+
+        self.build_generic(
+            signature,
+            body_bytes.len(),
+            move |cursor: &mut Cursor<&mut Vec<u8>>| {
+                cursor.write_all(body_bytes)?;
+
+                #[cfg(unix)]
+                return Ok::<Vec<RawFd>, Error>(fds);
+
+                #[cfg(not(unix))]
+                return Ok::<(), Error>(());
+            },
+            #[cfg(unix)]
+            fds_len,
+        )
+    }
+
+    fn build_generic<'b, WriteFunc>(
+        self,
+        mut signature: Signature<'b>,
+        body_len: usize,
+        write_body: WriteFunc,
+        #[cfg(unix)] fds_len: usize,
+    ) -> Result<Message>
+    where
+        WriteFunc: FnOnce(&mut Cursor<&mut Vec<u8>>) -> Result<BuildGenericResult>,
+    {
+        let ctxt = dbus_context!(0);
+        let mut header = self.header;
+
         if !signature.is_empty() {
             if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
                 // Remove leading and trailing STRUCT delimiters
@@ -230,29 +301,27 @@ impl<'a> MessageBuilder<'a> {
         }
 
         let body_len_u32 = body_len.try_into().map_err(|_| Error::ExcessData)?;
-        let fds_len_u32 = fds_len.try_into().map_err(|_| Error::ExcessData)?;
         header.primary_mut().set_body_len(body_len_u32);
 
-        if fds_len != 0 {
-            header.fields_mut().add(MessageField::UnixFDs(fds_len_u32));
+        #[cfg(unix)]
+        {
+            let fds_len_u32 = fds_len.try_into().map_err(|_| Error::ExcessData)?;
+            if fds_len != 0 {
+                header.fields_mut().add(MessageField::UnixFDs(fds_len_u32));
+            }
         }
 
         let hdr_len = zvariant::serialized_size(ctxt, &header)?;
 
         let mut bytes: Vec<u8> = Vec::with_capacity(hdr_len + body_len);
         let mut cursor = Cursor::new(&mut bytes);
-        zvariant::to_writer(&mut cursor, ctxt, &header)?;
 
-        let (_, _fds) = {
-            #[cfg(unix)]
-            {
-                zvariant::to_writer_fds(&mut cursor, ctxt, body)?
-            }
-            #[cfg(not(unix))]
-            {
-                (zvariant::to_writer(&mut cursor, ctxt, body)?, 0)
-            }
-        };
+        zvariant::to_writer(&mut cursor, ctxt, &header)?;
+        #[cfg(unix)]
+        let fds = write_body(&mut cursor)?;
+        #[cfg(not(unix))]
+        write_body(&mut cursor)?;
+
         let primary_header = header.into_primary();
         let header: MessageHeader<'_> = zvariant::from_slice(&bytes, ctxt)?;
         let quick_fields = QuickMessageFields::new(&bytes, &header)?;
@@ -263,7 +332,7 @@ impl<'a> MessageBuilder<'a> {
             bytes,
             body_offset: hdr_len,
             #[cfg(unix)]
-            fds: Arc::new(RwLock::new(Fds::Raw(_fds))),
+            fds: Arc::new(RwLock::new(Fds::Raw(fds))),
             recv_seq: MessageSequence::default(),
         })
     }
@@ -771,7 +840,7 @@ mod tests {
 
     #[cfg(unix)]
     use super::Fds;
-    use super::Message;
+    use super::{Message, MessageBuilder};
     use crate::Error;
 
     #[test]
@@ -815,5 +884,24 @@ mod tests {
         )
         .unwrap();
         assert_eq!(e.to_string(), "Error org.freedesktop.zbus.Error: kaboom!");
+    }
+
+    #[test]
+    fn test_raw() -> Result<(), Error> {
+        let raw_body: &[u8] = &[16, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0];
+        let message_builder = MessageBuilder::signal("/", "test.test", "test")?;
+        let message = unsafe {
+            message_builder.build_raw_body(
+                &raw_body,
+                "ai",
+                #[cfg(unix)]
+                vec![],
+            )?
+        };
+
+        let output: Vec<i32> = message.body()?;
+        assert_eq!(output, vec![1, 2, 3, 4]);
+
+        Ok(())
     }
 }
