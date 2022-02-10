@@ -14,7 +14,7 @@ use zvariant::{ObjectPath, OwnedObjectPath};
 
 use crate::{
     fdo,
-    fdo::{Introspectable, Peer, Properties},
+    fdo::{Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
     Connection, DispatchResult, Error, Interface, Message, MessageType, Result, SignalContext,
     WeakConnection,
 };
@@ -172,6 +172,7 @@ impl Node {
         node.at(Peer::name(), Peer);
         node.at(Introspectable::name(), Introspectable);
         node.at(Properties::name(), Properties);
+        node.at(ObjectManager::name(), ObjectManager);
 
         node
     }
@@ -231,10 +232,12 @@ impl Node {
     }
 
     fn is_empty(&self) -> bool {
-        !self
-            .interfaces
-            .keys()
-            .any(|k| *k != Peer::name() && *k != Introspectable::name() && *k != Properties::name())
+        !self.interfaces.keys().any(|k| {
+            *k != Peer::name()
+                && *k != Introspectable::name()
+                && *k != Properties::name()
+                && *k != ObjectManager::name()
+        })
     }
 
     fn remove_node(&mut self, node: &str) -> bool {
@@ -309,6 +312,27 @@ impl Node {
         self.introspect_to_writer(&mut xml, 0).await;
 
         xml
+    }
+
+    #[async_recursion::async_recursion]
+    pub(crate) async fn get_managed_objects(&self) -> ManagedObjects {
+        let mut path_base = self.path.to_string();
+        if !path_base.ends_with('/') {
+            path_base.push('/');
+        }
+        // Recursively get all properties of all interfaces of descendants.
+        let mut managed_objects = ManagedObjects::new();
+        for (name, node) in &self.children {
+            let mut interfaces = HashMap::new();
+            for (iface_name, iface) in &node.interfaces {
+                let ifaces = iface.read().await.get_all().await;
+                interfaces.insert(iface_name.to_owned().into(), ifaces);
+            }
+            let path = ObjectPath::from_string_unchecked(format!("{}{}", path_base, name));
+            managed_objects.insert(path.into(), interfaces);
+            managed_objects.extend(node.get_managed_objects().await);
+        }
+        managed_objects
     }
 }
 
