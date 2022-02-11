@@ -102,7 +102,7 @@ fn inputs_output_from_args(args: &[&Arg]) -> (String, String) {
 
     for a in args {
         match a.direction() {
-            Some("in") => {
+            None | Some("in") => {
                 let ty = to_rust_type(a.ty(), true, true);
                 let arg = if let Some(name) = a.name() {
                     to_identifier(name)
@@ -277,6 +277,7 @@ mod tests {
  <node name="/com/example/sample_object0">
    <interface name="com.example.SampleInterface0">
      <method name="Frobate">
+       <arg name="foz" type="i"/>
        <arg name="foo" type="i" direction="in"/>
        <arg name="bar" type="s" direction="out"/>
        <arg name="baz" type="a{us}" direction="out"/>
@@ -291,6 +292,10 @@ mod tests {
      </method>
      <signal name="Changed">
        <arg name="new_value" type="b"/>
+     </signal>
+     <signal name="Changed2">
+       <arg name="new_value" type="b" direction="out"/>
+       <arg name="new_value2" type="b" direction="out"/>
      </signal>
      <property name="Bar" type="y" access="readwrite"/>
    </interface>
