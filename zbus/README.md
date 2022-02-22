@@ -2,9 +2,9 @@
 
 [![](https://docs.rs/zbus/badge.svg)](https://docs.rs/zbus/) [![](https://img.shields.io/crates/v/zbus)](https://crates.io/crates/zbus)
 
-This is the main subcrate of the [zbus] project, that provides the main API you will use to interact
-with D-Bus from Rust. It takes care of the establishment of a connection, the creation, sending and
-receiving of different kind of D-Bus messages (method calls, signals etc) for you.
+This is the main subcrate of the [zbus] project, that provides the API to interact with D-Bus. It
+takes care of the establishment of a connection, the creation, sending and receiving of different
+kind of D-Bus messages (method calls, signals etc) for you.
 
 **Status:** Stable.
 
