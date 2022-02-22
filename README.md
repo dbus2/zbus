@@ -11,11 +11,12 @@ libraries.
 
 The project is divided into the following subcrates:
 
-* [`zbus`] and [`zbus_macros`]
-* [`zvariant`] and [`zvariant_derive`]
-* [`zbus_names`]
-* [`zbus_xmlgen`]
-* [`zbus_polkit`]
+* [`zbus`] and [`zbus_macros`]: The main subcrates that provide the API to interact with D-Bus.
+* [`zvariant`] and [`zvariant_derive`]: API for encoding/decoding of data to/from D-Bus wire
+  format.
+* [`zbus_names`]: A collection of types for various [D-Bus bus names][dbn].
+* [`zbus_xmlgen`]: A developer tool to generate Rust code from D-Bus XML interface descriptions.
+* [`zbus_polkit`]: A crate to interact with [PolicyKit].
 
 ## Getting Started
 
@@ -151,3 +152,4 @@ MIT license [LICENSE-MIT](LICENSE-MIT)
 [`zvariant`]: zvariant/README.md
 [`zvariant_derive`]: zvariant_derive/README.md
 [dbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names
+[PolicyKit]: https://gitlab.freedesktop.org/polkit/polkit/
