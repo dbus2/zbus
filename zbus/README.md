@@ -2,9 +2,9 @@
 
 [![](https://docs.rs/zbus/badge.svg)](https://docs.rs/zbus/) [![](https://img.shields.io/crates/v/zbus)](https://crates.io/crates/zbus)
 
-This is the main subcrate of the [zbus] project, that provides the main API you will use to interact
-with D-Bus from Rust. It takes care of the establishment of a connection, the creation, sending and
-receiving of different kind of D-Bus messages (method calls, signals etc) for you.
+This is the main subcrate of the [zbus] project, that provides the API to interact with D-Bus. It
+takes care of the establishment of a connection, the creation, sending and receiving of different
+kind of D-Bus messages (method calls, signals etc) for you.
 
 **Status:** Stable.
 
@@ -72,12 +72,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 A simple service that politely greets whoever calls its `SayHello` method:
 
 ```rust,no_run
-use std::{
-    error::Error,
-    future::pending,
-    time::Duration,
-};
-use zbus::{ObjectServer, ConnectionBuilder, dbus_interface, fdo};
+use std::{error::Error, future::pending};
+use zbus::{ConnectionBuilder, dbus_interface};
 
 struct Greeter {
     count: u64
@@ -88,7 +84,7 @@ impl Greeter {
     // Can be `async` as well.
     fn say_hello(&mut self, name: &str) -> String {
         self.count += 1;
-        format!("Hello {}! I have been called: {}", name, self.count)
+        format!("Hello {}! I have been called {} times.", name, self.count)
     }
 }
 
@@ -113,8 +109,7 @@ You can use the following command to test it:
 
 ```bash
 $ busctl --user call org.zbus.MyGreeter /org/zbus/MyGreeter org.zbus.MyGreeter1 SayHello s "Maria"
-Hello Maria!
-s
+s "Hello Maria! I have been called 1 times."
 ```
 
 ## Blocking API
