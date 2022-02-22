@@ -72,12 +72,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 A simple service that politely greets whoever calls its `SayHello` method:
 
 ```rust,no_run
-use std::{
-    error::Error,
-    future::pending,
-    time::Duration,
-};
-use zbus::{ObjectServer, ConnectionBuilder, dbus_interface, fdo};
+use std::{error::Error, future::pending};
+use zbus::{ConnectionBuilder, dbus_interface};
 
 struct Greeter {
     count: u64
