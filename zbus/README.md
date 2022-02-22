@@ -84,7 +84,7 @@ impl Greeter {
     // Can be `async` as well.
     fn say_hello(&mut self, name: &str) -> String {
         self.count += 1;
-        format!("Hello {}! I have been called: {}", name, self.count)
+        format!("Hello {}! I have been called {} times.", name, self.count)
     }
 }
 
@@ -109,8 +109,7 @@ You can use the following command to test it:
 
 ```bash
 $ busctl --user call org.zbus.MyGreeter /org/zbus/MyGreeter org.zbus.MyGreeter1 SayHello s "Maria"
-Hello Maria!
-s
+s "Hello Maria! I have been called 1 times."
 ```
 
 ## Blocking API
