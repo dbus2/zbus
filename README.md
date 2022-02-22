@@ -11,11 +11,12 @@ libraries.
 
 The project is divided into the following subcrates:
 
-* [`zbus`] and [`zbus_macros`]
-* [`zvariant`] and [`zvariant_derive`]
-* [`zbus_names`]
-* [`zbus_xmlgen`]
-* [`zbus_polkit`]
+* [`zbus`] and [`zbus_macros`]: The main subcrates that provide the API to interact with D-Bus.
+* [`zvariant`] and [`zvariant_derive`]: API for encoding/decoding of data to/from D-Bus wire
+  format.
+* [`zbus_names`]: A collection of types for various [D-Bus bus names][dbn].
+* [`zbus_xmlgen`]: A developer tool to generate Rust code from D-Bus XML interface descriptions.
+* [`zbus_polkit`]: A crate to interact with [PolicyKit].
 
 ## Getting Started
 
@@ -81,12 +82,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 A simple service that politely greets whoever calls its `SayHello` method:
 
 ```rust,no_run
-use std::{
-    error::Error,
-    future::pending,
-    time::Duration,
-};
-use zbus::{ObjectServer, ConnectionBuilder, dbus_interface, fdo};
+use std::{error::Error, future::pending};
+use zbus::{ConnectionBuilder, dbus_interface};
 
 struct Greeter {
     count: u64
@@ -97,7 +94,7 @@ impl Greeter {
     // Can be `async` as well.
     fn say_hello(&mut self, name: &str) -> String {
         self.count += 1;
-        format!("Hello {}! I have been called: {}", name, self.count)
+        format!("Hello {}! I have been called {} times.", name, self.count)
     }
 }
 
@@ -122,8 +119,7 @@ You can use the following command to test it:
 
 ```bash
 $ busctl --user call org.zbus.MyGreeter /org/zbus/MyGreeter org.zbus.MyGreeter1 SayHello s "Maria"
-Hello Maria!
-s
+s "Hello Maria! I have been called 1 times."
 ```
 
 ## Getting Help
@@ -151,3 +147,4 @@ MIT license [LICENSE-MIT](LICENSE-MIT)
 [`zvariant`]: zvariant/README.md
 [`zvariant_derive`]: zvariant_derive/README.md
 [dbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names
+[PolicyKit]: https://gitlab.freedesktop.org/polkit/polkit/
