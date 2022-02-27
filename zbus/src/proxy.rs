@@ -703,7 +703,7 @@ impl<'a> Proxy<'a> {
     {
         let reply = self.call_method(method_name, body).await?;
 
-        Ok(reply.body()?)
+        reply.body()
     }
 
     /// Call a method without expecting a reply
