@@ -38,6 +38,12 @@ fn test_proxy() {
         #[dbus_proxy(property)]
         fn property(&self) -> fdo::Result<Vec<String>>;
 
+        #[dbus_proxy(property(emits_changed_signal = "const"))]
+        fn a_const_property(&self) -> fdo::Result<Vec<String>>;
+
+        #[dbus_proxy(property(emits_changed_signal = "false"))]
+        fn a_live_property(&self) -> fdo::Result<Vec<String>>;
+
         #[dbus_proxy(property)]
         fn set_property(&self, val: u16) -> fdo::Result<()>;
 

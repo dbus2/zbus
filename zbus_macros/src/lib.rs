@@ -51,6 +51,13 @@ mod utils;
 ///
 /// * `property` - expose the method as a property. If the method takes an argument, it must be a
 ///   setter, with a `set_` prefix. Otherwise, it's a getter.
+///   Additional sub-attributes exists to control specific property behaviors:
+///   * `emits_changed_signal` - specifies how property changes are signaled. Valid values are
+///     those documented in [DBus specifications][dbus_emits_changed_signal]:
+///     * `"true"` - (default) change signal is always emitted with the value included.
+///     * `"invalidates"` - change signal is emitted, but the value is not included in the signal.
+///     * `"const"` - property never changes, thus no signal is ever emitted for it.
+///     * `"false"` - change signal is not (guaranteed to be) emitted if the property changes.
 ///
 /// * `signal` - declare a signal just like a D-Bus method. Read the [Signals](#signals) section
 ///    below for details.
@@ -164,6 +171,7 @@ mod utils;
 /// [`zbus::SignalReceiver::receive_for`]:
 /// https://docs.rs/zbus/2.0.0/zbus/struct.SignalReceiver.html#method.receive_for
 /// [`ObjectPath`]: https://docs.rs/zvariant/2.10.0/zvariant/struct.ObjectPath.html
+/// [dbus_emits_changed_signal]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
 #[proc_macro_attribute]
 pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
