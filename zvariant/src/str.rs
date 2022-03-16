@@ -1,5 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use static_assertions::assert_impl_all;
+use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 
 use crate::{Basic, EncodingFormat, Signature, Type};
@@ -12,7 +13,7 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 /// [`Value`]: enum.Value.html#variant.Str
 /// [`&str`]: https://doc.rust-lang.org/std/str/index.html
 /// [`String`]: https://doc.rust-lang.org/std/string/struct.String.html
-#[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize)]
 #[serde(rename(serialize = "zvariant::Str", deserialize = "zvariant::Str"))]
 pub struct Str<'a>(#[serde(borrow)] Inner<'a>);
 
@@ -32,6 +33,18 @@ impl<'a> Default for Inner<'a> {
 impl<'a> PartialEq for Inner<'a> {
     fn eq(&self, other: &Inner<'a>) -> bool {
         self.as_str() == other.as_str()
+    }
+}
+
+impl<'a> Ord for Inner<'a> {
+    fn cmp(&self, other: &Inner<'a>) -> Ordering {
+        self.as_str().cmp(other.as_str())
+    }
+}
+
+impl<'a> PartialOrd for Inner<'a> {
+    fn partial_cmp(&self, other: &Inner<'a>) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -188,5 +201,12 @@ mod tests {
         let string = String::from("value");
         let v = Str::from(&string);
         assert_eq!(v.as_str(), "value");
+    }
+
+    #[test]
+    fn test_ordering() {
+        let first = Str::from("a".to_string());
+        let second = Str::from_static("b");
+        assert!(first < second);
     }
 }
