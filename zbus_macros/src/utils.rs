@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use proc_macro2::TokenStream;
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
@@ -63,7 +65,7 @@ pub fn snake_case(s: &str) -> String {
 
 #[derive(Debug, PartialEq)]
 pub enum ItemAttribute {
-    Property,
+    Property(HashMap<String, String>),
     Signal,
     NoReply,
     OutArgs(Vec<String>),
@@ -76,7 +78,7 @@ pub enum ItemAttribute {
 
 impl ItemAttribute {
     pub fn is_property(&self) -> bool {
-        self == &Self::Property
+        matches!(self, Self::Property(_))
     }
 
     pub fn is_signal(&self) -> bool {
@@ -96,15 +98,35 @@ pub fn find_attribute_meta(attrs: &[Attribute], attr_name: &str) -> Result<Optio
     };
     match meta? {
         Meta::List(n) => Ok(Some(n)),
-        _ => panic!("wrong meta type"),
+        _ => panic!("wrong meta type, expected list"),
     }
 }
 
+fn parse_ident(meta: &NestedMeta) -> String {
+    let meta = match meta {
+        NestedMeta::Meta(m) => m,
+        _ => panic!("wrong meta type, expected meta"),
+    };
+
+    let ident = match meta {
+        Meta::Path(p) => p.get_ident().unwrap(),
+        Meta::NameValue(n) => match n.path.get_ident() {
+            None => panic!("missing ident"),
+            Some(ident) => ident,
+        },
+        Meta::List(l) => match l.path.get_ident() {
+            None => panic!("missing ident"),
+            Some(ident) => ident,
+        },
+    };
+    ident.to_string()
+}
+
 // parse a single meta like: ident = "value". meta can have multiple values too.
-fn parse_attribute(meta: &NestedMeta) -> (String, Vec<String>) {
+fn parse_single_attribute(meta: &NestedMeta) -> (String, Vec<String>) {
     let meta = match &meta {
         NestedMeta::Meta(m) => m,
-        _ => panic!("wrong meta type"),
+        _ => panic!("wrong meta type, expected meta"),
     };
 
     let (ident, values) = match meta {
@@ -112,7 +134,7 @@ fn parse_attribute(meta: &NestedMeta) -> (String, Vec<String>) {
         Meta::NameValue(n) => {
             let value = match &n.lit {
                 Lit::Str(s) => s.value(),
-                _ => panic!("wrong meta type"),
+                _ => panic!("wrong meta type, expected string"),
             };
 
             let ident = match n.path.get_ident() {
@@ -128,9 +150,9 @@ fn parse_attribute(meta: &NestedMeta) -> (String, Vec<String>) {
                 match nested {
                     NestedMeta::Lit(lit) => match lit {
                         Lit::Str(s) => values.push(s.value()),
-                        _ => panic!("wrong meta type"),
+                        _ => panic!("wrong meta type, expected string"),
                     },
-                    NestedMeta::Meta(_) => panic!("wrong meta type"),
+                    x => panic!("wrong meta type, expected literal but got {:?}", x),
                 }
             }
 
@@ -147,18 +169,53 @@ fn parse_attribute(meta: &NestedMeta) -> (String, Vec<String>) {
 }
 
 fn proxy_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
-    let (ident, mut values) = parse_attribute(meta);
+    let ident = parse_ident(meta);
+    match ident.as_str() {
+        "property" => {
+            let mut attrs = HashMap::new();
+            property_parse_item_attribute(meta, &mut attrs);
+            Ok(ItemAttribute::Property(attrs))
+        }
+        _ => parse_simple_attribute(meta),
+    }
+}
 
+fn parse_simple_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
+    let (ident, mut values) = parse_single_attribute(meta);
     match ident.as_ref() {
         "name" => Ok(ItemAttribute::Name(values.remove(0))),
-        "property" => Ok(ItemAttribute::Property),
         "signal" => Ok(ItemAttribute::Signal),
         "no_reply" => Ok(ItemAttribute::NoReply),
         "out_args" => Ok(ItemAttribute::OutArgs(values)),
         "object" => Ok(ItemAttribute::Object(values.remove(0))),
         "async_object" => Ok(ItemAttribute::AsyncObject(values.remove(0))),
         "blocking_object" => Ok(ItemAttribute::BlockingObject(values.remove(0))),
+        "property" => unreachable!(),
         s => panic!("Unknown item meta {}", s),
+    }
+}
+
+fn property_parse_item_attribute(meta: &NestedMeta, attrs: &mut HashMap<String, String>) {
+    let meta = match &meta {
+        NestedMeta::Meta(m) => m,
+        _ => panic!("wrong meta type, expected meta"),
+    };
+
+    match meta {
+        Meta::Path(_) => {}
+        Meta::NameValue(n) => {
+            let key = n.path.get_ident().unwrap().to_string();
+            let value = match &n.lit {
+                Lit::Str(s) => s.value(),
+                _ => panic!("wrong meta type, expected string"),
+            };
+            attrs.insert(key, value);
+        }
+        Meta::List(l) => {
+            for nested in l.nested.iter() {
+                property_parse_item_attribute(nested, attrs);
+            }
+        }
     }
 }
 
@@ -180,7 +237,7 @@ pub fn parse_item_attributes(attrs: &[Attribute], attr_name: &str) -> Result<Vec
 }
 
 fn error_parse_item_attribute(meta: &NestedMeta) -> Result<ItemAttribute> {
-    let (ident, mut values) = parse_attribute(meta);
+    let (ident, mut values) = parse_single_attribute(meta);
 
     match ident.as_ref() {
         "name" => Ok(ItemAttribute::Name(values.remove(0))),

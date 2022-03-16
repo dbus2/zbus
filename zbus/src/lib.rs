@@ -716,4 +716,80 @@ mod tests {
 
         child.join().unwrap();
     }
+
+    #[test]
+    #[timeout(15000)]
+    fn uncached_property() {
+        block_on(test_uncached_property()).unwrap();
+    }
+
+    async fn test_uncached_property() -> Result<()> {
+        // A dummy boolean test service. It starts as `false` and can be
+        // flipped to `true`. Two properties can access the inner value, with
+        // and without caching.
+        #[derive(Default)]
+        struct ServiceUncachedPropertyTest(bool);
+        #[crate::dbus_interface(name = "org.freedesktop.zbus.UncachedPropertyTest")]
+        impl ServiceUncachedPropertyTest {
+            #[dbus_interface(property)]
+            fn cached_prop(&self) -> bool {
+                self.0
+            }
+            #[dbus_interface(property)]
+            fn uncached_prop(&self) -> bool {
+                self.0
+            }
+            async fn set_inner_to_true(&mut self) -> zbus::fdo::Result<()> {
+                self.0 = true;
+                Ok(())
+            }
+        }
+
+        #[crate::dbus_proxy(
+            interface = "org.freedesktop.zbus.UncachedPropertyTest",
+            default_service = "org.freedesktop.zbus.UncachedPropertyTest",
+            default_path = "/org/freedesktop/zbus/UncachedPropertyTest"
+        )]
+        trait UncachedPropertyTest {
+            #[dbus_proxy(property)]
+            fn cached_prop(&self) -> zbus::Result<bool>;
+
+            #[dbus_proxy(property(emits_changed_signal = "false"))]
+            fn uncached_prop(&self) -> zbus::Result<bool>;
+
+            fn set_inner_to_true(&self) -> zbus::Result<()>;
+        }
+
+        let _service = crate::ConnectionBuilder::session()
+            .unwrap()
+            .serve_at(
+                "/org/freedesktop/zbus/UncachedPropertyTest",
+                ServiceUncachedPropertyTest(false),
+            )
+            .unwrap()
+            .name("org.freedesktop.zbus.UncachedPropertyTest")
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        let client_conn = crate::Connection::session().await.unwrap();
+        let client = UncachedPropertyTestProxy::new(&client_conn).await.unwrap();
+
+        // Query properties; this populates the cache too.
+        assert_eq!(client.cached_prop().await.unwrap(), false);
+        assert_eq!(client.uncached_prop().await.unwrap(), false);
+
+        // Flip the inner value so we can observe the different semantics of
+        // the two properties.
+        client.set_inner_to_true().await.unwrap();
+
+        // Query properties again; the first one should incur a stale read from
+        // cache, while the second one should be able to read the live/updated
+        // value.
+        assert_eq!(client.cached_prop().await.unwrap(), false);
+        assert_eq!(client.uncached_prop().await.unwrap(), true);
+
+        Ok(())
+    }
 }
