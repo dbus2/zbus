@@ -56,6 +56,12 @@ impl<'a, T> ProxyBuilder<'a, T> {
         Self(self.0.cache_properties(cache))
     }
 
+    /// Specify a set of properties (by name) which should be excluded from caching.
+    #[must_use]
+    pub fn uncached_properties(self, properties: &[&'a str]) -> Self {
+        Self(self.0.uncached_properties(properties))
+    }
+
     /// Build a proxy from the builder.
     ///
     /// # Panics

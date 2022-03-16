@@ -1,8 +1,8 @@
-use std::{convert::TryInto, marker::PhantomData, sync::Arc};
+use std::{collections::HashSet, convert::TryInto, marker::PhantomData, sync::Arc};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
-use zvariant::ObjectPath;
+use zvariant::{ObjectPath, Str};
 
 use crate::{Connection, Error, Proxy, ProxyInner, Result};
 
@@ -34,6 +34,7 @@ pub struct ProxyBuilder<'a, T = ()> {
     interface: Option<InterfaceName<'a>>,
     proxy_type: PhantomData<T>,
     cache: CacheProperties,
+    uncached_properties: HashSet<Str<'a>>,
 }
 
 impl<'a, T> Clone for ProxyBuilder<'a, T> {
@@ -44,6 +45,7 @@ impl<'a, T> Clone for ProxyBuilder<'a, T> {
             path: self.path.clone(),
             interface: self.interface.clone(),
             cache: self.cache,
+            uncached_properties: self.uncached_properties.clone(),
             proxy_type: PhantomData,
         }
     }
@@ -61,6 +63,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
             path: None,
             interface: None,
             cache: CacheProperties::default(),
+            uncached_properties: HashSet::new(),
             proxy_type: PhantomData,
         }
     }
@@ -104,15 +107,33 @@ impl<'a, T> ProxyBuilder<'a, T> {
         self
     }
 
+    /// Specify a set of properties (by name) which should be excluded from caching.
+    #[must_use]
+    pub fn uncached_properties(mut self, properties: &[&'a str]) -> Self {
+        for prop_name in properties {
+            self.uncached_properties.insert(Str::from(*prop_name));
+        }
+        self
+    }
+
     pub(crate) fn build_internal(self) -> Proxy<'a> {
         let conn = self.conn;
         let destination = self.destination.expect("missing `destination`");
         let path = self.path.expect("missing `path`");
         let interface = self.interface.expect("missing `interface`");
         let cache = self.cache;
+        let mut uncached_properties = self.uncached_properties;
+        uncached_properties.shrink_to_fit();
 
         Proxy {
-            inner: Arc::new(ProxyInner::new(conn, destination, path, interface, cache)),
+            inner: Arc::new(ProxyInner::new(
+                conn,
+                destination,
+                path,
+                interface,
+                cache,
+                uncached_properties,
+            )),
         }
     }
 
@@ -155,6 +176,7 @@ where
                 InterfaceName::from_static_str(T::INTERFACE).expect("invalid interface name"),
             ),
             cache: CacheProperties::default(),
+            uncached_properties: HashSet::new(),
             proxy_type: PhantomData,
         }
     }

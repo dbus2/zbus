@@ -8,7 +8,7 @@ use once_cell::sync::OnceCell;
 use ordered_stream::{join as join_streams, FromFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
     future::{Future, Ready},
     ops::Deref,
@@ -18,7 +18,7 @@ use std::{
 };
 
 use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName, WellKnownName};
-use zvariant::{ObjectPath, Optional, OwnedValue, Value};
+use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
@@ -107,7 +107,11 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) path: ObjectPath<'a>,
     pub(crate) interface: InterfaceName<'a>,
 
+    /// Cache of property values.
     property_cache: Option<OnceCell<(Arc<PropertiesCache>, Task<()>)>>,
+    /// Set of properties which do not get cached, by name.
+    /// This overrides proxy-level caching behavior.
+    uncached_properties: HashSet<Str<'a>>,
 }
 
 impl Drop for ProxyInnerStatic {
@@ -259,10 +263,20 @@ where
 }
 
 impl PropertiesCache {
-    fn update_cache(&self, changed: &HashMap<&str, Value<'_>>, invalidated: Vec<&str>) {
+    fn update_cache(
+        &self,
+        uncached_properties: &HashSet<Str<'_>>,
+        changed: &HashMap<&str, Value<'_>>,
+        invalidated: Vec<&str>,
+    ) {
         let mut values = self.values.write().expect("lock poisoned");
 
         for inval in invalidated {
+            if uncached_properties.contains(&Str::from(inval)) {
+                // TODO: Log that a cache invalidation event has been ignored.
+                continue;
+            }
+
             if let Some(entry) = values.get_mut(&*inval) {
                 entry.value = None;
                 entry.event.notify(usize::MAX);
@@ -270,6 +284,11 @@ impl PropertiesCache {
         }
 
         for (property_name, value) in changed {
+            if uncached_properties.contains(&Str::from(*property_name)) {
+                // TODO: Log that a cache update event has been ignored.
+                continue;
+            }
+
             let entry = values
                 .entry(property_name.to_string())
                 .or_insert_with(PropertyValue::default);
@@ -298,6 +317,7 @@ impl<'a> ProxyInner<'a> {
         path: ObjectPath<'a>,
         interface: InterfaceName<'a>,
         cache: CacheProperties,
+        uncached_properties: HashSet<Str<'a>>,
     ) -> Self {
         let property_cache = match cache {
             CacheProperties::Yes | CacheProperties::Lazily => Some(OnceCell::new()),
@@ -312,6 +332,7 @@ impl<'a> ProxyInner<'a> {
             path,
             interface,
             property_cache,
+            uncached_properties,
         }
     }
 
@@ -498,6 +519,12 @@ impl<'a> Proxy<'a> {
 
             let interface = self.interface().to_owned();
             let properties = cache.clone();
+            let uncached_properties: HashSet<zvariant::Str<'static>> = self
+                .inner
+                .uncached_properties
+                .iter()
+                .map(|s| s.to_owned())
+                .collect();
 
             let task = self.connection().executor().spawn(async move {
                 let prop_changes = match proxy.receive_properties_changed().await {
@@ -534,6 +561,7 @@ impl<'a> Proxy<'a> {
                             if let Ok(args) = update.args() {
                                 if args.interface_name == interface {
                                     properties.update_cache(
+                                        &uncached_properties,
                                         &args.changed_properties,
                                         args.invalidated_properties,
                                     );
@@ -541,9 +569,9 @@ impl<'a> Proxy<'a> {
                             }
                         }
                         Some(Either::Right(Ok(populate))) => {
-                            let result = populate
-                                .body()
-                                .map(|values| properties.update_cache(&values, Vec::new()));
+                            let result = populate.body().map(|values| {
+                                properties.update_cache(&uncached_properties, &values, Vec::new())
+                            });
                             let _ = send.send(result).await;
                             send.close();
                         }
@@ -633,7 +661,7 @@ impl<'a> Proxy<'a> {
 
     /// Get the property `property_name`.
     ///
-    /// Get the property value from the cache (if caching is enabled on this proxy) or call the
+    /// Get the property value from the cache (if caching is enabled) or call the
     /// `Get` method of the `org.freedesktop.DBus.Properties` interface.
     pub async fn get_property<T>(&self, property_name: &str) -> Result<T>
     where

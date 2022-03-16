@@ -1,6 +1,7 @@
 use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use regex::Regex;
+use std::collections::HashMap;
 use syn::{
     self, fold::Fold, parse_quote, spanned::Spanned, AttributeArgs, Error, FnArg, Ident, ItemTrait,
     NestedMeta, ReturnType, TraitItemMethod, Type,
@@ -176,13 +177,19 @@ pub fn create_proxy(
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
     let mut has_properties = false;
+    let mut uncached_properties: Vec<String> = vec![];
+
     let async_opts = AsyncOpts::new(blocking);
 
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
             let method_name = m.sig.ident.to_string();
             let attrs = parse_item_attributes(&m.attrs, "dbus_proxy")?;
-            let is_property = attrs.iter().any(|x| x.is_property());
+            let property_attrs = attrs.iter().find_map(|x| match x {
+                ItemAttribute::Property(v) => Some(v),
+                _ => None,
+            });
+            let is_property = property_attrs.is_some();
             let is_signal = attrs.iter().any(|x| x.is_signal());
             let has_inputs = m.sig.inputs.len() > 1;
             let name = attrs
@@ -199,9 +206,14 @@ pub fn create_proxy(
                         &method_name
                     })
                 });
-            let m = if is_property {
+            let m = if let Some(prop_attrs) = property_attrs {
+                assert!(is_property);
                 has_properties = true;
-                gen_proxy_property(&name, &method_name, m, &async_opts)
+                let emits_changed_signal = PropertyEmitsChangedSignal::parse_from_attrs(prop_attrs);
+                if let PropertyEmitsChangedSignal::False = emits_changed_signal {
+                    uncached_properties.push(name.clone());
+                }
+                gen_proxy_property(&name, &method_name, m, &async_opts, emits_changed_signal)
             } else if is_signal {
                 let (method, types) = gen_proxy_signal(
                     &proxy_name,
@@ -255,12 +267,14 @@ pub fn create_proxy(
 
             /// Returns a customizable builder for this proxy.
             pub fn builder(conn: &#connection) -> #builder<'c, Self> {
-                let cache_props = if #has_properties {
-                    #zbus::CacheProperties::default()
+                let mut builder = #builder::new(conn);
+                if #has_properties {
+                    let uncached = vec![#(#uncached_properties),*];
+                    builder.cache_properties(#zbus::CacheProperties::default())
+                           .uncached_properties(&uncached)
                 } else {
-                    #zbus::CacheProperties::No
-                };
-                #builder::new(conn).cache_properties(cache_props)
+                    builder.cache_properties(#zbus::CacheProperties::No)
+                }
             }
 
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
@@ -467,11 +481,48 @@ fn gen_proxy_method_call(
     }
 }
 
+/// Standard annotation `org.freedesktop.DBus.Property.EmitsChangedSignal`.
+///
+/// See <https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format>.
+#[derive(Debug)]
+enum PropertyEmitsChangedSignal {
+    True,
+    Invalidates,
+    Const,
+    False,
+}
+
+impl Default for PropertyEmitsChangedSignal {
+    fn default() -> Self {
+        PropertyEmitsChangedSignal::True
+    }
+}
+
+impl PropertyEmitsChangedSignal {
+    /// Macro property attribute key, like `#[dbus_proxy(property(emits_changed_signal = "..."))]`.
+    const ATTRIBUTE_KEY: &'static str = "emits_changed_signal";
+
+    /// Parse the value from macro attributes.
+    fn parse_from_attrs(attrs: &HashMap<String, String>) -> Self {
+        attrs
+            .get(Self::ATTRIBUTE_KEY)
+            .map(|val| match val.as_str() {
+                "true" => PropertyEmitsChangedSignal::True,
+                "invalidates" => PropertyEmitsChangedSignal::Invalidates,
+                "const" => PropertyEmitsChangedSignal::Const,
+                "false" => PropertyEmitsChangedSignal::False,
+                x => panic!("Invalid attribute '{} = {}'", Self::ATTRIBUTE_KEY, x),
+            })
+            .unwrap_or_default()
+    }
+}
+
 fn gen_proxy_property(
     property_name: &str,
     method_name: &str,
     m: &TraitItemMethod,
     async_opts: &AsyncOpts,
+    emits_changed_signal: PropertyEmitsChangedSignal,
 ) -> TokenStream {
     let AsyncOpts {
         usage,
@@ -516,29 +567,52 @@ fn gen_proxy_property(
             ("zbus::Proxy", quote! { #zbus::PropertyStream })
         };
 
-        let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
-        let receive = format_ident!("receive_{}_changed", method_name);
-        let gen_doc = format!(
-            "Create a stream for the `{}` property changes. \
+        let receive_method = match emits_changed_signal {
+            PropertyEmitsChangedSignal::True | PropertyEmitsChangedSignal::Invalidates => {
+                let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
+                let receive = format_ident!("receive_{}_changed", method_name);
+                let gen_doc = format!(
+                    "Create a stream for the `{}` property changes. \
                 This is a convenient wrapper around [`{}::receive_property_changed`].",
-            property_name, proxy_name
-        );
-        let receive = quote! {
-            #[doc = #gen_doc]
-            pub #usage fn #receive#ty_generics(
-                &self
-            ) -> #prop_stream<'c, <#ret_type as #zbus::ResultAdapter>::Ok>
-            #where_clause
-            {
-                self.0.receive_property_changed(#property_name)#wait
+                    property_name, proxy_name
+                );
+                quote! {
+                    #[doc = #gen_doc]
+                    pub #usage fn #receive#ty_generics(
+                        &self
+                    ) -> #prop_stream<'c, <#ret_type as #zbus::ResultAdapter>::Ok>
+                    #where_clause
+                    {
+                        self.0.receive_property_changed(#property_name)#wait
+                    }
+                }
+            }
+            PropertyEmitsChangedSignal::False | PropertyEmitsChangedSignal::Const => {
+                quote! {}
             }
         };
 
-        let cached_getter = format_ident!("cached_{}", method_name);
-        let cached_doc = format!(
-            " Get the cached value of the `{}` property, or `None` if the property is not cached.",
-            property_name,
-        );
+        let cached_getter_method = match emits_changed_signal {
+            PropertyEmitsChangedSignal::True
+            | PropertyEmitsChangedSignal::Invalidates
+            | PropertyEmitsChangedSignal::Const => {
+                let cached_getter = format_ident!("cached_{}", method_name);
+                let cached_doc = format!(
+                    " Get the cached value of the `{}` property, or `None` if the property is not cached.",
+                    property_name,
+                );
+                quote! {
+                    #[doc = #cached_doc]
+                    pub fn #cached_getter(&self) -> ::std::result::Result<
+                        ::std::option::Option<<#ret_type as #zbus::ResultAdapter>::Ok>,
+                        <#ret_type as #zbus::ResultAdapter>::Err>
+                    {
+                        self.0.cached_property(#property_name).map_err(::std::convert::Into::into)
+                    }
+                }
+            }
+            PropertyEmitsChangedSignal::False => quote! {},
+        };
 
         quote! {
             #(#doc)*
@@ -547,15 +621,9 @@ fn gen_proxy_property(
                 #body
             }
 
-            #[doc = #cached_doc]
-            pub fn #cached_getter(&self) -> ::std::result::Result<
-                ::std::option::Option<<#ret_type as #zbus::ResultAdapter>::Ok>,
-                <#ret_type as #zbus::ResultAdapter>::Err>
-            {
-                self.0.cached_property(#property_name).map_err(::std::convert::Into::into)
-            }
+            #cached_getter_method
 
-            #receive
+            #receive_method
         }
     }
 }
