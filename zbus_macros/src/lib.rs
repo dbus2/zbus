@@ -55,9 +55,16 @@ mod utils;
 ///   * `emits_changed_signal` - specifies how property changes are signaled. Valid values are
 ///     those documented in [DBus specifications][dbus_emits_changed_signal]:
 ///     * `"true"` - (default) change signal is always emitted with the value included.
+///       This uses the default caching behavior of the proxy, and generates a listener method for
+///       the change signal.
 ///     * `"invalidates"` - change signal is emitted, but the value is not included in the signal.
+///       This has the same behavior as `"true"`.
 ///     * `"const"` - property never changes, thus no signal is ever emitted for it.
+///       This uses the default caching behavior of the proxy, but does not generate a listener
+///       method for the change signal.
 ///     * `"false"` - change signal is not (guaranteed to be) emitted if the property changes.
+///       This disables property value caching, and does not generate a listener method for the
+///       change signal.
 ///
 /// * `signal` - declare a signal just like a D-Bus method. Read the [Signals](#signals) section
 ///    below for details.
