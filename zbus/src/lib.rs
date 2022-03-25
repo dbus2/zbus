@@ -777,8 +777,8 @@ mod tests {
         let client = UncachedPropertyTestProxy::new(&client_conn).await.unwrap();
 
         // Query properties; this populates the cache too.
-        assert_eq!(client.cached_prop().await.unwrap(), false);
-        assert_eq!(client.uncached_prop().await.unwrap(), false);
+        assert!(!client.cached_prop().await.unwrap());
+        assert!(!client.uncached_prop().await.unwrap());
 
         // Flip the inner value so we can observe the different semantics of
         // the two properties.
@@ -787,8 +787,8 @@ mod tests {
         // Query properties again; the first one should incur a stale read from
         // cache, while the second one should be able to read the live/updated
         // value.
-        assert_eq!(client.cached_prop().await.unwrap(), false);
-        assert_eq!(client.uncached_prop().await.unwrap(), true);
+        assert!(!client.cached_prop().await.unwrap());
+        assert!(client.uncached_prop().await.unwrap());
 
         Ok(())
     }
