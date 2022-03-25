@@ -1,7 +1,9 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use static_assertions::assert_impl_all;
-use std::cmp::Ordering;
-use std::hash::{Hash, Hasher};
+use std::{
+    cmp::Ordering,
+    hash::{Hash, Hasher},
+};
 
 use crate::{Basic, EncodingFormat, Signature, Type};
 
