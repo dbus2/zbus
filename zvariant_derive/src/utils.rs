@@ -95,13 +95,14 @@ pub fn get_signature_attribute(attrs: &[Attribute], span: Span) -> Result<Option
     let attrs = parse_item_attributes(attrs)?;
     attrs
         .into_iter()
-        .find_map(|x| match x {
-            ItemAttribute::Signature(s) => Some(Ok(s)),
-            ItemAttribute::Rename(_) => Some(Err(syn::Error::new(
+        .map(|x| match x {
+            ItemAttribute::Signature(s) => Ok(s),
+            ItemAttribute::Rename(_) => Err(syn::Error::new(
                 span,
                 "`rename` attribute is not applicable to type declarations",
-            ))),
+            )),
         })
+        .next()
         .transpose()
 }
 
@@ -109,13 +110,14 @@ pub fn get_rename_attribute(attrs: &[Attribute], span: Span) -> Result<Option<St
     let attrs = parse_item_attributes(attrs)?;
     attrs
         .into_iter()
-        .find_map(|x| match x {
-            ItemAttribute::Rename(s) => Some(Ok(s)),
-            ItemAttribute::Signature(_) => Some(Err(syn::Error::new(
+        .map(|x| match x {
+            ItemAttribute::Rename(s) => Ok(s),
+            ItemAttribute::Signature(_) => Err(syn::Error::new(
                 span,
                 "`signature` not applicable to fields",
-            ))),
+            )),
         })
+        .next()
         .transpose()
 }
 
