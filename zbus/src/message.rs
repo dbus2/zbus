@@ -892,7 +892,7 @@ mod tests {
         let message_builder = MessageBuilder::signal("/", "test.test", "test")?;
         let message = unsafe {
             message_builder.build_raw_body(
-                &raw_body,
+                raw_body,
                 "ai",
                 #[cfg(unix)]
                 vec![],
