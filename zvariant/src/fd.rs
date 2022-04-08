@@ -1,6 +1,6 @@
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use static_assertions::assert_impl_all;
-use std::os::unix::io;
+use std::os::unix::{io, prelude::BorrowedFd};
 
 use crate::{Basic, EncodingFormat, Signature, Type};
 
@@ -94,6 +94,12 @@ impl std::fmt::Display for Fd {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct OwnedFd {
     inner: io::RawFd,
+}
+
+impl OwnedFd {
+    pub unsafe fn borrow_raw_fd(self) -> BorrowedFd<'static> {
+        BorrowedFd::borrow_raw(self.inner)
+    }
 }
 
 impl Drop for OwnedFd {

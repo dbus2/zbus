@@ -3,6 +3,7 @@ use async_io::Async;
 use futures_core::ready;
 use std::{
     io,
+    pin::Pin,
     task::{Context, Poll},
 };
 #[cfg(feature = "async-io")]
@@ -79,10 +80,10 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
 }
 
 #[cfg(unix)]
-type PollRecvmsg = Poll<io::Result<(usize, Vec<OwnedFd>)>>;
+type PollRecvmsg = io::Result<(usize, Vec<OwnedFd>)>;
 
 #[cfg(not(unix))]
-type PollRecvmsg = Poll<io::Result<usize>>;
+type PollRecvmsg = io::Result<usize>;
 
 /// Trait representing some transport layer over which the DBus protocol can be used
 ///
@@ -93,6 +94,7 @@ type PollRecvmsg = Poll<io::Result<usize>>;
 /// free to submit pull requests to add support for more runtimes to zbus itself so rust's orphan
 /// rules don't force the use of a wrapper struct (and to avoid duplicating the work across many
 /// projects).
+#[async_trait::async_trait]
 pub trait Socket: std::fmt::Debug + Send + Sync {
     /// Supports passing file descriptors.
     fn can_pass_unix_fd(&self) -> bool {
@@ -103,7 +105,7 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
     ///
     /// On success, returns the number of bytes read as well as a `Vec` containing
     /// any associated file descriptors.
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg;
+    async fn poll_recvmsg(&mut self, buf: &mut [u8]) -> PollRecvmsg;
 
     /// Attempt to send a message on the socket
     ///
@@ -116,12 +118,11 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
     ///
     /// If the underlying transport does not support transmitting file descriptors, this
     /// will return `Err(ErrorKind::InvalidInput)`.
-    fn poll_sendmsg(
+    async fn poll_sendmsg(
         &mut self,
-        cx: &mut Context<'_>,
         buffer: &[u8],
         #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>>;
+    ) -> io::Result<usize>;
 
     /// Close the socket.
     ///
@@ -141,27 +142,28 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
     }
 }
 
+#[async_trait::async_trait]
 impl Socket for Box<dyn Socket> {
     fn can_pass_unix_fd(&self) -> bool {
         (&**self).can_pass_unix_fd()
     }
 
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        (&mut **self).poll_recvmsg(cx, buf)
+    async fn poll_recvmsg(&mut self, buf: &mut [u8]) -> PollRecvmsg {
+        (&mut **self).poll_recvmsg(buf).await
     }
 
-    fn poll_sendmsg(
+    async fn poll_sendmsg(
         &mut self,
-        cx: &mut Context<'_>,
         buffer: &[u8],
         #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
-        (&mut **self).poll_sendmsg(
-            cx,
-            buffer,
-            #[cfg(unix)]
-            fds,
-        )
+    ) -> io::Result<usize> {
+        (&mut **self)
+            .poll_sendmsg(
+                buffer,
+                #[cfg(unix)]
+                fds,
+            )
+            .await
     }
 
     fn close(&self) -> io::Result<()> {
@@ -180,42 +182,87 @@ impl Socket for Box<dyn Socket> {
 }
 
 #[cfg(all(unix, feature = "async-io"))]
-impl Socket for Async<UnixStream> {
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
+struct AsyncFdRecv<'buf> {
+    socket: &'buf Async<UnixStream>,
+    buf: &'buf mut [u8],
+}
+
+#[cfg(all(unix, feature = "async-io"))]
+impl<'buf> std::future::Future for AsyncFdRecv<'buf> {
+    type Output = PollRecvmsg;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = &mut *self;
         let (len, fds) = loop {
-            match fd_recvmsg(self.as_raw_fd(), buf) {
+            match fd_recvmsg(self.socket.as_raw_fd(), self.buf) {
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => match self.poll_readable(cx) {
-                    Poll::Pending => return Poll::Pending,
-                    Poll::Ready(res) => res?,
-                },
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    match self.socket.poll_readable(cx) {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready(res) => res?,
+                    }
+                }
                 v => break v?,
             }
         };
         Poll::Ready(Ok((len, fds)))
     }
+}
 
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buffer: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
-        loop {
+#[cfg(all(unix, feature = "async-io"))]
+struct AsyncFdSend<'buf> {
+    socket: &'buf Async<UnixStream>,
+    buf: &'buf [u8],
+    #[cfg(unix)]
+    fds: &'buf [RawFd],
+}
+
+#[cfg(all(unix, feature = "async-io"))]
+impl std::future::Future for AsyncFdSend<'_> {
+    type Output = io::Result<usize>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = &mut *self;
+        let len = loop {
             match fd_sendmsg(
-                self.as_raw_fd(),
-                buffer,
+                this.socket.as_raw_fd(),
+                this.buf,
                 #[cfg(unix)]
-                fds,
+                this.fds,
             ) {
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => match self.poll_writable(cx) {
-                    Poll::Pending => return Poll::Pending,
-                    Poll::Ready(res) => res?,
-                },
-                v => return Poll::Ready(v),
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    match this.socket.poll_writable(cx) {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready(res) => res?,
+                    }
+                }
+                v => break v?,
             }
+        };
+        Poll::Ready(Ok(len))
+    }
+}
+
+#[cfg(all(unix, feature = "async-io"))]
+#[async_trait::async_trait]
+impl Socket for Async<UnixStream> {
+    async fn poll_recvmsg(&mut self, buf: &mut [u8]) -> PollRecvmsg {
+        AsyncFdRecv { socket: self, buf }.await
+    }
+
+    async fn poll_sendmsg(
+        &mut self,
+        buffer: &[u8],
+        #[cfg(unix)] fds: &[RawFd],
+    ) -> io::Result<usize> {
+        AsyncFdSend {
+            socket: self,
+            buf: buffer,
+            #[cfg(unix)]
+            fds,
         }
+        .await
     }
 
     fn close(&self) -> io::Result<()> {
@@ -229,40 +276,24 @@ impl Socket for Async<UnixStream> {
 }
 
 #[cfg(all(unix, feature = "tokio"))]
-impl Socket for tokio::net::UnixStream {
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        loop {
-            match self.try_io(tokio::io::Interest::READABLE, || {
-                fd_recvmsg(self.as_raw_fd(), buf)
-            }) {
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => match self.poll_read_ready(cx) {
-                    Poll::Pending => return Poll::Pending,
-                    Poll::Ready(res) => res?,
-                },
-                v => return Poll::Ready(v),
-            }
-        }
-    }
+struct TokioFdRecv<'buf> {
+    socket: &'buf tokio::net::UnixStream,
+    buf: &'buf mut [u8],
+}
 
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buffer: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
+#[cfg(all(unix, feature = "tokio"))]
+impl<'buf> std::future::Future for TokioFdRecv<'buf> {
+    type Output = PollRecvmsg;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = &mut *self;
         loop {
-            match self.try_io(tokio::io::Interest::WRITABLE, || {
-                fd_sendmsg(
-                    self.as_raw_fd(),
-                    buffer,
-                    #[cfg(unix)]
-                    fds,
-                )
+            match this.socket.try_io(tokio::io::Interest::READABLE, || {
+                fd_recvmsg(this.as_raw_fd(), buf)
             }) {
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    match self.poll_write_ready(cx) {
+                    match this.socket.poll_read_ready(cx) {
                         Poll::Pending => return Poll::Pending,
                         Poll::Ready(res) => res?,
                     }
@@ -270,6 +301,63 @@ impl Socket for tokio::net::UnixStream {
                 v => return Poll::Ready(v),
             }
         }
+    }
+}
+
+#[cfg(all(unix, feature = "tokio"))]
+struct TokioFdSend<'buf> {
+    socket: &'buf tokio::net::UnixStream,
+    buf: &'buf [u8],
+    #[cfg(unix)]
+    fds: &'buf [RawFd],
+}
+
+#[cfg(all(unix, feature = "tokio"))]
+impl std::future::Future for TokioFdSend<'_> {
+    type Output = io::Result<usize>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = &mut *self;
+        loop {
+            match this.socket.try_io(tokio::io::Interest::WRITABLE, || {
+                fd_sendmsg(
+                    this.socket.as_raw_fd(),
+                    buffer,
+                    #[cfg(unix)]
+                    fds,
+                )
+            }) {
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    match this.socket.poll_write_ready(cx) {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready(res) => res?,
+                    }
+                }
+                v => return Poll::Ready(v),
+            }
+        }
+    }
+}
+
+#[cfg(all(unix, feature = "tokio"))]
+impl Socket for tokio::net::UnixStream {
+    fn poll_recvmsg(&mut self, buf: &mut [u8]) -> PollRecvmsg {
+        TokioFdRecv {
+            socket: self,
+            buf: buffer,
+        }
+        .await
+    }
+
+    fn poll_sendmsg(&mut self, buffer: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
+        TokioFdSend {
+            socket: self,
+            buf: buffer,
+            #[cfg(unix)]
+            fds,
+        }
+        .await
     }
 
     fn close(&self) -> io::Result<()> {
@@ -288,7 +376,7 @@ impl Socket for Async<UnixStream> {
         false
     }
 
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
+    fn poll_recvmsg(&mut self, buf: &mut [u8]) -> PollRecvmsg {
         loop {
             match (&mut *self).get_mut().read(buf) {
                 Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
@@ -302,7 +390,7 @@ impl Socket for Async<UnixStream> {
         }
     }
 
-    fn poll_sendmsg(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+    fn poll_sendmsg(&mut self, buf: &[u8]) -> io::Result<usize> {
         loop {
             match (&mut *self).get_mut().write(buf) {
                 Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
@@ -330,13 +418,14 @@ impl Socket for Async<UnixStream> {
     }
 }
 
+/*
 #[cfg(feature = "async-io")]
 impl Socket for Async<TcpStream> {
     fn can_pass_unix_fd(&self) -> bool {
         false
     }
 
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
+    fn poll_recvmsg(&mut self, buf: &mut [u8]) -> PollRecvmsg {
         #[cfg(unix)]
         let fds = vec![];
 
@@ -361,7 +450,7 @@ impl Socket for Async<TcpStream> {
         cx: &mut Context<'_>,
         buf: &[u8],
         #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
+    ) -> io::Result<usize> {
         #[cfg(unix)]
         if !fds.is_empty() {
             return Poll::Ready(Err(io::Error::new(
@@ -401,7 +490,7 @@ impl Socket for Async<TcpStream> {
 
         None
     }
-}
+}*/
 
 #[cfg(feature = "tokio")]
 impl Socket for tokio::net::TcpStream {
@@ -409,7 +498,7 @@ impl Socket for tokio::net::TcpStream {
         false
     }
 
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
+    fn poll_recvmsg(&mut self, buf: &mut [u8]) -> PollRecvmsg {
         #[cfg(unix)]
         let fds = vec![];
 
@@ -434,7 +523,7 @@ impl Socket for tokio::net::TcpStream {
         cx: &mut Context<'_>,
         buf: &[u8],
         #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
+    ) -> io::Result<usize> {
         #[cfg(unix)]
         if !fds.is_empty() {
             return Poll::Ready(Err(io::Error::new(

@@ -1,5 +1,6 @@
 #![allow(clippy::unusual_byte_groupings)]
 #![deny(rust_2018_idioms)]
+#![feature(io_safety)]
 #![doc(
     html_logo_url = "https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
 )]
