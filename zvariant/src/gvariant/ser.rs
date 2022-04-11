@@ -300,45 +300,11 @@ where
     }
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-        let c = self.0.sig_parser.next_char();
-        let end_parens;
-        if c == VARIANT_SIGNATURE_CHAR {
-            self.0.add_padding(VARIANT_ALIGNMENT_GVARIANT)?;
-            end_parens = false;
+        if self.0.sig_parser.next_char() == VARIANT_SIGNATURE_CHAR {
+            StructSerializer::variant(self)
         } else {
-            let signature = self.0.sig_parser.next_signature()?;
-            let alignment = alignment_for_signature(&signature, EncodingFormat::GVariant);
-            self.0.add_padding(alignment)?;
-
-            self.0.sig_parser.skip_char()?;
-
-            if c == STRUCT_SIG_START_CHAR || c == DICT_ENTRY_SIG_START_CHAR {
-                end_parens = true;
-            } else {
-                let expected = format!(
-                    "`{}` or `{}`",
-                    STRUCT_SIG_START_STR, DICT_ENTRY_SIG_START_STR,
-                );
-                return Err(serde::de::Error::invalid_type(
-                    serde::de::Unexpected::Char(c),
-                    &expected.as_str(),
-                ));
-            }
+            StructSerializer::structure(self)
         }
-
-        let offsets = if c == STRUCT_SIG_START_CHAR {
-            Some(FramingOffsets::new())
-        } else {
-            None
-        };
-        let start = self.0.bytes_written;
-
-        Ok(StructSerializer {
-            ser: self,
-            start,
-            end_parens,
-            offsets,
-        })
     }
 
     fn serialize_struct_variant(
@@ -445,6 +411,58 @@ where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
+    fn variant(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
+        ser.0.add_padding(VARIANT_ALIGNMENT_GVARIANT)?;
+        let offsets = if ser.0.sig_parser.next_char() == STRUCT_SIG_START_CHAR {
+            Some(FramingOffsets::new())
+        } else {
+            None
+        };
+        let start = ser.0.bytes_written;
+
+        Ok(Self {
+            ser,
+            end_parens: false,
+            offsets,
+            start,
+        })
+    }
+
+    fn structure(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
+        let c = ser.0.sig_parser.next_char();
+        if c != STRUCT_SIG_START_CHAR && c != DICT_ENTRY_SIG_START_CHAR {
+            let expected = format!(
+                "`{}` or `{}`",
+                STRUCT_SIG_START_STR, DICT_ENTRY_SIG_START_STR,
+            );
+
+            return Err(serde::de::Error::invalid_type(
+                serde::de::Unexpected::Char(c),
+                &expected.as_str(),
+            ));
+        }
+
+        let signature = ser.0.sig_parser.next_signature()?;
+        let alignment = alignment_for_signature(&signature, EncodingFormat::GVariant);
+        ser.0.add_padding(alignment)?;
+
+        ser.0.sig_parser.skip_char()?;
+
+        let offsets = if c == STRUCT_SIG_START_CHAR {
+            Some(FramingOffsets::new())
+        } else {
+            None
+        };
+        let start = ser.0.bytes_written;
+
+        Ok(Self {
+            ser,
+            end_parens: true,
+            offsets,
+            start,
+        })
+    }
+
     fn serialize_struct_element<T>(&mut self, name: Option<&'static str>, value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
