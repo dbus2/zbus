@@ -87,14 +87,12 @@ macro_rules! serialize_basic {
         fn $method(self, v: $type) -> Result<()> {
             let ctxt = EncodingContext::new_dbus(self.0.ctxt.position());
             let bytes_written = self.0.bytes_written;
-            #[cfg(unix)]
-            let mut fds = vec![];
             let mut dbus_ser = crate::dbus::Serializer(crate::SerializerCommon::<B, W> {
                 ctxt,
                 sig_parser: self.0.sig_parser.clone(),
                 writer: &mut self.0.writer,
                 #[cfg(unix)]
-                fds: &mut fds,
+                fds: self.0.fds,
                 bytes_written,
                 value_sign: None,
                 b: PhantomData,
@@ -104,8 +102,6 @@ macro_rules! serialize_basic {
 
             self.0.bytes_written = dbus_ser.0.bytes_written;
             self.0.sig_parser = dbus_ser.0.sig_parser;
-            #[cfg(unix)]
-            self.0.fds.extend(fds.iter());
 
             Ok(())
         }
@@ -466,22 +462,18 @@ where
 
                 let sig_parser = SignatureParser::new(signature.clone());
                 let bytes_written = self.ser.0.bytes_written;
-                #[cfg(unix)]
-                let mut fds = vec![];
                 let mut ser = Serializer(crate::SerializerCommon::<B, W> {
                     ctxt: self.ser.0.ctxt,
                     sig_parser,
                     writer: self.ser.0.writer,
                     #[cfg(unix)]
-                    fds: &mut fds,
+                    fds: self.ser.0.fds,
                     bytes_written,
                     value_sign: None,
                     b: PhantomData,
                 });
                 value.serialize(&mut ser)?;
                 self.ser.0.bytes_written = ser.0.bytes_written;
-                #[cfg(unix)]
-                self.ser.0.fds.extend(fds.iter());
 
                 self.ser.0.write_all(&b"\0"[..]).map_err(Error::Io)?;
                 self.ser

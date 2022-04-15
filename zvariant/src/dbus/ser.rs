@@ -422,22 +422,18 @@ where
 
                 let sig_parser = SignatureParser::new(signature.clone());
                 let bytes_written = self.ser.0.bytes_written;
-                #[cfg(unix)]
-                let mut fds = vec![];
                 let mut ser = Serializer(crate::SerializerCommon::<B, W> {
                     ctxt: self.ser.0.ctxt,
                     sig_parser,
                     writer: self.ser.0.writer,
                     #[cfg(unix)]
-                    fds: &mut fds,
+                    fds: self.ser.0.fds,
                     bytes_written,
                     value_sign: None,
                     b: PhantomData,
                 });
                 value.serialize(&mut ser)?;
                 self.ser.0.bytes_written = ser.0.bytes_written;
-                #[cfg(unix)]
-                self.ser.0.fds.extend(fds.iter());
 
                 Ok(())
             }
