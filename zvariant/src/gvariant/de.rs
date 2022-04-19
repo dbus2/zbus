@@ -163,11 +163,14 @@ where
         } else {
             let cstr =
                 CStr::from_bytes_with_nul(&self.0.bytes[self.0.pos..]).map_err(|_| -> Error {
-                    let c = self.0.bytes[self.0.bytes.len() - 1] as char;
-                    de::Error::invalid_value(
-                        de::Unexpected::Char(c),
-                        &"nul byte expected at the end of strings",
-                    )
+                    let unexpected = if self.0.bytes.is_empty() {
+                        de::Unexpected::Other("end of byte stream")
+                    } else {
+                        let c = self.0.bytes[self.0.bytes.len() - 1] as char;
+                        de::Unexpected::Char(c)
+                    };
+
+                    de::Error::invalid_value(unexpected, &"nul byte expected at the end of strings")
                 })?;
             let s = cstr.to_str().map_err(Error::Utf8)?;
             self.0.pos += s.len() + 1; // string and trailing null byte
@@ -697,6 +700,13 @@ where
     fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>) -> Result<Self> {
         // GVariant format has signature at the end
         let mut separator_pos = None;
+
+        if de.0.bytes.is_empty() {
+            return Err(de::Error::invalid_value(
+                de::Unexpected::Other("end of byte stream"),
+                &"nul byte separator between Variant's value & signature",
+            ));
+        }
 
         // Search for the nul byte separator
         for i in (de.0.pos..de.0.bytes.len() - 1).rev() {
