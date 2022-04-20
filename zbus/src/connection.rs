@@ -659,6 +659,10 @@ impl Connection {
     /// Get a reference to the associated [`ObjectServer`].
     ///
     /// The `ObjectServer` is created on-demand.
+    ///
+    /// **Note**: Once the `ObjectServer` is created, it will be replying to all method calls
+    /// received on `self`. If you want to manually reply to method calls, do not use this
+    /// method (or any of the `ObjectServer` related API).
     pub fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
         // FIXME: Maybe it makes sense after all to implement Deref<Target= ObjectServer> for
         // crate::ObjectServer instead of this wrapper?
