@@ -522,11 +522,6 @@ impl Connection {
             return Ok(());
         }
 
-        // Ensure ObjectServer and its msg stream exists and reading before registering any
-        // names. Otherwise we get issue#68 (that we warn the user about in the docs of this
-        // method).
-        self.object_server();
-
         let reply = fdo::DBusProxy::builder(self)
             .cache_properties(CacheProperties::No)
             .build()
