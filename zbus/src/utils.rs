@@ -28,7 +28,7 @@ impl<T, E> ResultAdapter for Result<T, E> {
 }
 
 #[cfg(feature = "async-io")]
-pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
+pub(crate) fn block_on<F: std::future::Future>(future: F) -> F::Output {
     async_io::block_on(future)
 }
 
@@ -43,7 +43,7 @@ lazy_static::lazy_static! {
 }
 
 #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
-pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
+pub(crate) fn block_on<F: std::future::Future>(future: F) -> F::Output {
     TOKIO_RT.block_on(future)
 }
 
