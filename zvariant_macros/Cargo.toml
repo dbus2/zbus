@@ -1,0 +1,24 @@
+[package]
+name = "zvariant_macros"
+# Keep version in sync with zvariant crate
+version = "3.2.0"
+authors = ["Hugo Osvado Barrera <hugo@whynothugo.nl>"]
+edition = "2018"
+
+description = "proc-macros for zvariant"
+repository = "https://gitlab.freedesktop.org/dbus/zbus/"
+keywords = ["D-Bus", "DBus", "IPC"]
+license = "MIT"
+categories = ["data-structures", "encoding", "parsing"]
+readme = "README.md"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.18", default-features= false }
+quote = "1.0.3"
+zvariant = { path = "../zvariant", version = "3.2.0", default-features = false }
+
+[dev-dependencies]
+doc-comment = "0.3.3"
