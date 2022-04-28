@@ -1216,12 +1216,15 @@ mod tests {
             Variant3,
         }
 
-        let ctxt = Context::<BE>::new_dbus(0);
+        let expected_bytes = [4, 7, 6, 5, 4];
         let signature = "u".try_into().unwrap();
-        let encoded = to_bytes_for_signature(ctxt, &signature, &Unit::Variant2).unwrap();
-        assert_eq!(encoded.len(), 4);
-        let decoded: Unit = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, Unit::Variant2);
+        for i in 0..expected_bytes.len() {
+            let ctxt = Context::<BE>::new_dbus(i);
+            let encoded = to_bytes_for_signature(ctxt, &signature, &Unit::Variant2).unwrap();
+            assert_eq!(encoded.len(), expected_bytes[i]);
+            let decoded: Unit = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+            assert_eq!(decoded, Unit::Variant2);
+        }
 
         #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
         enum NewType<'s> {
@@ -1230,12 +1233,17 @@ mod tests {
             Variant3(&'s str),
         }
 
+        let expected_bytes = [14, 21, 20, 19, 18];
         let signature = "(us)".try_into().unwrap();
-        let encoded =
-            to_bytes_for_signature(ctxt, &signature, &NewType::Variant2("hello")).unwrap();
-        assert_eq!(encoded.len(), 14);
-        let decoded: NewType<'_> = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, NewType::Variant2("hello"));
+        for i in 0..expected_bytes.len() {
+            let ctxt = Context::<BE>::new_dbus(i);
+            let encoded =
+                to_bytes_for_signature(ctxt, &signature, &NewType::Variant2("hello")).unwrap();
+            assert_eq!(encoded.len(), expected_bytes[i]);
+            let decoded: NewType<'_> =
+                from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+            assert_eq!(decoded, NewType::Variant2("hello"));
+        }
 
         #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
         enum Structs {
@@ -1243,18 +1251,23 @@ mod tests {
             Struct { y: u8, t: u64 },
         }
 
+        let expected_bytes = [24, 31, 30, 29, 28];
         // TODO: Provide convenience API to create complex signatures
         let signature = "(u(yt))".try_into().unwrap();
-        let encoded = to_bytes_for_signature(ctxt, &signature, &Structs::Tuple(42, 42)).unwrap();
-        assert_eq!(encoded.len(), 24);
-        let decoded: Structs = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, Structs::Tuple(42, 42));
+        for i in 0..expected_bytes.len() {
+            let ctxt = Context::<BE>::new_dbus(i);
+            let encoded =
+                to_bytes_for_signature(ctxt, &signature, &Structs::Tuple(42, 42)).unwrap();
+            assert_eq!(encoded.len(), expected_bytes[i]);
+            let decoded: Structs = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+            assert_eq!(decoded, Structs::Tuple(42, 42));
 
-        let s = Structs::Struct { y: 42, t: 42 };
-        let encoded = to_bytes_for_signature(ctxt, &signature, &s).unwrap();
-        assert_eq!(encoded.len(), 24);
-        let decoded: Structs = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, Structs::Struct { y: 42, t: 42 });
+            let s = Structs::Struct { y: 42, t: 42 };
+            let encoded = to_bytes_for_signature(ctxt, &signature, &s).unwrap();
+            assert_eq!(encoded.len(), expected_bytes[i]);
+            let decoded: Structs = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+            assert_eq!(decoded, Structs::Struct { y: 42, t: 42 });
+        }
     }
 
     #[test]
