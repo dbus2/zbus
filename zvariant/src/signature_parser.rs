@@ -34,11 +34,18 @@ impl<'s> SignatureParser<'s> {
         self.signature.slice(self.pos..self.end)
     }
 
+    pub fn next_char_optional(&self) -> Option<char> {
+        if self.done() {
+            return None;
+        }
+
+        Some(char::from(self.signature.as_bytes()[self.pos]))
+    }
+
     pub fn next_char(&self) -> char {
         // SAFETY: Other methods that increment `self.pos` must ensure we don't go beyond signature
         // length.
-        // FIXME: Probably best/safer if this method returned Option<char>
-        char::from(self.signature.as_bytes()[self.pos])
+        self.next_char_optional().expect("more characters to parse")
     }
 
     #[inline]
