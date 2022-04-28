@@ -118,7 +118,7 @@ impl<'s> SignatureParser<'s> {
     }
 
     /// Get the next signature and increment the position.
-    pub fn parse_next_signature(&mut self) -> Result<Signature<'_>> {
+    pub fn parse_next_signature(&mut self) -> Result<Signature<'s>> {
         let len = &self.next_signature()?.len();
         let pos = self.pos;
         self.pos += len;
