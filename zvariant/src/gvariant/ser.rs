@@ -285,14 +285,14 @@ where
 
     fn serialize_tuple_variant(
         self,
-        name: &'static str,
+        _name: &'static str,
         variant_index: u32,
         _variant: &'static str,
-        len: usize,
+        _len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
         self.0.prep_serialize_enum_variant(variant_index)?;
 
-        self.serialize_struct(name, len)
+        StructSerializer::enum_variant(self)
     }
 
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
@@ -309,14 +309,14 @@ where
 
     fn serialize_struct_variant(
         self,
-        name: &'static str,
+        _name: &'static str,
         variant_index: u32,
         _variant: &'static str,
-        len: usize,
+        _len: usize,
     ) -> Result<Self::SerializeStructVariant> {
         self.0.prep_serialize_enum_variant(variant_index)?;
 
-        self.serialize_struct(name, len)
+        StructSerializer::enum_variant(self)
     }
 }
 
@@ -401,7 +401,8 @@ where
 pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
     ser: &'b mut Serializer<'ser, 'sig, B, W>,
     start: usize,
-    end_parens: bool,
+    // The number of `)` in the signature to skip at the end.
+    end_parens: u8,
     // All offsets
     offsets: Option<FramingOffsets>,
 }
@@ -422,7 +423,7 @@ where
 
         Ok(Self {
             ser,
-            end_parens: false,
+            end_parens: 0,
             offsets,
             start,
         })
@@ -457,10 +458,17 @@ where
 
         Ok(Self {
             ser,
-            end_parens: true,
+            end_parens: 1,
             offsets,
             start,
         })
+    }
+
+    fn enum_variant(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
+        let mut ser = Self::structure(ser)?;
+        ser.end_parens += 1;
+
+        Ok(ser)
     }
 
     fn serialize_struct_element<T>(&mut self, name: Option<&'static str>, value: &T) -> Result<()>
@@ -520,8 +528,8 @@ where
     }
 
     fn end_struct(self) -> Result<()> {
-        if self.end_parens {
-            self.ser.0.sig_parser.skip_char()?;
+        if self.end_parens > 0 {
+            self.ser.0.sig_parser.skip_chars(self.end_parens as usize)?;
         }
         let mut offsets = match self.offsets {
             Some(offsets) => offsets,

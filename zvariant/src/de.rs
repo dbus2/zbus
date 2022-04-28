@@ -91,7 +91,7 @@ where
 /// # Examples
 ///
 /// One known case where `Type` implementation isn't possible, is enum types (except simple ones
-/// with unit variants only).
+/// with unit variants only). Each enum variant must have the same number and type of fields (if any).
 ///
 /// ```
 /// use std::convert::TryInto;
@@ -100,34 +100,52 @@ where
 /// use zvariant::{to_bytes_for_signature, from_slice_for_signature};
 /// use zvariant::EncodingContext;
 ///
+/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-/// enum Test {
-///     Unit,
-///     NewType(u8),
+/// enum Unit {
+///     Variant1,
+///     Variant2,
+///     Variant3,
+/// }
+///
+/// let signature = "u".try_into().unwrap();
+/// let encoded = to_bytes_for_signature(ctxt, &signature, &Unit::Variant2).unwrap();
+/// assert_eq!(encoded.len(), 4);
+/// let decoded: Unit = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// assert_eq!(decoded, Unit::Variant2);
+///
+/// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// enum NewType<'s> {
+///     Variant1(&'s str),
+///     Variant2(&'s str),
+///     Variant3(&'s str),
+/// }
+///
+/// let signature = "(us)".try_into().unwrap();
+/// let encoded =
+///     to_bytes_for_signature(ctxt, &signature, &NewType::Variant2("hello")).unwrap();
+/// assert_eq!(encoded.len(), 14);
+/// let decoded: NewType<'_> = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// assert_eq!(decoded, NewType::Variant2("hello"));
+///
+/// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// enum Structs {
 ///     Tuple(u8, u64),
 ///     Struct { y: u8, t: u64 },
 /// }
 ///
-/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
-/// let signature = "u".try_into().unwrap();
-/// let encoded = to_bytes_for_signature(ctxt, &signature, &Test::Unit).unwrap();
-/// let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-/// assert_eq!(decoded, Test::Unit);
+/// // TODO: Provide convenience API to create complex signatures
+/// let signature = "(u(yt))".try_into().unwrap();
+/// let encoded = to_bytes_for_signature(ctxt, &signature, &Structs::Tuple(42, 42)).unwrap();
+/// assert_eq!(encoded.len(), 24);
+/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// assert_eq!(decoded, Structs::Tuple(42, 42));
 ///
-/// let signature = "y".try_into().unwrap();
-/// let encoded = to_bytes_for_signature(ctxt, &signature, &Test::NewType(42)).unwrap();
-/// let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-/// assert_eq!(decoded, Test::NewType(42));
-///
-/// let signature = "(yt)".try_into().unwrap();
-/// let encoded = to_bytes_for_signature(ctxt, &signature, &Test::Tuple(42, 42)).unwrap();
-/// let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-/// assert_eq!(decoded, Test::Tuple(42, 42));
-///
-/// let s = Test::Struct { y: 42, t: 42 };
+/// let s = Structs::Struct { y: 42, t: 42 };
 /// let encoded = to_bytes_for_signature(ctxt, &signature, &s).unwrap();
-/// let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-/// assert_eq!(decoded, Test::Struct { y: 42, t: 42 });
+/// assert_eq!(encoded.len(), 24);
+/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// assert_eq!(decoded, Structs::Struct { y: 42, t: 42 });
 /// ```
 ///
 /// [`Type`]: trait.Type.html
@@ -598,7 +616,7 @@ where
     type Error = Error;
 
     fn unit_variant(self) -> std::result::Result<(), Self::Error> {
-        self.de.common_mut().sig_parser.skip_char()
+        Ok(())
     }
 
     fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>

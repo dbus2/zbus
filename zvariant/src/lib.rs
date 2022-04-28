@@ -1210,38 +1210,51 @@ mod tests {
         use serde::{Deserialize, Serialize};
 
         #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-        enum Test {
-            Unit,
-            NewType(u8),
-            Tuple(u8, u64),
-            Struct { y: u8, t: u64 },
+        enum Unit {
+            Variant1,
+            Variant2,
+            Variant3,
         }
 
         let ctxt = Context::<BE>::new_dbus(0);
         let signature = "u".try_into().unwrap();
-        let encoded = to_bytes_for_signature(ctxt, &signature, &Test::Unit).unwrap();
+        let encoded = to_bytes_for_signature(ctxt, &signature, &Unit::Variant2).unwrap();
         assert_eq!(encoded.len(), 4);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, Test::Unit);
+        let decoded: Unit = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+        assert_eq!(decoded, Unit::Variant2);
 
-        let signature = "y".try_into().unwrap();
-        let encoded = to_bytes_for_signature(ctxt, &signature, &Test::NewType(42)).unwrap();
-        assert_eq!(encoded.len(), 5);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, Test::NewType(42));
+        #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+        enum NewType<'s> {
+            Variant1(&'s str),
+            Variant2(&'s str),
+            Variant3(&'s str),
+        }
+
+        let signature = "(us)".try_into().unwrap();
+        let encoded =
+            to_bytes_for_signature(ctxt, &signature, &NewType::Variant2("hello")).unwrap();
+        assert_eq!(encoded.len(), 14);
+        let decoded: NewType<'_> = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+        assert_eq!(decoded, NewType::Variant2("hello"));
+
+        #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+        enum Structs {
+            Tuple(u8, u64),
+            Struct { y: u8, t: u64 },
+        }
 
         // TODO: Provide convenience API to create complex signatures
-        let signature = "(yt)".try_into().unwrap();
-        let encoded = to_bytes_for_signature(ctxt, &signature, &Test::Tuple(42, 42)).unwrap();
+        let signature = "(u(yt))".try_into().unwrap();
+        let encoded = to_bytes_for_signature(ctxt, &signature, &Structs::Tuple(42, 42)).unwrap();
         assert_eq!(encoded.len(), 24);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, Test::Tuple(42, 42));
+        let decoded: Structs = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+        assert_eq!(decoded, Structs::Tuple(42, 42));
 
-        let s = Test::Struct { y: 42, t: 42 };
+        let s = Structs::Struct { y: 42, t: 42 };
         let encoded = to_bytes_for_signature(ctxt, &signature, &s).unwrap();
         assert_eq!(encoded.len(), 24);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, Test::Struct { y: 42, t: 42 });
+        let decoded: Structs = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+        assert_eq!(decoded, Structs::Struct { y: 42, t: 42 });
     }
 
     #[test]
