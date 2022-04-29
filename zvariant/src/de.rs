@@ -90,8 +90,8 @@ where
 ///
 /// # Examples
 ///
-/// One known case where `Type` implementation isn't possible, is enum types (except simple ones
-/// with unit variants only). Each enum variant must have the same number and type of fields (if any).
+/// While `Type` derive supports enums, for this example, let's supposed it doesn't and we don't
+/// want to manually implement `Type` trait either:
 ///
 /// ```
 /// use std::convert::TryInto;
