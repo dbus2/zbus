@@ -1206,7 +1206,6 @@ mod tests {
         //
         // 1. `Value`.
         // 2. custom (de)serialize impl.
-        // 3. to/from_*_for_signature()
         use serde::{Deserialize, Serialize};
 
         #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
