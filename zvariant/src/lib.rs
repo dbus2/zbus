@@ -1393,6 +1393,24 @@ mod tests {
         let decoded: NoReprEnum = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(decoded, NoReprEnum::Variant2);
 
+        #[derive(Deserialize, Serialize, Type)]
+        enum NewType {
+            Variant1(f64),
+            Variant2(f64),
+        }
+        assert_eq!(NewType::signature(), "(ud)");
+
+        #[derive(Deserialize, Serialize, Type)]
+        enum StructFields {
+            Variant1(u16, i64, &'static str),
+            Variant2 {
+                field1: u16,
+                field2: i64,
+                field3: &'static str,
+            },
+        }
+        assert_eq!(StructFields::signature(), "(u(qxs))");
+
         #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
         struct AStruct<'s> {
             field1: u16,

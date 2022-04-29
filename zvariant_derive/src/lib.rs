@@ -47,9 +47,9 @@ mod value;
 /// assert_eq!(decoded, s);
 /// ```
 ///
-/// Same with enum, except that only enums with unit variants are supported. If you want the
-/// encoding size of the enum to be dictated by `repr` attribute (like in the example below),
-/// you'll also need [serde_repr] crate.
+/// Same with enum, except that all variants of the enum must have the same number and types of
+/// fields (if any). If you want the encoding size of the (unit-type) enum to be dictated by
+/// `repr` attribute (like in the example below), you'll also need [serde_repr] crate.
 ///
 /// ```
 /// use zvariant::{EncodingContext, from_slice, to_bytes, Type};
@@ -84,6 +84,22 @@ mod value;
 ///     Variant2,
 /// }
 /// assert_eq!(NoReprEnum::signature(), u32::signature());
+///
+/// // Not-unit enums are represented as a structure, with the first field being a u32 denoting the
+/// // variant and the second as the actual value.
+/// #[derive(Deserialize, Serialize, Type)]
+/// enum NewType {
+///     Variant1(f64),
+///     Variant2(f64),
+/// }
+/// assert_eq!(NewType::signature(), "(ud)");
+///
+/// #[derive(Deserialize, Serialize, Type)]
+/// enum StructFields {
+///     Variant1(u16, i64, &'static str),
+///     Variant2 { field1: u16, field2: i64, field3: &'static str },
+/// }
+/// assert_eq!(StructFields::signature(), "(u(qxs))");
 /// ```
 ///
 /// # Custom signatures
