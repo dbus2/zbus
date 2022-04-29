@@ -50,11 +50,17 @@ impl ProcessToken {
             unsafe { GetCurrentProcess() }
         };
 
-        if unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut process_token) } == 0 {
-            return Err(Error::last_os_error());
+        let ret = if unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut process_token) } == 0 {
+            Err(Error::last_os_error())
+        } else {
+            Ok(Self(process_token))
+        };
+
+        if !process.is_null() {
+            unsafe { CloseHandle(process) };
         }
 
-        Ok(Self(process_token))
+        ret
     }
 
     // Return the process SID (security identifier) as a string
