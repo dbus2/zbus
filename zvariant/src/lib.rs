@@ -1202,46 +1202,118 @@ mod tests {
 
     #[test]
     fn enums() {
-        // TODO: Document enum handling.
-        //
-        // 1. `Value`.
-        // 2. custom (de)serialize impl.
-        // 3. to/from_*_for_signature()
         use serde::{Deserialize, Serialize};
 
         #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-        enum Test {
-            Unit,
-            NewType(u8),
-            Tuple(u8, u64),
-            Struct { y: u8, t: u64 },
+        enum Unit {
+            Variant1,
+            Variant2,
+            Variant3,
         }
 
-        let ctxt = Context::<BE>::new_dbus(0);
+        let ctxts_n_expected_lens = [
+            // Unit variants are encoded as u32 and that has the same encoding in both formats.
+            [
+                (Context::<BE>::new_dbus(0), 4usize),
+                (Context::<BE>::new_dbus(1), 7),
+                (Context::<BE>::new_dbus(2), 6),
+                (Context::<BE>::new_dbus(3), 5),
+                (Context::<BE>::new_dbus(4), 4),
+            ],
+            [
+                (Context::<BE>::new_gvariant(0), 4usize),
+                (Context::<BE>::new_gvariant(1), 7),
+                (Context::<BE>::new_gvariant(2), 6),
+                (Context::<BE>::new_gvariant(3), 5),
+                (Context::<BE>::new_gvariant(4), 4),
+            ],
+        ];
         let signature = "u".try_into().unwrap();
-        let encoded = to_bytes_for_signature(ctxt, &signature, &Test::Unit).unwrap();
-        assert_eq!(encoded.len(), 4);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, Test::Unit);
+        for ctxts_n_expected_len in ctxts_n_expected_lens {
+            for (ctxt, expected_len) in ctxts_n_expected_len {
+                let encoded = to_bytes_for_signature(ctxt, &signature, &Unit::Variant2).unwrap();
+                assert_eq!(encoded.len(), expected_len);
+                let decoded: Unit = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+                assert_eq!(decoded, Unit::Variant2);
+            }
+        }
 
-        let signature = "y".try_into().unwrap();
-        let encoded = to_bytes_for_signature(ctxt, &signature, &Test::NewType(42)).unwrap();
-        assert_eq!(encoded.len(), 5);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, Test::NewType(42));
+        #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+        enum NewType<'s> {
+            Variant1(&'s str),
+            Variant2(&'s str),
+            Variant3(&'s str),
+        }
 
+        let ctxts_n_expected_lens = [
+            [
+                (Context::<BE>::new_dbus(0), 14usize),
+                (Context::<BE>::new_dbus(1), 21),
+                (Context::<BE>::new_dbus(2), 20),
+                (Context::<BE>::new_dbus(3), 19),
+                (Context::<BE>::new_dbus(4), 18),
+            ],
+            [
+                (Context::<BE>::new_gvariant(0), 10usize),
+                (Context::<BE>::new_gvariant(1), 13),
+                (Context::<BE>::new_gvariant(2), 12),
+                (Context::<BE>::new_gvariant(3), 11),
+                (Context::<BE>::new_gvariant(4), 10),
+            ],
+        ];
+        let signature = "(us)".try_into().unwrap();
+        for ctxts_n_expected_len in ctxts_n_expected_lens {
+            for (ctxt, expected_len) in ctxts_n_expected_len {
+                let encoded =
+                    to_bytes_for_signature(ctxt, &signature, &NewType::Variant2("hello")).unwrap();
+                assert_eq!(encoded.len(), expected_len);
+                let decoded: NewType<'_> =
+                    from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+                assert_eq!(decoded, NewType::Variant2("hello"));
+            }
+        }
+
+        #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+        enum Structs {
+            Tuple(u8, u32),
+            Struct { y: u8, t: u32 },
+        }
+
+        let ctxts_n_expected_lens = [
+            [
+                (Context::<BE>::new_dbus(0), 16usize),
+                (Context::<BE>::new_dbus(1), 23),
+                (Context::<BE>::new_dbus(2), 22),
+                (Context::<BE>::new_dbus(3), 21),
+                (Context::<BE>::new_dbus(4), 20),
+            ],
+            [
+                (Context::<BE>::new_gvariant(0), 12usize),
+                (Context::<BE>::new_gvariant(1), 15),
+                (Context::<BE>::new_gvariant(2), 14),
+                (Context::<BE>::new_gvariant(3), 13),
+                (Context::<BE>::new_gvariant(4), 12),
+            ],
+        ];
         // TODO: Provide convenience API to create complex signatures
-        let signature = "(yt)".try_into().unwrap();
-        let encoded = to_bytes_for_signature(ctxt, &signature, &Test::Tuple(42, 42)).unwrap();
-        assert_eq!(encoded.len(), 24);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, Test::Tuple(42, 42));
+        let signature = "(u(yu))".try_into().unwrap();
+        for ctxts_n_expected_len in ctxts_n_expected_lens {
+            for (ctxt, expected_len) in ctxts_n_expected_len {
+                let encoded =
+                    to_bytes_for_signature(ctxt, &signature, &Structs::Tuple(42, 42)).unwrap();
+                assert_eq!(encoded.len(), expected_len);
+                let decoded: Structs =
+                    from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+                assert_eq!(decoded, Structs::Tuple(42, 42));
 
-        let s = Test::Struct { y: 42, t: 42 };
-        let encoded = to_bytes_for_signature(ctxt, &signature, &s).unwrap();
-        assert_eq!(encoded.len(), 24);
-        let decoded: Test = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
-        assert_eq!(decoded, Test::Struct { y: 42, t: 42 });
+                let s = Structs::Struct { y: 42, t: 42 };
+                let encoded = to_bytes_for_signature(ctxt, &signature, &s).unwrap();
+                assert_eq!(encoded.len(), expected_len);
+                let decoded: Structs =
+                    from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+                assert_eq!(decoded, Structs::Struct { y: 42, t: 42 });
+            }
+        }
     }
 
     #[test]
@@ -1316,6 +1388,38 @@ mod tests {
         assert_eq!(encoded.len(), 4);
         let decoded: NoReprEnum = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(decoded, NoReprEnum::Variant2);
+
+        #[derive(Deserialize, Serialize, Type, Debug, PartialEq)]
+        #[zvariant(signature = "s")]
+        enum StrEnum {
+            Variant1,
+            Variant2,
+            Variant3,
+        }
+
+        assert_eq!(StrEnum::signature(), <&str>::signature());
+        let encoded = to_bytes(ctxt, &StrEnum::Variant2).unwrap();
+        assert_eq!(encoded.len(), 13);
+        let decoded: StrEnum = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, StrEnum::Variant2);
+
+        #[derive(Deserialize, Serialize, Type)]
+        enum NewType {
+            Variant1(f64),
+            Variant2(f64),
+        }
+        assert_eq!(NewType::signature(), "(ud)");
+
+        #[derive(Deserialize, Serialize, Type)]
+        enum StructFields {
+            Variant1(u16, i64, &'static str),
+            Variant2 {
+                field1: u16,
+                field2: i64,
+                field3: &'static str,
+            },
+        }
+        assert_eq!(StructFields::signature(), "(u(qxs))");
 
         #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
         struct AStruct<'s> {

@@ -49,7 +49,7 @@ fn impl_struct(
     zv: &TokenStream,
 ) -> Result<TokenStream, Error> {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    let signature = signature_for_struct(fields, zv);
+    let signature = signature_for_struct(&fields, zv, false);
 
     Ok(quote! {
         impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
@@ -61,7 +61,11 @@ fn impl_struct(
     })
 }
 
-fn signature_for_struct(fields: Fields, zv: &TokenStream) -> TokenStream {
+fn signature_for_struct(
+    fields: &Fields,
+    zv: &TokenStream,
+    insert_enum_variant: bool,
+) -> TokenStream {
     let field_types = fields.iter().map(|field| field.ty.to_token_stream());
     let new_type = match fields {
         Fields::Named(_) => false,
@@ -69,7 +73,7 @@ fn signature_for_struct(fields: Fields, zv: &TokenStream) -> TokenStream {
         Fields::Unnamed(_) => false,
         Fields::Unit => panic!("signature_for_struct must not be called for unit fields"),
     };
-    if new_type {
+    let inner_impl = if new_type {
         quote! {
             #(
                 <#field_types as #zv::Type>::signature()
@@ -85,6 +89,22 @@ fn signature_for_struct(fields: Fields, zv: &TokenStream) -> TokenStream {
 
             #zv::Signature::from_string_unchecked(s)
         }
+    };
+
+    if insert_enum_variant {
+        quote! {
+            let inner_signature = {
+                #inner_impl
+            };
+            let mut s = <::std::string::String as ::std::convert::From<_>>::from("(");
+            s.push_str(<u32 as #zv::Type>::signature().as_str());
+            s.push_str(inner_signature.as_str());
+            s.push_str(")");
+
+            #zv::Signature::from_string_unchecked(s)
+        }
+    } else {
+        inner_impl
     }
 }
 
@@ -112,16 +132,19 @@ fn impl_enum(
     data: DataEnum,
     zv: &TokenStream,
 ) -> Result<TokenStream, Error> {
-    let repr: TokenStream = match attrs.iter().find(|attr| attr.path.is_ident("repr")) {
-        Some(repr_attr) => repr_attr.parse_args()?,
-        None => quote! { u32 },
-    };
-
-    for variant in data.variants {
-        // Ensure all variants of the enum are unit type
-        match variant.fields {
-            Fields::Unit => (),
-            _ => return Err(Error::new(variant.span(), "must be a unit variant")),
+    let mut all_signatures: Vec<Result<TokenStream, Error>> = data
+        .variants
+        .iter()
+        .map(|variant| signature_for_variant(variant, &attrs, zv))
+        .collect();
+    let signature = all_signatures.pop().unwrap()?;
+    // Ensure all variants of the enum have the same number and type of fields.
+    for sig in all_signatures {
+        if sig?.to_string() != signature.to_string() {
+            return Err(Error::new(
+                name.span(),
+                "all variants must have the same number and type of fields",
+            ));
         }
     }
 
@@ -131,8 +154,28 @@ fn impl_enum(
         impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
             #[inline]
             fn signature() -> #zv::Signature<'static> {
-                <#repr as #zv::Type>::signature()
+                #signature
             }
         }
     })
+}
+
+fn signature_for_variant(
+    variant: &syn::Variant,
+    attrs: &[Attribute],
+    zv: &TokenStream,
+) -> Result<TokenStream, Error> {
+    let repr = attrs.iter().find(|attr| attr.path.is_ident("repr"));
+    match &variant.fields {
+        Fields::Unit => {
+            let repr = match repr {
+                Some(repr_attr) => repr_attr.parse_args()?,
+                None => quote! { u32 },
+            };
+
+            Ok(quote! { <#repr as #zv::Type>::signature() })
+        }
+        Fields::Named(_) => Ok(signature_for_struct(&variant.fields, zv, true)),
+        Fields::Unnamed(_) => Ok(signature_for_struct(&variant.fields, zv, true)),
+    }
 }
