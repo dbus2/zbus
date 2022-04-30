@@ -11,8 +11,8 @@ use std::os::unix::io::RawFd;
 
 use crate::{
     framing_offset_size::FramingOffsetSize, framing_offsets::FramingOffsets,
-    signature_parser::SignatureParser, utils::*, EncodingContext, EncodingFormat, Error, Result,
-    Signature,
+    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error,
+    Result, Signature,
 };
 
 /// Our serialization implementation.
@@ -205,9 +205,13 @@ where
         self,
         _name: &'static str,
         variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
     ) -> Result<()> {
-        variant_index.serialize(self)
+        if self.0.sig_parser.next_char() == <&str>::SIGNATURE_CHAR {
+            variant.serialize(self)
+        } else {
+            variant_index.serialize(self)
+        }
     }
 
     fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<()>
@@ -285,14 +289,14 @@ where
 
     fn serialize_tuple_variant(
         self,
-        name: &'static str,
+        _name: &'static str,
         variant_index: u32,
         _variant: &'static str,
-        len: usize,
+        _len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
         self.0.prep_serialize_enum_variant(variant_index)?;
 
-        self.serialize_struct(name, len)
+        StructSerializer::enum_variant(self)
     }
 
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
@@ -300,57 +304,23 @@ where
     }
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-        let c = self.0.sig_parser.next_char();
-        let end_parens;
-        if c == VARIANT_SIGNATURE_CHAR {
-            self.0.add_padding(VARIANT_ALIGNMENT_GVARIANT)?;
-            end_parens = false;
+        if self.0.sig_parser.next_char() == VARIANT_SIGNATURE_CHAR {
+            StructSerializer::variant(self)
         } else {
-            let signature = self.0.sig_parser.next_signature()?;
-            let alignment = alignment_for_signature(&signature, EncodingFormat::GVariant);
-            self.0.add_padding(alignment)?;
-
-            self.0.sig_parser.skip_char()?;
-
-            if c == STRUCT_SIG_START_CHAR || c == DICT_ENTRY_SIG_START_CHAR {
-                end_parens = true;
-            } else {
-                let expected = format!(
-                    "`{}` or `{}`",
-                    STRUCT_SIG_START_STR, DICT_ENTRY_SIG_START_STR,
-                );
-                return Err(serde::de::Error::invalid_type(
-                    serde::de::Unexpected::Char(c),
-                    &expected.as_str(),
-                ));
-            }
+            StructSerializer::structure(self)
         }
-
-        let offsets = if c == STRUCT_SIG_START_CHAR {
-            Some(FramingOffsets::new())
-        } else {
-            None
-        };
-        let start = self.0.bytes_written;
-
-        Ok(StructSerializer {
-            ser: self,
-            start,
-            end_parens,
-            offsets,
-        })
     }
 
     fn serialize_struct_variant(
         self,
-        name: &'static str,
+        _name: &'static str,
         variant_index: u32,
         _variant: &'static str,
-        len: usize,
+        _len: usize,
     ) -> Result<Self::SerializeStructVariant> {
         self.0.prep_serialize_enum_variant(variant_index)?;
 
-        self.serialize_struct(name, len)
+        StructSerializer::enum_variant(self)
     }
 }
 
@@ -435,7 +405,8 @@ where
 pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
     ser: &'b mut Serializer<'ser, 'sig, B, W>,
     start: usize,
-    end_parens: bool,
+    // The number of `)` in the signature to skip at the end.
+    end_parens: u8,
     // All offsets
     offsets: Option<FramingOffsets>,
 }
@@ -445,6 +416,65 @@ where
     B: byteorder::ByteOrder,
     W: Write + Seek,
 {
+    fn variant(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
+        ser.0.add_padding(VARIANT_ALIGNMENT_GVARIANT)?;
+        let offsets = if ser.0.sig_parser.next_char() == STRUCT_SIG_START_CHAR {
+            Some(FramingOffsets::new())
+        } else {
+            None
+        };
+        let start = ser.0.bytes_written;
+
+        Ok(Self {
+            ser,
+            end_parens: 0,
+            offsets,
+            start,
+        })
+    }
+
+    fn structure(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
+        let c = ser.0.sig_parser.next_char();
+        if c != STRUCT_SIG_START_CHAR && c != DICT_ENTRY_SIG_START_CHAR {
+            let expected = format!(
+                "`{}` or `{}`",
+                STRUCT_SIG_START_STR, DICT_ENTRY_SIG_START_STR,
+            );
+
+            return Err(serde::de::Error::invalid_type(
+                serde::de::Unexpected::Char(c),
+                &expected.as_str(),
+            ));
+        }
+
+        let signature = ser.0.sig_parser.next_signature()?;
+        let alignment = alignment_for_signature(&signature, EncodingFormat::GVariant);
+        ser.0.add_padding(alignment)?;
+
+        ser.0.sig_parser.skip_char()?;
+
+        let offsets = if c == STRUCT_SIG_START_CHAR {
+            Some(FramingOffsets::new())
+        } else {
+            None
+        };
+        let start = ser.0.bytes_written;
+
+        Ok(Self {
+            ser,
+            end_parens: 1,
+            offsets,
+            start,
+        })
+    }
+
+    fn enum_variant(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
+        let mut ser = Self::structure(ser)?;
+        ser.end_parens += 1;
+
+        Ok(ser)
+    }
+
     fn serialize_struct_element<T>(&mut self, name: Option<&'static str>, value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
@@ -502,8 +532,8 @@ where
     }
 
     fn end_struct(self) -> Result<()> {
-        if self.end_parens {
-            self.ser.0.sig_parser.skip_char()?;
+        if self.end_parens > 0 {
+            self.ser.0.sig_parser.skip_chars(self.end_parens as usize)?;
         }
         let mut offsets = match self.offsets {
             Some(offsets) => offsets,

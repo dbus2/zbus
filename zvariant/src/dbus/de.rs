@@ -312,33 +312,37 @@ where
     where
         V: Visitor<'de>,
     {
-        visitor.visit_enum(crate::de::Enum {
-            de: self,
+        let signature = self.0.sig_parser.next_signature()?;
+        let alignment = alignment_for_signature(&signature, self.0.ctxt.format());
+        self.0.parse_padding(alignment)?;
+
+        if self.0.sig_parser.next_char() == STRUCT_SIG_START_CHAR {
+            // This means we've a non-unit enum. Let's skip the `(`.
+            self.0.sig_parser.skip_char()?;
+        }
+
+        let v = visitor.visit_enum(crate::de::Enum {
+            de: &mut *self,
             name,
             phantom: PhantomData,
-        })
+        })?;
+        if self.0.sig_parser.next_char_optional() == Some(STRUCT_SIG_END_CHAR) {
+            // This means we've a non-unit enum. Let's skip the closing paren.
+            self.0.sig_parser.skip_char()?;
+        }
+
+        Ok(v)
     }
 
     fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        // Not using serialize_u32 cause identifier isn't part of the signature
-        let alignment = u32::alignment(EncodingFormat::DBus);
-        self.0.parse_padding(alignment)?;
-        let variant_index = {
-            #[cfg(unix)]
-            {
-                crate::from_slice_fds::<B, _>(&self.0.bytes[self.0.pos..], self.0.fds, self.0.ctxt)?
-            }
-            #[cfg(not(unix))]
-            {
-                crate::from_slice::<B, _>(&self.0.bytes[self.0.pos..], self.0.ctxt)?
-            }
-        };
-        self.0.pos += alignment;
-
-        visitor.visit_u32(variant_index)
+        if self.0.sig_parser.next_char() == <&str>::SIGNATURE_CHAR {
+            self.deserialize_str(visitor)
+        } else {
+            self.deserialize_u32(visitor)
+        }
     }
 }
 
