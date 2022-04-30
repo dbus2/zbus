@@ -38,13 +38,14 @@ where
 /// An optional value.
 ///
 /// Since D-Bus doesn't have the concept of nullability, it uses a special value (typically the
-/// default value) as [the null value][tnv]. Serde has built-in support for `Option` but
-/// unfortunately that doesn't work for us. Hence the need for this type.
+/// default value) as the null value. For example [this signal][ts] uses empty strings for null
+/// values. Serde has built-in support for `Option` but unfortunately that doesn't work for us.
+/// Hence the need for this type.
 ///
 /// The serialization and deserialization of `Optional` relies on [`NoneValue`] implementation of
 /// the underlying type.
 ///
-/// [tnv]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-name-owner-changed
+/// [ts]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-name-owner-changed
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Optional<T>(Option<T>);
 
