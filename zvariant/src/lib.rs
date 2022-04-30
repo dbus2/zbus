@@ -1202,10 +1202,6 @@ mod tests {
 
     #[test]
     fn enums() {
-        // TODO: Document enum handling.
-        //
-        // 1. `Value`.
-        // 2. custom (de)serialize impl.
         use serde::{Deserialize, Serialize};
 
         #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
