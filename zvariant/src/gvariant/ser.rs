@@ -11,8 +11,8 @@ use std::os::unix::io::RawFd;
 
 use crate::{
     framing_offset_size::FramingOffsetSize, framing_offsets::FramingOffsets,
-    signature_parser::SignatureParser, utils::*, EncodingContext, EncodingFormat, Error, Result,
-    Signature,
+    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error,
+    Result, Signature,
 };
 
 /// Our serialization implementation.
@@ -205,9 +205,13 @@ where
         self,
         _name: &'static str,
         variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
     ) -> Result<()> {
-        variant_index.serialize(self)
+        if self.0.sig_parser.next_char() == <&str>::SIGNATURE_CHAR {
+            variant.serialize(self)
+        } else {
+            variant_index.serialize(self)
+        }
     }
 
     fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<()>

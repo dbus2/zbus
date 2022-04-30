@@ -134,6 +134,29 @@ mod value;
 /// assert_eq!(decoded, s);
 /// ```
 ///
+/// Another common use for custom signatures is (de)serialization of unit enums as strings:
+///
+/// ```
+/// use zvariant::{EncodingContext, from_slice, to_bytes, Type};
+/// use serde::{Deserialize, Serialize};
+/// use byteorder::LE;
+///
+/// #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+/// #[zvariant(signature = "s")]
+/// enum StrEnum {
+///     Variant1,
+///     Variant2,
+///     Variant3,
+/// }
+///
+/// assert_eq!(StrEnum::signature(), "s");
+/// let ctxt = EncodingContext::<LE>::new_dbus(0);
+/// let encoded = to_bytes(ctxt, &StrEnum::Variant2).unwrap();
+/// assert_eq!(encoded.len(), 13);
+/// let decoded: StrEnum = from_slice(&encoded, ctxt).unwrap();
+/// assert_eq!(decoded, StrEnum::Variant2);
+/// ```
+///
 /// [`Type`]: https://docs.rs/zvariant/2.10.0/zvariant/trait.Type.html
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html

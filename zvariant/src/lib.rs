@@ -1389,6 +1389,20 @@ mod tests {
         let decoded: NoReprEnum = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(decoded, NoReprEnum::Variant2);
 
+        #[derive(Deserialize, Serialize, Type, Debug, PartialEq)]
+        #[zvariant(signature = "s")]
+        enum StrEnum {
+            Variant1,
+            Variant2,
+            Variant3,
+        }
+
+        assert_eq!(StrEnum::signature(), <&str>::signature());
+        let encoded = to_bytes(ctxt, &StrEnum::Variant2).unwrap();
+        assert_eq!(encoded.len(), 13);
+        let decoded: StrEnum = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(decoded, StrEnum::Variant2);
+
         #[derive(Deserialize, Serialize, Type)]
         enum NewType {
             Variant1(f64),

@@ -195,9 +195,13 @@ where
         self,
         _name: &'static str,
         variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
     ) -> Result<()> {
-        variant_index.serialize(self)
+        if self.0.sig_parser.next_char() == <&str>::SIGNATURE_CHAR {
+            variant.serialize(self)
+        } else {
+            variant_index.serialize(self)
+        }
     }
 
     fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<()>

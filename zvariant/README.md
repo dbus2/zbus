@@ -114,6 +114,17 @@ assert_eq!(UnitEnum::signature(), "y");
 let encoded = to_bytes(ctxt, &UnitEnum::Variant2).unwrap();
 let e: UnitEnum = from_slice(&encoded, ctxt).unwrap();
 assert_eq!(e, UnitEnum::Variant2);
+
+// Unit enums can also be (de)serialized as strings.
+#[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+#[zvariant(signature = "s")]
+enum StrEnum {
+    Variant1,
+    Variant2,
+    Variant3,
+}
+
+assert_eq!(StrEnum::signature(), "s");
 ```
 
 Apart from the obvious requirement of [`EncodingContext`] instance by the main serialization and

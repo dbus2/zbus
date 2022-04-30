@@ -338,7 +338,11 @@ where
     where
         V: Visitor<'de>,
     {
-        self.deserialize_u32(visitor)
+        if self.0.sig_parser.next_char() == <&str>::SIGNATURE_CHAR {
+            self.deserialize_str(visitor)
+        } else {
+            self.deserialize_u32(visitor)
+        }
     }
 }
 
