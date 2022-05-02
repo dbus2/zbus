@@ -345,16 +345,6 @@ enum Fds {
     Raw(Vec<RawFd>),
 }
 
-#[cfg(unix)]
-impl Clone for Fds {
-    fn clone(&self) -> Self {
-        Fds::Raw(match self {
-            Fds::Raw(v) => v.clone(),
-            Fds::Owned(v) => v.iter().map(|fd| fd.as_raw_fd()).collect(),
-        })
-    }
-}
-
 /// A position in the stream of [`Message`] objects received by a single [`zbus::Connection`].
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct MessageSequence {
