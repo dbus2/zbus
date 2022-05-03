@@ -345,16 +345,6 @@ enum Fds {
     Raw(Vec<RawFd>),
 }
 
-#[cfg(unix)]
-impl Clone for Fds {
-    fn clone(&self) -> Self {
-        Fds::Raw(match self {
-            Fds::Raw(v) => v.clone(),
-            Fds::Owned(v) => v.iter().map(|fd| fd.as_raw_fd()).collect(),
-        })
-    }
-}
-
 /// A position in the stream of [`Message`] objects received by a single [`zbus::Connection`].
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct MessageSequence {
@@ -373,7 +363,6 @@ pub struct MessageSequence {
 ///
 /// **Note**: The message owns the received FDs and will close them when dropped. You can call
 /// [`take_fds`] after deserializing to `RawFD` using [`body`] if you want to take the ownership.
-/// Moreover, a clone of a message with owned FDs will only receive unowned copies of the FDs.
 ///
 /// [`body`]: #method.body
 /// [`take_fds`]: #method.take_fds
