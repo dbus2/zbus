@@ -88,7 +88,7 @@ println!(
 
 As you can see, nothing changed in the `dbus_proxy` usage here and the rest largely remained the
 same as well. One difference that's not obvious is that the blocking API for receiving signals,
-implement [`std::iter::Iterator`] trait instead of [`futrues::stream::Stream`].
+implement [`std::iter::Iterator`] trait instead of [`futures::stream::Stream`].
 
 ### Watching for properties
 
