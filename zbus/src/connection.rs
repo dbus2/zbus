@@ -1026,16 +1026,13 @@ mod tests {
 
     async fn test_p2p(server: Connection, client: Connection) -> Result<()> {
         let server_future = async {
-            let mut method: Option<Arc<Message>> = None;
             let mut stream = MessageStream::from(&server);
-            while let Some(m) = stream.try_next().await? {
+            let method = loop {
+                let m = stream.try_next().await?.unwrap();
                 if m.to_string() == "Method call Test" {
-                    method.replace(m);
-
-                    break;
+                    break m;
                 }
-            }
-            let method = method.unwrap();
+            };
 
             // Send another message first to check the queueing function on client side.
             server
