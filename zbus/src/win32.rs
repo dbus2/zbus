@@ -25,6 +25,32 @@ use winapi::{
 
 use uds_windows::UnixStream;
 
+// A process handle
+pub struct ProcessHandle(HANDLE);
+
+impl Drop for ProcessHandle {
+    fn drop(&mut self) {
+        unsafe { CloseHandle(self.0) };
+    }
+}
+
+impl ProcessHandle {
+    // Open the process associated with the process_id (if None, the current process)
+    pub fn open(process_id: Option<DWORD>, desired_access: DWORD) -> Result<Self, Error> {
+        let process = if let Some(process_id) = process_id {
+            unsafe { OpenProcess(desired_access, false.into(), process_id) }
+        } else {
+            unsafe { GetCurrentProcess() }
+        };
+
+        if process.is_null() {
+            Err(Error::last_os_error())
+        } else {
+            Ok(Self(process))
+        }
+    }
+}
+
 // A process token
 //
 // See MSDN documentation:
@@ -43,18 +69,13 @@ impl ProcessToken {
     // Open the access token associated with the process_id (if None, the current process)
     pub fn open(process_id: Option<DWORD>) -> Result<Self, Error> {
         let mut process_token: HANDLE = ptr::null_mut();
+        let process = ProcessHandle::open(process_id, PROCESS_QUERY_LIMITED_INFORMATION)?;
 
-        let process = if let Some(process_id) = process_id {
-            unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false.into(), process_id) }
+        if unsafe { OpenProcessToken(process.0, TOKEN_QUERY, &mut process_token) } == 0 {
+            Err(Error::last_os_error())
         } else {
-            unsafe { GetCurrentProcess() }
-        };
-
-        if unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut process_token) } == 0 {
-            return Err(Error::last_os_error());
+            Ok(Self(process_token))
         }
-
-        Ok(Self(process_token))
     }
 
     // Return the process SID (security identifier) as a string
