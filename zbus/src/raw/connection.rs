@@ -33,7 +33,7 @@ pub struct Connection<S> {
     #[cfg(unix)]
     raw_in_fds: Vec<OwnedFd>,
     raw_in_pos: usize,
-    raw_out_buffer: VecDeque<u8>,
+    out_pos: usize,
     msg_out_buffer: VecDeque<Message>,
     prev_seq: u64,
 }
@@ -47,7 +47,7 @@ impl<S: Socket> Connection<S> {
             #[cfg(unix)]
             raw_in_fds: vec![],
             raw_in_pos: 0,
-            raw_out_buffer: VecDeque::new(),
+            out_pos: 0,
             msg_out_buffer: VecDeque::new(),
             prev_seq: 0,
         }
@@ -61,52 +61,22 @@ impl<S: Socket> Connection<S> {
     /// This method will thus only block if the socket is in blocking mode.
     pub fn try_flush(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         self.event.notify(usize::MAX);
-        // first, empty the raw_out_buffer of any partially-sent message
-        while !self.raw_out_buffer.is_empty() {
-            let (front, _) = self.raw_out_buffer.as_slices();
-            // VecDeque should never return an empty front buffer if the VecDeque
-            // itself is not empty
-            debug_assert!(!front.is_empty());
-            let written = ready!(self.socket.poll_sendmsg(
-                cx,
-                front,
-                #[cfg(unix)]
-                &[]
-            ))?;
-            self.raw_out_buffer.drain(..written);
-        }
-
-        // now, try to drain the msg_out_buffer
         while let Some(msg) = self.msg_out_buffer.front() {
-            let mut data = msg.as_bytes();
-            #[cfg(unix)]
-            let fds = msg.fds();
-            let written = ready!(self.socket.poll_sendmsg(
-                cx,
-                data,
+            loop {
+                let data = &msg.as_bytes()[self.out_pos..];
+                if data.is_empty() {
+                    self.out_pos = 0;
+                    self.msg_out_buffer.pop_front();
+                    break;
+                }
                 #[cfg(unix)]
-                &fds
-            ))?;
-            // at least some part of the message has been sent, see if we can/need to send more
-            // now the message must be removed from msg_out_buffer and any leftover bytes
-            // must be stored into raw_out_buffer
-            let msg = self.msg_out_buffer.pop_front().unwrap();
-            data = &msg.as_bytes()[written..];
-            while !data.is_empty() {
-                match self.socket.poll_sendmsg(
+                let fds = if self.out_pos == 0 { msg.fds() } else { vec![] };
+                self.out_pos += ready!(self.socket.poll_sendmsg(
                     cx,
                     data,
                     #[cfg(unix)]
-                    &[],
-                ) {
-                    Poll::Ready(Ok(n)) => data = &data[n..],
-                    e => {
-                        // an error occurred, we cannot send more, store the remaining into
-                        // raw_out_buffer and forward the error
-                        self.raw_out_buffer.extend(data);
-                        return e.map_ok(|_| unreachable!());
-                    }
-                }
+                    &fds,
+                ))?;
             }
         }
         Poll::Ready(Ok(()))
