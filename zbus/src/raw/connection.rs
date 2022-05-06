@@ -34,7 +34,7 @@ pub struct Connection<S> {
     raw_in_fds: Vec<OwnedFd>,
     raw_in_pos: usize,
     out_pos: usize,
-    msg_out_buffer: VecDeque<Message>,
+    out_msgs: VecDeque<Message>,
     prev_seq: u64,
 }
 
@@ -48,7 +48,7 @@ impl<S: Socket> Connection<S> {
             raw_in_fds: vec![],
             raw_in_pos: 0,
             out_pos: 0,
-            msg_out_buffer: VecDeque::new(),
+            out_msgs: VecDeque::new(),
             prev_seq: 0,
         }
     }
@@ -61,12 +61,12 @@ impl<S: Socket> Connection<S> {
     /// This method will thus only block if the socket is in blocking mode.
     pub fn try_flush(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         self.event.notify(usize::MAX);
-        while let Some(msg) = self.msg_out_buffer.front() {
+        while let Some(msg) = self.out_msgs.front() {
             loop {
                 let data = &msg.as_bytes()[self.out_pos..];
                 if data.is_empty() {
                     self.out_pos = 0;
-                    self.msg_out_buffer.pop_front();
+                    self.out_msgs.pop_front();
                     break;
                 }
                 #[cfg(unix)]
@@ -87,7 +87,7 @@ impl<S: Socket> Connection<S> {
     /// This method will *not* write anything to the socket, you need to call
     /// `try_flush()` afterwards so that your message is actually sent out.
     pub fn enqueue_message(&mut self, msg: Message) {
-        self.msg_out_buffer.push_back(msg);
+        self.out_msgs.push_back(msg);
     }
 
     /// Attempt to read a message from the socket
