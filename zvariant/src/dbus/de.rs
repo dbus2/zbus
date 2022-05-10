@@ -316,18 +316,23 @@ where
         let alignment = alignment_for_signature(&signature, self.0.ctxt.format());
         self.0.parse_padding(alignment)?;
 
-        if self.0.sig_parser.next_char() == STRUCT_SIG_START_CHAR {
+        let non_unit = if self.0.sig_parser.next_char() == STRUCT_SIG_START_CHAR {
             // This means we've a non-unit enum. Let's skip the `(`.
             self.0.sig_parser.skip_char()?;
-        }
+
+            true
+        } else {
+            false
+        };
 
         let v = visitor.visit_enum(crate::de::Enum {
             de: &mut *self,
             name,
             phantom: PhantomData,
         })?;
-        if self.0.sig_parser.next_char_optional() == Some(STRUCT_SIG_END_CHAR) {
-            // This means we've a non-unit enum. Let's skip the closing paren.
+
+        if non_unit {
+            // For non-unit enum, we need to skip the closing paren.
             self.0.sig_parser.skip_char()?;
         }
 
