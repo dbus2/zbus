@@ -1383,6 +1383,10 @@ mod tests {
             Variant3,
         }
 
+        // issue#265: Panic on deserialization of a structure w/ a unit enum as its last field.
+        let encoded = to_bytes(ctxt, &(NoReprEnum::Variant2,)).unwrap();
+        let _: (NoReprEnum,) = from_slice(&encoded, ctxt).unwrap();
+
         assert_eq!(NoReprEnum::signature(), u32::signature());
         let encoded = to_bytes(ctxt, &NoReprEnum::Variant2).unwrap();
         assert_eq!(encoded.len(), 4);
