@@ -11,6 +11,10 @@ license = "MIT"
 categories = ["os::unix-apis"]
 readme = "README.md"
 
+[features]
+default = ["zbus/async-io"]
+tokio = ["zbus/tokio"]
+
 [dependencies]
 zbus = { path = "../zbus", version = "2", default-features = false }
 zvariant = { path = "../zvariant", version = "3", default-features = false, features = ["enumflags2"] }
