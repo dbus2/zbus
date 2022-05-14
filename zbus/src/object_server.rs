@@ -169,9 +169,11 @@ impl Node {
             path,
             ..Default::default()
         };
-        node.at(Peer::name(), Peer);
-        node.at(Introspectable::name(), Introspectable);
-        node.at(Properties::name(), Properties);
+        node.at(Peer::name(), || Arc::new(RwLock::new(Peer)));
+        node.at(Introspectable::name(), || {
+            Arc::new(RwLock::new(Introspectable))
+        });
+        node.at(Properties::name(), || Arc::new(RwLock::new(Properties)));
 
         node
     }
@@ -241,26 +243,14 @@ impl Node {
         self.children.remove(node).is_some()
     }
 
-    fn at<I>(&mut self, name: InterfaceName<'static>, iface: I) -> bool
+    // Takes a closure so caller can avoid having to create an Arc & RwLock in case interface was
+    // already added.
+    fn at<F>(&mut self, name: InterfaceName<'static>, iface_creator: F) -> bool
     where
-        I: Interface,
+        F: FnOnce() -> Arc<RwLock<dyn Interface>>,
     {
         match self.interfaces.entry(name) {
-            Entry::Vacant(e) => e.insert(Arc::new(RwLock::new(iface))),
-            Entry::Occupied(_) => return false,
-        };
-
-        true
-    }
-
-    // FIXME: Better name?
-    fn at_ready(
-        &mut self,
-        name: InterfaceName<'static>,
-        iface: Arc<RwLock<dyn Interface>>,
-    ) -> bool {
-        match self.interfaces.entry(name) {
-            Entry::Vacant(e) => e.insert(iface),
+            Entry::Vacant(e) => e.insert(iface_creator()),
             Entry::Occupied(_) => return false,
         };
 
@@ -405,31 +395,26 @@ impl ObjectServer {
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
-        let path = path.try_into().map_err(Into::into)?;
-        Ok(self
-            .root
-            .write()
+        self.at_ready(path, I::name(), move || Arc::new(RwLock::new(iface)))
             .await
-            .get_child_mut(&path, true)
-            .unwrap()
-            .at_ready(I::name(), Arc::new(RwLock::new(iface))))
     }
 
     /// Same as `at` but expects an interface already in `Arc<RwLock<dyn Interface>>` form.
     // FIXME: Better name?
-    pub(crate) async fn at_ready<'node, P>(
+    pub(crate) async fn at_ready<'node, 'p, P, F>(
         &'node self,
         path: P,
         name: InterfaceName<'static>,
-        iface: Arc<RwLock<dyn Interface + 'static>>,
+        iface_creator: F,
     ) -> Result<bool>
     where
         // Needs to be hardcoded as 'static instead of 'p like most other
         // functions, due to https://github.com/rust-lang/rust/issues/63033
         // (It doesn't matter a whole lot since this is an internal-only API
         // anyway.)
-        P: TryInto<ObjectPath<'static>>,
+        P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
+        F: FnOnce() -> Arc<RwLock<dyn Interface + 'static>>,
     {
         let path = path.try_into().map_err(Into::into)?;
         Ok(self
@@ -438,7 +423,7 @@ impl ObjectServer {
             .await
             .get_child_mut(&path, true)
             .unwrap()
-            .at_ready(name, iface))
+            .at(name, iface_creator))
     }
 
     /// Unregister a D-Bus [`Interface`] at a given path.
