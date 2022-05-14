@@ -1084,7 +1084,7 @@ mod tests {
                 .unwrap();
 
         let listen = event.listen();
-        let child = async_std::task::spawn(my_iface_test(client_conn, event));
+        let child = async_std::task::spawn(my_iface_test(client_conn.clone(), event));
         // Wait for the listener to be ready
         listen.await;
 
@@ -1125,6 +1125,9 @@ mod tests {
                 }
             }
         }
+
+        // don't close the connection before we end the loop
+        drop(client_conn);
 
         let val = child.await.unwrap();
         assert_eq!(val, 2);
