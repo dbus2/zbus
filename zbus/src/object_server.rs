@@ -665,7 +665,7 @@ mod tests {
     use tokio::net::UnixStream;
 
     use crate::utils::block_on;
-    use async_channel::{bounded, Sender};
+    use async_channel::{bounded, Receiver, Sender};
     use event_listener::Event;
     use futures_util::StreamExt;
     use ntest::timeout;
@@ -741,12 +741,17 @@ mod tests {
 
     struct MyIfaceImpl {
         next_tx: Sender<NextAction>,
+        reply_rx: Receiver<()>,
         count: u32,
     }
 
     impl MyIfaceImpl {
-        fn new(next_tx: Sender<NextAction>) -> Self {
-            Self { next_tx, count: 0 }
+        fn new(next_tx: Sender<NextAction>, reply_rx: Receiver<()>) -> Self {
+            Self {
+                next_tx,
+                reply_rx,
+                count: 0,
+            }
         }
     }
 
@@ -832,7 +837,7 @@ mod tests {
             object_server
                 .at(
                     format!("/zbus/test/{}", key),
-                    MyIfaceImpl::new(self.next_tx.clone()),
+                    MyIfaceImpl::new(self.next_tx.clone(), self.reply_rx.clone()),
                 )
                 .await
                 .unwrap();
@@ -843,6 +848,7 @@ mod tests {
                 .send(NextAction::DestroyObj(key))
                 .await
                 .unwrap();
+            self.reply_rx.recv().await.unwrap();
         }
 
         #[dbus_interface(property)]
@@ -1071,7 +1077,8 @@ mod tests {
             (service_conn_builder, client_conn_builder)
         };
         let (next_tx, next_rx) = bounded(64);
-        let iface = MyIfaceImpl::new(next_tx.clone());
+        let (reply_tx, reply_rx) = bounded(64);
+        let iface = MyIfaceImpl::new(next_tx.clone(), reply_rx.clone());
         let service_conn_builder = service_conn_builder
             .serve_at("/org/freedesktop/MyService", iface)
             .unwrap();
@@ -1108,7 +1115,7 @@ mod tests {
                     let path = format!("/zbus/test/{}", key);
                     service_conn
                         .object_server()
-                        .at(path, MyIfaceImpl::new(next_tx.clone()))
+                        .at(path, MyIfaceImpl::new(next_tx.clone(), reply_rx.clone()))
                         .await
                         .unwrap();
                 }
@@ -1119,6 +1126,7 @@ mod tests {
                         .remove::<MyIfaceImpl, _>(path)
                         .await
                         .unwrap();
+                    reply_tx.send(()).await.unwrap();
                 }
             }
         }
