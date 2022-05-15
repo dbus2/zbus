@@ -266,6 +266,30 @@ macro_rules! gen_object_manager_proxy {
 gen_object_manager_proxy!(true, false);
 assert_impl_all!(ObjectManagerProxy<'_>: Send, Sync, Unpin);
 
+pub(crate) struct ObjectManager;
+
+/// Server-side implementation for the `org.freedesktop.DBus.ObjectManager` interface.
+/// This interface is implemented automatically for any object registered to the
+/// [ObjectServer](crate::ObjectServer).
+/// Note: Only GetManagedObjects is implemented. No signals are emitted for InterfacesAdded or
+/// InterfacesRemoved.
+#[dbus_interface(name = "org.freedesktop.DBus.ObjectManager")]
+impl ObjectManager {
+    async fn get_managed_objects(
+        &self,
+        #[zbus(object_server)] server: &ObjectServer,
+        #[zbus(header)] header: MessageHeader<'_>,
+    ) -> Result<ManagedObjects> {
+        let path = header.path()?.ok_or(crate::Error::MissingField)?;
+        let root = server.root().read().await;
+        let node = root
+            .get_child(path)
+            .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{}'", path)))?;
+
+        Ok(node.get_managed_objects().await)
+    }
+}
+
 #[rustfmt::skip]
 macro_rules! gen_peer_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
