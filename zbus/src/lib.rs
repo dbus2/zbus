@@ -760,21 +760,26 @@ mod tests {
             fn set_inner_to_true(&self) -> zbus::Result<()>;
         }
 
-        let _service = crate::ConnectionBuilder::session()
+        let service = crate::ConnectionBuilder::session()
             .unwrap()
             .serve_at(
                 "/org/freedesktop/zbus/UncachedPropertyTest",
                 ServiceUncachedPropertyTest(false),
             )
             .unwrap()
-            .name("org.freedesktop.zbus.UncachedPropertyTest")
-            .unwrap()
             .build()
             .await
             .unwrap();
 
+        let dest = service.unique_name().unwrap();
+
         let client_conn = crate::Connection::session().await.unwrap();
-        let client = UncachedPropertyTestProxy::new(&client_conn).await.unwrap();
+        let client = UncachedPropertyTestProxy::builder(&client_conn)
+            .destination(dest)
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
 
         // Query properties; this populates the cache too.
         assert!(!client.cached_prop().await.unwrap());

@@ -8,6 +8,7 @@ include:
 variables:
   FDO_UPSTREAM_REPO: dbus/zbus
   UPSTREAM_BRANCH: 'main'
+  RUST_BACKTRACE: 'full'
 
   ###
   # IMPORTANT
