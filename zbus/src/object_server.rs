@@ -642,6 +642,20 @@ impl ObjectServer {
         .await
     }
 
+    /// Unregister object manager interface from `path`.
+    ///
+    /// Remove a previously registered object manager interface at `path`.
+    ///
+    /// Returns whether the object was destroyed (because no more interfaces were registered on
+    /// `path`).
+    pub async fn remove_object_manager<'p, P>(&self, path: P) -> Result<bool>
+    where
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
+    {
+        self.remove::<ObjectManager, _>(path).await
+    }
+
     async fn dispatch_method_call_try(
         &self,
         connection: &Connection,
