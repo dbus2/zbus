@@ -125,6 +125,17 @@ impl<'a> ConnectionBuilder<'a> {
         self.0.serve_at(path, iface).map(Self)
     }
 
+    /// Register Object Manager interface at `path`.
+    ///
+    /// See [`zbus::ObjectServer::object_manager_at`] for more details.
+    pub fn object_manager_at<P>(self, path: P) -> Result<Self>
+    where
+        P: TryInto<ObjectPath<'a>>,
+        P::Error: Into<Error>,
+    {
+        self.0.object_manager_at(path).map(Self)
+    }
+
     /// Register a well-known name for this connection on the bus.
     ///
     /// This is similar to [`zbus::blocking::Connection::request_name`], except the name is

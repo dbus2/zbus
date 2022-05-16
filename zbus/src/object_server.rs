@@ -10,11 +10,11 @@ use std::{
 
 use static_assertions::assert_impl_all;
 use zbus_names::InterfaceName;
-use zvariant::{ObjectPath, OwnedObjectPath};
+use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
     fdo,
-    fdo::{Introspectable, Peer, Properties},
+    fdo::{Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
     Connection, DispatchResult, Error, Interface, Message, MessageType, Result, SignalContext,
     WeakConnection,
 };
@@ -169,9 +169,11 @@ impl Node {
             path,
             ..Default::default()
         };
-        node.at(Peer::name(), Peer);
-        node.at(Introspectable::name(), Introspectable);
-        node.at(Properties::name(), Properties);
+        node.at(Peer::name(), || Arc::new(RwLock::new(Peer)));
+        node.at(Introspectable::name(), || {
+            Arc::new(RwLock::new(Introspectable))
+        });
+        node.at(Properties::name(), || Arc::new(RwLock::new(Properties)));
 
         node
     }
@@ -194,14 +196,26 @@ impl Node {
     }
 
     // Get the child Node at path. Optionally create one if it doesn't exist.
-    fn get_child_mut(&mut self, path: &ObjectPath<'_>, create: bool) -> Option<&mut Node> {
+    // It also returns the path of parent node that implements ObjectManager (if any). If multiple
+    // parents implement it (they shouldn't), then the closest one is returned.
+    fn get_child_mut(
+        &mut self,
+        path: &ObjectPath<'_>,
+        create: bool,
+    ) -> (Option<&mut Node>, Option<ObjectPath<'_>>) {
         let mut node = self;
         let mut node_path = String::new();
+        let mut obj_manager_path = None;
 
         for i in path.split('/').skip(1) {
             if i.is_empty() {
                 continue;
             }
+
+            if node.interfaces.contains_key(&ObjectManager::name()) {
+                obj_manager_path = Some((*node.path).clone());
+            }
+
             write!(&mut node_path, "/{}", i).unwrap();
             match node.children.entry(i.into()) {
                 Entry::Vacant(e) => {
@@ -209,14 +223,14 @@ impl Node {
                         let path = node_path.as_str().try_into().expect("Invalid Object Path");
                         node = e.insert(Node::new(path));
                     } else {
-                        return None;
+                        return (None, obj_manager_path);
                     }
                 }
                 Entry::Occupied(e) => node = e.into_mut(),
             }
         }
 
-        Some(node)
+        (Some(node), obj_manager_path)
     }
 
     pub(crate) fn interface_lock(
@@ -231,36 +245,26 @@ impl Node {
     }
 
     fn is_empty(&self) -> bool {
-        !self
-            .interfaces
-            .keys()
-            .any(|k| *k != Peer::name() && *k != Introspectable::name() && *k != Properties::name())
+        !self.interfaces.keys().any(|k| {
+            *k != Peer::name()
+                && *k != Introspectable::name()
+                && *k != Properties::name()
+                && *k != ObjectManager::name()
+        })
     }
 
     fn remove_node(&mut self, node: &str) -> bool {
         self.children.remove(node).is_some()
     }
 
-    fn at<I>(&mut self, name: InterfaceName<'static>, iface: I) -> bool
+    // Takes a closure so caller can avoid having to create an Arc & RwLock in case interface was
+    // already added.
+    fn at<F>(&mut self, name: InterfaceName<'static>, iface_creator: F) -> bool
     where
-        I: Interface,
+        F: FnOnce() -> Arc<RwLock<dyn Interface>>,
     {
         match self.interfaces.entry(name) {
-            Entry::Vacant(e) => e.insert(Arc::new(RwLock::new(iface))),
-            Entry::Occupied(_) => return false,
-        };
-
-        true
-    }
-
-    // FIXME: Better name?
-    fn at_ready(
-        &mut self,
-        name: InterfaceName<'static>,
-        iface: Arc<RwLock<dyn Interface>>,
-    ) -> bool {
-        match self.interfaces.entry(name) {
-            Entry::Vacant(e) => e.insert(iface),
+            Entry::Vacant(e) => e.insert(iface_creator()),
             Entry::Occupied(_) => return false,
         };
 
@@ -309,6 +313,41 @@ impl Node {
         self.introspect_to_writer(&mut xml, 0).await;
 
         xml
+    }
+
+    #[async_recursion::async_recursion]
+    pub(crate) async fn get_managed_objects(&self) -> ManagedObjects {
+        // Recursively get all properties of all interfaces of descendants.
+        let mut managed_objects = ManagedObjects::new();
+        for node in self.children.values() {
+            let mut interfaces = HashMap::new();
+            for iface_name in node.interfaces.keys().filter(|n| {
+                // Filter standard interfaces.
+                *n != &Peer::name()
+                    && *n != &Introspectable::name()
+                    && *n != &Properties::name()
+                    && *n != &ObjectManager::name()
+            }) {
+                let props = node.get_properties(iface_name.clone()).await;
+                interfaces.insert(iface_name.clone().into(), props);
+            }
+            managed_objects.insert(node.path.clone(), interfaces);
+            managed_objects.extend(node.get_managed_objects().await);
+        }
+
+        managed_objects
+    }
+
+    async fn get_properties(
+        &self,
+        interface_name: InterfaceName<'_>,
+    ) -> HashMap<String, OwnedValue> {
+        self.interface_lock(interface_name)
+            .expect("Interface was added but not found")
+            .read()
+            .await
+            .get_all()
+            .await
     }
 }
 
@@ -405,40 +444,65 @@ impl ObjectServer {
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
-        let path = path.try_into().map_err(Into::into)?;
-        Ok(self
-            .root
-            .write()
+        self.at_ready(path, I::name(), move || Arc::new(RwLock::new(iface)))
             .await
-            .get_child_mut(&path, true)
-            .unwrap()
-            .at_ready(I::name(), Arc::new(RwLock::new(iface))))
     }
 
     /// Same as `at` but expects an interface already in `Arc<RwLock<dyn Interface>>` form.
     // FIXME: Better name?
-    pub(crate) async fn at_ready<'node, P>(
+    pub(crate) async fn at_ready<'node, 'p, P, F>(
         &'node self,
         path: P,
         name: InterfaceName<'static>,
-        iface: Arc<RwLock<dyn Interface + 'static>>,
+        iface_creator: F,
     ) -> Result<bool>
     where
         // Needs to be hardcoded as 'static instead of 'p like most other
         // functions, due to https://github.com/rust-lang/rust/issues/63033
         // (It doesn't matter a whole lot since this is an internal-only API
         // anyway.)
-        P: TryInto<ObjectPath<'static>>,
+        P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
+        F: FnOnce() -> Arc<RwLock<dyn Interface + 'static>>,
     {
         let path = path.try_into().map_err(Into::into)?;
-        Ok(self
-            .root()
-            .write()
-            .await
-            .get_child_mut(&path, true)
-            .unwrap()
-            .at_ready(name, iface))
+        let mut root = self.root().write().await;
+        let (node, manager_path) = root.get_child_mut(&path, true);
+        let node = node.unwrap();
+        let added = node.at(name.clone(), iface_creator);
+        if added {
+            if name == ObjectManager::name() {
+                // Just added an object manager. Need to signal all managed objects under it.
+                let ctxt = SignalContext::new(&self.connection(), path)?;
+                let objects = node.get_managed_objects().await;
+                for (path, owned_interfaces) in objects {
+                    let interfaces = owned_interfaces
+                        .iter()
+                        .map(|(i, props)| {
+                            let props = props
+                                .iter()
+                                .map(|(k, v)| (k.as_str(), Value::from(v)))
+                                .collect();
+                            (i.into(), props)
+                        })
+                        .collect();
+                    ObjectManager::interfaces_added(&ctxt, &path, &interfaces).await?;
+                }
+            } else if let Some(manager_path) = manager_path {
+                let ctxt = SignalContext::new(&self.connection(), manager_path.clone())?;
+                let mut interfaces = HashMap::new();
+                let owned_props = node.get_properties(name.clone()).await;
+                let props = owned_props
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), Value::from(v)))
+                    .collect();
+                interfaces.insert(name, props);
+
+                ObjectManager::interfaces_added(&ctxt, &path, &interfaces).await?;
+            }
+        }
+
+        Ok(added)
     }
 
     /// Unregister a D-Bus [`Interface`] at a given path.
@@ -453,11 +517,14 @@ impl ObjectServer {
     {
         let path = path.try_into().map_err(Into::into)?;
         let mut root = self.root.write().await;
-        let node = root
-            .get_child_mut(&path, false)
-            .ok_or(Error::InterfaceNotFound)?;
+        let (node, manager_path) = root.get_child_mut(&path, false);
+        let node = node.ok_or(Error::InterfaceNotFound)?;
         if !node.remove_interface(I::name()) {
             return Err(Error::InterfaceNotFound);
+        }
+        if let Some(manager_path) = manager_path {
+            let ctxt = SignalContext::new(&self.connection(), manager_path.clone())?;
+            ObjectManager::interfaces_removed(&ctxt, &path, &[I::name()]).await?;
         }
         if node.is_empty() {
             let mut path_parts = path.rsplit('/').filter(|i| !i.is_empty());
@@ -466,6 +533,7 @@ impl ObjectServer {
                 path_parts.fold(String::new(), |a, p| format!("/{}{}", p, a)),
             );
             root.get_child_mut(&ppath, false)
+                .0
                 .unwrap()
                 .remove_node(last_part);
             return Ok(true);
@@ -545,6 +613,47 @@ impl ObjectServer {
             lock,
             phantom: PhantomData,
         })
+    }
+
+    /// Register [object manager][om] interface at `path`.
+    ///
+    /// The recommended path to add this interface at is the path form of the well-known name of a D-Bus
+    /// service, or below. For example, if a D-Bus service is available at the well-known name
+    /// `net.example.ExampleService1`, this interface should typically be registered at
+    /// `/net/example/ExampleService1`, or below (to allow for multiple object managers in a service).
+    ///
+    /// It is supported, but not recommended, to add this interface at the root path, `/`.
+    ///
+    /// `InterfacesAdded` signal will be emitted for all the objects under `path`. You can use this
+    /// fact to minimize the signal emissions by populating the entire (sub)tree under `path` before
+    /// registering an object manager.
+    ///
+    /// If an object manager was already registered at `path`, returns false.
+    ///
+    /// [om]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-objectmanager
+    pub async fn object_manager_at<'p, P>(&self, path: P) -> Result<bool>
+    where
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
+    {
+        self.at_ready(path, ObjectManager::name(), move || {
+            Arc::new(RwLock::new(ObjectManager))
+        })
+        .await
+    }
+
+    /// Unregister object manager interface from `path`.
+    ///
+    /// Remove a previously registered object manager interface at `path`.
+    ///
+    /// Returns whether the object was destroyed (because no more interfaces were registered on
+    /// `path`).
+    pub async fn remove_object_manager<'p, P>(&self, path: P) -> Result<bool>
+    where
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
+    {
+        self.remove::<ObjectManager, _>(path).await
     }
 
     async fn dispatch_method_call_try(
@@ -664,8 +773,8 @@ mod tests {
     #[cfg(all(unix, not(feature = "async-io")))]
     use tokio::net::UnixStream;
 
-    use crate::utils::block_on;
-    use async_channel::{bounded, Receiver, Sender};
+    use crate::{fdo::ObjectManagerProxy, utils::block_on};
+    use async_channel::{bounded, Sender};
     use event_listener::Event;
     use futures_util::StreamExt;
     use ntest::timeout;
@@ -741,17 +850,12 @@ mod tests {
 
     struct MyIfaceImpl {
         next_tx: Sender<NextAction>,
-        reply_rx: Receiver<()>,
         count: u32,
     }
 
     impl MyIfaceImpl {
-        fn new(next_tx: Sender<NextAction>, reply_rx: Receiver<()>) -> Self {
-            Self {
-                next_tx,
-                reply_rx,
-                count: 0,
-            }
+        fn new(next_tx: Sender<NextAction>) -> Self {
+            Self { next_tx, count: 0 }
         }
     }
 
@@ -837,7 +941,7 @@ mod tests {
             object_server
                 .at(
                     format!("/zbus/test/{}", key),
-                    MyIfaceImpl::new(self.next_tx.clone(), self.reply_rx.clone()),
+                    MyIfaceImpl::new(self.next_tx.clone()),
                 )
                 .await
                 .unwrap();
@@ -848,7 +952,6 @@ mod tests {
                 .send(NextAction::DestroyObj(key))
                 .await
                 .unwrap();
-            self.reply_rx.recv().await.unwrap();
         }
 
         #[dbus_interface(property)]
@@ -987,7 +1090,20 @@ mod tests {
 
         let val = proxy.ping().await?;
 
+        let obj_manager_proxy = ObjectManagerProxy::builder(&conn)
+            .destination("org.freedesktop.MyService")?
+            .path("/zbus/test")?
+            .build()
+            .await?;
+        let mut ifaces_added_stream = obj_manager_proxy.receive_interfaces_added().await?;
         proxy.create_obj("MyObj").await?;
+        let ifaces_added = ifaces_added_stream.next().await.unwrap();
+        assert_eq!(ifaces_added.args()?.object_path(), "/zbus/test/MyObj");
+        let args = ifaces_added.args()?;
+        let ifaces = args.interfaces_and_properties();
+        let _ = ifaces.get("org.freedesktop.MyIface").unwrap();
+        // TODO: Check if the properties are correct.
+
         // issue#207: interface panics on incorrect number of args.
         assert!(proxy.call_method("CreateObj", &()).await.is_err());
 
@@ -1003,7 +1119,13 @@ mod tests {
             Some(&Value::from(0u32))
         );
         my_obj_proxy.ping().await?;
+        let mut ifaces_removed_stream = obj_manager_proxy.receive_interfaces_removed().await?;
         proxy.destroy_obj("MyObj").await?;
+        let ifaces_removed = ifaces_removed_stream.next().await.unwrap();
+        let args = ifaces_removed.args()?;
+        assert_eq!(args.object_path(), "/zbus/test/MyObj");
+        assert_eq!(args.interfaces(), &["org.freedesktop.MyIface"]);
+
         assert!(my_obj_proxy.introspect().await.is_err());
         assert!(my_obj_proxy.ping().await.is_err());
 
@@ -1077,10 +1199,11 @@ mod tests {
             (service_conn_builder, client_conn_builder)
         };
         let (next_tx, next_rx) = bounded(64);
-        let (reply_tx, reply_rx) = bounded(64);
-        let iface = MyIfaceImpl::new(next_tx.clone(), reply_rx.clone());
+        let iface = MyIfaceImpl::new(next_tx.clone());
         let service_conn_builder = service_conn_builder
             .serve_at("/org/freedesktop/MyService", iface)
+            .unwrap()
+            .object_manager_at("/zbus/test")
             .unwrap();
 
         let (service_conn, client_conn) =
@@ -1115,7 +1238,7 @@ mod tests {
                     let path = format!("/zbus/test/{}", key);
                     service_conn
                         .object_server()
-                        .at(path, MyIfaceImpl::new(next_tx.clone(), reply_rx.clone()))
+                        .at(path, MyIfaceImpl::new(next_tx.clone()))
                         .await
                         .unwrap();
                 }
@@ -1126,7 +1249,6 @@ mod tests {
                         .remove::<MyIfaceImpl, _>(path)
                         .await
                         .unwrap();
-                    reply_tx.send(()).await.unwrap();
                 }
             }
         }

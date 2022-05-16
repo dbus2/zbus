@@ -26,6 +26,10 @@ impl OwnedValue {
     pub(crate) fn into_inner(self) -> Value<'static> {
         self.0
     }
+
+    pub(crate) fn inner(&self) -> &Value<'_> {
+        &self.0
+    }
 }
 
 macro_rules! ov_try_from {
@@ -203,6 +207,12 @@ to_value!(Fd);
 impl From<OwnedValue> for Value<'static> {
     fn from(v: OwnedValue) -> Value<'static> {
         v.into_inner()
+    }
+}
+
+impl<'o> From<&'o OwnedValue> for Value<'o> {
+    fn from(v: &'o OwnedValue) -> Value<'o> {
+        v.inner().clone()
     }
 }
 
