@@ -22,6 +22,7 @@ use zvariant::ObjectPath;
 
 use crate::{
     address::{self, Address},
+    fdo::ObjectManager,
     names::{InterfaceName, WellKnownName},
     raw::Socket,
     AuthMechanism, Authenticated, Connection, Error, Guid, Interface, Result,
@@ -196,6 +197,17 @@ impl<'a> ConnectionBuilder<'a> {
         Ok(self)
     }
 
+    /// Register Object Manager interface at `path`.
+    ///
+    /// See [`zbus::ObjectServer::object_manager_at`] for more details.
+    pub fn object_manager_at<P>(self, path: P) -> Result<Self>
+    where
+        P: TryInto<ObjectPath<'a>>,
+        P::Error: Into<Error>,
+    {
+        self.serve_at(path, ObjectManager)
+    }
+
     /// Register a well-known name for this connection on the bus.
     ///
     /// This is similar to [`zbus::Connection::request_name`], except the name is requested as part
@@ -302,7 +314,7 @@ impl<'a> ConnectionBuilder<'a> {
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
                     // FIXME: Log warning message on `at` returning `false`.
-                    let future = object_server.at_ready(path.to_owned(), name, iface);
+                    let future = object_server.at_ready(path.to_owned(), name, || iface);
                     let added = conn.run_future_at_init(future).await?;
                     // Duplicates shouldn't happen.
                     assert!(added);

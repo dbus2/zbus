@@ -266,6 +266,47 @@ macro_rules! gen_object_manager_proxy {
 gen_object_manager_proxy!(true, false);
 assert_impl_all!(ObjectManagerProxy<'_>: Send, Sync, Unpin);
 
+// Not exposing to the public API because users should use `ObjectServer::object_manager_at` or
+// `ConnectionBuilder::object_manager_at`
+#[derive(Debug, Clone)]
+pub(crate) struct ObjectManager;
+
+#[dbus_interface(name = "org.freedesktop.DBus.ObjectManager")]
+impl ObjectManager {
+    async fn get_managed_objects(
+        &self,
+        #[zbus(object_server)] server: &ObjectServer,
+        #[zbus(header)] header: MessageHeader<'_>,
+    ) -> Result<ManagedObjects> {
+        let path = header.path()?.ok_or(crate::Error::MissingField)?;
+        let root = server.root().read().await;
+        let node = root
+            .get_child(path)
+            .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{}'", path)))?;
+
+        Ok(node.get_managed_objects().await)
+    }
+
+    /// This signal is emitted when either a new object is added or when an existing object gains
+    /// one or more interfaces. The `interfaces_and_properties` argument contains a map with the
+    /// interfaces and properties (if any) that have been added to the given object path.
+    #[dbus_interface(signal)]
+    pub async fn interfaces_added(
+        ctxt: &SignalContext<'_>,
+        object_path: &ObjectPath<'_>,
+        interfaces_and_properties: &HashMap<InterfaceName<'_>, HashMap<&str, Value<'_>>>,
+    ) -> zbus::Result<()>;
+
+    /// This signal is emitted whenever an object is removed or it loses one or more interfaces.
+    /// The `interfaces` parameters contains a list of the interfaces that were removed.
+    #[dbus_interface(signal)]
+    pub async fn interfaces_removed(
+        ctxt: &SignalContext<'_>,
+        object_path: &ObjectPath<'_>,
+        interfaces: &[InterfaceName<'_>],
+    ) -> zbus::Result<()>;
+}
+
 #[rustfmt::skip]
 macro_rules! gen_peer_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
