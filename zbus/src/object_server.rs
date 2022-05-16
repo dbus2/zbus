@@ -759,8 +759,8 @@ mod tests {
     #[cfg(all(unix, not(feature = "async-io")))]
     use tokio::net::UnixStream;
 
-    use crate::utils::block_on;
-    use async_channel::{bounded, Receiver, Sender};
+    use crate::{fdo::ObjectManagerProxy, utils::block_on};
+    use async_channel::{bounded, Sender};
     use event_listener::Event;
     use futures_util::StreamExt;
     use ntest::timeout;
@@ -836,17 +836,12 @@ mod tests {
 
     struct MyIfaceImpl {
         next_tx: Sender<NextAction>,
-        reply_rx: Receiver<()>,
         count: u32,
     }
 
     impl MyIfaceImpl {
-        fn new(next_tx: Sender<NextAction>, reply_rx: Receiver<()>) -> Self {
-            Self {
-                next_tx,
-                reply_rx,
-                count: 0,
-            }
+        fn new(next_tx: Sender<NextAction>) -> Self {
+            Self { next_tx, count: 0 }
         }
     }
 
@@ -932,7 +927,7 @@ mod tests {
             object_server
                 .at(
                     format!("/zbus/test/{}", key),
-                    MyIfaceImpl::new(self.next_tx.clone(), self.reply_rx.clone()),
+                    MyIfaceImpl::new(self.next_tx.clone()),
                 )
                 .await
                 .unwrap();
@@ -943,7 +938,6 @@ mod tests {
                 .send(NextAction::DestroyObj(key))
                 .await
                 .unwrap();
-            self.reply_rx.recv().await.unwrap();
         }
 
         #[dbus_interface(property)]
@@ -1082,7 +1076,20 @@ mod tests {
 
         let val = proxy.ping().await?;
 
+        let obj_manager_proxy = ObjectManagerProxy::builder(&conn)
+            .destination("org.freedesktop.MyService")?
+            .path("/zbus/test")?
+            .build()
+            .await?;
+        let mut ifaces_added_stream = obj_manager_proxy.receive_interfaces_added().await?;
         proxy.create_obj("MyObj").await?;
+        let ifaces_added = ifaces_added_stream.next().await.unwrap();
+        assert_eq!(ifaces_added.args()?.object_path(), "/zbus/test/MyObj");
+        let args = ifaces_added.args()?;
+        let ifaces = args.interfaces_and_properties();
+        let _ = ifaces.get("org.freedesktop.MyIface").unwrap();
+        // TODO: Check if the properties are correct.
+
         // issue#207: interface panics on incorrect number of args.
         assert!(proxy.call_method("CreateObj", &()).await.is_err());
 
@@ -1098,7 +1105,13 @@ mod tests {
             Some(&Value::from(0u32))
         );
         my_obj_proxy.ping().await?;
+        let mut ifaces_removed_stream = obj_manager_proxy.receive_interfaces_removed().await?;
         proxy.destroy_obj("MyObj").await?;
+        let ifaces_removed = ifaces_removed_stream.next().await.unwrap();
+        let args = ifaces_removed.args()?;
+        assert_eq!(args.object_path(), "/zbus/test/MyObj");
+        assert_eq!(args.interfaces(), &["org.freedesktop.MyIface"]);
+
         assert!(my_obj_proxy.introspect().await.is_err());
         assert!(my_obj_proxy.ping().await.is_err());
 
@@ -1172,10 +1185,11 @@ mod tests {
             (service_conn_builder, client_conn_builder)
         };
         let (next_tx, next_rx) = bounded(64);
-        let (reply_tx, reply_rx) = bounded(64);
-        let iface = MyIfaceImpl::new(next_tx.clone(), reply_rx.clone());
+        let iface = MyIfaceImpl::new(next_tx.clone());
         let service_conn_builder = service_conn_builder
             .serve_at("/org/freedesktop/MyService", iface)
+            .unwrap()
+            .object_manager_at("/zbus/test")
             .unwrap();
 
         let (service_conn, client_conn) =
@@ -1210,7 +1224,7 @@ mod tests {
                     let path = format!("/zbus/test/{}", key);
                     service_conn
                         .object_server()
-                        .at(path, MyIfaceImpl::new(next_tx.clone(), reply_rx.clone()))
+                        .at(path, MyIfaceImpl::new(next_tx.clone()))
                         .await
                         .unwrap();
                 }
@@ -1221,7 +1235,6 @@ mod tests {
                         .remove::<MyIfaceImpl, _>(path)
                         .await
                         .unwrap();
-                    reply_tx.send(()).await.unwrap();
                 }
             }
         }
