@@ -77,7 +77,7 @@ where
 {
     /// Get a reference to the underlying interface.
     ///
-    /// **WARNING:** If methods or properties in `ObjectServer` require `&mut self`
+    /// **WARNING:** If methods (e.g property setters) in `ObjectServer` require `&mut self`
     /// `ObjectServer` will not be able to access the interface in question until all references
     /// of this method are dropped, it is highly recommended that the scope of the interface
     /// returned is restricted.
