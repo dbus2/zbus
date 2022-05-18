@@ -139,6 +139,14 @@ currently require a session bus running on the build host.
 
 MIT license [LICENSE-MIT](LICENSE-MIT)
 
+## Alternative Crates
+
+[dbus-rs](dbrs) relies on the battle tested libdbus C library to send and receive messages.
+Companion crates add [Tokio support](dbrs-tokio), [server builder without macros](dbrs-cr), and
+[code generation](db-cg).
+
+There are many other D-Bus crates out there with various levels of maturity and features.
+
 [`zbus`]: zbus/README.md
 [`zbus_macros`]: zbus_macros/README.md
 [`zbus_names`]: zbus_names/README.md
@@ -148,3 +156,7 @@ MIT license [LICENSE-MIT](LICENSE-MIT)
 [`zvariant_derive`]: zvariant_derive/README.md
 [dbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names
 [PolicyKit]: https://gitlab.freedesktop.org/polkit/polkit/
+[dbrs]: https://github.com/diwic/dbus-rs
+[dbrs-tokio]: https://github.com/diwic/dbus-rs/tree/master/dbus-tokio
+[dbrs-cr]: https://github.com/diwic/dbus-rs/tree/master/dbus-crossroads
+[dbrs-cg]: https://github.com/diwic/dbus-rs/tree/master/dbus-codegen
