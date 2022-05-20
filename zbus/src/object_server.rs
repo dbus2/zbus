@@ -1118,6 +1118,10 @@ mod tests {
             .path("/zbus/test/MyObj")?
             .build()
             .await?;
+        my_obj_proxy.receive_count_changed().await;
+        // Calling this after creating the stream was panicking if the property doesn't get cached
+        // before the call (MR !460).
+        my_obj_proxy.cached_count()?;
         assert_eq!(my_obj_proxy.count().await?, 0);
         assert_eq!(my_obj_proxy.cached_count()?, Some(0));
         assert_eq!(
