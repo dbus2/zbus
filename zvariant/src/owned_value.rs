@@ -34,7 +34,7 @@ impl OwnedValue {
 
 macro_rules! ov_try_from {
     ($to:ty) => {
-        impl<'a> TryFrom<OwnedValue> for $to {
+        impl TryFrom<OwnedValue> for $to {
             type Error = crate::Error;
 
             fn try_from(v: OwnedValue) -> Result<Self, Self::Error> {
@@ -66,16 +66,16 @@ ov_try_from!(i64);
 ov_try_from!(u64);
 ov_try_from!(f64);
 ov_try_from!(String);
-ov_try_from!(Signature<'a>);
+ov_try_from!(Signature<'static>);
 ov_try_from!(OwnedSignature);
-ov_try_from!(ObjectPath<'a>);
+ov_try_from!(ObjectPath<'static>);
 ov_try_from!(OwnedObjectPath);
-ov_try_from!(Array<'a>);
-ov_try_from!(Dict<'a, 'a>);
+ov_try_from!(Array<'static>);
+ov_try_from!(Dict<'static, 'static>);
 #[cfg(feature = "gvariant")]
-ov_try_from!(Maybe<'a>);
-ov_try_from!(Str<'a>);
-ov_try_from!(Structure<'a>);
+ov_try_from!(Maybe<'static>);
+ov_try_from!(Str<'static>);
+ov_try_from!(Structure<'static>);
 #[cfg(unix)]
 ov_try_from!(Fd);
 
