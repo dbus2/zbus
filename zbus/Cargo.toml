@@ -68,10 +68,10 @@ uds_windows = "1.0.1"
 doc-comment = "0.3.3"
 futures-util = "0.3.8" # activate default features
 ntest = "0.7.1"
-env_logger = "0.8.4"
-test-log = "0.2.8"
+test-log = { version = "0.2.10", features = ["trace"], default-features = false }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "fs", "io-util", "net"] }
 async-std = { version = "1.10.0", features = ["attributes" ] }
+tracing-subscriber = { version = "0.3.11", features = ["env-filter" , "fmt"], default-features = false }
 
 [package.metadata.docs.rs]
 all-features = true
