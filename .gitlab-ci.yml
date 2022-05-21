@@ -130,6 +130,7 @@ test:
   stage: test
   variables:
     RUSTFLAGS: "-D warnings"
+    RUST_LOG: "trace"
   script:
     - rustup override set stable
     - *cargo_test
@@ -140,6 +141,7 @@ nightly:
   allow_failure: true
   variables:
     RUSTFLAGS: "-D warnings"
+    RUST_LOG: "trace"
   script:
     - rustup override set nightly
     - *cargo_test
