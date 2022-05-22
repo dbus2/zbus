@@ -891,6 +891,7 @@ fn gen_proxy_signal(
     };
     let stream_types = quote! {
         #[doc = #stream_gen_doc]
+        #[derive(Debug)]
         pub struct #stream_name<'a>(#zbus::#signal_type<'a>);
 
         #zbus::export::static_assertions::assert_impl_all!(
