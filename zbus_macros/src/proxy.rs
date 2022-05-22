@@ -753,6 +753,7 @@ fn gen_proxy_signal(
     let args_struct_decl = if gen_sig_args {
         quote! {
             #[doc = #args_struct_gen_doc]
+            #[derive(Debug, Clone)]
             pub struct #signal_name_ident(::std::sync::Arc<#zbus::Message>);
         }
     } else {
