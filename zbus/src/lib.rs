@@ -123,6 +123,7 @@ mod tests {
     use enumflags2::BitFlags;
     use ntest::timeout;
     use test_log::test;
+    use tracing::{debug, instrument};
 
     use zbus_names::UniqueName;
     #[cfg(unix)]
@@ -163,10 +164,11 @@ mod tests {
 
     #[test]
     #[timeout(15000)]
+    #[instrument]
     fn basic_connection() {
         let connection = blocking::Connection::session()
             .map_err(|e| {
-                println!("error: {}", e);
+                debug!("error: {}", e);
 
                 e
             })
@@ -242,11 +244,12 @@ mod tests {
     }
 
     #[test]
+    #[instrument]
     #[timeout(15000)]
     fn freedesktop_api() {
         let connection = blocking::Connection::session()
             .map_err(|e| {
-                println!("error: {}", e);
+                debug!("error: {}", e);
 
                 e
             })
@@ -284,7 +287,7 @@ mod tests {
             .map(|s| s == <&str>::signature())
             .unwrap());
         let id: &str = reply.body().unwrap();
-        println!("Unique ID of the bus: {}", id);
+        debug!("Unique ID of the bus: {}", id);
 
         let reply = connection
             .call_method(
@@ -335,12 +338,12 @@ mod tests {
         let hashmap: HashMap<&str, OwnedValue> = reply.body().unwrap();
 
         let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
-        println!("DBus bus PID: {}", pid);
+        debug!("DBus bus PID: {}", pid);
 
         #[cfg(unix)]
         {
             let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
-            println!("DBus bus UID: {}", uid);
+            debug!("DBus bus UID: {}", uid);
         }
     }
 
@@ -350,6 +353,7 @@ mod tests {
         block_on(test_freedesktop_api()).unwrap();
     }
 
+    #[instrument]
     async fn test_freedesktop_api() -> Result<()> {
         let connection = Connection::session().await?;
 
@@ -387,7 +391,7 @@ mod tests {
             .map(|s| s == <&str>::signature())
             .unwrap());
         let id: &str = reply.body().unwrap();
-        println!("Unique ID of the bus: {}", id);
+        debug!("Unique ID of the bus: {}", id);
 
         let reply = connection
             .call_method(
@@ -441,12 +445,12 @@ mod tests {
         let hashmap: HashMap<&str, OwnedValue> = reply.body().unwrap();
 
         let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
-        println!("DBus bus PID: {}", pid);
+        debug!("DBus bus PID: {}", pid);
 
         #[cfg(unix)]
         {
             let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
-            println!("DBus bus UID: {}", uid);
+            debug!("DBus bus UID: {}", uid);
         }
 
         Ok(())

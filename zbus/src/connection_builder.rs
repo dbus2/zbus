@@ -313,7 +313,6 @@ impl<'a> ConnectionBuilder<'a> {
             let object_server = conn.sync_object_server(false);
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
-                    // FIXME: Log warning message on `at` returning `false`.
                     let future = object_server.at_ready(path.to_owned(), name, || iface);
                     let added = conn.run_future_at_init(future).await?;
                     // Duplicates shouldn't happen.
