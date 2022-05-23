@@ -268,12 +268,17 @@ impl PropertiesCache {
         uncached_properties: &HashSet<Str<'_>>,
         changed: &HashMap<&str, Value<'_>>,
         invalidated: Vec<&str>,
+        interface: &InterfaceName<'_>,
     ) {
         let mut values = self.values.write().expect("lock poisoned");
 
         for inval in invalidated {
             if uncached_properties.contains(&Str::from(inval)) {
-                // TODO: Log that a cache invalidation event has been ignored.
+                tracing::debug!(
+                    "Ignoring invalidation of uncached property `{}.{}`",
+                    interface,
+                    inval
+                );
                 continue;
             }
 
@@ -285,7 +290,11 @@ impl PropertiesCache {
 
         for (property_name, value) in changed {
             if uncached_properties.contains(&Str::from(*property_name)) {
-                // TODO: Log that a cache update event has been ignored.
+                tracing::debug!(
+                    "Ignoring update of uncached property `{}.{}`",
+                    interface,
+                    property_name
+                );
                 continue;
             }
 
@@ -564,13 +573,19 @@ impl<'a> Proxy<'a> {
                                         &uncached_properties,
                                         &args.changed_properties,
                                         args.invalidated_properties,
+                                        &interface,
                                     );
                                 }
                             }
                         }
                         Some(Either::Right(Ok(populate))) => {
                             let result = populate.body().map(|values| {
-                                properties.update_cache(&uncached_properties, &values, Vec::new())
+                                properties.update_cache(
+                                    &uncached_properties,
+                                    &values,
+                                    Vec::new(),
+                                    &interface,
+                                );
                             });
                             let _ = send.send(result).await;
                             send.close();

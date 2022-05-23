@@ -20,6 +20,7 @@ use std::{
     },
     task::{Context, Poll},
 };
+use tracing::instrument;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
@@ -105,33 +106,40 @@ impl MessageReceiverTask {
     }
 
     // Keep receiving messages and put them on the queue.
+    #[instrument]
     async fn receive_msg(self: Arc<Self>) {
         loop {
+            tracing::trace!("Waiting for message on the socket..");
             let receive_msg = ReceiveMessage {
                 raw_conn: &self.raw_conn,
             };
             let msg = match receive_msg.await {
                 Ok(msg) => msg,
                 Err(e) => {
-                    // Ignore errors when sending the error; this happens if the channel is
-                    // being dropped.
-                    //
-                    // This can be logged when we have logging, though that's mostly useless: it
-                    // only happens when the receive_msg task is running at the time the last
-                    // Connection is dropped.
-                    let _ = self.error_sender.send(e).await;
+                    tracing::trace!("Error reading from the socket: {:?}", e);
+                    if let Err(e) = self.error_sender.send(e).await {
+                        // This happens if the channel is being dropped, which only happens when the
+                        // receive_msg task is running at the time the last Connection is dropped.
+                        // So it's unlikely that it'd be interesting to the user. Hence debug not
+                        // warn.
+                        tracing::debug!("Error sending error: {:?}", e);
+                    }
                     self.msg_sender.close();
                     self.error_sender.close();
+                    tracing::trace!("Socket reading task stopped");
                     return;
                 }
             };
+            tracing::trace!("Message received on the socket: {:?}", msg);
 
             let msg = Arc::new(msg);
-            if self.msg_sender.broadcast(msg.clone()).await.is_err() {
+            if let Err(e) = self.msg_sender.broadcast(msg.clone()).await {
                 // An error would be due to the channel being closed, which only happens when the
-                // connection is dropped, so just stop the task.  See comment above about logging.
+                // connection is dropped, so just stop the task.
+                tracing::debug!("Error broadcasting message to streams: {:?}", e);
                 return;
             }
+            tracing::trace!("Message broadcasted to all streams: {:?}", msg);
         }
     }
 }
@@ -698,18 +706,31 @@ impl Connection {
             let mut stream = MessageStream::from(self.clone());
 
             self.inner.executor.spawn(async move {
-                // TODO: Log errors when we've logging.
-                while let Some(msg) = stream.next().await.and_then(|m| m.ok()) {
+                while let Some(msg) = stream.next().await.and_then(|m| {
+                    if let Err(e) = &m {
+                        tracing::debug!("Error while reading from object server stream: {:?}", e);
+                    }
+                    m.ok()
+                }) {
                     if let Some(conn) = weak_conn.upgrade() {
                         let executor = conn.inner.executor.clone();
                         executor
                             .spawn(async move {
                                 let server = conn.object_server();
-                                let _ = server.dispatch_message(&msg).await;
+                                if let Err(e) = server.dispatch_message(&msg).await {
+                                    tracing::debug!(
+                                        "Error dispatching message. Message: {:?}, error: {:?}",
+                                        msg,
+                                        e
+                                    );
+                                }
                             })
                             .detach();
                     } else {
                         // If connection is completely gone, no reason to keep running the task anymore.
+                        tracing::trace!(
+                            "Connection is gone, stopping associated object server task"
+                        );
                         break;
                     }
                 }
