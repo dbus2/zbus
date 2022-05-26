@@ -1,7 +1,7 @@
 use std::{
     ffi::CStr,
     io::{Error, ErrorKind},
-    net::{SocketAddr, TcpStream},
+    net::SocketAddr,
     ptr,
 };
 
@@ -23,6 +23,7 @@ use winapi::{
     },
 };
 
+#[cfg(feature = "async-io")]
 use uds_windows::UnixStream;
 
 // A process handle
@@ -166,12 +167,14 @@ pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<DWORD, Error> {
 }
 
 // Get the process ID of the connected peer
-pub fn tcp_stream_get_peer_pid(stream: &TcpStream) -> Result<DWORD, Error> {
+#[cfg(any(test, feature = "async-io"))]
+pub fn tcp_stream_get_peer_pid(stream: &std::net::TcpStream) -> Result<DWORD, Error> {
     let peer_addr = stream.peer_addr()?;
 
     socket_addr_get_pid(&peer_addr)
 }
 
+#[cfg(any(test, feature = "async-io"))]
 fn last_err() -> std::io::Error {
     use winapi::um::winsock2::WSAGetLastError;
 
@@ -180,6 +183,7 @@ fn last_err() -> std::io::Error {
 }
 
 // Get the process ID of the connected peer
+#[cfg(feature = "async-io")]
 pub fn unix_stream_get_peer_pid(stream: &UnixStream) -> Result<DWORD, Error> {
     use std::os::windows::io::AsRawSocket;
     use winapi::{

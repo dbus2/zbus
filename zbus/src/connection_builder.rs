@@ -225,11 +225,14 @@ impl<'a> ConnectionBuilder<'a> {
             Target::UnixStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
             #[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
             Target::UnixStream(stream) => Box::new(stream) as Box<dyn Socket>,
+            #[cfg(all(not(unix), not(feature = "async-io"), feature = "tokio"))]
+            Target::UnixStream(_) => return Err(Error::Unsupported),
             #[cfg(feature = "async-io")]
             Target::TcpStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
             #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
             Target::TcpStream(stream) => Box::new(stream) as Box<dyn Socket>,
             Target::Address(address) => match address.connect().await? {
+                #[cfg(any(unix, feature = "async-io"))]
                 address::Stream::Unix(stream) => Box::new(stream) as Box<dyn Socket>,
                 address::Stream::Tcp(stream) => Box::new(stream) as Box<dyn Socket>,
             },

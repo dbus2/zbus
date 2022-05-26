@@ -246,9 +246,9 @@ mod tests {
     use std::os::unix::net::UnixStream;
     use std::thread;
     use test_log::test;
-    #[cfg(not(feature = "async-io"))]
+    #[cfg(all(unix, not(feature = "async-io")))]
     use tokio::net::UnixStream;
-    #[cfg(windows)]
+    #[cfg(all(windows, feature = "async-io"))]
     use uds_windows::UnixStream;
 
     use crate::{
@@ -256,6 +256,7 @@ mod tests {
         Guid,
     };
 
+    #[cfg(any(unix, feature = "async-io"))]
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {

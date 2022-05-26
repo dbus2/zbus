@@ -1119,12 +1119,14 @@ mod tests {
         test_p2p(server, client).await
     }
 
+    #[cfg(any(unix, feature = "async-io"))]
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
         crate::utils::block_on(test_unix_p2p()).unwrap();
     }
 
+    #[cfg(any(unix, feature = "async-io"))]
     async fn test_unix_p2p() -> Result<()> {
         #[cfg(all(unix, feature = "async-io"))]
         use std::os::unix::net::UnixStream;

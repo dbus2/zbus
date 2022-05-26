@@ -11,7 +11,7 @@ use std::{
     net::TcpStream,
 };
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "async-io"))]
 use uds_windows::UnixStream;
 
 #[cfg(unix)]
@@ -282,7 +282,7 @@ impl Socket for tokio::net::UnixStream {
     }
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "async-io"))]
 impl Socket for Async<UnixStream> {
     fn can_pass_unix_fd(&self) -> bool {
         false

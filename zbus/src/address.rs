@@ -14,7 +14,7 @@ use std::{collections::HashMap, convert::TryFrom, env, str::FromStr};
 use tokio::net::TcpStream;
 #[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
 use tokio::net::UnixStream;
-#[cfg(windows)]
+#[cfg(all(windows, feature = "async-io"))]
 use uds_windows::UnixStream;
 
 use std::ffi::OsString;
@@ -82,6 +82,44 @@ pub(crate) enum Stream {
     Tcp(TcpStream),
 }
 
+#[cfg(feature = "async-io")]
+async fn connect_tcp(addr: TcpAddress) -> Result<Async<TcpStream>> {
+    let addrs = run_in_thread(move || -> Result<Vec<SocketAddr>> {
+        let addrs = (addr.host(), addr.port()).to_socket_addrs()?.filter(|a| {
+            if let Some(family) = addr.family() {
+                if family == TcpAddressFamily::Ipv4 {
+                    a.is_ipv4()
+                } else {
+                    a.is_ipv6()
+                }
+            } else {
+                true
+            }
+        });
+        Ok(addrs.collect())
+    })
+    .await
+    .map_err(|e| Error::Address(format!("Failed to receive TCP addresses: {}", e)))?;
+
+    // we could attempt connections in parallel?
+    let mut last_err = Error::Address("Failed to connect".into());
+    for addr in addrs {
+        match Async::<TcpStream>::connect(addr).await {
+            Ok(stream) => return Ok(stream),
+            Err(e) => last_err = e.into(),
+        }
+    }
+
+    Err(last_err)
+}
+
+#[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+async fn connect_tcp(addr: TcpAddress) -> Result<TcpStream> {
+    TcpStream::connect((addr.host(), addr.port()))
+        .await
+        .map_err(Error::Io)
+}
+
 impl Address {
     pub(crate) async fn connect(&self) -> Result<Stream> {
         match self.clone() {
@@ -105,54 +143,23 @@ impl Address {
 
                 #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
                 {
-                    UnixStream::connect(p)
-                        .await
-                        .map(Stream::Unix)
-                        .map_err(Error::Io)
-                }
-            }
-            Address::Tcp(addr) => {
-                #[cfg(feature = "async-io")]
-                {
-                    let addrs = run_in_thread(move || -> Result<Vec<SocketAddr>> {
-                        let addrs = (addr.host(), addr.port()).to_socket_addrs()?.filter(|a| {
-                            if let Some(family) = addr.family() {
-                                if family == TcpAddressFamily::Ipv4 {
-                                    a.is_ipv4()
-                                } else {
-                                    a.is_ipv6()
-                                }
-                            } else {
-                                true
-                            }
-                        });
-                        Ok(addrs.collect())
-                    })
-                    .await
-                    .map_err(|e| {
-                        Error::Address(format!("Failed to receive TCP addresses: {}", e))
-                    })?;
-
-                    // we could attempt connections in parallel?
-                    let mut last_err = Error::Address("Failed to connect".into());
-                    for addr in addrs {
-                        match Async::<TcpStream>::connect(addr).await {
-                            Ok(stream) => return Ok(Stream::Tcp(stream)),
-                            Err(e) => last_err = e.into(),
-                        }
+                    #[cfg(unix)]
+                    {
+                        UnixStream::connect(p)
+                            .await
+                            .map(Stream::Unix)
+                            .map_err(Error::Io)
                     }
 
-                    Err(last_err)
-                }
-
-                #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
-                {
-                    TcpStream::connect((addr.host(), addr.port()))
-                        .await
-                        .map(Stream::Tcp)
-                        .map_err(Error::Io)
+                    #[cfg(not(unix))]
+                    {
+                        let _ = p;
+                        Err(Error::Unsupported)
+                    }
                 }
             }
+
+            Address::Tcp(addr) => connect_tcp(addr).await.map(Stream::Tcp),
         }
     }
 
@@ -190,7 +197,7 @@ impl Address {
     }
 
     // Helper for FromStr
-    #[cfg(unix)]
+    #[cfg(any(unix, feature = "async-io"))]
     fn from_unix(opts: HashMap<&str, &str>) -> Result<Self> {
         let path = if let Some(abs) = opts.get("abstract") {
             if opts.get("path").is_some() {
