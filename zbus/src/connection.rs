@@ -700,6 +700,7 @@ impl Connection {
         blocking::ObjectServer::new(self)
     }
 
+    #[instrument(skip(self))]
     pub(crate) fn start_object_server(&self) {
         self.inner.object_server_dispatch_task.get_or_init(|| {
             let weak_conn = WeakConnection::from(self);
