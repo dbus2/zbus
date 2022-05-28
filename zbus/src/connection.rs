@@ -106,7 +106,7 @@ impl MessageReceiverTask {
     }
 
     // Keep receiving messages and put them on the queue.
-    #[instrument]
+    #[instrument(skip(self))]
     async fn receive_msg(self: Arc<Self>) {
         loop {
             tracing::trace!("Waiting for message on the socket..");
