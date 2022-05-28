@@ -20,7 +20,7 @@ use std::{
     },
     task::{Context, Poll},
 };
-use tracing::instrument;
+use tracing::{debug, instrument, trace};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
@@ -109,37 +109,37 @@ impl MessageReceiverTask {
     #[instrument(skip(self))]
     async fn receive_msg(self: Arc<Self>) {
         loop {
-            tracing::trace!("Waiting for message on the socket..");
+            trace!("Waiting for message on the socket..");
             let receive_msg = ReceiveMessage {
                 raw_conn: &self.raw_conn,
             };
             let msg = match receive_msg.await {
                 Ok(msg) => msg,
                 Err(e) => {
-                    tracing::trace!("Error reading from the socket: {:?}", e);
+                    trace!("Error reading from the socket: {:?}", e);
                     if let Err(e) = self.error_sender.send(e).await {
                         // This happens if the channel is being dropped, which only happens when the
                         // receive_msg task is running at the time the last Connection is dropped.
                         // So it's unlikely that it'd be interesting to the user. Hence debug not
                         // warn.
-                        tracing::debug!("Error sending error: {:?}", e);
+                        debug!("Error sending error: {:?}", e);
                     }
                     self.msg_sender.close();
                     self.error_sender.close();
-                    tracing::trace!("Socket reading task stopped");
+                    trace!("Socket reading task stopped");
                     return;
                 }
             };
-            tracing::trace!("Message received on the socket: {:?}", msg);
+            trace!("Message received on the socket: {:?}", msg);
 
             let msg = Arc::new(msg);
             if let Err(e) = self.msg_sender.broadcast(msg.clone()).await {
                 // An error would be due to the channel being closed, which only happens when the
                 // connection is dropped, so just stop the task.
-                tracing::debug!("Error broadcasting message to streams: {:?}", e);
+                debug!("Error broadcasting message to streams: {:?}", e);
                 return;
             }
-            tracing::trace!("Message broadcasted to all streams: {:?}", msg);
+            trace!("Message broadcasted to all streams: {:?}", msg);
         }
     }
 }
@@ -709,7 +709,7 @@ impl Connection {
             self.inner.executor.spawn(async move {
                 while let Some(msg) = stream.next().await.and_then(|m| {
                     if let Err(e) = &m {
-                        tracing::debug!("Error while reading from object server stream: {:?}", e);
+                        debug!("Error while reading from object server stream: {:?}", e);
                     }
                     m.ok()
                 }) {
@@ -719,19 +719,16 @@ impl Connection {
                             .spawn(async move {
                                 let server = conn.object_server();
                                 if let Err(e) = server.dispatch_message(&msg).await {
-                                    tracing::debug!(
+                                    debug!(
                                         "Error dispatching message. Message: {:?}, error: {:?}",
-                                        msg,
-                                        e
+                                        msg, e
                                     );
                                 }
                             })
                             .detach();
                     } else {
                         // If connection is completely gone, no reason to keep running the task anymore.
-                        tracing::trace!(
-                            "Connection is gone, stopping associated object server task"
-                        );
+                        trace!("Connection is gone, stopping associated object server task");
                         break;
                     }
                 }
