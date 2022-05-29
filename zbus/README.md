@@ -122,8 +122,9 @@ convenience.
 zbus is runtime-agnostic and should work out of the box with different Rust async runtimes. However,
 in order to achieve that, zbus spawns a thread per connection to handle various internal tasks. If
 that is something you would like to avoid, you need to:
-  * Use [`ConnectionBuilder`] and disable the `internal_executor` flag.
-  * Ensure the [internal executor keeps ticking continuously][iektc].
+
+* Use [`ConnectionBuilder`] and disable the `internal_executor` flag.
+* Ensure the [internal executor keeps ticking continuously][iektc].
 
 Moreover, by default zbus makes use of [`async-io`] for all I/O, which also launches its own thread
 to run its own internal executor.
