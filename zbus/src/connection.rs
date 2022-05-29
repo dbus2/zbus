@@ -20,7 +20,7 @@ use std::{
     },
     task::{Context, Poll},
 };
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument, trace, trace_span, Instrument};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
@@ -706,33 +706,39 @@ impl Connection {
             let weak_conn = WeakConnection::from(self);
             let mut stream = MessageStream::from(self.clone());
 
-            self.inner.executor.spawn(async move {
-                while let Some(msg) = stream.next().await.and_then(|m| {
-                    if let Err(e) = &m {
-                        debug!("Error while reading from object server stream: {:?}", e);
-                    }
-                    m.ok()
-                }) {
-                    if let Some(conn) = weak_conn.upgrade() {
-                        let executor = conn.inner.executor.clone();
-                        executor
-                            .spawn(async move {
-                                let server = conn.object_server();
-                                if let Err(e) = server.dispatch_message(&msg).await {
-                                    debug!(
-                                        "Error dispatching message. Message: {:?}, error: {:?}",
-                                        msg, e
-                                    );
-                                }
-                            })
-                            .detach();
-                    } else {
-                        // If connection is completely gone, no reason to keep running the task anymore.
-                        trace!("Connection is gone, stopping associated object server task");
-                        break;
+            self.inner.executor.spawn(
+                async move {
+                    while let Some(msg) = stream.next().await.and_then(|m| {
+                        if let Err(e) = &m {
+                            debug!("Error while reading from object server stream: {:?}", e);
+                        }
+                        m.ok()
+                    }) {
+                        if let Some(conn) = weak_conn.upgrade() {
+                            let executor = conn.inner.executor.clone();
+                            executor
+                                .spawn(
+                                    async move {
+                                        let server = conn.object_server();
+                                        if let Err(e) = server.dispatch_message(&msg).await {
+                                            debug!(
+                                                "Error dispatching message. Message: {:?}, error: {:?}",
+                                                msg, e
+                                            );
+                                        }
+                                    }
+                                    .instrument(trace_span!("ObjectServer method task"))
+                                )
+                                .detach();
+                        } else {
+                            // If connection is completely gone, no reason to keep running the task anymore.
+                            trace!("Connection is gone, stopping associated object server task");
+                            break;
+                        }
                     }
                 }
-            })
+                .instrument(trace_span!("ObjectServer task")),
+            )
         });
     }
 
