@@ -312,6 +312,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         }
         None => panic!(""),
     };
+    drop(props_changed_stream);
 
     proxy.ping().await?;
     assert_eq!(proxy.count().await?, 1);
@@ -374,8 +375,21 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     debug!("Created: {:?}", obj_manager_proxy);
     let mut ifaces_added_stream = obj_manager_proxy.receive_interfaces_added().await?;
     debug!("Created: {:?}", ifaces_added_stream);
-    proxy.create_obj("MyObj").await?;
-    let ifaces_added = ifaces_added_stream.next().await.unwrap();
+
+    // Must process in parallel, so the stream listener does not block receiving
+    // the method return message.
+    let (ifaces_added, _) = futures_util::future::join(
+        async {
+            let ret = ifaces_added_stream.next().await.unwrap();
+            drop(ifaces_added_stream);
+            ret
+        },
+        async {
+            proxy.create_obj("MyObj").await.unwrap();
+        },
+    )
+    .await;
+
     assert_eq!(ifaces_added.args()?.object_path(), "/zbus/test/MyObj");
     let args = ifaces_added.args()?;
     let ifaces = args.interfaces_and_properties();
@@ -402,10 +416,23 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         Some(&Value::from(0u32))
     );
     my_obj_proxy.ping().await?;
+
     let mut ifaces_removed_stream = obj_manager_proxy.receive_interfaces_removed().await?;
     debug!("Created: {:?}", ifaces_removed_stream);
-    proxy.destroy_obj("MyObj").await?;
-    let ifaces_removed = ifaces_removed_stream.next().await.unwrap();
+    // Must process in parallel, so the stream listener does not block receiving
+    // the method return message.
+    let (ifaces_removed, _) = futures_util::future::join(
+        async {
+            let ret = ifaces_removed_stream.next().await.unwrap();
+            drop(ifaces_removed_stream);
+            ret
+        },
+        async {
+            proxy.destroy_obj("MyObj").await.unwrap();
+        },
+    )
+    .await;
+
     let args = ifaces_removed.args()?;
     assert_eq!(args.object_path(), "/zbus/test/MyObj");
     assert_eq!(args.interfaces(), &["org.freedesktop.MyIface"]);
