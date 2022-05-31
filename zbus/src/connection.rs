@@ -365,7 +365,9 @@ impl Connection {
     pub async fn send_message(&self, mut msg: Message) -> Result<u32> {
         let serial = self.assign_serial_num(&mut msg)?;
 
+        trace!("Sending message: {:?}", msg);
         (&*self).send(msg).await?;
+        trace!("Sent message with serial: {}", serial);
 
         Ok(serial)
     }
