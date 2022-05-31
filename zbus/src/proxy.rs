@@ -792,7 +792,6 @@ impl<'a> Proxy<'a> {
     ) -> Result<SignalStream<'a>> {
         // Time to try & resolve the destination name & track changes to it.
         let conn = self.inner.inner_without_borrows.conn.clone();
-        let stream = conn.msg_receiver.activate_cloned();
         self.inner.destination_unique_name().await?;
 
         let mut expr = format!(
@@ -821,6 +820,8 @@ impl<'a> Proxy<'a> {
                 (Some(name), None, Some(id))
             }
         };
+
+        let stream = conn.msg_receiver.activate_cloned();
 
         Ok(SignalStream {
             stream,
@@ -1081,7 +1082,8 @@ mod tests {
     use zbus_names::UniqueName;
 
     use super::*;
-    use crate::utils::block_on;
+    use crate::{dbus_interface, dbus_proxy, utils::block_on, ConnectionBuilder, SignalContext};
+    use futures_util::StreamExt;
     use ntest::timeout;
     use std::future::ready;
     use test_log::test;
@@ -1094,7 +1096,6 @@ mod tests {
     }
 
     async fn test_signal() -> Result<()> {
-        use futures_util::StreamExt;
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = Connection::session().await?;
@@ -1164,6 +1165,116 @@ mod tests {
 
         let acquired_signal = acquired_signal.0.unwrap();
         assert_eq!(acquired_signal.body::<&str>().unwrap(), well_known);
+
+        Ok(())
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn signal_stream_deadlock() {
+        block_on(test_signal_stream_deadlock()).unwrap();
+    }
+
+    /// Tests deadlocking in signal reception when the message queue is full.
+    ///
+    /// Creates a connection with a small message queue, and a service that
+    /// emits signals at a high rate. First a listener is created that listens
+    /// for that signal which should fill the small queue. Then another signal
+    /// signal listener is created against another signal. Previously, this second
+    /// call to add the match rule never resolved and resulted in a deadlock.
+    async fn test_signal_stream_deadlock() -> Result<()> {
+        #[dbus_proxy(
+            gen_blocking = false,
+            default_path = "/org/zbus/Test",
+            default_service = "org.zbus.Test.MR501",
+            interface = "org.zbus.Test"
+        )]
+        trait Test {
+            #[dbus_proxy(signal)]
+            fn my_signal(&self, msg: &str) -> Result<()>;
+        }
+
+        struct TestIface;
+
+        #[dbus_interface(name = "org.zbus.Test")]
+        impl TestIface {
+            #[dbus_interface(signal)]
+            async fn my_signal(context: &SignalContext<'_>, msg: &'static str) -> Result<()>;
+        }
+
+        let test_iface = TestIface;
+        let server_conn = ConnectionBuilder::session()?
+            .name("org.zbus.Test.MR501")?
+            .serve_at("/org/zbus/Test", test_iface)?
+            .build()
+            .await?;
+
+        let client_conn = ConnectionBuilder::session()?.max_queued(1).build().await?;
+
+        let test_proxy = TestProxy::new(&client_conn).await?;
+        let test_prop_proxy = PropertiesProxy::builder(&client_conn)
+            .destination("org.zbus.Test.MR501")?
+            .path("/org/zbus/Test")?
+            .build()
+            .await?;
+
+        let (tx, rx) = bounded(1);
+
+        let handle = {
+            let tx = tx.clone();
+            let conn = server_conn.clone();
+            server_conn.executor().spawn(async move {
+                use std::time::Duration;
+
+                #[cfg(feature = "async-io")]
+                use async_io::Timer;
+
+                #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+                use tokio::time::sleep;
+
+                let iface_ref = conn
+                    .object_server()
+                    .interface::<_, TestIface>("/org/zbus/Test")
+                    .await
+                    .unwrap();
+
+                let context = iface_ref.signal_context();
+                while !tx.is_closed() {
+                    for _ in 0..10 {
+                        TestIface::my_signal(context, "This is a test")
+                            .await
+                            .unwrap();
+                    }
+
+                    #[cfg(feature = "async-io")]
+                    Timer::after(Duration::from_millis(5)).await;
+
+                    #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+                    sleep(Duration::from_millis(5)).await;
+                }
+            })
+        };
+
+        let signal_fut = async {
+            let mut signal_stream = test_proxy.receive_my_signal().await.unwrap();
+
+            tx.send(()).await.unwrap();
+
+            while let Some(_signal) = signal_stream.next().await {}
+        };
+
+        let prop_fut = async {
+            rx.recv().await.unwrap();
+            let _prop_stream = test_prop_proxy.receive_properties_changed().await.unwrap();
+            rx.close();
+        };
+
+        futures_util::pin_mut!(signal_fut);
+        futures_util::pin_mut!(prop_fut);
+
+        futures_util::future::select(signal_fut, prop_fut).await;
+
+        handle.await;
 
         Ok(())
     }
