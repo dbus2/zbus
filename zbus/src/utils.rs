@@ -38,6 +38,7 @@ lazy_static::lazy_static! {
     static ref TOKIO_RT: tokio::runtime::Runtime = {
         tokio::runtime::Builder::new_current_thread()
             .enable_io()
+            .enable_time()
             .build()
             .expect("launch of single-threaded tokio runtime")
     };
