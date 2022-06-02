@@ -55,6 +55,36 @@ impl TcpAddress {
     pub fn family(&self) -> Option<TcpAddressFamily> {
         self.family
     }
+
+    // Helper for FromStr
+    fn from_tcp(opts: HashMap<&str, &str>) -> Result<Address> {
+        let bind = None;
+        if opts.contains_key("bind") {
+            return Err(Error::Address("`bind` isn't yet supported".into()));
+        }
+
+        let host = opts
+            .get("host")
+            .ok_or_else(|| Error::Address("tcp address is missing `host`".into()))?
+            .to_string();
+        let port = opts
+            .get("port")
+            .ok_or_else(|| Error::Address("tcp address is missing `port`".into()))?;
+        let port = port
+            .parse::<u16>()
+            .map_err(|_| Error::Address("invalid tcp `port`".into()))?;
+        let family = opts
+            .get("family")
+            .map(|f| TcpAddressFamily::from_str(f))
+            .transpose()?;
+
+        Ok(Address::Tcp(TcpAddress {
+            host,
+            bind,
+            port,
+            family,
+        }))
+    }
 }
 
 /// A bus address
@@ -217,36 +247,6 @@ impl Address {
         };
 
         Ok(Address::Unix(path))
-    }
-
-    // Helper for FromStr
-    fn from_tcp(opts: HashMap<&str, &str>) -> Result<Self> {
-        let bind = None;
-        if opts.contains_key("bind") {
-            return Err(Error::Address("`bind` isn't yet supported".into()));
-        }
-
-        let host = opts
-            .get("host")
-            .ok_or_else(|| Error::Address("tcp address is missing `host`".into()))?
-            .to_string();
-        let port = opts
-            .get("port")
-            .ok_or_else(|| Error::Address("tcp address is missing `port`".into()))?;
-        let port = port
-            .parse::<u16>()
-            .map_err(|_| Error::Address("invalid tcp `port`".into()))?;
-        let family = opts
-            .get("family")
-            .map(|f| TcpAddressFamily::from_str(f))
-            .transpose()?;
-
-        Ok(Address::Tcp(TcpAddress {
-            host,
-            bind,
-            port,
-            family,
-        }))
     }
 }
 
