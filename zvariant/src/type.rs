@@ -339,4 +339,7 @@ macro_rules! static_str_type {
     };
 }
 
+#[cfg(feature = "uuid")]
+static_str_type!(uuid::Uuid);
+
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
