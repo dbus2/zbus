@@ -342,4 +342,7 @@ macro_rules! static_str_type {
 #[cfg(feature = "uuid")]
 static_str_type!(uuid::Uuid);
 
+#[cfg(feature = "url")]
+static_str_type!(url::Url);
+
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
