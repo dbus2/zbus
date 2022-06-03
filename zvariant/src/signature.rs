@@ -279,13 +279,8 @@ impl<'a> Signature<'a> {
 }
 
 impl<'a> Debug for Signature<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        // FIXME: Should we display all the bytes along with self.pos and self.end, instead?
-        f.write_str("Signature: [\n")?;
-        for byte in self.as_bytes() {
-            f.write_fmt(format_args!("\t{} ({}),\n", *byte as char, byte))?;
-        }
-        f.write_str("]")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Signature").field(&self.as_str()).finish()
     }
 }
 
