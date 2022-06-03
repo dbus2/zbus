@@ -669,4 +669,58 @@ mod tests {
         let addr = Address::from_str(&format!("tcp:host=localhost,port={}", port)).unwrap();
         crate::utils::block_on(async { addr.connect().await }).unwrap();
     }
+
+    #[test]
+    fn connect_nonce_tcp() {
+        struct PercentEncoded<'a>(&'a [u8]);
+
+        impl std::fmt::Display for PercentEncoded<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                super::encode_percents(f, self.0)
+            }
+        }
+
+        use std::io::Write;
+
+        const TEST_COOKIE: &'static [u8] = b"VERILY SECRETIVE";
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let mut cookie = tempfile::NamedTempFile::new().unwrap();
+        cookie.as_file_mut().write_all(TEST_COOKIE).unwrap();
+
+        let encoded_path = format!(
+            "{}",
+            PercentEncoded(cookie.path().to_str().unwrap().as_ref())
+        );
+
+        let addr = Address::from_str(&format!(
+            "nonce-tcp:host=localhost,port={},noncefile={}",
+            port, encoded_path
+        ))
+        .unwrap();
+
+        let saw_cookie = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+        std::thread::spawn({
+            let saw_cookie = saw_cookie.clone();
+            move || {
+                use std::io::Read;
+
+                let mut client = listener.incoming().next().unwrap().unwrap();
+
+                let mut buf = [0u8; 16];
+                client.read_exact(&mut buf).unwrap();
+
+                if buf == TEST_COOKIE {
+                    saw_cookie.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+        });
+
+        crate::utils::block_on(addr.connect()).unwrap();
+
+        assert!(saw_cookie.load(std::sync::atomic::Ordering::Relaxed));
+    }
 }
