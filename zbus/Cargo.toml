@@ -73,6 +73,7 @@ test-log = { version = "0.2.10", features = ["trace"], default-features = false 
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "fs", "io-util", "net"] }
 async-std = { version = "1.10.0", features = ["attributes" ] }
 tracing-subscriber = { version = "0.3.11", features = ["env-filter" , "fmt"], default-features = false }
+tempfile = "3.3.0"
 
 [package.metadata.docs.rs]
 all-features = true
