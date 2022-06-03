@@ -12,7 +12,11 @@ use ntest::timeout;
 use serde::{Deserialize, Serialize};
 use test_log::test;
 use tracing::{debug, instrument};
-use zbus::{block_on, fdo::ObjectManagerProxy, DBusError};
+use zbus::{
+    block_on,
+    fdo::{ObjectManager, ObjectManagerProxy},
+    DBusError,
+};
 use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Type, Value};
 
 use zbus::{
@@ -523,7 +527,7 @@ async fn iface_and_proxy_(p2p: bool) {
     let service_conn_builder = service_conn_builder
         .serve_at("/org/freedesktop/MyService", iface)
         .unwrap()
-        .object_manager_at("/zbus/test")
+        .serve_at("/zbus/test", ObjectManager)
         .unwrap();
     debug!("ObjectServer set-up.");
 

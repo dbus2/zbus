@@ -266,10 +266,22 @@ macro_rules! gen_object_manager_proxy {
 gen_object_manager_proxy!(true, false);
 assert_impl_all!(ObjectManagerProxy<'_>: Send, Sync, Unpin);
 
-// Not exposing to the public API because users should use `ObjectServer::object_manager_at` or
-// `ConnectionBuilder::object_manager_at`
+/// Service-side [Object Manager][om] interface implementation.
+///
+/// The recommended path to add this interface at is the path form of the well-known name of a D-Bus
+/// service, or below. For example, if a D-Bus service is available at the well-known name
+/// `net.example.ExampleService1`, this interface should typically be registered at
+/// `/net/example/ExampleService1`, or below (to allow for multiple object managers in a service).
+///
+/// It is supported, but not recommended, to add this interface at the root path, `/`.
+///
+/// When added to an `ObjectServer`, `InterfacesAdded` signal is emitted for all the objects under
+/// the `path` its added at. You can use this fact to minimize the signal emissions by populating
+/// the entire (sub)tree under `path` before registering an object manager.
+///
+/// [om]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-objectmanager
 #[derive(Debug, Clone)]
-pub(crate) struct ObjectManager;
+pub struct ObjectManager;
 
 #[dbus_interface(name = "org.freedesktop.DBus.ObjectManager")]
 impl ObjectManager {
