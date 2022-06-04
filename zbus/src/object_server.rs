@@ -621,47 +621,6 @@ impl ObjectServer {
         })
     }
 
-    /// Register [object manager][om] interface at `path`.
-    ///
-    /// The recommended path to add this interface at is the path form of the well-known name of a D-Bus
-    /// service, or below. For example, if a D-Bus service is available at the well-known name
-    /// `net.example.ExampleService1`, this interface should typically be registered at
-    /// `/net/example/ExampleService1`, or below (to allow for multiple object managers in a service).
-    ///
-    /// It is supported, but not recommended, to add this interface at the root path, `/`.
-    ///
-    /// `InterfacesAdded` signal will be emitted for all the objects under `path`. You can use this
-    /// fact to minimize the signal emissions by populating the entire (sub)tree under `path` before
-    /// registering an object manager.
-    ///
-    /// If an object manager was already registered at `path`, returns false.
-    ///
-    /// [om]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-objectmanager
-    pub async fn object_manager_at<'p, P>(&self, path: P) -> Result<bool>
-    where
-        P: TryInto<ObjectPath<'p>>,
-        P::Error: Into<Error>,
-    {
-        self.at_ready(path, ObjectManager::name(), move || {
-            Arc::new(RwLock::new(ObjectManager))
-        })
-        .await
-    }
-
-    /// Unregister object manager interface from `path`.
-    ///
-    /// Remove a previously registered object manager interface at `path`.
-    ///
-    /// Returns whether the object was destroyed (because no more interfaces were registered on
-    /// `path`).
-    pub async fn remove_object_manager<'p, P>(&self, path: P) -> Result<bool>
-    where
-        P: TryInto<ObjectPath<'p>>,
-        P::Error: Into<Error>,
-    {
-        self.remove::<ObjectManager, _>(path).await
-    }
-
     async fn dispatch_method_call_try(
         &self,
         connection: &Connection,
