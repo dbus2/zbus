@@ -328,4 +328,15 @@ impl Type for serde_bytes::ByteBuf {
     }
 }
 
+#[allow(unused)]
+macro_rules! static_str_type {
+    ($ty:ty) => {
+        impl Type for $ty {
+            fn signature() -> Signature<'static> {
+                <&str>::signature()
+            }
+        }
+    };
+}
+
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
