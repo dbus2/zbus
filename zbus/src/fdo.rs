@@ -426,7 +426,7 @@ assert_impl_all!(StatsProxy<'_>: Send, Sync, Unpin);
 /// [`request_name`]: struct.DBusProxy.html#method.request_name
 #[bitflags]
 #[repr(u32)]
-#[derive(Type, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Type, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RequestNameFlags {
     /// If an application A specifies this flag and succeeds in becoming the owner of the name, and
     /// another application B later calls [`request_name`] with the [`ReplaceExisting`] flag, then
@@ -461,7 +461,7 @@ assert_impl_all!(RequestNameFlags: Send, Sync, Unpin);
 ///
 /// [`request_name`]: struct.DBusProxy.html#method.request_name
 #[repr(u32)]
-#[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
+#[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq, Eq)]
 pub enum RequestNameReply {
     /// The caller is now the primary owner of the name, replacing any previous owner. Either the
     /// name had no owner before, or the caller specified [`ReplaceExisting`] and the current owner
@@ -496,7 +496,7 @@ assert_impl_all!(RequestNameReply: Send, Sync, Unpin);
 ///
 /// [`release_name`]: struct.DBusProxy.html#method.release_name
 #[repr(u32)]
-#[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
+#[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq, Eq)]
 pub enum ReleaseNameReply {
     /// The caller has released their claim on the given name. Either the caller was the primary
     /// owner of the name, and the name is now unused or taken by somebody waiting in the queue for
@@ -521,7 +521,7 @@ assert_impl_all!(ReleaseNameReply: Send, Sync, Unpin);
 ///
 /// **Note**: unknown keys, in particular those with "." that are not from the specification, will
 /// be ignored. Use your own implementation or contribute your keys here, or in the specification.
-#[derive(Debug, DeserializeDict, PartialEq, SerializeDict, Type)]
+#[derive(Debug, DeserializeDict, PartialEq, Eq, SerializeDict, Type)]
 #[zvariant(signature = "a{sv}")]
 pub struct ConnectionCredentials {
     /// The numeric Unix user ID, as defined by POSIX

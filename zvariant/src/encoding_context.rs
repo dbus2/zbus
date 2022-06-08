@@ -4,7 +4,7 @@ use static_assertions::assert_impl_all;
 
 /// The encoding format.
 ///
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum EncodingFormat {
     /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-marshaling)
     /// format.
@@ -61,7 +61,7 @@ impl std::fmt::Display for EncodingFormat {
 /// [serialization and deserialization]: index.html#functions
 /// [ByteOrder]: https://docs.rs/byteorder/1.3.4/byteorder/trait.ByteOrder.html
 /// [specify]: #method.new
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct EncodingContext<B> {
     format: EncodingFormat,
     position: usize,

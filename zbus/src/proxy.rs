@@ -153,7 +153,7 @@ impl<'a, T> PropertyChanged<'a, T> {
             type Target = Value<'static>;
 
             fn deref(&self) -> &Self::Target {
-                &*self
+                &**self
                     .values
                     .get(self.name)
                     .expect("PropertyStream with no corresponding property")
@@ -282,7 +282,7 @@ impl PropertiesCache {
                 continue;
             }
 
-            if let Some(entry) = values.get_mut(&*inval) {
+            if let Some(entry) = values.get_mut(inval) {
                 entry.value = None;
                 entry.event.notify(usize::MAX);
             }

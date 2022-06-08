@@ -51,7 +51,7 @@ fn parse_attribute(meta: &NestedMeta) -> (String, String) {
     (ident.to_string(), value)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ItemAttribute {
     Rename(String),
     Signature(String),
