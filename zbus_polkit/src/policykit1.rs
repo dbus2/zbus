@@ -12,7 +12,7 @@ use crate::Error;
 /// Flags used in the CheckAuthorization() method.
 #[bitflags]
 #[repr(u32)]
-#[derive(Type, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Type, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum CheckAuthorizationFlags {
     /// If the Subject can obtain the authorization through authentication, and an authentication
     /// agent is available, then attempt to do so. Note, this means that the CheckAuthorization()
@@ -24,7 +24,7 @@ assert_impl_all!(CheckAuthorizationFlags: Send, Sync, Unpin);
 
 /// An enumeration for granting implicit authorizations.
 #[repr(u32)]
-#[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
+#[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq, Eq)]
 pub enum ImplicitAuthorization {
     /// The Subject is not authorized.
     NotAuthorized = 0,
@@ -45,7 +45,7 @@ assert_impl_all!(ImplicitAuthorization: Send, Sync, Unpin);
 /// Flags describing features supported by the Authority implementation.
 #[bitflags]
 #[repr(u32)]
-#[derive(Type, Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Type, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum AuthorityFeatures {
     /// The authority supports temporary authorizations that can be obtained through authentication.
     TemporaryAuthorization = 0x01,

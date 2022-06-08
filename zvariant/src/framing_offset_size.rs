@@ -6,7 +6,7 @@ use byteorder::{ByteOrder, WriteBytesExt, LE};
 // GVariant containers keeps framing offsets at the end and size of these offsets is dependent on
 // the size of the container (which includes offsets themselves.
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(usize)]
 pub(crate) enum FramingOffsetSize {
     U8 = 1,

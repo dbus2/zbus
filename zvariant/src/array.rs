@@ -1,3 +1,4 @@
+#![allow(unknown_lints)]
 use serde::{
     de::{DeserializeSeed, Deserializer, SeqAccess, Visitor},
     ser::{Serialize, SerializeSeq, Serializer},
@@ -16,6 +17,8 @@ use crate::{
 /// [`Value`]: enum.Value.html#variant.Array
 /// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 #[derive(Debug, Clone, PartialEq)]
+// FIXME: Workaround for https://github.com/rust-lang/rust-clippy/issues/8970
+#[allow(clippy::derive_partial_eq_without_eq)]
 pub struct Array<'a> {
     element_signature: Signature<'a>,
     elements: Vec<Value<'a>>,
@@ -259,6 +262,8 @@ impl<'de> DeserializeSeed<'de> for ArraySeed<'de> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+// FIXME: Workaround for https://github.com/rust-lang/rust-clippy/issues/8970
+#[allow(clippy::derive_partial_eq_without_eq)]
 struct ArrayVisitor<'a> {
     signature: Signature<'a>,
 }

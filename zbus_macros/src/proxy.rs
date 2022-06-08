@@ -553,7 +553,7 @@ fn gen_proxy_property(
             ::std::result::Result::Ok(self.0.get_property(#property_name)#wait?)
         };
         let ret_type = if let ReturnType::Type(_, ty) = &signature.output {
-            Some(&*ty)
+            Some(ty)
         } else {
             None
         };

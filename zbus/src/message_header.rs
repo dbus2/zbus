@@ -16,7 +16,7 @@ pub(crate) const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
 
 /// D-Bus code for endianness.
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, Type)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Eq, Serialize_repr, Type)]
 pub enum EndianSig {
     /// The D-Bus message is in big-endian (network) byte order.
     Big = b'B',
@@ -49,7 +49,7 @@ pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Little;
 
 /// Message header representing the D-Bus type of the message.
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Serialize_repr, Type)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Eq, Serialize_repr, Type)]
 pub enum MessageType {
     /// Invalid message type. All unknown types on received messages are treated as invalid.
     Invalid = 0,
@@ -81,7 +81,7 @@ impl From<u8> for MessageType {
 /// Pre-defined flags that can be passed in Message header.
 #[bitflags]
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, Type)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Type)]
 pub enum MessageFlags {
     /// This message does not expect method return replies or error replies, even if it is of a type
     /// that can have a reply; the reply should be omitted.

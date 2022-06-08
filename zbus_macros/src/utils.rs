@@ -63,7 +63,7 @@ pub fn snake_case(s: &str) -> String {
     snake
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ItemAttribute {
     Property(HashMap<String, String>),
     Signal,

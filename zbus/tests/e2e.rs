@@ -32,7 +32,7 @@ pub struct ArgStructTest {
 
 // Mimic a NetworkManager interface property that's a dict. This tests ability to use a custom
 // dict type using the `Type` And `*Dict` macros (issue #241).
-#[derive(DeserializeDict, SerializeDict, Type, Debug, Value, OwnedValue, PartialEq)]
+#[derive(DeserializeDict, SerializeDict, Type, Debug, Value, OwnedValue, PartialEq, Eq)]
 #[zvariant(signature = "dict")]
 pub struct IP4Adress {
     prefix: u32,

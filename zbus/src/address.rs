@@ -20,14 +20,14 @@ use uds_windows::UnixStream;
 use std::ffi::OsString;
 
 /// A `tcp:` address family.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TcpAddressFamily {
     Ipv4,
     Ipv6,
 }
 
 /// A `tcp:` D-Bus address.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TcpAddress {
     pub(crate) host: String,
     pub(crate) bind: Option<String>,
@@ -58,7 +58,7 @@ impl TcpAddress {
 }
 
 /// A bus address
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Address {
     /// A path on the filesystem
