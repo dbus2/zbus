@@ -366,7 +366,7 @@ impl Connection {
         let serial = self.assign_serial_num(&mut msg)?;
 
         trace!("Sending message: {:?}", msg);
-        (&*self).send(msg).await?;
+        (&mut &*self).send(msg).await?;
         trace!("Sent message with serial: {}", serial);
 
         Ok(serial)
