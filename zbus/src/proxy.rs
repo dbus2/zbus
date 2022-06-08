@@ -1229,7 +1229,7 @@ mod tests {
                 #[cfg(feature = "async-io")]
                 use async_io::Timer;
 
-                #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+                #[cfg(not(feature = "async-io"))]
                 use tokio::time::sleep;
 
                 let iface_ref = conn
@@ -1249,7 +1249,7 @@ mod tests {
                     #[cfg(feature = "async-io")]
                     Timer::after(Duration::from_millis(5)).await;
 
-                    #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+                    #[cfg(not(feature = "async-io"))]
                     sleep(Duration::from_millis(5)).await;
                 }
             })

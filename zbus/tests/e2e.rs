@@ -505,7 +505,7 @@ async fn iface_and_proxy_(p2p: bool) {
                 )
             }
 
-            #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+            #[cfg(not(feature = "async-io"))]
             {
                 let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
                 let addr = listener.local_addr().unwrap();

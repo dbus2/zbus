@@ -10,9 +10,9 @@ use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 #[cfg(all(unix, feature = "async-io"))]
 use std::os::unix::net::UnixStream;
 use std::{collections::HashMap, convert::TryFrom, env, str::FromStr};
-#[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+#[cfg(all(not(feature = "async-io")))]
 use tokio::net::TcpStream;
-#[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
+#[cfg(all(unix, not(feature = "async-io")))]
 use tokio::net::UnixStream;
 #[cfg(all(windows, feature = "async-io"))]
 use uds_windows::UnixStream;
@@ -130,7 +130,7 @@ pub(crate) enum Stream {
     Tcp(Async<TcpStream>),
 }
 
-#[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+#[cfg(all(not(feature = "async-io")))]
 #[derive(Debug)]
 pub(crate) enum Stream {
     #[cfg(unix)]
@@ -169,7 +169,7 @@ async fn connect_tcp(addr: TcpAddress) -> Result<Async<TcpStream>> {
     Err(last_err)
 }
 
-#[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+#[cfg(all(not(feature = "async-io")))]
 async fn connect_tcp(addr: TcpAddress) -> Result<TcpStream> {
     TcpStream::connect((addr.host(), addr.port()))
         .await
@@ -197,7 +197,7 @@ impl Address {
                     }
                 }
 
-                #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+                #[cfg(all(not(feature = "async-io")))]
                 {
                     #[cfg(unix)]
                     {
@@ -243,7 +243,7 @@ impl Address {
                     }
                 }
 
-                #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+                #[cfg(all(not(feature = "async-io")))]
                 {
                     let nonce = tokio::fs::read(nonce_file).await?;
                     tokio::io::AsyncWriteExt::write_all(&mut stream, &nonce).await?;
