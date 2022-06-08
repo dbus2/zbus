@@ -983,7 +983,8 @@ impl<'a> Sink<Message> for &'a Connection {
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         let mut raw_conn = self.inner.raw_conn.lock().expect("poisoned lock");
-        match ready!(raw_conn.flush(cx)) {
+        let res = raw_conn.flush(cx);
+        match ready!(res) {
             Ok(_) => (),
             Err(e) => return Poll::Ready(Err(e)),
         }
