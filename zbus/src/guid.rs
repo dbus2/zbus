@@ -16,7 +16,7 @@ use static_assertions::assert_impl_all;
 ///
 /// [UUIDs chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#uuids
 /// [TryFrom]: #impl-TryFrom%3C%26%27_%20str%3E
-#[derive(Clone, Debug, PartialEq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Guid(String);
 
 assert_impl_all!(Guid: Send, Sync, Unpin);

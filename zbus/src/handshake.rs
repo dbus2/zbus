@@ -19,7 +19,7 @@ use crate::{
 /// Authentication mechanisms
 ///
 /// See <https://dbus.freedesktop.org/doc/dbus-specification.html#auth-mechanisms>
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AuthMechanism {
     /// This is the recommended authentication mechanism on platforms where credentials can be
     /// transferred out-of-band, in particular Unix platforms that can perform credentials-passing

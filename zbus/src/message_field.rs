@@ -20,7 +20,7 @@ use zvariant::{ObjectPath, Signature, Type, Value};
 /// [retrieve a specific field]: struct.MessageFields.html#method.get_field
 /// [`MessageFields`]: struct.MessageFields.html
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Serialize_repr, Type)]
+#[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Eq, Serialize_repr, Type)]
 pub enum MessageFieldCode {
     /// Code for [`MessageField::Invalid`](enum.MessageField.html#variant.Invalid)
     Invalid = 0,
@@ -92,7 +92,7 @@ impl<'f> MessageField<'f> {
 /// [headers]: struct.MessageHeader.html
 /// [are fixed]: struct.MessagePrimaryHeader.html
 /// [Message Format]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-messages
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MessageField<'f> {
     /// Not a valid field.
     Invalid,

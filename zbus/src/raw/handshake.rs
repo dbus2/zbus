@@ -24,7 +24,7 @@ use futures_core::ready;
  * Client-side handshake logic
  */
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(clippy::upper_case_acronyms)]
 enum ClientHandshakeStep {
     Init,

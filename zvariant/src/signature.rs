@@ -452,7 +452,7 @@ fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
 }
 
 /// Owned [`Signature`](struct.Signature.html)
-#[derive(Debug, Clone, PartialEq, serde::Serialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Type)]
 pub struct OwnedSignature(Signature<'static>);
 
 assert_impl_all!(OwnedSignature: Send, Sync, Unpin);

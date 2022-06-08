@@ -640,7 +640,7 @@ mod tests {
         use zvariant::{OwnedValue, Type};
 
         #[derive(
-            Debug, PartialEq, Clone, Type, OwnedValue, serde::Serialize, serde::Deserialize,
+            Debug, PartialEq, Eq, Clone, Type, OwnedValue, serde::Serialize, serde::Deserialize,
         )]
         pub struct DbusPath {
             id: String,
