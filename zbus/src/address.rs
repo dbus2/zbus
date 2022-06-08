@@ -352,7 +352,7 @@ fn decode_percents(value: &str) -> Result<Vec<u8>> {
     let mut decoded = Vec::new();
 
     while let Some(c) = iter.next() {
-        if matches!(c, '-' | 'A'..='Z' | 'a'..='z' | '_' | '/' | '.' | '\\' | '*') {
+        if matches!(c, '-' | '0'..='9' | 'A'..='Z' | 'a'..='z' | '_' | '/' | '.' | '\\' | '*') {
             decoded.push(c as u8)
         } else if c == '%' {
             decoded.push(
@@ -393,7 +393,7 @@ fn encode_percents(f: &mut Formatter<'_>, mut value: &[u8]) -> std::fmt::Result 
 
     loop {
         let pos = value.iter().position(
-            |c| !matches!(c, b'-' | b'A'..=b'Z' | b'a'..=b'z' | b'_' | b'/' | b'.' | b'\\' | b'*'),
+            |c| !matches!(c, b'-' | b'0'..=b'9' | b'A'..=b'Z' | b'a'..=b'z' | b'_' | b'/' | b'.' | b'\\' | b'*'),
         );
 
         if let Some(pos) = pos {
@@ -602,10 +602,10 @@ mod tests {
                     bind: None,
                     family: Some(TcpAddressFamily::Ipv6),
                 },
-                nonce_file: b"/a/file/path to file".to_vec()
+                nonce_file: b"/a/file/path to file 1234".to_vec()
             },
             Address::from_str(
-                "nonce-tcp:host=localhost,port=4142,family=ipv6,noncefile=/a/file/path%20to%20file"
+                "nonce-tcp:host=localhost,port=4142,family=ipv6,noncefile=/a/file/path%20to%20file%201234"
             )
             .unwrap()
         );
@@ -655,10 +655,10 @@ mod tests {
                     bind: None,
                     family: Some(TcpAddressFamily::Ipv6),
                 },
-                nonce_file: b"/a/file/path to file".to_vec()
+                nonce_file: b"/a/file/path to file 1234".to_vec()
             }
             .to_string(),
-            "nonce-tcp:noncefile=/a/file/path%20to%20file,host=localhost,port=4142,family=ipv6"
+            "nonce-tcp:noncefile=/a/file/path%20to%20file%201234,host=localhost,port=4142,family=ipv6"
         );
     }
 
