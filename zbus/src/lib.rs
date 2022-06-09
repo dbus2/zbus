@@ -21,7 +21,13 @@ mod doctests {
 }
 
 #[cfg(all(not(feature = "async-io"), not(feature = "tokio")))]
-compile_error!("Either \"async-io\" (default) or \"tokio\" must be enabled.");
+mod error_message {
+    #[cfg(windows)]
+    compile_error!("Either \"async-io\" (default) or \"tokio\" must be enabled. On Windows \"async-io\" is (currently) required for UNIX socket support");
+
+    #[cfg(not(windows))]
+    compile_error!("Either \"async-io\" (default) or \"tokio\" must be enabled.");
+}
 
 #[cfg(windows)]
 mod win32;
