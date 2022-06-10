@@ -701,26 +701,28 @@ mod tests {
         ))
         .unwrap();
 
-        let saw_cookie = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
 
-        std::thread::spawn({
-            let saw_cookie = saw_cookie.clone();
-            move || {
-                use std::io::Read;
+        std::thread::spawn(move || {
+            use std::io::Read;
 
-                let mut client = listener.incoming().next().unwrap().unwrap();
+            let mut client = listener.incoming().next().unwrap().unwrap();
 
-                let mut buf = [0u8; 16];
-                client.read_exact(&mut buf).unwrap();
+            let mut buf = [0u8; 16];
+            client.read_exact(&mut buf).unwrap();
 
-                if buf == TEST_COOKIE {
-                    saw_cookie.store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-            }
+            sender.send(buf == TEST_COOKIE).unwrap();
         });
 
         crate::utils::block_on(addr.connect()).unwrap();
 
-        assert!(saw_cookie.load(std::sync::atomic::Ordering::Relaxed));
+        let saw_cookie = receiver
+            .recv_timeout(std::time::Duration::from_millis(100))
+            .expect("nonce file content hasn't been received by server thread in time");
+
+        assert!(
+            saw_cookie,
+            "nonce file content has been received, but was invalid"
+        );
     }
 }
