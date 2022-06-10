@@ -1751,4 +1751,43 @@ mod tests {
         let _: Summary<'_> = from_slice(&encoded, ctxt).unwrap();
         // If we're able to deserialize all the data successfully, don't bother checking the summary data.
     }
+
+    #[test]
+    #[cfg(feature = "time")]
+    fn time() {
+        // time::Date
+        let date = time::Date::from_calendar_date(2011, time::Month::June, 21).unwrap();
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &date).unwrap();
+        let decoded: time::Date = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(date, decoded);
+
+        // time::Duration
+        let duration = time::Duration::new(42, 123456789);
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &duration).unwrap();
+        let decoded: time::Duration = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(duration, decoded);
+
+        // time::OffsetDateTime
+        let offset = time::OffsetDateTime::now_utc();
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &offset).unwrap();
+        let decoded: time::OffsetDateTime = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(offset, decoded);
+
+        // time::Time
+        let time = time::Time::from_hms(23, 42, 59).unwrap();
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &time).unwrap();
+        let decoded: time::Time = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(time, decoded);
+
+        // time::PrimitiveDateTime
+        let date = time::PrimitiveDateTime::new(date, time);
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &date).unwrap();
+        let decoded: time::PrimitiveDateTime = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(date, decoded);
+    }
 }

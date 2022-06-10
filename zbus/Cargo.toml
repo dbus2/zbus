@@ -15,6 +15,9 @@ readme = "README.md"
 default = ["async-io"]
 xml = ["serde-xml-rs"]
 gvariant = ["zvariant/gvariant"]
+uuid = ["zvariant/uuid"]
+url = ["zvariant/url"]
+time = ["zvariant/time"]
 
 [dependencies]
 byteorder = "1.3.1"

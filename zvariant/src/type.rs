@@ -328,4 +328,136 @@ impl Type for serde_bytes::ByteBuf {
     }
 }
 
+#[allow(unused)]
+macro_rules! static_str_type {
+    ($ty:ty) => {
+        impl Type for $ty {
+            fn signature() -> Signature<'static> {
+                <&str>::signature()
+            }
+        }
+    };
+}
+
+#[cfg(feature = "uuid")]
+static_str_type!(uuid::Uuid);
+
+#[cfg(feature = "url")]
+static_str_type!(url::Url);
+
+// FIXME: Ignoring the `serde-human-readable` feature of `time` crate in these impls:
+// https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L110
+#[cfg(feature = "time")]
+impl Type for time::Date {
+    fn signature() -> Signature<'static> {
+        // Serialized as a (year, ordinal) tuple:
+        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L92
+        <(i32, u16)>::signature()
+    }
+}
+
+#[cfg(feature = "time")]
+impl Type for time::Duration {
+    fn signature() -> Signature<'static> {
+        // Serialized as a (whole seconds, nanoseconds) tuple:
+        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L119
+        <(i64, i32)>::signature()
+    }
+}
+
+#[cfg(feature = "time")]
+impl Type for time::OffsetDateTime {
+    fn signature() -> Signature<'static> {
+        // Serialized as a tuple:
+        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L155
+        <(
+            // year
+            i32,
+            // ordinal
+            u16,
+            // hour
+            u8,
+            // minute
+            u8,
+            // second
+            u8,
+            // nanosecond
+            u32,
+            // offset.whole_hours
+            i8,
+            // offset.minutes_past_hour
+            i8,
+            // offset.seconds_past_minute
+            i8,
+        )>::signature()
+    }
+}
+
+#[cfg(feature = "time")]
+impl Type for time::PrimitiveDateTime {
+    fn signature() -> Signature<'static> {
+        // Serialized as a tuple:
+        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L200
+        <(
+            // year
+            i32,
+            // ordinal
+            u16,
+            // hour
+            u8,
+            // minute
+            u8,
+            // second
+            u8,
+            // nanosecond
+            u32,
+        )>::signature()
+    }
+}
+
+#[cfg(feature = "time")]
+impl Type for time::Time {
+    fn signature() -> Signature<'static> {
+        // Serialized as a tuple:
+        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L246
+        <(
+            // hour
+            u8,
+            // minute
+            u8,
+            // second
+            u8,
+            // nanosecond
+            u32,
+        )>::signature()
+    }
+}
+
+#[cfg(feature = "time")]
+impl Type for time::UtcOffset {
+    fn signature() -> Signature<'static> {
+        // Serialized as a (whole hours, minutes past hour, seconds past minute) tuple:
+        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L282
+        <(i8, i8, i8)>::signature()
+    }
+}
+
+#[cfg(feature = "time")]
+impl Type for time::Weekday {
+    fn signature() -> Signature<'static> {
+        // Serialized as number from Monday:
+        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L312
+        u8::signature()
+    }
+}
+
+#[cfg(feature = "time")]
+impl Type for time::Month {
+    fn signature() -> Signature<'static> {
+        // Serialized as month number:
+        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L337
+        u8::signature()
+    }
+}
+
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
