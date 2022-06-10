@@ -3,9 +3,9 @@ use async_io::Async;
 use futures_core::ready;
 use std::{
     io,
+    io::{IoSlice, IoSliceMut},
     task::{Context, Poll},
 };
-use std::io::{IoSlice, IoSliceMut};
 #[cfg(feature = "async-io")]
 use std::{
     io::{Read, Write},
