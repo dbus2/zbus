@@ -5,9 +5,10 @@ use std::{
     io,
     task::{Context, Poll},
 };
+use std::io::{IoSlice, IoSliceMut};
 #[cfg(feature = "async-io")]
 use std::{
-    io::{IoSlice, IoSliceMut, Read, Write},
+    io::{Read, Write},
     net::TcpStream,
 };
 
