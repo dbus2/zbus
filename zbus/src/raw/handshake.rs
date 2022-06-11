@@ -399,7 +399,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
 
                 // Steal the leading null byte from the buffer.
                 let zero = &[self.send_buffer.drain(0..1).next().unwrap()];
-                let iov = [nix::sys::uio::IoVec::from_slice(zero)];
+                let iov = [nix::sys::uio::IoSlice::new(zero)];
 
                 if sendmsg(
                     self.socket.as_raw_fd(),
