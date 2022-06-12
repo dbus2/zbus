@@ -17,9 +17,11 @@ use tokio::net::UnixStream;
 #[cfg(all(windows, feature = "async-io"))]
 use uds_windows::UnixStream;
 
-use std::ffi::OsString;
-use std::fmt::{Display, Formatter};
-use std::str::from_utf8_unchecked;
+use std::{
+    ffi::OsString,
+    fmt::{Display, Formatter},
+    str::from_utf8_unchecked,
+};
 
 /// A `tcp:` address family.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
