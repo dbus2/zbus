@@ -4,9 +4,9 @@ use std::convert::TryInto;
 use std::net::TcpStream;
 #[cfg(all(unix, feature = "async-io"))]
 use std::os::unix::net::UnixStream;
-#[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+#[cfg(not(feature = "async-io"))]
 use tokio::net::TcpStream;
-#[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
+#[cfg(all(unix, not(feature = "async-io")))]
 use tokio::net::UnixStream;
 #[cfg(windows)]
 use uds_windows::UnixStream;

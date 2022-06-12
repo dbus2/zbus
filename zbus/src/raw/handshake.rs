@@ -265,10 +265,8 @@ struct Cookie {
 
 impl Cookie {
     fn keyring_path() -> Result<PathBuf> {
-        let home = std::env::var("HOME")
-            .map_err(|e| Error::Handshake(format!("Failed to read $HOME: {}", e)))?;
-        let mut path = PathBuf::new();
-        path.push(home);
+        let mut path = dirs::home_dir()
+            .ok_or_else(|| Error::Handshake("Failed to get home directory".into()))?;
         path.push(".dbus-keyrings");
         Ok(path)
     }

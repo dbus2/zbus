@@ -489,17 +489,34 @@ async fn iface_and_proxy_(p2p: bool) {
                 ConnectionBuilder::unix_stream(p1).p2p(),
             )
         }
+
         #[cfg(windows)]
         {
-            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-            let addr = listener.local_addr().unwrap();
-            let p1 = std::net::TcpStream::connect(addr).unwrap();
-            let p0 = listener.incoming().next().unwrap().unwrap();
+            #[cfg(feature = "async-io")]
+            {
+                let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+                let addr = listener.local_addr().unwrap();
+                let p1 = std::net::TcpStream::connect(addr).unwrap();
+                let p0 = listener.incoming().next().unwrap().unwrap();
 
-            (
-                ConnectionBuilder::tcp_stream(p0).server(&guid).p2p(),
-                ConnectionBuilder::tcp_stream(p1).p2p(),
-            )
+                (
+                    ConnectionBuilder::tcp_stream(p0).server(&guid).p2p(),
+                    ConnectionBuilder::tcp_stream(p1).p2p(),
+                )
+            }
+
+            #[cfg(not(feature = "async-io"))]
+            {
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let addr = listener.local_addr().unwrap();
+                let p1 = tokio::net::TcpStream::connect(addr).await.unwrap();
+                let p0 = listener.accept().await.unwrap().0;
+
+                (
+                    ConnectionBuilder::tcp_stream(p0).server(&guid).p2p(),
+                    ConnectionBuilder::tcp_stream(p1).p2p(),
+                )
+            }
         }
     } else {
         let service_conn_builder = ConnectionBuilder::session()

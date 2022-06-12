@@ -65,6 +65,10 @@ feature and disabling `async-io` feature:
 zbus = { version = "2", default-features = false, features = ["tokio"] }
 ```
 
+**Note**: On Windows, the `async-io` feature is currently required for UNIX domain socket support,
+see [the corresponding tokio issue on GitHub][tctiog].
+
+[tctiog]: https://github.com/tokio-rs/tokio/issues/2201
 [`Type`]: https://docs.rs/zvariant/3.1.0/zvariant/derive.Type.html
 [`SerializeDict`]: https://docs.rs/zvariant/3.0.0/zvariant/derive.SerializeDict.html
 [`DeserializeDict`]: https://docs.rs/zvariant/3.0.0/zvariant/derive.DeserializeDict.html

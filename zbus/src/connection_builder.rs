@@ -11,9 +11,9 @@ use std::{
     convert::TryInto,
     sync::Arc,
 };
-#[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+#[cfg(not(feature = "async-io"))]
 use tokio::net::TcpStream;
-#[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
+#[cfg(all(unix, not(feature = "async-io")))]
 use tokio::net::UnixStream;
 #[cfg(windows)]
 use uds_windows::UnixStream;
@@ -223,13 +223,16 @@ impl<'a> ConnectionBuilder<'a> {
         let stream = match self.target {
             #[cfg(all(feature = "async-io"))]
             Target::UnixStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
-            #[cfg(all(unix, not(feature = "async-io"), feature = "tokio"))]
+            #[cfg(all(unix, not(feature = "async-io")))]
             Target::UnixStream(stream) => Box::new(stream) as Box<dyn Socket>,
+            #[cfg(all(not(unix), not(feature = "async-io")))]
+            Target::UnixStream(_) => return Err(Error::Unsupported),
             #[cfg(feature = "async-io")]
             Target::TcpStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
-            #[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+            #[cfg(not(feature = "async-io"))]
             Target::TcpStream(stream) => Box::new(stream) as Box<dyn Socket>,
             Target::Address(address) => match address.connect().await? {
+                #[cfg(any(unix, feature = "async-io"))]
                 address::Stream::Unix(stream) => Box::new(stream) as Box<dyn Socket>,
                 address::Stream::Tcp(stream) => Box::new(stream) as Box<dyn Socket>,
             },
