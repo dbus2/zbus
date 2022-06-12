@@ -144,9 +144,13 @@ zbus = { version = "2", default-features = false, features = ["tokio"] }
 That's it! No threads launched behind your back by zbus (directly or indirectly) now and no need to
 tick any executors etc. 😼
 
+**Note**: On Windows, the `async-io` feature is currently required for UNIX domain socket support,
+see [the corresponding tokio issue on GitHub][tctiog].
+
 [zbus]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/README.md
 [bw]: https://docs.rs/zbus/2.0.0/zbus/blocking/index.html
 [iektc]: https://docs.rs/zbus/2.0.0/zbus/struct.Connection.html#examples-1
+[tctiog]: https://github.com/tokio-rs/tokio/issues/
 [`ConnectionBuilder`]: https://docs.rs/zbus/2.0.0/zbus/struct.ConnectionBuilder.html
 [`tokio`]: https://crates.io/crates/tokio
 [`async-io`]: https://crates.io/crates/async-io

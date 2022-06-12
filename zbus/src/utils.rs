@@ -33,7 +33,7 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
     async_io::block_on(future)
 }
 
-#[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+#[cfg(not(feature = "async-io"))]
 lazy_static::lazy_static! {
     static ref TOKIO_RT: tokio::runtime::Runtime = {
         tokio::runtime::Builder::new_current_thread()
@@ -44,7 +44,7 @@ lazy_static::lazy_static! {
     };
 }
 
-#[cfg(all(not(feature = "async-io"), feature = "tokio"))]
+#[cfg(not(feature = "async-io"))]
 #[doc(hidden)]
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
     TOKIO_RT.block_on(future)
