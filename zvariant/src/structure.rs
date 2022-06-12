@@ -15,8 +15,6 @@ use crate::{
 ///
 /// [`Structure`]: struct.Structure.html
 #[derive(Debug, Default, Clone, PartialEq)]
-// FIXME: Workaround for https://github.com/rust-lang/rust-clippy/issues/8970
-#[allow(clippy::derive_partial_eq_without_eq)]
 pub struct StructureBuilder<'a>(Vec<Value<'a>>);
 
 assert_impl_all!(StructureBuilder<'_>: Send, Sync, Unpin);
@@ -92,9 +90,7 @@ impl<'a> StructureBuilder<'a> {
 /// Use this to deserialize a [`Structure`].
 ///
 /// [`Structure`]: struct.Structure.html
-#[derive(Debug, Clone, PartialEq)]
-// FIXME: Workaround for https://github.com/rust-lang/rust-clippy/issues/8970
-#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructureSeed<'a>(Signature<'a>);
 
 assert_impl_all!(StructureSeed<'_>: Send, Sync, Unpin);
@@ -131,9 +127,7 @@ impl<'de> DeserializeSeed<'de> for StructureSeed<'de> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-// FIXME: Workaround for https://github.com/rust-lang/rust-clippy/issues/8970
-#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct StructureVisitor<'a> {
     signature: Signature<'a>,
 }
@@ -162,8 +156,6 @@ impl<'de> Visitor<'de> for StructureVisitor<'de> {
 ///
 /// [`Value`]: enum.Value.html
 #[derive(Debug, Clone, PartialEq)]
-// FIXME: Workaround for https://github.com/rust-lang/rust-clippy/issues/8970
-#[allow(clippy::derive_partial_eq_without_eq)]
 pub struct Structure<'a> {
     fields: Vec<Value<'a>>,
     signature: Signature<'a>,
