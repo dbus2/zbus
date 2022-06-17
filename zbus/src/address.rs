@@ -1,5 +1,7 @@
 #[cfg(feature = "async-io")]
 use crate::run_in_thread;
+#[cfg(all(windows))]
+use crate::win32::windows_autolaunch_bus_address;
 use crate::{Error, Result};
 #[cfg(feature = "async-io")]
 use async_io::Async;
@@ -123,6 +125,8 @@ pub enum Address {
         addr: TcpAddress,
         nonce_file: Vec<u8>,
     },
+    /// Autolaunch address with optional scope
+    Autolaunch(Option<String>),
 }
 
 #[cfg(feature = "async-io")]
@@ -180,7 +184,30 @@ async fn connect_tcp(addr: TcpAddress) -> Result<TcpStream> {
 
 impl Address {
     pub(crate) async fn connect(&self) -> Result<Stream> {
-        match self.clone() {
+        let addr = if let Self::Autolaunch(scope) = self {
+            #[cfg(not(windows))]
+            {
+                let _ = scope;
+                return Err(Error::Address(
+                    "Autolaunch addresses are only supported on Windows".to_owned(),
+                ));
+            }
+
+            #[cfg(windows)]
+            {
+                if scope.is_some() {
+                    return Err(Error::Address(
+                        "Autolaunch scopes are currently unsupported".to_owned(),
+                    ));
+                } else {
+                    windows_autolaunch_bus_address()?
+                }
+            }
+        } else {
+            self.clone()
+        };
+
+        match addr {
             Address::Unix(p) => {
                 #[cfg(feature = "async-io")]
                 {
@@ -253,6 +280,8 @@ impl Address {
 
                 Ok(Stream::Tcp(stream))
             }
+
+            Address::Autolaunch(_) => unreachable!(),
         }
     }
 
@@ -263,6 +292,19 @@ impl Address {
         match env::var("DBUS_SESSION_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
             _ => {
+                #[cfg(all(windows))]
+                {
+                    #[cfg(feature = "windows-gdbus")]
+                    {
+                        Self::from_str("autolaunch:")
+                    }
+
+                    #[cfg(not(feature = "windows-gdbus"))]
+                    {
+                        Self::from_str("autolaunch:scope=*user")
+                    }
+                }
+
                 #[cfg(unix)]
                 {
                     let runtime_dir = env::var("XDG_RUNTIME_DIR")
@@ -270,10 +312,6 @@ impl Address {
                     let path = format!("unix:path={}/bus", runtime_dir);
 
                     Self::from_str(&path)
-                }
-                #[cfg(not(unix))]
-                {
-                    Err(Error::Unsupported)
                 }
             }
         }
@@ -285,7 +323,17 @@ impl Address {
     pub fn system() -> Result<Self> {
         match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
-            _ => Self::from_str("unix:path=/var/run/dbus/system_bus_socket"),
+            _ => {
+                #[cfg(unix)]
+                {
+                    Self::from_str("unix:path=/var/run/dbus/system_bus_socket")
+                }
+
+                #[cfg(not(unix))]
+                {
+                    Self::from_str("autolaunch:")
+                }
+            }
         }
     }
 
@@ -440,6 +488,13 @@ impl Display for Address {
 
                 #[cfg(windows)]
                 write!(f, "unix:path={}", path.to_str().ok_or(std::fmt::Error)?)?;
+            }
+
+            Self::Autolaunch(scope) => {
+                write!(f, "autolaunch:")?;
+                if let Some(scope) = scope {
+                    write!(f, "scope={scope}")?;
+                }
             }
         }
 
