@@ -59,9 +59,11 @@ dirs = "4.0.0"
 winapi = { version = "0.3", features = [
   "handleapi",
   "iphlpapi",
+  "memoryapi",
   "processthreadsapi",
   "sddl",
   "securitybaseapi",
+  "synchapi",
   "tcpmib",
   "winbase",
   "winerror",
