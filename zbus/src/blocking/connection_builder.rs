@@ -1,12 +1,12 @@
 use static_assertions::assert_impl_all;
 use std::convert::TryInto;
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
-#[cfg(all(unix, feature = "async-io"))]
+#[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
-#[cfg(not(feature = "async-io"))]
+#[cfg(feature = "tokio")]
 use tokio::net::TcpStream;
-#[cfg(all(unix, not(feature = "async-io")))]
+#[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
 #[cfg(windows)]
 use uds_windows::UnixStream;

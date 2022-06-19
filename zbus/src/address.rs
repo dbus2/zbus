@@ -1,22 +1,22 @@
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use crate::run_in_thread;
 #[cfg(all(windows))]
 use crate::win32::windows_autolaunch_bus_address;
 use crate::{Error, Result};
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use async_io::Async;
 #[cfg(unix)]
 use nix::unistd::Uid;
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
-#[cfg(all(unix, feature = "async-io"))]
+#[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 use std::{collections::HashMap, convert::TryFrom, env, str::FromStr};
-#[cfg(all(not(feature = "async-io")))]
+#[cfg(all(feature = "tokio"))]
 use tokio::net::TcpStream;
-#[cfg(all(unix, not(feature = "async-io")))]
+#[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
-#[cfg(all(windows, feature = "async-io"))]
+#[cfg(all(windows, not(feature = "tokio")))]
 use uds_windows::UnixStream;
 
 use std::{
@@ -129,14 +129,14 @@ pub enum Address {
     Autolaunch(Option<String>),
 }
 
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 #[derive(Debug)]
 pub(crate) enum Stream {
     Unix(Async<UnixStream>),
     Tcp(Async<TcpStream>),
 }
 
-#[cfg(all(not(feature = "async-io")))]
+#[cfg(all(feature = "tokio"))]
 #[derive(Debug)]
 pub(crate) enum Stream {
     #[cfg(unix)]
@@ -144,7 +144,7 @@ pub(crate) enum Stream {
     Tcp(TcpStream),
 }
 
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 async fn connect_tcp(addr: TcpAddress) -> Result<Async<TcpStream>> {
     let addrs = run_in_thread(move || -> Result<Vec<SocketAddr>> {
         let addrs = (addr.host(), addr.port()).to_socket_addrs()?.filter(|a| {
@@ -175,7 +175,7 @@ async fn connect_tcp(addr: TcpAddress) -> Result<Async<TcpStream>> {
     Err(last_err)
 }
 
-#[cfg(all(not(feature = "async-io")))]
+#[cfg(all(feature = "tokio"))]
 async fn connect_tcp(addr: TcpAddress) -> Result<TcpStream> {
     TcpStream::connect((addr.host(), addr.port()))
         .await
@@ -209,7 +209,7 @@ impl Address {
 
         match addr {
             Address::Unix(p) => {
-                #[cfg(feature = "async-io")]
+                #[cfg(not(feature = "tokio"))]
                 {
                     #[cfg(windows)]
                     {
@@ -226,7 +226,7 @@ impl Address {
                     }
                 }
 
-                #[cfg(all(not(feature = "async-io")))]
+                #[cfg(all(feature = "tokio"))]
                 {
                     #[cfg(unix)]
                     {
@@ -259,7 +259,7 @@ impl Address {
                 let nonce_file = std::str::from_utf8(&nonce_file)
                     .map_err(|_| Error::Address("nonce file path is invalid UTF-8".to_owned()))?;
 
-                #[cfg(feature = "async-io")]
+                #[cfg(not(feature = "tokio"))]
                 {
                     let nonce = std::fs::read(nonce_file)?;
                     let mut nonce = &nonce[..];
@@ -272,7 +272,7 @@ impl Address {
                     }
                 }
 
-                #[cfg(all(not(feature = "async-io")))]
+                #[cfg(all(feature = "tokio"))]
                 {
                     let nonce = tokio::fs::read(nonce_file).await?;
                     tokio::io::AsyncWriteExt::write_all(&mut stream, &nonce).await?;
@@ -338,7 +338,7 @@ impl Address {
     }
 
     // Helper for FromStr
-    #[cfg(any(unix, feature = "async-io"))]
+    #[cfg(any(unix, not(feature = "tokio")))]
     fn from_unix(opts: HashMap<&str, &str>) -> Result<Self> {
         let path = if let Some(abs) = opts.get("abstract") {
             if opts.get("path").is_some() {
@@ -530,7 +530,7 @@ impl FromStr for Address {
         }
 
         match transport {
-            #[cfg(any(unix, feature = "async-io"))]
+            #[cfg(any(unix, not(feature = "tokio")))]
             "unix" => Self::from_unix(options),
             "tcp" => TcpAddress::from_tcp(options).map(Self::Tcp),
 

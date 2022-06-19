@@ -631,6 +631,7 @@ impl Connection {
     /// use tokio::runtime;
     ///
     /// runtime::Builder::new_current_thread()
+    ///        .enable_io()
     ///        .build()
     ///        .unwrap()
     ///        .block_on(async {
@@ -875,12 +876,12 @@ impl Connection {
                     executor.tick().await;
                 }
             };
-            #[cfg(feature = "async-io")]
+            #[cfg(not(feature = "tokio"))]
             std::thread::Builder::new()
                 .name("zbus::Connection executor".into())
                 .spawn(move || crate::utils::block_on(ticker_future))?;
 
-            #[cfg(not(feature = "async-io"))]
+            #[cfg(feature = "tokio")]
             tokio::task::spawn(ticker_future);
         }
 
@@ -1033,7 +1034,7 @@ mod tests {
     use ntest::timeout;
     use test_log::test;
 
-    #[cfg(all(unix, feature = "async-io"))]
+    #[cfg(all(unix, not(feature = "tokio")))]
     use crate::AuthMechanism;
 
     use super::*;
@@ -1074,14 +1075,14 @@ mod tests {
     }
 
     // FIXME: Make it work with tokio as well.
-    #[cfg(feature = "async-io")]
+    #[cfg(not(feature = "tokio"))]
     #[test]
     #[timeout(15000)]
     fn tcp_p2p() {
         crate::utils::block_on(test_tcp_p2p()).unwrap();
     }
 
-    #[cfg(feature = "async-io")]
+    #[cfg(not(feature = "tokio"))]
     async fn test_tcp_p2p() -> Result<()> {
         let guid = Guid::generate();
 
@@ -1105,20 +1106,20 @@ mod tests {
         test_p2p(server, client).await
     }
 
-    #[cfg(any(unix, feature = "async-io"))]
+    #[cfg(any(unix, not(feature = "tokio")))]
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
         crate::utils::block_on(test_unix_p2p()).unwrap();
     }
 
-    #[cfg(any(unix, feature = "async-io"))]
+    #[cfg(any(unix, not(feature = "tokio")))]
     async fn test_unix_p2p() -> Result<()> {
-        #[cfg(all(unix, feature = "async-io"))]
+        #[cfg(all(unix, not(feature = "tokio")))]
         use std::os::unix::net::UnixStream;
-        #[cfg(not(feature = "async-io"))]
+        #[cfg(feature = "tokio")]
         use tokio::net::UnixStream;
-        #[cfg(all(windows, feature = "async-io"))]
+        #[cfg(all(windows, not(feature = "tokio")))]
         use uds_windows::UnixStream;
 
         let guid = Guid::generate();

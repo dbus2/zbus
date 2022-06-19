@@ -208,7 +208,7 @@ impl Connection<Box<dyn Socket>> {
     }
 }
 
-#[cfg(all(unix, feature = "async-io"))]
+#[cfg(all(unix, not(feature = "tokio")))]
 #[cfg(test)]
 mod tests {
     use super::Connection;

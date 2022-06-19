@@ -27,7 +27,7 @@ use winapi::{
 };
 
 use crate::Address;
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use uds_windows::UnixStream;
 
 // An owned Windows handle
@@ -213,14 +213,14 @@ pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<DWORD, Error> {
 }
 
 // Get the process ID of the connected peer
-#[cfg(any(test, feature = "async-io"))]
+#[cfg(any(test, not(feature = "tokio")))]
 pub fn tcp_stream_get_peer_pid(stream: &std::net::TcpStream) -> Result<DWORD, Error> {
     let peer_addr = stream.peer_addr()?;
 
     socket_addr_get_pid(&peer_addr)
 }
 
-#[cfg(any(test, feature = "async-io"))]
+#[cfg(any(test, not(feature = "tokio")))]
 fn last_err() -> std::io::Error {
     use winapi::um::winsock2::WSAGetLastError;
 
@@ -229,7 +229,7 @@ fn last_err() -> std::io::Error {
 }
 
 // Get the process ID of the connected peer
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 pub fn unix_stream_get_peer_pid(stream: &UnixStream) -> Result<DWORD, Error> {
     use std::os::windows::io::AsRawSocket;
     use winapi::{

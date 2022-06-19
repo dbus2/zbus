@@ -834,10 +834,10 @@ impl FromStr for Command {
 #[cfg(test)]
 mod tests {
     use futures_util::future::poll_fn;
-    #[cfg(feature = "async-io")]
+    #[cfg(not(feature = "tokio"))]
     use std::os::unix::net::UnixStream;
     use test_log::test;
-    #[cfg(not(feature = "async-io"))]
+    #[cfg(feature = "tokio")]
     use tokio::net::UnixStream;
 
     use super::*;
@@ -850,7 +850,7 @@ mod tests {
         let (p0, p1) = crate::utils::block_on(async { UnixStream::pair().unwrap() });
 
         // initialize both handshakes
-        #[cfg(feature = "async-io")]
+        #[cfg(not(feature = "tokio"))]
         let (p0, p1) = {
             p0.set_nonblocking(true).unwrap();
             p1.set_nonblocking(true).unwrap();

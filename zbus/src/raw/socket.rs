@@ -1,4 +1,4 @@
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use async_io::Async;
 use futures_core::ready;
 use std::{
@@ -6,13 +6,13 @@ use std::{
     io::{IoSlice, IoSliceMut},
     task::{Context, Poll},
 };
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use std::{
     io::{Read, Write},
     net::TcpStream,
 };
 
-#[cfg(all(windows, feature = "async-io"))]
+#[cfg(all(windows, not(feature = "tokio")))]
 use uds_windows::UnixStream;
 
 #[cfg(unix)]
@@ -23,7 +23,7 @@ use nix::{
 #[cfg(unix)]
 use std::os::unix::io::{FromRawFd, RawFd};
 
-#[cfg(all(unix, feature = "async-io"))]
+#[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 
 #[cfg(unix)]
@@ -177,7 +177,7 @@ impl Socket for Box<dyn Socket> {
     }
 }
 
-#[cfg(all(unix, feature = "async-io"))]
+#[cfg(all(unix, not(feature = "tokio")))]
 impl Socket for Async<UnixStream> {
     fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
         let (len, fds) = loop {
@@ -280,7 +280,7 @@ impl Socket for tokio::net::UnixStream {
     }
 }
 
-#[cfg(all(windows, feature = "async-io"))]
+#[cfg(all(windows, not(feature = "tokio")))]
 impl Socket for Async<UnixStream> {
     fn can_pass_unix_fd(&self) -> bool {
         false
@@ -328,7 +328,7 @@ impl Socket for Async<UnixStream> {
     }
 }
 
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 impl Socket for Async<TcpStream> {
     fn can_pass_unix_fd(&self) -> bool {
         false

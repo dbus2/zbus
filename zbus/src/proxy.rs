@@ -1222,10 +1222,10 @@ mod tests {
             server_conn.executor().spawn(async move {
                 use std::time::Duration;
 
-                #[cfg(feature = "async-io")]
+                #[cfg(not(feature = "tokio"))]
                 use async_io::Timer;
 
-                #[cfg(not(feature = "async-io"))]
+                #[cfg(feature = "tokio")]
                 use tokio::time::sleep;
 
                 let iface_ref = conn
@@ -1242,10 +1242,10 @@ mod tests {
                             .unwrap();
                     }
 
-                    #[cfg(feature = "async-io")]
+                    #[cfg(not(feature = "tokio"))]
                     Timer::after(Duration::from_millis(5)).await;
 
-                    #[cfg(not(feature = "async-io"))]
+                    #[cfg(feature = "tokio")]
                     sleep(Duration::from_millis(5)).await;
                 }
             })

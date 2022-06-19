@@ -242,13 +242,13 @@ impl From<crate::Connection> for Connection {
 #[cfg(test)]
 mod tests {
     use ntest::timeout;
-    #[cfg(all(unix, feature = "async-io"))]
+    #[cfg(all(unix, not(feature = "tokio")))]
     use std::os::unix::net::UnixStream;
     use std::thread;
     use test_log::test;
-    #[cfg(all(unix, not(feature = "async-io")))]
+    #[cfg(all(unix, feature = "tokio"))]
     use tokio::net::UnixStream;
-    #[cfg(all(windows, feature = "async-io"))]
+    #[cfg(all(windows, not(feature = "tokio")))]
     use uds_windows::UnixStream;
 
     use crate::{
@@ -256,7 +256,7 @@ mod tests {
         Guid,
     };
 
-    #[cfg(any(unix, feature = "async-io"))]
+    #[cfg(any(unix, not(feature = "tokio")))]
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {

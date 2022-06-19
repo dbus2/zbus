@@ -128,7 +128,7 @@ where
     }
 }
 
-#[cfg(all(unix, feature = "async-io"))]
+#[cfg(all(unix, not(feature = "tokio")))]
 #[cfg(test)]
 mod tests {
     use async_io::Async;
