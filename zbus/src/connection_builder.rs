@@ -143,7 +143,7 @@ impl<'a> ConnectionBuilder<'a> {
     /// ```
     ///# use std::error::Error;
     ///# use zbus::ConnectionBuilder;
-    ///# use async_io::block_on;
+    ///# use zbus::block_on;
     ///#
     ///# block_on(async {
     /// let conn = ConnectionBuilder::session()?

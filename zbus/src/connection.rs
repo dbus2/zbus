@@ -200,7 +200,7 @@ impl MessageReceiverTask {
 /// ```
 ///# use zvariant::Type;
 ///#
-///# async_io::block_on(async {
+///# zbus::block_on(async {
 /// use zbus::Connection;
 ///
 /// let mut connection = Connection::session().await?;
@@ -226,7 +226,7 @@ impl MessageReceiverTask {
 /// Let's eavesdrop on the session bus 😈 using the [Monitor] interface:
 ///
 /// ```rust,no_run
-///# async_io::block_on(async {
+///# zbus::block_on(async {
 /// use futures_util::stream::TryStreamExt;
 /// use zbus::{Connection, MessageStream};
 ///

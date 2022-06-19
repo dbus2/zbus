@@ -47,14 +47,10 @@ pub(crate) struct PropertiesCache {
 /// ```
 /// use std::result::Result;
 /// use std::error::Error;
-/// use async_io::block_on;
 /// use zbus::{Connection, Proxy};
 ///
-/// fn main() -> Result<(), Box<dyn Error>> {
-///     block_on(run())
-/// }
-///
-/// async fn run() -> Result<(), Box<dyn Error>> {
+/// #[tokio::main]
+/// async fn main() -> Result<(), Box<dyn Error>> {
 ///     let connection = Connection::session().await?;
 ///     let p = Proxy::new(
 ///         &connection,
