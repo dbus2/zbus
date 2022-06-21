@@ -1,6 +1,10 @@
 use crate::{utils::*, Signature};
 use serde::de::{Deserialize, DeserializeSeed};
-use std::{convert::TryInto, marker::PhantomData};
+use std::{
+    convert::TryInto,
+    marker::PhantomData,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+};
 
 /// Trait implemented by all serializable types.
 ///
@@ -299,6 +303,27 @@ where
     #[inline]
     fn signature() -> Signature<'static> {
         T::signature()
+    }
+}
+
+impl Type for Ipv4Addr {
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <(u32, &[u8])>::signature()
+    }
+}
+
+impl Type for Ipv6Addr {
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <(u32, &[u8])>::signature()
+    }
+}
+
+impl Type for IpAddr {
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <(u32, &[u8])>::signature()
     }
 }
 
