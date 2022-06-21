@@ -357,6 +357,10 @@ where
 
         Ok(v)
     }
+
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }
 
 fn deserialize_ay<'de, 'sig, 'f, B>(de: &mut Deserializer<'de, 'sig, 'f, B>) -> Result<&'de [u8]>

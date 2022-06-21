@@ -590,6 +590,10 @@ where
         n: &'static str,
         l: usize
     ) => Self::SerializeStruct = StructSerializer);
+
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }
 
 macro_rules! serialize_impl {
