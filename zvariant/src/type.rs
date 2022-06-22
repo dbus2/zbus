@@ -365,7 +365,11 @@ macro_rules! static_str_type {
 }
 
 #[cfg(feature = "uuid")]
-static_str_type!(uuid::Uuid);
+impl Type for uuid::Uuid {
+    fn signature() -> Signature<'static> {
+        Signature::from_static_str_unchecked("ay")
+    }
+}
 
 #[cfg(feature = "url")]
 static_str_type!(url::Url);
