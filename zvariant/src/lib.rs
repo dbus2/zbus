@@ -109,6 +109,7 @@ mod tests {
     use std::{
         collections::HashMap,
         convert::{TryFrom, TryInto},
+        net::{IpAddr, Ipv4Addr, Ipv6Addr},
     };
 
     #[cfg(feature = "arrayvec")]
@@ -1732,6 +1733,21 @@ mod tests {
 
         let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
         let _: ZVStruct<'_> = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+    }
+
+    #[test]
+    fn ip_addr() {
+        let localhost_v4 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &localhost_v4).unwrap();
+        let decoded: IpAddr = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(localhost_v4, decoded);
+
+        let localhost_v6 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
+        let encoded = to_bytes(ctxt, &localhost_v6).unwrap();
+        let decoded: IpAddr = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(localhost_v6, decoded);
     }
 
     #[cfg(feature = "ostree-tests")]

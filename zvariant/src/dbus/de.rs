@@ -349,6 +349,10 @@ where
             self.deserialize_u32(visitor)
         }
     }
+
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }
 
 struct ArrayDeserializer<'d, 'de, 'sig, 'f, B> {
