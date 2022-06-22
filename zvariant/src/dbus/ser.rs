@@ -74,12 +74,12 @@ where
     type Error = Error;
 
     type SerializeSeq = SeqSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeTuple = StructSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeTupleStruct = StructSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeTupleVariant = StructSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeTuple = StructSeqSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeTupleStruct = StructSeqSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeTupleVariant = StructSeqSerializer<'ser, 'sig, 'b, B, W>;
     type SerializeMap = SeqSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeStruct = StructSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeStructVariant = StructSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeStruct = StructSeqSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeStructVariant = StructSeqSerializer<'ser, 'sig, 'b, B, W>;
 
     serialize_basic!(serialize_bool(bool) write_u32(u32));
     // No i8 type in D-Bus/GVariant, let's pretend it's i16
@@ -277,18 +277,20 @@ where
     ) -> Result<Self::SerializeTupleVariant> {
         self.0.prep_serialize_enum_variant(variant_index)?;
 
-        StructSerializer::enum_variant(self)
+        StructSerializer::enum_variant(self).map(StructSeqSerializer::Struct)
     }
 
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
         self.serialize_seq(len)
     }
 
-    fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-        if self.0.sig_parser.next_char() == VARIANT_SIGNATURE_CHAR {
-            StructSerializer::variant(self)
-        } else {
-            StructSerializer::structure(self)
+    fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
+        match self.0.sig_parser.next_char() {
+            VARIANT_SIGNATURE_CHAR => {
+                StructSerializer::variant(self).map(StructSeqSerializer::Struct)
+            }
+            ARRAY_SIGNATURE_CHAR => self.serialize_seq(Some(len)).map(StructSeqSerializer::Seq),
+            _ => StructSerializer::structure(self).map(StructSeqSerializer::Struct),
         }
     }
 
@@ -301,7 +303,7 @@ where
     ) -> Result<Self::SerializeStructVariant> {
         self.0.prep_serialize_enum_variant(variant_index)?;
 
-        StructSerializer::enum_variant(self)
+        StructSerializer::enum_variant(self).map(StructSeqSerializer::Struct)
     }
 
     fn is_human_readable(&self) -> bool {
@@ -473,6 +475,13 @@ where
     }
 }
 
+#[doc(hidden)]
+/// Allows us to serialize a struct as an ARRAY.
+pub enum StructSeqSerializer<'ser, 'sig, 'b, B, W> {
+    Struct(StructSerializer<'ser, 'sig, 'b, B, W>),
+    Seq(SeqSerializer<'ser, 'sig, 'b, B, W>),
+}
+
 macro_rules! serialize_struct_anon_fields {
     ($trait:ident $method:ident) => {
         impl<'ser, 'sig, 'b, B, W> ser::$trait for StructSerializer<'ser, 'sig, 'b, B, W>
@@ -492,6 +501,32 @@ macro_rules! serialize_struct_anon_fields {
 
             fn end(self) -> Result<()> {
                 self.end_struct()
+            }
+        }
+
+        impl<'ser, 'sig, 'b, B, W> ser::$trait for StructSeqSerializer<'ser, 'sig, 'b, B, W>
+        where
+            B: byteorder::ByteOrder,
+            W: Write + Seek,
+        {
+            type Ok = ();
+            type Error = Error;
+
+            fn $method<T>(&mut self, value: &T) -> Result<()>
+            where
+                T: ?Sized + Serialize,
+            {
+                match self {
+                    StructSeqSerializer::Struct(ser) => ser.$method(value),
+                    StructSeqSerializer::Seq(ser) => ser.serialize_element(value),
+                }
+            }
+
+            fn end(self) -> Result<()> {
+                match self {
+                    StructSeqSerializer::Struct(ser) => ser.end_struct(),
+                    StructSeqSerializer::Seq(ser) => ser.end_seq(),
+                }
             }
         }
     };
@@ -571,6 +606,32 @@ macro_rules! serialize_struct_named_fields {
 
             fn end(self) -> Result<()> {
                 self.end_struct()
+            }
+        }
+
+        impl<'ser, 'sig, 'b, B, W> ser::$trait for StructSeqSerializer<'ser, 'sig, 'b, B, W>
+        where
+            B: byteorder::ByteOrder,
+            W: Write + Seek,
+        {
+            type Ok = ();
+            type Error = Error;
+
+            fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
+            where
+                T: ?Sized + Serialize,
+            {
+                match self {
+                    StructSeqSerializer::Struct(ser) => ser.serialize_field(key, value),
+                    StructSeqSerializer::Seq(ser) => ser.serialize_element(value),
+                }
+            }
+
+            fn end(self) -> Result<()> {
+                match self {
+                    StructSeqSerializer::Struct(ser) => ser.end_struct(),
+                    StructSeqSerializer::Seq(ser) => ser.end_seq(),
+                }
             }
         }
     };
