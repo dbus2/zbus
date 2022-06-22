@@ -546,6 +546,10 @@ where
     ));
     deserialize_method!(deserialize_identifier());
     deserialize_method!(deserialize_ignored_any());
+
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Debug)]

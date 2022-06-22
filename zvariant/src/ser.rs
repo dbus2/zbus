@@ -590,6 +590,10 @@ where
         n: &'static str,
         l: usize
     ) => Self::SerializeStruct = StructSerializer);
+
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }
 
 macro_rules! serialize_impl {
@@ -637,9 +641,9 @@ serialize_impl!(SerializeSeq, SeqSerializer, serialize_element(value: &T));
 
 #[doc(hidden)]
 pub enum StructSerializer<'ser, 'sig, 'b, B, W> {
-    DBus(dbus::StructSerializer<'ser, 'sig, 'b, B, W>),
+    DBus(dbus::StructSeqSerializer<'ser, 'sig, 'b, B, W>),
     #[cfg(feature = "gvariant")]
-    GVariant(gvariant::StructSerializer<'ser, 'sig, 'b, B, W>),
+    GVariant(gvariant::StructSeqSerializer<'ser, 'sig, 'b, B, W>),
 }
 
 serialize_impl!(SerializeTuple, StructSerializer, serialize_element(v: &T));
