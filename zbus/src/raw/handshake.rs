@@ -9,6 +9,7 @@ use std::{
     str::FromStr,
     task::{Context, Poll},
 };
+use tracing::{instrument, trace};
 
 #[cfg(windows)]
 use crate::win32;
@@ -572,10 +573,12 @@ impl<S: Socket> ServerHandshake<S> {
 }
 
 impl<S: Socket> Handshake<S> for ServerHandshake<S> {
+    #[instrument(skip(cx))]
     fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         loop {
             match self.step {
                 ServerHandshakeStep::WaitingForNull => {
+                    trace!("Waiting for NULL");
                     let mut buffer = [0; 1];
                     let read = ready!(self.socket.poll_recvmsg(cx, &mut buffer))?;
                     #[cfg(unix)]
@@ -590,6 +593,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                     self.step = ServerHandshakeStep::WaitingForAuth;
                 }
                 ServerHandshakeStep::WaitingForAuth => {
+                    trace!("Waiting for authentication");
                     ready!(self.read_command(cx))?;
                     let mut reply = String::new();
                     (&self.buffer[..]).read_line(&mut reply)?;
@@ -645,14 +649,17 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                     }
                 }
                 ServerHandshakeStep::SendingAuthError => {
+                    trace!("Sending authentication error");
                     ready!(self.flush_buffer(cx))?;
                     self.step = ServerHandshakeStep::WaitingForAuth;
                 }
                 ServerHandshakeStep::SendingAuthOK => {
+                    trace!("Sending authentication OK");
                     ready!(self.flush_buffer(cx))?;
                     self.step = ServerHandshakeStep::WaitingForBegin;
                 }
                 ServerHandshakeStep::WaitingForBegin => {
+                    trace!("Waiting for Begin command from the client");
                     ready!(self.read_command(cx))?;
                     let mut reply = String::new();
                     (&self.buffer[..]).read_line(&mut reply)?;
@@ -673,10 +680,14 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                 }
                 #[cfg(unix)]
                 ServerHandshakeStep::SendingBeginMessage => {
+                    trace!("Sending Begin message to the client");
                     ready!(self.flush_buffer(cx))?;
                     self.step = ServerHandshakeStep::WaitingForBegin;
                 }
-                ServerHandshakeStep::Done => return Poll::Ready(Ok(())),
+                ServerHandshakeStep::Done => {
+                    trace!("Handshake done");
+                    return Poll::Ready(Ok(()));
+                }
             }
         }
     }

@@ -214,7 +214,7 @@ fn ensure_correct_unique_name(name: &str) -> Result<()> {
 
     if no_dot {
         return Err(Error::InvalidUniqueName(String::from(
-            "must not contain at least 1 `.`",
+            "must contain at least 1 `.`",
         )));
     }
 
