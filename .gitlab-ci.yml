@@ -6,17 +6,6 @@ variables:
   CARGO_HOME: $CI_PROJECT_DIR/cargo
   APT_CACHE_DIR: $CI_PROJECT_DIR/apt
 
-check:
-  image: "rustdocker/rustfmt_clippy:1.51.0"
-  stage: "lint"
-  script:
-    - rustc --version
-    - cargo --version
-    - cargo fmt --all -- --check
-    - cargo clippy -- -D warnings -Aclippy::upper_case_acronyms -Adeprecated
-    - cargo install cargo-audit
-    - cargo audit
-
 test:
   image: "rustdocker/rustfmt_clippy:1.51.0"
   stage: test
