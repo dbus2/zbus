@@ -1,6 +1,6 @@
 [package]
 name = "zbus"
-version = "1.9.2"
+version = "1.9.3"
 authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
 edition = "2018"
 
@@ -17,11 +17,11 @@ xml = ["serde-xml-rs"]
 
 [dependencies]
 byteorder = "1.3.1"
-nix = "0.20.2"
+nix = "0.22.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1"
 zvariant = { path = "../zvariant", version = "2", default-features = false, features = ["enumflags2"] }
-zbus_macros = { path = "../zbus_macros", version = "=1.9.2" }
+zbus_macros = { path = "../zbus_macros", version = "=1.9.3" }
 enumflags2 = { version = "0.6.4", features = ["serde"] }
 serde-xml-rs = { version = "0.4.0", optional = true }
 derivative = "2.1"

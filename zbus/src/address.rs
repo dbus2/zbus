@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use crate::{Error, Result};
 use async_io::Async;
 use nb_connect::unix;
