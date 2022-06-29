@@ -7,7 +7,7 @@ variables:
   APT_CACHE_DIR: $CI_PROJECT_DIR/apt
 
 test:
-  image: "rustdocker/rustfmt_clippy:1.51.0"
+  image: "rustdocker/rustfmt_clippy:1.61.0"
   stage: test
   script:
     - rustc --version
