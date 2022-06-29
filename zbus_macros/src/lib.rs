@@ -59,7 +59,7 @@ mod utils;
 ///
 ///     #[dbus_proxy(signal)]
 ///     fn some_signal(&self, arg1: &str, arg2: u32) -> fdo::Result<()>;
-/// };
+/// }
 ///
 /// let connection = Connection::new_session()?;
 /// let proxy = SomeIfaceProxy::new(&connection)?;
