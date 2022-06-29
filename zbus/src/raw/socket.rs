@@ -85,8 +85,7 @@ impl Socket for UnixStream {
                 }
                 Ok((msg.bytes, fds))
             }
-            Err(nix::Error::Sys(e)) => Err(e.into()),
-            _ => Err(io::Error::new(io::ErrorKind::Other, "unhandled nix error")),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -104,8 +103,7 @@ impl Socket for UnixStream {
                 "failed to write to buffer",
             )),
             Ok(n) => Ok(n),
-            Err(nix::Error::Sys(e)) => Err(e.into()),
-            _ => Err(io::Error::new(io::ErrorKind::Other, "unhandled nix error")),
+            Err(e) => Err(e.into()),
         }
     }
 
