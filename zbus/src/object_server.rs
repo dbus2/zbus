@@ -7,6 +7,7 @@ use std::{
     ops::{Deref, DerefMut},
     sync::Arc,
 };
+use tracing::{debug, instrument, trace};
 
 use static_assertions::assert_impl_all;
 use zbus_names::InterfaceName;
@@ -621,6 +622,7 @@ impl ObjectServer {
         })
     }
 
+    #[instrument(skip(self, connection))]
     async fn dispatch_method_call_try(
         &self,
         connection: &Connection,
@@ -629,7 +631,7 @@ impl ObjectServer {
         let path = msg
             .path()
             .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
-        let iface = msg
+        let iface_name = msg
             .interface()
             // TODO: In the absence of an INTERFACE field, if two or more interfaces on the same object
             // have a method with the same name, it is undefined which of those methods will be
@@ -648,12 +650,14 @@ impl ObjectServer {
                 .get_child(&path)
                 .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
 
-            node.interface_lock(iface.as_ref()).ok_or_else(|| {
-                fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface))
+            node.interface_lock(iface_name.as_ref()).ok_or_else(|| {
+                fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface_name))
             })?
         };
 
+        trace!("acquiring read lock on interface `{}`", iface_name);
         let read_lock = iface.read().await;
+        trace!("acquired read lock on interface `{}`", iface_name);
         match read_lock.call(self, connection, msg, member.as_ref()) {
             DispatchResult::NotFound => {
                 return Err(fdo::Error::UnknownMethod(format!(
@@ -667,7 +671,9 @@ impl ObjectServer {
             DispatchResult::RequiresMut => {}
         }
         drop(read_lock);
+        trace!("acquiring write lock on interface `{}`", iface_name);
         let mut write_lock = iface.write().await;
+        trace!("acquired write lock on interface `{}`", iface_name);
         match write_lock.call_mut(self, connection, msg, member.as_ref()) {
             DispatchResult::NotFound => {}
             DispatchResult::RequiresMut => {}
@@ -682,10 +688,12 @@ impl ObjectServer {
         )))
     }
 
+    #[instrument(skip(self, connection))]
     async fn dispatch_method_call(&self, connection: &Connection, msg: &Message) -> Result<()> {
         match self.dispatch_method_call_try(connection, msg).await {
             Err(e) => {
                 let hdr = msg.header()?;
+                debug!("Returning error: {}", e);
                 connection.reply_dbus_error(&hdr, e).await?;
                 Ok(())
             }
@@ -705,11 +713,13 @@ impl ObjectServer {
     ///   the caller through the associated server connection.
     ///
     /// Returns an error if the message is malformed, true if it's handled, false otherwise.
+    #[instrument(skip(self))]
     pub(crate) async fn dispatch_message(&self, msg: &Message) -> Result<bool> {
         match msg.message_type() {
             MessageType::MethodCall => {
                 let conn = self.connection();
                 self.dispatch_method_call(&conn, msg).await?;
+                trace!("Handled: {}", msg);
                 Ok(true)
             }
             _ => Ok(false),

@@ -129,7 +129,7 @@ mod tests {
     use enumflags2::BitFlags;
     use ntest::timeout;
     use test_log::test;
-    use tracing::{debug, instrument};
+    use tracing::{debug, instrument, trace};
 
     use zbus_names::UniqueName;
     #[cfg(unix)]
@@ -557,7 +557,9 @@ mod tests {
                 .build()
                 .unwrap();
 
+            trace!("Calling open_session");
             proxy.open_session("plain", &Value::from("")).unwrap();
+            trace!("Called open_session");
 
             2u32
         });

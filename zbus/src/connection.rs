@@ -705,22 +705,26 @@ impl Connection {
     #[instrument(skip(self))]
     pub(crate) fn start_object_server(&self) {
         self.inner.object_server_dispatch_task.get_or_init(|| {
+            trace!("starting ObjectServer task");
             let weak_conn = WeakConnection::from(self);
             let mut stream = MessageStream::from(self.clone());
 
             self.inner.executor.spawn(
                 async move {
+                    trace!("waiting for incoming method call messages..");
                     while let Some(msg) = stream.next().await.and_then(|m| {
                         if let Err(e) = &m {
                             debug!("Error while reading from object server stream: {:?}", e);
                         }
                         m.ok()
                     }) {
+                        trace!("Got `{}`. Will spawn a task for dispatch..", msg);
                         if let Some(conn) = weak_conn.upgrade() {
                             let executor = conn.inner.executor.clone();
                             executor
                                 .spawn(
                                     async move {
+                                        trace!("spawned a task to dispatch `{}`.", msg);
                                         let server = conn.object_server();
                                         if let Err(e) = server.dispatch_message(&msg).await {
                                             debug!(
