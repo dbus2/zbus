@@ -555,7 +555,9 @@ async fn iface_and_proxy_(p2p: bool) {
     debug!("Service connection created: {:?}", service_conn);
 
     let listen = event.listen();
-    let child = async_std::task::spawn(my_iface_test(client_conn.clone(), event));
+    let child = client_conn
+        .executor()
+        .spawn(my_iface_test(client_conn.clone(), event));
     debug!("Child task spawned.");
     // Wait for the listener to be ready
     listen.await;

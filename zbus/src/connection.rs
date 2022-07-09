@@ -1,8 +1,6 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
-use async_executor::Executor;
 use async_lock::Mutex;
-use async_task::Task;
 use event_listener::EventListener;
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
@@ -31,8 +29,8 @@ use futures_util::{sink::SinkExt, StreamExt, TryFutureExt};
 use crate::{
     blocking, fdo,
     raw::{Connection as RawConnection, Socket},
-    Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Guid, Message,
-    MessageStream, MessageType, ObjectServer, Result,
+    Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, Message,
+    MessageStream, MessageType, ObjectServer, Result, Task,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -53,7 +51,7 @@ pub(crate) struct ConnectionInner {
     serial: AtomicU32,
 
     // Our executor
-    executor: Arc<Executor<'static>>,
+    executor: Executor<'static>,
 
     // Message receiver task
     #[allow(unused)]
@@ -656,7 +654,9 @@ impl Connection {
     ///
     /// **Note**: zbus 2.1 added support for tight integration with tokio. This means, if you use
     /// zbus with tokio, you do not need to worry about this at all. All you need to do is enable
-    /// `tokio` feature and disable the (default) `async-io` feature in your `Cargo.toml`.
+    /// `tokio` feature. You should also disable the (default) `async-io` feature in your
+    /// `Cargo.toml` to drop avoid unused dependencies. Also note that **prior** to zbus 3.0,
+    /// disabling `async-io` was required to enable tight `tokio` integration.
     ///
     /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
     pub fn executor(&self) -> &Executor<'static> {
@@ -833,7 +833,7 @@ impl Connection {
     pub(crate) async fn new(
         auth: Authenticated<Box<dyn Socket>>,
         bus_connection: bool,
-        internal_executor: bool,
+        #[allow(unused)] internal_executor: bool,
     ) -> Result<Self> {
         let auth = auth.into_inner();
         #[cfg(unix)]
@@ -842,7 +842,7 @@ impl Connection {
         let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
         let msg_receiver = msg_receiver.deactivate();
         let (error_sender, error_receiver) = bounded(1);
-        let executor = Arc::new(Executor::new());
+        let executor = Executor::new();
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
         // Start the message receiver task.
@@ -869,20 +869,18 @@ impl Connection {
             }),
         };
 
+        #[cfg(not(feature = "tokio"))]
         if internal_executor {
-            let ticker_future = async move {
-                // Run as long as there is a task to run.
-                while !executor.is_empty() {
-                    executor.tick().await;
-                }
-            };
-            #[cfg(not(feature = "tokio"))]
             std::thread::Builder::new()
                 .name("zbus::Connection executor".into())
-                .spawn(move || crate::utils::block_on(ticker_future))?;
-
-            #[cfg(feature = "tokio")]
-            tokio::task::spawn(ticker_future);
+                .spawn(move || {
+                    crate::utils::block_on(async move {
+                        // Run as long as there is a task to run.
+                        while !executor.is_empty() {
+                            executor.tick().await;
+                        }
+                    })
+                })?;
         }
 
         if !bus_connection {

@@ -1,6 +1,5 @@
 use async_broadcast::Receiver;
 use async_channel::bounded;
-use async_executor::Task;
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
 use futures_util::{future::Either, stream::FilterMap};
@@ -23,7 +22,7 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
     CacheProperties, Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder,
-    Result,
+    Result, Task,
 };
 
 #[derive(Debug, Default)]
