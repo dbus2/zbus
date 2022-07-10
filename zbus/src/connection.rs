@@ -621,18 +621,15 @@ impl Connection {
     ///
     /// # Examples
     ///
-    /// Here is how one would typically run the zbus executor through tokio's single-threaded
+    /// Here is how one would typically run the zbus executor through async-std's single-threaded
     /// scheduler:
     ///
     /// ```
     /// use zbus::ConnectionBuilder;
-    /// use tokio::runtime;
+    /// use async_std::task::{block_on, spawn};
     ///
-    /// runtime::Builder::new_current_thread()
-    ///        .enable_io()
-    ///        .build()
-    ///        .unwrap()
-    ///        .block_on(async {
+    ///# #[cfg(not(feature = "tokio"))]
+    /// block_on(async {
     ///     let conn = ConnectionBuilder::session()
     ///         .unwrap()
     ///         .internal_executor(false)
@@ -641,7 +638,7 @@ impl Connection {
     ///         .unwrap();
     ///     {
     ///        let conn = conn.clone();
-    ///        tokio::task::spawn(async move {
+    ///        spawn(async move {
     ///            loop {
     ///                conn.executor().tick().await;
     ///            }
