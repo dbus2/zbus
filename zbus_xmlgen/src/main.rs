@@ -49,7 +49,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 bus.trim_start_matches("--")
             );
 
-            Node::from_str(&proxy(connection, &*service, &*path).introspect()?)?
+            let xml = proxy(connection, &*service, &*path).introspect()?;
+            Node::from_str(&xml)?
         }
         Some(address) if address == "--address" => {
             let address = args().nth(2).expect("Missing param for address path");
@@ -60,7 +61,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             input_src = format!("Interface '{}' from service '{}'", path, service);
 
-            Node::from_str(&proxy(connection, &service, &path).introspect()?)?
+            let xml = proxy(connection, &*service, &*path).introspect()?;
+            Node::from_str(&xml)?
         }
         Some(path) => {
             input_src = Path::new(&path)
