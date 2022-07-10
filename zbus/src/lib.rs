@@ -538,7 +538,7 @@ mod tests {
             .unwrap();
         let service_name = conn.unique_name().unwrap().clone();
 
-        let child = std::thread::spawn(move || {
+        {
             let conn = blocking::Connection::session().unwrap();
             #[super::dbus_proxy(interface = "org.freedesktop.Secret.Service", gen_async = false)]
             trait Secret {
@@ -560,12 +560,7 @@ mod tests {
             trace!("Calling open_session");
             proxy.open_session("plain", &Value::from("")).unwrap();
             trace!("Called open_session");
-
-            2u32
-        });
-
-        let val = child.join().expect("failed to join");
-        assert_eq!(val, 2);
+        };
     }
 
     // This one we just want to see if it builds, no need to run it. For details see:
