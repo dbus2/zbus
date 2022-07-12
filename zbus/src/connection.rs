@@ -26,11 +26,7 @@ use zvariant::ObjectPath;
 
 use futures_core::{ready, Future};
 use futures_sink::Sink;
-use futures_util::{
-    future::{select, Either},
-    sink::SinkExt,
-    StreamExt, TryFutureExt,
-};
+use futures_util::{sink::SinkExt, StreamExt, TryFutureExt};
 
 use crate::{
     blocking, fdo,
@@ -830,21 +826,7 @@ impl Connection {
     where
         F: Future<Output = Result<O>>,
     {
-        let executor = self.inner.executor.clone();
-        let ticking_future = async move {
-            // Keep running as long as this task/future is not cancelled.
-            loop {
-                executor.tick().await;
-            }
-        };
-
-        futures_util::pin_mut!(future);
-        futures_util::pin_mut!(ticking_future);
-
-        match select(future, ticking_future).await {
-            Either::Left((res, _)) => res,
-            Either::Right((_, _)) => unreachable!("ticking task future shouldn't finish"),
-        }
+        self.inner.executor.run(future).await
     }
 
     pub(crate) async fn new(
