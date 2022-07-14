@@ -20,11 +20,11 @@ error[E0277]: the trait bound `Foo: Type` is not satisfied
             and 88 others
     = note: required because of the requirements on the impl of `Type` for `(Foo,)`
     = note: required because of the requirements on the impl of `DynamicType` for `(Foo,)`
-note: required by a bound in `zbus::Proxy::<'a>::call`
+note: required by a bound in `zbus::Proxy::<'a>::call_with_flags`
    --> $WORKSPACE/zbus/src/proxy.rs
     |
     |         B: serde::ser::Serialize + zvariant::DynamicType,
-    |                                    ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `zbus::Proxy::<'a>::call`
+    |                                    ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `zbus::Proxy::<'a>::call_with_flags`
     = note: this error originates in the attribute macro `dbus_proxy` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Foo: Type` is not satisfied
@@ -47,11 +47,11 @@ error[E0277]: the trait bound `Foo: Type` is not satisfied
               (T0, T1, T2, T3, T4, T5)
               (T0, T1, T2, T3, T4, T5, T6)
             and 88 others
-note: required by a bound in `zbus::Proxy::<'a>::call`
+note: required by a bound in `zbus::Proxy::<'a>::call_with_flags`
    --> $WORKSPACE/zbus/src/proxy.rs
     |
     |         R: serde::de::DeserializeOwned + zvariant::Type,
-    |                                          ^^^^^^^^^^^^^^ required by this bound in `zbus::Proxy::<'a>::call`
+    |                                          ^^^^^^^^^^^^^^ required by this bound in `zbus::Proxy::<'a>::call_with_flags`
     = note: this error originates in the attribute macro `dbus_proxy` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Foo: From<OwnedValue>` is not satisfied
@@ -85,11 +85,11 @@ error[E0277]: the trait bound `Foo: Type` is not satisfied
             and 88 others
     = note: required because of the requirements on the impl of `Type` for `(Foo,)`
     = note: required because of the requirements on the impl of `DynamicType` for `(Foo,)`
-note: required by a bound in `zbus::blocking::Proxy::<'a>::call`
+note: required by a bound in `zbus::blocking::Proxy::<'a>::call_with_flags`
    --> $WORKSPACE/zbus/src/blocking/proxy.rs
     |
     |         B: serde::ser::Serialize + zvariant::DynamicType,
-    |                                    ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `zbus::blocking::Proxy::<'a>::call`
+    |                                    ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `zbus::blocking::Proxy::<'a>::call_with_flags`
     = note: this error originates in the attribute macro `dbus_proxy` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Foo: Type` is not satisfied
@@ -112,11 +112,11 @@ error[E0277]: the trait bound `Foo: Type` is not satisfied
               (T0, T1, T2, T3, T4, T5)
               (T0, T1, T2, T3, T4, T5, T6)
             and 88 others
-note: required by a bound in `zbus::blocking::Proxy::<'a>::call`
+note: required by a bound in `zbus::blocking::Proxy::<'a>::call_with_flags`
    --> $WORKSPACE/zbus/src/blocking/proxy.rs
     |
     |         R: serde::de::DeserializeOwned + zvariant::Type,
-    |                                          ^^^^^^^^^^^^^^ required by this bound in `zbus::blocking::Proxy::<'a>::call`
+    |                                          ^^^^^^^^^^^^^^ required by this bound in `zbus::blocking::Proxy::<'a>::call_with_flags`
     = note: this error originates in the attribute macro `dbus_proxy` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Foo: From<OwnedValue>` is not satisfied
