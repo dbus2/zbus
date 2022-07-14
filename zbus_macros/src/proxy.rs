@@ -385,6 +385,15 @@ fn gen_proxy_method_call(
         _ => None,
     });
     let no_reply = attrs.iter().any(|x| matches!(x, ItemAttribute::NoReply));
+    let no_autostart = attrs.iter().any(|x| matches!(x, ItemAttribute::NoAutoStart));
+    let allow_interactive_auth = attrs.iter().any(|x| matches!(x, ItemAttribute::AllowInteractiveAuth));
+
+    let additional_flags = match (no_autostart, allow_interactive_auth) {
+        (true, true) => quote!(Some(zbus::MessageFlags::NoAutoStart | zbus::MessageFlags::AllowInteractiveAuth)),
+        (true, false) => quote!(Some(zbus::MessageFlags::NoAutoStart)),
+        (false, true) => quote!(Some(zbus::MessageFlags::AllowInteractiveAuth)),
+        _ => quote!(None),
+    };
 
     let method = Ident::new(snake_case_name, Span::call_site());
     let inputs = &m.sig.inputs;
@@ -430,9 +439,10 @@ fn gen_proxy_method_call(
             #(#doc)*
             pub #usage #signature {
                 let object_path: #zbus::zvariant::OwnedObjectPath =
-                    self.0.call(
+                    self.0.call_with_flags(
                         #method_name,
                         &(#(#args),*),
+                        #additional_flags,
                     )
                     #wait?;
                 #proxy::builder(&self.0.connection())
@@ -465,7 +475,7 @@ fn gen_proxy_method_call(
             return quote! {
                 #(#doc)*
                 pub #usage #signature {
-                    self.0.call_noreply(#method_name, #body)#wait?;
+                    self.0.call_noreply_with_flags(#method_name, #body, #additional_flags)#wait?;
                     ::std::result::Result::Ok(())
                 }
             };
@@ -474,7 +484,7 @@ fn gen_proxy_method_call(
         quote! {
             #(#doc)*
             pub #usage #signature {
-                let reply = self.0.call(#method_name, #body)#wait?;
+                let reply = self.0.call_with_flags(#method_name, #body, #additional_flags)#wait?;
                 ::std::result::Result::Ok(reply)
             }
         }
