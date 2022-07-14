@@ -26,11 +26,7 @@ use zvariant::ObjectPath;
 
 use futures_core::{ready, Future};
 use futures_sink::Sink;
-use futures_util::{
-    future::{select, Either},
-    sink::SinkExt,
-    StreamExt, TryFutureExt,
-};
+use futures_util::{sink::SinkExt, StreamExt, TryFutureExt};
 
 use crate::{
     blocking, fdo,
@@ -705,22 +701,26 @@ impl Connection {
     #[instrument(skip(self))]
     pub(crate) fn start_object_server(&self) {
         self.inner.object_server_dispatch_task.get_or_init(|| {
+            trace!("starting ObjectServer task");
             let weak_conn = WeakConnection::from(self);
             let mut stream = MessageStream::from(self.clone());
 
             self.inner.executor.spawn(
                 async move {
+                    trace!("waiting for incoming method call messages..");
                     while let Some(msg) = stream.next().await.and_then(|m| {
                         if let Err(e) = &m {
                             debug!("Error while reading from object server stream: {:?}", e);
                         }
                         m.ok()
                     }) {
+                        trace!("Got `{}`. Will spawn a task for dispatch..", msg);
                         if let Some(conn) = weak_conn.upgrade() {
                             let executor = conn.inner.executor.clone();
                             executor
                                 .spawn(
                                     async move {
+                                        trace!("spawned a task to dispatch `{}`.", msg);
                                         let server = conn.object_server();
                                         if let Err(e) = server.dispatch_message(&msg).await {
                                             debug!(
@@ -826,21 +826,7 @@ impl Connection {
     where
         F: Future<Output = Result<O>>,
     {
-        let executor = self.inner.executor.clone();
-        let ticking_future = async move {
-            // Keep running as long as this task/future is not cancelled.
-            loop {
-                executor.tick().await;
-            }
-        };
-
-        futures_util::pin_mut!(future);
-        futures_util::pin_mut!(ticking_future);
-
-        match select(future, ticking_future).await {
-            Either::Left((res, _)) => res,
-            Either::Right((_, _)) => unreachable!("ticking task future shouldn't finish"),
-        }
+        self.inner.executor.run(future).await
     }
 
     pub(crate) async fn new(

@@ -176,6 +176,7 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// ```
 /// use zvariant::{Signature, Type, TypeDict};
 ///
+/// #[allow(deprecated)]
 /// #[derive(TypeDict)]
 /// struct Struct {
 ///     field: u32,
