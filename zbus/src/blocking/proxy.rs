@@ -213,7 +213,12 @@ impl<'a> Proxy<'a> {
     /// allocation/copying, by deserializing the reply to an unowned type).
     ///
     /// [`call`]: struct.Proxy.html#method.call
-    pub fn call_method_with_flags<'m, M, B>(&self, method_name: M, body: &B, flags: Option<MessageFlags>) -> Result<Arc<Message>>
+    pub fn call_method_with_flags<'m, M, B>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<Arc<Message>>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
@@ -242,7 +247,12 @@ impl<'a> Proxy<'a> {
     /// Use [`call_method`] instead if you need to deserialize the reply manually/separately.
     ///
     /// [`call_method`]: struct.Proxy.html#method.call_method
-    pub fn call_with_flags<'m, M, B, R>(&self, method_name: M, body: &B, flags: Option<MessageFlags>) -> Result<R>
+    pub fn call_with_flags<'m, M, B, R>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<R>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
@@ -268,7 +278,12 @@ impl<'a> Proxy<'a> {
     /// method call message
     ///
     /// This sets the `NoReplyExpected` flag on the calling message and does not wait for a reply.
-    pub fn call_noreply_with_flags<'m, M, B>(&self, method_name: M, body: &B, flags: Option<MessageFlags>) -> Result<()>
+    pub fn call_noreply_with_flags<'m, M, B>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<()>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,

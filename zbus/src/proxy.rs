@@ -22,8 +22,8 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    CacheProperties, Connection, Error, Message, MessageBuilder, MessageFlags, MessageSequence, ProxyBuilder,
-    Result,
+    CacheProperties, Connection, Error, Message, MessageBuilder, MessageFlags, MessageSequence,
+    ProxyBuilder, Result,
 };
 
 #[derive(Debug, Default)]
@@ -732,7 +732,12 @@ impl<'a> Proxy<'a> {
     /// allocation/copying, by deserializing the reply to an unowned type).
     ///
     /// [`call`]: struct.Proxy.html#method.call
-    pub async fn call_method_with_flags<'m, M, B>(&self, method_name: M, body: &B, flags: Option<MessageFlags>) -> Result<Arc<Message>>
+    pub async fn call_method_with_flags<'m, M, B>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<Arc<Message>>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
@@ -775,14 +780,21 @@ impl<'a> Proxy<'a> {
     /// Use [`call_method`] instead if you need to deserialize the reply manually/separately.
     ///
     /// [`call_method`]: struct.Proxy.html#method.call_method
-    pub async fn call_with_flags<'m, M, B, R>(&self, method_name: M, body: &B, flags: Option<MessageFlags>) -> Result<R>
+    pub async fn call_with_flags<'m, M, B, R>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<R>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
-        let reply = self.call_method_with_flags(method_name, body, flags).await?;
+        let reply = self
+            .call_method_with_flags(method_name, body, flags)
+            .await?;
 
         reply.body()
     }
@@ -796,12 +808,18 @@ impl<'a> Proxy<'a> {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        self.call_noreply_with_flags(method_name, body, Some(MessageFlags::NoReplyExpected)).await
+        self.call_noreply_with_flags(method_name, body, Some(MessageFlags::NoReplyExpected))
+            .await
     }
 
     /// Call a method without expecting a reply, passing additional header flags in
     /// the method call message
-    pub async fn call_noreply_with_flags<'m, M, B>(&self, method_name: M, body: &B, flags: Option<MessageFlags>) -> Result<()>
+    pub async fn call_noreply_with_flags<'m, M, B>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<()>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,

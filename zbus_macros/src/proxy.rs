@@ -385,11 +385,17 @@ fn gen_proxy_method_call(
         _ => None,
     });
     let no_reply = attrs.iter().any(|x| matches!(x, ItemAttribute::NoReply));
-    let no_autostart = attrs.iter().any(|x| matches!(x, ItemAttribute::NoAutoStart));
-    let allow_interactive_auth = attrs.iter().any(|x| matches!(x, ItemAttribute::AllowInteractiveAuth));
+    let no_autostart = attrs
+        .iter()
+        .any(|x| matches!(x, ItemAttribute::NoAutoStart));
+    let allow_interactive_auth = attrs
+        .iter()
+        .any(|x| matches!(x, ItemAttribute::AllowInteractiveAuth));
 
     let additional_flags = match (no_autostart, allow_interactive_auth) {
-        (true, true) => quote!(Some(zbus::MessageFlags::NoAutoStart | zbus::MessageFlags::AllowInteractiveAuth)),
+        (true, true) => quote!(Some(
+            zbus::MessageFlags::NoAutoStart | zbus::MessageFlags::AllowInteractiveAuth
+        )),
         (true, false) => quote!(Some(zbus::MessageFlags::NoAutoStart)),
         (false, true) => quote!(Some(zbus::MessageFlags::AllowInteractiveAuth)),
         _ => quote!(None),
