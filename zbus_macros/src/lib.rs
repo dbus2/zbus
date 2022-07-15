@@ -71,6 +71,13 @@ mod utils;
 ///
 /// * `no_reply` - declare a method call that does not wait for a reply.
 ///
+/// * `no_autostart`- declare that the bus must not launch an owner for the destination name in
+///   response to this message.
+///
+/// * `allow_interactive_auth` - declare that callers of this method should be prepared to wait
+///   (potentially for a considerable time) for an interactive request to complete
+///   if additional authorization is required before executing a privileged method call.
+///
 /// * `object` - methods that returns an [`ObjectPath`] can be annotated with the `object` attribute
 ///   to specify the proxy object to be constructed from the returned [`ObjectPath`].
 ///
