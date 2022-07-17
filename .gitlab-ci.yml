@@ -73,6 +73,7 @@ container:
 
 windows amd64 docker:
   stage: container
+  allow_failure: true
   variables:
     # this file needs to be relative to docker/windows/ subdir
     # as it makes life easier in the powershell script
@@ -149,6 +150,7 @@ nightly:
 msvc:
   image: $WINDOWS_IMAGE
   stage: test
+  allow_failure: true
   tags:
     - 'docker'
     - 'windows'
