@@ -3,6 +3,7 @@ use async_io::Async;
 use futures_core::ready;
 use std::{
     io,
+    io::{IoSlice, IoSliceMut},
     task::{Context, Poll},
 };
 #[cfg(feature = "async-io")]
@@ -17,10 +18,7 @@ use uds_windows::UnixStream;
 #[cfg(unix)]
 use nix::{
     cmsg_space,
-    sys::{
-        socket::{recvmsg, sendmsg, ControlMessage, ControlMessageOwned, MsgFlags},
-        uio::IoVec,
-    },
+    sys::socket::{recvmsg, sendmsg, ControlMessage, ControlMessageOwned, MsgFlags, UnixAddr},
 };
 #[cfg(unix)]
 use std::os::unix::io::{FromRawFd, RawFd};
@@ -33,10 +31,10 @@ use crate::{utils::FDS_MAX, OwnedFd};
 
 #[cfg(unix)]
 fn fd_recvmsg(fd: RawFd, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
-    let iov = [IoVec::from_mut_slice(buffer)];
+    let mut iov = [IoSliceMut::new(buffer)];
     let mut cmsgspace = cmsg_space!([RawFd; FDS_MAX]);
 
-    match recvmsg(fd, &iov, Some(&mut cmsgspace), MsgFlags::empty()) {
+    match recvmsg::<UnixAddr>(fd, &mut iov, Some(&mut cmsgspace), MsgFlags::empty()) {
         Ok(msg) => {
             let mut fds = vec![];
             for cmsg in msg.cmsgs() {
@@ -66,8 +64,8 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
     } else {
         vec![]
     };
-    let iov = [IoVec::from_slice(buffer)];
-    match sendmsg(fd, &iov, &cmsg, MsgFlags::empty(), None) {
+    let iov = [IoSlice::new(buffer)];
+    match sendmsg::<UnixAddr>(fd, &iov, &cmsg, MsgFlags::empty(), None) {
         // can it really happen?
         Ok(0) => Err(io::Error::new(
             io::ErrorKind::WriteZero,
