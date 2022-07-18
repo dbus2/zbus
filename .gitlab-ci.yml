@@ -81,7 +81,7 @@ windows amd64 docker:
   tags:
     - windows
     - shell
-    - "1809"
+    - "2022"
   script:
     # We need to pass an array and to resolve the env vars, so we can't use a variable:
     - $DOCKER_BUILD_ARGS = @("--build-arg", "DEFAULT_BRANCH=$UPSTREAM_BRANCH")
@@ -152,7 +152,7 @@ msvc:
   tags:
     - 'docker'
     - 'windows'
-    - '1809'
+    - '2022'
   needs:
     - "windows amd64 docker"
   variables:
