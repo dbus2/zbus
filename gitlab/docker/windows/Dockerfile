@@ -1,6 +1,6 @@
 # escape=`
 
-FROM 'mcr.microsoft.com/windows/servercore:ltsc2019'
+FROM 'mcr.microsoft.com/windows/servercore:ltsc2022'
 
 # Make sure any failure in PowerShell scripts is fatal
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';"]
