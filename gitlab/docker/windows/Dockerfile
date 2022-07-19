@@ -1,6 +1,6 @@
 # escape=`
 
-FROM 'mcr.microsoft.com/windows/servercore:ltsc2019'
+FROM 'mcr.microsoft.com/windows/servercore:ltsc2022'
 
 # Make sure any failure in PowerShell scripts is fatal
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';"]
@@ -25,7 +25,6 @@ RUN pip3 install meson
 # See also: https://bugs.python.org/issue36011
 RUN pip3 install --upgrade certifi
 RUN pip3 install python-certifi-win32
-RUN (New-Object System.Net.WebClient).DownloadString('https://sourceforge.net') >$null
 RUN (New-Object System.Net.WebClient).DownloadString('https://wrapdb.mesonbuild.com/v2/pcre_8.37-2/get_patch') >$null
 RUN (New-Object System.Net.WebClient).DownloadString('https://zlib.net/fossils/') >$null
 
