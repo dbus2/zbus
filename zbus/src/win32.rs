@@ -1,13 +1,14 @@
 use std::{
-    ffi::CStr,
+    ffi::{CStr, OsStr},
     io::{Error, ErrorKind},
     net::SocketAddr,
+    os::windows::prelude::OsStrExt,
     ptr,
 };
 
 use winapi::{
     shared::{
-        minwindef::DWORD,
+        minwindef::{DWORD, FALSE},
         sddl::ConvertSidToStringSidA,
         tcpmib::{MIB_TCPTABLE2, MIB_TCP_STATE_ESTAB},
         winerror::{ERROR_INSUFFICIENT_BUFFER, NO_ERROR},
@@ -16,24 +17,73 @@ use winapi::{
     um::{
         handleapi::CloseHandle,
         iphlpapi::GetTcpTable2,
+        memoryapi::{MapViewOfFile, OpenFileMappingW, FILE_MAP_READ},
         processthreadsapi::{GetCurrentProcess, OpenProcess, OpenProcessToken},
         securitybaseapi::{GetTokenInformation, IsValidSid},
-        winbase::LocalFree,
+        synchapi::{CreateMutexW, ReleaseMutex, WaitForSingleObject},
+        winbase::{LocalFree, INFINITE, WAIT_ABANDONED, WAIT_OBJECT_0},
         winnt::{TokenUser, HANDLE, PROCESS_QUERY_LIMITED_INFORMATION, TOKEN_QUERY, TOKEN_USER},
     },
 };
 
+use crate::Address;
 #[cfg(feature = "async-io")]
 use uds_windows::UnixStream;
 
-// A process handle
-pub struct ProcessHandle(HANDLE);
+// An owned Windows handle
+pub struct OwnedHandle(HANDLE);
 
-impl Drop for ProcessHandle {
+impl OwnedHandle {
+    // SAFETY: since `handle` is just a pointer, it can be given to multiple `OwnedHandle`
+    pub unsafe fn new(handle: HANDLE) -> Self {
+        Self(handle)
+    }
+
+    #[inline]
+    pub fn get(&self) -> HANDLE {
+        self.0
+    }
+}
+
+impl Drop for OwnedHandle {
     fn drop(&mut self) {
         unsafe { CloseHandle(self.0) };
     }
 }
+
+struct Mutex(OwnedHandle);
+
+impl Mutex {
+    pub fn new(name: &str) -> Result<Self, crate::Error> {
+        let name_wide = OsStr::new(name)
+            .encode_wide()
+            .chain([0])
+            .collect::<Vec<_>>();
+
+        let handle = unsafe { CreateMutexW(ptr::null_mut(), FALSE, name_wide.as_ptr()) };
+
+        // SAFETY: We have exclusive ownership over the mutex handle
+        Ok(Self(unsafe { OwnedHandle::new(handle) }))
+    }
+
+    pub fn lock(&self) -> MutexGuard<'_> {
+        match unsafe { WaitForSingleObject(self.0.get(), INFINITE) } {
+            WAIT_ABANDONED | WAIT_OBJECT_0 => MutexGuard(self),
+            err => panic!("WaitForSingleObject() failed: return code {}", err),
+        }
+    }
+}
+
+struct MutexGuard<'a>(&'a Mutex);
+
+impl Drop for MutexGuard<'_> {
+    fn drop(&mut self) {
+        unsafe { ReleaseMutex(self.0 .0.get()) };
+    }
+}
+
+// A process handle
+pub struct ProcessHandle(OwnedHandle);
 
 impl ProcessHandle {
     // Open the process associated with the process_id (if None, the current process)
@@ -47,7 +97,8 @@ impl ProcessHandle {
         if process.is_null() {
             Err(Error::last_os_error())
         } else {
-            Ok(Self(process))
+            // SAFETY: We have exclusive ownership over the process handle
+            Ok(Self(unsafe { OwnedHandle::new(process) }))
         }
     }
 }
@@ -58,13 +109,7 @@ impl ProcessHandle {
 // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
 //
 // Get the process security identifier with the `sid()` function.
-pub struct ProcessToken(HANDLE);
-
-impl Drop for ProcessToken {
-    fn drop(&mut self) {
-        unsafe { CloseHandle(self.0) };
-    }
-}
+pub struct ProcessToken(OwnedHandle);
 
 impl ProcessToken {
     // Open the access token associated with the process_id (if None, the current process)
@@ -72,10 +117,11 @@ impl ProcessToken {
         let mut process_token: HANDLE = ptr::null_mut();
         let process = ProcessHandle::open(process_id, PROCESS_QUERY_LIMITED_INFORMATION)?;
 
-        if unsafe { OpenProcessToken(process.0, TOKEN_QUERY, &mut process_token) } == 0 {
+        if unsafe { OpenProcessToken(process.0.get(), TOKEN_QUERY, &mut process_token) } == 0 {
             Err(Error::last_os_error())
         } else {
-            Ok(Self(process_token))
+            // SAFETY: We have exclusive ownership over the process handle
+            Ok(Self(unsafe { OwnedHandle::new(process_token) }))
         }
     }
 
@@ -89,7 +135,7 @@ impl ProcessToken {
 
             let result = unsafe {
                 GetTokenInformation(
-                    self.0,
+                    self.0.get(),
                     TokenUser,
                     token_info.as_mut_ptr() as *mut _,
                     len,
@@ -221,6 +267,46 @@ pub fn unix_stream_get_peer_pid(stream: &UnixStream) -> Result<DWORD, Error> {
     }
 
     Ok(ret)
+}
+
+fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
+    let handle = {
+        let wide_name = OsStr::new(name)
+            .encode_wide()
+            .chain([0])
+            .collect::<Vec<_>>();
+
+        let res = unsafe { OpenFileMappingW(FILE_MAP_READ, FALSE, wide_name.as_ptr()) };
+
+        if !res.is_null() {
+            // SAFETY: We have exclusive ownership over the file mapping handle
+            unsafe { OwnedHandle::new(res) }
+        } else {
+            return Err(crate::Error::Address(
+                "Unable to open shared memory".to_owned(),
+            ));
+        }
+    };
+
+    let addr = unsafe { MapViewOfFile(handle.get(), FILE_MAP_READ, 0, 0, 0) };
+
+    if addr.is_null() {
+        return Err(crate::Error::Address("MapViewOfFile() failed".to_owned()));
+    }
+
+    let data = unsafe { CStr::from_ptr(addr as *const _) };
+    Ok(data.to_bytes().to_owned())
+}
+
+pub fn windows_autolaunch_bus_address() -> Result<Address, crate::Error> {
+    let mutex = Mutex::new("DBusAutolaunchMutex")?;
+    let _guard = mutex.lock();
+
+    let addr = read_shm("DBusDaemonAddressInfo")?;
+    let addr = String::from_utf8(addr)
+        .map_err(|e| crate::Error::Address(format!("Unable to parse address as UTF-8: {}", e)))?;
+
+    addr.parse()
 }
 
 #[cfg(test)]
