@@ -208,22 +208,34 @@ impl Connection<Box<dyn Socket>> {
     }
 }
 
-#[cfg(all(unix, not(feature = "tokio")))]
+#[cfg(unix)]
 #[cfg(test)]
 mod tests {
     use super::Connection;
     use crate::message::Message;
-    use async_io::Async;
     use futures_util::future::poll_fn;
-    use std::os::unix::net::UnixStream;
     use test_log::test;
 
     #[test]
     fn raw_send_receive() {
-        let (p0, p1) = UnixStream::pair().unwrap();
+        crate::block_on(raw_send_receive_async());
+    }
 
-        let mut conn0 = Connection::wrap(Async::new(p0).unwrap());
-        let mut conn1 = Connection::wrap(Async::new(p1).unwrap());
+    async fn raw_send_receive_async() {
+        #[cfg(not(feature = "tokio"))]
+        let (p0, p1) = std::os::unix::net::UnixStream::pair()
+            .map(|(p0, p1)| {
+                (
+                    async_io::Async::new(p0).unwrap(),
+                    async_io::Async::new(p1).unwrap(),
+                )
+            })
+            .unwrap();
+        #[cfg(feature = "tokio")]
+        let (p0, p1) = tokio::net::UnixStream::pair().unwrap();
+
+        let mut conn0 = Connection::wrap(p0);
+        let mut conn1 = Connection::wrap(p1);
 
         let msg = Message::method(
             None::<()>,
@@ -235,12 +247,10 @@ mod tests {
         )
         .unwrap();
 
-        async_io::block_on(async {
-            conn0.enqueue_message(msg);
-            poll_fn(|cx| conn0.try_flush(cx)).await.unwrap();
+        conn0.enqueue_message(msg);
+        poll_fn(|cx| conn0.try_flush(cx)).await.unwrap();
 
-            let ret = poll_fn(|cx| conn1.try_receive_message(cx)).await.unwrap();
-            assert_eq!(ret.to_string(), "Method call Test");
-        });
+        let ret = poll_fn(|cx| conn1.try_receive_message(cx)).await.unwrap();
+        assert_eq!(ret.to_string(), "Method call Test");
     }
 }

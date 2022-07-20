@@ -256,7 +256,7 @@ mod tests {
         Guid,
     };
 
-    #[cfg(any(unix, not(feature = "tokio")))]
+    #[cfg(unix)]
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {

@@ -1101,16 +1101,16 @@ mod tests {
         test_p2p(server, client).await
     }
 
-    #[cfg(any(unix, not(feature = "tokio")))]
+    #[cfg(unix)]
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
         crate::utils::block_on(test_unix_p2p()).unwrap();
     }
 
-    #[cfg(any(unix, not(feature = "tokio")))]
+    #[cfg(unix)]
     async fn test_unix_p2p() -> Result<()> {
-        #[cfg(all(unix, not(feature = "tokio")))]
+        #[cfg(not(feature = "tokio"))]
         use std::os::unix::net::UnixStream;
         #[cfg(feature = "tokio")]
         use tokio::net::UnixStream;
