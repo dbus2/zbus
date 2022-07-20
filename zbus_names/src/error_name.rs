@@ -69,7 +69,7 @@ impl<'name> ErrorName<'name> {
     }
 
     /// Same as `from_str_unchecked`, except it takes a `&'static str`.
-    pub fn from_static_str_unchecked(name: &'static str) -> Self {
+    pub const fn from_static_str_unchecked(name: &'static str) -> Self {
         Self(Str::from_static(name))
     }
 

@@ -143,7 +143,7 @@ impl<'a> Signature<'a> {
     }
 
     /// Same as `from_str_unchecked`, except it takes a static string reference.
-    pub fn from_static_str_unchecked(signature: &'static str) -> Self {
+    pub const fn from_static_str_unchecked(signature: &'static str) -> Self {
         Self {
             bytes: Bytes::Static(signature.as_bytes()),
             pos: 0,
