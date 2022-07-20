@@ -16,7 +16,7 @@ variables:
   # If you are hacking on them or need a them to rebuild, its enough
   # to change any part of the string of the image you want.
   ###
-  WINDOWS_TAG: "2022-07-18.1"
+  WINDOWS_TAG: "2022-07-20.1"
 
   WINDOWS_AMD64_SUFFIX: 'amd64/windows'
   WINDOWS_IMAGE: "$CI_REGISTRY_IMAGE/$WINDOWS_AMD64_SUFFIX:$WINDOWS_TAG-$UPSTREAM_BRANCH"
