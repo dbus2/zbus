@@ -1,6 +1,5 @@
 use async_broadcast::Receiver;
 use async_channel::bounded;
-use async_executor::Task;
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
 use futures_util::{future::Either, stream::FilterMap};
@@ -23,7 +22,7 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 use crate::{
     fdo::{self, IntrospectableProxy, PropertiesProxy},
     CacheProperties, Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder,
-    Result,
+    Result, Task,
 };
 
 #[derive(Debug, Default)]
@@ -47,14 +46,10 @@ pub(crate) struct PropertiesCache {
 /// ```
 /// use std::result::Result;
 /// use std::error::Error;
-/// use async_io::block_on;
 /// use zbus::{Connection, Proxy};
 ///
-/// fn main() -> Result<(), Box<dyn Error>> {
-///     block_on(run())
-/// }
-///
-/// async fn run() -> Result<(), Box<dyn Error>> {
+/// #[tokio::main]
+/// async fn main() -> Result<(), Box<dyn Error>> {
 ///     let connection = Connection::session().await?;
 ///     let p = Proxy::new(
 ///         &connection,
@@ -1226,10 +1221,10 @@ mod tests {
             server_conn.executor().spawn(async move {
                 use std::time::Duration;
 
-                #[cfg(feature = "async-io")]
+                #[cfg(not(feature = "tokio"))]
                 use async_io::Timer;
 
-                #[cfg(not(feature = "async-io"))]
+                #[cfg(feature = "tokio")]
                 use tokio::time::sleep;
 
                 let iface_ref = conn
@@ -1246,10 +1241,10 @@ mod tests {
                             .unwrap();
                     }
 
-                    #[cfg(feature = "async-io")]
+                    #[cfg(not(feature = "tokio"))]
                     Timer::after(Duration::from_millis(5)).await;
 
-                    #[cfg(not(feature = "async-io"))]
+                    #[cfg(feature = "tokio")]
                     sleep(Duration::from_millis(5)).await;
                 }
             })

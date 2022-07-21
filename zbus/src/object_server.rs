@@ -1,4 +1,3 @@
-use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{
     collections::{hash_map::Entry, HashMap},
     convert::TryInto,
@@ -14,6 +13,7 @@ use zbus_names::InterfaceName;
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use crate::{
+    async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard},
     fdo,
     fdo::{Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
     Connection, DispatchResult, Error, Interface, Message, MessageType, Result, SignalContext,

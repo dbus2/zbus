@@ -1,10 +1,9 @@
-use async_io::block_on;
 use futures_util::{
     future::{select, Either},
     stream::StreamExt,
 };
 use std::{convert::TryInto, future::ready};
-use zbus::{fdo, CacheProperties, SignalContext};
+use zbus::{block_on, fdo, CacheProperties, SignalContext};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]

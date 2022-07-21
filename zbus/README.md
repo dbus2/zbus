@@ -132,12 +132,12 @@ to run its own internal executor.
 ### Special tokio support
 
 Since [`tokio`] is the most popular async runtime, zbus provides an easy way to enable tight
-integration with it without you having to worry about any of the above: Enabling the `tokio` feature
-and disabling the default `async-io` feature:
+integration with it without you having to worry about any of the above: Enabling the `tokio` feature:
 
 ```toml
 # Sample Cargo.toml snippet.
 [dependencies]
+# Also disable the default `async-io` feature to avoid unused dependencies.
 zbus = { version = "2", default-features = false, features = ["tokio"] }
 ```
 

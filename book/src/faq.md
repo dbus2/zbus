@@ -57,11 +57,12 @@ possible to use these APIs from interface methods. Moreover, by default zbus rel
 crate to communicate with the bus, which uses its own thread.
 
 Not to worry, though! You can enable tight integration between tokio and zbus by enabling `tokio`
-feature and disabling `async-io` feature:
+feature:
 
 ```toml
 # Sample Cargo.toml snippet.
 [dependencies]
+# Also disable the default `async-io` feature to avoid unused dependencies.
 zbus = { version = "2", default-features = false, features = ["tokio"] }
 ```
 
