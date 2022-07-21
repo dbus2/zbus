@@ -86,7 +86,7 @@ assert_impl_all!(Str<'_>: Send, Sync, Unpin);
 
 impl<'a> Str<'a> {
     /// An owned string without allocations
-    pub fn from_static(s: &'static str) -> Self {
+    pub const fn from_static(s: &'static str) -> Self {
         Str(Inner::Static(s))
     }
 
