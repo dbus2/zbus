@@ -7,6 +7,7 @@ use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet},
     convert::TryInto,
+    future::ready,
     io::{self, ErrorKind},
     ops::Deref,
     pin::Pin,
@@ -701,7 +702,9 @@ impl Connection {
         self.inner.object_server_dispatch_task.get_or_init(|| {
             trace!("starting ObjectServer task");
             let weak_conn = WeakConnection::from(self);
-            let mut stream = MessageStream::from(self.clone());
+            let mut stream = MessageStream::from(self.clone()).filter(|msg| {
+                ready(msg.as_ref().map(|m| m.message_type() == MessageType::MethodCall).unwrap_or_default())
+            });
 
             self.inner.executor.spawn(
                 async move {
