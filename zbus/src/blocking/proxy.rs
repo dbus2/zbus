@@ -56,7 +56,10 @@ use crate::fdo;
 pub struct Proxy<'a> {
     #[derivative(Debug = "ignore")]
     conn: Connection,
-    azync: crate::Proxy<'a>,
+    // Wrap it in an `Option` to ensure the proxy is dropped in a `block_on` call. This is needed
+    // for tokio because the proxy spawns a task in its `Drop` impl and that needs a runtime
+    // context in case of tokio.
+    azync: Option<crate::Proxy<'a>>,
 }
 
 assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
@@ -86,7 +89,7 @@ impl<'a> Proxy<'a> {
 
         Ok(Self {
             conn: conn.clone(),
-            azync: proxy,
+            azync: Some(proxy),
         })
     }
 
@@ -113,7 +116,10 @@ impl<'a> Proxy<'a> {
             interface,
         ))?;
 
-        Ok(Self { conn, azync: proxy })
+        Ok(Self {
+            conn,
+            azync: Some(proxy),
+        })
     }
 
     /// Get a reference to the associated connection.
@@ -123,24 +129,24 @@ impl<'a> Proxy<'a> {
 
     /// Get a reference to the destination service name.
     pub fn destination(&self) -> &BusName<'_> {
-        self.azync.destination()
+        self.inner().destination()
     }
 
     /// Get a reference to the object path.
     pub fn path(&self) -> &ObjectPath<'_> {
-        self.azync.path()
+        self.inner().path()
     }
 
     /// Get a reference to the interface.
     pub fn interface(&self) -> &InterfaceName<'_> {
-        self.azync.interface()
+        self.inner().interface()
     }
 
     /// Introspect the associated object, and return the XML description.
     ///
     /// See the [xml](xml/index.html) module for parsing the result.
     pub fn introspect(&self) -> fdo::Result<String> {
-        block_on(self.azync.introspect())
+        block_on(self.inner().introspect())
     }
 
     /// Get the cached value of the property `property_name`.
@@ -154,7 +160,7 @@ impl<'a> Proxy<'a> {
         T: TryFrom<OwnedValue>,
         T::Error: Into<Error>,
     {
-        self.azync.cached_property(property_name)
+        self.inner().cached_property(property_name)
     }
 
     /// Get the cached value of the property `property_name`.
@@ -165,7 +171,7 @@ impl<'a> Proxy<'a> {
         &'p self,
         property_name: &'p str,
     ) -> Option<impl Deref<Target = Value<'static>> + 'p> {
-        self.azync.cached_property_raw(property_name)
+        self.inner().cached_property_raw(property_name)
     }
 
     /// Get the property `property_name`.
@@ -177,7 +183,7 @@ impl<'a> Proxy<'a> {
         T: TryFrom<OwnedValue>,
         T::Error: Into<Error>,
     {
-        block_on(self.azync.get_property(property_name))
+        block_on(self.inner().get_property(property_name))
     }
 
     /// Set the property `property_name`.
@@ -187,7 +193,7 @@ impl<'a> Proxy<'a> {
     where
         T: Into<Value<'t>>,
     {
-        block_on(self.azync.set_property(property_name, value))
+        block_on(self.inner().set_property(property_name, value))
     }
 
     /// Call a method and return the reply.
@@ -203,7 +209,7 @@ impl<'a> Proxy<'a> {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        block_on(self.azync.call_method(method_name, body))
+        block_on(self.inner().call_method(method_name, body))
     }
 
     /// Call a method and return the reply body.
@@ -218,7 +224,7 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::DynamicType,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
-        block_on(self.azync.call(method_name, body))
+        block_on(self.inner().call(method_name, body))
     }
 
     /// Call a method without expecting a reply
@@ -230,7 +236,7 @@ impl<'a> Proxy<'a> {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        block_on(self.azync.call_noreply(method_name, body))
+        block_on(self.inner().call_noreply(method_name, body))
     }
 
     /// Create a stream for signal named `signal_name`.
@@ -245,7 +251,9 @@ impl<'a> Proxy<'a> {
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
     {
-        block_on(self.azync.receive_signal(signal_name)).map(SignalIterator)
+        block_on(self.inner().receive_signal(signal_name))
+            .map(Some)
+            .map(SignalIterator)
     }
 
     /// Create a stream for all signals emitted by this service.
@@ -256,7 +264,9 @@ impl<'a> Proxy<'a> {
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
     pub fn receive_all_signals(&self) -> Result<SignalIterator<'a>> {
-        block_on(self.azync.receive_all_signals()).map(SignalIterator)
+        block_on(self.inner().receive_all_signals())
+            .map(Some)
+            .map(SignalIterator)
     }
 
     /// Get an iterator to receive owner changed events.
@@ -274,7 +284,7 @@ impl<'a> Proxy<'a> {
         &self,
         name: &'name str,
     ) -> PropertyIterator<'a, T> {
-        PropertyIterator(block_on(self.azync.receive_property_changed(name)))
+        PropertyIterator(block_on(self.inner().receive_property_changed(name)))
     }
 
     /// Get an iterator to receive property changed events.
@@ -282,17 +292,17 @@ impl<'a> Proxy<'a> {
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
     pub fn receive_owner_changed(&self) -> Result<OwnerChangedIterator<'_>> {
-        block_on(self.azync.receive_owner_changed()).map(OwnerChangedIterator)
+        block_on(self.inner().receive_owner_changed()).map(OwnerChangedIterator)
     }
 
     /// Get a reference to the underlying async Proxy.
     pub fn inner(&self) -> &crate::Proxy<'a> {
-        &self.azync
+        self.azync.as_ref().expect("Inner proxy is `None`")
     }
 
     /// Get the underlying async Proxy, consuming `self`.
-    pub fn into_inner(self) -> crate::Proxy<'a> {
-        self.azync
+    pub fn into_inner(mut self) -> crate::Proxy<'a> {
+        self.azync.take().expect("Inner proxy is `None`")
     }
 }
 
@@ -306,8 +316,16 @@ impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
     fn from(proxy: crate::Proxy<'a>) -> Self {
         Self {
             conn: proxy.connection().clone().into(),
-            azync: proxy,
+            azync: Some(proxy),
         }
+    }
+}
+
+impl std::ops::Drop for Proxy<'_> {
+    fn drop(&mut self) {
+        block_on(async {
+            self.azync.take();
+        });
     }
 }
 
@@ -315,7 +333,7 @@ impl<'a> From<crate::Proxy<'a>> for Proxy<'a> {
 ///
 /// Use [`Proxy::receive_signal`] to create an instance of this type.
 #[derive(Debug)]
-pub struct SignalIterator<'a>(crate::SignalStream<'a>);
+pub struct SignalIterator<'a>(Option<crate::SignalStream<'a>>);
 
 assert_impl_all!(SignalIterator<'_>: Send, Sync, Unpin);
 
@@ -323,7 +341,15 @@ impl std::iter::Iterator for SignalIterator<'_> {
     type Item = Arc<Message>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        block_on(self.0.next())
+        block_on(self.0.as_mut().expect("`SignalStream` is `None`").next())
+    }
+}
+
+impl std::ops::Drop for SignalIterator<'_> {
+    fn drop(&mut self) {
+        block_on(async {
+            self.0.take();
+        });
     }
 }
 

@@ -27,13 +27,13 @@ impl<T, E> ResultAdapter for Result<T, E> {
     type Err = E;
 }
 
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 #[doc(hidden)]
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
     async_io::block_on(future)
 }
 
-#[cfg(not(feature = "async-io"))]
+#[cfg(feature = "tokio")]
 lazy_static::lazy_static! {
     static ref TOKIO_RT: tokio::runtime::Runtime = {
         tokio::runtime::Builder::new_current_thread()
@@ -44,13 +44,13 @@ lazy_static::lazy_static! {
     };
 }
 
-#[cfg(not(feature = "async-io"))]
+#[cfg(feature = "tokio")]
 #[doc(hidden)]
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
     TOKIO_RT.block_on(future)
 }
 
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 pub(crate) async fn run_in_thread<F, T>(f: F) -> T
 where
     F: FnOnce() -> T,

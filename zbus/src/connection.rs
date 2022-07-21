@@ -1,8 +1,5 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
-use async_executor::Executor;
-use async_lock::Mutex;
-use async_task::Task;
 use event_listener::EventListener;
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
@@ -29,10 +26,11 @@ use futures_sink::Sink;
 use futures_util::{sink::SinkExt, StreamExt, TryFutureExt};
 
 use crate::{
+    async_lock::Mutex,
     blocking, fdo,
     raw::{Connection as RawConnection, Socket},
-    Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Guid, Message,
-    MessageStream, MessageType, ObjectServer, Result,
+    Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, Message,
+    MessageStream, MessageType, ObjectServer, Result, Task,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -53,7 +51,7 @@ pub(crate) struct ConnectionInner {
     serial: AtomicU32,
 
     // Our executor
-    executor: Arc<Executor<'static>>,
+    executor: Executor<'static>,
 
     // Message receiver task
     #[allow(unused)]
@@ -200,7 +198,7 @@ impl MessageReceiverTask {
 /// ```
 ///# use zvariant::Type;
 ///#
-///# async_io::block_on(async {
+///# zbus::block_on(async {
 /// use zbus::Connection;
 ///
 /// let mut connection = Connection::session().await?;
@@ -226,7 +224,7 @@ impl MessageReceiverTask {
 /// Let's eavesdrop on the session bus 😈 using the [Monitor] interface:
 ///
 /// ```rust,no_run
-///# async_io::block_on(async {
+///# zbus::block_on(async {
 /// use futures_util::stream::TryStreamExt;
 /// use zbus::{Connection, MessageStream};
 ///
@@ -623,17 +621,15 @@ impl Connection {
     ///
     /// # Examples
     ///
-    /// Here is how one would typically run the zbus executor through tokio's single-threaded
+    /// Here is how one would typically run the zbus executor through async-std's single-threaded
     /// scheduler:
     ///
     /// ```
     /// use zbus::ConnectionBuilder;
-    /// use tokio::runtime;
+    /// use async_std::task::{block_on, spawn};
     ///
-    /// runtime::Builder::new_current_thread()
-    ///        .build()
-    ///        .unwrap()
-    ///        .block_on(async {
+    ///# #[cfg(not(feature = "tokio"))]
+    /// block_on(async {
     ///     let conn = ConnectionBuilder::session()
     ///         .unwrap()
     ///         .internal_executor(false)
@@ -642,7 +638,7 @@ impl Connection {
     ///         .unwrap();
     ///     {
     ///        let conn = conn.clone();
-    ///        tokio::task::spawn(async move {
+    ///        spawn(async move {
     ///            loop {
     ///                conn.executor().tick().await;
     ///            }
@@ -655,7 +651,9 @@ impl Connection {
     ///
     /// **Note**: zbus 2.1 added support for tight integration with tokio. This means, if you use
     /// zbus with tokio, you do not need to worry about this at all. All you need to do is enable
-    /// `tokio` feature and disable the (default) `async-io` feature in your `Cargo.toml`.
+    /// `tokio` feature. You should also disable the (default) `async-io` feature in your
+    /// `Cargo.toml` to drop avoid unused dependencies. Also note that **prior** to zbus 3.0,
+    /// disabling `async-io` was required to enable tight `tokio` integration.
     ///
     /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
     pub fn executor(&self) -> &Executor<'static> {
@@ -832,7 +830,7 @@ impl Connection {
     pub(crate) async fn new(
         auth: Authenticated<Box<dyn Socket>>,
         bus_connection: bool,
-        internal_executor: bool,
+        #[allow(unused)] internal_executor: bool,
     ) -> Result<Self> {
         let auth = auth.into_inner();
         #[cfg(unix)]
@@ -841,7 +839,7 @@ impl Connection {
         let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
         let msg_receiver = msg_receiver.deactivate();
         let (error_sender, error_receiver) = bounded(1);
-        let executor = Arc::new(Executor::new());
+        let executor = Executor::new();
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
         // Start the message receiver task.
@@ -868,20 +866,18 @@ impl Connection {
             }),
         };
 
+        #[cfg(not(feature = "tokio"))]
         if internal_executor {
-            let ticker_future = async move {
-                // Run as long as there is a task to run.
-                while !executor.is_empty() {
-                    executor.tick().await;
-                }
-            };
-            #[cfg(feature = "async-io")]
             std::thread::Builder::new()
                 .name("zbus::Connection executor".into())
-                .spawn(move || crate::utils::block_on(ticker_future))?;
-
-            #[cfg(not(feature = "async-io"))]
-            tokio::task::spawn(ticker_future);
+                .spawn(move || {
+                    crate::utils::block_on(async move {
+                        // Run as long as there is a task to run.
+                        while !executor.is_empty() {
+                            executor.tick().await;
+                        }
+                    })
+                })?;
         }
 
         if !bus_connection {
@@ -1033,7 +1029,7 @@ mod tests {
     use ntest::timeout;
     use test_log::test;
 
-    #[cfg(all(unix, feature = "async-io"))]
+    #[cfg(all(unix, not(feature = "tokio")))]
     use crate::AuthMechanism;
 
     use super::*;
@@ -1074,14 +1070,14 @@ mod tests {
     }
 
     // FIXME: Make it work with tokio as well.
-    #[cfg(feature = "async-io")]
+    #[cfg(not(feature = "tokio"))]
     #[test]
     #[timeout(15000)]
     fn tcp_p2p() {
         crate::utils::block_on(test_tcp_p2p()).unwrap();
     }
 
-    #[cfg(feature = "async-io")]
+    #[cfg(not(feature = "tokio"))]
     async fn test_tcp_p2p() -> Result<()> {
         let guid = Guid::generate();
 
@@ -1105,20 +1101,20 @@ mod tests {
         test_p2p(server, client).await
     }
 
-    #[cfg(any(unix, feature = "async-io"))]
+    #[cfg(unix)]
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
         crate::utils::block_on(test_unix_p2p()).unwrap();
     }
 
-    #[cfg(any(unix, feature = "async-io"))]
+    #[cfg(unix)]
     async fn test_unix_p2p() -> Result<()> {
-        #[cfg(all(unix, feature = "async-io"))]
+        #[cfg(not(feature = "tokio"))]
         use std::os::unix::net::UnixStream;
-        #[cfg(not(feature = "async-io"))]
+        #[cfg(feature = "tokio")]
         use tokio::net::UnixStream;
-        #[cfg(all(windows, feature = "async-io"))]
+        #[cfg(all(windows, not(feature = "tokio")))]
         use uds_windows::UnixStream;
 
         let guid = Guid::generate();
