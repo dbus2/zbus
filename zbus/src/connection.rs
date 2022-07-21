@@ -1,6 +1,5 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
 use async_channel::{bounded, Receiver, Sender};
-use async_lock::Mutex;
 use event_listener::EventListener;
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
@@ -27,6 +26,7 @@ use futures_sink::Sink;
 use futures_util::{sink::SinkExt, StreamExt, TryFutureExt};
 
 use crate::{
+    async_lock::Mutex,
     blocking, fdo,
     raw::{Connection as RawConnection, Socket},
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, Message,

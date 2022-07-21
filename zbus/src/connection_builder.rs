@@ -1,6 +1,5 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
-use async_lock::RwLock;
 use static_assertions::assert_impl_all;
 #[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
@@ -22,6 +21,7 @@ use zvariant::ObjectPath;
 
 use crate::{
     address::{self, Address},
+    async_lock::RwLock,
     names::{InterfaceName, WellKnownName},
     raw::Socket,
     AuthMechanism, Authenticated, Connection, Error, Guid, Interface, Result,

@@ -78,6 +78,7 @@ mod interface;
 pub use interface::*;
 mod executor;
 pub use executor::*;
+mod async_lock;
 
 mod utils;
 pub use utils::*;
