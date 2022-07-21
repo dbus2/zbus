@@ -16,8 +16,7 @@ use crate::{
     async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard},
     fdo,
     fdo::{Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
-    Connection, DispatchResult, Error, Interface, Message, MessageType, Result, SignalContext,
-    WeakConnection,
+    Connection, DispatchResult, Error, Interface, Message, Result, SignalContext, WeakConnection,
 };
 
 /// Opaque structure that derefs to an `Interface` type.
@@ -715,15 +714,11 @@ impl ObjectServer {
     /// Returns an error if the message is malformed, true if it's handled, false otherwise.
     #[instrument(skip(self))]
     pub(crate) async fn dispatch_message(&self, msg: &Message) -> Result<bool> {
-        match msg.message_type() {
-            MessageType::MethodCall => {
-                let conn = self.connection();
-                self.dispatch_method_call(&conn, msg).await?;
-                trace!("Handled: {}", msg);
-                Ok(true)
-            }
-            _ => Ok(false),
-        }
+        let conn = self.connection();
+        self.dispatch_method_call(&conn, msg).await?;
+        trace!("Handled: {}", msg);
+
+        Ok(true)
     }
 
     pub(crate) fn connection(&self) -> Connection {
