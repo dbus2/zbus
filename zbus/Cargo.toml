@@ -3,6 +3,7 @@ name = "zbus"
 version = "3.0.0"
 authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
 edition = "2018"
+rust-version = "1.60"
 
 description = "API for D-Bus communication"
 repository = "https://gitlab.freedesktop.org/dbus/zbus/"
