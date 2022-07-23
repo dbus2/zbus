@@ -10,6 +10,10 @@ variables:
   UPSTREAM_BRANCH: 'main'
   RUST_BACKTRACE: 'full'
 
+  # If the MSRV needs to be updated, make sure to also change the
+  # rust-version fields in packages' Cargo.toml files.
+  MSRV: '1.60'
+
   ###
   # IMPORTANT
   # These are the version tags for the docker images the CI runs against.
@@ -33,7 +37,7 @@ stages:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: '2022-07-17.1'
+    FDO_DISTRIBUTION_TAG: '2022-07-23.2'
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
@@ -51,7 +55,7 @@ stages:
       python3-setuptools
       gcc-mingw-w64-x86-64
     FDO_DISTRIBUTION_EXEC: >-
-      gitlab/install-rust.sh stable &&
+      gitlab/install-rust.sh stable $MSRV &&
       pip3 install lcov_cobertura &&
       pip3 install codespell
   before_script:
@@ -109,6 +113,13 @@ check:
     - cargo clippy -- -D warnings
     - cargo audit
     - codespell
+
+check msrv:
+  extends: .debian_img
+  stage: "lint"
+  script:
+    - rustup override set $MSRV
+    - cargo check
 
 .cargo_test_var: &cargo_test
     - rustc --version
