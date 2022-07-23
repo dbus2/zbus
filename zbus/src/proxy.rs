@@ -1,5 +1,4 @@
 use async_broadcast::Receiver;
-use async_channel::bounded;
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
 use futures_util::{future::Either, stream::FilterMap};
@@ -20,6 +19,7 @@ use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName
 use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 
 use crate::{
+    async_channel::channel,
     fdo::{self, IntrospectableProxy, PropertiesProxy},
     CacheProperties, Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder,
     Result, Task,
@@ -34,7 +34,7 @@ struct PropertyValue {
 #[derive(Debug)]
 pub(crate) struct PropertiesCache {
     values: RwLock<HashMap<String, PropertyValue>>,
-    ready: async_channel::Receiver<Result<()>>,
+    ready: crate::async_channel::Receiver<Result<()>>,
 }
 
 /// A client-side interface proxy.
@@ -307,10 +307,7 @@ impl PropertiesCache {
         // Only one caller will actually get the result; all other callers see a closed channel,
         // but that indicates the cache is ready (and on error, the cache will be empty, which just
         // means we bypass it)
-        match self.ready.recv().await {
-            Ok(res) => res,
-            Err(_closed) => Ok(()),
-        }
+        self.ready.recv().await.unwrap_or(Ok(()))
     }
 }
 
@@ -514,7 +511,7 @@ impl<'a> Proxy<'a> {
         };
         let (cache, _) = &cache.get_or_init(|| {
             let proxy = self.owned_properties_proxy();
-            let (send, recv) = bounded(1);
+            let (send, recv) = channel(1);
 
             let cache = Arc::new(PropertiesCache {
                 values: Default::default(),
@@ -583,11 +580,11 @@ impl<'a> Proxy<'a> {
                                 );
                             });
                             let _ = send.send(result).await;
-                            send.close();
+                            send.close().await;
                         }
                         Some(Either::Right(Err(e))) => {
                             let _ = send.send(Err(e)).await;
-                            send.close();
+                            send.close().await;
                         }
                         None => return,
                     }
@@ -1213,7 +1210,7 @@ mod tests {
             .build()
             .await?;
 
-        let (tx, rx) = bounded(1);
+        let (tx, rx) = channel(1);
 
         let handle = {
             let tx = tx.clone();
@@ -1253,7 +1250,7 @@ mod tests {
         let signal_fut = async {
             let mut signal_stream = test_proxy.receive_my_signal().await.unwrap();
 
-            tx.send(()).await.unwrap();
+            assert!(tx.send(()).await.is_none());
 
             while let Some(_signal) = signal_stream.next().await {}
         };
@@ -1261,7 +1258,7 @@ mod tests {
         let prop_fut = async {
             rx.recv().await.unwrap();
             let _prop_stream = test_prop_proxy.receive_properties_changed().await.unwrap();
-            rx.close();
+            rx.close().await;
         };
 
         futures_util::pin_mut!(signal_fut);
