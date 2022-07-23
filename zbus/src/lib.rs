@@ -78,6 +78,8 @@ mod interface;
 pub use interface::*;
 mod executor;
 pub use executor::*;
+#[doc(hidden)]
+pub mod async_channel;
 mod async_lock;
 
 mod utils;

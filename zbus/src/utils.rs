@@ -57,7 +57,7 @@ where
     F: Send + 'static,
     T: Send + 'static,
 {
-    let (s, r) = async_channel::bounded(1);
+    let (s, r) = crate::async_channel::channel(1);
 
     std::thread::spawn(move || {
         let res = f();
