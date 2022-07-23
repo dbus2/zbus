@@ -1,5 +1,4 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
-use async_channel::{bounded, Receiver, Sender};
 use event_listener::EventListener;
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
@@ -27,6 +26,7 @@ use futures_sink::Sink;
 use futures_util::{sink::SinkExt, StreamExt, TryFutureExt};
 
 use crate::{
+    async_channel::{channel, Receiver, Sender},
     async_lock::Mutex,
     blocking, fdo,
     raw::{Connection as RawConnection, Socket},
@@ -112,15 +112,9 @@ impl MessageReceiverTask {
                 Ok(msg) => msg,
                 Err(e) => {
                     trace!("Error reading from the socket: {:?}", e);
-                    if let Err(e) = self.error_sender.send(e).await {
-                        // This happens if the channel is being dropped, which only happens when the
-                        // receive_msg task is running at the time the last Connection is dropped.
-                        // So it's unlikely that it'd be interesting to the user. Hence debug not
-                        // warn.
-                        debug!("Error sending error: {:?}", e);
-                    }
+                    self.error_sender.send(e).await;
                     self.msg_sender.close();
-                    self.error_sender.close();
+                    self.error_sender.close().await;
                     trace!("Socket reading task stopped");
                     return;
                 }
@@ -841,7 +835,7 @@ impl Connection {
 
         let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
         let msg_receiver = msg_receiver.deactivate();
-        let (error_sender, error_receiver) = bounded(1);
+        let (error_sender, error_receiver) = channel(1);
         let executor = Executor::new();
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
