@@ -120,6 +120,7 @@ check msrv:
   script:
     - rustup override set $MSRV
     - cargo check
+    - cargo check --all-features
 
 .cargo_test_var: &cargo_test
     - rustc --version
