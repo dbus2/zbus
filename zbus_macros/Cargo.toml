@@ -4,6 +4,7 @@ name = "zbus_macros"
 version = "3.0.0"
 authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
 edition = "2018"
+rust-version = "1.60"
 
 description = "proc-macros for zbus"
 repository = "https://gitlab.freedesktop.org/dbus/zbus/"
