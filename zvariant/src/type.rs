@@ -181,15 +181,23 @@ impl Type for () {
     }
 }
 
-impl<T> Type for &T
-where
-    T: ?Sized + Type,
-{
-    #[inline]
-    fn signature() -> Signature<'static> {
-        T::signature()
-    }
+macro_rules! deref_impl {
+    (
+        $type:ty,
+        <$($desc:tt)+
+    ) => {
+        impl <$($desc)+ {
+            #[inline]
+            fn signature() -> Signature<'static> {
+                <$type>::signature()
+            }
+        }
+    };
 }
+
+deref_impl!(T, <T: ?Sized + Type> Type for &T);
+deref_impl!(T, <T: ?Sized + Type> Type for &mut T);
+deref_impl!(T, <T: ?Sized + Type + ToOwned> Type for Cow<'_, T>);
 
 #[cfg(feature = "gvariant")]
 impl<T> Type for Option<T>
@@ -295,16 +303,6 @@ macro_rules! map_impl {
 
 map_impl!(BTreeMap<K: Ord, V>);
 map_impl!(HashMap<K: Eq + Hash, V, H: BuildHasher>);
-
-impl<T> Type for Cow<'_, T>
-where
-    T: ?Sized + Type + ToOwned,
-{
-    #[inline]
-    fn signature() -> Signature<'static> {
-        T::signature()
-    }
-}
 
 impl Type for Ipv4Addr {
     #[inline]
