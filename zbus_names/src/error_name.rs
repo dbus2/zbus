@@ -38,7 +38,9 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [en]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
+)]
 pub struct ErrorName<'name>(Str<'name>);
 
 assert_impl_all!(ErrorName<'_>: Send, Sync, Unpin);
@@ -247,7 +249,9 @@ impl<'name> NoneValue for ErrorName<'name> {
 }
 
 /// Owned sibling of [`ErrorName`].
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
+)]
 pub struct OwnedErrorName(#[serde(borrow)] ErrorName<'static>);
 
 assert_impl_all!(OwnedErrorName: Send, Sync, Unpin);
