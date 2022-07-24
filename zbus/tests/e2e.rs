@@ -1,4 +1,4 @@
-#[allow(clippy::blacklisted_name)]
+#![allow(clippy::blacklisted_name)]
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 use std::{collections::HashMap, convert::TryInto};

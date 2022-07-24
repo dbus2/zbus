@@ -76,11 +76,8 @@ mod signal_context;
 pub use signal_context::*;
 mod interface;
 pub use interface::*;
-mod executor;
-pub use executor::*;
-#[doc(hidden)]
-pub mod async_channel;
-mod async_lock;
+mod abstractions;
+pub use abstractions::*;
 
 mod utils;
 pub use utils::*;
