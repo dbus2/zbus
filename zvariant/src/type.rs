@@ -4,6 +4,8 @@ use std::{
     convert::TryInto,
     marker::PhantomData,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    rc::Rc,
+    sync::{Arc, Mutex, RwLock},
 };
 
 /// Trait implemented by all serializable types.
@@ -198,6 +200,11 @@ macro_rules! deref_impl {
 deref_impl!(T, <T: ?Sized + Type> Type for &T);
 deref_impl!(T, <T: ?Sized + Type> Type for &mut T);
 deref_impl!(T, <T: ?Sized + Type + ToOwned> Type for Cow<'_, T>);
+deref_impl!(T, <T: ?Sized + Type> Type for Arc<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for Mutex<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for RwLock<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for Box<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for Rc<T>);
 
 #[cfg(feature = "gvariant")]
 impl<T> Type for Option<T>
