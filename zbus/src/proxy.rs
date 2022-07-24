@@ -148,8 +148,7 @@ impl<'a, T> PropertyChanged<'a, T> {
             type Target = Value<'static>;
 
             fn deref(&self) -> &Self::Target {
-                &**self
-                    .values
+                self.values
                     .get(self.name)
                     .expect("PropertyStream with no corresponding property")
                     .value
