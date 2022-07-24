@@ -33,7 +33,9 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [ubn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
+)]
 pub struct UniqueName<'name>(Str<'name>);
 
 assert_impl_all!(UniqueName<'_>: Send, Sync, Unpin);
@@ -246,7 +248,9 @@ impl<'name> NoneValue for UniqueName<'name> {
 }
 
 /// Owned sibling of [`UniqueName`].
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
+)]
 pub struct OwnedUniqueName(#[serde(borrow)] UniqueName<'static>);
 
 assert_impl_all!(OwnedUniqueName: Send, Sync, Unpin);

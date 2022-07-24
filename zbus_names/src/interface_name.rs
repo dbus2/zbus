@@ -36,7 +36,9 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [in]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
+)]
 pub struct InterfaceName<'name>(Str<'name>);
 
 assert_impl_all!(InterfaceName<'_>: Send, Sync, Unpin);
@@ -245,7 +247,9 @@ impl<'name> NoneValue for InterfaceName<'name> {
 }
 
 /// Owned sibling of [`InterfaceName`].
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
+)]
 pub struct OwnedInterfaceName(#[serde(borrow)] InterfaceName<'static>);
 
 assert_impl_all!(OwnedInterfaceName: Send, Sync, Unpin);
