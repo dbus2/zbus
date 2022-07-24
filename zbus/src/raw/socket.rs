@@ -141,11 +141,11 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
 
 impl Socket for Box<dyn Socket> {
     fn can_pass_unix_fd(&self) -> bool {
-        (&**self).can_pass_unix_fd()
+        (**self).can_pass_unix_fd()
     }
 
     fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        (&mut **self).poll_recvmsg(cx, buf)
+        (**self).poll_recvmsg(cx, buf)
     }
 
     fn poll_sendmsg(
@@ -154,7 +154,7 @@ impl Socket for Box<dyn Socket> {
         buffer: &[u8],
         #[cfg(unix)] fds: &[RawFd],
     ) -> Poll<io::Result<usize>> {
-        (&mut **self).poll_sendmsg(
+        (**self).poll_sendmsg(
             cx,
             buffer,
             #[cfg(unix)]
@@ -163,12 +163,12 @@ impl Socket for Box<dyn Socket> {
     }
 
     fn close(&self) -> io::Result<()> {
-        (&**self).close()
+        (**self).close()
     }
 
     #[cfg(unix)]
     fn as_raw_fd(&self) -> RawFd {
-        (&**self).as_raw_fd()
+        (**self).as_raw_fd()
     }
 
     #[cfg(windows)]
@@ -339,7 +339,7 @@ impl Socket for Async<TcpStream> {
         let fds = vec![];
 
         loop {
-            match (&mut *self).get_mut().read(buf) {
+            match (*self).get_mut().read(buf) {
                 Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
                 Err(e) => return Poll::Ready(Err(e)),
                 Ok(len) => {
@@ -369,7 +369,7 @@ impl Socket for Async<TcpStream> {
         }
 
         loop {
-            match (&mut *self).get_mut().write(buf) {
+            match (*self).get_mut().write(buf) {
                 Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
                 res => return Poll::Ready(res),
             }
