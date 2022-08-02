@@ -239,15 +239,9 @@ impl<'a> ConnectionBuilder<'a> {
             #[cfg(all(not(unix), feature = "tokio"))]
             Target::UnixStream(_) => return Err(Error::Unsupported),
             #[cfg(not(feature = "tokio"))]
-            Target::TcpStream(stream) => (
-                Some(stream.as_raw_fd()),
-                Box::new(Async::new(stream)?) as Box<dyn Socket>,
-            ),
+            Target::TcpStream(stream) => (None, Box::new(Async::new(stream)?) as Box<dyn Socket>),
             #[cfg(feature = "tokio")]
-            Target::TcpStream(stream) => (
-                Some(stream.as_raw_fd()),
-                Box::new(stream) as Box<dyn Socket>,
-            ),
+            Target::TcpStream(stream) => (None, Box::new(stream) as Box<dyn Socket>),
             Target::Address(address) => match address.connect().await? {
                 #[cfg(any(unix, not(feature = "tokio")))]
                 address::Stream::Unix(stream) => (
@@ -257,10 +251,7 @@ impl<'a> ConnectionBuilder<'a> {
                     None,
                     Box::new(stream) as Box<dyn Socket>,
                 ),
-                address::Stream::Tcp(stream) => (
-                    Some(stream.as_raw_fd()),
-                    Box::new(stream) as Box<dyn Socket>,
-                ),
+                address::Stream::Tcp(stream) => (None, Box::new(stream) as Box<dyn Socket>),
             },
             Target::Socket(stream) => (None, stream),
         };
