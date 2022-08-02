@@ -71,7 +71,7 @@ where
 
     /// Create a server-side `Authenticated` for the given `socket`.
     ///
-    /// The function takes `client_uid` on Unix only.
+    /// The function takes `client_uid` on Unix only. On Windows, it takes `client_sid` instead.
     pub async fn server(
         socket: S,
         guid: Guid,
