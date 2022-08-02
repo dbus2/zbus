@@ -1,5 +1,7 @@
 use futures_core::ready;
 
+#[cfg(unix)]
+use std::os::unix::prelude::RawFd;
 use std::{
     collections::VecDeque,
     fmt::Debug,
@@ -61,9 +63,18 @@ where
     S: Socket + Unpin,
 {
     /// Create a client-side `Authenticated` for the given `socket`.
-    pub async fn client(socket: S, mechanisms: Option<VecDeque<AuthMechanism>>) -> Result<Self> {
+    pub async fn client(
+        socket: S,
+        #[cfg(unix)] fd: Option<RawFd>,
+        mechanisms: Option<VecDeque<AuthMechanism>>,
+    ) -> Result<Self> {
         Handshake {
-            handshake: Some(raw::ClientHandshake::new(socket, mechanisms)),
+            handshake: Some(raw::ClientHandshake::new(
+                socket,
+                #[cfg(unix)]
+                fd,
+                mechanisms,
+            )),
             phantom: PhantomData,
         }
         .await
@@ -71,11 +82,11 @@ where
 
     /// Create a server-side `Authenticated` for the given `socket`.
     ///
-    /// The function takes `client_uid` on Unix only.
+    /// The function takes `client_uid` on Unix only. On Windows, it takes `client_sid` instead.
     pub async fn server(
         socket: S,
         guid: Guid,
-        #[cfg(unix)] client_uid: u32,
+        #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         auth_mechanisms: Option<VecDeque<AuthMechanism>>,
     ) -> Result<Self> {
@@ -133,7 +144,7 @@ where
 mod tests {
     use async_io::Async;
     use nix::unistd::Uid;
-    use std::os::unix::net::UnixStream;
+    use std::os::unix::{net::UnixStream, prelude::AsRawFd};
     use test_log::test;
 
     use super::*;
@@ -150,11 +161,12 @@ mod tests {
         let (p0, p1) = UnixStream::pair()?;
 
         // initialize both handshakes
-        let client = Authenticated::client(Async::new(p0)?, None);
+        let fd = Some(p0.as_raw_fd());
+        let client = Authenticated::client(Async::new(p0)?, fd, None);
         let server = Authenticated::server(
             Async::new(p1)?,
             Guid::generate(),
-            Uid::current().into(),
+            Some(Uid::current().into()),
             None,
         );
 
