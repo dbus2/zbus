@@ -21,7 +21,7 @@ use nix::{
     sys::socket::{recvmsg, sendmsg, ControlMessage, ControlMessageOwned, MsgFlags, UnixAddr},
 };
 #[cfg(unix)]
-use std::os::unix::io::{FromRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
@@ -126,12 +126,6 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
     /// After this call, it is valid for all reading and writing operations to fail.
     fn close(&self) -> io::Result<()>;
 
-    /// Return the raw file descriptor backing this transport, if any.
-    ///
-    /// This is used to back some internal platform-specific functions.
-    #[cfg(unix)]
-    fn as_raw_fd(&self) -> RawFd;
-
     /// Return the peer process SID, if any.
     #[cfg(windows)]
     fn peer_sid(&self) -> Option<String> {
@@ -164,11 +158,6 @@ impl Socket for Box<dyn Socket> {
 
     fn close(&self) -> io::Result<()> {
         (**self).close()
-    }
-
-    #[cfg(unix)]
-    fn as_raw_fd(&self) -> RawFd {
-        (**self).as_raw_fd()
     }
 
     #[cfg(windows)]
@@ -219,11 +208,6 @@ impl Socket for Async<UnixStream> {
     fn close(&self) -> io::Result<()> {
         self.get_ref().shutdown(std::net::Shutdown::Both)
     }
-
-    fn as_raw_fd(&self) -> RawFd {
-        // This causes a name collision if imported
-        std::os::unix::io::AsRawFd::as_raw_fd(self.get_ref())
-    }
 }
 
 #[cfg(all(unix, feature = "tokio"))]
@@ -272,11 +256,6 @@ impl Socket for tokio::net::UnixStream {
 
     fn close(&self) -> io::Result<()> {
         Ok(())
-    }
-
-    fn as_raw_fd(&self) -> RawFd {
-        // This causes a name collision if imported
-        std::os::unix::io::AsRawFd::as_raw_fd(self)
     }
 }
 
@@ -381,12 +360,6 @@ impl Socket for Async<TcpStream> {
         self.get_ref().shutdown(std::net::Shutdown::Both)
     }
 
-    #[cfg(unix)]
-    fn as_raw_fd(&self) -> RawFd {
-        // This causes a name collision if imported
-        std::os::unix::io::AsRawFd::as_raw_fd(self.get_ref())
-    }
-
     #[cfg(windows)]
     fn peer_sid(&self) -> Option<String> {
         use crate::win32::{tcp_stream_get_peer_pid, ProcessToken};
@@ -452,12 +425,6 @@ impl Socket for tokio::net::TcpStream {
 
     fn close(&self) -> io::Result<()> {
         Ok(())
-    }
-
-    #[cfg(unix)]
-    fn as_raw_fd(&self) -> RawFd {
-        // This causes a name collision if imported
-        std::os::unix::io::AsRawFd::as_raw_fd(self)
     }
 
     #[cfg(windows)]

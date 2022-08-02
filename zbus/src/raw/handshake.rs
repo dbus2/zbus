@@ -1,5 +1,7 @@
 #[cfg(unix)]
 use nix::unistd::Uid;
+#[cfg(unix)]
+use std::os::unix::prelude::RawFd;
 use std::{
     collections::VecDeque,
     fmt,
@@ -73,6 +75,9 @@ pub struct ClientHandshake<S> {
     send_buffer: Vec<u8>,
     step: ClientHandshakeStep,
     server_guid: Option<Guid>,
+    #[cfg(unix)]
+    #[allow(unused)]
+    fd: Option<RawFd>,
     cap_unix_fd: bool,
     // the current AUTH mechanism is front, ordered by priority
     mechanisms: VecDeque<AuthMechanism>,
@@ -118,7 +123,11 @@ pub trait Handshake<S> {
 
 impl<S: Socket> ClientHandshake<S> {
     /// Start a handshake on this client socket
-    pub fn new(socket: S, mechanisms: Option<VecDeque<AuthMechanism>>) -> ClientHandshake<S> {
+    pub fn new(
+        socket: S,
+        #[cfg(unix)] fd: Option<RawFd>,
+        mechanisms: Option<VecDeque<AuthMechanism>>,
+    ) -> ClientHandshake<S> {
         let mechanisms = mechanisms.unwrap_or_else(|| {
             let mut mechanisms = VecDeque::new();
             mechanisms.push_back(AuthMechanism::External);
@@ -129,6 +138,8 @@ impl<S: Socket> ClientHandshake<S> {
 
         ClientHandshake {
             socket,
+            #[cfg(unix)]
+            fd,
             recv_buffer: Vec::new(),
             send_buffer: Vec::new(),
             step: ClientHandshakeStep::Init,
@@ -396,12 +407,20 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
             if self.step == Init {
                 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 
+                let fd = match self.fd {
+                    Some(fd) => fd,
+                    None => {
+                        // Seems like it's a non Unixstream socket, let's just continue.
+                        self.step = next_step;
+                        continue;
+                    }
+                };
+
                 // Steal the leading null byte from the buffer.
                 let zero = &[self.send_buffer.drain(0..1).next().unwrap()];
                 let iov = [std::io::IoSlice::new(zero)];
-
                 if sendmsg::<()>(
-                    self.socket.as_raw_fd(),
+                    fd,
                     &iov,
                     &[ControlMessage::ScmCreds],
                     MsgFlags::empty(),
@@ -471,7 +490,7 @@ pub struct ServerHandshake<S> {
     #[cfg(unix)]
     cap_unix_fd: bool,
     #[cfg(unix)]
-    client_uid: u32,
+    client_uid: Option<u32>,
     #[cfg(windows)]
     client_sid: Option<String>,
     mechanisms: VecDeque<AuthMechanism>,
@@ -481,13 +500,13 @@ impl<S: Socket> ServerHandshake<S> {
     pub fn new(
         socket: S,
         guid: Guid,
-        #[cfg(unix)] client_uid: u32,
+        #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
     ) -> Result<ServerHandshake<S>> {
         let can_external = (|| {
             #[cfg(unix)]
-            return true;
+            return client_uid.is_some();
 
             #[cfg(windows)]
             return client_sid.is_some();
@@ -617,7 +636,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                                                 Error::Handshake(format!("Invalid UID: {}", e))
                                             })?;
                                             // Safe to unwrap since we checked earlier external & UID
-                                            uid == self.client_uid
+                                            uid == self.client_uid.unwrap()
                                         }
                                         #[cfg(windows)]
                                         {
@@ -836,6 +855,7 @@ mod tests {
     use futures_util::future::poll_fn;
     #[cfg(not(feature = "tokio"))]
     use std::os::unix::net::UnixStream;
+    use std::os::unix::prelude::AsRawFd;
     use test_log::test;
     #[cfg(feature = "tokio")]
     use tokio::net::UnixStream;
@@ -860,9 +880,10 @@ mod tests {
                 async_io::Async::new(p1).unwrap(),
             )
         };
-        let mut client = ClientHandshake::new(p0, None);
+        let fd = p0.as_raw_fd();
+        let mut client = ClientHandshake::new(p0, Some(fd), None);
         let mut server =
-            ServerHandshake::new(p1, Guid::generate(), Uid::current().into(), None).unwrap();
+            ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
 
         // proceed to the handshakes
         let mut client_done = false;
