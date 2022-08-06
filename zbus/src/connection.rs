@@ -151,7 +151,7 @@ impl MessageReceiverTask {
 ///
 /// `Connection` implements [`Clone`] and cloning it is a very cheap operation, as the underlying
 /// data is not cloned. This makes it very convenient to share the connection between different
-/// parts of your code. `Connection` also implements [`std::marker::Sync`] and[`std::marker::Send`]
+/// parts of your code. `Connection` also implements [`std::marker::Sync`] and [`std::marker::Send`]
 /// so you can send and share a connection instance across threads as well.
 ///
 /// `Connection` keeps an internal queue of incoming message. The maximum capacity of this queue
