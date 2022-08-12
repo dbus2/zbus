@@ -904,7 +904,11 @@ impl<'a> Proxy<'a> {
 type OwnerChangedStreamFilter<'a> = FilterMap<
     fdo::NameOwnerChangedStream<'a>,
     Ready<Option<Option<UniqueName<'static>>>>,
-    Box<dyn FnMut(fdo::NameOwnerChanged) -> Ready<Option<Option<UniqueName<'static>>>>>,
+    Box<
+        dyn FnMut(fdo::NameOwnerChanged) -> Ready<Option<Option<UniqueName<'static>>>>
+            + Send
+            + Sync,
+    >,
 >;
 
 /// A [`stream::Stream`] implementation that yields `UniqueName` when the bus owner changes.
@@ -914,6 +918,8 @@ pub struct OwnerChangedStream<'a> {
     filter_stream: OwnerChangedStreamFilter<'a>,
     name: BusName<'a>,
 }
+
+assert_impl_all!(OwnerChangedStream<'_>: Send, Sync);
 
 impl OwnerChangedStream<'_> {
     /// The bus name being tracked.
