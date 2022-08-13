@@ -1,5 +1,5 @@
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
@@ -40,6 +40,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
 
     let zv = zvariant_path();
     let mut entries = quote! {};
+    let mut num_entries: usize = 0;
 
     for f in &data.fields {
         let name = &f.ident;
@@ -67,11 +68,13 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
         };
 
         entries.extend(e);
+        num_entries += 1;
     }
 
     let generics = input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    let num_entries = num_entries.to_token_stream();
     Ok(quote! {
         impl #impl_generics #zv::export::serde::ser::Serialize for #name #ty_generics
         #where_clause
@@ -83,7 +86,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
                 use #zv::export::serde::ser::SerializeMap;
 
                 // zbus doesn't care about number of entries (it would need bytes instead)
-                let mut map = serializer.serialize_map(::std::option::Option::None)?;
+                let mut map = serializer.serialize_map(::std::option::Option::Some(#num_entries))?;
                 #entries
                 map.end()
             }
