@@ -907,7 +907,8 @@ type OwnerChangedStreamFilter<'a> = FilterMap<
     Box<
         dyn FnMut(fdo::NameOwnerChanged) -> Ready<Option<Option<UniqueName<'static>>>>
             + Send
-            + Sync,
+            + Sync
+            + Unpin,
     >,
 >;
 
@@ -919,7 +920,7 @@ pub struct OwnerChangedStream<'a> {
     name: BusName<'a>,
 }
 
-assert_impl_all!(OwnerChangedStream<'_>: Send, Sync);
+assert_impl_all!(OwnerChangedStream<'_>: Send, Sync, Unpin);
 
 impl OwnerChangedStream<'_> {
     /// The bus name being tracked.
