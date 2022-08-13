@@ -386,7 +386,7 @@ impl<'a, T> PropertyChanged<'a, T> {
     // If the notification signal contained the new value, it has been cached already and this call
     // will return that value. Otherwise (i-e invalidated property), a D-Bus call is made to fetch
     // and cache the new value.
-    pub fn get_raw<'p>(&'p self) -> Result<impl Deref<Target = Value<'static>> + 'p> {
+    pub fn get_raw(&self) -> Result<impl Deref<Target = Value<'static>> + '_> {
         block_on(self.0.get_raw())
     }
 }
