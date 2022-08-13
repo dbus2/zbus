@@ -279,9 +279,9 @@ impl<'a> MessageBuilder<'a> {
         )
     }
 
-    fn build_generic<'b, WriteFunc>(
+    fn build_generic<WriteFunc>(
         self,
-        mut signature: Signature<'b>,
+        mut signature: Signature<'_>,
         body_len: usize,
         write_body: WriteFunc,
         #[cfg(unix)] fds_len: usize,
