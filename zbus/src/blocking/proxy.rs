@@ -230,7 +230,7 @@ impl<'a> Proxy<'a> {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        block_on(self.azync.call_method_with_flags(method_name, body, flags))
+        block_on(self.inner().call_method_with_flags(method_name, body, flags))
     }
 
     /// Call a method and return the reply body.
@@ -265,7 +265,7 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::DynamicType,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
-        block_on(self.azync.call_with_flags(method_name, body, flags))
+        block_on(self.inner().call_with_flags(method_name, body, flags))
     }
 
     /// Call a method without expecting a reply
@@ -295,7 +295,7 @@ impl<'a> Proxy<'a> {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        block_on(self.azync.call_noreply_with_flags(method_name, body, flags))
+        block_on(self.inner().call_noreply_with_flags(method_name, body, flags))
     }
 
     /// Create a stream for signal named `signal_name`.

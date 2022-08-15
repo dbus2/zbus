@@ -31,7 +31,7 @@ use crate::{
     blocking, fdo,
     raw::{Connection as RawConnection, Socket},
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, Message,
-    MessageStream, MessageType, ObjectServer, Result, Task,
+    MessageBuilder, MessageFlags, MessageStream, MessageType, ObjectServer, Result, Task,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;

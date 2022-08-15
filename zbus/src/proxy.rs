@@ -21,7 +21,7 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 use crate::{
     async_channel::channel,
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    CacheProperties, Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder,
+    CacheProperties, Connection, Error, Message, MessageBuilder, MessageFlags, MessageSequence, ProxyBuilder,
     Result, Task,
 };
 
