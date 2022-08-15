@@ -512,20 +512,23 @@ impl FromStr for Address {
             .ok_or_else(|| Error::Address("address has no colon".to_owned()))?;
         let transport = &address[..col];
         let mut options = HashMap::new();
-        for kv in address[col + 1..].split(',') {
-            let (k, v) = match kv.find('=') {
-                Some(eq) => (&kv[..eq], &kv[eq + 1..]),
-                None => {
-                    return Err(Error::Address(
-                        "missing = when parsing key/value".to_owned(),
-                    ))
+
+        if address.len() > col + 1 {
+            for kv in address[col + 1..].split(',') {
+                let (k, v) = match kv.find('=') {
+                    Some(eq) => (&kv[..eq], &kv[eq + 1..]),
+                    None => {
+                        return Err(Error::Address(
+                            "missing = when parsing key/value".to_owned(),
+                        ))
+                    }
+                };
+                if options.insert(k, v).is_some() {
+                    return Err(Error::Address(format!(
+                        "Key `{}` specified multiple times",
+                        k
+                    )));
                 }
-            };
-            if options.insert(k, v).is_some() {
-                return Err(Error::Address(format!(
-                    "Key `{}` specified multiple times",
-                    k
-                )));
             }
         }
 
