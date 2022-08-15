@@ -104,6 +104,21 @@ fn get_unix_uid(fd: &impl AsRawFd) -> io::Result<Option<u32>> {
     }
 }
 
+// Send 0 byte as a separate SCM_CREDS message.
+#[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+fn send_zero_byte(fd: &impl AsRawFd) -> io::Result<usize> {
+    let fd = fd.as_raw_fd();
+    let iov = [std::io::IoSlice::new(b"\0")];
+    sendmsg::<()>(
+        fd,
+        &iov,
+        &[ControlMessage::ScmCreds],
+        MsgFlags::empty(),
+        None,
+    )
+    .map_err(|e| e.into())
+}
+
 #[cfg(unix)]
 type PollRecvmsg = Poll<io::Result<(usize, Vec<OwnedFd>)>>;
 
@@ -165,6 +180,15 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
     fn uid(&self) -> io::Result<Option<u32>> {
         Ok(None)
     }
+
+    /// The dbus daemon on `freebsd` and `dragonfly` currently requires sending the zero byte
+    /// as a separate message with SCM_CREDS, as part of the `EXTERNAL` authentication on unix
+    /// sockets. This method is used by the authentication machinery in zbus to send this
+    /// zero byte. Socket implementations based on unix sockets should implement this method.
+    #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+    fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+        Ok(None)
+    }
 }
 
 impl Socket for Box<dyn Socket> {
@@ -202,6 +226,11 @@ impl Socket for Box<dyn Socket> {
     #[cfg(unix)]
     fn uid(&self) -> io::Result<Option<u32>> {
         (**self).uid()
+    }
+
+    #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+    fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+        (**self).send_zero_byte()
     }
 }
 
@@ -251,6 +280,11 @@ impl Socket for Async<UnixStream> {
     #[cfg(unix)]
     fn uid(&self) -> io::Result<Option<u32>> {
         get_unix_uid(self)
+    }
+
+    #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+    fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+        send_zero_byte(self).map(Some)
     }
 }
 
@@ -306,6 +340,11 @@ impl Socket for tokio::net::UnixStream {
     fn uid(&self) -> io::Result<Option<u32>> {
         get_unix_uid(self)
     }
+
+    #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+    fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+        send_zero_byte(self).map(Some)
+    }
 }
 
 #[cfg(all(windows, not(feature = "tokio")))]
@@ -358,6 +397,11 @@ impl Socket for Async<UnixStream> {
     #[cfg(unix)]
     fn uid(&self) -> io::Result<Option<u32>> {
         get_unix_uid(self)
+    }
+
+    #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+    fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+        send_zero_byte(self).map(Some)
     }
 }
 
