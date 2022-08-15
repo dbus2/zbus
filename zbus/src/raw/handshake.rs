@@ -354,7 +354,33 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
         loop {
             ready!(self.flush_buffer(cx))?;
             let (next_step, cmd) = match self.step {
-                Init | MechanismInit => self.mechanism_init()?,
+                Init => {
+                    #[allow(clippy::let_and_return)]
+                    let ret = self.mechanism_init()?;
+                    // The dbus daemon on these platforms currently requires sending the zero byte
+                    // as a separate message with SCM_CREDS
+                    #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+                    if let Some(fd) = self.fd {
+                        use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
+
+                        let iov = [std::io::IoSlice::new(b"\0")];
+                        if sendmsg::<()>(
+                            fd,
+                            &iov,
+                            &[ControlMessage::ScmCreds],
+                            MsgFlags::empty(),
+                            None,
+                        ) != Ok(1)
+                        {
+                            return Poll::Ready(Err(Error::Handshake(
+                                "Could not send zero byte with credentials".to_string(),
+                            )));
+                        }
+                    }
+
+                    ret
+                }
+                MechanismInit => self.mechanism_init()?,
                 WaitingForData | WaitingForOK => {
                     let reply = ready!(self.read_command(cx))?;
                     match (self.step, reply) {
@@ -396,42 +422,14 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                 }
                 Done => return Poll::Ready(Ok(())),
             };
-            self.send_buffer = if self.step == Init {
+            self.send_buffer = if self.step == Init
+                // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
+                && !cfg!(any(target_os = "freebsd", target_os = "dragonfly"))
+            {
                 format!("\0{}", cmd).into()
             } else {
                 cmd.into()
             };
-            // The dbus daemon on these platforms currently requires sending the zero byte
-            // as a separate message with SCM_CREDS
-            #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-            if self.step == Init {
-                use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
-
-                let fd = match self.fd {
-                    Some(fd) => fd,
-                    None => {
-                        // Seems like it's a non Unixstream socket, let's just continue.
-                        self.step = next_step;
-                        continue;
-                    }
-                };
-
-                // Steal the leading null byte from the buffer.
-                let zero = &[self.send_buffer.drain(0..1).next().unwrap()];
-                let iov = [std::io::IoSlice::new(zero)];
-                if sendmsg::<()>(
-                    fd,
-                    &iov,
-                    &[ControlMessage::ScmCreds],
-                    MsgFlags::empty(),
-                    None,
-                ) != Ok(1)
-                {
-                    return Poll::Ready(Err(Error::Handshake(
-                        "Could not send zero byte with credentials".to_string(),
-                    )));
-                }
-            }
             self.step = next_step;
         }
     }
