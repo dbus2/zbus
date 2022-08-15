@@ -178,6 +178,9 @@ msvc:
     - $env:PATH += ";C:\bin"
     - Start-Process dbus-daemon.exe --config-file=gitlab/win32-session.conf
     - cargo test
+
+    - $env:DBUS_SESSION_BUS_ADDRESS = $null
+    - $env:ZBUS_GDBUS_TEST = "1"
     # This is an undocumented implementation detail, but easier and faster than calling the gdbus C library
     - Start-Process gdbus.exe _win32_run_session_bus
     - cargo test --features zbus/windows-gdbus
