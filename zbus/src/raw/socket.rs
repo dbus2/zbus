@@ -77,6 +77,34 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
 }
 
 #[cfg(unix)]
+fn get_unix_uid(fd: &impl AsRawFd) -> io::Result<Option<u32>> {
+    let fd = fd.as_raw_fd();
+
+    #[cfg(any(target_os = "android", target_os = "linux"))]
+    {
+        use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+
+        getsockopt(fd, PeerCredentials)
+            .map(|creds| Some(creds.uid()))
+            .map_err(|e| e.into())
+    }
+
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    ))]
+    {
+        nix::unistd::getpeereid(fd)
+            .map(|(uid, _)| Some(uid.into()))
+            .map_err(|e| e.into())
+    }
+}
+
+#[cfg(unix)]
 type PollRecvmsg = Poll<io::Result<(usize, Vec<OwnedFd>)>>;
 
 #[cfg(not(unix))]
@@ -131,6 +159,12 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
     fn peer_sid(&self) -> Option<String> {
         None
     }
+
+    /// Return the User ID, if any.
+    #[cfg(unix)]
+    fn uid(&self) -> io::Result<Option<u32>> {
+        Ok(None)
+    }
 }
 
 impl Socket for Box<dyn Socket> {
@@ -163,6 +197,11 @@ impl Socket for Box<dyn Socket> {
     #[cfg(windows)]
     fn peer_sid(&self) -> Option<String> {
         (&**self).peer_sid()
+    }
+
+    #[cfg(unix)]
+    fn uid(&self) -> io::Result<Option<u32>> {
+        (**self).uid()
     }
 }
 
@@ -207,6 +246,11 @@ impl Socket for Async<UnixStream> {
 
     fn close(&self) -> io::Result<()> {
         self.get_ref().shutdown(std::net::Shutdown::Both)
+    }
+
+    #[cfg(unix)]
+    fn uid(&self) -> io::Result<Option<u32>> {
+        get_unix_uid(self)
     }
 }
 
@@ -257,6 +301,11 @@ impl Socket for tokio::net::UnixStream {
     fn close(&self) -> io::Result<()> {
         Ok(())
     }
+
+    #[cfg(unix)]
+    fn uid(&self) -> io::Result<Option<u32>> {
+        get_unix_uid(self)
+    }
 }
 
 #[cfg(all(windows, not(feature = "tokio")))]
@@ -304,6 +353,11 @@ impl Socket for Async<UnixStream> {
         }
 
         None
+    }
+
+    #[cfg(unix)]
+    fn uid(&self) -> io::Result<Option<u32>> {
+        get_unix_uid(self)
     }
 }
 
