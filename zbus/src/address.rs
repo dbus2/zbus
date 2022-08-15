@@ -546,6 +546,17 @@ impl FromStr for Address {
                 addr: TcpAddress::from_tcp(options)?,
             }),
 
+            "autolaunch" => Ok(Self::Autolaunch(
+                options
+                    .get("scope")
+                    .map(|scope| -> Result<_> {
+                        String::from_utf8(decode_percents(scope)?).map_err(|_| {
+                            Error::Address("autolaunch scope is not valid UTF-8".to_owned())
+                        })
+                    })
+                    .transpose()?,
+            )),
+
             _ => Err(Error::Address(format!(
                 "unsupported transport '{}'",
                 transport
@@ -669,6 +680,14 @@ mod tests {
             )
             .unwrap()
         );
+        assert_eq!(
+            Address::Autolaunch(None),
+            Address::from_str("autolaunch:").unwrap()
+        );
+        assert_eq!(
+            Address::Autolaunch(Some("*my_cool_scope*".to_owned())),
+            Address::from_str("autolaunch:scope=*my_cool_scope*").unwrap()
+        );
     }
 
     #[test]
@@ -719,6 +738,11 @@ mod tests {
             }
             .to_string(),
             "nonce-tcp:noncefile=/a/file/path%20to%20file%201234,host=localhost,port=4142,family=ipv6"
+        );
+        assert_eq!(Address::Autolaunch(None).to_string(), "autolaunch:");
+        assert_eq!(
+            Address::Autolaunch(Some("*my_cool_scope*".to_owned())).to_string(),
+            "autolaunch:scope=*my_cool_scope*"
         );
     }
 
