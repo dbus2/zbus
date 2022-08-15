@@ -1,19 +1,20 @@
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use async_io::Async;
-use async_lock::RwLock;
 use static_assertions::assert_impl_all;
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
-#[cfg(all(unix, feature = "async-io"))]
+#[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
+#[cfg(unix)]
+use std::os::unix::prelude::AsRawFd;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     convert::TryInto,
     sync::Arc,
 };
-#[cfg(not(feature = "async-io"))]
+#[cfg(feature = "tokio")]
 use tokio::net::TcpStream;
-#[cfg(all(unix, not(feature = "async-io")))]
+#[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
 #[cfg(windows)]
 use uds_windows::UnixStream;
@@ -22,6 +23,7 @@ use zvariant::ObjectPath;
 
 use crate::{
     address::{self, Address},
+    async_lock::RwLock,
     names::{InterfaceName, WellKnownName},
     raw::Socket,
     AuthMechanism, Authenticated, Connection, Error, Guid, Interface, Result,
@@ -143,7 +145,7 @@ impl<'a> ConnectionBuilder<'a> {
     /// ```
     ///# use std::error::Error;
     ///# use zbus::ConnectionBuilder;
-    ///# use async_io::block_on;
+    ///# use zbus::block_on;
     ///#
     ///# block_on(async {
     /// let conn = ConnectionBuilder::session()?
@@ -220,28 +222,49 @@ impl<'a> ConnectionBuilder<'a> {
     /// Until server-side bus connection is supported, attempting to build such a connection will
     /// result in [`Error::Unsupported`] error.
     pub async fn build(self) -> Result<Connection> {
-        let stream = match self.target {
-            #[cfg(all(feature = "async-io"))]
-            Target::UnixStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
-            #[cfg(all(unix, not(feature = "async-io")))]
-            Target::UnixStream(stream) => Box::new(stream) as Box<dyn Socket>,
-            #[cfg(all(not(unix), not(feature = "async-io")))]
+        let (fd, stream): (Option<i32>, _) = match self.target {
+            #[cfg(all(not(feature = "tokio")))]
+            Target::UnixStream(stream) => (
+                #[cfg(unix)]
+                Some(stream.as_raw_fd()),
+                #[cfg(not(unix))]
+                None,
+                Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            ),
+            #[cfg(all(unix, feature = "tokio"))]
+            Target::UnixStream(stream) => (
+                Some(stream.as_raw_fd()),
+                Box::new(stream) as Box<dyn Socket>,
+            ),
+            #[cfg(all(not(unix), feature = "tokio"))]
             Target::UnixStream(_) => return Err(Error::Unsupported),
-            #[cfg(feature = "async-io")]
-            Target::TcpStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
-            #[cfg(not(feature = "async-io"))]
-            Target::TcpStream(stream) => Box::new(stream) as Box<dyn Socket>,
+            #[cfg(not(feature = "tokio"))]
+            Target::TcpStream(stream) => (None, Box::new(Async::new(stream)?) as Box<dyn Socket>),
+            #[cfg(feature = "tokio")]
+            Target::TcpStream(stream) => (None, Box::new(stream) as Box<dyn Socket>),
             Target::Address(address) => match address.connect().await? {
-                #[cfg(any(unix, feature = "async-io"))]
-                address::Stream::Unix(stream) => Box::new(stream) as Box<dyn Socket>,
-                address::Stream::Tcp(stream) => Box::new(stream) as Box<dyn Socket>,
+                #[cfg(any(unix, not(feature = "tokio")))]
+                address::Stream::Unix(stream) => (
+                    #[cfg(unix)]
+                    Some(stream.as_raw_fd()),
+                    #[cfg(not(unix))]
+                    None,
+                    Box::new(stream) as Box<dyn Socket>,
+                ),
+                address::Stream::Tcp(stream) => (None, Box::new(stream) as Box<dyn Socket>),
             },
-            Target::Socket(stream) => stream,
+            Target::Socket(stream) => (None, stream),
         };
         let auth = match self.guid {
             None => {
                 // SASL Handshake
-                Authenticated::client(stream, self.auth_mechanisms).await?
+                Authenticated::client(
+                    stream,
+                    #[cfg(unix)]
+                    fd,
+                    self.auth_mechanisms,
+                )
+                .await?
             }
             Some(guid) => {
                 if !self.p2p {
@@ -249,37 +272,41 @@ impl<'a> ConnectionBuilder<'a> {
                 }
 
                 #[cfg(unix)]
-                let client_uid = {
-                    #[cfg(any(target_os = "android", target_os = "linux"))]
-                    {
-                        use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+                let client_uid = fd
+                    .map(|fd| -> Result<u32> {
+                        #[cfg(any(target_os = "android", target_os = "linux"))]
+                        {
+                            use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
 
-                        let creds =
-                            getsockopt(stream.as_raw_fd(), PeerCredentials).map_err(|e| {
+                            let creds = getsockopt(fd, PeerCredentials).map_err(|e| {
                                 Error::Handshake(format!("Failed to get peer credentials: {}", e))
                             })?;
 
-                        creds.uid()
-                    }
+                            Ok(creds.uid())
+                        }
 
-                    #[cfg(any(
-                        target_os = "macos",
-                        target_os = "ios",
-                        target_os = "freebsd",
-                        target_os = "dragonfly",
-                        target_os = "openbsd",
-                        target_os = "netbsd"
-                    ))]
-                    {
-                        let uid = nix::unistd::getpeereid(stream.as_raw_fd())
-                            .map_err(|e| {
-                                Error::Handshake(format!("Failed to get peer credentials: {}", e))
-                            })?
-                            .0;
+                        #[cfg(any(
+                            target_os = "macos",
+                            target_os = "ios",
+                            target_os = "freebsd",
+                            target_os = "dragonfly",
+                            target_os = "openbsd",
+                            target_os = "netbsd"
+                        ))]
+                        {
+                            let uid = nix::unistd::getpeereid(fd)
+                                .map_err(|e| {
+                                    Error::Handshake(format!(
+                                        "Failed to get peer credentials: {}",
+                                        e
+                                    ))
+                                })?
+                                .0;
 
-                        uid.into()
-                    }
-                };
+                            Ok(uid.into())
+                        }
+                    })
+                    .transpose()?;
 
                 #[cfg(windows)]
                 let client_sid = stream.peer_sid();

@@ -914,16 +914,6 @@ mod tests {
 
     async fn test_signal() {
         let conn = crate::Connection::session().await.unwrap();
-
-        {
-            let conn = conn.clone();
-            tokio::task::spawn(async move {
-                loop {
-                    conn.executor().tick().await;
-                }
-            });
-        }
-
         let proxy = fdo::DBusProxy::new(&conn).await.unwrap();
 
         // Register a well-known name with the session bus and ensure we get the appropriate

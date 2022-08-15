@@ -1,6 +1,4 @@
 use async_broadcast::Receiver;
-use async_channel::bounded;
-use async_executor::Task;
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
 use futures_util::{future::Either, stream::FilterMap};
@@ -21,9 +19,10 @@ use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName
 use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 
 use crate::{
+    async_channel::channel,
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    CacheProperties, Connection, Error, Message, MessageBuilder, MessageFlags, MessageSequence,
-    ProxyBuilder, Result,
+    CacheProperties, Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder,
+    Result, Task,
 };
 
 #[derive(Debug, Default)]
@@ -35,7 +34,7 @@ struct PropertyValue {
 #[derive(Debug)]
 pub(crate) struct PropertiesCache {
     values: RwLock<HashMap<String, PropertyValue>>,
-    ready: async_channel::Receiver<Result<()>>,
+    ready: crate::async_channel::Receiver<Result<()>>,
 }
 
 /// A client-side interface proxy.
@@ -47,14 +46,10 @@ pub(crate) struct PropertiesCache {
 /// ```
 /// use std::result::Result;
 /// use std::error::Error;
-/// use async_io::block_on;
 /// use zbus::{Connection, Proxy};
 ///
-/// fn main() -> Result<(), Box<dyn Error>> {
-///     block_on(run())
-/// }
-///
-/// async fn run() -> Result<(), Box<dyn Error>> {
+/// #[tokio::main]
+/// async fn main() -> Result<(), Box<dyn Error>> {
 ///     let connection = Connection::session().await?;
 ///     let p = Proxy::new(
 ///         &connection,
@@ -153,8 +148,7 @@ impl<'a, T> PropertyChanged<'a, T> {
             type Target = Value<'static>;
 
             fn deref(&self) -> &Self::Target {
-                &**self
-                    .values
+                self.values
                     .get(self.name)
                     .expect("PropertyStream with no corresponding property")
                     .value
@@ -312,10 +306,7 @@ impl PropertiesCache {
         // Only one caller will actually get the result; all other callers see a closed channel,
         // but that indicates the cache is ready (and on error, the cache will be empty, which just
         // means we bypass it)
-        match self.ready.recv().await {
-            Ok(res) => res,
-            Err(_closed) => Ok(()),
-        }
+        self.ready.recv().await.unwrap_or(Ok(()))
     }
 }
 
@@ -519,7 +510,7 @@ impl<'a> Proxy<'a> {
         };
         let (cache, _) = &cache.get_or_init(|| {
             let proxy = self.owned_properties_proxy();
-            let (send, recv) = bounded(1);
+            let (send, recv) = channel(1);
 
             let cache = Arc::new(PropertiesCache {
                 values: Default::default(),
@@ -588,11 +579,11 @@ impl<'a> Proxy<'a> {
                                 );
                             });
                             let _ = send.send(result).await;
-                            send.close();
+                            send.close().await;
                         }
                         Some(Either::Right(Err(e))) => {
                             let _ = send.send(Err(e)).await;
-                            send.close();
+                            send.close().await;
                         }
                         None => return,
                     }
@@ -982,7 +973,12 @@ impl<'a> Proxy<'a> {
 type OwnerChangedStreamFilter<'a> = FilterMap<
     fdo::NameOwnerChangedStream<'a>,
     Ready<Option<Option<UniqueName<'static>>>>,
-    Box<dyn FnMut(fdo::NameOwnerChanged) -> Ready<Option<Option<UniqueName<'static>>>>>,
+    Box<
+        dyn FnMut(fdo::NameOwnerChanged) -> Ready<Option<Option<UniqueName<'static>>>>
+            + Send
+            + Sync
+            + Unpin,
+    >,
 >;
 
 /// A [`stream::Stream`] implementation that yields `UniqueName` when the bus owner changes.
@@ -992,6 +988,8 @@ pub struct OwnerChangedStream<'a> {
     filter_stream: OwnerChangedStreamFilter<'a>,
     name: BusName<'a>,
 }
+
+assert_impl_all!(OwnerChangedStream<'_>: Send, Sync, Unpin);
 
 impl OwnerChangedStream<'_> {
     /// The bus name being tracked.
@@ -1287,7 +1285,7 @@ mod tests {
             .build()
             .await?;
 
-        let (tx, rx) = bounded(1);
+        let (tx, rx) = channel(1);
 
         let handle = {
             let tx = tx.clone();
@@ -1295,10 +1293,10 @@ mod tests {
             server_conn.executor().spawn(async move {
                 use std::time::Duration;
 
-                #[cfg(feature = "async-io")]
+                #[cfg(not(feature = "tokio"))]
                 use async_io::Timer;
 
-                #[cfg(not(feature = "async-io"))]
+                #[cfg(feature = "tokio")]
                 use tokio::time::sleep;
 
                 let iface_ref = conn
@@ -1315,10 +1313,10 @@ mod tests {
                             .unwrap();
                     }
 
-                    #[cfg(feature = "async-io")]
+                    #[cfg(not(feature = "tokio"))]
                     Timer::after(Duration::from_millis(5)).await;
 
-                    #[cfg(not(feature = "async-io"))]
+                    #[cfg(feature = "tokio")]
                     sleep(Duration::from_millis(5)).await;
                 }
             })
@@ -1327,7 +1325,7 @@ mod tests {
         let signal_fut = async {
             let mut signal_stream = test_proxy.receive_my_signal().await.unwrap();
 
-            tx.send(()).await.unwrap();
+            assert!(tx.send(()).await.is_none());
 
             while let Some(_signal) = signal_stream.next().await {}
         };
@@ -1335,7 +1333,7 @@ mod tests {
         let prop_fut = async {
             rx.recv().await.unwrap();
             let _prop_stream = test_prop_proxy.receive_properties_changed().await.unwrap();
-            rx.close();
+            rx.close().await;
         };
 
         futures_util::pin_mut!(signal_fut);

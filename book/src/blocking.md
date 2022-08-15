@@ -4,6 +4,11 @@ While zbus API being primarily asynchronous (since 2.0) is a great thing, it cou
 daunting for simple use cases. Not to worry! In the spirit of "ease" being a primary goal of zbus,
 it provides blocking wrapper types, under the [blocking module].
 
+**Note:** Use of the blocking API presented in this chapter in an async context will likely result
+in panics and hangs. This is not a limitation of zbus but rather a
+[well-known general problem][wkgp] in the Rust async/await world. The [`blocking` crate],
+[`async-std`][assb] and [`tokio`][tsb] crates provide a easy way around this problem.
+
 ## Establishing a connection
 
 The only difference to that of [asynchronous `Connection` API] is that you use
@@ -125,9 +130,8 @@ Similarly here, you'd use [`blocking::ObjectServer`] that is associated with eve
 `dbus_interface` allows you to write non-async methods.
 
 **Note:** Even though you can write non-async methods, these methods are still called from an async
-context. Therefore, you can not use blocking API that's a wrapper of an async API. This is not a
-limitation of zbus but rather a [well-known general problem][wkgp] in the Rust async/await world.
-The [`blocking` crate] provides an easy way around this problem.
+context. Therefore, you can not use blocking API in the method implementation directly. See note at
+the beginning of this chapter for details on why and a possible workaround.
 
 ```rust,no_run
 # use std::error::Error;
@@ -196,4 +200,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 [blocking module]: https://docs.rs/zbus/2.0.0/zbus/blocking/index.html
 [wkgp]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
 [`blocking` crate]: https://docs.rs/blocking/
+[assb]: https://docs.rs/async-std/latest/async_std/task/fn.spawn_blocking.html
+[tsb]: https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html
 [`futures::stream::Stream`]: https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html

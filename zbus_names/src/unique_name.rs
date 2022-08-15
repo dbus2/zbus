@@ -33,7 +33,9 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [ubn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
+)]
 pub struct UniqueName<'name>(Str<'name>);
 
 assert_impl_all!(UniqueName<'_>: Send, Sync, Unpin);
@@ -64,7 +66,7 @@ impl<'name> UniqueName<'name> {
     }
 
     /// Same as `from_str_unchecked`, except it takes a `&'static str`.
-    pub fn from_static_str_unchecked(name: &'static str) -> Self {
+    pub const fn from_static_str_unchecked(name: &'static str) -> Self {
         Self(Str::from_static(name))
     }
 
@@ -246,7 +248,9 @@ impl<'name> NoneValue for UniqueName<'name> {
 }
 
 /// Owned sibling of [`UniqueName`].
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
+)]
 pub struct OwnedUniqueName(#[serde(borrow)] UniqueName<'static>);
 
 assert_impl_all!(OwnedUniqueName: Send, Sync, Unpin);

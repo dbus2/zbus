@@ -10,6 +10,7 @@ authors = [
     "Zeeshan Ali <zeeshanak@gnome.org>",
 ]
 edition = "2018"
+rust-version = "1.60"
 
 description = "D-Bus XML interface code generator"
 repository = "https://gitlab.freedesktop.org/dbus/zbus/"
@@ -24,6 +25,6 @@ name = "zbus-xmlgen"
 path = "src/main.rs"
 
 [dependencies]
-zbus = { path = "../zbus", version = "2", features = ["xml"] }
+zbus = { path = "../zbus", version = "3", features = ["xml"] }
 zvariant = { path = "../zvariant", version = "3" }
 snakecase = "0.1.0"

@@ -64,13 +64,7 @@ impl<'m> MessageFields<'m> {
     ///
     /// [`MessageField`]: enum.MessageField.html
     pub fn into_field(self, code: MessageFieldCode) -> Option<MessageField<'m>> {
-        for field in self.0 {
-            if field.code() == code {
-                return Some(field);
-            }
-        }
-
-        None
+        self.0.into_iter().find(|f| f.code() == code)
     }
 }
 

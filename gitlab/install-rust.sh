@@ -2,6 +2,7 @@ source ./gitlab/env.sh
 
 RUSTUP_VERSION=1.23.1
 RUST_VERSION=$1
+MSRV=$2
 RUST_ARCH="x86_64-unknown-linux-gnu"
 
 RUSTUP_URL=https://static.rust-lang.org/rustup/archive/$RUSTUP_VERSION/$RUST_ARCH/rustup-init
@@ -27,6 +28,9 @@ rustup install nightly
 rustup component add llvm-tools-preview
 rustup component add --toolchain nightly clippy
 rustup component add --toolchain nightly rustfmt
+
+# separate toolchain for verifying that the build works on the targeted MSRV
+rustup install $MSRV
 
 # fetch project deps
 cargo fetch

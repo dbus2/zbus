@@ -5,13 +5,14 @@ use std::{
 };
 
 use async_broadcast::Receiver as ActiveReceiver;
-use async_channel::Receiver;
 use futures_core::{ready, stream};
 use futures_util::stream::FusedStream;
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 
-use crate::{Connection, ConnectionInner, Error, Message, MessageSequence, Result};
+use crate::{
+    async_channel::Receiver, Connection, ConnectionInner, Error, Message, MessageSequence, Result,
+};
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///

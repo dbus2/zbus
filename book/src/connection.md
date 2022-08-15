@@ -18,6 +18,10 @@ messages, for the times when low-level API is more appropriate for your use case
 all `session()` share the same underlying connection for example. At the time of this writing,
 zbus doesn't do that.
 
+**Note:** on Windows, there is no standard implicit way to connect to a session bus. zbus provides
+opt-in compatibility to the GDBus session bus discovery mechanism via the `windows-gdbus` feature.
+This mechanism uses a machine-wide mutex however, so only one GDBus session bus can run at a time.
+
 ## Using a custom bus address
 
 You may also specify a custom bus with `Connection::new_for_address()` which takes a D-Bus address

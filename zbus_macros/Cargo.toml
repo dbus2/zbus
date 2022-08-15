@@ -1,9 +1,10 @@
 [package]
 name = "zbus_macros"
 # Keep version in sync with zbus crate
-version = "2.3.2"
+version = "3.0.0"
 authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
 edition = "2018"
+rust-version = "1.60"
 
 description = "proc-macros for zbus"
 repository = "https://gitlab.freedesktop.org/dbus/zbus/"

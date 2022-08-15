@@ -1,11 +1,10 @@
-#[allow(clippy::blacklisted_name)]
-#[cfg(all(unix, feature = "async-io"))]
+#![allow(clippy::blacklisted_name)]
+#[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 use std::{collections::HashMap, convert::TryInto};
-#[cfg(all(unix, not(feature = "async-io")))]
+#[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
 
-use async_channel::{bounded, Sender};
 use event_listener::Event;
 use futures_util::StreamExt;
 use ntest::timeout;
@@ -13,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use test_log::test;
 use tracing::{debug, instrument};
 use zbus::{
+    async_channel::{channel, Sender},
     block_on,
     fdo::{ObjectManager, ObjectManagerProxy},
     DBusError,
@@ -124,7 +124,7 @@ impl MyIfaceImpl {
     #[instrument]
     async fn quit(&self) {
         debug!("Client asked to quit.");
-        self.next_tx.send(NextAction::Quit).await.unwrap();
+        assert!(self.next_tx.send(NextAction::Quit).await.is_none());
     }
 
     #[instrument]
@@ -189,7 +189,11 @@ impl MyIfaceImpl {
     #[instrument]
     async fn create_obj(&self, key: String) {
         debug!("`CreateObj` called.");
-        self.next_tx.send(NextAction::CreateObj(key)).await.unwrap();
+        assert!(self
+            .next_tx
+            .send(NextAction::CreateObj(key))
+            .await
+            .is_none());
     }
 
     #[instrument]
@@ -211,10 +215,11 @@ impl MyIfaceImpl {
     #[instrument]
     async fn destroy_obj(&self, key: String) {
         debug!("`DestroyObj` called.");
-        self.next_tx
+        assert!(self
+            .next_tx
             .send(NextAction::DestroyObj(key))
             .await
-            .unwrap();
+            .is_none());
     }
 
     #[instrument]
@@ -492,7 +497,7 @@ async fn iface_and_proxy_(p2p: bool) {
 
         #[cfg(windows)]
         {
-            #[cfg(feature = "async-io")]
+            #[cfg(not(feature = "tokio"))]
             {
                 let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
                 let addr = listener.local_addr().unwrap();
@@ -505,7 +510,7 @@ async fn iface_and_proxy_(p2p: bool) {
                 )
             }
 
-            #[cfg(not(feature = "async-io"))]
+            #[cfg(feature = "tokio")]
             {
                 let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
                 let addr = listener.local_addr().unwrap();
@@ -539,7 +544,7 @@ async fn iface_and_proxy_(p2p: bool) {
         "Service connection builder created: {:?}",
         service_conn_builder
     );
-    let (next_tx, next_rx) = bounded(64);
+    let (next_tx, next_rx) = channel(64);
     let iface = MyIfaceImpl::new(next_tx.clone());
     let service_conn_builder = service_conn_builder
         .serve_at("/org/freedesktop/MyService", iface)
@@ -555,7 +560,9 @@ async fn iface_and_proxy_(p2p: bool) {
     debug!("Service connection created: {:?}", service_conn);
 
     let listen = event.listen();
-    let child = async_std::task::spawn(my_iface_test(client_conn.clone(), event));
+    let child = client_conn
+        .executor()
+        .spawn(my_iface_test(client_conn.clone(), event));
     debug!("Child task spawned.");
     // Wait for the listener to be ready
     listen.await;

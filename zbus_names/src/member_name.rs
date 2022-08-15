@@ -34,7 +34,9 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [in]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-member
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
+)]
 pub struct MemberName<'name>(Str<'name>);
 
 assert_impl_all!(MemberName<'_>: Send, Sync, Unpin);
@@ -65,7 +67,7 @@ impl<'name> MemberName<'name> {
     }
 
     /// Same as `from_str_unchecked`, except it takes a `&'static str`.
-    pub fn from_static_str_unchecked(name: &'static str) -> Self {
+    pub const fn from_static_str_unchecked(name: &'static str) -> Self {
         Self(Str::from_static(name))
     }
 
@@ -223,7 +225,9 @@ impl<'name> NoneValue for MemberName<'name> {
 }
 
 /// Owned sibling of [`MemberName`].
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, OwnedValue)]
+#[derive(
+    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
+)]
 pub struct OwnedMemberName(#[serde(borrow)] MemberName<'static>);
 
 assert_impl_all!(OwnedMemberName: Send, Sync, Unpin);

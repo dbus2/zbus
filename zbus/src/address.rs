@@ -1,20 +1,22 @@
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use crate::run_in_thread;
+#[cfg(all(windows))]
+use crate::win32::windows_autolaunch_bus_address;
 use crate::{Error, Result};
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use async_io::Async;
 #[cfg(unix)]
 use nix::unistd::Uid;
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
-#[cfg(all(unix, feature = "async-io"))]
+#[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 use std::{collections::HashMap, convert::TryFrom, env, str::FromStr};
-#[cfg(all(not(feature = "async-io")))]
+#[cfg(all(feature = "tokio"))]
 use tokio::net::TcpStream;
-#[cfg(all(unix, not(feature = "async-io")))]
+#[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
-#[cfg(all(windows, feature = "async-io"))]
+#[cfg(all(windows, not(feature = "tokio")))]
 use uds_windows::UnixStream;
 
 use std::{
@@ -123,16 +125,18 @@ pub enum Address {
         addr: TcpAddress,
         nonce_file: Vec<u8>,
     },
+    /// Autolaunch address with optional scope
+    Autolaunch(Option<String>),
 }
 
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 #[derive(Debug)]
 pub(crate) enum Stream {
     Unix(Async<UnixStream>),
     Tcp(Async<TcpStream>),
 }
 
-#[cfg(all(not(feature = "async-io")))]
+#[cfg(all(feature = "tokio"))]
 #[derive(Debug)]
 pub(crate) enum Stream {
     #[cfg(unix)]
@@ -140,7 +144,7 @@ pub(crate) enum Stream {
     Tcp(TcpStream),
 }
 
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 async fn connect_tcp(addr: TcpAddress) -> Result<Async<TcpStream>> {
     let addrs = run_in_thread(move || -> Result<Vec<SocketAddr>> {
         let addrs = (addr.host(), addr.port()).to_socket_addrs()?.filter(|a| {
@@ -171,7 +175,7 @@ async fn connect_tcp(addr: TcpAddress) -> Result<Async<TcpStream>> {
     Err(last_err)
 }
 
-#[cfg(all(not(feature = "async-io")))]
+#[cfg(all(feature = "tokio"))]
 async fn connect_tcp(addr: TcpAddress) -> Result<TcpStream> {
     TcpStream::connect((addr.host(), addr.port()))
         .await
@@ -180,9 +184,32 @@ async fn connect_tcp(addr: TcpAddress) -> Result<TcpStream> {
 
 impl Address {
     pub(crate) async fn connect(&self) -> Result<Stream> {
-        match self.clone() {
+        let addr = if let Self::Autolaunch(scope) = self {
+            #[cfg(not(windows))]
+            {
+                let _ = scope;
+                return Err(Error::Address(
+                    "Autolaunch addresses are only supported on Windows".to_owned(),
+                ));
+            }
+
+            #[cfg(windows)]
+            {
+                if scope.is_some() {
+                    return Err(Error::Address(
+                        "Autolaunch scopes are currently unsupported".to_owned(),
+                    ));
+                } else {
+                    windows_autolaunch_bus_address()?
+                }
+            }
+        } else {
+            self.clone()
+        };
+
+        match addr {
             Address::Unix(p) => {
-                #[cfg(feature = "async-io")]
+                #[cfg(not(feature = "tokio"))]
                 {
                     #[cfg(windows)]
                     {
@@ -199,7 +226,7 @@ impl Address {
                     }
                 }
 
-                #[cfg(all(not(feature = "async-io")))]
+                #[cfg(all(feature = "tokio"))]
                 {
                     #[cfg(unix)]
                     {
@@ -232,7 +259,7 @@ impl Address {
                 let nonce_file = std::str::from_utf8(&nonce_file)
                     .map_err(|_| Error::Address("nonce file path is invalid UTF-8".to_owned()))?;
 
-                #[cfg(feature = "async-io")]
+                #[cfg(not(feature = "tokio"))]
                 {
                     let nonce = std::fs::read(nonce_file)?;
                     let mut nonce = &nonce[..];
@@ -245,7 +272,7 @@ impl Address {
                     }
                 }
 
-                #[cfg(all(not(feature = "async-io")))]
+                #[cfg(all(feature = "tokio"))]
                 {
                     let nonce = tokio::fs::read(nonce_file).await?;
                     tokio::io::AsyncWriteExt::write_all(&mut stream, &nonce).await?;
@@ -253,6 +280,8 @@ impl Address {
 
                 Ok(Stream::Tcp(stream))
             }
+
+            Address::Autolaunch(_) => unreachable!(),
         }
     }
 
@@ -263,6 +292,19 @@ impl Address {
         match env::var("DBUS_SESSION_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
             _ => {
+                #[cfg(all(windows))]
+                {
+                    #[cfg(feature = "windows-gdbus")]
+                    {
+                        Self::from_str("autolaunch:")
+                    }
+
+                    #[cfg(not(feature = "windows-gdbus"))]
+                    {
+                        Self::from_str("autolaunch:scope=*user")
+                    }
+                }
+
                 #[cfg(unix)]
                 {
                     let runtime_dir = env::var("XDG_RUNTIME_DIR")
@@ -270,10 +312,6 @@ impl Address {
                     let path = format!("unix:path={}/bus", runtime_dir);
 
                     Self::from_str(&path)
-                }
-                #[cfg(not(unix))]
-                {
-                    Err(Error::Unsupported)
                 }
             }
         }
@@ -285,12 +323,22 @@ impl Address {
     pub fn system() -> Result<Self> {
         match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
-            _ => Self::from_str("unix:path=/var/run/dbus/system_bus_socket"),
+            _ => {
+                #[cfg(unix)]
+                {
+                    Self::from_str("unix:path=/var/run/dbus/system_bus_socket")
+                }
+
+                #[cfg(not(unix))]
+                {
+                    Self::from_str("autolaunch:")
+                }
+            }
         }
     }
 
     // Helper for FromStr
-    #[cfg(any(unix, feature = "async-io"))]
+    #[cfg(any(unix, not(feature = "tokio")))]
     fn from_unix(opts: HashMap<&str, &str>) -> Result<Self> {
         let path = if let Some(abs) = opts.get("abstract") {
             if opts.get("path").is_some() {
@@ -441,6 +489,13 @@ impl Display for Address {
                 #[cfg(windows)]
                 write!(f, "unix:path={}", path.to_str().ok_or(std::fmt::Error)?)?;
             }
+
+            Self::Autolaunch(scope) => {
+                write!(f, "autolaunch:")?;
+                if let Some(scope) = scope {
+                    write!(f, "scope={scope}")?;
+                }
+            }
         }
 
         Ok(())
@@ -475,7 +530,7 @@ impl FromStr for Address {
         }
 
         match transport {
-            #[cfg(any(unix, feature = "async-io"))]
+            #[cfg(any(unix, not(feature = "tokio")))]
             "unix" => Self::from_unix(options),
             "tcp" => TcpAddress::from_tcp(options).map(Self::Tcp),
 
@@ -684,7 +739,7 @@ mod tests {
 
         use std::io::Write;
 
-        const TEST_COOKIE: &'static [u8] = b"VERILY SECRETIVE";
+        const TEST_COOKIE: &[u8] = b"VERILY SECRETIVE";
 
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();

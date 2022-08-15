@@ -1,4 +1,4 @@
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use async_io::Async;
 use futures_core::ready;
 use std::{
@@ -6,13 +6,13 @@ use std::{
     io::{IoSlice, IoSliceMut},
     task::{Context, Poll},
 };
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 use std::{
     io::{Read, Write},
     net::TcpStream,
 };
 
-#[cfg(all(windows, feature = "async-io"))]
+#[cfg(all(windows, not(feature = "tokio")))]
 use uds_windows::UnixStream;
 
 #[cfg(unix)]
@@ -21,9 +21,9 @@ use nix::{
     sys::socket::{recvmsg, sendmsg, ControlMessage, ControlMessageOwned, MsgFlags, UnixAddr},
 };
 #[cfg(unix)]
-use std::os::unix::io::{FromRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 
-#[cfg(all(unix, feature = "async-io"))]
+#[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 
 #[cfg(unix)]
@@ -126,12 +126,6 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
     /// After this call, it is valid for all reading and writing operations to fail.
     fn close(&self) -> io::Result<()>;
 
-    /// Return the raw file descriptor backing this transport, if any.
-    ///
-    /// This is used to back some internal platform-specific functions.
-    #[cfg(unix)]
-    fn as_raw_fd(&self) -> RawFd;
-
     /// Return the peer process SID, if any.
     #[cfg(windows)]
     fn peer_sid(&self) -> Option<String> {
@@ -141,11 +135,11 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
 
 impl Socket for Box<dyn Socket> {
     fn can_pass_unix_fd(&self) -> bool {
-        (&**self).can_pass_unix_fd()
+        (**self).can_pass_unix_fd()
     }
 
     fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        (&mut **self).poll_recvmsg(cx, buf)
+        (**self).poll_recvmsg(cx, buf)
     }
 
     fn poll_sendmsg(
@@ -154,7 +148,7 @@ impl Socket for Box<dyn Socket> {
         buffer: &[u8],
         #[cfg(unix)] fds: &[RawFd],
     ) -> Poll<io::Result<usize>> {
-        (&mut **self).poll_sendmsg(
+        (**self).poll_sendmsg(
             cx,
             buffer,
             #[cfg(unix)]
@@ -163,12 +157,7 @@ impl Socket for Box<dyn Socket> {
     }
 
     fn close(&self) -> io::Result<()> {
-        (&**self).close()
-    }
-
-    #[cfg(unix)]
-    fn as_raw_fd(&self) -> RawFd {
-        (&**self).as_raw_fd()
+        (**self).close()
     }
 
     #[cfg(windows)]
@@ -177,7 +166,7 @@ impl Socket for Box<dyn Socket> {
     }
 }
 
-#[cfg(all(unix, feature = "async-io"))]
+#[cfg(all(unix, not(feature = "tokio")))]
 impl Socket for Async<UnixStream> {
     fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
         let (len, fds) = loop {
@@ -218,11 +207,6 @@ impl Socket for Async<UnixStream> {
 
     fn close(&self) -> io::Result<()> {
         self.get_ref().shutdown(std::net::Shutdown::Both)
-    }
-
-    fn as_raw_fd(&self) -> RawFd {
-        // This causes a name collision if imported
-        std::os::unix::io::AsRawFd::as_raw_fd(self.get_ref())
     }
 }
 
@@ -273,14 +257,9 @@ impl Socket for tokio::net::UnixStream {
     fn close(&self) -> io::Result<()> {
         Ok(())
     }
-
-    fn as_raw_fd(&self) -> RawFd {
-        // This causes a name collision if imported
-        std::os::unix::io::AsRawFd::as_raw_fd(self)
-    }
 }
 
-#[cfg(all(windows, feature = "async-io"))]
+#[cfg(all(windows, not(feature = "tokio")))]
 impl Socket for Async<UnixStream> {
     fn can_pass_unix_fd(&self) -> bool {
         false
@@ -328,7 +307,7 @@ impl Socket for Async<UnixStream> {
     }
 }
 
-#[cfg(feature = "async-io")]
+#[cfg(not(feature = "tokio"))]
 impl Socket for Async<TcpStream> {
     fn can_pass_unix_fd(&self) -> bool {
         false
@@ -339,7 +318,7 @@ impl Socket for Async<TcpStream> {
         let fds = vec![];
 
         loop {
-            match (&mut *self).get_mut().read(buf) {
+            match (*self).get_mut().read(buf) {
                 Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
                 Err(e) => return Poll::Ready(Err(e)),
                 Ok(len) => {
@@ -369,7 +348,7 @@ impl Socket for Async<TcpStream> {
         }
 
         loop {
-            match (&mut *self).get_mut().write(buf) {
+            match (*self).get_mut().write(buf) {
                 Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
                 res => return Poll::Ready(res),
             }
@@ -379,12 +358,6 @@ impl Socket for Async<TcpStream> {
 
     fn close(&self) -> io::Result<()> {
         self.get_ref().shutdown(std::net::Shutdown::Both)
-    }
-
-    #[cfg(unix)]
-    fn as_raw_fd(&self) -> RawFd {
-        // This causes a name collision if imported
-        std::os::unix::io::AsRawFd::as_raw_fd(self.get_ref())
     }
 
     #[cfg(windows)]
@@ -452,12 +425,6 @@ impl Socket for tokio::net::TcpStream {
 
     fn close(&self) -> io::Result<()> {
         Ok(())
-    }
-
-    #[cfg(unix)]
-    fn as_raw_fd(&self) -> RawFd {
-        // This causes a name collision if imported
-        std::os::unix::io::AsRawFd::as_raw_fd(self)
     }
 
     #[cfg(windows)]
