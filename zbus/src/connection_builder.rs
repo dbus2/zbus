@@ -272,41 +272,7 @@ impl<'a> ConnectionBuilder<'a> {
                 }
 
                 #[cfg(unix)]
-                let client_uid = fd
-                    .map(|fd| -> Result<u32> {
-                        #[cfg(any(target_os = "android", target_os = "linux"))]
-                        {
-                            use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
-
-                            let creds = getsockopt(fd, PeerCredentials).map_err(|e| {
-                                Error::Handshake(format!("Failed to get peer credentials: {}", e))
-                            })?;
-
-                            Ok(creds.uid())
-                        }
-
-                        #[cfg(any(
-                            target_os = "macos",
-                            target_os = "ios",
-                            target_os = "freebsd",
-                            target_os = "dragonfly",
-                            target_os = "openbsd",
-                            target_os = "netbsd"
-                        ))]
-                        {
-                            let uid = nix::unistd::getpeereid(fd)
-                                .map_err(|e| {
-                                    Error::Handshake(format!(
-                                        "Failed to get peer credentials: {}",
-                                        e
-                                    ))
-                                })?
-                                .0;
-
-                            Ok(uid.into())
-                        }
-                    })
-                    .transpose()?;
+                let client_uid = stream.uid()?;
 
                 #[cfg(windows)]
                 let client_sid = stream.peer_sid();
