@@ -357,26 +357,22 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                 Init => {
                     #[allow(clippy::let_and_return)]
                     let ret = self.mechanism_init()?;
-                    // The dbus daemon on these platforms currently requires sending the zero byte
-                    // as a separate message with SCM_CREDS
+                    // The dbus daemon on some platforms requires sending the zero byte as a separate message with SCM_CREDS.
                     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-                    if let Some(fd) = self.fd {
-                        use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
-
-                        let iov = [std::io::IoSlice::new(b"\0")];
-                        if sendmsg::<()>(
-                            fd,
-                            &iov,
-                            &[ControlMessage::ScmCreds],
-                            MsgFlags::empty(),
-                            None,
-                        ) != Ok(1)
-                        {
-                            return Poll::Ready(Err(Error::Handshake(
+                    self.socket
+                        .send_zero_byte()
+                        .map_err(|e| {
+                            Error::Handshake(format!(
+                                "Could not send zero byte with credentials: {}",
+                                e
+                            ))
+                        })
+                        .and_then(|n| match n {
+                            Some(n) if n != 1 => Err(Error::Handshake(
                                 "Could not send zero byte with credentials".to_string(),
-                            )));
-                        }
-                    }
+                            )),
+                            _ => Ok(()),
+                        })?;
 
                     ret
                 }
