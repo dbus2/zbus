@@ -1,7 +1,5 @@
 #[cfg(unix)]
 use nix::unistd::Uid;
-#[cfg(unix)]
-use std::os::unix::prelude::RawFd;
 use std::{
     collections::VecDeque,
     fmt,
@@ -75,9 +73,6 @@ pub struct ClientHandshake<S> {
     send_buffer: Vec<u8>,
     step: ClientHandshakeStep,
     server_guid: Option<Guid>,
-    #[cfg(unix)]
-    #[allow(unused)]
-    fd: Option<RawFd>,
     cap_unix_fd: bool,
     // the current AUTH mechanism is front, ordered by priority
     mechanisms: VecDeque<AuthMechanism>,
@@ -123,11 +118,7 @@ pub trait Handshake<S> {
 
 impl<S: Socket> ClientHandshake<S> {
     /// Start a handshake on this client socket
-    pub fn new(
-        socket: S,
-        #[cfg(unix)] fd: Option<RawFd>,
-        mechanisms: Option<VecDeque<AuthMechanism>>,
-    ) -> ClientHandshake<S> {
+    pub fn new(socket: S, mechanisms: Option<VecDeque<AuthMechanism>>) -> ClientHandshake<S> {
         let mechanisms = mechanisms.unwrap_or_else(|| {
             let mut mechanisms = VecDeque::new();
             mechanisms.push_back(AuthMechanism::External);
@@ -138,8 +129,6 @@ impl<S: Socket> ClientHandshake<S> {
 
         ClientHandshake {
             socket,
-            #[cfg(unix)]
-            fd,
             recv_buffer: Vec::new(),
             send_buffer: Vec::new(),
             step: ClientHandshakeStep::Init,
@@ -849,7 +838,6 @@ mod tests {
     use futures_util::future::poll_fn;
     #[cfg(not(feature = "tokio"))]
     use std::os::unix::net::UnixStream;
-    use std::os::unix::prelude::AsRawFd;
     use test_log::test;
     #[cfg(feature = "tokio")]
     use tokio::net::UnixStream;
@@ -874,8 +862,7 @@ mod tests {
                 async_io::Async::new(p1).unwrap(),
             )
         };
-        let fd = p0.as_raw_fd();
-        let mut client = ClientHandshake::new(p0, Some(fd), None);
+        let mut client = ClientHandshake::new(p0, None);
         let mut server =
             ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
 
