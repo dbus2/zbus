@@ -144,6 +144,10 @@ mod tests {
         Connection, Message, MessageFlags, Result, SignalContext,
     };
 
+    fn is_gdbus_test() -> bool {
+        std::env::var_os("ZBUS_GDBUS_TEST").is_some()
+    }
+
     #[test]
     fn msg() {
         let mut m = Message::method(
@@ -192,6 +196,10 @@ mod tests {
         ) {
             Err(crate::Error::MethodError(_, _, _)) => (),
             Err(e) => panic!("{}", e),
+
+            // GDBus allows the method to be called multiple times
+            Ok(_) if is_gdbus_test() => (),
+
             _ => panic!(),
         };
     }
@@ -217,6 +225,10 @@ mod tests {
         {
             Err(crate::Error::MethodError(_, _, _)) => (),
             Err(e) => panic!("{}", e),
+
+            // GDBus allows the method to be called multiple times
+            Ok(_) if is_gdbus_test() => (),
+
             _ => panic!(),
         };
 
@@ -332,6 +344,11 @@ mod tests {
             *connection.unique_name().unwrap(),
         );
 
+        // GDBus doesn't provide this method
+        if is_gdbus_test() {
+            return;
+        }
+
         let reply = connection
             .call_method(
                 Some("org.freedesktop.DBus"),
@@ -437,6 +454,11 @@ mod tests {
             reply.body::<UniqueName<'_>>().unwrap(),
             *connection.unique_name().unwrap(),
         );
+
+        // GDBus doesn't provide this method
+        if is_gdbus_test() {
+            return Ok(());
+        }
 
         let reply = connection
             .call_method(

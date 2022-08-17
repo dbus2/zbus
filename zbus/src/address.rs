@@ -512,20 +512,23 @@ impl FromStr for Address {
             .ok_or_else(|| Error::Address("address has no colon".to_owned()))?;
         let transport = &address[..col];
         let mut options = HashMap::new();
-        for kv in address[col + 1..].split(',') {
-            let (k, v) = match kv.find('=') {
-                Some(eq) => (&kv[..eq], &kv[eq + 1..]),
-                None => {
-                    return Err(Error::Address(
-                        "missing = when parsing key/value".to_owned(),
-                    ))
+
+        if address.len() > col + 1 {
+            for kv in address[col + 1..].split(',') {
+                let (k, v) = match kv.find('=') {
+                    Some(eq) => (&kv[..eq], &kv[eq + 1..]),
+                    None => {
+                        return Err(Error::Address(
+                            "missing = when parsing key/value".to_owned(),
+                        ))
+                    }
+                };
+                if options.insert(k, v).is_some() {
+                    return Err(Error::Address(format!(
+                        "Key `{}` specified multiple times",
+                        k
+                    )));
                 }
-            };
-            if options.insert(k, v).is_some() {
-                return Err(Error::Address(format!(
-                    "Key `{}` specified multiple times",
-                    k
-                )));
             }
         }
 
@@ -542,6 +545,17 @@ impl FromStr for Address {
                 )?,
                 addr: TcpAddress::from_tcp(options)?,
             }),
+
+            "autolaunch" => Ok(Self::Autolaunch(
+                options
+                    .get("scope")
+                    .map(|scope| -> Result<_> {
+                        String::from_utf8(decode_percents(scope)?).map_err(|_| {
+                            Error::Address("autolaunch scope is not valid UTF-8".to_owned())
+                        })
+                    })
+                    .transpose()?,
+            )),
 
             _ => Err(Error::Address(format!(
                 "unsupported transport '{}'",
@@ -666,6 +680,14 @@ mod tests {
             )
             .unwrap()
         );
+        assert_eq!(
+            Address::Autolaunch(None),
+            Address::from_str("autolaunch:").unwrap()
+        );
+        assert_eq!(
+            Address::Autolaunch(Some("*my_cool_scope*".to_owned())),
+            Address::from_str("autolaunch:scope=*my_cool_scope*").unwrap()
+        );
     }
 
     #[test]
@@ -716,6 +738,11 @@ mod tests {
             }
             .to_string(),
             "nonce-tcp:noncefile=/a/file/path%20to%20file%201234,host=localhost,port=4142,family=ipv6"
+        );
+        assert_eq!(Address::Autolaunch(None).to_string(), "autolaunch:");
+        assert_eq!(
+            Address::Autolaunch(Some("*my_cool_scope*".to_owned())).to_string(),
+            "autolaunch:scope=*my_cool_scope*"
         );
     }
 
