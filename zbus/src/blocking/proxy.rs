@@ -8,7 +8,7 @@ use std::{
 use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
-use crate::{blocking::Connection, utils::block_on, Error, Message, Result};
+use crate::{blocking::Connection, utils::block_on, Error, Message, MessageFlags, Result};
 
 use crate::fdo;
 
@@ -212,6 +212,27 @@ impl<'a> Proxy<'a> {
         block_on(self.inner().call_method(method_name, body))
     }
 
+    /// Call a method, passing additional header flags in the method call message, and return the reply.
+    ///
+    /// Typically, you would want to use [`call`] method instead. Use this method if you need to
+    /// deserialize the reply message manually (this way, you can avoid the memory
+    /// allocation/copying, by deserializing the reply to an unowned type).
+    ///
+    /// [`call`]: struct.Proxy.html#method.call
+    pub fn call_method_with_flags<'m, M, B>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<Arc<Message>>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        block_on(self.inner().call_method_with_flags(method_name, body, flags))
+    }
+
     /// Call a method and return the reply body.
     ///
     /// Use [`call_method`] instead if you need to deserialize the reply manually/separately.
@@ -227,6 +248,26 @@ impl<'a> Proxy<'a> {
         block_on(self.inner().call(method_name, body))
     }
 
+    /// Call a method, passing additional header flags in the method call message, and return the reply body.
+    ///
+    /// Use [`call_method`] instead if you need to deserialize the reply manually/separately.
+    ///
+    /// [`call_method`]: struct.Proxy.html#method.call_method
+    pub fn call_with_flags<'m, M, B, R>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<R>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+        R: serde::de::DeserializeOwned + zvariant::Type,
+    {
+        block_on(self.inner().call_with_flags(method_name, body, flags))
+    }
+
     /// Call a method without expecting a reply
     ///
     /// This sets the `NoReplyExpected` flag on the calling message and does not wait for a reply.
@@ -237,6 +278,24 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
         block_on(self.inner().call_noreply(method_name, body))
+    }
+
+    /// Call a method without expecting a reply, passing additional header flags in the
+    /// method call message
+    ///
+    /// This sets the `NoReplyExpected` flag on the calling message and does not wait for a reply.
+    pub fn call_noreply_with_flags<'m, M, B>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<()>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        block_on(self.inner().call_noreply_with_flags(method_name, body, flags))
     }
 
     /// Create a stream for signal named `signal_name`.

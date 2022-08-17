@@ -31,7 +31,7 @@ use crate::{
     blocking, fdo,
     raw::{Connection as RawConnection, Socket},
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, Message,
-    MessageStream, MessageType, ObjectServer, Result, Task,
+    MessageBuilder, MessageFlags, MessageStream, MessageType, ObjectServer, Result, Task,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -394,6 +394,55 @@ impl Connection {
             method_name,
             body,
         )?;
+
+        self.call_method_raw(m).await?.await
+    }
+
+    /// Send a method call.
+    ///
+    /// Create a method-call message, send it over the connection, then wait for the reply.
+    ///
+    /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
+    /// error replies are returned as [`Error::MethodError`].
+    pub async fn call_method_with_flags<'d, 'p, 'i, 'm, D, P, I, M, B>(
+        &self,
+        destination: Option<D>,
+        path: P,
+        interface: Option<I>,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<Arc<Message>>
+    where
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        let mut builder = MessageBuilder::method_call(path, method_name)?;
+
+        if let Some(sender) = self.unique_name() {
+            builder = builder.sender(sender)?;
+        }
+
+        if let Some(destination) = destination {
+            builder = builder.destination(destination)?;
+        }
+
+        if let Some(interface) = interface {
+            builder = builder.interface(interface)?;
+        }
+
+        if let Some(flags) = flags {
+            builder = builder.with_flags(flags)?;
+        }
+
+        let m = builder.build(body)?;
         self.call_method_raw(m).await?.await
     }
 

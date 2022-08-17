@@ -829,8 +829,10 @@ mod tests {
 
     #[cfg(unix)]
     use super::Fds;
-    use super::{Message, MessageBuilder};
+    use super::{Message, MessageBuilder, MessageFlags};
     use crate::Error;
+
+    use enumflags2::BitFlags;
 
     #[test]
     fn test() {
@@ -862,6 +864,8 @@ mod tests {
             Error::Variant(zvariant::Error::SignatureMismatch { .. })
         ));
 
+        assert_eq!(m.primary_header().flags(), BitFlags::empty());
+
         assert_eq!(m.to_string(), "Method call do from :1.72");
         let r = Message::method_reply(None::<()>, &m, &("all fine!")).unwrap();
         assert_eq!(r.to_string(), "Method return");
@@ -890,6 +894,28 @@ mod tests {
 
         let output: Vec<i32> = message.body()?;
         assert_eq!(output, vec![1, 2, 3, 4]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn builder_sets_flags_properly() -> Result<(), Error> {
+        let msg = MessageBuilder::method_call("/", "test")?
+            .with_flags(MessageFlags::NoReplyExpected)
+            .expect("Method calls should accept NoReplyExpected flag")
+            .with_flags(MessageFlags::NoAutoStart)
+            .expect("Method calls should accept NoAutoStart flag")
+            .with_flags(MessageFlags::AllowInteractiveAuth)
+            .expect("Method calls should accept AllowInteractiveAuth flag")
+            .build(&())?;
+
+        assert!(msg.primary_header().flags().is_all());
+
+        let err = MessageBuilder::signal("/", "test.test", "test")?
+            .with_flags(MessageFlags::NoReplyExpected)
+            .expect_err("NoReplyExpected is only valid on method calls");
+
+        assert!(matches!(err, Error::InvalidField));
 
         Ok(())
     }

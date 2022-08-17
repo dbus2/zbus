@@ -21,7 +21,7 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 use crate::{
     async_channel::channel,
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    CacheProperties, Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder,
+    CacheProperties, Connection, Error, Message, MessageBuilder, MessageFlags, MessageSequence, ProxyBuilder,
     Result, Task,
 };
 
@@ -713,15 +713,37 @@ impl<'a> Proxy<'a> {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
+        self.call_method_with_flags(method_name, body, None).await
+    }
+
+    /// Call a method, passing additional header flags in the method call message, and return the reply.
+    ///
+    /// Typically, you would want to use [`call`] method instead. Use this method if you need to
+    /// deserialize the reply message manually (this way, you can avoid the memory
+    /// allocation/copying, by deserializing the reply to an unowned type).
+    ///
+    /// [`call`]: struct.Proxy.html#method.call
+    pub async fn call_method_with_flags<'m, M, B>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<Arc<Message>>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
         self.inner
             .inner_without_borrows
             .conn
-            .call_method(
+            .call_method_with_flags(
                 Some(&self.inner.destination),
                 self.inner.path.as_str(),
                 Some(&self.inner.interface),
                 method_name,
                 body,
+                flags,
             )
             .await
     }
@@ -743,6 +765,31 @@ impl<'a> Proxy<'a> {
         reply.body()
     }
 
+    /// Call a method, passing additional header flags in the method call message,
+    /// and return the reply body
+    ///
+    /// Use [`call_method`] instead if you need to deserialize the reply manually/separately.
+    ///
+    /// [`call_method`]: struct.Proxy.html#method.call_method
+    pub async fn call_with_flags<'m, M, B, R>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<R>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+        R: serde::de::DeserializeOwned + zvariant::Type,
+    {
+        let reply = self
+            .call_method_with_flags(method_name, body, flags)
+            .await?;
+
+        reply.body()
+    }
+
     /// Call a method without expecting a reply
     ///
     /// This sets the `NoReplyExpected` flag on the calling message and does not wait for a reply.
@@ -752,11 +799,33 @@ impl<'a> Proxy<'a> {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let msg = MessageBuilder::method_call(self.inner.path.as_ref(), method_name)?
-            .with_flags(zbus::MessageFlags::NoReplyExpected)?
+        self.call_noreply_with_flags(method_name, body, Some(MessageFlags::NoReplyExpected))
+            .await
+    }
+
+    /// Call a method without expecting a reply, passing additional header flags in
+    /// the method call message
+    pub async fn call_noreply_with_flags<'m, M, B>(
+        &self,
+        method_name: M,
+        body: &B,
+        flags: Option<MessageFlags>,
+    ) -> Result<()>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        let mut msg = MessageBuilder::method_call(self.inner.path.as_ref(), method_name)?
+            .with_flags(MessageFlags::NoReplyExpected)?
             .destination(&self.inner.destination)?
-            .interface(&self.inner.interface)?
-            .build(body)?;
+            .interface(&self.inner.interface)?;
+
+        if let Some(flags) = flags {
+            msg = msg.with_flags(flags)?;
+        }
+
+        let msg = msg.build(body)?;
 
         self.inner
             .inner_without_borrows
