@@ -1,9 +1,10 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
 use futures_core::ready;
+#[cfg(unix)]
+use std::io::{IoSlice, IoSliceMut};
 use std::{
     io,
-    io::{IoSlice, IoSliceMut},
     task::{Context, Poll},
 };
 #[cfg(not(feature = "tokio"))]
