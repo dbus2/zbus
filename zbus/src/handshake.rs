@@ -1,7 +1,5 @@
 use futures_core::ready;
 
-#[cfg(unix)]
-use std::os::unix::prelude::RawFd;
 use std::{
     collections::VecDeque,
     fmt::Debug,
@@ -63,18 +61,9 @@ where
     S: Socket + Unpin,
 {
     /// Create a client-side `Authenticated` for the given `socket`.
-    pub async fn client(
-        socket: S,
-        #[cfg(unix)] fd: Option<RawFd>,
-        mechanisms: Option<VecDeque<AuthMechanism>>,
-    ) -> Result<Self> {
+    pub async fn client(socket: S, mechanisms: Option<VecDeque<AuthMechanism>>) -> Result<Self> {
         Handshake {
-            handshake: Some(raw::ClientHandshake::new(
-                socket,
-                #[cfg(unix)]
-                fd,
-                mechanisms,
-            )),
+            handshake: Some(raw::ClientHandshake::new(socket, mechanisms)),
             phantom: PhantomData,
         }
         .await
@@ -144,7 +133,7 @@ where
 mod tests {
     use async_io::Async;
     use nix::unistd::Uid;
-    use std::os::unix::{net::UnixStream, prelude::AsRawFd};
+    use std::os::unix::net::UnixStream;
     use test_log::test;
 
     use super::*;
@@ -161,8 +150,7 @@ mod tests {
         let (p0, p1) = UnixStream::pair()?;
 
         // initialize both handshakes
-        let fd = Some(p0.as_raw_fd());
-        let client = Authenticated::client(Async::new(p0)?, fd, None);
+        let client = Authenticated::client(Async::new(p0)?, None);
         let server = Authenticated::server(
             Async::new(p1)?,
             Guid::generate(),

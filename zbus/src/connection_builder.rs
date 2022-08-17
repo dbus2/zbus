@@ -5,8 +5,6 @@ use static_assertions::assert_impl_all;
 use std::net::TcpStream;
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
-#[cfg(unix)]
-use std::os::unix::prelude::AsRawFd;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     convert::TryInto,
@@ -222,49 +220,28 @@ impl<'a> ConnectionBuilder<'a> {
     /// Until server-side bus connection is supported, attempting to build such a connection will
     /// result in [`Error::Unsupported`] error.
     pub async fn build(self) -> Result<Connection> {
-        let (fd, stream): (Option<i32>, _) = match self.target {
+        let stream = match self.target {
             #[cfg(all(not(feature = "tokio")))]
-            Target::UnixStream(stream) => (
-                #[cfg(unix)]
-                Some(stream.as_raw_fd()),
-                #[cfg(not(unix))]
-                None,
-                Box::new(Async::new(stream)?) as Box<dyn Socket>,
-            ),
+            Target::UnixStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
             #[cfg(all(unix, feature = "tokio"))]
-            Target::UnixStream(stream) => (
-                Some(stream.as_raw_fd()),
-                Box::new(stream) as Box<dyn Socket>,
-            ),
+            Target::UnixStream(stream) => Box::new(stream) as Box<dyn Socket>,
             #[cfg(all(not(unix), feature = "tokio"))]
             Target::UnixStream(_) => return Err(Error::Unsupported),
             #[cfg(not(feature = "tokio"))]
-            Target::TcpStream(stream) => (None, Box::new(Async::new(stream)?) as Box<dyn Socket>),
+            Target::TcpStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
             #[cfg(feature = "tokio")]
-            Target::TcpStream(stream) => (None, Box::new(stream) as Box<dyn Socket>),
+            Target::TcpStream(stream) => Box::new(stream) as Box<dyn Socket>,
             Target::Address(address) => match address.connect().await? {
                 #[cfg(any(unix, not(feature = "tokio")))]
-                address::Stream::Unix(stream) => (
-                    #[cfg(unix)]
-                    Some(stream.as_raw_fd()),
-                    #[cfg(not(unix))]
-                    None,
-                    Box::new(stream) as Box<dyn Socket>,
-                ),
-                address::Stream::Tcp(stream) => (None, Box::new(stream) as Box<dyn Socket>),
+                address::Stream::Unix(stream) => Box::new(stream) as Box<dyn Socket>,
+                address::Stream::Tcp(stream) => Box::new(stream) as Box<dyn Socket>,
             },
-            Target::Socket(stream) => (None, stream),
+            Target::Socket(stream) => stream,
         };
         let auth = match self.guid {
             None => {
                 // SASL Handshake
-                Authenticated::client(
-                    stream,
-                    #[cfg(unix)]
-                    fd,
-                    self.auth_mechanisms,
-                )
-                .await?
+                Authenticated::client(stream, self.auth_mechanisms).await?
             }
             Some(guid) => {
                 if !self.p2p {
@@ -272,41 +249,7 @@ impl<'a> ConnectionBuilder<'a> {
                 }
 
                 #[cfg(unix)]
-                let client_uid = fd
-                    .map(|fd| -> Result<u32> {
-                        #[cfg(any(target_os = "android", target_os = "linux"))]
-                        {
-                            use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
-
-                            let creds = getsockopt(fd, PeerCredentials).map_err(|e| {
-                                Error::Handshake(format!("Failed to get peer credentials: {}", e))
-                            })?;
-
-                            Ok(creds.uid())
-                        }
-
-                        #[cfg(any(
-                            target_os = "macos",
-                            target_os = "ios",
-                            target_os = "freebsd",
-                            target_os = "dragonfly",
-                            target_os = "openbsd",
-                            target_os = "netbsd"
-                        ))]
-                        {
-                            let uid = nix::unistd::getpeereid(fd)
-                                .map_err(|e| {
-                                    Error::Handshake(format!(
-                                        "Failed to get peer credentials: {}",
-                                        e
-                                    ))
-                                })?
-                                .0;
-
-                            Ok(uid.into())
-                        }
-                    })
-                    .transpose()?;
+                let client_uid = stream.uid()?;
 
                 #[cfg(windows)]
                 let client_sid = stream.peer_sid();

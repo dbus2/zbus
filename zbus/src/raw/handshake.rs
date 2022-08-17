@@ -1,7 +1,5 @@
 #[cfg(unix)]
 use nix::unistd::Uid;
-#[cfg(unix)]
-use std::os::unix::prelude::RawFd;
 use std::{
     collections::VecDeque,
     fmt,
@@ -75,9 +73,6 @@ pub struct ClientHandshake<S> {
     send_buffer: Vec<u8>,
     step: ClientHandshakeStep,
     server_guid: Option<Guid>,
-    #[cfg(unix)]
-    #[allow(unused)]
-    fd: Option<RawFd>,
     cap_unix_fd: bool,
     // the current AUTH mechanism is front, ordered by priority
     mechanisms: VecDeque<AuthMechanism>,
@@ -123,11 +118,7 @@ pub trait Handshake<S> {
 
 impl<S: Socket> ClientHandshake<S> {
     /// Start a handshake on this client socket
-    pub fn new(
-        socket: S,
-        #[cfg(unix)] fd: Option<RawFd>,
-        mechanisms: Option<VecDeque<AuthMechanism>>,
-    ) -> ClientHandshake<S> {
+    pub fn new(socket: S, mechanisms: Option<VecDeque<AuthMechanism>>) -> ClientHandshake<S> {
         let mechanisms = mechanisms.unwrap_or_else(|| {
             let mut mechanisms = VecDeque::new();
             mechanisms.push_back(AuthMechanism::External);
@@ -138,8 +129,6 @@ impl<S: Socket> ClientHandshake<S> {
 
         ClientHandshake {
             socket,
-            #[cfg(unix)]
-            fd,
             recv_buffer: Vec::new(),
             send_buffer: Vec::new(),
             step: ClientHandshakeStep::Init,
@@ -354,7 +343,29 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
         loop {
             ready!(self.flush_buffer(cx))?;
             let (next_step, cmd) = match self.step {
-                Init | MechanismInit => self.mechanism_init()?,
+                Init => {
+                    #[allow(clippy::let_and_return)]
+                    let ret = self.mechanism_init()?;
+                    // The dbus daemon on some platforms requires sending the zero byte as a separate message with SCM_CREDS.
+                    #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+                    self.socket
+                        .send_zero_byte()
+                        .map_err(|e| {
+                            Error::Handshake(format!(
+                                "Could not send zero byte with credentials: {}",
+                                e
+                            ))
+                        })
+                        .and_then(|n| match n {
+                            Some(n) if n != 1 => Err(Error::Handshake(
+                                "Could not send zero byte with credentials".to_string(),
+                            )),
+                            _ => Ok(()),
+                        })?;
+
+                    ret
+                }
+                MechanismInit => self.mechanism_init()?,
                 WaitingForData | WaitingForOK => {
                     let reply = ready!(self.read_command(cx))?;
                     match (self.step, reply) {
@@ -396,42 +407,14 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                 }
                 Done => return Poll::Ready(Ok(())),
             };
-            self.send_buffer = if self.step == Init {
+            self.send_buffer = if self.step == Init
+                // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
+                && !cfg!(any(target_os = "freebsd", target_os = "dragonfly"))
+            {
                 format!("\0{}", cmd).into()
             } else {
                 cmd.into()
             };
-            // The dbus daemon on these platforms currently requires sending the zero byte
-            // as a separate message with SCM_CREDS
-            #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-            if self.step == Init {
-                use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
-
-                let fd = match self.fd {
-                    Some(fd) => fd,
-                    None => {
-                        // Seems like it's a non Unixstream socket, let's just continue.
-                        self.step = next_step;
-                        continue;
-                    }
-                };
-
-                // Steal the leading null byte from the buffer.
-                let zero = &[self.send_buffer.drain(0..1).next().unwrap()];
-                let iov = [std::io::IoSlice::new(zero)];
-                if sendmsg::<()>(
-                    fd,
-                    &iov,
-                    &[ControlMessage::ScmCreds],
-                    MsgFlags::empty(),
-                    None,
-                ) != Ok(1)
-                {
-                    return Poll::Ready(Err(Error::Handshake(
-                        "Could not send zero byte with credentials".to_string(),
-                    )));
-                }
-            }
             self.step = next_step;
         }
     }
@@ -855,7 +838,6 @@ mod tests {
     use futures_util::future::poll_fn;
     #[cfg(not(feature = "tokio"))]
     use std::os::unix::net::UnixStream;
-    use std::os::unix::prelude::AsRawFd;
     use test_log::test;
     #[cfg(feature = "tokio")]
     use tokio::net::UnixStream;
@@ -880,8 +862,7 @@ mod tests {
                 async_io::Async::new(p1).unwrap(),
             )
         };
-        let fd = p0.as_raw_fd();
-        let mut client = ClientHandshake::new(p0, Some(fd), None);
+        let mut client = ClientHandshake::new(p0, None);
         let mut server =
             ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
 
