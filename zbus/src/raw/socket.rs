@@ -542,3 +542,57 @@ impl Socket for tokio::net::TcpStream {
         None
     }
 }
+
+#[cfg(all(feature = "vsock", not(feature = "tokio")))]
+impl Socket for Async<vsock::VsockStream> {
+    fn can_pass_unix_fd(&self) -> bool {
+        false
+    }
+
+    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
+        #[cfg(unix)]
+        let fds = vec![];
+
+        loop {
+            match (*self).get_mut().read(buf) {
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                Err(e) => return Poll::Ready(Err(e)),
+                Ok(len) => {
+                    #[cfg(unix)]
+                    let ret = (len, fds);
+                    #[cfg(not(unix))]
+                    let ret = len;
+                    return Poll::Ready(Ok(ret));
+                }
+            }
+            ready!(self.poll_readable(cx))?;
+        }
+    }
+
+    fn poll_sendmsg(
+        &mut self,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+        #[cfg(unix)] fds: &[RawFd],
+    ) -> Poll<io::Result<usize>> {
+        #[cfg(unix)]
+        if !fds.is_empty() {
+            return Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "fds cannot be sent with a tcp stream",
+            )));
+        }
+
+        loop {
+            match (*self).get_mut().write(buf) {
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                res => return Poll::Ready(res),
+            }
+            ready!(self.poll_writable(cx))?;
+        }
+    }
+
+    fn close(&self) -> io::Result<()> {
+        self.get_ref().shutdown(std::net::Shutdown::Both)
+    }
+}
