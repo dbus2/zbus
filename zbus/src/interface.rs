@@ -7,10 +7,12 @@ use std::{
 };
 
 use async_trait::async_trait;
+use zbus::MessageFlags;
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{DynamicType, OwnedValue, Value};
 
 use crate::{fdo, Connection, Message, ObjectServer, Result, SignalContext};
+use tracing::trace;
 
 /// A helper type returned by [`Interface`] callbacks.
 pub enum DispatchResult<'a> {
@@ -36,11 +38,21 @@ impl<'a> DispatchResult<'a> {
     {
         DispatchResult::Async(Box::pin(async move {
             let hdr = msg.header()?;
-            match f.await {
-                Ok(r) => conn.reply(msg, &r).await,
-                Err(e) => conn.reply_dbus_error(&hdr, e).await,
+            let ret = f.await;
+            if !hdr
+                .primary()
+                .flags()
+                .contains(MessageFlags::NoReplyExpected)
+            {
+                match ret {
+                    Ok(r) => conn.reply(msg, &r).await,
+                    Err(e) => conn.reply_dbus_error(&hdr, e).await,
+                }
+                .map(|_seq| ())
+            } else {
+                trace!("No reply expected for {:?} by the caller.", msg);
+                Ok(())
             }
-            .map(|_seq| ())
         }))
     }
 }
