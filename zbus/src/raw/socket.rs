@@ -596,3 +596,48 @@ impl Socket for Async<vsock::VsockStream> {
         self.get_ref().shutdown(std::net::Shutdown::Both)
     }
 }
+
+#[cfg(feature = "tokio-vsock")]
+impl Socket for tokio_vsock::VsockStream {
+    fn can_pass_unix_fd(&self) -> bool {
+        false
+    }
+
+    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
+        use tokio::io::{AsyncRead, ReadBuf};
+
+        let mut read_buf = ReadBuf::new(buf);
+        Pin::new(self).poll_read(cx, &mut read_buf).map(|res| {
+            res.map(|_| {
+                let ret = read_buf.filled().len();
+                #[cfg(unix)]
+                let ret = (ret, vec![]);
+
+                ret
+            })
+        })
+    }
+
+    fn poll_sendmsg(
+        &mut self,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+        #[cfg(unix)] fds: &[RawFd],
+    ) -> Poll<io::Result<usize>> {
+        use tokio::io::AsyncWrite;
+
+        #[cfg(unix)]
+        if !fds.is_empty() {
+            return Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "fds cannot be sent with a tcp stream",
+            )));
+        }
+
+        Pin::new(self).poll_write(cx, buf)
+    }
+
+    fn close(&self) -> io::Result<()> {
+        self.shutdown(std::net::Shutdown::Both)
+    }
+}
