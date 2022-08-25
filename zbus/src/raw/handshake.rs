@@ -189,7 +189,10 @@ impl<S: Socket> ClientHandshake<S> {
         use ClientHandshakeStep::*;
         let mech = self.mechanism()?;
         match mech {
-            AuthMechanism::Anonymous => Ok((WaitingForOK, Command::Auth(Some(*mech), None))),
+            AuthMechanism::Anonymous => Ok((
+                WaitingForOK,
+                Command::Auth(Some(*mech), Some(hex::encode("zbus"))),
+            )),
             AuthMechanism::External => Ok((
                 WaitingForOK,
                 Command::Auth(Some(*mech), Some(sasl_auth_id()?)),
@@ -442,8 +445,8 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
 enum ServerHandshakeStep {
     WaitingForNull,
     WaitingForAuth,
-    SendingAuthData,
-    WaitingForData,
+    SendingAuthData(AuthMechanism),
+    WaitingForData(AuthMechanism),
     SendingAuthOK,
     SendingAuthError,
     WaitingForBegin,
@@ -642,12 +645,12 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                                 .filter(|m| self.mechanisms.contains(m));
 
                             match (mech, words.next(), words.next()) {
-                                (Some(AuthMechanism::Anonymous), None, None) => {
-                                    self.auth_ok();
-                                }
-                                (Some(AuthMechanism::External), None, None) => {
+                                (Some(mech), None, None) => {
                                     self.write_buffer = "DATA\r\n".into();
-                                    self.step = ServerHandshakeStep::SendingAuthData;
+                                    self.step = ServerHandshakeStep::SendingAuthData(mech);
+                                }
+                                (Some(AuthMechanism::Anonymous), Some(_), None) => {
+                                    self.auth_ok();
                                 }
                                 (Some(AuthMechanism::External), Some(sasl_id), None) => {
                                     self.check_external_auth(sasl_id)?;
@@ -664,22 +667,23 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                         _ => self.unsupported_command_error(),
                     }
                 }
-                ServerHandshakeStep::SendingAuthData => {
+                ServerHandshakeStep::SendingAuthData(mech) => {
                     trace!("Sending data request");
                     ready!(self.flush_buffer(cx))?;
-                    self.step = ServerHandshakeStep::WaitingForData;
+                    self.step = ServerHandshakeStep::WaitingForData(mech);
                 }
-                ServerHandshakeStep::WaitingForData => {
+                ServerHandshakeStep::WaitingForData(mech) => {
                     trace!("Waiting for authentication");
                     let reply = ready!(self.read_command(cx))?;
                     let mut words = reply.split_whitespace();
-                    match (words.next(), words.next(), words.next()) {
-                        (Some("DATA"), Some(sasl_id), None) => {
+                    match (mech, words.next(), words.next(), words.next()) {
+                        (AuthMechanism::External, Some("DATA"), Some(sasl_id), None) => {
                             self.check_external_auth(sasl_id)?;
                         }
-                        (Some("DATA"), None, None) => self.auth_ok(),
-                        (Some("DATA"), _, _) => self.rejected_error(),
-                        (_, _, _) => self.unsupported_command_error(),
+                        (AuthMechanism::External, Some("DATA"), None, None)
+                        | (AuthMechanism::Anonymous, Some("DATA"), _, None) => self.auth_ok(),
+                        (_, Some("DATA"), _, _) => self.rejected_error(),
+                        (_, _, _, _) => self.unsupported_command_error(),
                     }
                 }
                 ServerHandshakeStep::SendingAuthError => {
@@ -992,6 +996,43 @@ mod tests {
             ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
 
         crate::utils::block_on(p0.write_all(b"\0AUTH EXTERNAL\r\nDATA\r\nBEGIN\r\n")).unwrap();
+        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+
+        server.try_finish().unwrap();
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn anonymous_handshake() {
+        let (mut p0, p1) = create_async_socket_pair();
+        let mut server = ServerHandshake::new(
+            p1,
+            Guid::generate(),
+            Some(Uid::current().into()),
+            Some(vec![AuthMechanism::Anonymous].into()),
+        )
+        .unwrap();
+
+        crate::utils::block_on(p0.write_all(b"\0AUTH ANONYMOUS abcd\r\nBEGIN\r\n")).unwrap();
+        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+
+        server.try_finish().unwrap();
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn separate_anonymous_data() {
+        let (mut p0, p1) = create_async_socket_pair();
+        let mut server = ServerHandshake::new(
+            p1,
+            Guid::generate(),
+            Some(Uid::current().into()),
+            Some(vec![AuthMechanism::Anonymous].into()),
+        )
+        .unwrap();
+
+        crate::utils::block_on(p0.write_all(b"\0AUTH ANONYMOUS\r\nDATA abcd\r\nBEGIN\r\n"))
+            .unwrap();
         crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
 
         server.try_finish().unwrap();
