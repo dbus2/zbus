@@ -189,7 +189,10 @@ impl<S: Socket> ClientHandshake<S> {
         use ClientHandshakeStep::*;
         let mech = self.mechanism()?;
         match mech {
-            AuthMechanism::Anonymous => Ok((WaitingForOK, Command::Auth(Some(*mech), None))),
+            AuthMechanism::Anonymous => Ok((
+                WaitingForOK,
+                Command::Auth(Some(*mech), Some(hex::encode("zbus"))),
+            )),
             AuthMechanism::External => Ok((
                 WaitingForOK,
                 Command::Auth(Some(*mech), Some(sasl_auth_id()?)),
@@ -442,6 +445,8 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
 enum ServerHandshakeStep {
     WaitingForNull,
     WaitingForAuth,
+    SendingAuthData(AuthMechanism),
+    WaitingForData(AuthMechanism),
     SendingAuthOK,
     SendingAuthError,
     WaitingForBegin,
@@ -467,7 +472,8 @@ enum ServerHandshakeStep {
 #[derive(Debug)]
 pub struct ServerHandshake<S> {
     socket: S,
-    buffer: Vec<u8>,
+    read_buffer: Vec<u8>,
+    write_buffer: Vec<u8>,
     step: ServerHandshakeStep,
     server_guid: Guid,
     #[cfg(unix)]
@@ -515,7 +521,8 @@ impl<S: Socket> ServerHandshake<S> {
 
         Ok(ServerHandshake {
             socket,
-            buffer: Vec::new(),
+            read_buffer: Vec::new(),
+            write_buffer: Vec::new(),
             step: ServerHandshakeStep::WaitingForNull,
             server_guid: guid,
             #[cfg(unix)]
@@ -529,36 +536,68 @@ impl<S: Socket> ServerHandshake<S> {
     }
 
     fn flush_buffer(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        while !self.buffer.is_empty() {
+        while !self.write_buffer.is_empty() {
             let written = ready!(self.socket.poll_sendmsg(
                 cx,
-                &self.buffer,
+                &self.write_buffer,
                 #[cfg(unix)]
                 &[]
             ))?;
-            self.buffer.drain(..written);
+            self.write_buffer.drain(..written);
         }
         Poll::Ready(Ok(()))
     }
 
-    fn read_command(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        while !self.buffer.ends_with(b"\r\n") {
+    fn read_command(&mut self, cx: &mut Context<'_>) -> Poll<Result<String>> {
+        while !self.read_buffer.ends_with(b"\r\n") {
             let mut buf = [0; 40];
             let read = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
             #[cfg(unix)]
             let read = read.0;
-            self.buffer.extend(&buf[..read]);
+            self.read_buffer.extend(&buf[..read]);
         }
-        Poll::Ready(Ok(()))
+
+        let mut line = String::new();
+        let read = (&self.read_buffer[..]).read_line(&mut line).unwrap();
+        self.read_buffer.drain(..read);
+        Poll::Ready(Ok(line.trim_end().to_string()))
     }
 
     fn auth_ok(&mut self) {
-        self.buffer = format!("OK {}\r\n", self.server_guid).into();
+        self.write_buffer = format!("OK {}\r\n", self.server_guid).into();
         self.step = ServerHandshakeStep::SendingAuthOK;
     }
 
+    fn check_external_auth(&mut self, sasl_id: &str) -> Result<()> {
+        let auth_ok = {
+            #[cfg(unix)]
+            {
+                let uid = id_from_str(sasl_id)
+                    .map_err(|e| Error::Handshake(format!("Invalid UID: {}", e)))?;
+                // Safe to unwrap since we checked earlier external & UID
+                uid == self.client_uid.unwrap()
+            }
+            #[cfg(windows)]
+            {
+                let sid = hex::decode(sasl_id)?;
+                let sid = std::str::from_utf8(&sid)
+                    .map_err(|e| Error::Handshake(format!("Invalid SID: {}", e)))?;
+                // Safe to unwrap since we checked earlier external & SID
+                sid == self.client_sid.as_ref().unwrap()
+            }
+        };
+
+        if auth_ok {
+            self.auth_ok();
+        } else {
+            self.rejected_error();
+        }
+
+        Ok(())
+    }
+
     fn unsupported_command_error(&mut self) {
-        self.buffer = Vec::from(&b"ERROR Unsupported command\r\n"[..]);
+        self.write_buffer = Vec::from(&b"ERROR Unsupported command\r\n"[..]);
         self.step = ServerHandshakeStep::SendingAuthError;
     }
 
@@ -569,7 +608,7 @@ impl<S: Socket> ServerHandshake<S> {
             .map(|m| m.to_string())
             .collect::<Vec<_>>()
             .join(" ");
-        self.buffer = format!("REJECTED {}\r\n", mechanisms).into();
+        self.write_buffer = format!("REJECTED {}\r\n", mechanisms).into();
         self.step = ServerHandshakeStep::SendingAuthError;
     }
 }
@@ -596,9 +635,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                 }
                 ServerHandshakeStep::WaitingForAuth => {
                     trace!("Waiting for authentication");
-                    ready!(self.read_command(cx))?;
-                    let mut reply = String::new();
-                    (&self.buffer[..]).read_line(&mut reply)?;
+                    let reply = ready!(self.read_command(cx))?;
                     let mut words = reply.split_whitespace();
                     match words.next() {
                         Some("AUTH") => {
@@ -608,35 +645,15 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                                 .filter(|m| self.mechanisms.contains(m));
 
                             match (mech, words.next(), words.next()) {
-                                (Some(AuthMechanism::Anonymous), None, None) => {
+                                (Some(mech), None, None) => {
+                                    self.write_buffer = "DATA\r\n".into();
+                                    self.step = ServerHandshakeStep::SendingAuthData(mech);
+                                }
+                                (Some(AuthMechanism::Anonymous), Some(_), None) => {
                                     self.auth_ok();
                                 }
                                 (Some(AuthMechanism::External), Some(sasl_id), None) => {
-                                    let auth_ok = {
-                                        #[cfg(unix)]
-                                        {
-                                            let uid = id_from_str(sasl_id).map_err(|e| {
-                                                Error::Handshake(format!("Invalid UID: {}", e))
-                                            })?;
-                                            // Safe to unwrap since we checked earlier external & UID
-                                            uid == self.client_uid.unwrap()
-                                        }
-                                        #[cfg(windows)]
-                                        {
-                                            let sid = hex::decode(sasl_id)?;
-                                            let sid = std::str::from_utf8(&sid).map_err(|e| {
-                                                Error::Handshake(format!("Invalid SID: {}", e))
-                                            })?;
-                                            // Safe to unwrap since we checked earlier external & SID
-                                            sid == self.client_sid.as_ref().unwrap()
-                                        }
-                                    };
-
-                                    if auth_ok {
-                                        self.auth_ok();
-                                    } else {
-                                        self.rejected_error();
-                                    }
+                                    self.check_external_auth(sasl_id)?;
                                 }
                                 _ => self.rejected_error(),
                             }
@@ -648,6 +665,25 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                             )));
                         }
                         _ => self.unsupported_command_error(),
+                    }
+                }
+                ServerHandshakeStep::SendingAuthData(mech) => {
+                    trace!("Sending data request");
+                    ready!(self.flush_buffer(cx))?;
+                    self.step = ServerHandshakeStep::WaitingForData(mech);
+                }
+                ServerHandshakeStep::WaitingForData(mech) => {
+                    trace!("Waiting for authentication");
+                    let reply = ready!(self.read_command(cx))?;
+                    let mut words = reply.split_whitespace();
+                    match (mech, words.next(), words.next(), words.next()) {
+                        (AuthMechanism::External, Some("DATA"), Some(sasl_id), None) => {
+                            self.check_external_auth(sasl_id)?;
+                        }
+                        (AuthMechanism::External, Some("DATA"), None, None)
+                        | (AuthMechanism::Anonymous, Some("DATA"), _, None) => self.auth_ok(),
+                        (_, Some("DATA"), _, _) => self.rejected_error(),
+                        (_, _, _, _) => self.unsupported_command_error(),
                     }
                 }
                 ServerHandshakeStep::SendingAuthError => {
@@ -662,9 +698,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                 }
                 ServerHandshakeStep::WaitingForBegin => {
                     trace!("Waiting for Begin command from the client");
-                    ready!(self.read_command(cx))?;
-                    let mut reply = String::new();
-                    (&self.buffer[..]).read_line(&mut reply)?;
+                    let reply = ready!(self.read_command(cx))?;
                     let mut words = reply.split_whitespace();
                     match (words.next(), words.next()) {
                         (Some("BEGIN"), None) => {
@@ -674,7 +708,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                         #[cfg(unix)]
                         (Some("NEGOTIATE_UNIX_FD"), None) => {
                             self.cap_unix_fd = true;
-                            self.buffer = Vec::from(&b"AGREE_UNIX_FD\r\n"[..]);
+                            self.write_buffer = Vec::from(&b"AGREE_UNIX_FD\r\n"[..]);
                             self.step = ServerHandshakeStep::SendingBeginMessage;
                         }
                         _ => self.unsupported_command_error(),
@@ -835,19 +869,24 @@ impl FromStr for Command {
 #[cfg(unix)]
 #[cfg(test)]
 mod tests {
+    #[cfg(not(feature = "tokio"))]
+    use async_std::io::{Write as AsyncWrite, WriteExt};
     use futures_util::future::poll_fn;
+    use ntest::timeout;
     #[cfg(not(feature = "tokio"))]
     use std::os::unix::net::UnixStream;
     use test_log::test;
     #[cfg(feature = "tokio")]
-    use tokio::net::UnixStream;
+    use tokio::{
+        io::{AsyncWrite, AsyncWriteExt},
+        net::UnixStream,
+    };
 
     use super::*;
 
     use crate::Guid;
 
-    #[test]
-    fn handshake() {
+    fn create_async_socket_pair() -> (impl AsyncWrite + Socket, impl AsyncWrite + Socket) {
         // Tokio needs us to call the sync function from async context. :shrug:
         let (p0, p1) = crate::utils::block_on(async { UnixStream::pair().unwrap() });
 
@@ -862,6 +901,14 @@ mod tests {
                 async_io::Async::new(p1).unwrap(),
             )
         };
+
+        (p0, p1)
+    }
+
+    #[test]
+    fn handshake() {
+        let (p0, p1) = create_async_socket_pair();
+
         let mut client = ClientHandshake::new(p0, None);
         let mut server =
             ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
@@ -893,5 +940,101 @@ mod tests {
 
         assert_eq!(client.server_guid, server.server_guid);
         assert_eq!(client.cap_unix_fd, server.cap_unix_fd);
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn pipelined_handshake() {
+        let (mut p0, p1) = create_async_socket_pair();
+        let mut server =
+            ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
+
+        crate::utils::block_on(
+            p0.write_all(
+                format!(
+                    "\0AUTH EXTERNAL {}\r\nNEGOTIATE_UNIX_FD\r\nBEGIN\r\n",
+                    sasl_auth_id().unwrap()
+                )
+                .as_bytes(),
+            ),
+        )
+        .unwrap();
+        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+
+        let server = server.try_finish().unwrap();
+
+        assert!(server.cap_unix_fd);
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn separate_external_data() {
+        let (mut p0, p1) = create_async_socket_pair();
+        let mut server =
+            ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
+
+        crate::utils::block_on(
+            p0.write_all(
+                format!(
+                    "\0AUTH EXTERNAL\r\nDATA {}\r\nBEGIN\r\n",
+                    sasl_auth_id().unwrap()
+                )
+                .as_bytes(),
+            ),
+        )
+        .unwrap();
+        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+
+        server.try_finish().unwrap();
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn missing_external_data() {
+        let (mut p0, p1) = create_async_socket_pair();
+        let mut server =
+            ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
+
+        crate::utils::block_on(p0.write_all(b"\0AUTH EXTERNAL\r\nDATA\r\nBEGIN\r\n")).unwrap();
+        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+
+        server.try_finish().unwrap();
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn anonymous_handshake() {
+        let (mut p0, p1) = create_async_socket_pair();
+        let mut server = ServerHandshake::new(
+            p1,
+            Guid::generate(),
+            Some(Uid::current().into()),
+            Some(vec![AuthMechanism::Anonymous].into()),
+        )
+        .unwrap();
+
+        crate::utils::block_on(p0.write_all(b"\0AUTH ANONYMOUS abcd\r\nBEGIN\r\n")).unwrap();
+        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+
+        server.try_finish().unwrap();
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn separate_anonymous_data() {
+        let (mut p0, p1) = create_async_socket_pair();
+        let mut server = ServerHandshake::new(
+            p1,
+            Guid::generate(),
+            Some(Uid::current().into()),
+            Some(vec![AuthMechanism::Anonymous].into()),
+        )
+        .unwrap();
+
+        crate::utils::block_on(p0.write_all(b"\0AUTH ANONYMOUS\r\nDATA abcd\r\nBEGIN\r\n"))
+            .unwrap();
+        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+
+        server.try_finish().unwrap();
     }
 }
