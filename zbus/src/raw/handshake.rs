@@ -442,6 +442,8 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
 enum ServerHandshakeStep {
     WaitingForNull,
     WaitingForAuth,
+    SendingAuthData,
+    WaitingForData,
     SendingAuthOK,
     SendingAuthError,
     WaitingForBegin,
@@ -563,6 +565,34 @@ impl<S: Socket> ServerHandshake<S> {
         self.step = ServerHandshakeStep::SendingAuthOK;
     }
 
+    fn check_external_auth(&mut self, sasl_id: &str) -> Result<()> {
+        let auth_ok = {
+            #[cfg(unix)]
+            {
+                let uid = id_from_str(sasl_id)
+                    .map_err(|e| Error::Handshake(format!("Invalid UID: {}", e)))?;
+                // Safe to unwrap since we checked earlier external & UID
+                uid == self.client_uid.unwrap()
+            }
+            #[cfg(windows)]
+            {
+                let sid = hex::decode(sasl_id)?;
+                let sid = std::str::from_utf8(&sid)
+                    .map_err(|e| Error::Handshake(format!("Invalid SID: {}", e)))?;
+                // Safe to unwrap since we checked earlier external & SID
+                sid == self.client_sid.as_ref().unwrap()
+            }
+        };
+
+        if auth_ok {
+            self.auth_ok();
+        } else {
+            self.rejected_error();
+        }
+
+        Ok(())
+    }
+
     fn unsupported_command_error(&mut self) {
         self.write_buffer = Vec::from(&b"ERROR Unsupported command\r\n"[..]);
         self.step = ServerHandshakeStep::SendingAuthError;
@@ -615,32 +645,12 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                                 (Some(AuthMechanism::Anonymous), None, None) => {
                                     self.auth_ok();
                                 }
+                                (Some(AuthMechanism::External), None, None) => {
+                                    self.write_buffer = "DATA\r\n".into();
+                                    self.step = ServerHandshakeStep::SendingAuthData;
+                                }
                                 (Some(AuthMechanism::External), Some(sasl_id), None) => {
-                                    let auth_ok = {
-                                        #[cfg(unix)]
-                                        {
-                                            let uid = id_from_str(sasl_id).map_err(|e| {
-                                                Error::Handshake(format!("Invalid UID: {}", e))
-                                            })?;
-                                            // Safe to unwrap since we checked earlier external & UID
-                                            uid == self.client_uid.unwrap()
-                                        }
-                                        #[cfg(windows)]
-                                        {
-                                            let sid = hex::decode(sasl_id)?;
-                                            let sid = std::str::from_utf8(&sid).map_err(|e| {
-                                                Error::Handshake(format!("Invalid SID: {}", e))
-                                            })?;
-                                            // Safe to unwrap since we checked earlier external & SID
-                                            sid == self.client_sid.as_ref().unwrap()
-                                        }
-                                    };
-
-                                    if auth_ok {
-                                        self.auth_ok();
-                                    } else {
-                                        self.rejected_error();
-                                    }
+                                    self.check_external_auth(sasl_id)?;
                                 }
                                 _ => self.rejected_error(),
                             }
@@ -652,6 +662,23 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                             )));
                         }
                         _ => self.unsupported_command_error(),
+                    }
+                }
+                ServerHandshakeStep::SendingAuthData => {
+                    trace!("Sending data request");
+                    ready!(self.flush_buffer(cx))?;
+                    self.step = ServerHandshakeStep::WaitingForData;
+                }
+                ServerHandshakeStep::WaitingForData => {
+                    trace!("Waiting for authentication");
+                    let reply = ready!(self.read_command(cx))?;
+                    let mut words = reply.split_whitespace();
+                    match (words.next(), words.next(), words.next()) {
+                        (Some("DATA"), Some(sasl_id), None) => {
+                            self.check_external_auth(sasl_id)?;
+                        }
+                        (Some("DATA"), _, _) => self.rejected_error(),
+                        (_, _, _) => self.unsupported_command_error(),
                     }
                 }
                 ServerHandshakeStep::SendingAuthError => {
@@ -932,5 +959,27 @@ mod tests {
         let server = server.try_finish().unwrap();
 
         assert!(server.cap_unix_fd);
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn separate_external_data() {
+        let (mut p0, p1) = create_async_socket_pair();
+        let mut server =
+            ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
+
+        crate::utils::block_on(
+            p0.write_all(
+                format!(
+                    "\0AUTH EXTERNAL\r\nDATA {}\r\nBEGIN\r\n",
+                    sasl_auth_id().unwrap()
+                )
+                .as_bytes(),
+            ),
+        )
+        .unwrap();
+        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+
+        server.try_finish().unwrap();
     }
 }
