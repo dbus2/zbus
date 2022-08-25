@@ -677,6 +677,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                         (Some("DATA"), Some(sasl_id), None) => {
                             self.check_external_auth(sasl_id)?;
                         }
+                        (Some("DATA"), None, None) => self.auth_ok(),
                         (Some("DATA"), _, _) => self.rejected_error(),
                         (_, _, _) => self.unsupported_command_error(),
                     }
@@ -978,6 +979,19 @@ mod tests {
             ),
         )
         .unwrap();
+        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+
+        server.try_finish().unwrap();
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn missing_external_data() {
+        let (mut p0, p1) = create_async_socket_pair();
+        let mut server =
+            ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
+
+        crate::utils::block_on(p0.write_all(b"\0AUTH EXTERNAL\r\nDATA\r\nBEGIN\r\n")).unwrap();
         crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
 
         server.try_finish().unwrap();
