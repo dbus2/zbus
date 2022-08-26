@@ -1176,6 +1176,66 @@ mod tests {
         futures_util::try_join!(client, server)
     }
 
+    // Compile-test only since we don't have a VM setup to run this with/in.
+    #[cfg(any(
+        all(feature = "vsock", not(feature = "tokio")),
+        feature = "tokio-vsock"
+    ))]
+    #[test]
+    #[timeout(15000)]
+    #[ignore]
+    fn vsock_p2p() {
+        crate::utils::block_on(test_vsock_p2p()).unwrap();
+    }
+
+    #[cfg(any(
+        all(feature = "vsock", not(feature = "tokio")),
+        feature = "tokio-vsock"
+    ))]
+    async fn test_vsock_p2p() -> Result<()> {
+        let (server1, client1) = vsock_p2p_pipe().await?;
+        let (server2, client2) = vsock_p2p_pipe().await?;
+
+        test_p2p(server1, client1, server2, client2).await
+    }
+
+    #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+    async fn vsock_p2p_pipe() -> Result<(Connection, Connection)> {
+        let guid = Guid::generate();
+
+        let listener = vsock::VsockListener::bind_with_cid_port(vsock::VMADDR_CID_ANY, 42).unwrap();
+        let addr = listener.local_addr().unwrap();
+        let client = vsock::VsockStream::connect(&addr).unwrap();
+        let server = listener.incoming().next().unwrap().unwrap();
+
+        let server = ConnectionBuilder::vsock_stream(server)
+            .server(&guid)
+            .p2p()
+            .auth_mechanisms(&[AuthMechanism::Anonymous])
+            .build();
+        let client = ConnectionBuilder::vsock_stream(client).p2p().build();
+
+        futures_util::try_join!(server, client)
+    }
+
+    #[cfg(feature = "tokio-vsock")]
+    async fn vsock_p2p_pipe() -> Result<(Connection, Connection)> {
+        let guid = Guid::generate();
+
+        let listener = tokio_vsock::VsockListener::bind(2, 42).unwrap();
+        let client = tokio_vsock::VsockStream::connect(3, 42).await.unwrap();
+        let server = listener.incoming().next().await.unwrap().unwrap();
+
+        let server = ConnectionBuilder::vsock_stream(server)
+            .server(&guid)
+            .p2p()
+            .auth_mechanisms(&[AuthMechanism::Anonymous])
+            .build();
+        let client = ConnectionBuilder::vsock_stream(client).p2p().build();
+
+        futures_util::try_join!(server, client)
+    }
+
     #[test]
     #[timeout(15000)]
     fn serial_monotonically_increases() {
