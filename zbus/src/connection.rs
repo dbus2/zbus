@@ -913,27 +913,33 @@ impl Connection {
     }
 }
 
-impl Sink<Message> for Connection {
+impl<T> Sink<T> for Connection
+where
+    T: Into<Arc<Message>>,
+{
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        Pin::new(&mut &*self).poll_ready(cx)
+        <&Connection as Sink<Arc<Message>>>::poll_ready(Pin::new(&mut &*self), cx)
     }
 
-    fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
+    fn start_send(self: Pin<&mut Self>, msg: T) -> Result<()> {
         Pin::new(&mut &*self).start_send(msg)
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        Pin::new(&mut &*self).poll_flush(cx)
+        <&Connection as Sink<Arc<Message>>>::poll_flush(Pin::new(&mut &*self), cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        Pin::new(&mut &*self).poll_close(cx)
+        <&Connection as Sink<Arc<Message>>>::poll_close(Pin::new(&mut &*self), cx)
     }
 }
 
-impl<'a> Sink<Message> for &'a Connection {
+impl<'a, T> Sink<T> for &'a Connection
+where
+    T: Into<Arc<Message>>,
+{
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
@@ -941,7 +947,9 @@ impl<'a> Sink<Message> for &'a Connection {
         Poll::Ready(Ok(()))
     }
 
-    fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
+    fn start_send(self: Pin<&mut Self>, msg: T) -> Result<()> {
+        let msg = msg.into();
+
         #[cfg(unix)]
         if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);

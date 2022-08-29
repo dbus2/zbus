@@ -1,6 +1,7 @@
 use std::{
     collections::VecDeque,
     io,
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -34,7 +35,7 @@ pub struct Connection<S> {
     raw_in_fds: Vec<OwnedFd>,
     raw_in_pos: usize,
     out_pos: usize,
-    out_msgs: VecDeque<Message>,
+    out_msgs: VecDeque<Arc<Message>>,
     prev_seq: u64,
 }
 
@@ -86,7 +87,7 @@ impl<S: Socket> Connection<S> {
     ///
     /// This method will *not* write anything to the socket, you need to call
     /// `try_flush()` afterwards so that your message is actually sent out.
-    pub fn enqueue_message(&mut self, msg: Message) {
+    pub fn enqueue_message(&mut self, msg: Arc<Message>) {
         self.out_msgs.push_back(msg);
     }
 
@@ -211,7 +212,7 @@ impl Connection<Box<dyn Socket>> {
 #[cfg(unix)]
 #[cfg(test)]
 mod tests {
-    use super::Connection;
+    use super::{Arc, Connection};
     use crate::message::Message;
     use futures_util::future::poll_fn;
     use test_log::test;
@@ -247,7 +248,7 @@ mod tests {
         )
         .unwrap();
 
-        conn0.enqueue_message(msg);
+        conn0.enqueue_message(Arc::new(msg));
         poll_fn(|cx| conn0.try_flush(cx)).await.unwrap();
 
         let ret = poll_fn(|cx| conn1.try_receive_message(cx)).await.unwrap();
