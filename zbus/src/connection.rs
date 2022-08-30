@@ -913,27 +913,33 @@ impl Connection {
     }
 }
 
-impl Sink<Message> for Connection {
+impl<T> Sink<T> for Connection
+where
+    T: Into<Arc<Message>>,
+{
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        Pin::new(&mut &*self).poll_ready(cx)
+        <&Connection as Sink<Arc<Message>>>::poll_ready(Pin::new(&mut &*self), cx)
     }
 
-    fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
+    fn start_send(self: Pin<&mut Self>, msg: T) -> Result<()> {
         Pin::new(&mut &*self).start_send(msg)
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        Pin::new(&mut &*self).poll_flush(cx)
+        <&Connection as Sink<Arc<Message>>>::poll_flush(Pin::new(&mut &*self), cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        Pin::new(&mut &*self).poll_close(cx)
+        <&Connection as Sink<Arc<Message>>>::poll_close(Pin::new(&mut &*self), cx)
     }
 }
 
-impl<'a> Sink<Message> for &'a Connection {
+impl<'a, T> Sink<T> for &'a Connection
+where
+    T: Into<Arc<Message>>,
+{
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
@@ -941,7 +947,9 @@ impl<'a> Sink<Message> for &'a Connection {
         Poll::Ready(Ok(()))
     }
 
-    fn start_send(self: Pin<&mut Self>, msg: Message) -> Result<()> {
+    fn start_send(self: Pin<&mut Self>, msg: T) -> Result<()> {
+        let msg = msg.into();
+
         #[cfg(unix)]
         if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);
@@ -1031,9 +1039,24 @@ mod tests {
 
     use super::*;
 
-    async fn test_p2p(server: Connection, client: Connection) -> Result<()> {
+    // Same numbered client and server are already paired up. We make use of the
+    // `futures_util::stream::Forward` to connect the two pipes and hence test one of the benefits
+    // of our Stream and Sink impls.
+    async fn test_p2p(
+        server1: Connection,
+        client1: Connection,
+        server2: Connection,
+        client2: Connection,
+    ) -> Result<()> {
+        let _forward_task = client1.executor().spawn(async move {
+            futures_util::try_join!(
+                MessageStream::from(&server1).forward(&client2),
+                MessageStream::from(&client2).forward(&server1),
+            )
+        });
+
         let server_future = async {
-            let mut stream = MessageStream::from(&server);
+            let mut stream = MessageStream::from(&server2);
             let method = loop {
                 let m = stream.try_next().await?.unwrap();
                 if m.to_string() == "Method call Test" {
@@ -1042,15 +1065,15 @@ mod tests {
             };
 
             // Send another message first to check the queueing function on client side.
-            server
+            server2
                 .emit_signal(None::<()>, "/", "org.zbus.p2p", "ASignalForYou", &())
                 .await?;
-            server.reply(&method, &("yay")).await
+            server2.reply(&method, &("yay")).await
         };
 
         let client_future = async {
-            let mut stream = MessageStream::from(&client);
-            let reply = client
+            let mut stream = MessageStream::from(&client1);
+            let reply = client1
                 .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
@@ -1060,7 +1083,7 @@ mod tests {
             reply.body::<String>()
         };
 
-        let (val, _) = futures_util::try_join!(client_future, server_future)?;
+        let (val, _) = futures_util::try_join!(client_future, server_future,)?;
         assert_eq!(val, "yay");
 
         Ok(())
@@ -1076,6 +1099,14 @@ mod tests {
 
     #[cfg(not(feature = "tokio"))]
     async fn test_tcp_p2p() -> Result<()> {
+        let (server1, client1) = tcp_p2p_pipe().await?;
+        let (server2, client2) = tcp_p2p_pipe().await?;
+
+        test_p2p(server1, client1, server2, client2).await
+    }
+
+    #[cfg(not(feature = "tokio"))]
+    async fn tcp_p2p_pipe() -> Result<(Connection, Connection)> {
         let guid = Guid::generate();
 
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1093,9 +1124,8 @@ mod tests {
             c.build()
         };
         let client = ConnectionBuilder::tcp_stream(client).p2p().build();
-        let (client, server) = futures_util::try_join!(client, server)?;
 
-        test_p2p(server, client).await
+        futures_util::try_join!(client, server)
     }
 
     #[cfg(unix)]
@@ -1107,6 +1137,14 @@ mod tests {
 
     #[cfg(unix)]
     async fn test_unix_p2p() -> Result<()> {
+        let (server1, client1) = unix_p2p_pipe().await?;
+        let (server2, client2) = unix_p2p_pipe().await?;
+
+        test_p2p(server1, client1, server2, client2).await
+    }
+
+    #[cfg(unix)]
+    async fn unix_p2p_pipe() -> Result<(Connection, Connection)> {
         #[cfg(not(feature = "tokio"))]
         use std::os::unix::net::UnixStream;
         #[cfg(feature = "tokio")]
@@ -1123,9 +1161,8 @@ mod tests {
             .p2p()
             .build();
         let client = ConnectionBuilder::unix_stream(p1).p2p().build();
-        let (client, server) = futures_util::try_join!(client, server)?;
 
-        test_p2p(server, client).await
+        futures_util::try_join!(client, server)
     }
 
     #[test]
