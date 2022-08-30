@@ -337,6 +337,8 @@ impl Socket for tokio::net::UnixStream {
     }
 
     fn close(&self) -> io::Result<()> {
+        // FIXME: This should call `tokio::net::UnixStream::poll_shutdown` but this method is not
+        // async-friendly. At the next API break, we should fix this.
         Ok(())
     }
 
@@ -517,6 +519,8 @@ impl Socket for tokio::net::TcpStream {
     }
 
     fn close(&self) -> io::Result<()> {
+        // FIXME: This should call `tokio::net::TcpStream::poll_shutdown` but this method is not
+        // async-friendly. At the next API break, we should fix this.
         Ok(())
     }
 
