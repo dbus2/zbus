@@ -138,7 +138,7 @@ integration with it without you having to worry about any of the above: Enabling
 # Sample Cargo.toml snippet.
 [dependencies]
 # Also disable the default `async-io` feature to avoid unused dependencies.
-zbus = { version = "2", default-features = false, features = ["tokio"] }
+zbus = { version = "3", default-features = false, features = ["tokio"] }
 ```
 
 That's it! No threads launched behind your back by zbus (directly or indirectly) now and no need to
@@ -152,10 +152,10 @@ opt-in compatibility to the GDBus session bus discovery mechanism via the `windo
 This mechanism uses a machine-wide mutex however, so only one GDBus session bus can run at a time.
 
 [zbus]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/README.md
-[bw]: https://docs.rs/zbus/2.0.0/zbus/blocking/index.html
-[iektc]: https://docs.rs/zbus/2.0.0/zbus/struct.Connection.html#examples-1
+[bw]: https://docs.rs/zbus/3.0.0/zbus/blocking/index.html
+[iektc]: https://docs.rs/zbus/3.0.0/zbus/struct.Connection.html#examples-1
 [tctiog]: https://github.com/tokio-rs/tokio/issues/
-[`ConnectionBuilder`]: https://docs.rs/zbus/2.0.0/zbus/struct.ConnectionBuilder.html
+[`ConnectionBuilder`]: https://docs.rs/zbus/3.0.0/zbus/struct.ConnectionBuilder.html
 [`tokio`]: https://crates.io/crates/tokio
 [`async-io`]: https://crates.io/crates/async-io
 [LICENSE-MIT]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/LICENSE-MIT
