@@ -33,7 +33,7 @@ services expose at least one object on the bus and all clients interact with the
 these objects. These objects can be ephemeral or they could live as long as the service itself.
 
 Every object is identified by a string, which is referred to as its path. An example of an object
-path is `/org/freedesktop/Notifications`, which identies the only object exposed by the
+path is `/org/freedesktop/Notifications`, which identities the only object exposed by the
 [FreeDesktop Notifications Service].
 
 For further details on object paths, please refer to the [Basic types chapter] of the D-Bus
