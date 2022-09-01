@@ -14,8 +14,12 @@ use std::{
 use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
+#[cfg(feature = "tokio-vsock")]
+use tokio_vsock::VsockStream;
 #[cfg(windows)]
 use uds_windows::UnixStream;
+#[cfg(all(feature = "vsock", not(feature = "tokio")))]
+use vsock::VsockStream;
 
 use zvariant::ObjectPath;
 
@@ -33,6 +37,11 @@ const DEFAULT_MAX_QUEUED: usize = 64;
 enum Target {
     UnixStream(UnixStream),
     TcpStream(TcpStream),
+    #[cfg(any(
+        all(feature = "vsock", not(feature = "tokio")),
+        feature = "tokio-vsock"
+    ))]
+    VsockStream(VsockStream),
     Address(Address),
     Socket(Box<dyn Socket>),
 }
@@ -99,6 +108,20 @@ impl<'a> ConnectionBuilder<'a> {
     #[must_use]
     pub fn tcp_stream(stream: TcpStream) -> Self {
         Self::new(Target::TcpStream(stream))
+    }
+
+    /// Create a builder for connection that will use the given VSOCK stream.
+    ///
+    /// This method is only available when either `vsock` or `tokio-vsock` feature is enabled. The
+    /// type of `stream` is `vsock::VsockStream` with `vsock` feature and `tokio_vsock::VsockStream`
+    /// with `tokio-vsock` feature.
+    #[cfg(any(
+        all(feature = "vsock", not(feature = "tokio")),
+        feature = "tokio-vsock"
+    ))]
+    #[must_use]
+    pub fn vsock_stream(stream: VsockStream) -> Self {
+        Self::new(Target::VsockStream(stream))
     }
 
     /// Create a builder for connection that will use the given socket.
@@ -231,10 +254,19 @@ impl<'a> ConnectionBuilder<'a> {
             Target::TcpStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
             #[cfg(feature = "tokio")]
             Target::TcpStream(stream) => Box::new(stream) as Box<dyn Socket>,
+            #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+            Target::VsockStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            #[cfg(feature = "tokio-vsock")]
+            Target::VsockStream(stream) => Box::new(stream) as Box<dyn Socket>,
             Target::Address(address) => match address.connect().await? {
                 #[cfg(any(unix, not(feature = "tokio")))]
                 address::Stream::Unix(stream) => Box::new(stream) as Box<dyn Socket>,
                 address::Stream::Tcp(stream) => Box::new(stream) as Box<dyn Socket>,
+                #[cfg(any(
+                    all(feature = "vsock", not(feature = "tokio")),
+                    feature = "tokio-vsock"
+                ))]
+                address::Stream::Vsock(stream) => Box::new(stream) as Box<dyn Socket>,
             },
             Target::Socket(stream) => stream,
         };

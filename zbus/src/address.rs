@@ -16,8 +16,12 @@ use std::{collections::HashMap, convert::TryFrom, env, str::FromStr};
 use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
+#[cfg(feature = "tokio-vsock")]
+use tokio_vsock::VsockStream;
 #[cfg(all(windows, not(feature = "tokio")))]
 use uds_windows::UnixStream;
+#[cfg(all(feature = "vsock", not(feature = "tokio")))]
+use vsock::VsockStream;
 
 use std::{
     ffi::OsString,
@@ -112,6 +116,28 @@ impl TcpAddress {
     }
 }
 
+#[cfg(any(
+    all(feature = "vsock", not(feature = "tokio")),
+    feature = "tokio-vsock"
+))]
+/// A `tcp:` D-Bus address.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VsockAddress {
+    pub(crate) cid: u32,
+    pub(crate) port: u32,
+}
+
+#[cfg(any(
+    all(feature = "vsock", not(feature = "tokio")),
+    feature = "tokio-vsock"
+))]
+impl VsockAddress {
+    /// Create a new VSOCK address.
+    pub fn new(cid: u32, port: u32) -> Self {
+        Self { cid, port }
+    }
+}
+
 /// A bus address
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -127,6 +153,16 @@ pub enum Address {
     },
     /// Autolaunch address with optional scope
     Autolaunch(Option<String>),
+    #[cfg(any(
+        all(feature = "vsock", not(feature = "tokio")),
+        feature = "tokio-vsock"
+    ))]
+    /// VSOCK address
+    ///
+    /// This variant is only available when either `vsock` or `tokio-vsock` feature is enabled. The
+    /// type of `stream` is `vsock::VsockStream` with `vsock` feature and `tokio_vsock::VsockStream`
+    /// with `tokio-vsock` feature.
+    Vsock(VsockAddress),
 }
 
 #[cfg(not(feature = "tokio"))]
@@ -134,6 +170,8 @@ pub enum Address {
 pub(crate) enum Stream {
     Unix(Async<UnixStream>),
     Tcp(Async<TcpStream>),
+    #[cfg(feature = "vsock")]
+    Vsock(Async<VsockStream>),
 }
 
 #[cfg(all(feature = "tokio"))]
@@ -142,6 +180,8 @@ pub(crate) enum Stream {
     #[cfg(unix)]
     Unix(UnixStream),
     Tcp(TcpStream),
+    #[cfg(feature = "tokio-vsock")]
+    Vsock(VsockStream),
 }
 
 #[cfg(not(feature = "tokio"))]
@@ -243,6 +283,18 @@ impl Address {
                     }
                 }
             }
+
+            #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+            Address::Vsock(addr) => {
+                let stream = VsockStream::connect_with_cid_port(addr.cid, addr.port)?;
+                Async::new(stream).map(Stream::Vsock).map_err(Into::into)
+            }
+
+            #[cfg(feature = "tokio-vsock")]
+            Address::Vsock(addr) => VsockStream::connect(addr.cid, addr.port)
+                .await
+                .map(Stream::Vsock)
+                .map_err(Into::into),
 
             Address::Tcp(addr) => connect_tcp(addr).await.map(Stream::Tcp),
 
@@ -358,6 +410,24 @@ impl Address {
         };
 
         Ok(Address::Unix(path))
+    }
+
+    #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+    fn from_vsock(opts: HashMap<&str, &str>) -> Result<Self> {
+        let cid = opts
+            .get("cid")
+            .ok_or_else(|| Error::Address("VSOCK address is missing cid=".into()))?;
+        let cid = cid
+            .parse::<u32>()
+            .map_err(|e| Error::Address(format!("Failed to parse VSOCK cid `{}`: {}", cid, e)))?;
+        let port = opts
+            .get("port")
+            .ok_or_else(|| Error::Address("VSOCK address is missing port=".into()))?;
+        let port = port
+            .parse::<u32>()
+            .map_err(|e| Error::Address(format!("Failed to parse VSOCK port `{}`: {}", port, e)))?;
+
+        Ok(Address::Vsock(VsockAddress { cid, port }))
     }
 }
 
@@ -490,6 +560,14 @@ impl Display for Address {
                 write!(f, "unix:path={}", path.to_str().ok_or(std::fmt::Error)?)?;
             }
 
+            #[cfg(any(
+                all(feature = "vsock", not(feature = "tokio")),
+                feature = "tokio-vsock"
+            ))]
+            Self::Vsock(addr) => {
+                write!(f, "vsock:cid={},port={}", addr.cid, addr.port)?;
+            }
+
             Self::Autolaunch(scope) => {
                 write!(f, "autolaunch:")?;
                 if let Some(scope) = scope {
@@ -545,7 +623,8 @@ impl FromStr for Address {
                 )?,
                 addr: TcpAddress::from_tcp(options)?,
             }),
-
+            #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+            "vsock" => Self::from_vsock(options),
             "autolaunch" => Ok(Self::Autolaunch(
                 options
                     .get("scope")
@@ -688,6 +767,15 @@ mod tests {
             Address::Autolaunch(Some("*my_cool_scope*".to_owned())),
             Address::from_str("autolaunch:scope=*my_cool_scope*").unwrap()
         );
+
+        #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+        assert_eq!(
+            Address::Vsock(crate::VsockAddress {
+                cid: 98,
+                port: 2934
+            }),
+            Address::from_str("vsock:cid=98,port=2934,guid=123").unwrap()
+        );
     }
 
     #[test]
@@ -743,6 +831,16 @@ mod tests {
         assert_eq!(
             Address::Autolaunch(Some("*my_cool_scope*".to_owned())).to_string(),
             "autolaunch:scope=*my_cool_scope*"
+        );
+
+        #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+        assert_eq!(
+            Address::Vsock(crate::VsockAddress {
+                cid: 98,
+                port: 2934
+            })
+            .to_string(),
+            "vsock:cid=98,port=2934,guid=123",
         );
     }
 
