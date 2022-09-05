@@ -238,7 +238,9 @@ where
     where
         V: Visitor<'de>,
     {
-        unreachable!("DBus format can't support `Option`");
+        Err(de::Error::custom(
+            "D-Bus format does not support optional values",
+        ))
     }
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
