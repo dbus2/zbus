@@ -405,7 +405,7 @@ where
         let mut de = Deserializer::<B>(crate::DeserializerCommon {
             ctxt,
             sig_parser,
-            bytes: &self.de.0.bytes[self.de.0.pos..],
+            bytes: subslice(self.de.0.bytes, self.de.0.pos..)?,
             fds: self.de.0.fds,
             pos: 0,
             b: PhantomData,
@@ -582,8 +582,7 @@ where
                 // Skip trailing nul byte
                 let value_start = sig_end + 1;
 
-                let slice = &self.de.0.bytes[sig_start..sig_end];
-                // FIXME: Can we just use `Signature::from_bytes_unchecked`?
+                let slice = subslice(self.de.0.bytes, sig_start..sig_end)?;
                 let signature = Signature::try_from(slice)?;
                 let sig_parser = SignatureParser::new(signature);
 
@@ -594,7 +593,7 @@ where
                 let mut de = Deserializer::<B>(crate::DeserializerCommon {
                     ctxt,
                     sig_parser,
-                    bytes: &self.de.0.bytes[value_start..],
+                    bytes: subslice(self.de.0.bytes, value_start..)?,
                     fds: self.de.0.fds,
                     pos: 0,
                     b: PhantomData,
