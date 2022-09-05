@@ -1,6 +1,8 @@
+use std::slice::SliceIndex;
+
 #[cfg(feature = "gvariant")]
-use crate::{signature_parser::SignatureParser, Error};
-use crate::{Basic, EncodingFormat, ObjectPath, Signature};
+use crate::signature_parser::SignatureParser;
+use crate::{Basic, EncodingFormat, Error, ObjectPath, Signature};
 
 #[cfg(unix)]
 use crate::Fd;
@@ -285,4 +287,12 @@ fn is_fixed_sized_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Resu
     let value_signature = Signature::from_str_unchecked(&signature[2..signature.len() - 1]);
 
     is_fixed_sized_signature(&value_signature)
+}
+
+/// Slice the given slice of bytes safely and return an error if the slice is too small.
+pub(crate) fn subslice<I, T>(input: &[T], index: I) -> Result<&I::Output, Error>
+where
+    I: SliceIndex<[T]>,
+{
+    input.get(index).ok_or(Error::OutOfBounds)
 }
