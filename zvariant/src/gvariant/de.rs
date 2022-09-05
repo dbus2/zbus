@@ -102,7 +102,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let c = self.0.sig_parser.next_char();
+        let c = self.0.sig_parser.next_char()?;
 
         crate::de::deserialize_any::<B, Self, V>(self, c, visitor)
     }
@@ -149,7 +149,7 @@ where
         V: Visitor<'de>,
     {
         let slice = subslice(self.0.bytes, self.0.pos..)?;
-        let s = if self.0.sig_parser.next_char() == VARIANT_SIGNATURE_CHAR {
+        let s = if self.0.sig_parser.next_char()? == VARIANT_SIGNATURE_CHAR {
             if slice.contains(&0) {
                 return Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Char('\0'),
@@ -272,7 +272,7 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.0.sig_parser.next_char() {
+        match self.0.sig_parser.next_char()? {
             VARIANT_SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
                 self.0.parse_padding(VARIANT_ALIGNMENT_GVARIANT)?;
@@ -282,7 +282,7 @@ where
             }
             ARRAY_SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
-                let next_signature_char = self.0.sig_parser.next_char();
+                let next_signature_char = self.0.sig_parser.next_char()?;
                 let array_de = ArrayDeserializer::new(self)?;
 
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
@@ -333,7 +333,7 @@ where
         let alignment = alignment_for_signature(&signature, self.0.ctxt.format());
         self.0.parse_padding(alignment)?;
 
-        let non_unit = if self.0.sig_parser.next_char() == STRUCT_SIG_START_CHAR {
+        let non_unit = if self.0.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
             // This means we've a non-unit enum. Let's skip the `(`.
             self.0.sig_parser.skip_char()?;
 
@@ -402,7 +402,7 @@ where
         let element_alignment = alignment_for_signature(&element_signature, de.0.ctxt.format());
         let element_signature_len = element_signature.len();
         let fixed_sized_child = crate::utils::is_fixed_sized_signature(&element_signature)?;
-        let fixed_sized_key = if de.0.sig_parser.next_char() == DICT_ENTRY_SIG_START_CHAR {
+        let fixed_sized_key = if de.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
             // Key signature can only be 1 char
             let key_signature = Signature::from_str_unchecked(&element_signature[1..2]);
 
@@ -436,7 +436,7 @@ where
         };
         let start = de.0.pos;
 
-        if de.0.sig_parser.next_char() == DICT_ENTRY_SIG_START_CHAR {
+        if de.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
             de.0.sig_parser.skip_char()?;
         }
 
@@ -661,7 +661,7 @@ where
         let element_end = if !fixed_sized_element {
             let next_sig_pos = element_signature.len();
             let parser = self.de.0.sig_parser.slice(next_sig_pos..);
-            if !parser.done() && parser.next_char() == STRUCT_SIG_END_CHAR {
+            if !parser.done() && parser.next_char()? == STRUCT_SIG_END_CHAR {
                 // This is the last item then and in GVariant format, we don't have offset for it
                 // even if it's non-fixed-sized.
                 self.end
@@ -691,7 +691,7 @@ where
         let v = seed.deserialize(&mut de).map(Some);
         self.de.0.pos += de.0.pos;
 
-        if de.0.sig_parser.next_char() == STRUCT_SIG_END_CHAR {
+        if de.0.sig_parser.next_char()? == STRUCT_SIG_END_CHAR {
             // Last item in the struct
             de.0.sig_parser.skip_char()?;
 

@@ -1,6 +1,6 @@
 use std::ops::{Bound, RangeBounds};
 
-use crate::{Basic, ObjectPath, Result, Signature};
+use crate::{subslice, Basic, ObjectPath, Result, Signature};
 
 #[cfg(unix)]
 use crate::Fd;
@@ -42,10 +42,8 @@ impl<'s> SignatureParser<'s> {
         Some(char::from(self.signature.as_bytes()[self.pos]))
     }
 
-    pub fn next_char(&self) -> char {
-        // SAFETY: Other methods that increment `self.pos` must ensure we don't go beyond signature
-        // length.
-        self.next_char_optional().expect("more characters to parse")
+    pub fn next_char(&self) -> Result<char> {
+        subslice(self.signature.as_bytes(), self.pos).map(|b| *b as char)
     }
 
     #[inline]

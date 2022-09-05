@@ -90,7 +90,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let c = self.0.sig_parser.next_char();
+        let c = self.0.sig_parser.next_char()?;
 
         crate::de::deserialize_any::<B, Self, V>(self, c, visitor)
     }
@@ -157,7 +157,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let v = match self.0.sig_parser.next_char() {
+        let v = match self.0.sig_parser.next_char()? {
             #[cfg(unix)]
             Fd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
@@ -193,7 +193,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let len = match self.0.sig_parser.next_char() {
+        let len = match self.0.sig_parser.next_char()? {
             Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
                 let len_slice = self.0.next_slice(1)?;
 
@@ -266,7 +266,7 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.0.sig_parser.next_char() {
+        match self.0.sig_parser.next_char()? {
             VARIANT_SIGNATURE_CHAR => {
                 let value_de = ValueDeserializer::new(self);
 
@@ -274,7 +274,7 @@ where
             }
             ARRAY_SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
-                let next_signature_char = self.0.sig_parser.next_char();
+                let next_signature_char = self.0.sig_parser.next_char()?;
                 let array_de = ArrayDeserializer::new(self)?;
 
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
@@ -316,7 +316,7 @@ where
         let alignment = alignment_for_signature(&signature, self.0.ctxt.format());
         self.0.parse_padding(alignment)?;
 
-        let non_unit = if self.0.sig_parser.next_char() == STRUCT_SIG_START_CHAR {
+        let non_unit = if self.0.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
             // This means we've a non-unit enum. Let's skip the `(`.
             self.0.sig_parser.skip_char()?;
 
@@ -343,7 +343,7 @@ where
     where
         V: Visitor<'de>,
     {
-        if self.0.sig_parser.next_char() == <&str>::SIGNATURE_CHAR {
+        if self.0.sig_parser.next_char()? == <&str>::SIGNATURE_CHAR {
             self.deserialize_str(visitor)
         } else {
             self.deserialize_u32(visitor)
@@ -382,7 +382,7 @@ where
         de.0.parse_padding(element_alignment)?;
         let start = de.0.pos;
 
-        if de.0.sig_parser.next_char() == DICT_ENTRY_SIG_START_CHAR {
+        if de.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
             de.0.sig_parser.skip_char()?;
             element_signature_len -= 1;
         }
@@ -526,7 +526,7 @@ where
     {
         let v = seed.deserialize(&mut *self.de).map(Some);
 
-        if self.de.0.sig_parser.next_char() == STRUCT_SIG_END_CHAR {
+        if self.de.0.sig_parser.next_char()? == STRUCT_SIG_END_CHAR {
             // Last item in the struct
             self.de.0.sig_parser.skip_char()?;
         }
