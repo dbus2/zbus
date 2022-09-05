@@ -1,8 +1,8 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
 
-use zvariant::{EncodingContext as Context, from_slice, to_bytes, Value};
 use byteorder::LE;
+use zvariant::{from_slice, to_bytes, EncodingContext as Context, Value};
 
 fuzz_target!(|data: &[u8]| {
     let ctx = Context::<LE>::new_gvariant(0);
