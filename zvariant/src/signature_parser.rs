@@ -34,14 +34,6 @@ impl<'s> SignatureParser<'s> {
         self.signature.slice(self.pos..self.end)
     }
 
-    pub fn next_char_optional(&self) -> Option<char> {
-        if self.done() {
-            return None;
-        }
-
-        Some(char::from(self.signature.as_bytes()[self.pos]))
-    }
-
     pub fn next_char(&self) -> Result<char> {
         subslice(self.signature.as_bytes(), self.pos).map(|b| *b as char)
     }
