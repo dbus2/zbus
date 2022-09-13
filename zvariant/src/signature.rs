@@ -4,7 +4,7 @@ use core::{
     str,
 };
 use serde::{
-    de::{Deserialize, Deserializer, Visitor},
+    de::{Deserialize, Deserializer, Unexpected, Visitor},
     ser::{Serialize, Serializer},
 };
 use static_assertions::assert_impl_all;
@@ -13,7 +13,14 @@ use std::{
     sync::Arc,
 };
 
-use crate::{signature_parser::SignatureParser, Basic, EncodingFormat, Error, Result, Type};
+#[cfg(unix)]
+use crate::Fd;
+
+use crate::{
+    signature_parser::SignatureParser, Basic, EncodingFormat, Error, ObjectPath, Result, Type,
+    ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR, DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_CHAR,
+    STRUCT_SIG_START_CHAR, VARIANT_SIGNATURE_CHAR,
+};
 
 // A data type similar to Cow and [`bytes::Bytes`] but unlike the former won't allow us to only keep
 // the owned bytes in Arc and latter doesn't have a notion of borrowed data and would require API
@@ -429,6 +436,39 @@ impl<'de> Visitor<'de> for SignatureVisitor {
     }
 }
 
+#[cfg(all(unix, not(feature = "gvariant")))]
+const N_VALID_CHARS: usize = 19;
+#[cfg(all(not(unix), not(feature = "gvariant")))]
+const N_VALID_CHARS: usize = 18;
+#[cfg(all(unix, feature = "gvariant"))]
+const N_VALID_CHARS: usize = 20;
+#[cfg(all(not(unix), feature = "gvariant"))]
+const N_VALID_CHARS: usize = 19;
+const VALID_SIGNATURE_CHARS: [char; N_VALID_CHARS] = [
+    u8::SIGNATURE_CHAR,
+    u16::SIGNATURE_CHAR,
+    u32::SIGNATURE_CHAR,
+    u64::SIGNATURE_CHAR,
+    i16::SIGNATURE_CHAR,
+    i32::SIGNATURE_CHAR,
+    i64::SIGNATURE_CHAR,
+    f64::SIGNATURE_CHAR,
+    bool::SIGNATURE_CHAR,
+    <&str>::SIGNATURE_CHAR,
+    ObjectPath::SIGNATURE_CHAR,
+    Signature::SIGNATURE_CHAR,
+    ARRAY_SIGNATURE_CHAR,
+    STRUCT_SIG_START_CHAR,
+    STRUCT_SIG_END_CHAR,
+    DICT_ENTRY_SIG_START_CHAR,
+    DICT_ENTRY_SIG_END_CHAR,
+    #[cfg(unix)]
+    Fd::SIGNATURE_CHAR,
+    VARIANT_SIGNATURE_CHAR,
+    #[cfg(feature = "gvariant")]
+    crate::MAYBE_SIGNATURE_CHAR,
+];
+
 fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
     if signature.len() > 255 {
         return Err(serde::de::Error::invalid_length(
@@ -441,7 +481,17 @@ fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
         return Ok(());
     }
 
-    // SAFETY: SignatureParser never calls as_str
+    for b in signature {
+        let c = *b as char;
+        if !VALID_SIGNATURE_CHARS.contains(&c) {
+            return Err(serde::de::Error::invalid_value(
+                Unexpected::Char(c),
+                &"a valid signature character",
+            ));
+        }
+    }
+
+    // SAFETY: We just checked above that `signature` only contain allowed characters.
     let signature = unsafe { Signature::from_bytes_unchecked(signature) };
     let mut parser = SignatureParser::new(signature);
     while !parser.done() {
