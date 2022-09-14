@@ -274,9 +274,17 @@ impl<'s> SignatureParser<'s> {
         // There should be one valid complete signature for value.
         let value_parser = self.slice(2..);
         let value_len = value_parser.next_signature()?.len();
-
         // signature of value + `{` + 1 char of the key signature + `}`
-        Ok(self.signature_slice(0, value_len + 3))
+        let end = value_len + 3;
+
+        if signature.len() < end {
+            return Err(serde::de::Error::invalid_length(
+                signature.len(),
+                &format!(">= {} characters", end).as_str(),
+            ));
+        }
+
+        Ok(self.signature_slice(0, end))
     }
 
     fn signature_slice(&self, idx: usize, end: usize) -> Signature<'_> {
