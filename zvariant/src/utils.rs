@@ -185,7 +185,7 @@ fn alignment_for_single_child_type_signature(
         EncodingFormat::DBus => Ok(dbus_align),
         #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
-            let child_signature = Signature::from_str_unchecked(&signature[1..]);
+            let child_signature = signature.slice(1..);
 
             alignment_for_signature(&child_signature, format)
         }
