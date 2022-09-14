@@ -6,7 +6,7 @@ dive in, and derive from a trait to make a convenient Rust binding. Finally, we 
 
 To make this learning "hands-on", we are going to call and bind the cross-desktop notification
 service (please refer to this
-[reference](https://people.gnome.org/~mccann/docs/notification-spec/notification-spec-latest.html)
+[reference](https://specifications.freedesktop.org/notification-spec/notification-spec-latest.html)
 document for further details on this API).
 
 Let's start by playing with the service from the shell, and notify the desktop with [`busctl`][^busctl]:
