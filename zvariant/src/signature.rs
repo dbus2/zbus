@@ -262,16 +262,11 @@ impl<'a> Signature<'a> {
 
         assert!(
             pos <= end,
-            "range start must not be greater than end: {:?} <= {:?}",
+            "range start must not be greater than end: {:?} > {:?}",
             pos,
             end,
         );
-        assert!(
-            end <= len,
-            "range end out of bounds: {:?} <= {:?}",
-            end,
-            len,
-        );
+        assert!(end <= len, "range end out of bounds: {:?} > {:?}", end, len,);
 
         if end == pos {
             return Self::from_str_unchecked("");
