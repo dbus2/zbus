@@ -15,23 +15,35 @@ impl FramingOffsets {
         Self(VecDeque::new())
     }
 
-    pub fn from_encoded_array(container: &[u8]) -> (Self, usize) {
+    pub fn from_encoded_array(container: &[u8]) -> Result<(Self, usize)> {
         let offset_size = FramingOffsetSize::for_encoded_container(container.len());
 
         // The last offset tells us the start of offsets.
         let mut i = offset_size.read_last_offset_from_buffer(container);
+        if i > container.len() {
+            return Err(serde::de::Error::invalid_length(
+                i,
+                &format!("< {}", container.len()).as_str(),
+            ));
+        }
         let offsets_len = container.len() - i;
         let slice_len = offset_size as usize;
         let mut offsets = Self::new();
         while i < container.len() {
             let end = i + slice_len;
+            if end > container.len() {
+                return Err(serde::de::Error::invalid_length(
+                    end,
+                    &format!("< {}", container.len()).as_str(),
+                ));
+            }
             let offset = offset_size.read_last_offset_from_buffer(&container[i..end]);
             offsets.push(offset);
 
             i += slice_len;
         }
 
-        (offsets, offsets_len)
+        Ok((offsets, offsets_len))
     }
 
     pub fn push(&mut self, offset: usize) {

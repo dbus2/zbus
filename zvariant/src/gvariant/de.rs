@@ -419,7 +419,7 @@ where
 
         let (offsets, offsets_len, key_offset_size) = if !fixed_sized_child {
             let (array_offsets, offsets_len) =
-                FramingOffsets::from_encoded_array(subslice(de.0.bytes, de.0.pos..)?);
+                FramingOffsets::from_encoded_array(subslice(de.0.bytes, de.0.pos..)?)?;
             len -= offsets_len;
             let key_offset_size = if !fixed_sized_key {
                 // The actual offset for keys is calculated per key later, this is just to
@@ -670,8 +670,16 @@ where
                     .offset_size
                     .read_last_offset_from_buffer(subslice(self.de.0.bytes, self.start..self.end)?)
                     + self.start;
-                self.end -= self.offset_size as usize;
-                self.offsets_len += self.offset_size as usize;
+                let offset_size = self.offset_size as usize;
+                if offset_size > self.end {
+                    return Err(serde::de::Error::invalid_length(
+                        offset_size,
+                        &format!("< {}", self.end).as_str(),
+                    ));
+                }
+
+                self.end -= offset_size;
+                self.offsets_len += offset_size;
 
                 end
             }
