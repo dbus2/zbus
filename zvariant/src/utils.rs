@@ -220,9 +220,7 @@ fn alignment_for_struct_signature(
             let mut alignment = 0;
 
             while !sig_parser.done() {
-                let child_signature = sig_parser
-                    .parse_next_signature()
-                    .expect("invalid signature");
+                let child_signature = sig_parser.parse_next_signature()?;
 
                 let child_alignment = alignment_for_signature(&child_signature, format)?;
                 if child_alignment > alignment {
@@ -273,9 +271,7 @@ fn is_fixed_sized_struct_signature<'a>(signature: &'a Signature<'a>) -> Result<b
     let mut fixed_sized = true;
 
     while !sig_parser.done() {
-        let child_signature = sig_parser
-            .parse_next_signature()
-            .expect("invalid signature");
+        let child_signature = sig_parser.parse_next_signature()?;
 
         if !is_fixed_sized_signature(&child_signature)? {
             // STRUCT is fixed-sized only if all its children are
