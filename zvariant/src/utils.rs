@@ -2,7 +2,7 @@ use std::slice::SliceIndex;
 
 #[cfg(feature = "gvariant")]
 use crate::signature_parser::SignatureParser;
-use crate::{Basic, EncodingFormat, Error, ObjectPath, Signature};
+use crate::{Basic, EncodingFormat, Error, ObjectPath, Result, Signature};
 
 #[cfg(unix)]
 use crate::Fd;
@@ -83,8 +83,11 @@ pub(crate) fn f64_to_f32(value: f64) -> f32 {
 }
 
 // `signature` must be **one** complete and correct signature. Expect panics otherwise!
-pub(crate) fn alignment_for_signature(signature: &Signature<'_>, format: EncodingFormat) -> usize {
-    match signature
+pub(crate) fn alignment_for_signature(
+    signature: &Signature<'_>,
+    format: EncodingFormat,
+) -> Result<usize> {
+    let alignment = match signature
         .as_bytes()
         .first()
         .map(|b| *b as char)
@@ -109,21 +112,23 @@ pub(crate) fn alignment_for_signature(signature: &Signature<'_>, format: Encodin
             #[cfg(feature = "gvariant")]
             EncodingFormat::GVariant => VARIANT_ALIGNMENT_GVARIANT,
         },
-        ARRAY_SIGNATURE_CHAR => alignment_for_array_signature(signature, format),
-        STRUCT_SIG_START_CHAR => alignment_for_struct_signature(signature, format),
-        DICT_ENTRY_SIG_START_CHAR => alignment_for_dict_entry_signature(signature, format),
+        ARRAY_SIGNATURE_CHAR => alignment_for_array_signature(signature, format)?,
+        STRUCT_SIG_START_CHAR => alignment_for_struct_signature(signature, format)?,
+        DICT_ENTRY_SIG_START_CHAR => alignment_for_dict_entry_signature(signature, format)?,
         #[cfg(feature = "gvariant")]
-        MAYBE_SIGNATURE_CHAR => alignment_for_maybe_signature(signature, format),
+        MAYBE_SIGNATURE_CHAR => alignment_for_maybe_signature(signature, format)?,
         _ => {
             println!("WARNING: Unsupported signature: {}", signature);
 
             0
         }
-    }
+    };
+
+    Ok(alignment)
 }
 
 #[cfg(feature = "gvariant")]
-pub(crate) fn is_fixed_sized_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
+pub(crate) fn is_fixed_sized_signature<'a>(signature: &'a Signature<'a>) -> Result<bool> {
     match signature
         .as_bytes()
         .first()
@@ -175,9 +180,9 @@ fn alignment_for_single_child_type_signature(
     #[allow(unused)] signature: &Signature<'_>,
     format: EncodingFormat,
     dbus_align: usize,
-) -> usize {
+) -> Result<usize> {
     match format {
-        EncodingFormat::DBus => dbus_align,
+        EncodingFormat::DBus => Ok(dbus_align),
         #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
             let child_signature = Signature::from_str_unchecked(&signature[1..]);
@@ -187,21 +192,27 @@ fn alignment_for_single_child_type_signature(
     }
 }
 
-fn alignment_for_array_signature(signature: &Signature<'_>, format: EncodingFormat) -> usize {
+fn alignment_for_array_signature(
+    signature: &Signature<'_>,
+    format: EncodingFormat,
+) -> Result<usize> {
     alignment_for_single_child_type_signature(signature, format, ARRAY_ALIGNMENT_DBUS)
 }
 
 #[cfg(feature = "gvariant")]
-fn alignment_for_maybe_signature(signature: &Signature<'_>, format: EncodingFormat) -> usize {
+fn alignment_for_maybe_signature(
+    signature: &Signature<'_>,
+    format: EncodingFormat,
+) -> Result<usize> {
     alignment_for_single_child_type_signature(signature, format, 1)
 }
 
 fn alignment_for_struct_signature(
     #[allow(unused)] signature: &Signature<'_>,
     format: EncodingFormat,
-) -> usize {
+) -> Result<usize> {
     match format {
-        EncodingFormat::DBus => STRUCT_ALIGNMENT_DBUS,
+        EncodingFormat::DBus => Ok(STRUCT_ALIGNMENT_DBUS),
         #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
             let inner_signature = Signature::from_str_unchecked(&signature[1..signature.len() - 1]);
@@ -213,7 +224,7 @@ fn alignment_for_struct_signature(
                     .parse_next_signature()
                     .expect("invalid signature");
 
-                let child_alignment = alignment_for_signature(&child_signature, format);
+                let child_alignment = alignment_for_signature(&child_signature, format)?;
                 if child_alignment > alignment {
                     alignment = child_alignment;
 
@@ -224,7 +235,7 @@ fn alignment_for_struct_signature(
                 }
             }
 
-            alignment
+            Ok(alignment)
         }
     }
 }
@@ -232,31 +243,31 @@ fn alignment_for_struct_signature(
 fn alignment_for_dict_entry_signature(
     #[allow(unused)] signature: &Signature<'_>,
     format: EncodingFormat,
-) -> usize {
+) -> Result<usize> {
     match format {
-        EncodingFormat::DBus => DICT_ENTRY_ALIGNMENT_DBUS,
+        EncodingFormat::DBus => Ok(DICT_ENTRY_ALIGNMENT_DBUS),
         #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
             let key_signature = Signature::from_str_unchecked(&signature[1..2]);
-            let key_alignment = alignment_for_signature(&key_signature, format);
+            let key_alignment = alignment_for_signature(&key_signature, format)?;
             if key_alignment == 8 {
                 // 8 bytes is max alignment so we can short-circuit here
-                return 8;
+                return Ok(8);
             }
 
             let value_signature = Signature::from_str_unchecked(&signature[2..signature.len() - 1]);
-            let value_alignment = alignment_for_signature(&value_signature, format);
+            let value_alignment = alignment_for_signature(&value_signature, format)?;
             if value_alignment > key_alignment {
-                value_alignment
+                Ok(value_alignment)
             } else {
-                key_alignment
+                Ok(key_alignment)
             }
         }
     }
 }
 
 #[cfg(feature = "gvariant")]
-fn is_fixed_sized_struct_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
+fn is_fixed_sized_struct_signature<'a>(signature: &'a Signature<'a>) -> Result<bool> {
     let inner_signature = Signature::from_str_unchecked(&signature[1..signature.len() - 1]);
     let mut sig_parser = SignatureParser::new(inner_signature);
     let mut fixed_sized = true;
@@ -278,7 +289,7 @@ fn is_fixed_sized_struct_signature<'a>(signature: &'a Signature<'a>) -> Result<b
 }
 
 #[cfg(feature = "gvariant")]
-fn is_fixed_sized_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<bool, Error> {
+fn is_fixed_sized_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Result<bool> {
     let key_signature = Signature::from_str_unchecked(&signature[1..2]);
     if !is_fixed_sized_signature(&key_signature)? {
         return Ok(false);
@@ -290,7 +301,7 @@ fn is_fixed_sized_dict_entry_signature<'a>(signature: &'a Signature<'a>) -> Resu
 }
 
 /// Slice the given slice of bytes safely and return an error if the slice is too small.
-pub(crate) fn subslice<I, T>(input: &[T], index: I) -> Result<&I::Output, Error>
+pub(crate) fn subslice<I, T>(input: &[T], index: I) -> Result<&I::Output>
 where
     I: SliceIndex<[T]>,
 {

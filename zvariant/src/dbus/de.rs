@@ -287,7 +287,7 @@ where
             }
             STRUCT_SIG_START_CHAR => {
                 let signature = self.0.sig_parser.next_signature()?;
-                let alignment = alignment_for_signature(&signature, EncodingFormat::DBus);
+                let alignment = alignment_for_signature(&signature, EncodingFormat::DBus)?;
                 self.0.parse_padding(alignment)?;
 
                 self.0.sig_parser.skip_char()?;
@@ -315,7 +315,7 @@ where
         V: Visitor<'de>,
     {
         let signature = self.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, self.0.ctxt.format());
+        let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
         self.0.parse_padding(alignment)?;
 
         let non_unit = if self.0.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
@@ -376,7 +376,7 @@ where
 
         let len = B::read_u32(de.0.next_slice(4)?) as usize;
         let element_signature = de.0.sig_parser.next_signature()?;
-        let element_alignment = alignment_for_signature(&element_signature, EncodingFormat::DBus);
+        let element_alignment = alignment_for_signature(&element_signature, EncodingFormat::DBus)?;
         let mut element_signature_len = element_signature.len();
 
         // D-Bus requires padding for the first element even when there is no first element

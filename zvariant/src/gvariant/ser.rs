@@ -54,7 +54,7 @@ where
         T: ?Sized + Serialize,
     {
         let signature = self.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, self.0.ctxt.format());
+        let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
         let child_sig_parser = self.0.sig_parser.slice(1..);
         let child_signature = child_sig_parser.next_signature()?;
         let child_sig_len = child_signature.len();
@@ -242,7 +242,7 @@ where
         self.0.sig_parser.skip_char()?;
         let element_signature = self.0.sig_parser.next_signature()?;
         let element_signature_len = element_signature.len();
-        let element_alignment = alignment_for_signature(&element_signature, self.0.ctxt.format());
+        let element_alignment = alignment_for_signature(&element_signature, self.0.ctxt.format())?;
 
         let fixed_sized_child = crate::utils::is_fixed_sized_signature(&element_signature)?;
         let offsets = if !fixed_sized_child {
@@ -454,7 +454,7 @@ where
         }
 
         let signature = ser.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, EncodingFormat::GVariant);
+        let alignment = alignment_for_signature(&signature, EncodingFormat::GVariant)?;
         ser.0.add_padding(alignment)?;
 
         ser.0.sig_parser.skip_char()?;

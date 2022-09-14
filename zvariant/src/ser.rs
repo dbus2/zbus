@@ -464,7 +464,7 @@ where
             ));
         }
 
-        let alignment = alignment_for_signature(&signature, self.ctxt.format());
+        let alignment = alignment_for_signature(&signature, self.ctxt.format())?;
         self.add_padding(alignment)?;
 
         // Now serialize the veriant index.

@@ -185,7 +185,7 @@ where
         V: Visitor<'de>,
     {
         let signature = self.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, self.0.ctxt.format());
+        let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
         let child_sig_parser = self.0.sig_parser.slice(1..);
         let child_signature = child_sig_parser.next_signature()?;
         let child_sig_len = child_signature.len();
@@ -293,7 +293,7 @@ where
             }
             STRUCT_SIG_START_CHAR => {
                 let signature = self.0.sig_parser.next_signature()?;
-                let alignment = alignment_for_signature(&signature, self.0.ctxt.format());
+                let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
                 self.0.parse_padding(alignment)?;
 
                 self.0.sig_parser.skip_char()?;
@@ -330,7 +330,7 @@ where
         V: Visitor<'de>,
     {
         let signature = self.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, self.0.ctxt.format());
+        let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
         self.0.parse_padding(alignment)?;
 
         let non_unit = if self.0.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
@@ -399,7 +399,7 @@ where
         let mut len = de.0.bytes.len() - de.0.pos;
 
         let element_signature = de.0.sig_parser.next_signature()?;
-        let element_alignment = alignment_for_signature(&element_signature, de.0.ctxt.format());
+        let element_alignment = alignment_for_signature(&element_signature, de.0.ctxt.format())?;
         let element_signature_len = element_signature.len();
         let fixed_sized_child = crate::utils::is_fixed_sized_signature(&element_signature)?;
         let fixed_sized_key = if de.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {

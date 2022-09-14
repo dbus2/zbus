@@ -240,7 +240,7 @@ where
 
         let element_signature = self.0.sig_parser.next_signature()?;
         let element_signature_len = element_signature.len();
-        let element_alignment = alignment_for_signature(&element_signature, self.0.ctxt.format());
+        let element_alignment = alignment_for_signature(&element_signature, self.0.ctxt.format())?;
 
         // D-Bus expects us to add padding for the first element even when there is no first
         // element (i-e empty array) so we add padding already.
@@ -415,7 +415,7 @@ where
         }
 
         let signature = ser.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, EncodingFormat::DBus);
+        let alignment = alignment_for_signature(&signature, EncodingFormat::DBus)?;
         ser.0.add_padding(alignment)?;
 
         ser.0.sig_parser.skip_char()?;
