@@ -91,7 +91,7 @@ pub(crate) fn alignment_for_signature(
         .as_bytes()
         .first()
         .map(|b| *b as char)
-        .expect("alignment_for_signature expects **one** complete & correct signature")
+        .ok_or_else(|| -> Error { serde::de::Error::invalid_length(0, &">= 1 character") })?
     {
         u8::SIGNATURE_CHAR => u8::alignment(format),
         bool::SIGNATURE_CHAR => bool::alignment(format),
