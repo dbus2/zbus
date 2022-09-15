@@ -245,19 +245,11 @@ where
         let element_alignment = alignment_for_signature(&element_signature, self.0.ctxt.format())?;
 
         let fixed_sized_child = crate::utils::is_fixed_sized_signature(&element_signature)?;
-        let offsets = if !fixed_sized_child {
-            Some(FramingOffsets::new())
-        } else {
-            None
-        };
+        let offsets = (!fixed_sized_child).then(FramingOffsets::new);
 
         let key_start = if self.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
             let key_signature = Signature::from_str_unchecked(&element_signature[1..2]);
-            if !crate::utils::is_fixed_sized_signature(&key_signature)? {
-                Some(0)
-            } else {
-                None
-            }
+            (!crate::utils::is_fixed_sized_signature(&key_signature)?).then(|| 0)
         } else {
             None
         };
