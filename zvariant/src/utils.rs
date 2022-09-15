@@ -215,6 +215,12 @@ fn alignment_for_struct_signature(
         EncodingFormat::DBus => Ok(STRUCT_ALIGNMENT_DBUS),
         #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
+            if signature.len() < 3 {
+                return Err(serde::de::Error::invalid_length(
+                    signature.len(),
+                    &">= 3 characters in struct signature",
+                ));
+            }
             let inner_signature = Signature::from_str_unchecked(&signature[1..signature.len() - 1]);
             let mut sig_parser = SignatureParser::new(inner_signature);
             let mut alignment = 0;
@@ -246,6 +252,12 @@ fn alignment_for_dict_entry_signature(
         EncodingFormat::DBus => Ok(DICT_ENTRY_ALIGNMENT_DBUS),
         #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
+            if signature.len() < 4 {
+                return Err(serde::de::Error::invalid_length(
+                    signature.len(),
+                    &">= 4 characters in dict entry signature",
+                ));
+            }
             let key_signature = Signature::from_str_unchecked(&signature[1..2]);
             let key_alignment = alignment_for_signature(&key_signature, format)?;
             if key_alignment == 8 {
