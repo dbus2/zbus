@@ -354,8 +354,6 @@ where
         let array_len = self.ser.0.bytes_written - self.start;
         if array_len == 0 {
             // Empty sequence
-            assert!(offsets.is_empty());
-
             return Ok(());
         }
 
@@ -540,8 +538,6 @@ where
         let struct_len = self.ser.0.bytes_written - self.start;
         if struct_len == 0 {
             // Empty sequence
-            assert!(offsets.is_empty());
-
             return Ok(());
         }
         if offsets.peek() == Some(struct_len) {
