@@ -201,7 +201,7 @@ impl<'s> SignatureParser<'s> {
     fn next_structure_signature(&self) -> Result<Signature<'_>> {
         let signature = self.signature();
 
-        if signature.len() < 2 {
+        if signature.len() < 3 {
             return Err(serde::de::Error::invalid_length(
                 signature.len(),
                 &">= 2 characters",
