@@ -8,8 +8,8 @@ use crate::Fd;
 #[cfg(feature = "gvariant")]
 use crate::utils::MAYBE_SIGNATURE_CHAR;
 use crate::utils::{
-    ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_STR, STRUCT_SIG_START_CHAR,
-    STRUCT_SIG_START_STR, VARIANT_SIGNATURE_CHAR,
+    ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR, DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_STR,
+    STRUCT_SIG_START_CHAR, STRUCT_SIG_START_STR, VARIANT_SIGNATURE_CHAR,
 };
 
 #[derive(Debug, Clone)]
@@ -258,11 +258,8 @@ impl<'s> SignatureParser<'s> {
         }
 
         // We can't get None here cause we already established there are at least 4 chars above
-        let c = signature
-            .as_bytes()
-            .first()
-            .map(|b| *b as char)
-            .expect("empty signature");
+        let bytes = signature.as_bytes();
+        let c = bytes.first().map(|b| *b as char).expect("empty signature");
         if c != DICT_ENTRY_SIG_START_CHAR {
             return Err(serde::de::Error::invalid_value(
                 serde::de::Unexpected::Char(c),
@@ -270,7 +267,16 @@ impl<'s> SignatureParser<'s> {
             ));
         }
 
-        // Key's signature will always be just 1 character so no need to slice for that.
+        let key_parser = self.slice(1..);
+        let key_signature = key_parser.next_signature()?;
+        // Key's signature will always be just 1 character.
+        if key_signature.len() != 1 {
+            return Err(serde::de::Error::invalid_length(
+                key_signature.len(),
+                &"dict-entry key's signature can only be a single character",
+            ));
+        }
+
         // There should be one valid complete signature for value.
         let value_parser = self.slice(2..);
         let value_len = value_parser.next_signature()?.len();
@@ -281,6 +287,12 @@ impl<'s> SignatureParser<'s> {
             return Err(serde::de::Error::invalid_length(
                 signature.len(),
                 &format!(">= {} characters", end).as_str(),
+            ));
+        }
+        if bytes[end - 1] as char != DICT_ENTRY_SIG_END_CHAR {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Char(c),
+                &crate::DICT_ENTRY_SIG_END_STR,
             ));
         }
 
