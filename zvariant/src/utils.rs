@@ -118,9 +118,10 @@ pub(crate) fn alignment_for_signature(
         #[cfg(feature = "gvariant")]
         MAYBE_SIGNATURE_CHAR => alignment_for_maybe_signature(signature, format)?,
         _ => {
-            println!("WARNING: Unsupported signature: {}", signature);
-
-            0
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(signature),
+                &"a valid signature",
+            ))
         }
     };
 
