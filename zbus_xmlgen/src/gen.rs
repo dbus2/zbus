@@ -22,12 +22,16 @@ impl<'i> Display for GenTrait<'i> {
         methods.sort_by(|a, b| a.name().partial_cmp(b.name()).unwrap());
         for m in &methods {
             let (inputs, output) = inputs_output_from_args(&m.args());
+            let name = to_identifier(&to_snakecase(m.name()));
             writeln!(f)?;
             writeln!(f, "    /// {} method", m.name())?;
+            if pascal_case(&name) != m.name() {
+                writeln!(f, "    #[dbus_proxy(name = \"{}\")]", m.name())?;
+            }
             writeln!(
                 f,
                 "    fn {name}({inputs}){output};",
-                name = to_identifier(&to_snakecase(m.name())),
+                name = name,
                 inputs = inputs,
                 output = output
             )?;
@@ -37,13 +41,18 @@ impl<'i> Display for GenTrait<'i> {
         signals.sort_by(|a, b| a.name().partial_cmp(b.name()).unwrap());
         for signal in &signals {
             let args = parse_signal_args(&signal.args());
+            let name = to_identifier(&to_snakecase(signal.name()));
             writeln!(f)?;
             writeln!(f, "    /// {} signal", signal.name())?;
-            writeln!(f, "    #[dbus_proxy(signal)]")?;
+            if pascal_case(&name) != signal.name() {
+                writeln!(f, "    #[dbus_proxy(signal, name = \"{}\")]", signal.name())?;
+            } else {
+                writeln!(f, "    #[dbus_proxy(signal)]")?;
+            }
             writeln!(
                 f,
                 "    fn {name}({args}) -> zbus::Result<()>;",
-                name = to_identifier(&to_snakecase(signal.name())),
+                name = name,
                 args = args,
             )?;
         }
@@ -52,28 +61,32 @@ impl<'i> Display for GenTrait<'i> {
         props.sort_by(|a, b| a.name().partial_cmp(b.name()).unwrap());
         for p in props {
             let (read, write) = read_write_from_access(p.access());
+            let name = to_identifier(&to_snakecase(p.name()));
 
             writeln!(f)?;
             writeln!(f, "    /// {} property", p.name())?;
+            if pascal_case(&name) != p.name() {
+                writeln!(f, "    #[dbus_proxy(property, name = \"{}\")]", p.name())?;
+            } else {
+                writeln!(f, "    #[dbus_proxy(property)]")?;
+            }
 
             if read {
                 let output = to_rust_type(p.ty(), false, false);
-                writeln!(f, "    #[dbus_proxy(property)]")?;
                 writeln!(
                     f,
                     "    fn {name}(&self) -> zbus::Result<{output}>;",
-                    name = to_identifier(&to_snakecase(p.name())),
+                    name = name,
                     output = output,
                 )?;
             }
 
             if write {
                 let input = to_rust_type(p.ty(), true, true);
-                writeln!(f, "    #[dbus_proxy(property)]")?;
                 writeln!(
                     f,
                     "    fn set_{name}(&self, value: {input}) -> zbus::Result<()>;",
-                    name = to_identifier(&to_snakecase(p.name())),
+                    name = name,
                     input = input,
                 )?;
             }
@@ -262,6 +275,23 @@ fn to_identifier(id: &str) -> String {
     } else {
         id.replace('-', "_")
     }
+}
+
+// This function is the same as zbus_macros::utils::pascal_case
+pub fn pascal_case(s: &str) -> String {
+    let mut pascal = String::new();
+    let mut capitalize = true;
+    for ch in s.chars() {
+        if ch == '_' {
+            capitalize = true;
+        } else if capitalize {
+            pascal.push(ch.to_ascii_uppercase());
+            capitalize = false;
+        } else {
+            pascal.push(ch);
+        }
+    }
+    pascal
 }
 
 #[cfg(test)]
