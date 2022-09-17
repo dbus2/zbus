@@ -457,14 +457,14 @@ where
     pub(crate) fn prep_serialize_enum_variant(&mut self, variant_index: u32) -> Result<()> {
         // Encode enum variants as a struct with first field as variant index
         let signature = self.sig_parser.next_signature()?;
-        if self.sig_parser.next_char() != STRUCT_SIG_START_CHAR {
+        if self.sig_parser.next_char()? != STRUCT_SIG_START_CHAR {
             return Err(Error::SignatureMismatch(
                 signature.to_owned(),
                 format!("expected `{}`", STRUCT_SIG_START_CHAR),
             ));
         }
 
-        let alignment = alignment_for_signature(&signature, self.ctxt.format());
+        let alignment = alignment_for_signature(&signature, self.ctxt.format())?;
         self.add_padding(alignment)?;
 
         // Now serialize the veriant index.

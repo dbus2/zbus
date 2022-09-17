@@ -26,6 +26,8 @@ pub enum Error {
     /// The provided signature (first argument) was not valid for reading as the requested type.
     /// Details on the expected signatures are in the second argument.
     SignatureMismatch(crate::Signature<'static>, String),
+    /// Out of bounds range specified.
+    OutOfBounds,
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -76,6 +78,11 @@ impl fmt::Display for Error {
                 f,
                 "Signature mismatch: got `{}`, expected {}",
                 provided, expected,
+            ),
+            Error::OutOfBounds => write!(
+                f,
+                // FIXME: using the `Debug` impl of `Range` because it doesn't impl `Display`.
+                "Out of bounds range specified",
             ),
         }
     }

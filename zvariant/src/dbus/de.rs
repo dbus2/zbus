@@ -90,7 +90,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let c = self.0.sig_parser.next_char();
+        let c = self.0.sig_parser.next_char()?;
 
         crate::de::deserialize_any::<B, Self, V>(self, c, visitor)
     }
@@ -157,7 +157,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let v = match self.0.sig_parser.next_char() {
+        let v = match self.0.sig_parser.next_char()? {
             #[cfg(unix)]
             Fd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
@@ -193,7 +193,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let len = match self.0.sig_parser.next_char() {
+        let len = match self.0.sig_parser.next_char()? {
             Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
                 let len_slice = self.0.next_slice(1)?;
 
@@ -238,7 +238,9 @@ where
     where
         V: Visitor<'de>,
     {
-        unreachable!("DBus format can't support `Option`");
+        Err(de::Error::custom(
+            "D-Bus format does not support optional values",
+        ))
     }
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
@@ -266,7 +268,7 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.0.sig_parser.next_char() {
+        match self.0.sig_parser.next_char()? {
             VARIANT_SIGNATURE_CHAR => {
                 let value_de = ValueDeserializer::new(self);
 
@@ -274,7 +276,7 @@ where
             }
             ARRAY_SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
-                let next_signature_char = self.0.sig_parser.next_char();
+                let next_signature_char = self.0.sig_parser.next_char()?;
                 let array_de = ArrayDeserializer::new(self)?;
 
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
@@ -285,7 +287,7 @@ where
             }
             STRUCT_SIG_START_CHAR => {
                 let signature = self.0.sig_parser.next_signature()?;
-                let alignment = alignment_for_signature(&signature, EncodingFormat::DBus);
+                let alignment = alignment_for_signature(&signature, EncodingFormat::DBus)?;
                 self.0.parse_padding(alignment)?;
 
                 self.0.sig_parser.skip_char()?;
@@ -313,10 +315,10 @@ where
         V: Visitor<'de>,
     {
         let signature = self.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, self.0.ctxt.format());
+        let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
         self.0.parse_padding(alignment)?;
 
-        let non_unit = if self.0.sig_parser.next_char() == STRUCT_SIG_START_CHAR {
+        let non_unit = if self.0.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
             // This means we've a non-unit enum. Let's skip the `(`.
             self.0.sig_parser.skip_char()?;
 
@@ -343,7 +345,7 @@ where
     where
         V: Visitor<'de>,
     {
-        if self.0.sig_parser.next_char() == <&str>::SIGNATURE_CHAR {
+        if self.0.sig_parser.next_char()? == <&str>::SIGNATURE_CHAR {
             self.deserialize_str(visitor)
         } else {
             self.deserialize_u32(visitor)
@@ -374,7 +376,7 @@ where
 
         let len = B::read_u32(de.0.next_slice(4)?) as usize;
         let element_signature = de.0.sig_parser.next_signature()?;
-        let element_alignment = alignment_for_signature(&element_signature, EncodingFormat::DBus);
+        let element_alignment = alignment_for_signature(&element_signature, EncodingFormat::DBus)?;
         let mut element_signature_len = element_signature.len();
 
         // D-Bus requires padding for the first element even when there is no first element
@@ -382,7 +384,7 @@ where
         de.0.parse_padding(element_alignment)?;
         let start = de.0.pos;
 
-        if de.0.sig_parser.next_char() == DICT_ENTRY_SIG_START_CHAR {
+        if de.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
             de.0.sig_parser.skip_char()?;
             element_signature_len -= 1;
         }
@@ -405,7 +407,7 @@ where
         let mut de = Deserializer::<B>(crate::DeserializerCommon {
             ctxt,
             sig_parser,
-            bytes: &self.de.0.bytes[self.de.0.pos..],
+            bytes: subslice(self.de.0.bytes, self.de.0.pos..)?,
             fds: self.de.0.fds,
             pos: 0,
             b: PhantomData,
@@ -526,7 +528,7 @@ where
     {
         let v = seed.deserialize(&mut *self.de).map(Some);
 
-        if self.de.0.sig_parser.next_char() == STRUCT_SIG_END_CHAR {
+        if self.de.0.sig_parser.next_char()? == STRUCT_SIG_END_CHAR {
             // Last item in the struct
             self.de.0.sig_parser.skip_char()?;
         }
@@ -582,8 +584,7 @@ where
                 // Skip trailing nul byte
                 let value_start = sig_end + 1;
 
-                let slice = &self.de.0.bytes[sig_start..sig_end];
-                // FIXME: Can we just use `Signature::from_bytes_unchecked`?
+                let slice = subslice(self.de.0.bytes, sig_start..sig_end)?;
                 let signature = Signature::try_from(slice)?;
                 let sig_parser = SignatureParser::new(signature);
 
@@ -594,7 +595,7 @@ where
                 let mut de = Deserializer::<B>(crate::DeserializerCommon {
                     ctxt,
                     sig_parser,
-                    bytes: &self.de.0.bytes[value_start..],
+                    bytes: subslice(self.de.0.bytes, value_start..)?,
                     fds: self.de.0.fds,
                     pos: 0,
                     b: PhantomData,
