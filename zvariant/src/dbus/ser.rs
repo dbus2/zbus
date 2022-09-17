@@ -88,7 +88,7 @@ where
     serialize_basic!(serialize_i64(i64) write_i64);
 
     fn serialize_i32(self, v: i32) -> Result<()> {
-        match self.0.sig_parser.next_char() {
+        match self.0.sig_parser.next_char()? {
             #[cfg(unix)]
             Fd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
@@ -128,7 +128,7 @@ where
                 &"D-Bus string type must not contain interior null bytes",
             ));
         }
-        let c = self.0.sig_parser.next_char();
+        let c = self.0.sig_parser.next_char()?;
         if c == VARIANT_SIGNATURE_CHAR {
             self.0.value_sign = Some(signature_string!(v));
         }
@@ -197,7 +197,7 @@ where
         variant_index: u32,
         variant: &'static str,
     ) -> Result<()> {
-        if self.0.sig_parser.next_char() == <&str>::SIGNATURE_CHAR {
+        if self.0.sig_parser.next_char()? == <&str>::SIGNATURE_CHAR {
             variant.serialize(self)
         } else {
             variant_index.serialize(self)
@@ -240,7 +240,7 @@ where
 
         let element_signature = self.0.sig_parser.next_signature()?;
         let element_signature_len = element_signature.len();
-        let element_alignment = alignment_for_signature(&element_signature, self.0.ctxt.format());
+        let element_alignment = alignment_for_signature(&element_signature, self.0.ctxt.format())?;
 
         // D-Bus expects us to add padding for the first element even when there is no first
         // element (i-e empty array) so we add padding already.
@@ -285,7 +285,7 @@ where
     }
 
     fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
-        match self.0.sig_parser.next_char() {
+        match self.0.sig_parser.next_char()? {
             VARIANT_SIGNATURE_CHAR => {
                 StructSerializer::variant(self).map(StructSeqSerializer::Struct)
             }
@@ -401,7 +401,7 @@ where
     }
 
     fn structure(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
-        let c = ser.0.sig_parser.next_char();
+        let c = ser.0.sig_parser.next_char()?;
         if c != STRUCT_SIG_START_CHAR && c != DICT_ENTRY_SIG_START_CHAR {
             let expected = format!(
                 "`{}` or `{}`",
@@ -415,7 +415,7 @@ where
         }
 
         let signature = ser.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, EncodingFormat::DBus);
+        let alignment = alignment_for_signature(&signature, EncodingFormat::DBus)?;
         ser.0.add_padding(alignment)?;
 
         ser.0.sig_parser.skip_char()?;

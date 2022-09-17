@@ -88,7 +88,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> Result<TokenStream, Erro
                     return Err(Error::new_spanned(&nv.lit, "unsupported argument"));
                 }
             }
-            _ => return Err(Error::new_spanned(&arg, "unknown attribute")),
+            _ => return Err(Error::new_spanned(arg, "unknown attribute")),
         }
     }
 

@@ -652,6 +652,12 @@ where
     where
         V: MapAccess<'de>,
     {
+        if self.signature.len() < 5 {
+            return Err(serde::de::Error::invalid_length(
+                self.signature.len(),
+                &">= 5 characters in dict entry signature",
+            ));
+        }
         let key_signature = self.signature.slice(2..3);
         let signature_end = self.signature.len() - 1;
         let value_signature = self.signature.slice(3..signature_end);

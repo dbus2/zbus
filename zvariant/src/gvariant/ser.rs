@@ -54,7 +54,7 @@ where
         T: ?Sized + Serialize,
     {
         let signature = self.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, self.0.ctxt.format());
+        let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
         let child_sig_parser = self.0.sig_parser.slice(1..);
         let child_signature = child_sig_parser.next_signature()?;
         let child_sig_len = child_signature.len();
@@ -159,7 +159,7 @@ where
             ));
         }
 
-        let c = self.0.sig_parser.next_char();
+        let c = self.0.sig_parser.next_char()?;
         if c == VARIANT_SIGNATURE_CHAR {
             self.0.value_sign = Some(signature_string!(v));
 
@@ -207,7 +207,7 @@ where
         variant_index: u32,
         variant: &'static str,
     ) -> Result<()> {
-        if self.0.sig_parser.next_char() == <&str>::SIGNATURE_CHAR {
+        if self.0.sig_parser.next_char()? == <&str>::SIGNATURE_CHAR {
             variant.serialize(self)
         } else {
             variant_index.serialize(self)
@@ -242,22 +242,14 @@ where
         self.0.sig_parser.skip_char()?;
         let element_signature = self.0.sig_parser.next_signature()?;
         let element_signature_len = element_signature.len();
-        let element_alignment = alignment_for_signature(&element_signature, self.0.ctxt.format());
+        let element_alignment = alignment_for_signature(&element_signature, self.0.ctxt.format())?;
 
         let fixed_sized_child = crate::utils::is_fixed_sized_signature(&element_signature)?;
-        let offsets = if !fixed_sized_child {
-            Some(FramingOffsets::new())
-        } else {
-            None
-        };
+        let offsets = (!fixed_sized_child).then(FramingOffsets::new);
 
-        let key_start = if self.0.sig_parser.next_char() == DICT_ENTRY_SIG_START_CHAR {
+        let key_start = if self.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
             let key_signature = Signature::from_str_unchecked(&element_signature[1..2]);
-            if !crate::utils::is_fixed_sized_signature(&key_signature)? {
-                Some(0)
-            } else {
-                None
-            }
+            (!crate::utils::is_fixed_sized_signature(&key_signature)?).then(|| 0)
         } else {
             None
         };
@@ -304,7 +296,7 @@ where
     }
 
     fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
-        match self.0.sig_parser.next_char() {
+        match self.0.sig_parser.next_char()? {
             VARIANT_SIGNATURE_CHAR => {
                 StructSerializer::variant(self).map(StructSeqSerializer::Struct)
             }
@@ -362,8 +354,6 @@ where
         let array_len = self.ser.0.bytes_written - self.start;
         if array_len == 0 {
             // Empty sequence
-            assert!(offsets.is_empty());
-
             return Ok(());
         }
 
@@ -424,7 +414,7 @@ where
 {
     fn variant(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
         ser.0.add_padding(VARIANT_ALIGNMENT_GVARIANT)?;
-        let offsets = if ser.0.sig_parser.next_char() == STRUCT_SIG_START_CHAR {
+        let offsets = if ser.0.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
             Some(FramingOffsets::new())
         } else {
             None
@@ -440,7 +430,7 @@ where
     }
 
     fn structure(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
-        let c = ser.0.sig_parser.next_char();
+        let c = ser.0.sig_parser.next_char()?;
         if c != STRUCT_SIG_START_CHAR && c != DICT_ENTRY_SIG_START_CHAR {
             let expected = format!(
                 "`{}` or `{}`",
@@ -454,7 +444,7 @@ where
         }
 
         let signature = ser.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, EncodingFormat::GVariant);
+        let alignment = alignment_for_signature(&signature, EncodingFormat::GVariant)?;
         ser.0.add_padding(alignment)?;
 
         ser.0.sig_parser.skip_char()?;
@@ -548,8 +538,6 @@ where
         let struct_len = self.ser.0.bytes_written - self.start;
         if struct_len == 0 {
             // Empty sequence
-            assert!(offsets.is_empty());
-
             return Ok(());
         }
         if offsets.peek() == Some(struct_len) {
