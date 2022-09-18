@@ -35,7 +35,7 @@ enum Bytes<'b> {
 }
 
 impl<'b> Bytes<'b> {
-    fn borrowed<'s: 'b>(bytes: &'s [u8]) -> Self {
+    const fn borrowed<'s: 'b>(bytes: &'s [u8]) -> Self {
         Self::Borrowed(bytes)
     }
 
@@ -141,7 +141,7 @@ impl<'a> Signature<'a> {
     }
 
     /// Same as `from_bytes_unchecked`, except it takes a string reference.
-    pub fn from_str_unchecked<'s: 'a>(signature: &'s str) -> Self {
+    pub const fn from_str_unchecked<'s: 'a>(signature: &'s str) -> Self {
         Self {
             bytes: Bytes::borrowed(signature.as_bytes()),
             pos: 0,
