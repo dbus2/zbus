@@ -47,6 +47,7 @@ where
             #[cfg(not(unix))]
             fds: PhantomData,
             pos: 0,
+            container_depths: Default::default(),
             b: PhantomData,
         })
     }
@@ -410,10 +411,12 @@ where
             bytes: subslice(self.de.0.bytes, self.de.0.pos..)?,
             fds: self.de.0.fds,
             pos: 0,
+            container_depths: self.de.0.container_depths,
             b: PhantomData,
         });
         let v = seed.deserialize(&mut de);
         self.de.0.pos += de.0.pos;
+        // No need for retaking the container depths as the child can't be incomplete.
 
         if self.de.0.pos > self.start + self.len {
             return Err(serde::de::Error::invalid_length(
@@ -598,6 +601,7 @@ where
                     bytes: subslice(self.de.0.bytes, value_start..)?,
                     fds: self.de.0.fds,
                     pos: 0,
+                    container_depths: self.de.0.container_depths,
                     b: PhantomData,
                 });
 
