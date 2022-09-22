@@ -11,8 +11,8 @@ use std::{
 use std::os::unix::io::RawFd;
 
 use crate::{
-    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error,
-    ObjectPath, Result, Signature,
+    container_depths::ContainerDepths, signature_parser::SignatureParser, utils::*, Basic,
+    EncodingContext, EncodingFormat, Error, ObjectPath, Result, Signature,
 };
 
 #[cfg(unix)]
@@ -48,6 +48,7 @@ where
             fds,
             bytes_written: 0,
             value_sign: None,
+            container_depths: Default::default(),
             b: PhantomData,
         })
     }
@@ -246,6 +247,7 @@ where
         // element (i-e empty array) so we add padding already.
         let first_padding = self.0.add_padding(element_alignment)?;
         let start = self.0.bytes_written;
+        self.0.container_depths = self.0.container_depths.inc_array()?;
 
         Ok(SeqSerializer {
             ser: self,
@@ -350,6 +352,8 @@ where
             .seek(std::io::SeekFrom::Current(total_array_len - 4))
             .map_err(Error::Io)?;
 
+        self.ser.0.container_depths = self.ser.0.container_depths.dec_array();
+
         Ok(())
     }
 }
@@ -387,6 +391,8 @@ pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
     ser: &'b mut Serializer<'ser, 'sig, B, W>,
     // The number of `)` in the signature to skip at the end.
     end_parens: u8,
+    // The original container depths. We restore to that at the end.
+    container_depths: ContainerDepths,
 }
 
 impl<'ser, 'sig, 'b, B, W> StructSerializer<'ser, 'sig, 'b, B, W>
@@ -396,8 +402,14 @@ where
 {
     fn variant(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
         ser.0.add_padding(VARIANT_ALIGNMENT_DBUS)?;
+        let container_depths = ser.0.container_depths;
+        ser.0.container_depths = ser.0.container_depths.inc_variant()?;
 
-        Ok(Self { ser, end_parens: 0 })
+        Ok(Self {
+            ser,
+            end_parens: 0,
+            container_depths,
+        })
     }
 
     fn structure(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
@@ -419,8 +431,14 @@ where
         ser.0.add_padding(alignment)?;
 
         ser.0.sig_parser.skip_char()?;
+        let container_depths = ser.0.container_depths;
+        ser.0.container_depths = ser.0.container_depths.inc_structure()?;
 
-        Ok(Self { ser, end_parens: 1 })
+        Ok(Self {
+            ser,
+            end_parens: 1,
+            container_depths,
+        })
     }
 
     fn enum_variant(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
@@ -455,6 +473,7 @@ where
                     fds: self.ser.0.fds,
                     bytes_written,
                     value_sign: None,
+                    container_depths: self.ser.0.container_depths,
                     b: PhantomData,
                 });
                 value.serialize(&mut ser)?;
@@ -470,6 +489,8 @@ where
         if self.end_parens > 0 {
             self.ser.0.sig_parser.skip_chars(self.end_parens as usize)?;
         }
+        // Restore the original container depths.
+        self.ser.0.container_depths = self.container_depths;
 
         Ok(())
     }

@@ -10,9 +10,9 @@ use std::{
 use std::os::unix::io::RawFd;
 
 use crate::{
-    framing_offset_size::FramingOffsetSize, framing_offsets::FramingOffsets,
-    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error,
-    Result, Signature,
+    container_depths::ContainerDepths, framing_offset_size::FramingOffsetSize,
+    framing_offsets::FramingOffsets, signature_parser::SignatureParser, utils::*, Basic,
+    EncodingContext, EncodingFormat, Error, Result, Signature,
 };
 
 /// Our serialization implementation.
@@ -45,6 +45,7 @@ where
             fds,
             bytes_written: 0,
             value_sign: None,
+            container_depths: Default::default(),
             b: PhantomData,
         })
     }
@@ -66,7 +67,9 @@ where
 
         match value {
             Some(value) => {
+                self.0.container_depths = self.0.container_depths.inc_maybe()?;
                 value.serialize(&mut *self)?;
+                self.0.container_depths = self.0.container_depths.dec_maybe();
 
                 if !fixed_sized_child {
                     self.0.write_all(&b"\0"[..]).map_err(Error::Io)?;
@@ -95,6 +98,7 @@ macro_rules! serialize_basic {
                 fds: self.0.fds,
                 bytes_written,
                 value_sign: None,
+                container_depths: self.0.container_depths,
                 b: PhantomData,
             });
 
@@ -254,6 +258,7 @@ where
             None
         };
         self.0.add_padding(element_alignment)?;
+        self.0.container_depths = self.0.container_depths.inc_array()?;
 
         let start = self.0.bytes_written;
 
@@ -346,6 +351,7 @@ where
             .0
             .sig_parser
             .skip_chars(self.element_signature_len)?;
+        self.ser.0.container_depths = self.ser.0.container_depths.dec_array();
 
         let offsets = match self.offsets {
             Some(offsets) => offsets,
@@ -405,6 +411,8 @@ pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
     end_parens: u8,
     // All offsets
     offsets: Option<FramingOffsets>,
+    // The original container depths. We restore to that at the end.
+    container_depths: ContainerDepths,
 }
 
 impl<'ser, 'sig, 'b, B, W> StructSerializer<'ser, 'sig, 'b, B, W>
@@ -420,12 +428,15 @@ where
             None
         };
         let start = ser.0.bytes_written;
+        let container_depths = ser.0.container_depths;
+        ser.0.container_depths = ser.0.container_depths.inc_variant()?;
 
         Ok(Self {
             ser,
             end_parens: 0,
             offsets,
             start,
+            container_depths,
         })
     }
 
@@ -455,12 +466,15 @@ where
             None
         };
         let start = ser.0.bytes_written;
+        let container_depths = ser.0.container_depths;
+        ser.0.container_depths = ser.0.container_depths.inc_structure()?;
 
         Ok(Self {
             ser,
             end_parens: 1,
             offsets,
             start,
+            container_depths,
         })
     }
 
@@ -496,6 +510,7 @@ where
                     fds: self.ser.0.fds,
                     bytes_written,
                     value_sign: None,
+                    container_depths: self.ser.0.container_depths,
                     b: PhantomData,
                 });
                 value.serialize(&mut ser)?;
@@ -531,6 +546,9 @@ where
         if self.end_parens > 0 {
             self.ser.0.sig_parser.skip_chars(self.end_parens as usize)?;
         }
+        // Restore the original container depths.
+        self.ser.0.container_depths = self.container_depths;
+
         let mut offsets = match self.offsets {
             Some(offsets) => offsets,
             None => return Ok(()),
