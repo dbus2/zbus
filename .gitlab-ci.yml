@@ -185,6 +185,16 @@ msvc:
     - Start-Process gdbus.exe _win32_run_session_bus
     - cargo test --package zbus --features windows-gdbus
 
+zvariant_fuzz:
+  extends: .debian_img
+  stage: test
+  variables:
+    RUST_LOG: "trace"
+  script:
+    - rustup override set nightly
+    - cargo fuzz run --fuzz-dir zvariant/fuzz dbus -- -max_total_time=30 -max_len=100M
+    - cargo fuzz run --fuzz-dir zvariant/fuzz gvariant -- -max_total_time=30 -max_len=100M
+
 coverage:
   extends: .debian_img
   stage: extras
