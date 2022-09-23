@@ -22,6 +22,7 @@ rustup component add rustfmt
 rustup target add x86_64-apple-darwin x86_64-unknown-freebsd x86_64-unknown-netbsd x86_64-pc-windows-gnu
 cargo install --force cargo-audit
 cargo install --force grcov
+cargo install --force cargo-fuzz
 
 # nightly, used to generate tests coverage
 rustup install nightly
