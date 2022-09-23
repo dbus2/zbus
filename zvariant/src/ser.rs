@@ -13,6 +13,7 @@ use std::os::unix::io::RawFd;
 #[cfg(feature = "gvariant")]
 use crate::gvariant::{self, Serializer as GVSerializer};
 use crate::{
+    container_depths::ContainerDepths,
     dbus::{self, Serializer as DBusSerializer},
     signature_parser::SignatureParser,
     utils::*,
@@ -354,6 +355,8 @@ pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
     pub(crate) sig_parser: SignatureParser<'sig>,
 
     pub(crate) value_sign: Option<Signature<'static>>,
+
+    pub(crate) container_depths: ContainerDepths,
 
     pub(crate) b: PhantomData<B>,
 }

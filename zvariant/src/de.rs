@@ -12,9 +12,9 @@ use std::os::unix::io::RawFd;
 #[cfg(feature = "gvariant")]
 use crate::gvariant::Deserializer as GVDeserializer;
 use crate::{
-    dbus::Deserializer as DBusDeserializer, signature_parser::SignatureParser, utils::*, Basic,
-    DynamicDeserialize, DynamicType, EncodingContext, EncodingFormat, Error, ObjectPath, Result,
-    Signature, Type,
+    container_depths::ContainerDepths, dbus::Deserializer as DBusDeserializer,
+    signature_parser::SignatureParser, utils::*, Basic, DynamicDeserialize, DynamicType,
+    EncodingContext, EncodingFormat, Error, ObjectPath, Result, Signature, Type,
 };
 
 #[cfg(unix)]
@@ -363,6 +363,8 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B> {
     pub(crate) pos: usize,
 
     pub(crate) sig_parser: SignatureParser<'sig>,
+
+    pub(crate) container_depths: ContainerDepths,
 
     pub(crate) b: PhantomData<B>,
 }

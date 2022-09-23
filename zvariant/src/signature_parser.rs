@@ -1,6 +1,6 @@
 use std::ops::{Bound, RangeBounds};
 
-use crate::{subslice, Basic, ObjectPath, Result, Signature};
+use crate::{subslice, Basic, ObjectPath, Result, Signature, STRUCT_SIG_END_CHAR};
 
 #[cfg(unix)]
 use crate::Fd;
@@ -8,8 +8,8 @@ use crate::Fd;
 #[cfg(feature = "gvariant")]
 use crate::utils::MAYBE_SIGNATURE_CHAR;
 use crate::utils::{
-    ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR, DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_STR,
-    STRUCT_SIG_START_CHAR, STRUCT_SIG_START_STR, VARIANT_SIGNATURE_CHAR,
+    ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR, DICT_ENTRY_SIG_START_CHAR,
+    STRUCT_SIG_START_CHAR, VARIANT_SIGNATURE_CHAR,
 };
 
 #[derive(Debug, Clone)]
@@ -221,30 +221,21 @@ impl<'s> SignatureParser<'s> {
             ));
         }
 
-        let mut open_braces = 1;
-        let mut i = 1;
-        while i < signature.len() - 1 {
-            if &signature[i..=i] == STRUCT_SIG_END_STR {
-                open_braces -= 1;
-
-                if open_braces == 0 {
-                    break;
-                }
-            } else if &signature[i..=i] == STRUCT_SIG_START_STR {
-                open_braces += 1;
-            }
-
-            i += 1;
+        let mut fields_sig_len = 0;
+        let mut fields_parser = self.slice(1..);
+        while !fields_parser.done() && fields_parser.next_char()? != STRUCT_SIG_END_CHAR {
+            fields_sig_len += fields_parser.parse_next_signature()?.len();
         }
-        let end = &signature[i..=i];
-        if end != STRUCT_SIG_END_STR {
+        let c = fields_parser.next_char()?;
+        if c != STRUCT_SIG_END_CHAR {
             return Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Str(end),
+                serde::de::Unexpected::Char(c),
                 &crate::STRUCT_SIG_END_STR,
             ));
         }
 
-        Ok(self.signature_slice(0, i + 1))
+        // The `(`, fields signatures and `)`.
+        Ok(self.signature_slice(0, fields_sig_len + 2))
     }
 
     fn next_dict_entry_signature(&self) -> Result<Signature<'_>> {

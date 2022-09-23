@@ -45,6 +45,7 @@ where
             #[cfg(not(unix))]
             fds: PhantomData,
             pos: 0,
+            container_depths: Default::default(),
             b: PhantomData,
         })
     }
@@ -65,12 +66,14 @@ macro_rules! deserialize_basic {
                 bytes: subslice(self.0.bytes, self.0.pos..)?,
                 fds: self.0.fds,
                 pos: 0,
+                container_depths: self.0.container_depths,
                 b: PhantomData,
             });
 
             let v = dbus_de.$method(visitor)?;
             self.0.sig_parser = dbus_de.0.sig_parser;
             self.0.pos += dbus_de.0.pos;
+            // Basic types don't have anything to do with container depths so not updating it here.
 
             Ok(v)
         }
@@ -214,11 +217,13 @@ where
                 bytes: subslice(self.0.bytes, self.0.pos..end)?,
                 fds: self.0.fds,
                 pos: 0,
+                container_depths: self.0.container_depths.inc_maybe()?,
                 b: PhantomData,
             });
 
             let v = visitor.visit_some(&mut de)?;
             self.0.pos += de.0.pos;
+            // No need for retaking the container depths as the underlying type can't be incomplete.
 
             if !fixed_sized_child {
                 let byte = *subslice(self.0.bytes, self.0.pos)?;
@@ -301,13 +306,17 @@ where
                 let start = self.0.pos;
                 let end = self.0.bytes.len();
                 let offset_size = FramingOffsetSize::for_encoded_container(end - start);
-                visitor.visit_seq(StructureDeserializer {
+                self.0.container_depths = self.0.container_depths.inc_structure()?;
+                let v = visitor.visit_seq(StructureDeserializer {
                     de: self,
                     start,
                     end,
                     offsets_len: 0,
                     offset_size,
-                })
+                });
+                self.0.container_depths = self.0.container_depths.dec_structure();
+
+                v
             }
             c => Err(de::Error::invalid_type(
                 de::Unexpected::Char(c),
@@ -396,6 +405,7 @@ where
     B: byteorder::ByteOrder,
 {
     fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>) -> Result<Self> {
+        de.0.container_depths = de.0.container_depths.inc_array()?;
         let mut len = de.0.bytes.len() - de.0.pos;
 
         let element_signature = de.0.sig_parser.next_signature()?;
@@ -492,6 +502,7 @@ where
                 .sig_parser
                 .skip_chars(self.element_signature_len)?;
             self.de.0.pos += self.offsets_len;
+            self.de.0.container_depths = self.de.0.container_depths.dec_array();
 
             return Ok(None);
         }
@@ -508,11 +519,13 @@ where
             bytes: subslice(self.de.0.bytes, self.de.0.pos..end)?,
             fds: self.de.0.fds,
             pos: 0,
+            container_depths: self.de.0.container_depths,
             b: PhantomData,
         });
 
         let v = seed.deserialize(&mut de).map(Some);
         self.de.0.pos += de.0.pos;
+        // No need for retaking the container depths as the child can't be incomplete.
 
         if self.de.0.pos > self.start + self.len {
             return Err(serde::de::Error::invalid_length(
@@ -573,10 +586,12 @@ where
             bytes: subslice(self.de.0.bytes, self.de.0.pos..key_end)?,
             fds: self.de.0.fds,
             pos: 0,
+            container_depths: self.de.0.container_depths,
             b: PhantomData,
         });
         let v = seed.deserialize(&mut de).map(Some);
         self.de.0.pos += de.0.pos;
+        // No need for retaking the container depths as the key can't be incomplete.
 
         if self.de.0.pos > self.start + self.len {
             return Err(serde::de::Error::invalid_length(
@@ -611,10 +626,12 @@ where
             bytes: subslice(self.de.0.bytes, self.de.0.pos..value_end)?,
             fds: self.de.0.fds,
             pos: 0,
+            container_depths: self.de.0.container_depths,
             b: PhantomData,
         });
         let v = seed.deserialize(&mut de);
         self.de.0.pos += de.0.pos;
+        // No need for retaking the container depths as the value can't be incomplete.
 
         if let Some(key_offset_size) = self.key_offset_size {
             self.de.0.pos += key_offset_size as usize;
@@ -694,10 +711,12 @@ where
             bytes: subslice(self.de.0.bytes, self.de.0.pos..element_end)?,
             fds: self.de.0.fds,
             pos: 0,
+            container_depths: self.de.0.container_depths,
             b: PhantomData,
         });
         let v = seed.deserialize(&mut de).map(Some);
         self.de.0.pos += de.0.pos;
+        // No need for retaking the container depths as the field can't be incomplete.
 
         if de.0.sig_parser.next_char()? == STRUCT_SIG_END_CHAR {
             // Last item in the struct
@@ -792,6 +811,7 @@ where
                     bytes: subslice(self.de.0.bytes, self.sig_start..self.sig_end)?,
                     fds: self.de.0.fds,
                     pos: 0,
+                    container_depths: self.de.0.container_depths,
                     b: PhantomData,
                 });
 
@@ -815,6 +835,7 @@ where
                     bytes: subslice(self.de.0.bytes, self.value_start..self.value_end)?,
                     fds: self.de.0.fds,
                     pos: 0,
+                    container_depths: self.de.0.container_depths.inc_variant()?,
                     b: PhantomData,
                 });
 
