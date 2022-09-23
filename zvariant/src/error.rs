@@ -2,6 +2,36 @@ use serde::{de, ser};
 use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, result};
 
+/// Enum representing the max depth exceeded error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaxDepthExceeded {
+    /// The maximum allowed depth for structures in encoding was exceeded.
+    Structure,
+    /// The maximum allowed depth for arrays in encoding was exceeded.
+    Array,
+    /// The maximum allowed depth for containers in encoding was exceeded.
+    Container,
+}
+
+impl fmt::Display for MaxDepthExceeded {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Structure => write!(
+                f,
+                "Maximum allowed depth for structures in encoding was exceeded"
+            ),
+            Self::Array => write!(
+                f,
+                "Maximum allowed depth for arrays in encoding was exceeded"
+            ),
+            Self::Container => write!(
+                f,
+                "Maximum allowed depth for containers in encoding was exceeded"
+            ),
+        }
+    }
+}
+
 /// Error type used by zvariant API.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -28,6 +58,8 @@ pub enum Error {
     SignatureMismatch(crate::Signature<'static>, String),
     /// Out of bounds range specified.
     OutOfBounds,
+    /// The maximum allowed depth for containers in encoding was exceeded.
+    MaxDepthExceeded(MaxDepthExceeded),
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -41,6 +73,7 @@ impl PartialEq for Error {
             (Error::Utf8(msg), Error::Utf8(other)) => msg == other,
             (Error::PaddingNot0(p), Error::PaddingNot0(other)) => p == other,
             (Error::UnknownFd, Error::UnknownFd) => true,
+            (Error::MaxDepthExceeded(max1), Error::MaxDepthExceeded(max2)) => max1 == max2,
             (_, _) => false,
         }
     }
@@ -84,6 +117,7 @@ impl fmt::Display for Error {
                 // FIXME: using the `Debug` impl of `Range` because it doesn't impl `Display`.
                 "Out of bounds range specified",
             ),
+            Error::MaxDepthExceeded(max) => write!(f, "{max}"),
         }
     }
 }

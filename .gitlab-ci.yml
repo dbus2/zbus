@@ -37,7 +37,7 @@ stages:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: '2022-08-31.1'
+    FDO_DISTRIBUTION_TAG: '2022-09-23.1'
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
@@ -184,6 +184,16 @@ msvc:
     # This is an undocumented implementation detail, but easier and faster than calling the gdbus C library
     - Start-Process gdbus.exe _win32_run_session_bus
     - cargo test --package zbus --features windows-gdbus
+
+zvariant_fuzz:
+  extends: .debian_img
+  stage: test
+  variables:
+    RUST_LOG: "trace"
+  script:
+    - rustup override set nightly
+    - cargo fuzz run --fuzz-dir zvariant/fuzz dbus -- -max_total_time=30 -max_len=100M
+    - cargo fuzz run --fuzz-dir zvariant/fuzz gvariant -- -max_total_time=30 -max_len=100M
 
 coverage:
   extends: .debian_img
