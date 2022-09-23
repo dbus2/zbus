@@ -154,7 +154,7 @@ This mechanism uses a machine-wide mutex however, so only one GDBus session bus 
 [zbus]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/README.md
 [bw]: https://docs.rs/zbus/3.0.0/zbus/blocking/index.html
 [iektc]: https://docs.rs/zbus/3.0.0/zbus/struct.Connection.html#examples-1
-[tctiog]: https://github.com/tokio-rs/tokio/issues/
+[tctiog]: https://github.com/tokio-rs/tokio/issues/2201
 [`ConnectionBuilder`]: https://docs.rs/zbus/3.0.0/zbus/struct.ConnectionBuilder.html
 [`tokio`]: https://crates.io/crates/tokio
 [`async-io`]: https://crates.io/crates/async-io
