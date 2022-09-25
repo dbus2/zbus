@@ -18,7 +18,7 @@ use crate::Maybe;
 
 /// Owned [`Value`](enum.Value.html)
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
-pub struct OwnedValue(Value<'static>);
+pub struct OwnedValue(pub(crate) Value<'static>);
 
 assert_impl_all!(OwnedValue: Send, Sync, Unpin);
 
@@ -164,13 +164,13 @@ where
 impl<'a> From<Value<'a>> for OwnedValue {
     fn from(v: Value<'a>) -> Self {
         // TODO: add into_owned, avoiding copy if already owned..
-        OwnedValue(v.to_owned())
+        v.to_owned()
     }
 }
 
 impl<'a> From<&Value<'a>> for OwnedValue {
     fn from(v: &Value<'a>) -> Self {
-        OwnedValue(v.to_owned())
+        v.to_owned()
     }
 }
 

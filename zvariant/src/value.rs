@@ -166,8 +166,8 @@ impl<'a> Value<'a> {
     /// Ideally, we should implement [`std::borrow::ToOwned`] trait for `Value`, but that's
     /// implemented generically for us through `impl<T: Clone> ToOwned for T` and it's not what we
     /// need/want.
-    pub fn to_owned(&self) -> Value<'static> {
-        match self {
+    pub fn to_owned(&self) -> OwnedValue {
+        OwnedValue(match self {
             Value::U8(v) => Value::U8(*v),
             Value::Bool(v) => Value::Bool(*v),
             Value::I16(v) => Value::I16(*v),
@@ -192,7 +192,7 @@ impl<'a> Value<'a> {
             Value::Maybe(v) => Value::Maybe(v.to_owned()),
             #[cfg(unix)]
             Value::Fd(v) => Value::Fd(*v),
-        }
+        })
     }
 
     /// Get the signature of the enclosed value.
