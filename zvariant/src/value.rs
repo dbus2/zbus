@@ -161,7 +161,12 @@ impl<'a> Value<'a> {
         }
     }
 
-    pub(crate) fn to_owned(&self) -> Value<'static> {
+    /// Create an owned version of `self`.
+    ///
+    /// Ideally, we should implement [`std::borrow::ToOwned`] trait for `Value`, but that's
+    /// implemented generically for us through `impl<T: Clone> ToOwned for T` and it's not what we
+    /// need/want.
+    pub fn to_owned(&self) -> Value<'static> {
         match self {
             Value::U8(v) => Value::U8(*v),
             Value::Bool(v) => Value::Bool(*v),
