@@ -108,7 +108,6 @@ fn test_derive_error() {
 #[test]
 fn test_interface() {
     use serde::{Deserialize, Serialize};
-    use std::convert::TryFrom;
     use zbus::{
         zvariant::{Type, Value},
         Interface,
@@ -121,12 +120,6 @@ fn test_interface() {
 
     #[derive(Serialize, Deserialize, Type, Value)]
     struct MyCustomPropertyType(u32);
-
-    impl From<&zbus::zvariant::Value<'_>> for MyCustomPropertyType {
-        fn from(value: &zbus::zvariant::Value<'_>) -> Self {
-            Self::try_from(value).unwrap()
-        }
-    }
 
     #[dbus_interface(name = "org.freedesktop.zbus.Test")]
     impl<T: 'static> Test<T>
