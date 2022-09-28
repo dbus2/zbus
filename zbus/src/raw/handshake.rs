@@ -249,7 +249,7 @@ fn sasl_auth_id() -> Result<String> {
     let id = {
         #[cfg(unix)]
         {
-            Uid::current().to_string()
+            Uid::effective().to_string()
         }
 
         #[cfg(windows)]
@@ -911,7 +911,8 @@ mod tests {
 
         let mut client = ClientHandshake::new(p0, None);
         let mut server =
-            ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
+            ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
+                .unwrap();
 
         // proceed to the handshakes
         let mut client_done = false;
@@ -947,7 +948,8 @@ mod tests {
     fn pipelined_handshake() {
         let (mut p0, p1) = create_async_socket_pair();
         let mut server =
-            ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
+            ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
+                .unwrap();
 
         crate::utils::block_on(
             p0.write_all(
@@ -971,7 +973,8 @@ mod tests {
     fn separate_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
         let mut server =
-            ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
+            ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
+                .unwrap();
 
         crate::utils::block_on(
             p0.write_all(
@@ -993,7 +996,8 @@ mod tests {
     fn missing_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
         let mut server =
-            ServerHandshake::new(p1, Guid::generate(), Some(Uid::current().into()), None).unwrap();
+            ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
+                .unwrap();
 
         crate::utils::block_on(p0.write_all(b"\0AUTH EXTERNAL\r\nDATA\r\nBEGIN\r\n")).unwrap();
         crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
@@ -1008,7 +1012,7 @@ mod tests {
         let mut server = ServerHandshake::new(
             p1,
             Guid::generate(),
-            Some(Uid::current().into()),
+            Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
         )
         .unwrap();
@@ -1026,7 +1030,7 @@ mod tests {
         let mut server = ServerHandshake::new(
             p1,
             Guid::generate(),
-            Some(Uid::current().into()),
+            Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
         )
         .unwrap();
