@@ -360,7 +360,7 @@ impl Address {
                 #[cfg(unix)]
                 {
                     let runtime_dir = env::var("XDG_RUNTIME_DIR")
-                        .unwrap_or_else(|_| format!("/run/user/{}", Uid::current()));
+                        .unwrap_or_else(|_| format!("/run/user/{}", Uid::effective()));
                     let path = format!("unix:path={}/bus", runtime_dir);
 
                     Self::from_str(&path)

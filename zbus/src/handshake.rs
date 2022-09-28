@@ -154,7 +154,7 @@ mod tests {
         let server = Authenticated::server(
             Async::new(p1)?,
             Guid::generate(),
-            Some(Uid::current().into()),
+            Some(Uid::effective().into()),
             None,
         );
 
