@@ -911,6 +911,16 @@ impl Connection {
             .expect("poisoned lock")
             .monitor_activity()
     }
+
+    /// Returns the peer process ID, or Ok(None) if it cannot be returned for the associated socket.
+    pub fn peer_pid(&self) -> io::Result<Option<u32>> {
+        self.inner
+            .raw_conn
+            .lock()
+            .expect("poisoned lock")
+            .socket()
+            .peer_pid()
+    }
 }
 
 impl<T> Sink<T> for Connection
