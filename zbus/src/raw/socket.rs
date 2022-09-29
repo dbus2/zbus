@@ -435,7 +435,7 @@ impl Socket for Async<UnixStream> {
     fn peer_sid(&self) -> Option<String> {
         use crate::win32::ProcessToken;
 
-        if let Some(Some(pid)) = self.peer_pid().ok() {
+        if let Ok(Some(pid)) = self.peer_pid() {
             if let Ok(process_token) =
                 ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
             {
