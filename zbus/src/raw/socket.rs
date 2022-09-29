@@ -81,6 +81,33 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
 }
 
 #[cfg(unix)]
+fn get_unix_pid(fd: &impl AsRawFd) -> io::Result<Option<u32>> {
+    let fd = fd.as_raw_fd();
+
+    #[cfg(any(target_os = "android", target_os = "linux"))]
+    {
+        use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+
+        getsockopt(fd, PeerCredentials)
+            .map(|creds| Some(creds.pid() as _))
+            .map_err(|e| e.into())
+    }
+
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    ))]
+    {
+        // FIXME
+        Ok(None)
+    }
+}
+
+#[cfg(unix)]
 fn get_unix_uid(fd: &impl AsRawFd) -> io::Result<Option<u32>> {
     let fd = fd.as_raw_fd();
 
@@ -173,6 +200,11 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
     /// After this call, it is valid for all reading and writing operations to fail.
     fn close(&self) -> io::Result<()>;
 
+    /// Return the peer PID.
+    fn peer_pid(&self) -> io::Result<Option<u32>> {
+        Ok(None)
+    }
+
     /// Return the peer process SID, if any.
     #[cfg(windows)]
     fn peer_sid(&self) -> Option<String> {
@@ -220,6 +252,10 @@ impl Socket for Box<dyn Socket> {
 
     fn close(&self) -> io::Result<()> {
         (**self).close()
+    }
+
+    fn peer_pid(&self) -> io::Result<Option<u32>> {
+        (**self).peer_pid()
     }
 
     #[cfg(windows)]
@@ -279,6 +315,10 @@ impl Socket for Async<UnixStream> {
 
     fn close(&self) -> io::Result<()> {
         self.get_ref().shutdown(std::net::Shutdown::Both)
+    }
+
+    fn peer_pid(&self) -> io::Result<Option<u32>> {
+        get_unix_pid(self)
     }
 
     #[cfg(unix)]
@@ -342,6 +382,10 @@ impl Socket for tokio::net::UnixStream {
         Ok(())
     }
 
+    fn peer_pid(&self) -> io::Result<Option<u32>> {
+        get_unix_pid(self)
+    }
+
     #[cfg(unix)]
     fn uid(&self) -> io::Result<Option<u32>> {
         get_unix_uid(self)
@@ -389,15 +433,29 @@ impl Socket for Async<UnixStream> {
 
     #[cfg(windows)]
     fn peer_sid(&self) -> Option<String> {
-        use crate::win32::{unix_stream_get_peer_pid, ProcessToken};
+        use crate::win32::ProcessToken;
 
-        if let Ok(pid) = unix_stream_get_peer_pid(&self.get_ref()) {
-            if let Ok(process_token) = ProcessToken::open(if pid != 0 { Some(pid) } else { None }) {
+        if let Ok(Some(pid)) = self.peer_pid() {
+            if let Ok(process_token) =
+                ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
+            {
                 return process_token.sid().ok();
             }
         }
 
         None
+    }
+
+    fn peer_pid(&self) -> io::Result<Option<u32>> {
+        #[cfg(windows)]
+        {
+            use crate::win32::unix_stream_get_peer_pid;
+
+            Ok(Some(unix_stream_get_peer_pid(&self.get_ref())? as _))
+        }
+
+        #[cfg(unix)]
+        get_unix_pid(self)
     }
 
     #[cfg(unix)]
