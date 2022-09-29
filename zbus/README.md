@@ -136,4 +136,3 @@ This mechanism uses a machine-wide mutex however, so only one GDBus session bus 
 [`ConnectionBuilder`]: https://docs.rs/zbus/3.0.0/zbus/struct.ConnectionBuilder.html
 [`tokio`]: https://crates.io/crates/tokio
 [`async-io`]: https://crates.io/crates/async-io
-[LICENSE-MIT]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/LICENSE-MIT
