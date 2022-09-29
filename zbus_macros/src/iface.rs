@@ -3,8 +3,9 @@ use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use syn::{
     self, parse_quote, punctuated::Punctuated, AngleBracketedGenericArguments, AttributeArgs,
-    Error, FnArg, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue,
-    NestedMeta, PatType, PathArguments, ReturnType, Signature, Token, Type, TypePath,
+    Error, FnArg, GenericArgument, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList,
+    MetaNameValue, NestedMeta, PatType, PathArguments, ReturnType, Signature, Token, Type,
+    TypePath,
 };
 
 use crate::utils::*;
@@ -232,7 +233,42 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 } else {
                     quote!(::std::result::Result::Ok(self.#ident(val)))
                 };
-                let do_set = quote!(
+
+                // * For reference arg, we convert from `&Value` (so `TryFrom<&Value<'_>>` is
+                //   required).
+                //
+                // * For argument type with lifetimes, we convert from `Value` (so
+                //   `TryFrom<Value<'_>>` is required).
+                //
+                // * For all other arg types, we convert the passed value to `OwnedValue` first and
+                //   then pass it as `Value` (so `TryFrom<Value<'static>>` is required).
+                let value_to_owned = quote! {
+                    ::zbus::zvariant::Value::from(zbus::zvariant::Value::to_owned(value))
+                };
+                let value_arg = match &*typed_inputs
+                    .first()
+                    .ok_or_else(|| Error::new_spanned(&inputs, "Expected a value argument"))?
+                    .ty
+                {
+                    Type::Reference(_) => quote!(value),
+                    Type::Path(path) => path
+                        .path
+                        .segments
+                        .first()
+                        .map(|segment| match &segment.arguments {
+                            PathArguments::AngleBracketed(angled) => angled
+                                .args
+                                .first()
+                                .filter(|arg| matches!(arg, GenericArgument::Lifetime(_)))
+                                .map(|_| quote!(value.clone()))
+                                .unwrap_or_else(|| value_to_owned.clone()),
+                            _ => value_to_owned.clone(),
+                        })
+                        .unwrap_or_else(|| value_to_owned.clone()),
+                    _ => value_to_owned,
+                };
+                let do_set = quote!({
+                    let value = #value_arg;
                     match ::std::convert::TryInto::try_into(value) {
                         ::std::result::Result::Ok(val) => {
                             match #set_call {
@@ -252,7 +288,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                             )
                         }
                     }
-                );
+                });
 
                 if is_mut {
                     let q = quote!(

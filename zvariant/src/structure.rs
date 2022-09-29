@@ -191,7 +191,7 @@ impl<'a> Structure<'a> {
 
     pub(crate) fn to_owned(&self) -> Structure<'static> {
         Structure {
-            fields: self.fields.iter().map(|v| v.to_owned()).collect(),
+            fields: self.fields.iter().map(|v| v.to_owned().into()).collect(),
             signature: self.signature.to_owned(),
         }
     }
