@@ -17,7 +17,7 @@ use zbus::{
     fdo::{ObjectManager, ObjectManagerProxy},
     DBusError,
 };
-use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Type, Value};
+use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Str, Type, Value};
 
 use zbus::{
     dbus_interface, dbus_proxy, CacheProperties, Connection, ConnectionBuilder, InterfaceRef,
@@ -37,6 +37,13 @@ pub struct ArgStructTest {
 pub struct IP4Adress {
     prefix: u32,
     address: String,
+}
+
+// To test property setter for types with lifetimes.
+#[derive(Serialize, Deserialize, Type, Debug, Value, OwnedValue, PartialEq, Eq)]
+pub struct RefType<'a> {
+    #[serde(borrow)]
+    field1: Str<'a>,
 }
 
 #[dbus_proxy(gen_blocking = false)]
@@ -74,7 +81,22 @@ trait MyIface {
     fn address_data(&self) -> zbus::Result<IP4Adress>;
 
     #[dbus_proxy(property)]
+    fn set_address_data(&self, addr: IP4Adress) -> zbus::Result<()>;
+
+    #[dbus_proxy(property)]
     fn address_data2(&self) -> zbus::Result<IP4Adress>;
+
+    #[dbus_proxy(property)]
+    fn str_prop(&self) -> zbus::Result<String>;
+
+    #[dbus_proxy(property)]
+    fn set_str_prop(&self, str_prop: &str) -> zbus::Result<()>;
+
+    #[dbus_proxy(property)]
+    fn ref_type(&self) -> zbus::Result<RefType<'_>>;
+
+    #[dbus_proxy(property)]
+    fn set_ref_type(&self, ref_type: RefType<'_>) -> zbus::Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -257,6 +279,12 @@ impl MyIfaceImpl {
         }
     }
 
+    #[instrument]
+    #[dbus_interface(property)]
+    fn set_address_data(&self, addr: IP4Adress) {
+        debug!("`AddressData` setter called with {:?}", addr);
+    }
+
     // On the bus, this should return the same value as address_data above. We want to test if
     // this works both ways.
     #[instrument]
@@ -268,6 +296,32 @@ impl MyIfaceImpl {
         map.insert("prefix".into(), 1234u32.into());
 
         map
+    }
+
+    #[instrument]
+    #[dbus_interface(property)]
+    fn str_prop(&self) -> String {
+        "Hello".to_string()
+    }
+
+    #[instrument]
+    #[dbus_interface(property)]
+    fn set_str_prop(&self, str_prop: &str) {
+        debug!("`SetStrRef` called with {:?}", str_prop);
+    }
+
+    #[instrument]
+    #[dbus_interface(property)]
+    fn ref_prop(&self) -> RefType<'_> {
+        RefType {
+            field1: "Hello".into(),
+        }
+    }
+
+    #[instrument]
+    #[dbus_interface(property)]
+    fn set_ref_prop(&self, ref_type: RefType<'_>) {
+        debug!("`SetRefType` called with {:?}", ref_type);
     }
 
     #[dbus_interface(signal)]
@@ -336,6 +390,13 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         .await?;
     check_hash_map(proxy.test_hashmap_return().await?);
     check_hash_map(proxy.hash_map().await?);
+    proxy
+        .set_address_data(IP4Adress {
+            address: "localhost".to_string(),
+            prefix: 1234,
+        })
+        .await?;
+    proxy.set_str_prop("This is an str ref").await?;
     check_ipv4_address(proxy.address_data().await?);
     check_ipv4_address(proxy.address_data2().await?);
 

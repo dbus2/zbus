@@ -97,7 +97,7 @@ impl<'a> Maybe<'a> {
     pub(crate) fn to_owned(&self) -> Maybe<'static> {
         Maybe {
             value_signature: self.value_signature.to_owned(),
-            value: Box::new(self.value.clone().map(|v| v.to_owned())),
+            value: Box::new(self.value.clone().map(|v| v.to_owned().into())),
             signature: self.signature.to_owned(),
         }
     }

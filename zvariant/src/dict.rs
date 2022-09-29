@@ -227,8 +227,8 @@ struct DictEntry<'k, 'v> {
 impl<'k, 'v> DictEntry<'k, 'v> {
     fn to_owned(&self) -> DictEntry<'static, 'static> {
         DictEntry {
-            key: self.key.to_owned(),
-            value: self.value.to_owned(),
+            key: self.key.to_owned().into(),
+            value: self.value.to_owned().into(),
         }
     }
 }

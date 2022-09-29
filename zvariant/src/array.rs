@@ -95,7 +95,7 @@ impl<'a> Array<'a> {
     pub(crate) fn to_owned(&self) -> Array<'static> {
         Array {
             element_signature: self.element_signature.to_owned(),
-            elements: self.elements.iter().map(|v| v.to_owned()).collect(),
+            elements: self.elements.iter().map(|v| v.to_owned().into()).collect(),
             signature: self.signature.to_owned(),
         }
     }
