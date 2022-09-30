@@ -19,13 +19,14 @@ impl FramingOffsets {
         let offset_size = FramingOffsetSize::for_encoded_container(container.len());
 
         // The last offset tells us the start of offsets.
-        let mut i = offset_size.read_last_offset_from_buffer(container);
-        if i > container.len() {
+        let offsets_start = offset_size.read_last_offset_from_buffer(container);
+        if offsets_start > container.len() {
             return Err(serde::de::Error::invalid_length(
-                i,
+                offsets_start,
                 &format!("< {}", container.len()).as_str(),
             ));
         }
+        let mut i = offsets_start;
         let offsets_len = container.len() - i;
         let slice_len = offset_size as usize;
         let mut offsets = Self::new();
@@ -35,6 +36,13 @@ impl FramingOffsets {
                 return Err(serde::de::Error::invalid_length(
                     end,
                     &format!("< {}", container.len()).as_str(),
+                ));
+            }
+            let offset = offset_size.read_last_offset_from_buffer(&container[i..end]);
+            if offset > offsets_start {
+                return Err(serde::de::Error::invalid_length(
+                    offset,
+                    &format!("< {}", offsets_start).as_str(),
                 ));
             }
             let offset = offset_size.read_last_offset_from_buffer(&container[i..end]);
