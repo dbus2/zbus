@@ -1,12 +1,7 @@
 #![no_main]
-use libfuzzer_sys::fuzz_target;
+mod utils;
 
-use byteorder::LE;
-use zvariant::{from_slice, to_bytes, EncodingContext as Context, Value};
-
-fuzz_target!(|data: &[u8]| {
-    let ctx = Context::<LE>::new_gvariant(0);
-    if let Ok(decoded) = from_slice::<_, Value>(data, ctx) {
-        to_bytes(ctx, &decoded).unwrap();
-    }
+libfuzzer_sys::fuzz_target!(|data: &[u8]| {
+    utils::fuzz_for_context(data, zvariant::EncodingContext::<byteorder::LE>::new_gvariant(0));
+    utils::fuzz_for_context(data, zvariant::EncodingContext::<byteorder::BE>::new_gvariant(0));
 });
