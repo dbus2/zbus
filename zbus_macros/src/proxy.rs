@@ -794,14 +794,7 @@ fn gen_proxy_signal(
                 pub fn args#ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
                 #where_clause
                 {
-                    self.0.body::<(#(#input_types),*)>()
-                        .map_err(::std::convert::Into::into)
-                        .map(|args| {
-                            #signal_args {
-                                phantom: ::std::marker::PhantomData,
-                                #arg_fields_init
-                            }
-                        })
+                    ::std::convert::TryFrom::try_from(&**self)
                 }
             }
 
@@ -832,6 +825,23 @@ fn gen_proxy_signal(
                      .field(stringify!(#args), &self.#args)
                     )*
                      .finish()
+                }
+            }
+
+            impl #impl_generics ::std::convert::TryFrom<&'s #zbus::Message> for #signal_args #ty_generics
+                #where_clause
+            {
+                type Error = #zbus::Error;
+
+                fn try_from(message: &'s #zbus::Message) -> #zbus::Result<Self> {
+                    message.body::<(#(#input_types),*)>()
+                        .map_err(::std::convert::Into::into)
+                        .map(|args| {
+                            #signal_args {
+                                phantom: ::std::marker::PhantomData,
+                                #arg_fields_init
+                            }
+                        })
                 }
             }
         }
