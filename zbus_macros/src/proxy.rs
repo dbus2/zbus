@@ -755,6 +755,26 @@ fn gen_proxy_signal(
             #[doc = #args_struct_gen_doc]
             #[derive(Debug, Clone)]
             pub struct #signal_name_ident(::std::sync::Arc<#zbus::Message>);
+
+            impl ::std::ops::Deref for #signal_name_ident {
+                type Target = #zbus::Message;
+
+                fn deref(&self) -> &#zbus::Message {
+                    &self.0
+                }
+            }
+
+            impl ::std::convert::AsRef<::std::sync::Arc<#zbus::Message>> for #signal_name_ident {
+                fn as_ref(&self) -> &::std::sync::Arc<#zbus::Message> {
+                    &self.0
+                }
+            }
+
+            impl ::std::convert::AsRef<#zbus::Message> for #signal_name_ident {
+                fn as_ref(&self) -> &#zbus::Message {
+                    &self.0
+                }
+            }
         }
     } else {
         quote!()
@@ -782,26 +802,6 @@ fn gen_proxy_signal(
                                 #arg_fields_init
                             }
                         })
-               }
-            }
-
-            impl ::std::ops::Deref for #signal_name_ident {
-                type Target = #zbus::Message;
-
-                fn deref(&self) -> &#zbus::Message {
-                    &self.0
-                }
-            }
-
-            impl ::std::convert::AsRef<::std::sync::Arc<#zbus::Message>> for #signal_name_ident {
-                fn as_ref(&self) -> &::std::sync::Arc<#zbus::Message> {
-                    &self.0
-                }
-            }
-
-            impl ::std::convert::AsRef<#zbus::Message> for #signal_name_ident {
-                fn as_ref(&self) -> &#zbus::Message {
-                    &self.0
                 }
             }
 
