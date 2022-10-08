@@ -223,6 +223,7 @@ pub fn create_proxy(
             } else if is_signal {
                 let (method, types) = gen_proxy_signal(
                     &proxy_name,
+                    &iface_name,
                     &member_name,
                     &method_name,
                     m,
@@ -650,6 +651,7 @@ impl Fold for SetLifetimeS {
 
 fn gen_proxy_signal(
     proxy_name: &Ident,
+    iface_name: &str,
     signal_name: &str,
     snake_case_name: &str,
     m: &TraitItemMethod,
@@ -779,6 +781,28 @@ fn gen_proxy_signal(
             impl ::std::convert::AsRef<#zbus::Message> for #signal_name_ident {
                 fn as_ref(&self) -> &#zbus::Message {
                     &self.0
+                }
+            }
+
+            impl #signal_name_ident {
+                #[doc = "Try to construct a "]
+                #[doc = #signal_name]
+                #[doc = " from a [::zbus::Message]."]
+                fn from_message<M>(msg: M) -> ::std::option::Option<Self>
+                where
+                    M: ::std::convert::Into<::std::sync::Arc<#zbus::Message>>,
+                {
+                    let msg = msg.into();
+                    let message_type = msg.message_type();
+                    let interface = msg.interface();
+                    let member = msg.member();
+                    let interface = interface.as_ref().map(|i| i.as_str());
+                    let member = member.as_ref().map(|m| m.as_str());
+
+                    match (message_type, interface, member) {
+                        (#zbus::MessageType::Signal, Some(#iface_name), Some(#signal_name)) => Some(Self(msg)),
+                        _ => None,
+                    }
                 }
             }
         }
