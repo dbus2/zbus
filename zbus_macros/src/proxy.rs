@@ -165,7 +165,7 @@ pub fn create_proxy(
     let doc = get_doc_attrs(&input.attrs);
     let proxy_name = Ident::new(proxy_name, Span::call_site());
     let ident = input.ident.to_string();
-    let name = iface_name
+    let iface_name = iface_name
         .map(ToString::to_string)
         .unwrap_or(format!("org.freedesktop.{}", ident));
     let default_path = default_path
@@ -173,7 +173,7 @@ pub fn create_proxy(
         .unwrap_or(format!("/org/freedesktop/{}", ident));
     let default_service = default_service
         .map(ToString::to_string)
-        .unwrap_or_else(|| name.clone());
+        .unwrap_or_else(|| iface_name.clone());
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
     let mut has_properties = false;
@@ -256,7 +256,7 @@ pub fn create_proxy(
 
     Ok(quote! {
         impl<'a> #zbus::ProxyDefault for #proxy_name<'a> {
-            const INTERFACE: &'static str = #name;
+            const INTERFACE: &'static str = #iface_name;
             const DESTINATION: &'static str = #default_service;
             const PATH: &'static str = #default_path;
         }
