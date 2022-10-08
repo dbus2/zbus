@@ -192,7 +192,7 @@ pub fn create_proxy(
             let is_property = property_attrs.is_some();
             let is_signal = attrs.iter().any(|x| x.is_signal());
             let has_inputs = m.sig.inputs.len() > 1;
-            let name = attrs
+            let member_name = attrs
                 .iter()
                 .find_map(|x| match x {
                     ItemAttribute::Name(n) => Some(n.to_string()),
@@ -211,13 +211,19 @@ pub fn create_proxy(
                 has_properties = true;
                 let emits_changed_signal = PropertyEmitsChangedSignal::parse_from_attrs(prop_attrs);
                 if let PropertyEmitsChangedSignal::False = emits_changed_signal {
-                    uncached_properties.push(name.clone());
+                    uncached_properties.push(member_name.clone());
                 }
-                gen_proxy_property(&name, &method_name, m, &async_opts, emits_changed_signal)
+                gen_proxy_property(
+                    &member_name,
+                    &method_name,
+                    m,
+                    &async_opts,
+                    emits_changed_signal,
+                )
             } else if is_signal {
                 let (method, types) = gen_proxy_signal(
                     &proxy_name,
-                    &name,
+                    &member_name,
                     &method_name,
                     m,
                     &async_opts,
@@ -227,7 +233,7 @@ pub fn create_proxy(
 
                 method
             } else {
-                gen_proxy_method_call(&name, &method_name, m, &async_opts)
+                gen_proxy_method_call(&member_name, &method_name, m, &async_opts)
             };
             methods.extend(m);
         }
