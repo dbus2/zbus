@@ -2,7 +2,7 @@
 name = "zvariant_derive"
 # Keep major and minor version in sync with zvariant crate
 version = "3.7.1"
-authors = ["Zeeshan Ali <zeeshanak@gnome.org>"]
+authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = "2018"
 rust-version = "1.60"
 

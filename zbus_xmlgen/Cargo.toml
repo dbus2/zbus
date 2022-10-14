@@ -7,7 +7,7 @@ authors = [
     "Marc-André Lureau <marcandre.lureau@redhat.com>",
     "Thomas Mühlbacher <tmuehlbacher@posteo.net>",
     "Tim Small <tim@seoss.co.uk>",
-    "Zeeshan Ali <zeeshanak@gnome.org>",
+    "Zeeshan Ali Khan <zeeshanak@gnome.org>",
 ]
 edition = "2018"
 rust-version = "1.60"
