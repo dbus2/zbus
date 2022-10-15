@@ -21,8 +21,8 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 use crate::{
     async_channel::{channel, Sender},
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    CacheProperties, Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder,
-    Result, Task,
+    CacheProperties, Connection, Error, Executor, Message, MessageBuilder, MessageSequence,
+    ProxyBuilder, Result, Task,
 };
 
 #[derive(Debug, Default)]
@@ -257,8 +257,36 @@ where
 }
 
 impl PropertiesCache {
-    // Proxy::get_property_cache() runs this in a task it spawns for initialization of properties
-    // cache and keeping the cache in sync.
+    fn new(
+        proxy: PropertiesProxy<'static>,
+        interface: InterfaceName<'static>,
+        executor: &Executor<'_>,
+        uncached_properties: HashSet<zvariant::Str<'static>>,
+    ) -> (Arc<Self>, Task<()>) {
+        let (send, recv) = channel(1);
+
+        let cache = Arc::new(PropertiesCache {
+            values: Default::default(),
+            ready: recv,
+        });
+
+        let cache_clone = cache.clone();
+
+        let task = executor.spawn(async move {
+            if let Err(e) = cache_clone
+                .keep_updated(proxy, interface, uncached_properties, send.clone())
+                .await
+            {
+                // ignore send errors, it just means the original future was cancelled
+                let _ = send.send(Err(e)).await;
+            }
+        });
+
+        (cache, task)
+    }
+
+    // new() runs this in a task it spawns for initialization of properties cache and keeping the
+    // cache in sync.
     async fn keep_updated(
         &self,
         proxy: PropertiesProxy<'static>,
@@ -568,33 +596,16 @@ impl<'a> Proxy<'a> {
         };
         let (cache, _) = &cache.get_or_init(|| {
             let proxy = self.owned_properties_proxy();
-            let (send, recv) = channel(1);
-
-            let cache = Arc::new(PropertiesCache {
-                values: Default::default(),
-                ready: recv,
-            });
-
             let interface = self.interface().to_owned();
-            let cache_clone = cache.clone();
             let uncached_properties: HashSet<zvariant::Str<'static>> = self
                 .inner
                 .uncached_properties
                 .iter()
                 .map(|s| s.to_owned())
                 .collect();
+            let executor = self.connection().executor();
 
-            let task = self.connection().executor().spawn(async move {
-                if let Err(e) = cache_clone
-                    .keep_updated(proxy, interface, uncached_properties, send.clone())
-                    .await
-                {
-                    // ignore send errors, it just means the original future was cancelled
-                    let _ = send.send(Err(e)).await;
-                }
-            });
-
-            (cache, task)
+            PropertiesCache::new(proxy, interface, executor, uncached_properties)
         });
 
         Some(cache)
