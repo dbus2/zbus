@@ -236,3 +236,75 @@ fn test_interface() {
         });
     }
 }
+
+mod signal_tryfrom {
+    use super::*;
+    use std::{convert::TryFrom, sync::Arc};
+    use zbus::MessageBuilder;
+
+    #[dbus_proxy(
+        interface = "org.freedesktop.zbus_macros.Test",
+        default_service = "org.freedesktop.zbus_macros",
+        default_path = "/org/freedesktop/zbus_macros/test"
+    )]
+    trait Test {
+        #[dbus_proxy(signal)]
+        fn signal_u8(&self, arg: u8) -> fdo::Result<()>;
+
+        #[dbus_proxy(signal)]
+        fn signal_string(&self, arg: String) -> fdo::Result<()>;
+    }
+
+    #[test]
+    fn signal_u8() {
+        let message = Arc::new(
+            MessageBuilder::signal(
+                "/org/freedesktop/zbus_macros/test",
+                "org.freedesktop.zbus_macros.Test",
+                "SignalU8",
+            )
+            .expect("Failed to create signal message builder")
+            .build(&(1u8,))
+            .expect("Failed to build signal message"),
+        );
+
+        SignalU8::try_from(message.clone()).expect("Message is a SignalU8");
+        SignalString::try_from(message).expect_err("Message is not a SignalString");
+    }
+
+    #[test]
+    fn signal_string() {
+        let message = Arc::new(
+            MessageBuilder::signal(
+                "/org/freedesktop/zbus_macros/test",
+                "org.freedesktop.zbus_macros.Test",
+                "SignalString",
+            )
+            .expect("Failed to create signal message builder")
+            .build(&(String::from("test"),))
+            .expect("Failed to build signal message"),
+        );
+
+        SignalString::try_from(message.clone()).expect("Message is a SignalString");
+        SignalU8::try_from(message).expect_err("Message is not a SignalU8");
+    }
+
+    #[test]
+    fn wrong_data() {
+        let message = Arc::new(
+            MessageBuilder::signal(
+                "/org/freedesktop/zbus_macros/test",
+                "org.freedesktop.zbus_macros.Test",
+                "SignalU8",
+            )
+            .expect("Failed to create signal message builder")
+            .build(&(String::from("test"),))
+            .expect("Failed to build signal message"),
+        );
+
+        let signal = SignalU8::try_from(message).expect("Message is a SignalU8");
+        signal
+            .args()
+            .expect_err("Message does not have correct data");
+    }
+}
