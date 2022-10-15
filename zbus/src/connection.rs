@@ -114,8 +114,8 @@ impl MessageReceiverTask {
                     trace!("Error reading from the socket: {:?}", e);
                     self.error_sender.send(e).await;
                     self.msg_sender.close();
-                    self.error_sender.close().await;
                     trace!("Socket reading task stopped");
+
                     return;
                 }
             };

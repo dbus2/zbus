@@ -14,12 +14,13 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
     task::{Context, Poll},
 };
+use tracing::{debug, instrument};
 
 use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName, WellKnownName};
 use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 
 use crate::{
-    async_channel::{channel, Sender},
+    async_channel::channel,
     fdo::{self, IntrospectableProxy, PropertiesProxy},
     CacheProperties, Connection, Error, Executor, Message, MessageBuilder, MessageSequence,
     ProxyBuilder, Result, Task,
@@ -257,6 +258,7 @@ where
 }
 
 impl PropertiesCache {
+    #[instrument]
     fn new(
         proxy: PropertiesProxy<'static>,
         interface: InterfaceName<'static>,
@@ -273,27 +275,46 @@ impl PropertiesCache {
         let cache_clone = cache.clone();
 
         let task = executor.spawn(async move {
-            if let Err(e) = cache_clone
-                .keep_updated(proxy, interface, uncached_properties, send.clone())
+            let (proxy, interface, uncached_properties) = match cache_clone
+                .init(proxy, interface, uncached_properties)
                 .await
             {
-                // ignore send errors, it just means the original future was cancelled
-                let _ = send.send(Err(e)).await;
+                Ok((proxy, interface, uncached_properties)) => {
+                    // ignore send errors, it just means the original future was cancelled
+                    let _ = send.send(Ok(())).await;
+
+                    (proxy, interface, uncached_properties)
+                }
+                Err(e) => {
+                    let _ = send.send(Err(e)).await;
+
+                    return;
+                }
+            };
+            drop(send);
+
+            if let Err(e) = cache_clone
+                .keep_updated(proxy, interface, uncached_properties)
+                .await
+            {
+                debug!("Error keeping properties cache updated: {e}");
             }
         });
 
         (cache, task)
     }
 
-    // new() runs this in a task it spawns for initialization of properties cache and keeping the
-    // cache in sync.
-    async fn keep_updated(
+    // new() runs this in a task it spawns for initialization of properties cache.
+    async fn init(
         &self,
         proxy: PropertiesProxy<'static>,
         interface: InterfaceName<'static>,
         uncached_properties: HashSet<zvariant::Str<'static>>,
-        send: Sender<Result<()>>,
-    ) -> Result<()> {
+    ) -> Result<(
+        PropertiesProxy<'static>,
+        InterfaceName<'static>,
+        HashSet<zvariant::Str<'static>>,
+    )> {
         use ordered_stream::OrderedStreamExt;
 
         let prop_changes = proxy
@@ -314,34 +335,55 @@ impl PropertiesCache {
 
         let mut join = join_streams(prop_changes, get_all);
 
-        loop {
-            match join.next().await {
-                Some(Either::Left(update)) => {
-                    if let Ok(args) = update.args() {
-                        if args.interface_name == interface {
-                            self.update_cache(
-                                &uncached_properties,
-                                &args.changed_properties,
-                                args.invalidated_properties,
-                                &interface,
-                            );
-                        }
+        match join.next().await {
+            Some(Either::Left(update)) => {
+                if let Ok(args) = update.args() {
+                    if args.interface_name == interface {
+                        self.update_cache(
+                            &uncached_properties,
+                            &args.changed_properties,
+                            args.invalidated_properties,
+                            &interface,
+                        );
                     }
                 }
-                Some(Either::Right(Ok(populate))) => {
-                    let result = populate.body().map(|values| {
-                        self.update_cache(&uncached_properties, &values, Vec::new(), &interface);
-                    });
-                    let _ = send.send(result).await;
-                    send.close().await;
+            }
+            Some(Either::Right(populate)) => {
+                populate?.body().map(|values| {
+                    self.update_cache(&uncached_properties, &values, Vec::new(), &interface);
+                })?;
+            }
+            None => (),
+        }
+
+        Ok((proxy, interface, uncached_properties))
+    }
+
+    // new() runs this in a task it spawns for keeping the cache in sync.
+    async fn keep_updated(
+        &self,
+        proxy: PropertiesProxy<'static>,
+        interface: InterfaceName<'static>,
+        uncached_properties: HashSet<zvariant::Str<'static>>,
+    ) -> Result<()> {
+        use futures_util::StreamExt;
+
+        let mut prop_changes = proxy.receive_properties_changed().await?;
+
+        while let Some(update) = prop_changes.next().await {
+            if let Ok(args) = update.args() {
+                if args.interface_name == interface {
+                    self.update_cache(
+                        &uncached_properties,
+                        &args.changed_properties,
+                        args.invalidated_properties,
+                        &interface,
+                    );
                 }
-                Some(Either::Right(Err(e))) => {
-                    let _ = send.send(Err(e)).await;
-                    send.close().await;
-                }
-                None => return Ok(()),
             }
         }
+
+        Ok(())
     }
 
     fn update_cache(
