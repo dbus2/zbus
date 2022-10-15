@@ -236,3 +236,87 @@ fn test_interface() {
         });
     }
 }
+
+mod signal_from_message {
+    use super::*;
+    use std::sync::Arc;
+    use zbus::MessageBuilder;
+
+    #[dbus_proxy(
+        interface = "org.freedesktop.zbus_macros.Test",
+        default_service = "org.freedesktop.zbus_macros",
+        default_path = "/org/freedesktop/zbus_macros/test"
+    )]
+    trait Test {
+        #[dbus_proxy(signal)]
+        fn signal_u8(&self, arg: u8) -> fdo::Result<()>;
+
+        #[dbus_proxy(signal)]
+        fn signal_string(&self, arg: String) -> fdo::Result<()>;
+    }
+
+    #[test]
+    fn signal_u8() {
+        let message = Arc::new(
+            MessageBuilder::signal(
+                "/org/freedesktop/zbus_macros/test",
+                "org.freedesktop.zbus_macros.Test",
+                "SignalU8",
+            )
+            .expect("Failed to create signal message builder")
+            .build(&(1u8,))
+            .expect("Failed to build signal message"),
+        );
+
+        assert!(
+            SignalU8::from_message(message.clone()).is_some(),
+            "Message is a SignalU8"
+        );
+        assert!(
+            SignalString::from_message(message).is_none(),
+            "Message is not a SignalString"
+        );
+    }
+
+    #[test]
+    fn signal_string() {
+        let message = Arc::new(
+            MessageBuilder::signal(
+                "/org/freedesktop/zbus_macros/test",
+                "org.freedesktop.zbus_macros.Test",
+                "SignalString",
+            )
+            .expect("Failed to create signal message builder")
+            .build(&(String::from("test"),))
+            .expect("Failed to build signal message"),
+        );
+
+        assert!(
+            SignalString::from_message(message.clone()).is_some(),
+            "Message is a SignalString"
+        );
+        assert!(
+            SignalU8::from_message(message).is_none(),
+            "Message is not a SignalU8"
+        );
+    }
+
+    #[test]
+    fn wrong_data() {
+        let message = Arc::new(
+            MessageBuilder::signal(
+                "/org/freedesktop/zbus_macros/test",
+                "org.freedesktop.zbus_macros.Test",
+                "SignalU8",
+            )
+            .expect("Failed to create signal message builder")
+            .build(&(String::from("test"),))
+            .expect("Failed to build signal message"),
+        );
+
+        let signal = SignalU8::from_message(message).expect("Message is a SignalU8");
+        signal
+            .args()
+            .expect_err("Message does not have correct data");
+    }
+}
