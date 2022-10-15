@@ -19,10 +19,10 @@ use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName
 use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 
 use crate::{
-    async_channel::channel,
+    async_channel::{channel, Sender},
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    CacheProperties, Connection, Error, Message, MessageBuilder, MessageSequence, ProxyBuilder,
-    Result, Task,
+    CacheProperties, Connection, Error, Executor, Message, MessageBuilder, MessageSequence,
+    ProxyBuilder, Result, Task,
 };
 
 #[derive(Debug, Default)]
@@ -257,6 +257,93 @@ where
 }
 
 impl PropertiesCache {
+    fn new(
+        proxy: PropertiesProxy<'static>,
+        interface: InterfaceName<'static>,
+        executor: &Executor<'_>,
+        uncached_properties: HashSet<zvariant::Str<'static>>,
+    ) -> (Arc<Self>, Task<()>) {
+        let (send, recv) = channel(1);
+
+        let cache = Arc::new(PropertiesCache {
+            values: Default::default(),
+            ready: recv,
+        });
+
+        let cache_clone = cache.clone();
+
+        let task = executor.spawn(async move {
+            if let Err(e) = cache_clone
+                .keep_updated(proxy, interface, uncached_properties, send.clone())
+                .await
+            {
+                // ignore send errors, it just means the original future was cancelled
+                let _ = send.send(Err(e)).await;
+            }
+        });
+
+        (cache, task)
+    }
+
+    // new() runs this in a task it spawns for initialization of properties cache and keeping the
+    // cache in sync.
+    async fn keep_updated(
+        &self,
+        proxy: PropertiesProxy<'static>,
+        interface: InterfaceName<'static>,
+        uncached_properties: HashSet<zvariant::Str<'static>>,
+        send: Sender<Result<()>>,
+    ) -> Result<()> {
+        use ordered_stream::OrderedStreamExt;
+
+        let prop_changes = proxy
+            .receive_properties_changed()
+            .await
+            .map(|s| s.map(Either::Left))?;
+
+        let get_all = MessageBuilder::method_call(proxy.path().as_ref(), "GetAll")?
+            .destination(proxy.destination())?
+            .interface(proxy.interface())?
+            .build(&interface)?;
+
+        let get_all = proxy
+            .connection()
+            .call_method_raw(get_all)
+            .await
+            .map(|s| FromFuture::from(s).map(Either::Right))?;
+
+        let mut join = join_streams(prop_changes, get_all);
+
+        loop {
+            match join.next().await {
+                Some(Either::Left(update)) => {
+                    if let Ok(args) = update.args() {
+                        if args.interface_name == interface {
+                            self.update_cache(
+                                &uncached_properties,
+                                &args.changed_properties,
+                                args.invalidated_properties,
+                                &interface,
+                            );
+                        }
+                    }
+                }
+                Some(Either::Right(Ok(populate))) => {
+                    let result = populate.body().map(|values| {
+                        self.update_cache(&uncached_properties, &values, Vec::new(), &interface);
+                    });
+                    let _ = send.send(result).await;
+                    send.close().await;
+                }
+                Some(Either::Right(Err(e))) => {
+                    let _ = send.send(Err(e)).await;
+                    send.close().await;
+                }
+                None => return Ok(()),
+            }
+        }
+    }
+
     fn update_cache(
         &self,
         uncached_properties: &HashSet<Str<'_>>,
@@ -503,94 +590,22 @@ impl<'a> Proxy<'a> {
     /// Use PropertiesCache::ready() to wait for the cache to be populated and to get any errors
     /// encountered in the population.
     pub(crate) fn get_property_cache(&self) -> Option<&Arc<PropertiesCache>> {
-        use ordered_stream::OrderedStreamExt;
         let cache = match &self.inner.property_cache {
             Some(cache) => cache,
             None => return None,
         };
         let (cache, _) = &cache.get_or_init(|| {
             let proxy = self.owned_properties_proxy();
-            let (send, recv) = channel(1);
-
-            let cache = Arc::new(PropertiesCache {
-                values: Default::default(),
-                ready: recv,
-            });
-
             let interface = self.interface().to_owned();
-            let properties = cache.clone();
             let uncached_properties: HashSet<zvariant::Str<'static>> = self
                 .inner
                 .uncached_properties
                 .iter()
                 .map(|s| s.to_owned())
                 .collect();
+            let executor = self.connection().executor();
 
-            let task = self.connection().executor().spawn(async move {
-                let prop_changes = match proxy.receive_properties_changed().await {
-                    Ok(s) => s.map(Either::Left),
-                    Err(e) => {
-                        // ignore send errors, it just means the original future was cancelled
-                        let _ = send.send(Err(e)).await;
-                        return;
-                    }
-                };
-
-                let get_all = MessageBuilder::method_call(proxy.path().as_ref(), "GetAll")
-                    .unwrap()
-                    .destination(proxy.destination())
-                    .unwrap()
-                    .interface(proxy.interface())
-                    .unwrap()
-                    .build(&interface)
-                    .unwrap();
-
-                let get_all = match proxy.connection().call_method_raw(get_all).await {
-                    Ok(s) => FromFuture::from(s).map(Either::Right),
-                    Err(e) => {
-                        let _ = send.send(Err(e)).await;
-                        return;
-                    }
-                };
-
-                let mut join = join_streams(prop_changes, get_all);
-
-                loop {
-                    match join.next().await {
-                        Some(Either::Left(update)) => {
-                            if let Ok(args) = update.args() {
-                                if args.interface_name == interface {
-                                    properties.update_cache(
-                                        &uncached_properties,
-                                        &args.changed_properties,
-                                        args.invalidated_properties,
-                                        &interface,
-                                    );
-                                }
-                            }
-                        }
-                        Some(Either::Right(Ok(populate))) => {
-                            let result = populate.body().map(|values| {
-                                properties.update_cache(
-                                    &uncached_properties,
-                                    &values,
-                                    Vec::new(),
-                                    &interface,
-                                );
-                            });
-                            let _ = send.send(result).await;
-                            send.close().await;
-                        }
-                        Some(Either::Right(Err(e))) => {
-                            let _ = send.send(Err(e)).await;
-                            send.close().await;
-                        }
-                        None => return,
-                    }
-                }
-            });
-
-            (cache, task)
+            PropertiesCache::new(proxy, interface, executor, uncached_properties)
         });
 
         Some(cache)
