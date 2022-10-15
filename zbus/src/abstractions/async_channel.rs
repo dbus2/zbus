@@ -136,7 +136,14 @@ impl<T> Receiver<T> {
         }
 
         #[cfg(feature = "tokio")]
-        self.inner.lock().await.recv().await
+        {
+            let item = self.inner.lock().await.recv().await;
+            if item.is_none() {
+                self.is_terminated.store(true, SeqCst);
+            }
+
+            item
+        }
     }
 
     // Used by tests.
