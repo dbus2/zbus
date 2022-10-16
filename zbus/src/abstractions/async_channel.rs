@@ -49,30 +49,17 @@ pub fn channel<T>(cap: usize) -> (Sender<T>, Receiver<T>) {
             is_terminated: AtomicBool::new(false),
         };
 
-        (
-            Sender {
-                inner: s,
-                receiver: receiver.clone(),
-            },
-            receiver,
-        )
+        (Sender { inner: s }, receiver)
     }
 }
 
-#[cfg(not(feature = "tokio"))]
 #[derive(Debug)]
 #[doc(hidden)]
 pub struct Sender<T> {
+    #[cfg(not(feature = "tokio"))]
     inner: async_channel::Sender<T>,
-}
-
-#[cfg(feature = "tokio")]
-#[derive(Debug)]
-#[doc(hidden)]
-pub struct Sender<T> {
+    #[cfg(feature = "tokio")]
     inner: tokio::sync::mpsc::Sender<T>,
-    // Keep a clone of receiver in case of tokio so we can close from sender side.
-    receiver: Receiver<T>,
 }
 
 impl<T> Sender<T> {
@@ -108,17 +95,6 @@ impl<T> Sender<T> {
         }
     }
 
-    pub async fn close(&self) {
-        #[cfg(not(feature = "tokio"))]
-        {
-            self.inner.close();
-        }
-        #[cfg(feature = "tokio")]
-        {
-            self.receiver.close().await;
-        }
-    }
-
     // Used by tests.
     #[allow(unused)]
     pub fn is_closed(&self) -> bool {
@@ -130,8 +106,6 @@ impl<T> Clone for Sender<T> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            #[cfg(feature = "tokio")]
-            receiver: self.receiver.clone(),
         }
     }
 }
@@ -162,7 +136,14 @@ impl<T> Receiver<T> {
         }
 
         #[cfg(feature = "tokio")]
-        self.inner.lock().await.recv().await
+        {
+            let item = self.inner.lock().await.recv().await;
+            if item.is_none() {
+                self.is_terminated.store(true, SeqCst);
+            }
+
+            item
+        }
     }
 
     // Used by tests.
