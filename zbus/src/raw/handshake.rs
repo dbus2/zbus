@@ -293,6 +293,7 @@ impl Cookie {
             // FIXME: add code to check directory permissions
         }
         path.push(name);
+        trace!("Reading keyring {:?}", path);
         let file = File::open(&path)?;
         let mut cookies = vec![];
         for (n, line) in BufReader::new(file).lines().enumerate() {
@@ -327,6 +328,7 @@ impl Cookie {
                 .to_string();
             cookies.push(Cookie { id, cookie })
         }
+        trace!("Loaded keyring {:?}", cookies);
         Ok(cookies)
     }
 
