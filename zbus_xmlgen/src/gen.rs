@@ -62,13 +62,35 @@ impl<'i> Display for GenTrait<'i> {
         for p in props {
             let (read, write) = read_write_from_access(p.access());
             let name = to_identifier(&to_snakecase(p.name()));
+            let annotations = p.annotations();
+
+            let emits_changed_signal = annotations
+                .into_iter()
+                .find(|a| a.name() == "org.freedesktop.DBus.Property.EmitsChangedSignal");
 
             writeln!(f)?;
             writeln!(f, "    /// {} property", p.name())?;
             if pascal_case(&name) != p.name() {
-                writeln!(f, "    #[dbus_proxy(property, name = \"{}\")]", p.name())?;
+                if let Some(emits) = emits_changed_signal {
+                    writeln!(
+                        f,
+                        "    #[dbus_proxy(property(emits_changed_signal = \"{}\"), name = \"{}\")]",
+                        emits.value(),
+                        p.name()
+                    )?;
+                } else {
+                    writeln!(f, "    #[dbus_proxy(property, name = \"{}\")]", p.name())?;
+                }
             } else {
-                writeln!(f, "    #[dbus_proxy(property)]")?;
+                if let Some(emits) = emits_changed_signal {
+                    writeln!(
+                        f,
+                        "    #[dbus_proxy(property(emits_changed_signal = \"{}\"))]",
+                        emits.value()
+                    )?;
+                } else {
+                    writeln!(f, "    #[dbus_proxy(property)]")?;
+                }
             }
 
             if read {
