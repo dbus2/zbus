@@ -269,8 +269,8 @@ struct Cookie {
 
 impl Cookie {
     fn keyring_path() -> Result<PathBuf> {
-        let mut path = dirs::home_dir()
-            .ok_or_else(|| Error::Handshake("Failed to get home directory".into()))?;
+        let mut path =
+            home_dir().ok_or_else(|| Error::Handshake("Failed to get home directory".into()))?;
         path.push(".dbus-keyrings");
         Ok(path)
     }
@@ -293,6 +293,7 @@ impl Cookie {
             // FIXME: add code to check directory permissions
         }
         path.push(name);
+        trace!("Reading keyring {:?}", path);
         let file = File::open(&path)?;
         let mut cookies = vec![];
         for (n, line) in BufReader::new(file).lines().enumerate() {
@@ -327,6 +328,7 @@ impl Cookie {
                 .to_string();
             cookies.push(Cookie { id, cookie })
         }
+        trace!("Loaded keyring {:?}", cookies);
         Ok(cookies)
     }
 
@@ -337,6 +339,15 @@ impl Cookie {
             .find(|c| c.id == id)
             .ok_or_else(|| Error::Handshake(format!("DBus cookie ID {} not found", id)))?;
         Ok(c.cookie.to_string())
+    }
+}
+
+// See https://github.com/dirs-dev/dirs-rs/issues/45
+fn home_dir() -> Option<PathBuf> {
+    if let Ok(home) = std::env::var("HOME") {
+        Some(home.into())
+    } else {
+        dirs::home_dir()
     }
 }
 

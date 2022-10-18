@@ -6,6 +6,7 @@
 // the brightness by 5%. Pass '-' for decreasing it by 5%.
 
 fn main() {
+    tracing_subscriber::fmt::init();
     let connection = zbus::blocking::Connection::session().unwrap();
 
     let method = match std::env::args().nth(1) {
