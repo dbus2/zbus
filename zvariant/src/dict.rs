@@ -75,6 +75,8 @@ impl<'k, 'v> Dict<'k, 'v> {
     }
 
     /// Get the value for the given key.
+    ///
+    /// Note this function is O(N) where N is the number of entries in the dictionary.
     pub fn get<'d, K, V>(&'d self, key: &K) -> Result<Option<&'v V>, Error>
     where
         'd: 'k + 'v,
@@ -95,6 +97,36 @@ impl<'k, 'v> Dict<'k, 'v> {
         }
 
         Ok(None)
+    }
+
+    /// Get the raw value for the given key.
+    ///
+    /// Note this function is O(N) where N is the number of entries in the dictionary.
+    pub fn get_raw(&self, key: &Value<'_>) -> Option<&Value<'_>> {
+        self.entries
+            .iter()
+            .find_map(|e| if &e.key == key { Some(&e.value) } else { None })
+    }
+
+    /// Iterate over the values in the dictionary
+    pub fn iter<'d, K, V>(&'d self) -> impl Iterator<Item = Result<(&'k K, &'v V), Error>>
+    where
+        'd: 'k + 'v,
+        K: ?Sized + 'k,
+        V: ?Sized + 'v,
+        &'k K: TryFrom<&'k Value<'k>>,
+        &'v V: TryFrom<&'v Value<'v>>,
+    {
+        self.entries.iter().map(|e| {
+            let k = e.key.downcast_ref::<K>().ok_or(Error::IncorrectType)?;
+            let v = e.value.downcast_ref::<V>().ok_or(Error::IncorrectType)?;
+            Ok((k, v))
+        })
+    }
+
+    /// Iterate over the values in the dictionary without casting them to a type.
+    pub fn iter_raw(&self) -> impl Iterator<Item = (&Value<'k>, &Value<'v>)> {
+        self.entries.iter().map(|e| (&e.key, &e.value))
     }
 
     /// Get the signature of this `Dict`.
