@@ -1,6 +1,6 @@
 [package]
 name = "zbus"
-version = "3.2.0"
+version = "3.3.0"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = "2018"
 rust-version = "1.60"
@@ -32,7 +32,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1.5"
 zvariant = { path = "../zvariant", version = "3.7.0", default-features = false, features = ["enumflags2"] }
 zbus_names = { path = "../zbus_names", version = "2.2" }
-zbus_macros = { path = "../zbus_macros", version = "=3.2.0" }
+zbus_macros = { path = "../zbus_macros", version = "=3.3.0" }
 enumflags2 = { version = "0.7.1", features = ["serde"] }
 serde-xml-rs = { version = "0.4.0", optional = true }
 derivative = "2.1"
