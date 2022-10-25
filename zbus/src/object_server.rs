@@ -1,10 +1,11 @@
+use enumflags2::BitFlags;
 use std::{
     collections::{hash_map::Entry, HashMap},
     convert::TryInto,
     fmt::Write,
     marker::PhantomData,
     ops::{Deref, DerefMut},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 use tracing::{debug, instrument, trace};
 
@@ -419,6 +420,7 @@ impl Node {
 pub struct ObjectServer {
     conn: WeakConnection,
     root: RwLock<Node>,
+    ignore_unknown: Mutex<BitFlags<IgnoreUnknown>>,
 }
 
 assert_impl_all!(ObjectServer: Send, Sync, Unpin);
@@ -429,6 +431,7 @@ impl ObjectServer {
         Self {
             conn: conn.into(),
             root: RwLock::new(Node::new("/".try_into().expect("zvariant bug"))),
+            ignore_unknown: Mutex::new(BitFlags::empty()),
         }
     }
 
@@ -621,6 +624,21 @@ impl ObjectServer {
         })
     }
 
+    /// Specify which unknown elements to ignore.
+    ///
+    /// By default [`ObjectServer`] takes full control of all the method call messages arriving on
+    /// its associated connection and returns an error on encountering an unknown interface,
+    /// object path or method. This method allows to change this behavior and ignore specific
+    /// unknown elements.
+    pub fn set_ignore_unknown(&self, ignore: BitFlags<IgnoreUnknown>) {
+        *self.ignore_unknown.lock().expect("poisoned lock") = ignore;
+    }
+
+    /// Returns the [`IgnoreUnknown`] flags set on [`self`].
+    pub fn ignore_unknown(&self) -> BitFlags<IgnoreUnknown> {
+        *self.ignore_unknown.lock().expect("poisoned lock")
+    }
+
     #[instrument(skip(self, connection))]
     async fn dispatch_method_call_try(
         &self,
@@ -690,6 +708,24 @@ impl ObjectServer {
     #[instrument(skip(self, connection))]
     async fn dispatch_method_call(&self, connection: &Connection, msg: &Message) -> Result<()> {
         match self.dispatch_method_call_try(connection, msg).await {
+            Err(fdo::Error::UnknownInterface(_))
+                if self.ignore_unknown().contains(IgnoreUnknown::Interface) =>
+            {
+                trace!("Ignoring {:?}", msg);
+                Ok(())
+            }
+            Err(fdo::Error::UnknownObject(_))
+                if self.ignore_unknown().contains(IgnoreUnknown::Object) =>
+            {
+                trace!("Ignoring {:?}", msg);
+                Ok(())
+            }
+            Err(fdo::Error::UnknownMethod(_))
+                if self.ignore_unknown().contains(IgnoreUnknown::Method) =>
+            {
+                trace!("Ignoring {:?}", msg);
+                Ok(())
+            }
             Err(e) => {
                 let hdr = msg.header()?;
                 debug!("Returning error: {}", e);
@@ -733,3 +769,21 @@ impl From<crate::blocking::ObjectServer> for ObjectServer {
         server.into_inner()
     }
 }
+
+/// Flags informing [`ObjectServer`] which unknown elements to ignore.
+///
+/// See [`ObjectServer::set_ignore_unknown`] for details.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[enumflags2::bitflags]
+#[repr(u8)]
+#[non_exhaustive]
+pub enum IgnoreUnknown {
+    /// Ignore unknown interfaces.
+    Interface = 1 << 0,
+    /// Ignore unknown objects.
+    Object = 1 << 1,
+    /// Ignore unknown methods.
+    Method = 1 << 2,
+}
+
+assert_impl_all!(IgnoreUnknown: Send, Sync, Unpin);
