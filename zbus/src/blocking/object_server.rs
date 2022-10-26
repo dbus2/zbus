@@ -1,10 +1,12 @@
 use std::{convert::TryInto, ops::Deref};
 
+use enumflags2::BitFlags;
 use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
 use crate::{
-    utils::block_on, Error, Interface, InterfaceDeref, InterfaceDerefMut, Result, SignalContext,
+    utils::block_on, Error, IgnoreUnknown, Interface, InterfaceDeref, InterfaceDerefMut, Result,
+    SignalContext,
 };
 
 /// Wrapper over an interface, along with its corresponding `SignalContext`
@@ -218,6 +220,21 @@ impl ObjectServer {
         Ok(InterfaceRef {
             azync: block_on(self.azync.interface(path))?,
         })
+    }
+
+    /// Specify which unknown elements to ignore.
+    ///
+    /// By default [`ObjectServer`] takes full control of all the method call messages arriving on
+    /// its associated connection and returns an error on encountering an unknown interface,
+    /// object path or method. This method allows to change this behavior and ignore specific
+    /// unknown elements.
+    pub fn set_ignore_unknown(&self, ignore: BitFlags<IgnoreUnknown>) {
+        self.azync.set_ignore_unknown(ignore);
+    }
+
+    /// Returns the [`IgnoreUnknown`] flags set on [`self`].
+    pub fn ignore_unknown(&self) -> BitFlags<IgnoreUnknown> {
+        self.azync.ignore_unknown()
     }
 
     /// Get a reference to the underlying async ObjectServer.
