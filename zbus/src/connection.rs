@@ -503,8 +503,8 @@ impl Connection {
     /// or any of the registered well-known names. For p2p connections, it will handle all incoming
     /// method calls if no well-known name is requested.
     ///
-    /// You can request multiple names for the same `ObjectServer`. Use [`Connection::release_name`]
-    /// for deregistering names registered through this method.
+    /// You can request multiple names for the same connection. Use [`Connection::release_name`] for
+    /// deregistering names registered through this method.
     ///
     /// Note that exclusive ownership without queueing is requested (using
     /// [`fdo::RequestNameFlags::ReplaceExisting`] and [`fdo::RequestNameFlags::DoNotQueue`] flags)
