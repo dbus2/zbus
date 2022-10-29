@@ -261,6 +261,11 @@ impl OwnedErrorName {
     pub fn into_inner(self) -> ErrorName<'static> {
         self.0
     }
+
+    /// Get a reference to the inner `ErrorName`.
+    pub fn inner(&self) -> &ErrorName<'static> {
+        &self.0
+    }
 }
 
 impl Deref for OwnedErrorName {

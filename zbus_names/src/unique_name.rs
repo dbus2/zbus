@@ -260,6 +260,11 @@ impl OwnedUniqueName {
     pub fn into_inner(self) -> UniqueName<'static> {
         self.0
     }
+
+    /// Get a reference to the inner `UniqueName`.
+    pub fn inner(&self) -> &UniqueName<'static> {
+        &self.0
+    }
 }
 
 impl Deref for OwnedUniqueName {
