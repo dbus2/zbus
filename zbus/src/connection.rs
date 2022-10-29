@@ -495,7 +495,13 @@ impl Connection {
         self.send_message(m?).await
     }
 
-    /// Register a well-known name for this service on the bus.
+    /// Register a well-known name for this connection.
+    ///
+    /// When connecting to a bus, the name is requested from the bus. In case of p2p connection, the
+    /// name (if requested) is used of self-identification. Please note that the associated
+    /// `ObjectServer` will only handle method calls destined for the unique name of this connection
+    /// or any of the registered well-known names. For p2p connections, it will handle all incoming
+    /// method calls if no well-known name is requested.
     ///
     /// You can request multiple names for the same `ObjectServer`. Use [`Connection::release_name`]
     /// for deregistering names registered through this method.
@@ -518,6 +524,12 @@ impl Connection {
         let mut names = self.inner.registered_names.lock().await;
 
         if names.contains(&well_known_name) {
+            return Ok(());
+        }
+
+        if !self.is_bus() {
+            names.insert(well_known_name.to_owned());
+
             return Ok(());
         }
 
@@ -556,6 +568,10 @@ impl Connection {
         // FIXME: Should be possible to avoid cloning/allocation here
         if !names.remove(&well_known_name.to_owned()) {
             return Ok(false);
+        }
+
+        if !self.is_bus() {
+            return Ok(true);
         }
 
         fdo::DBusProxy::builder(self)
