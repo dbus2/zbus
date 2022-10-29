@@ -320,6 +320,11 @@ impl OwnedBusName {
     pub fn into_inner(self) -> BusName<'static> {
         self.0
     }
+
+    /// Get a reference to the inner `BusName`.
+    pub fn inner(&self) -> &BusName<'static> {
+        &self.0
+    }
 }
 
 impl Deref for OwnedBusName {
