@@ -259,6 +259,11 @@ impl OwnedInterfaceName {
     pub fn into_inner(self) -> InterfaceName<'static> {
         self.0
     }
+
+    /// Get a reference to the inner `InterfaceName`.
+    pub fn inner(&self) -> &InterfaceName<'static> {
+        &self.0
+    }
 }
 
 impl Deref for OwnedInterfaceName {

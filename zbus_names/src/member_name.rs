@@ -237,6 +237,11 @@ impl OwnedMemberName {
     pub fn into_inner(self) -> MemberName<'static> {
         self.0
     }
+
+    /// Get a reference to the inner `MemberName`.
+    pub fn inner(&self) -> &MemberName<'static> {
+        &self.0
+    }
 }
 
 impl Deref for OwnedMemberName {
