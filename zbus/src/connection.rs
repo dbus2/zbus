@@ -17,7 +17,7 @@ use std::{
     },
     task::{Context, Poll},
 };
-use tracing::{debug, instrument, trace, trace_span, Instrument};
+use tracing::{debug, instrument, trace, trace_span, warn, Instrument};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
@@ -709,8 +709,47 @@ impl Connection {
                         }
                         m.ok()
                     }) {
-                        trace!("Got `{}`. Will spawn a task for dispatch..", msg);
                         if let Some(conn) = weak_conn.upgrade() {
+                            let hdr = match msg.header() {
+                                Ok(hdr) => hdr,
+                                Err(e) => {
+                                    warn!("Failed to parse header: {}", e);
+
+                                    continue;
+                                }
+                            };
+                            match hdr.destination() {
+                                Ok(Some(BusName::Unique(dest))) => {
+                                    match conn.unique_name().map(|n| &**n) {
+                                        Some(unique_name) if dest != unique_name => {
+                                            trace!("Got a method call for a different destination: {}", dest);
+
+                                            continue;
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                                Ok(Some(BusName::WellKnown(dest))) => {
+                                    let names = conn.inner.registered_names.lock().await;
+                                    // For p2p, destination doesn't matter if no name has been registered.
+                                    if !names.contains(dest) && (conn.is_bus() || !names.is_empty()) {
+                                        trace!("Got a method call for a different destination: {}", dest);
+
+                                        continue;
+                                    }
+                                }
+                                Ok(None) => {
+                                    warn!("Got a method call with no destination: {}", msg);
+
+                                    continue;
+                                }
+                                Err(e) => {
+                                    warn!("Failed to parse destination: {}", e);
+
+                                    continue;
+                                }
+                            }
+                            trace!("Got `{}`. Will spawn a task for dispatch..", msg);
                             let executor = conn.inner.executor.clone();
                             executor
                                 .spawn(
