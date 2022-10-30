@@ -17,7 +17,7 @@ use std::{
     },
     task::{Context, Poll},
 };
-use tracing::{debug, instrument, trace, trace_span, Instrument};
+use tracing::{debug, instrument, trace, trace_span, warn, Instrument};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
@@ -495,10 +495,16 @@ impl Connection {
         self.send_message(m?).await
     }
 
-    /// Register a well-known name for this service on the bus.
+    /// Register a well-known name for this connection.
     ///
-    /// You can request multiple names for the same `ObjectServer`. Use [`Connection::release_name`]
-    /// for deregistering names registered through this method.
+    /// When connecting to a bus, the name is requested from the bus. In case of p2p connection, the
+    /// name (if requested) is used of self-identification. Please note that the associated
+    /// `ObjectServer` will only handle method calls destined for the unique name of this connection
+    /// or any of the registered well-known names. For p2p connections, it will handle all incoming
+    /// method calls if no well-known name is requested.
+    ///
+    /// You can request multiple names for the same connection. Use [`Connection::release_name`] for
+    /// deregistering names registered through this method.
     ///
     /// Note that exclusive ownership without queueing is requested (using
     /// [`fdo::RequestNameFlags::ReplaceExisting`] and [`fdo::RequestNameFlags::DoNotQueue`] flags)
@@ -518,6 +524,12 @@ impl Connection {
         let mut names = self.inner.registered_names.lock().await;
 
         if names.contains(&well_known_name) {
+            return Ok(());
+        }
+
+        if !self.is_bus() {
+            names.insert(well_known_name.to_owned());
+
             return Ok(());
         }
 
@@ -558,6 +570,10 @@ impl Connection {
             return Ok(false);
         }
 
+        if !self.is_bus() {
+            return Ok(true);
+        }
+
         fdo::DBusProxy::builder(self)
             .cache_properties(CacheProperties::No)
             .build()
@@ -588,9 +604,32 @@ impl Connection {
         Ok(serial)
     }
 
-    /// The unique name as assigned by the message bus or `None` if not a message bus connection.
+    /// The unique name of the connection, if set/applicable.
+    ///
+    /// The unique name is assigned by the message bus or set manually using [`set_unique_name`].
     pub fn unique_name(&self) -> Option<&OwnedUniqueName> {
         self.inner.unique_name.get()
+    }
+
+    /// Sets the unique name of the connection (if not already set).
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the unique name is already set. It will always panic if the connection
+    /// is to a message bus as it's the bus that assigns peers their unique names. This is mainly
+    /// provided for bus implementations. All other users should not need to use this method.
+    pub fn set_unique_name<U>(&self, unique_name: U) -> Result<()>
+    where
+        U: TryInto<OwnedUniqueName>,
+        U::Error: Into<Error>,
+    {
+        let name = unique_name.try_into().map_err(Into::into)?;
+        self.inner
+            .unique_name
+            .set(name)
+            .expect("unique name already set");
+
+        Ok(())
     }
 
     /// Max number of messages to queue.
@@ -709,8 +748,47 @@ impl Connection {
                         }
                         m.ok()
                     }) {
-                        trace!("Got `{}`. Will spawn a task for dispatch..", msg);
                         if let Some(conn) = weak_conn.upgrade() {
+                            let hdr = match msg.header() {
+                                Ok(hdr) => hdr,
+                                Err(e) => {
+                                    warn!("Failed to parse header: {}", e);
+
+                                    continue;
+                                }
+                            };
+                            match hdr.destination() {
+                                Ok(Some(BusName::Unique(dest))) => {
+                                    match conn.unique_name().map(|n| &**n) {
+                                        Some(unique_name) if dest != unique_name => {
+                                            trace!("Got a method call for a different destination: {}", dest);
+
+                                            continue;
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                                Ok(Some(BusName::WellKnown(dest))) => {
+                                    let names = conn.inner.registered_names.lock().await;
+                                    // For p2p, destination doesn't matter if no name has been registered.
+                                    if !names.contains(dest) && (conn.is_bus() || !names.is_empty()) {
+                                        trace!("Got a method call for a different destination: {}", dest);
+
+                                        continue;
+                                    }
+                                }
+                                Ok(None) => {
+                                    warn!("Got a method call with no destination: {}", msg);
+
+                                    continue;
+                                }
+                                Err(e) => {
+                                    warn!("Failed to parse destination: {}", e);
+
+                                    continue;
+                                }
+                            }
+                            trace!("Got `{}`. Will spawn a task for dispatch..", msg);
                             let executor = conn.inner.executor.clone();
                             executor
                                 .spawn(
