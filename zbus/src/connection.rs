@@ -604,9 +604,32 @@ impl Connection {
         Ok(serial)
     }
 
-    /// The unique name as assigned by the message bus or `None` if not a message bus connection.
+    /// The unique name of the connection, if set/applicable.
+    ///
+    /// The unique name is assigned by the message bus or set manually using [`set_unique_name`].
     pub fn unique_name(&self) -> Option<&OwnedUniqueName> {
         self.inner.unique_name.get()
+    }
+
+    /// Sets the unique name of the connection (if not already set).
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the unique name is already set. It will always panic if the connection
+    /// is to a message bus as it's the bus that assigns peers their unique names. This is mainly
+    /// provided for bus implementations. All other users should not need to use this method.
+    pub fn set_unique_name<U>(&self, unique_name: U) -> Result<()>
+    where
+        U: TryInto<OwnedUniqueName>,
+        U::Error: Into<Error>,
+    {
+        let name = unique_name.try_into().map_err(Into::into)?;
+        self.inner
+            .unique_name
+            .set(name)
+            .expect("unique name already set");
+
+        Ok(())
     }
 
     /// Max number of messages to queue.
