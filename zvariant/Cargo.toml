@@ -37,7 +37,7 @@ serde_json = "1.0"
 serde_repr = "0.1.9"
 glib = { git = "https://github.com/gtk-rs/glib", rev = "c9ee583cea0" }
 rand = "0.8.5"
-criterion = "0.3"
+criterion = "0.4"
 
 [lib]
 bench = false
