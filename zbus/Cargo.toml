@@ -47,7 +47,7 @@ async-channel = { version = "1.7.1", optional = true }
 async-executor = { version = "1.4.1", optional = true }
 async-task = { version = "4.3.0", optional = true }
 hex = "0.4.3"
-ordered-stream = "0.0.1"
+ordered-stream = "0.1.1"
 rand = "0.8.5"
 sha1 = { version = "0.10.5", features = ["std"] }
 event-listener = "2.5.3"
