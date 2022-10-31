@@ -21,6 +21,8 @@ use crate::{
 
 use futures_core::ready;
 
+use sha1::{Digest, Sha1};
+
 /*
  * Client-side handshake logic
  */
@@ -224,7 +226,7 @@ impl<S: Socket> ClientHandshake<S> {
                 let cookie = Cookie::lookup(name, id)?;
                 let client_chall = random_ascii(16);
                 let sec = format!("{}:{}:{}", server_chall, client_chall, cookie);
-                let sha1 = sha1::Sha1::from(sec).hexdigest();
+                let sha1 = hex::encode(sha1::Sha1::digest(sec));
                 let data = format!("{} {}", client_chall, sha1);
                 Ok((WaitingForOK, Command::Data(data.into())))
             }
