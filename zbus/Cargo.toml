@@ -27,7 +27,7 @@ tokio-vsock = ["dep:tokio-vsock", "tokio"]
 
 [dependencies]
 byteorder = "1.4.3"
-nix = "0.24.2"
+nix = "0.25.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1.9"
 zvariant = { path = "../zvariant", version = "3.7.0", default-features = false, features = ["enumflags2"] }
