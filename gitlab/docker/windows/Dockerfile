@@ -45,7 +45,7 @@ RUN C:\TEMP\Install.cmd C:\TEMP\vs_buildtools.exe --quiet --wait --norestart --n
     --installPath C:\BuildTools
 
 # Build glib for MSVC
-RUN git clone --depth 1 --branch 2.70.2 https://gitlab.gnome.org/GNOME/glib.git \glib
+RUN git clone --depth 1 --branch 2.74.1 https://gitlab.gnome.org/GNOME/glib.git \glib
 WORKDIR "/glib"
 RUN cmd /c 'C:\BuildTools\Common7\Tools\VsDevCmd.bat -arch=amd64 & meson setup builddir'
 RUN meson compile -C builddir
