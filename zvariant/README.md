@@ -164,7 +164,7 @@ accomplish. However, community contribution can change that. 😊
 | enumflags2 | Implement `Type` for [`struct@enumflags2::BitFlags<F>`] |
 
 [dwf]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-marshaling
-[GVariant]: https://web.archive.org/web/20220119135702/https://people.gnome.org/~desrt/gvariant-serialisation.pdf
+[GVariant]: https://developer.gnome.org/documentation/specifications/gvariant-specification-1.0.html
 [serde]: https://crates.io/crates/serde
 [tutorial]: https://serde.rs/
 [toplevel functions]: https://docs.rs/zvariant/latest/zvariant/#functions
