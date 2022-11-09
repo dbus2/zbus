@@ -162,7 +162,11 @@ pub fn create_proxy(
 ) -> Result<TokenStream, Error> {
     let zbus = zbus_path();
 
-    let doc = get_doc_attrs(&input.attrs);
+    let other_attrs: Vec<_> = input
+        .attrs
+        .iter()
+        .filter(|a| !a.path.is_ident("dbus_proxy"))
+        .collect();
     let proxy_name = Ident::new(proxy_name, Span::call_site());
     let ident = input.ident.to_string();
     let name = iface_name
@@ -255,7 +259,7 @@ pub fn create_proxy(
             const PATH: &'static str = #default_path;
         }
 
-        #(#doc)*
+        #(#other_attrs)*
         #[derive(Clone, Debug)]
         pub struct #proxy_name<'c>(#proxy_struct<'c>);
 
@@ -356,7 +360,11 @@ fn gen_proxy_method_call(
         blocking,
     } = async_opts;
     let zbus = zbus_path();
-    let doc = get_doc_attrs(&m.attrs);
+    let other_attrs: Vec<_> = m
+        .attrs
+        .iter()
+        .filter(|a| !a.path.is_ident("dbus_proxy"))
+        .collect();
     let args: Vec<_> = m.sig.inputs.iter().filter_map(arg_ident).collect();
     let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
     let async_proxy_object = attrs.iter().find_map(|x| match x {
@@ -427,7 +435,7 @@ fn gen_proxy_method_call(
         };
 
         quote! {
-            #(#doc)*
+            #(#other_attrs)*
             pub #usage #signature {
                 let object_path: #zbus::zvariant::OwnedObjectPath =
                     self.0.call(
@@ -463,7 +471,7 @@ fn gen_proxy_method_call(
 
         if no_reply {
             return quote! {
-                #(#doc)*
+                #(#other_attrs)*
                 pub #usage #signature {
                     self.0.call_noreply(#method_name, #body)#wait?;
                     ::std::result::Result::Ok(())
@@ -472,7 +480,7 @@ fn gen_proxy_method_call(
         }
 
         quote! {
-            #(#doc)*
+            #(#other_attrs)*
             pub #usage #signature {
                 let reply = self.0.call(#method_name, #body)#wait?;
                 ::std::result::Result::Ok(reply)
@@ -530,12 +538,16 @@ fn gen_proxy_property(
         blocking,
     } = async_opts;
     let zbus = zbus_path();
-    let doc = get_doc_attrs(&m.attrs);
+    let other_attrs: Vec<_> = m
+        .attrs
+        .iter()
+        .filter(|a| !a.path.is_ident("dbus_proxy"))
+        .collect();
     let signature = &m.sig;
     if signature.inputs.len() > 1 {
         let value = arg_ident(signature.inputs.last().unwrap()).unwrap();
         quote! {
-            #(#doc)*
+            #(#other_attrs)*
             #[allow(clippy::needless_question_mark)]
             pub #usage #signature {
                 ::std::result::Result::Ok(self.0.set_property(#property_name, #value)#wait?)
@@ -615,7 +627,7 @@ fn gen_proxy_property(
         };
 
         quote! {
-            #(#doc)*
+            #(#other_attrs)*
             #[allow(clippy::needless_question_mark)]
             pub #usage #signature {
                 #body
@@ -656,7 +668,11 @@ fn gen_proxy_signal(
         blocking,
     } = async_opts;
     let zbus = zbus_path();
-    let doc = get_doc_attrs(&m.attrs);
+    let other_attrs: Vec<_> = m
+        .attrs
+        .iter()
+        .filter(|a| !a.path.is_ident("dbus_proxy"))
+        .collect();
     let input_types: Vec<Box<Type>> = m
         .sig
         .inputs
@@ -733,7 +749,7 @@ fn gen_proxy_signal(
     );
     let receive_signal = quote! {
         #[doc = #receive_gen_doc]
-        #(#doc)*
+        #(#other_attrs)*
         pub #usage fn #receiver_name(&self) -> #zbus::Result<#stream_name<'c>>
         {
             self.receive_signal(#signal_name)#wait.map(#stream_name)
