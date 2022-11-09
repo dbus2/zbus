@@ -50,6 +50,10 @@ pub enum Error {
     NoBodySignature,
     /// The requested name was already claimed by another peer.
     NameTaken,
+    /// Invalid [match rule][MR] string.
+    ///
+    /// [MR]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-bus-routing-match-rules
+    InvalidMatchRule,
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -70,6 +74,7 @@ impl PartialEq for Error {
             (Self::FDO(s), Self::FDO(o)) => s == o,
             (Self::NoBodySignature, Self::NoBodySignature) => true,
             (Self::InvalidField, Self::InvalidField) => true,
+            (Self::InvalidMatchRule, Self::InvalidMatchRule) => true,
             (Self::Variant(s), Self::Variant(o)) => s == o,
             (Self::Names(s), Self::Names(o)) => s == o,
             (Self::NameTaken, Self::NameTaken) => true,
@@ -103,6 +108,7 @@ impl error::Error for Error {
             Error::InvalidField => None,
             Error::MissingField => None,
             Error::NameTaken => None,
+            Error::InvalidMatchRule => None,
         }
     }
 }
@@ -134,6 +140,7 @@ impl fmt::Display for Error {
             Error::SerdeXml(e) => write!(f, "XML error: {}", e),
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
             Error::NameTaken => write!(f, "name already taken on the bus"),
+            Error::InvalidMatchRule => write!(f, "Invalid match rule string"),
         }
     }
 }
