@@ -22,8 +22,8 @@ use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
 use crate::{
     async_channel::channel,
     fdo::{self, IntrospectableProxy, PropertiesProxy},
-    CacheProperties, Connection, Error, Executor, Message, MessageBuilder, MessageSequence,
-    ProxyBuilder, Result, Task,
+    CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageBuilder,
+    MessageSequence, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
 
 #[derive(Debug, Default)]
@@ -93,7 +93,7 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 pub(crate) struct ProxyInnerStatic {
     #[derivative(Debug = "ignore")]
     pub(crate) conn: Connection,
-    dest_name_watcher: OnceCell<String>,
+    dest_name_watcher: OnceCell<OwnedMatchRule>,
 }
 
 #[derive(Debug)]
@@ -112,8 +112,8 @@ pub(crate) struct ProxyInner<'a> {
 
 impl Drop for ProxyInnerStatic {
     fn drop(&mut self) {
-        if let Some(expr) = self.dest_name_watcher.take() {
-            self.conn.queue_remove_match(expr);
+        if let Some(rule) = self.dest_name_watcher.take() {
+            self.conn.queue_remove_match(rule);
         }
     }
 }
@@ -489,28 +489,27 @@ impl<'a> ProxyInner<'a> {
             }
 
             let conn = &self.inner_without_borrows.conn;
-            let signal_expr = format!(
-                concat!(
-                    "type='signal',",
-                    "sender='org.freedesktop.DBus',",
-                    "path='/org/freedesktop/DBus',",
-                    "interface='org.freedesktop.DBus',",
-                    "member='NameOwnerChanged',",
-                    "arg0='{}'"
-                ),
-                well_known_name
-            );
+            let signal_rule: OwnedMatchRule = MatchRule::builder()
+                .msg_type(MessageType::Signal)
+                .sender("org.freedesktop.DBus")?
+                .path("/org/freedesktop/DBus")?
+                .interface("org.freedesktop.DBus")?
+                .member("NameOwnerChanged")?
+                .add_arg(well_known_name.as_str())?
+                .build()
+                .to_owned()
+                .into();
 
-            conn.add_match(signal_expr.clone()).await?;
+            conn.add_match(signal_rule.clone()).await?;
 
             if self
                 .inner_without_borrows
                 .dest_name_watcher
-                .set(signal_expr.clone())
+                .set(signal_rule.clone())
                 .is_err()
             {
                 // we raced another destination_unique_name call and added it twice
-                conn.remove_match(signal_expr).await?;
+                conn.remove_match(signal_rule).await?;
             }
         }
 
@@ -842,17 +841,16 @@ impl<'a> Proxy<'a> {
         let conn = self.inner.inner_without_borrows.conn.clone();
         self.inner.destination_unique_name().await?;
 
-        let mut expr = format!(
-            "type='signal',sender='{}',path='{}',interface='{}'",
-            self.destination(),
-            self.path(),
-            self.interface(),
-        );
+        let mut rule_builder = MatchRule::builder()
+            .msg_type(MessageType::Signal)
+            .sender(self.destination())?
+            .path(self.path())?
+            .interface(self.interface())?;
         if let Some(name) = &signal_name {
-            use std::fmt::Write;
-            write!(expr, ",member='{}'", name).unwrap();
+            rule_builder = rule_builder.member(name)?;
         }
-        conn.add_match(expr.clone()).await?;
+        let rule: OwnedMatchRule = rule_builder.build().to_owned().into();
+        conn.add_match(rule.clone()).await?;
 
         let (src_bus_name, src_unique_name, src_query) = match self.destination().to_owned() {
             BusName::Unique(name) => (None, Some(name), None),
@@ -874,7 +872,7 @@ impl<'a> Proxy<'a> {
         Ok(SignalStream {
             stream,
             proxy: self.clone(),
-            expr,
+            match_rule: Some(rule),
             src_bus_name,
             src_query,
             src_unique_name,
@@ -1002,7 +1000,7 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
 pub struct SignalStream<'a> {
     stream: Receiver<Arc<Message>>,
     proxy: Proxy<'a>,
-    expr: String,
+    match_rule: Option<OwnedMatchRule>,
     src_bus_name: Option<WellKnownName<'a>>,
     src_query: Option<u32>,
     src_unique_name: Option<UniqueName<'static>>,
@@ -1120,9 +1118,8 @@ impl<'a> stream::FusedStream for SignalStream<'a> {
 
 impl<'a> std::ops::Drop for SignalStream<'a> {
     fn drop(&mut self) {
-        self.proxy
-            .connection()
-            .queue_remove_match(std::mem::take(&mut self.expr));
+        let rule = self.match_rule.take().expect("match rule already removed");
+        self.proxy.connection().queue_remove_match(rule);
     }
 }
 
