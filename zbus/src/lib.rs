@@ -78,6 +78,10 @@ mod interface;
 pub use interface::*;
 mod abstractions;
 pub use abstractions::*;
+mod match_rule;
+pub use match_rule::*;
+mod match_rule_builder;
+pub use match_rule_builder::*;
 
 mod utils;
 pub use utils::*;

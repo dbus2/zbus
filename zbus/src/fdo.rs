@@ -580,7 +580,12 @@ macro_rules! gen_dbus_proxy {
         )]
         trait DBus {
             /// Adds a match rule to match messages going through the message bus
+            #[deprecated(since = "3.5.0", note = "Use `add_match_rule` instead")]
             fn add_match(&self, rule: &str) -> Result<()>;
+
+            /// Adds a match rule to match messages going through the message bus
+            #[dbus_proxy(name = "AddMatch")]
+            fn add_match_rule(&self, rule: crate::MatchRule<'_>) -> Result<()>;
 
             /// Returns auditing data used by Solaris ADT, in an unspecified binary format.
             fn get_adt_audit_session_data(&self, bus_name: BusName<'_>) -> Result<Vec<u8>>;
@@ -633,7 +638,12 @@ macro_rules! gen_dbus_proxy {
             fn reload_config(&self) -> Result<()>;
 
             /// Removes the first rule that matches.
+            #[deprecated(since = "3.5.0", note = "Use `remove_match_rule` instead")]
             fn remove_match(&self, rule: &str) -> Result<()>;
+
+            /// Removes the first rule that matches.
+            #[dbus_proxy(name = "RemoveMatch")]
+            fn remove_match_rule(&self, rule: crate::MatchRule<'_>) -> Result<()>;
 
             /// Ask the message bus to assign the given name to the method caller.
             fn request_name(

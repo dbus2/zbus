@@ -49,7 +49,7 @@ pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Little;
 
 /// Message header representing the D-Bus type of the message.
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Eq, Serialize_repr, Type)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Eq, Hash, Serialize_repr, Type)]
 pub enum MessageType {
     /// Invalid message type. All unknown types on received messages are treated as invalid.
     Invalid = 0,
