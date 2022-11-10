@@ -297,7 +297,9 @@ impl<'de> Deserialize<'de> for OwnedMemberName {
     where
         D: de::Deserializer<'de>,
     {
-        Ok(MemberName::deserialize(deserializer)?.into())
+        String::deserialize(deserializer)
+            .and_then(|n| MemberName::try_from(n).map_err(|e| de::Error::custom(e.to_string())))
+            .map(Self)
     }
 }
 
