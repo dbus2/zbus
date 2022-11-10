@@ -829,7 +829,7 @@ impl Connection {
                     .cache_properties(CacheProperties::No)
                     .build()
                     .await?
-                    .add_match(&e.key().to_string())
+                    .add_match_rule(e.key().inner().clone())
                     .await?;
                 e.insert(1);
             }
@@ -857,7 +857,7 @@ impl Connection {
                         .cache_properties(CacheProperties::No)
                         .build()
                         .await?
-                        .remove_match(&e.key().to_string())
+                        .remove_match_rule(e.key().inner().clone())
                         .await?;
                     e.remove();
                 }
