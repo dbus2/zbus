@@ -31,7 +31,7 @@ use crate::{
     blocking, fdo,
     raw::{Connection as RawConnection, Socket},
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, Message,
-    MessageStream, MessageType, ObjectServer, Result, Task,
+    MessageStream, MessageType, ObjectServer, OwnedMatchRule, Result, Task,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -58,7 +58,7 @@ pub(crate) struct ConnectionInner {
     #[allow(unused)]
     msg_receiver_task: Task<()>,
 
-    signal_matches: Mutex<HashMap<String, u64>>,
+    signal_matches: Mutex<HashMap<OwnedMatchRule, u64>>,
 
     object_server: OnceCell<blocking::ObjectServer>,
     object_server_dispatch_task: OnceCell<Task<()>>,
@@ -817,19 +817,19 @@ impl Connection {
         });
     }
 
-    pub(crate) async fn add_match(&self, expr: String) -> Result<()> {
+    pub(crate) async fn add_match(&self, rule: OwnedMatchRule) -> Result<()> {
         use std::collections::hash_map::Entry;
         if !self.is_bus() {
             return Ok(());
         }
         let mut subscriptions = self.inner.signal_matches.lock().await;
-        match subscriptions.entry(expr) {
+        match subscriptions.entry(rule) {
             Entry::Vacant(e) => {
                 fdo::DBusProxy::builder(self)
                     .cache_properties(CacheProperties::No)
                     .build()
                     .await?
-                    .add_match(e.key())
+                    .add_match(&e.key().to_string())
                     .await?;
                 e.insert(1);
             }
@@ -840,7 +840,7 @@ impl Connection {
         Ok(())
     }
 
-    pub(crate) async fn remove_match(&self, expr: String) -> Result<bool> {
+    pub(crate) async fn remove_match(&self, rule: OwnedMatchRule) -> Result<bool> {
         use std::collections::hash_map::Entry;
         if !self.is_bus() {
             return Ok(true);
@@ -848,7 +848,7 @@ impl Connection {
         let mut subscriptions = self.inner.signal_matches.lock().await;
         // TODO when it becomes stable, use HashMap::raw_entry and only require expr: &str
         // (both here and in add_match)
-        match subscriptions.entry(expr) {
+        match subscriptions.entry(rule) {
             Entry::Vacant(_) => Ok(false),
             Entry::Occupied(mut e) => {
                 *e.get_mut() -= 1;
@@ -857,7 +857,7 @@ impl Connection {
                         .cache_properties(CacheProperties::No)
                         .build()
                         .await?
-                        .remove_match(e.key())
+                        .remove_match(&e.key().to_string())
                         .await?;
                     e.remove();
                 }
@@ -866,11 +866,11 @@ impl Connection {
         }
     }
 
-    pub(crate) fn queue_remove_match(&self, expr: String) {
+    pub(crate) fn queue_remove_match(&self, rule: OwnedMatchRule) {
         let conn = self.clone();
         self.inner
             .executor
-            .spawn(async move { conn.remove_match(expr).await })
+            .spawn(async move { conn.remove_match(rule).await })
             .detach()
     }
 
