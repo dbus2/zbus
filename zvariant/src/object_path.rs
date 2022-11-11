@@ -365,7 +365,7 @@ impl<'de> Deserialize<'de> for OwnedObjectPath {
         let visitor = ObjectPathVisitor;
 
         deserializer
-            .deserialize_string(visitor)
+            .deserialize_str(visitor)
             .map(|v| OwnedObjectPath(v.to_owned()))
     }
 }

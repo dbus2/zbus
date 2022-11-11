@@ -492,7 +492,7 @@ impl<'de> Deserialize<'de> for OwnedSignature {
         let visitor = SignatureVisitor;
 
         deserializer
-            .deserialize_string(visitor)
+            .deserialize_str(visitor)
             .map(|v| OwnedSignature(v.to_owned()))
     }
 }
