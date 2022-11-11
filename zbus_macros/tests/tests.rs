@@ -19,9 +19,9 @@ fn test_proxy() {
     }
 
     #[dbus_proxy(
+        assume_defaults = false,
         interface = "org.freedesktop.zbus_macros.Test",
-        default_service = "org.freedesktop.zbus_macros",
-        default_path = "/org/freedesktop/zbus_macros/test"
+        default_service = "org.freedesktop.zbus_macros"
     )]
     trait Test {
         /// comment for a_test()
@@ -55,11 +55,14 @@ fn test_proxy() {
     block_on(async move {
         let connection = zbus::Connection::session().await.unwrap();
         let proxy = TestProxy::builder(&connection)
+            .path("/org/freedesktop/zbus_macros/test")
+            .unwrap()
             .cache_properties(CacheProperties::No)
             .build()
             .await
             .unwrap();
-        fdo::DBusProxy::new(&connection)
+        fdo::DBusProxy::builder(&connection)
+            .build()
             .await
             .unwrap()
             .request_name(
