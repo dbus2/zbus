@@ -1,7 +1,7 @@
 use core::{
     convert::TryFrom,
     fmt::{self, Debug, Display, Formatter},
-    str,
+    panic, str,
 };
 use serde::{
     de::{Deserialize, Deserializer, Visitor},
@@ -413,14 +413,6 @@ impl<'de> Visitor<'de> for SignatureVisitor {
         E: serde::de::Error,
     {
         Signature::try_from(value).map_err(serde::de::Error::custom)
-    }
-
-    #[inline]
-    fn visit_str<E>(self, value: &str) -> core::result::Result<Signature<'de>, E>
-    where
-        E: serde::de::Error,
-    {
-        Signature::try_from(String::from(value)).map_err(serde::de::Error::custom)
     }
 }
 

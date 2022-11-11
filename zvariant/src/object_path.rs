@@ -243,14 +243,6 @@ impl<'de> Visitor<'de> for ObjectPathVisitor {
     {
         ObjectPath::try_from(value).map_err(serde::de::Error::custom)
     }
-
-    #[inline]
-    fn visit_str<E>(self, value: &str) -> core::result::Result<ObjectPath<'de>, E>
-    where
-        E: serde::de::Error,
-    {
-        ObjectPath::try_from(String::from(value)).map_err(serde::de::Error::custom)
-    }
 }
 
 fn ensure_correct_object_path_str(path: &[u8]) -> Result<()> {
