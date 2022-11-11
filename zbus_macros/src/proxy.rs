@@ -169,7 +169,7 @@ pub fn create_proxy(
         .collect();
     let proxy_name = Ident::new(proxy_name, Span::call_site());
     let ident = input.ident.to_string();
-    let name = iface_name
+    let iface_name = iface_name
         .map(ToString::to_string)
         .unwrap_or(format!("org.freedesktop.{}", ident));
     let default_path = default_path
@@ -177,7 +177,7 @@ pub fn create_proxy(
         .unwrap_or(format!("/org/freedesktop/{}", ident));
     let default_service = default_service
         .map(ToString::to_string)
-        .unwrap_or_else(|| name.clone());
+        .unwrap_or_else(|| iface_name.clone());
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
     let mut has_properties = false;
@@ -196,7 +196,7 @@ pub fn create_proxy(
             let is_property = property_attrs.is_some();
             let is_signal = attrs.iter().any(|x| x.is_signal());
             let has_inputs = m.sig.inputs.len() > 1;
-            let name = attrs
+            let member_name = attrs
                 .iter()
                 .find_map(|x| match x {
                     ItemAttribute::Name(n) => Some(n.to_string()),
@@ -215,13 +215,20 @@ pub fn create_proxy(
                 has_properties = true;
                 let emits_changed_signal = PropertyEmitsChangedSignal::parse_from_attrs(prop_attrs);
                 if let PropertyEmitsChangedSignal::False = emits_changed_signal {
-                    uncached_properties.push(name.clone());
+                    uncached_properties.push(member_name.clone());
                 }
-                gen_proxy_property(&name, &method_name, m, &async_opts, emits_changed_signal)
+                gen_proxy_property(
+                    &member_name,
+                    &method_name,
+                    m,
+                    &async_opts,
+                    emits_changed_signal,
+                )
             } else if is_signal {
                 let (method, types) = gen_proxy_signal(
                     &proxy_name,
-                    &name,
+                    &iface_name,
+                    &member_name,
                     &method_name,
                     m,
                     &async_opts,
@@ -231,7 +238,7 @@ pub fn create_proxy(
 
                 method
             } else {
-                gen_proxy_method_call(&name, &method_name, m, &async_opts)
+                gen_proxy_method_call(&member_name, &method_name, m, &async_opts)
             };
             methods.extend(m);
         }
@@ -254,7 +261,7 @@ pub fn create_proxy(
 
     Ok(quote! {
         impl<'a> #zbus::ProxyDefault for #proxy_name<'a> {
-            const INTERFACE: &'static str = #name;
+            const INTERFACE: &'static str = #iface_name;
             const DESTINATION: &'static str = #default_service;
             const PATH: &'static str = #default_path;
         }
@@ -656,6 +663,7 @@ impl Fold for SetLifetimeS {
 
 fn gen_proxy_signal(
     proxy_name: &Ident,
+    iface_name: &str,
     signal_name: &str,
     snake_case_name: &str,
     m: &TraitItemMethod,
@@ -789,6 +797,28 @@ fn gen_proxy_signal(
             impl ::std::convert::AsRef<#zbus::Message> for #signal_name_ident {
                 fn as_ref(&self) -> &#zbus::Message {
                     &self.0
+                }
+            }
+
+            impl #signal_name_ident {
+                #[doc = "Try to construct a "]
+                #[doc = #signal_name]
+                #[doc = " from a [::zbus::Message]."]
+                fn from_message<M>(msg: M) -> ::std::option::Option<Self>
+                where
+                    M: ::std::convert::Into<::std::sync::Arc<#zbus::Message>>,
+                {
+                    let msg = msg.into();
+                    let message_type = msg.message_type();
+                    let interface = msg.interface();
+                    let member = msg.member();
+                    let interface = interface.as_ref().map(|i| i.as_str());
+                    let member = member.as_ref().map(|m| m.as_str());
+
+                    match (message_type, interface, member) {
+                        (#zbus::MessageType::Signal, Some(#iface_name), Some(#signal_name)) => Some(Self(msg)),
+                        _ => None,
+                    }
                 }
             }
         }
