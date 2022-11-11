@@ -3,6 +3,7 @@ use static_assertions::assert_impl_all;
 use std::{
     cmp::Ordering,
     hash::{Hash, Hasher},
+    sync::Arc,
 };
 
 use crate::{Basic, EncodingFormat, Signature, Type};
@@ -23,7 +24,7 @@ pub struct Str<'a>(#[serde(borrow)] Inner<'a>);
 enum Inner<'a> {
     Static(&'static str),
     Borrowed(&'a str),
-    Owned(Box<str>),
+    Owned(Arc<str>),
 }
 
 impl<'a> Default for Inner<'a> {
@@ -113,7 +114,7 @@ impl<'a> Str<'a> {
     pub fn into_owned(self) -> Str<'static> {
         match self.0 {
             Inner::Static(s) => Str(Inner::Static(s)),
-            Inner::Borrowed(s) => Str(Inner::Owned(s.into())),
+            Inner::Borrowed(s) => Str(Inner::Owned(s.to_owned().into())),
             Inner::Owned(s) => Str(Inner::Owned(s)),
         }
     }
@@ -157,7 +158,7 @@ impl<'a> From<Str<'a>> for String {
         match value.0 {
             Inner::Static(s) => s.into(),
             Inner::Borrowed(s) => s.into(),
-            Inner::Owned(s) => s.into(),
+            Inner::Owned(s) => s.to_string(),
         }
     }
 }
