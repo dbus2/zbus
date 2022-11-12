@@ -34,7 +34,7 @@ pub struct ProxyBuilder<'a, T = ()> {
     interface: Option<InterfaceName<'a>>,
     proxy_type: PhantomData<T>,
     cache: CacheProperties,
-    uncached_properties: HashSet<Str<'a>>,
+    uncached_properties: Option<HashSet<Str<'a>>>,
 }
 
 impl<'a, T> Clone for ProxyBuilder<'a, T> {
@@ -63,7 +63,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
             path: None,
             interface: None,
             cache: CacheProperties::default(),
-            uncached_properties: HashSet::new(),
+            uncached_properties: None,
             proxy_type: PhantomData,
         }
     }
@@ -110,9 +110,9 @@ impl<'a, T> ProxyBuilder<'a, T> {
     /// Specify a set of properties (by name) which should be excluded from caching.
     #[must_use]
     pub fn uncached_properties(mut self, properties: &[&'a str]) -> Self {
-        for prop_name in properties {
-            self.uncached_properties.insert(Str::from(*prop_name));
-        }
+        self.uncached_properties
+            .replace(properties.iter().map(|p| Str::from(*p)).collect());
+
         self
     }
 
@@ -122,8 +122,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
         let path = self.path.expect("missing `path`");
         let interface = self.interface.expect("missing `interface`");
         let cache = self.cache;
-        let mut uncached_properties = self.uncached_properties;
-        uncached_properties.shrink_to_fit();
+        let uncached_properties = self.uncached_properties.unwrap_or_default();
 
         Proxy {
             inner: Arc::new(ProxyInner::new(
@@ -176,7 +175,7 @@ where
                 InterfaceName::from_static_str(T::INTERFACE).expect("invalid interface name"),
             ),
             cache: CacheProperties::default(),
-            uncached_properties: HashSet::new(),
+            uncached_properties: None,
             proxy_type: PhantomData,
         }
     }
