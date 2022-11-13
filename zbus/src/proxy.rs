@@ -1,4 +1,5 @@
 use async_broadcast::Receiver;
+use enumflags2::{bitflags, BitFlags};
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
 use futures_util::{future::Either, stream::FilterMap};
@@ -72,13 +73,8 @@ pub(crate) struct PropertiesCache {
 /// It is recommended to use the [`dbus_proxy`] macro, which provides a more convenient and
 /// type-safe *façade* `Proxy` derived from a Rust trait.
 ///
-/// ## Current limitations:
-///
-/// At the moment, `Proxy` doesn't prevent [auto-launching][al].
-///
 /// [`futures` crate]: https://crates.io/crates/futures
 /// [`dbus_proxy`]: attr.dbus_proxy.html
-/// [al]: https://gitlab.freedesktop.org/dbus/zbus/-/issues/54
 #[derive(Clone, Debug)]
 pub struct Proxy<'a> {
     pub(crate) inner: Arc<ProxyInner<'a>>,
@@ -799,6 +795,60 @@ impl<'a> Proxy<'a> {
         reply.body()
     }
 
+    /// Call a method and return the reply body, optionally supplying a set of
+    /// method flags to control the way the method call message is sent and handled.
+    ///
+    /// Use [`call`] instead if you do not need any special handling via additional flags.
+    /// If the `NoReplyExpected` flag is passed , this will return None immediately
+    /// after sending the message, similar to [`call_noreply`]
+    ///
+    /// [`call`]: struct.Proxy.html#method.call
+    /// [`call_noreply`]: struct.Proxy.html#method.call_noreply
+    pub async fn call_with_flags<'m, M, F, B, R>(
+        &self,
+        method_name: M,
+        flags: F,
+        body: &B,
+    ) -> Result<Option<R>>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        F: Into<BitFlags<MethodFlags>>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+        R: serde::de::DeserializeOwned + zvariant::Type,
+    {
+        let mut builder = MessageBuilder::method_call(self.inner.path.as_ref(), method_name)?
+            .destination(&self.inner.destination)?
+            .interface(&self.inner.interface)?;
+
+        let msg_flags = flags.into();
+        for flag in msg_flags {
+            builder = builder.with_flags(flag.into())?;
+        }
+
+        let msg = builder.build(body)?;
+
+        if msg_flags.contains(MethodFlags::NoReplyExpected) {
+            self.inner
+                .inner_without_borrows
+                .conn
+                .send_message(msg)
+                .await?;
+            Ok(None)
+        } else {
+            let response = self
+                .inner
+                .inner_without_borrows
+                .conn
+                .call_method_raw(msg)
+                .await?
+                .await?
+                .body()?;
+
+            Ok(Some(response))
+        }
+    }
+
     /// Call a method without expecting a reply
     ///
     /// This sets the `NoReplyExpected` flag on the calling message and does not wait for a reply.
@@ -808,18 +858,8 @@ impl<'a> Proxy<'a> {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let msg = MessageBuilder::method_call(self.inner.path.as_ref(), method_name)?
-            .with_flags(zbus::MessageFlags::NoReplyExpected)?
-            .destination(&self.inner.destination)?
-            .interface(&self.inner.interface)?
-            .build(body)?;
-
-        self.inner
-            .inner_without_borrows
-            .conn
-            .send_message(msg)
+        self.call_with_flags::<_, _, _, ()>(method_name, MethodFlags::NoReplyExpected, body)
             .await?;
-
         Ok(())
     }
 
@@ -953,6 +993,50 @@ impl<'a> Proxy<'a> {
                 })),
             name: self.destination().clone(),
         })
+    }
+}
+
+/// Flags to use with [`Proxy::call_with_flags`].
+#[bitflags]
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum MethodFlags {
+    /// No response is expected from this method call, regardless of whether the
+    /// signature for the interface method indicates a reply type. When passed,
+    /// `call_with_flags` will return `Ok(None)` immediately after successfully
+    /// sending the method call.
+    ///
+    /// Errors encountered while *making* the call will still be returned as
+    /// an `Err` variant, but any errors that are triggered by the receiver's
+    /// handling of the call will not be delivered.
+    NoReplyExpected = 0x1,
+
+    /// When set on a call whose destination is a message bus, this flag will instruct
+    /// the bus not to [launch][al] a service to handle the call if no application
+    /// on the bus owns the requested name.
+    ///
+    /// This flag is ignored when using a peer-to-peer connection.
+    ///
+    /// [al]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-bus-starting-services
+    NoAutoStart = 0x2,
+
+    /// Indicates to the receiver that this client is prepared to wait for interactive
+    /// authorization, which might take a considerable time to complete. For example, the receiver
+    /// may query the user for confirmation via [polkit] or a similar framework.
+    ///
+    /// [polkit]: https://gitlab.freedesktop.org/polkit/polkit/
+    AllowInteractiveAuth = 0x4,
+}
+
+assert_impl_all!(MethodFlags: Send, Sync, Unpin);
+
+impl From<MethodFlags> for crate::MessageFlags {
+    fn from(method_flag: MethodFlags) -> Self {
+        match method_flag {
+            MethodFlags::NoReplyExpected => Self::NoReplyExpected,
+            MethodFlags::NoAutoStart => Self::NoAutoStart,
+            MethodFlags::AllowInteractiveAuth => Self::AllowInteractiveAuth,
+        }
     }
 }
 
