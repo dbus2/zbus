@@ -80,6 +80,9 @@ mod utils;
 /// * `no_autostart` - declare a method call that will not trigger the bus to automatically launch
 ///    the destination service if it is not already running.
 ///
+/// * `allow_interactive_auth` - declare a method call that is allowed to trigger an interactive
+///    prompt for authorization or confirmation from the receiver.
+///
 /// * `object` - methods that returns an [`ObjectPath`] can be annotated with the `object` attribute
 ///   to specify the proxy object to be constructed from the returned [`ObjectPath`].
 ///

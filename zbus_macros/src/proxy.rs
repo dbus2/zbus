@@ -516,12 +516,30 @@ fn gen_proxy_method_call(
     let no_autostart = attrs
         .iter()
         .any(|x| matches!(x, ItemAttribute::NoAutoStart));
+    let allow_interactive_auth = attrs
+        .iter()
+        .any(|x| matches!(x, ItemAttribute::AllowInteractiveAuth));
 
-    let method_flags = match (no_reply, no_autostart,) {
-        (true, false,) => Some(quote!(zbus::MethodFlags::NoReplyExpected)),
-        (false, true,) => Some(quote!(zbus::MethodFlags::NoAutoStart)),
+    let method_flags = match (no_reply, no_autostart, allow_interactive_auth) {
+        (true, false, false) => Some(quote!(zbus::MethodFlags::NoReplyExpected)),
+        (false, true, false) => Some(quote!(zbus::MethodFlags::NoAutoStart)),
+        (false, false, true) => Some(quote!(zbus::MethodFlags::AllowInteractiveAuth)),
 
-        (true, true,) => Some(quote!(zbus::MethodFlags::NoReplyExpected | zbus::MethodFlags::NoAutoStart)),
+        (true, true, false) => Some(quote!(
+            zbus::MethodFlags::NoReplyExpected | zbus::MethodFlags::NoAutoStart
+        )),
+        (true, false, true) => Some(quote!(
+            zbus::MethodFlags::NoReplyExpected | zbus::MethodFlags::AllowInteractiveAuth
+        )),
+        (false, true, true) => Some(quote!(
+            zbus::MethodFlags::NoAutoStart | zbus::MethodFlags::AllowInteractiveAuth
+        )),
+
+        (true, true, true) => Some(quote!(
+            zbus::MethodFlags::NoReplyExpected
+                | zbus::MethodFlags::NoAutoStart
+                | zbus::MethodFlags::AllowInteractiveAuth
+        )),
         _ => None,
     };
 
