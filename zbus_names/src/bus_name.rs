@@ -4,6 +4,7 @@ use core::{
     fmt::{self, Display, Formatter},
     ops::Deref,
 };
+use std::sync::Arc;
 
 use crate::{Error, OwnedUniqueName, OwnedWellKnownName, Result, UniqueName, WellKnownName};
 use serde::{de, Deserialize, Serialize};
@@ -222,6 +223,25 @@ impl TryFrom<String> for BusName<'_> {
                 BusName::WellKnown(WellKnownName::from_string_unchecked(value))
             }
         })
+    }
+}
+
+impl TryFrom<Arc<str>> for BusName<'_> {
+    type Error = Error;
+
+    fn try_from(value: Arc<str>) -> Result<Self> {
+        // FIXME: Same as `str` impl above. Use a macro to avoid code duplication.
+        match UniqueName::try_from(value.clone()) {
+            Err(Error::InvalidUniqueName(unique_err)) => match WellKnownName::try_from(value) {
+                Err(Error::InvalidWellKnownName(well_known_err)) => {
+                    Err(Error::InvalidBusName(unique_err, well_known_err))
+                }
+                Err(e) => Err(e),
+                Ok(name) => Ok(BusName::WellKnown(name)),
+            },
+            Err(e) => Err(e),
+            Ok(name) => Ok(BusName::Unique(name)),
+        }
     }
 }
 

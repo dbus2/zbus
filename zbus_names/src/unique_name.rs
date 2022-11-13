@@ -6,6 +6,7 @@ use std::{
     convert::TryFrom,
     fmt::{self, Display, Formatter},
     ops::Deref,
+    sync::Arc,
 };
 use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 
@@ -156,6 +157,16 @@ impl TryFrom<String> for UniqueName<'_> {
         ensure_correct_unique_name(&value)?;
 
         Ok(Self::from_string_unchecked(value))
+    }
+}
+
+impl TryFrom<Arc<str>> for UniqueName<'_> {
+    type Error = Error;
+
+    fn try_from(value: Arc<str>) -> Result<Self> {
+        ensure_correct_unique_name(&value)?;
+
+        Ok(Self(Str::from(value)))
     }
 }
 
@@ -311,6 +322,14 @@ impl TryFrom<String> for OwnedUniqueName {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
+        Ok(Self::from(UniqueName::try_from(value)?))
+    }
+}
+
+impl TryFrom<Arc<str>> for OwnedUniqueName {
+    type Error = Error;
+
+    fn try_from(value: Arc<str>) -> Result<Self> {
         Ok(Self::from(UniqueName::try_from(value)?))
     }
 }
