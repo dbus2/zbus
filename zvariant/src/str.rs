@@ -153,6 +153,12 @@ impl<'a> From<String> for Str<'a> {
     }
 }
 
+impl<'a> From<Arc<str>> for Str<'a> {
+    fn from(value: Arc<str>) -> Self {
+        Self(Inner::Owned(value))
+    }
+}
+
 impl<'a> From<Str<'a>> for String {
     fn from(value: Str<'a>) -> String {
         match value.0 {

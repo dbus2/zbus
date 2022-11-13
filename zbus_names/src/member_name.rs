@@ -6,6 +6,7 @@ use std::{
     convert::TryFrom,
     fmt::{self, Display, Formatter},
     ops::Deref,
+    sync::Arc,
 };
 use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 
@@ -160,6 +161,16 @@ impl TryFrom<String> for MemberName<'_> {
     }
 }
 
+impl TryFrom<Arc<str>> for MemberName<'_> {
+    type Error = Error;
+
+    fn try_from(value: Arc<str>) -> Result<Self> {
+        ensure_correct_member_name(&value)?;
+
+        Ok(Self(Str::from(value)))
+    }
+}
+
 fn ensure_correct_member_name(name: &str) -> Result<()> {
     // Rules
     //
@@ -288,6 +299,14 @@ impl TryFrom<String> for OwnedMemberName {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
+        Ok(Self::from(MemberName::try_from(value)?))
+    }
+}
+
+impl TryFrom<Arc<str>> for OwnedMemberName {
+    type Error = Error;
+
+    fn try_from(value: Arc<str>) -> Result<Self> {
         Ok(Self::from(MemberName::try_from(value)?))
     }
 }

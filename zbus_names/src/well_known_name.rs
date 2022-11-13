@@ -6,6 +6,7 @@ use std::{
     convert::TryFrom,
     fmt::{self, Display, Formatter},
     ops::Deref,
+    sync::Arc,
 };
 use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 
@@ -157,6 +158,16 @@ impl TryFrom<String> for WellKnownName<'_> {
         ensure_correct_well_known_name(&value)?;
 
         Ok(Self::from_string_unchecked(value))
+    }
+}
+
+impl TryFrom<Arc<str>> for WellKnownName<'_> {
+    type Error = Error;
+
+    fn try_from(value: Arc<str>) -> Result<Self> {
+        ensure_correct_well_known_name(&value)?;
+
+        Ok(Self(Str::from(value)))
     }
 }
 
@@ -324,6 +335,14 @@ impl TryFrom<String> for OwnedWellKnownName {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
+        Ok(Self::from(WellKnownName::try_from(value)?))
+    }
+}
+
+impl TryFrom<Arc<str>> for OwnedWellKnownName {
+    type Error = Error;
+
+    fn try_from(value: Arc<str>) -> Result<Self> {
         Ok(Self::from(WellKnownName::try_from(value)?))
     }
 }
