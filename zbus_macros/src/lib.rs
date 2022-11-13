@@ -77,6 +77,9 @@ mod utils;
 ///
 /// * `no_reply` - declare a method call that does not wait for a reply.
 ///
+/// * `no_autostart` - declare a method call that will not trigger the bus to automatically launch
+///    the destination service if it is not already running.
+///
 /// * `object` - methods that returns an [`ObjectPath`] can be annotated with the `object` attribute
 ///   to specify the proxy object to be constructed from the returned [`ObjectPath`].
 ///
