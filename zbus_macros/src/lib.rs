@@ -47,6 +47,12 @@ mod utils;
 ///
 /// Trait methods accept `dbus_proxy` attributes:
 ///
+/// * `assume_defaults` - whether to auto-generate values for `default_path` and `default_service`
+///   if none are specified (default: `true`). `dbus_proxy` currently generates a warning if neither
+///   this attribute nor one of the default values are specified. A future release will change the
+///   default to `false`. Please make sure to explicitly set either this attribute or the default
+///   values, according to your needs.
+///
 /// * `name` - override the D-Bus name (pascal case form by default)
 ///
 /// * `property` - expose the method as a property. If the method takes an argument, it must be a
