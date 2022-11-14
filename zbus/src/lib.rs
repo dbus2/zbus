@@ -568,7 +568,11 @@ mod tests {
 
         {
             let conn = blocking::Connection::session().unwrap();
-            #[super::dbus_proxy(interface = "org.freedesktop.Secret.Service", gen_async = false)]
+            #[super::dbus_proxy(
+                interface = "org.freedesktop.Secret.Service",
+                assume_defaults = true,
+                gen_async = false
+            )]
             trait Secret {
                 fn open_session(
                     &self,
@@ -599,7 +603,7 @@ mod tests {
     fn issue_121() {
         use crate::dbus_proxy;
 
-        #[dbus_proxy(interface = "org.freedesktop.IBus")]
+        #[dbus_proxy(interface = "org.freedesktop.IBus", assume_defaults = true)]
         trait IBus {
             /// CurrentInputContext property
             #[dbus_proxy(property)]
@@ -678,7 +682,7 @@ mod tests {
             path: OwnedObjectPath,
         }
 
-        #[dbus_proxy]
+        #[dbus_proxy(assume_defaults = true)]
         trait Session {
             #[dbus_proxy(property)]
             fn sessions_tuple(&self) -> zbus::Result<(String, String)>;
