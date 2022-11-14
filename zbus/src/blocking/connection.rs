@@ -1,10 +1,16 @@
+use enumflags2::BitFlags;
 use event_listener::EventListener;
 use static_assertions::assert_impl_all;
 use std::{convert::TryInto, ops::Deref, sync::Arc};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
-use crate::{blocking::ObjectServer, utils::block_on, DBusError, Error, Message, Result};
+use crate::{
+    blocking::ObjectServer,
+    fdo::{RequestNameFlags, RequestNameReply},
+    utils::block_on,
+    DBusError, Error, Message, Result,
+};
 
 /// A blocking wrapper of [`zbus::Connection`].
 ///
@@ -175,7 +181,23 @@ impl Connection {
         W: TryInto<WellKnownName<'w>>,
         W::Error: Into<Error>,
     {
-        block_on(self.inner.request_name(well_known_name)).map(Into::into)
+        block_on(self.inner.request_name(well_known_name))
+    }
+
+    /// Register a well-known name for this service on the bus.
+    ///
+    /// Blocking version of [`crate::Connection::request_name_with_flags`]. See docs there for more
+    /// details and caveats.
+    pub fn request_name_with_flags<'w, W>(
+        &self,
+        well_known_name: W,
+        flags: BitFlags<RequestNameFlags>,
+    ) -> Result<RequestNameReply>
+    where
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
+    {
+        block_on(self.inner.request_name_with_flags(well_known_name, flags))
     }
 
     /// Deregister a previously registered well-known name for this service on the bus.

@@ -1,10 +1,11 @@
 use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
+use enumflags2::BitFlags;
 use event_listener::EventListener;
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     convert::TryInto,
     future::ready,
     io::{self, ErrorKind},
@@ -28,7 +29,8 @@ use futures_util::{sink::SinkExt, StreamExt, TryFutureExt};
 use crate::{
     async_channel::{channel, Receiver, Sender},
     async_lock::Mutex,
-    blocking, fdo,
+    blocking,
+    fdo::{self, RequestNameFlags, RequestNameReply},
     raw::{Connection as RawConnection, Socket},
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, Message,
     MessageStream, MessageType, ObjectServer, OwnedMatchRule, Result, Task,
@@ -44,7 +46,7 @@ pub(crate) struct ConnectionInner {
     cap_unix_fd: bool,
     bus_conn: bool,
     unique_name: OnceCell<OwnedUniqueName>,
-    registered_names: Mutex<HashSet<WellKnownName<'static>>>,
+    registered_names: Mutex<HashMap<WellKnownName<'static>, NameStatus>>,
 
     raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
 
@@ -504,9 +506,9 @@ impl Connection {
     /// deregistering names registered through this method.
     ///
     /// Note that exclusive ownership without queueing is requested (using
-    /// [`fdo::RequestNameFlags::ReplaceExisting`] and [`fdo::RequestNameFlags::DoNotQueue`] flags)
-    /// since that is the most typical case. If that is not what you want, you should use
-    /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
+    /// [`RequestNameFlags::ReplaceExisting`] and [`RequestNameFlags::DoNotQueue`] flags) since that
+    /// is the most typical case. If that is not what you want, you should use
+    /// [`Connection::request_name_with_flags`] instead (but make sure then that name is requested
     /// **after** you've setup your service implementation with the `ObjectServer`).
     ///
     /// # Caveats
@@ -529,34 +531,215 @@ impl Connection {
         W: TryInto<WellKnownName<'w>>,
         W::Error: Into<Error>,
     {
+        self.request_name_with_flags(
+            well_known_name,
+            RequestNameFlags::ReplaceExisting | RequestNameFlags::DoNotQueue,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// Register a well-known name for this connection.
+    ///
+    /// This is the same as [`Connection::request_name`] but allows to specify the flags to use when
+    /// requesting the name.
+    ///
+    /// If the [`RequestNameFlags::DoNotQueue`] flag is not specified and request ends up in the
+    /// queue, you can use [`fdo::NameAcquiredStream`] to be notified when the name is acquired. A
+    /// queued name request can be cancelled using [`Connection::release_name`].
+    ///
+    /// If the [`RequestNameFlags::AllowReplacement`] flag is specified, the requested name can be
+    /// lost if another peer requests the same name. You can use [`fdo::NameLostStream`] to be
+    /// notified when the name is lost
+    ///
+    /// # Example
+    ///
+    /// ```
+    ///#
+    ///# zbus::block_on(async {
+    /// use zbus::{Connection, fdo::{DBusProxy, RequestNameFlags, RequestNameReply}};
+    /// use enumflags2::BitFlags;
+    /// use futures_util::stream::StreamExt;
+    ///
+    /// let name = "org.freedesktop.zbus.QueuedNameTest";
+    /// let conn1 = Connection::session().await?;
+    /// // This should just work right away.
+    /// conn1.request_name(name).await?;
+    ///
+    /// let conn2 = Connection::session().await?;
+    /// // A second request from the another connection will fail with `DoNotQueue` flag, which is
+    /// // implicit with `request_name` method.
+    /// assert!(conn2.request_name(name).await.is_err());
+    ///
+    /// // Now let's try w/o `DoNotQueue` and we should be queued.
+    /// let reply = conn2
+    ///     .request_name_with_flags(name, RequestNameFlags::AllowReplacement.into())
+    ///     .await?;
+    /// assert_eq!(reply, RequestNameReply::InQueue);
+    /// // Another request should just give us the same response.
+    /// let reply = conn2
+    ///     // The flags on subsequent requests will however be ignored.
+    ///     .request_name_with_flags(name, BitFlags::empty())
+    ///     .await?;
+    /// assert_eq!(reply, RequestNameReply::InQueue);
+    /// let mut acquired_stream = DBusProxy::new(&conn2)
+    ///     .await?
+    ///     .receive_name_acquired()
+    ///     .await?;
+    /// assert!(conn1.release_name(name).await?);
+    /// // This would have waited forever if `conn1` hadn't just release the name.
+    /// let acquired = acquired_stream.next().await.unwrap();
+    /// assert_eq!(acquired.args().unwrap().name, name);
+    ///
+    /// // conn2 made the mistake of being too nice and allowed name replacemnt, so conn1 should be
+    /// // able to take it back.
+    /// let mut lost_stream = DBusProxy::new(&conn2)
+    ///     .await?
+    ///     .receive_name_lost()
+    ///     .await?;
+    /// conn1.request_name(name).await?;
+    /// let lost = lost_stream.next().await.unwrap();
+    /// assert_eq!(lost.args().unwrap().name, name);
+    ///
+    ///# Ok::<(), zbus::Error>(())
+    ///# });
+    /// ```
+    ///
+    /// # Caveats
+    ///
+    /// * Same as that of [`Connection::request_name`].
+    /// * If you wish to track changes to name ownership after this call, make sure that the
+    /// [`fdo::NameAcquired`] and/or [`fdo::NameLostStream`] instance(s) are created **before**
+    /// calling this method. Otherwise, you may loose the signal if it's emitted after this call but
+    /// just before the stream instance get created.
+    pub async fn request_name_with_flags<'w, W>(
+        &self,
+        well_known_name: W,
+        flags: BitFlags<RequestNameFlags>,
+    ) -> Result<RequestNameReply>
+    where
+        W: TryInto<WellKnownName<'w>>,
+        W::Error: Into<Error>,
+    {
         let well_known_name = well_known_name.try_into().map_err(Into::into)?;
+        // We keep the lock until the end of this function so that the (possibly) spawned task
+        // doesn't end up accessing the name entry before it's inserted.
         let mut names = self.inner.registered_names.lock().await;
 
-        if names.contains(&well_known_name) {
-            return Ok(());
+        match names.get(&well_known_name) {
+            Some(NameStatus::Owner(_)) => return Ok(RequestNameReply::AlreadyOwner),
+            Some(NameStatus::Queued(_)) => return Ok(RequestNameReply::InQueue),
+            None => (),
         }
 
         if !self.is_bus() {
-            names.insert(well_known_name.to_owned());
+            names.insert(well_known_name.to_owned(), NameStatus::Owner(None));
 
-            return Ok(());
+            return Ok(RequestNameReply::PrimaryOwner);
         }
 
-        let reply = fdo::DBusProxy::builder(self)
+        let dbus_proxy = fdo::DBusProxy::builder(self)
             .cache_properties(CacheProperties::No)
             .build()
-            .await?
-            .request_name(
-                well_known_name.clone(),
-                fdo::RequestNameFlags::ReplaceExisting | fdo::RequestNameFlags::DoNotQueue,
-            )
             .await?;
-        if let fdo::RequestNameReply::Exists = reply {
-            Err(Error::NameTaken)
+        let mut acquired_stream = dbus_proxy.receive_name_acquired().await?;
+        let mut lost_stream = dbus_proxy.receive_name_lost().await?;
+        let reply = dbus_proxy
+            .request_name(well_known_name.clone(), flags)
+            .await?;
+        let name_lost_fut = if flags.contains(RequestNameFlags::AllowReplacement) {
+            let weak_conn = WeakConnection::from(self);
+            let well_known_name = well_known_name.to_owned();
+            Some(async move {
+                loop {
+                    let signal = lost_stream.next().await;
+                    let inner = match weak_conn.upgrade() {
+                        Some(conn) => conn.inner.clone(),
+                        None => break,
+                    };
+
+                    match signal {
+                        Some(signal) => match signal.args() {
+                            Ok(args) if args.name == well_known_name => {
+                                tracing::info!(
+                                    "Connection `{}` lost name `{}`",
+                                    // SAFETY: This is bus connection so unique name can't be None.
+                                    inner.unique_name.get().unwrap(),
+                                    well_known_name
+                                );
+                                inner.registered_names.lock().await.remove(&well_known_name);
+
+                                break;
+                            }
+                            Ok(_) => (),
+                            Err(e) => warn!("Failed to parse `NameLost` signal: {}", e),
+                        },
+                        None => {
+                            trace!("`NameLost` signal stream closed");
+                            // This is a very strange state we end up in. Now the name is question
+                            // remains in the queue forever. Maybe we can do better here but I
+                            // think it's a very unlikely scenario anyway.
+                            //
+                            // Can happen if the connection is lost/dropped but then the whole
+                            // `Connection` instance will go away soon anyway and hence this
+                            // strange state along with it.
+                            break;
+                        }
+                    }
+                }
+            })
         } else {
-            names.insert(well_known_name.to_owned());
-            Ok(())
-        }
+            None
+        };
+        let status = match reply {
+            RequestNameReply::InQueue => {
+                let weak_conn = WeakConnection::from(self);
+                let well_known_name = well_known_name.to_owned();
+                let task = self.executor().spawn(async move {
+                    loop {
+                        let signal = acquired_stream.next().await;
+                        let inner = match weak_conn.upgrade() {
+                            Some(conn) => conn.inner.clone(),
+                            None => break,
+                        };
+                        match signal {
+                            Some(signal) => match signal.args() {
+                                Ok(args) if args.name == well_known_name => {
+                                    let mut names = inner.registered_names.lock().await;
+                                    if let Some(status) = names.get_mut(&well_known_name) {
+                                        let task =
+                                            name_lost_fut.map(|fut| inner.executor.spawn(fut));
+                                        *status = NameStatus::Owner(task);
+
+                                        break;
+                                    }
+                                    // else the name was released in the meantime. :shrug:
+                                }
+                                Ok(_) => (),
+                                Err(e) => warn!("Failed to parse `NameAcquired` signal: {}", e),
+                            },
+                            None => {
+                                trace!("`NameAcquired` signal stream closed");
+                                // See comment above for similar state in case of `NameLost` stream.
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                NameStatus::Queued(task)
+            }
+            RequestNameReply::PrimaryOwner | RequestNameReply::AlreadyOwner => {
+                let task = name_lost_fut.map(|fut| self.executor().spawn(fut));
+
+                NameStatus::Owner(task)
+            }
+            RequestNameReply::Exists => return Err(Error::NameTaken),
+        };
+
+        names.insert(well_known_name.to_owned(), status);
+
+        Ok(reply)
     }
 
     /// Deregister a previously registered well-known name for this service on the bus.
@@ -575,9 +758,9 @@ impl Connection {
         let well_known_name: WellKnownName<'w> = well_known_name.try_into().map_err(Into::into)?;
         let mut names = self.inner.registered_names.lock().await;
         // FIXME: Should be possible to avoid cloning/allocation here
-        if !names.remove(&well_known_name.to_owned()) {
+        if names.remove(&well_known_name.to_owned()).is_none() {
             return Ok(false);
-        }
+        };
 
         if !self.is_bus() {
             return Ok(true);
@@ -782,7 +965,7 @@ impl Connection {
                                     let names = conn.inner.registered_names.lock().await;
                                     // destination doesn't matter if no name has been registered
                                     // (probably means name it's registered through external means).
-                                    if !names.is_empty() && !names.contains(dest) {
+                                    if !names.is_empty() && !names.contains_key(dest) {
                                         trace!("Got a method call for a different destination: {}", dest);
 
                                         continue;
@@ -948,7 +1131,7 @@ impl Connection {
                 object_server_dispatch_task: OnceCell::new(),
                 executor: executor.clone(),
                 msg_receiver_task,
-                registered_names: Mutex::new(HashSet::new()),
+                registered_names: Mutex::new(HashMap::new()),
             }),
         };
 
@@ -1125,6 +1308,14 @@ impl From<&Connection> for WeakConnection {
             error_receiver: conn.error_receiver.clone(),
         }
     }
+}
+
+#[derive(Debug)]
+enum NameStatus {
+    // The task waits for name lost signal if owner allows replacement.
+    Owner(Option<Task<()>>),
+    // The task waits for name acquisition signal.
+    Queued(Task<()>),
 }
 
 #[cfg(test)]
