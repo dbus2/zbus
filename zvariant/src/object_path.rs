@@ -1,6 +1,6 @@
 use core::{convert::TryFrom, fmt::Debug, str};
 use serde::{
-    de::{Deserialize, Deserializer, Visitor},
+    de::{self, Deserialize, Deserializer, Visitor},
     ser::{Serialize, Serializer},
 };
 use static_assertions::assert_impl_all;
@@ -354,10 +354,20 @@ impl<'de> Deserialize<'de> for OwnedObjectPath {
     where
         D: Deserializer<'de>,
     {
-        let visitor = ObjectPathVisitor;
+        String::deserialize(deserializer)
+            .and_then(|s| ObjectPath::try_from(s).map_err(|e| de::Error::custom(e.to_string())))
+            .map(Self)
+    }
+}
 
-        deserializer
-            .deserialize_str(visitor)
-            .map(|v| OwnedObjectPath(v.to_owned()))
+#[cfg(test)]
+mod unit {
+    use super::*;
+
+    #[test]
+    fn owned_from_reader() {
+        // See https://gitlab.freedesktop.org/dbus/zbus/-/issues/287
+        let json_str = "\"/some/path\"";
+        serde_json::de::from_reader::<_, OwnedObjectPath>(json_str.as_bytes()).unwrap();
     }
 }
