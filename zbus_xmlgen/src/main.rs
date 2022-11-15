@@ -8,12 +8,11 @@ use std::{
     path::Path,
     process::{Command, Stdio},
     result::Result,
-    str::FromStr,
 };
 
 use zbus::{
     blocking::{Connection, ConnectionBuilder, ProxyBuilder},
-    xml::{Interface, Node},
+    quick_xml::{Interface, Node},
 };
 
 mod gen;
@@ -32,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .unwrap()
     };
 
-    let node: Node = match args().nth(1) {
+    let node: Node<'_> = match args().nth(1) {
         Some(bus) if bus == "--system" || bus == "--session" => {
             let connection = if bus == "--system" {
                 Connection::system()?
@@ -50,7 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             );
 
             let xml = proxy(connection, &*service, &*path).introspect()?;
-            Node::from_str(&xml)?
+            Node::from_reader(xml.as_bytes())?
         }
         Some(address) if address == "--address" => {
             let address = args().nth(2).expect("Missing param for address path");
@@ -62,7 +61,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             input_src = format!("Interface '{}' from service '{}'", path, service);
 
             let xml = proxy(connection, &*service, &*path).introspect()?;
-            Node::from_str(&xml)?
+            Node::from_reader(xml.as_bytes())?
         }
         Some(path) => {
             input_src = Path::new(&path)
@@ -91,10 +90,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     let rustfmt_stdin = process.stdin.as_mut().unwrap();
     let fdo_iface_prefix = "org.freedesktop.DBus";
-    let (fdo_standard_ifaces, needed_ifaces): (Vec<&Interface>, Vec<&Interface>) = node
+    let (fdo_standard_ifaces, needed_ifaces): (Vec<&Interface<'_>>, Vec<&Interface<'_>>) = node
         .interfaces()
         .iter()
-        .partition(|&&i| i.name().starts_with(fdo_iface_prefix));
+        .partition(|&i| i.name().starts_with(fdo_iface_prefix));
 
     if let Some((first_iface, following_ifaces)) = needed_ifaces.split_first() {
         if following_ifaces.is_empty() {
