@@ -498,10 +498,7 @@ impl Connection {
     /// Register a well-known name for this connection.
     ///
     /// When connecting to a bus, the name is requested from the bus. In case of p2p connection, the
-    /// name (if requested) is used of self-identification. Please note that the associated
-    /// `ObjectServer` will only handle method calls destined for the unique name of this connection
-    /// or any of the registered well-known names. For p2p connections, it will handle all incoming
-    /// method calls if no well-known name is requested.
+    /// name (if requested) is used of self-identification.
     ///
     /// You can request multiple names for the same connection. Use [`Connection::release_name`] for
     /// deregistering names registered through this method.
@@ -511,6 +508,18 @@ impl Connection {
     /// since that is the most typical case. If that is not what you want, you should use
     /// [`fdo::DBusProxy::request_name`] instead (but make sure then that name is requested
     /// **after** you've setup your service implementation with the `ObjectServer`).
+    ///
+    /// # Caveats
+    ///
+    /// The associated `ObjectServer` will only handle method calls destined for the unique name of
+    /// this connection or any of the registered well-known names. If no well-known name is
+    /// registered, the method calls destined to all well-known names will be handled.
+    ///
+    /// Since names registered through any other means than this method or
+    /// [`ConnectionBuilder::name`] are not known to the connection, method calls destined to
+    /// those names will only be handled by the associated `ObjectServer` if none of the names are
+    /// registered through this method or [`ConnectionBuilder::name`]. Simply put, either register
+    /// all the names through this method (and/or `ConnectionBuilder::name`) or none.
     ///
     /// # Errors
     ///
@@ -770,8 +779,9 @@ impl Connection {
                                 }
                                 Ok(Some(BusName::WellKnown(dest))) => {
                                     let names = conn.inner.registered_names.lock().await;
-                                    // For p2p, destination doesn't matter if no name has been registered.
-                                    if !names.contains(dest) && (conn.is_bus() || !names.is_empty()) {
+                                    // destination doesn't matter if no name has been registered
+                                    // (probably means name it's registered through external means).
+                                    if !names.is_empty() && !names.contains(dest) {
                                         trace!("Got a method call for a different destination: {}", dest);
 
                                         continue;

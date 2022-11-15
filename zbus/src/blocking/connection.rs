@@ -168,15 +168,8 @@ impl Connection {
 
     /// Register a well-known name for this service on the bus.
     ///
-    /// You can request multiple names for the same `ObjectServer`. Use [`Connection::release_name`]
-    /// for deregistering names registered through this method.
-    ///
-    /// Note that exclusive ownership without queueing is requested (using
-    /// [`crate::fdo::RequestNameFlags::ReplaceExisting`] and
-    /// [`crate::fdo::RequestNameFlags::DoNotQueue`] flags) since that is the most typical case. If
-    /// that is not what you want, you should use [`crate::fdo::DBusProxy::request_name`] instead
-    /// (but make sure then that name is requested **after** you've setup your service
-    /// implementation with the `ObjectServer`).
+    /// Blocking version of [`crate::Connection::register_name`]. See docs there for more details
+    /// and caveats.
     pub fn request_name<'w, W>(&self, well_known_name: W) -> Result<()>
     where
         W: TryInto<WellKnownName<'w>>,
