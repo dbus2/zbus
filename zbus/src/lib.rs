@@ -100,7 +100,11 @@ pub use raw::Socket;
 
 pub mod blocking;
 
+#[cfg(feature = "xml")]
 pub mod xml;
+
+#[cfg(feature = "quick-xml")]
+pub mod quick_xml;
 
 pub use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 

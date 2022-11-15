@@ -451,12 +451,14 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     proxy.test_no_reply().await?;
     proxy.test_no_autostart().await?;
     proxy.test_interactive_auth().await?;
-
-    #[cfg(feature = "xml")]
+    #[cfg(any(feature = "xml", feature = "quick-xml"))]
     {
         let xml = proxy.introspect().await?;
         debug!("Introspection: {}", xml);
+        #[cfg(all(feature = "xml", not(feature = "quick-xml")))]
         let node = zbus::xml::Node::from_reader(xml.as_bytes())?;
+        #[cfg(feature = "quick-xml")]
+        let node = zbus::quick_xml::Node::from_reader(xml.as_bytes())?;
         let ifaces = node.interfaces();
         let iface = ifaces
             .iter()
@@ -468,7 +470,12 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
                 continue;
             }
             let args = method.args();
+            #[cfg(all(feature = "xml", not(feature = "quick-xml")))]
             let mut out_args = args.iter().filter(|a| a.direction().unwrap() == "out");
+            #[cfg(feature = "quick-xml")]
+            let mut out_args = args
+                .iter()
+                .filter(|a| a.direction().unwrap() == zbus::quick_xml::ArgDirection::Out);
 
             if method.name() == "TestSingleStructRet" {
                 assert_eq!(args.len(), 1);
