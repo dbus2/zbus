@@ -2,7 +2,7 @@ use crate::{Error, Result};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     convert::TryFrom,
     fmt::{self, Display, Formatter},
     ops::Deref,
@@ -168,6 +168,17 @@ impl TryFrom<Arc<str>> for WellKnownName<'_> {
         ensure_correct_well_known_name(&value)?;
 
         Ok(Self(Str::from(value)))
+    }
+}
+
+impl<'name> TryFrom<Cow<'name, str>> for WellKnownName<'name> {
+    type Error = Error;
+
+    fn try_from(value: Cow<'name, str>) -> Result<Self> {
+        match value {
+            Cow::Borrowed(s) => Self::try_from(s),
+            Cow::Owned(s) => Self::try_from(s),
+        }
     }
 }
 
