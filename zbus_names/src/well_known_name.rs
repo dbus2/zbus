@@ -134,7 +134,7 @@ impl<'de: 'name, 'name> Deserialize<'de> for WellKnownName<'name> {
     where
         D: serde::Deserializer<'de>,
     {
-        let name = <&str>::deserialize(deserializer)?;
+        let name = <Cow<'name, str>>::deserialize(deserializer)?;
 
         Self::try_from(name).map_err(|e| de::Error::custom(e.to_string()))
     }
