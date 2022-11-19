@@ -517,11 +517,11 @@ impl Connection {
     /// this connection or any of the registered well-known names. If no well-known name is
     /// registered, the method calls destined to all well-known names will be handled.
     ///
-    /// Since names registered through any other means than this method or
-    /// [`ConnectionBuilder::name`] are not known to the connection, method calls destined to
-    /// those names will only be handled by the associated `ObjectServer` if none of the names are
-    /// registered through this method or [`ConnectionBuilder::name`]. Simply put, either register
-    /// all the names through this method (and/or `ConnectionBuilder::name`) or none.
+    /// Since names registered through any other means than `Connection` or [`ConnectionBuilder`]
+    /// API are not known to the connection, method calls destined to those names will only be
+    /// handled by the associated `ObjectServer` if none of the names are registered through
+    /// `Connection*` API. Simply put, either register all the names through `Connection*` API or
+    /// none of them.
     ///
     /// # Errors
     ///
