@@ -2,7 +2,7 @@ use crate::{Error, Result};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     convert::TryFrom,
     fmt::{self, Display, Formatter},
     ops::Deref,
@@ -136,7 +136,7 @@ impl<'de: 'name, 'name> Deserialize<'de> for InterfaceName<'name> {
     where
         D: serde::Deserializer<'de>,
     {
-        let name = <&str>::deserialize(deserializer)?;
+        let name = <Cow<'name, str>>::deserialize(deserializer)?;
 
         Self::try_from(name).map_err(|e| de::Error::custom(e.to_string()))
     }
@@ -170,6 +170,17 @@ impl TryFrom<Arc<str>> for InterfaceName<'_> {
         ensure_correct_interface_name(&value)?;
 
         Ok(Self(Str::from(value)))
+    }
+}
+
+impl<'name> TryFrom<Cow<'name, str>> for InterfaceName<'name> {
+    type Error = Error;
+
+    fn try_from(value: Cow<'name, str>) -> Result<Self> {
+        match value {
+            Cow::Borrowed(s) => Self::try_from(s),
+            Cow::Owned(s) => Self::try_from(s),
+        }
     }
 }
 

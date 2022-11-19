@@ -4,6 +4,7 @@ use core::{
     fmt::{self, Display, Formatter},
     ops::Deref,
 };
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use crate::{Error, OwnedUniqueName, OwnedWellKnownName, Result, UniqueName, WellKnownName};
@@ -170,7 +171,7 @@ impl<'de: 'name, 'name> Deserialize<'de> for BusName<'name> {
     where
         D: serde::Deserializer<'de>,
     {
-        let name = <&str>::deserialize(deserializer)?;
+        let name = <Cow<'name, str>>::deserialize(deserializer)?;
 
         Self::try_from(name).map_err(|e| de::Error::custom(e.to_string()))
     }
@@ -266,6 +267,17 @@ impl TryFrom<()> for BusName<'_> {
 
     fn try_from(_value: ()) -> Result<Self> {
         unreachable!("Conversion from `()` is not meant to actually work.");
+    }
+}
+
+impl<'name> TryFrom<Cow<'name, str>> for BusName<'name> {
+    type Error = Error;
+
+    fn try_from(value: Cow<'name, str>) -> Result<Self> {
+        match value {
+            Cow::Borrowed(s) => Self::try_from(s),
+            Cow::Owned(s) => Self::try_from(s),
+        }
     }
 }
 
