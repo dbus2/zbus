@@ -513,6 +513,35 @@ fn gen_proxy_method_call(
         _ => None,
     });
     let no_reply = attrs.iter().any(|x| matches!(x, ItemAttribute::NoReply));
+    let no_autostart = attrs
+        .iter()
+        .any(|x| matches!(x, ItemAttribute::NoAutoStart));
+    let allow_interactive_auth = attrs
+        .iter()
+        .any(|x| matches!(x, ItemAttribute::AllowInteractiveAuth));
+
+    let method_flags = match (no_reply, no_autostart, allow_interactive_auth) {
+        (true, false, false) => Some(quote!(zbus::MethodFlags::NoReplyExpected)),
+        (false, true, false) => Some(quote!(zbus::MethodFlags::NoAutoStart)),
+        (false, false, true) => Some(quote!(zbus::MethodFlags::AllowInteractiveAuth)),
+
+        (true, true, false) => Some(quote!(
+            zbus::MethodFlags::NoReplyExpected | zbus::MethodFlags::NoAutoStart
+        )),
+        (true, false, true) => Some(quote!(
+            zbus::MethodFlags::NoReplyExpected | zbus::MethodFlags::AllowInteractiveAuth
+        )),
+        (false, true, true) => Some(quote!(
+            zbus::MethodFlags::NoAutoStart | zbus::MethodFlags::AllowInteractiveAuth
+        )),
+
+        (true, true, true) => Some(quote!(
+            zbus::MethodFlags::NoReplyExpected
+                | zbus::MethodFlags::NoAutoStart
+                | zbus::MethodFlags::AllowInteractiveAuth
+        )),
+        _ => None,
+    };
 
     let method = Ident::new(snake_case_name, Span::call_site());
     let inputs = &m.sig.inputs;
@@ -589,21 +618,38 @@ fn gen_proxy_method_call(
             #where_clause
         };
 
-        if no_reply {
-            return quote! {
+        if let Some(method_flags) = method_flags {
+            if no_reply {
+                quote! {
+                    #(#other_attrs)*
+                    pub #usage #signature {
+                        self.0.call_with_flags::<_, _, _, ()>(#method_name, #method_flags, #body)#wait?;
+                        ::std::result::Result::Ok(())
+                    }
+                }
+            } else {
+                quote! {
+                    #(#other_attrs)*
+                    pub #usage #signature {
+                        let reply = self.0.call_with_flags(#method_name, #method_flags, #body)#wait?;
+
+                        // SAFETY: This unwrap() cannot fail due to the guarantees in
+                        // call_with_flags, which can only return Ok(None) if the
+                        // NoReplyExpected is set. By not passing NoReplyExpected,
+                        // we are guaranteed to get either an Err variant (handled
+                        // in the previous statement) or Ok(Some(T)) which is safe to
+                        // unwrap
+                        ::std::result::Result::Ok(reply.unwrap())
+                    }
+                }
+            }
+        } else {
+            quote! {
                 #(#other_attrs)*
                 pub #usage #signature {
-                    self.0.call_noreply(#method_name, #body)#wait?;
-                    ::std::result::Result::Ok(())
+                    let reply = self.0.call(#method_name, #body)#wait?;
+                    ::std::result::Result::Ok(reply)
                 }
-            };
-        }
-
-        quote! {
-            #(#other_attrs)*
-            pub #usage #signature {
-                let reply = self.0.call(#method_name, #body)#wait?;
-                ::std::result::Result::Ok(reply)
             }
         }
     }

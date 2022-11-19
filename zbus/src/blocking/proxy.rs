@@ -1,3 +1,4 @@
+use enumflags2::BitFlags;
 use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
 use std::{
@@ -8,7 +9,7 @@ use std::{
 use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
-use crate::{blocking::Connection, utils::block_on, Error, Message, Result};
+use crate::{blocking::Connection, utils::block_on, Error, Message, MethodFlags, Result};
 
 use crate::fdo;
 
@@ -225,6 +226,31 @@ impl<'a> Proxy<'a> {
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
         block_on(self.inner().call(method_name, body))
+    }
+
+    /// Call a method and return the reply body, optionally supplying a set of
+    /// method flags to control the way the method call message is sent and handled.
+    ///
+    /// Use [`call`] instead if you do not need any special handling via additional flags.
+    /// If the `NoReplyExpected` flag is passed , this will return None immediately
+    /// after sending the message, similar to [`call_noreply`]
+    ///
+    /// [`call`]: struct.Proxy.html#method.call
+    /// [`call_noreply`]: struct.Proxy.html#method.call_noreply
+    pub fn call_with_flags<'m, M, F, B, R>(
+        &self,
+        method_name: M,
+        flags: F,
+        body: &B,
+    ) -> Result<Option<R>>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        F: Into<BitFlags<MethodFlags>>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+        R: serde::de::DeserializeOwned + zvariant::Type,
+    {
+        block_on(self.inner().call_with_flags(method_name, flags, body))
     }
 
     /// Call a method without expecting a reply
