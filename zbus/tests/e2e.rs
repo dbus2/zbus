@@ -97,6 +97,15 @@ trait MyIface {
 
     #[dbus_proxy(property)]
     fn set_ref_type(&self, ref_type: RefType<'_>) -> zbus::Result<()>;
+
+    #[dbus_proxy(no_reply)]
+    fn test_no_reply(&self) -> zbus::Result<()>;
+
+    #[dbus_proxy(no_autostart)]
+    fn test_no_autostart(&self) -> zbus::Result<()>;
+
+    #[dbus_proxy(allow_interactive_auth)]
+    fn test_interactive_auth(&self) -> zbus::Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -324,6 +333,45 @@ impl MyIfaceImpl {
         debug!("`SetRefType` called with {:?}", ref_type);
     }
 
+    #[instrument]
+    fn test_no_reply(&self, #[zbus(header)] header: MessageHeader<'_>) {
+        debug!("`TestNoReply` called");
+        assert_eq!(
+            header.message_type().unwrap(),
+            zbus::MessageType::MethodCall
+        );
+        assert!(header
+            .primary()
+            .flags()
+            .contains(zbus::MessageFlags::NoReplyExpected));
+    }
+
+    #[instrument]
+    fn test_no_autostart(&self, #[zbus(header)] header: MessageHeader<'_>) {
+        debug!("`TestNoAutostart` called");
+        assert_eq!(
+            header.message_type().unwrap(),
+            zbus::MessageType::MethodCall
+        );
+        assert!(header
+            .primary()
+            .flags()
+            .contains(zbus::MessageFlags::NoAutoStart));
+    }
+
+    #[instrument]
+    fn test_interactive_auth(&self, #[zbus(header)] header: MessageHeader<'_>) {
+        debug!("`TestInteractiveAuth` called");
+        assert_eq!(
+            header.message_type().unwrap(),
+            zbus::MessageType::MethodCall
+        );
+        assert!(header
+            .primary()
+            .flags()
+            .contains(zbus::MessageFlags::AllowInteractiveAuth));
+    }
+
     #[dbus_interface(signal)]
     async fn alert_count(ctxt: &SignalContext<'_>, val: u32) -> zbus::Result<()>;
 }
@@ -399,6 +447,10 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     proxy.set_str_prop("This is an str ref").await?;
     check_ipv4_address(proxy.address_data().await?);
     check_ipv4_address(proxy.address_data2().await?);
+
+    proxy.test_no_reply().await?;
+    proxy.test_no_autostart().await?;
+    proxy.test_interactive_auth().await?;
 
     #[cfg(feature = "xml")]
     {
