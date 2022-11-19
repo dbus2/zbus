@@ -615,7 +615,8 @@ impl Connection {
 
     /// The unique name of the connection, if set/applicable.
     ///
-    /// The unique name is assigned by the message bus or set manually using [`set_unique_name`].
+    /// The unique name is assigned by the message bus or set manually using
+    /// [`Connection::set_unique_name`].
     pub fn unique_name(&self) -> Option<&OwnedUniqueName> {
         self.inner.unique_name.get()
     }
