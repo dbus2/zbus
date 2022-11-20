@@ -58,8 +58,7 @@ zbus `Connection` has a `call_method()` method, which you can use directly:
 use std::collections::HashMap;
 use std::error::Error;
 
-use zbus::Connection;
-use zvariant::Value;
+use zbus::{zvariant::Value, Connection};
 
 // Although we use `async-std` here, you can use any async runtime of choice.
 #[async_std::main]
@@ -98,8 +97,7 @@ calls:
 use std::collections::HashMap;
 use std::error::Error;
 
-use zbus::{Connection, dbus_proxy};
-use zvariant::Value;
+use zbus::{zvariant::Value, dbus_proxy, Connection};
 
 #[dbus_proxy]
 trait Notifications {
@@ -160,8 +158,7 @@ Let's look at this API in action, with an example where we get our location from
 [Geoclue](https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md):
 
 ```rust,no_run
-use zbus::{Connection, dbus_proxy, Result};
-use zvariant::ObjectPath;
+use zbus::{zvariant::ObjectPath, dbus_proxy, Connection, Result};
 use futures_util::stream::StreamExt;
 
 #[dbus_proxy(
@@ -517,8 +514,7 @@ For example, the generated `GetServerInformation` method can be improved to a ni
 
 ```rust
 # use serde::{Serialize, Deserialize};
-# use zvariant::Type;
-# use zbus::dbus_proxy;
+# use zbus::{zvariant::Type, dbus_proxy};
 #
 #[derive(Debug, Type, Serialize, Deserialize)]
 pub struct ServerInformation {
