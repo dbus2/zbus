@@ -150,8 +150,15 @@ impl Greeter {
     }
 
     // Rude!
-    fn go_away(&self) {
+    async fn go_away(
+        &self,
+        #[zbus(signal_context)]
+        ctxt: SignalContext<'_>,
+    ) -> fdo::Result<()> {
+        Self::greeted_everyone(&ctxt).await?;
         self.done.notify(1);
+
+        Ok(())
     }
 
     /// A "GreeterName" property.

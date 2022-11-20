@@ -222,8 +222,15 @@ impl Greeter {
     }
 
     // Rude!
-    async fn go_away(&self) {
+    async fn go_away(
+        &self,
+        #[zbus(signal_context)]
+        ctxt: SignalContext<'_>,
+    ) -> fdo::Result<()> {
+        Self::greeted_everyone(&ctxt).await?;
         self.done.notify(1);
+
+        Ok(())
     }
 
     /// A "GreeterName" property.
@@ -297,9 +304,10 @@ the returned `Result<T, E>`.
 As you might have noticed in the previous example, the signal methods don't take a `&self` argument
 but a `SignalContext` reference. This allows to emit signals whether from inside or outside of the
 `dbus_interface` methods' context. To make things simpler, `dbus_interface` methods can receive a
-`SignalContext` passed to them using the special `zbus(signal_context)` attribute:
+`SignalContext` passed to them using the special `zbus(signal_context)` attribute, as demonstrated
+in the previous example.
 
-Please refer to [`dbus_interface` documentation][didoc] for an example and list of other special
+Please refer to [`dbus_interface` documentation][didoc] for more examples and list of other special
 attributes you can make use of.
 
 ### Notifying property changes
