@@ -3,6 +3,11 @@
     html_logo_url = "https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
 )]
 #![doc = include_str!("../README.md")]
+#![doc(test(attr(
+    deny(warnings),
+    // W/o this, we seem to get some bogus warning about `extern crate zbus`.
+    allow(unused_extern_crates),
+)))]
 
 #[cfg(doctest)]
 mod doctests {
