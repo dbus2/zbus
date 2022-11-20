@@ -143,7 +143,7 @@ mod utils;
 ///     // `SomeOtherIfaceProxyBlock` would have been assumed and expected. We could also specify
 ///     // the specific name of the asynchronous proxy types, using the `async_object` attribute.
 ///     fn some_method(&self, arg1: &str);
-/// };
+/// }
 ///
 /// #[dbus_proxy(
 ///     interface = "org.test.SomeOtherIface",
@@ -262,7 +262,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// use zbus::{ObjectServer, SignalContext, MessageHeader};
 ///
 /// struct Example {
-///     some_data: String,
+///     _some_data: String,
 /// }
 ///
 /// #[dbus_interface(name = "org.myservice.Example")]
@@ -279,7 +279,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     ) -> zbus::fdo::Result<()> {
 ///         let path = hdr.path()?.unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);
-///         Example::bye(&ctxt, &msg);
+///         Example::bye(&ctxt, &msg).await?;
 ///
 ///         // Do some asynchronous tasks before quitting..
 ///

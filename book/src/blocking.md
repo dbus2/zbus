@@ -25,8 +25,7 @@ Similar to `blocking::Connection`, you use `blocking::Proxy` type. Its construct
 to use the blocking connection and proxy:
 
 ```rust,no_run
-use zbus::{blocking::Connection, dbus_proxy, Result};
-use zvariant::{ObjectPath, OwnedObjectPath};
+use zbus::{blocking::Connection, zvariant::ObjectPath, dbus_proxy, Result};
 
 #[dbus_proxy(
     default_service = "org.freedesktop.GeoClue2",
@@ -135,7 +134,7 @@ the beginning of this chapter for details on why and a possible workaround.
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{blocking::{ObjectServer, ConnectionBuilder}, dbus_interface, fdo, SignalContext};
+# use zbus::{blocking::ConnectionBuilder, dbus_interface, fdo, SignalContext};
 #
 use event_listener::Event;
 

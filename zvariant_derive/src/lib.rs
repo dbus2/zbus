@@ -256,6 +256,7 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// #[derive(DeserializeDict, Type)]
 /// #[zvariant(signature = "a{sv}")]
+///##[allow(unused)]
 /// struct Struct {
 ///     field1: u16,
 ///     #[zvariant(rename = "another-name")]
@@ -361,7 +362,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// ```
 ///# use std::convert::TryFrom;
-///# use zvariant::{OwnedObjectPath, OwnedValue, Value};
+///# use zvariant::{OwnedValue, Value};
 ///#
 /// #[derive(Debug, PartialEq, Value, OwnedValue)]
 /// #[repr(u8)]

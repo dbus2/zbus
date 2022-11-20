@@ -107,7 +107,7 @@ respective handlers, as well as replying to introspection requests.
 Let see how to use it for `MyGreeter` interface:
 
 ```rust,no_run
-# use zbus::{SignalContext, ObjectServer, Connection, dbus_interface, fdo, Result};
+# use zbus::{Connection, dbus_interface, Result};
 #
 
 struct Greeter;
@@ -149,7 +149,7 @@ after taking their name. This is why it's typically better to make use of `Conne
 setting up your interfaces and requesting names, and not have to care about this:
 
 ```rust,no_run
-# use zbus::{SignalContext, ObjectServer, ConnectionBuilder, dbus_interface, fdo, Result};
+# use zbus::{ConnectionBuilder, dbus_interface, Result};
 #
 #
 # struct Greeter;
@@ -206,7 +206,7 @@ synchronize with the interface handlers from outside, thanks to the `event_liste
 (this is just one of the many ways).
 
 ```rust,no_run
-# use zbus::{SignalContext, ObjectServer, ConnectionBuilder, dbus_interface, fdo, Result};
+# use zbus::{SignalContext, ConnectionBuilder, dbus_interface, fdo, Result};
 #
 use event_listener::Event;
 
@@ -332,7 +332,6 @@ example code:
 # async fn main() -> zbus::Result<()> {
 # let connection = zbus::Connection::session().await?;
 # let object_server = connection.object_server();
-use zbus::InterfaceDerefMut;
 
 let iface_ref = object_server.interface::<_, Greeter>("/org/zbus/MyGreeter").await?;
 let mut iface = iface_ref.get_mut().await;

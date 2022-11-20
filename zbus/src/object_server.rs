@@ -111,7 +111,7 @@ where
     /// ```no_run
     ///# use std::error::Error;
     ///# use async_io::block_on;
-    ///# use zbus::{Connection, ObjectServer, SignalContext, dbus_interface};
+    ///# use zbus::{Connection, dbus_interface};
     ///
     /// struct MyIface(u32);
     ///
@@ -129,7 +129,7 @@ where
     ///#
     ///# let path = "/org/zbus/path";
     ///# connection.object_server().at(path, MyIface(22)).await?;
-    /// let mut object_server = connection.object_server();
+    /// let object_server = connection.object_server();
     /// let iface_ref = object_server.interface::<_, MyIface>(path).await?;
     /// let mut iface = iface_ref.get_mut().await;
     /// iface.0 = 42;
@@ -371,8 +371,7 @@ impl Node {
 ///
 /// ```no_run
 ///# use std::error::Error;
-/// use zbus::{Connection, ObjectServer, dbus_interface};
-/// use std::sync::Arc;
+/// use zbus::{Connection, dbus_interface};
 /// use event_listener::Event;
 ///# use async_io::block_on;
 ///
@@ -412,7 +411,7 @@ impl Node {
 ///
 /// quit_listener.await;
 ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
-///# });
+///# })?;
 ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
 #[derive(Debug)]
@@ -560,7 +559,7 @@ impl ObjectServer {
     ///
     /// ```no_run
     ///# use std::error::Error;
-    ///# use zbus::{Connection, InterfaceDerefMut, ObjectServer, SignalContext, dbus_interface};
+    ///# use zbus::{Connection, dbus_interface};
     ///# use async_io::block_on;
     ///#
     /// struct MyIface(u32);

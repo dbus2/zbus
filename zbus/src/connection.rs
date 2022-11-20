@@ -191,12 +191,10 @@ impl MessageReceiverTask {
 /// #### Get the session bus ID
 ///
 /// ```
-///# use zvariant::Type;
-///#
 ///# zbus::block_on(async {
 /// use zbus::Connection;
 ///
-/// let mut connection = Connection::session().await?;
+/// let connection = Connection::session().await?;
 ///
 /// let reply = connection
 ///     .call_method(
@@ -211,7 +209,7 @@ impl MessageReceiverTask {
 /// let id: &str = reply.body()?;
 /// println!("Unique ID of the bus: {}", id);
 ///# Ok::<(), zbus::Error>(())
-///# });
+///# }).unwrap();
 /// ```
 ///
 /// #### Monitoring all messages
@@ -241,7 +239,7 @@ impl MessageReceiverTask {
 /// }
 ///
 ///# Ok::<(), zbus::Error>(())
-///# });
+///# }).unwrap();
 /// ```
 ///
 /// This should print something like:
@@ -669,10 +667,11 @@ impl Connection {
     /// scheduler:
     ///
     /// ```
+    ///# #[cfg(not(feature = "tokio"))]
+    ///# {
     /// use zbus::ConnectionBuilder;
     /// use async_std::task::{block_on, spawn};
     ///
-    ///# #[cfg(not(feature = "tokio"))]
     /// block_on(async {
     ///     let conn = ConnectionBuilder::session()
     ///         .unwrap()
@@ -691,6 +690,7 @@ impl Connection {
     ///
     ///     // All your other async code goes here.
     /// });
+    ///# }
     /// ```
     ///
     /// **Note**: zbus 2.1 added support for tight integration with tokio. This means, if you use
