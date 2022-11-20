@@ -471,7 +471,11 @@ code:
 ```rust
 # use zbus::dbus_proxy;
 #
-#[dbus_proxy(interface = "org.freedesktop.Notifications")]
+#[dbus_proxy(
+    interface = "org.freedesktop.Notifications",
+    default_service = "org.freedesktop.Notifications",
+    default_path= "/org/freedesktop/Notifications",
+)]
 trait Notifications {
     /// CloseNotification method
     fn close_notification(&self, arg_0: u32) -> zbus::Result<()>;
