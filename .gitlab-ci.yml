@@ -122,6 +122,14 @@ check msrv:
     - cargo check
     - cargo check --all-features
 
+docs build:
+  extends: .debian_img
+  stage: "lint"
+  variables:
+    RUSTDOCFLAGS: "-D warnings"
+  script:
+    - cargo doc
+
 .cargo_test_var: &cargo_test
     - rustc --version
     - cargo --version
