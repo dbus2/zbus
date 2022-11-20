@@ -535,6 +535,11 @@ pub struct ServerInformation {
     pub spec_version: String,
 }
 
+#[dbus_proxy(
+    interface = "org.freedesktop.Notifications",
+    default_service = "org.freedesktop.Notifications",
+    default_path= "/org/freedesktop/Notifications",
+)]
 trait Notifications {
     /// Get server information.
     ///
