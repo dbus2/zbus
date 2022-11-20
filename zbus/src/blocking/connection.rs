@@ -168,7 +168,7 @@ impl Connection {
 
     /// Register a well-known name for this service on the bus.
     ///
-    /// Blocking version of [`crate::Connection::register_name`]. See docs there for more details
+    /// Blocking version of [`crate::Connection::request_name`]. See docs there for more details
     /// and caveats.
     pub fn request_name<'w, W>(&self, well_known_name: W) -> Result<()>
     where
