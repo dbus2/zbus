@@ -176,7 +176,7 @@ impl<'a> ConnectionBuilder<'a> {
     /// assert_eq!(conn.max_queued(), 30);
     ///
     ///#     Ok::<(), zbus::Error>(())
-    ///# });
+    ///# }).unwrap();
     ///#
     /// // Do something useful with `conn`..
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
