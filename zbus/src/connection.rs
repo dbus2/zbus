@@ -600,7 +600,7 @@ impl Connection {
     /// assert_eq!(lost.args().unwrap().name, name);
     ///
     ///# Ok::<(), zbus::Error>(())
-    ///# });
+    ///# }).unwrap();
     /// ```
     ///
     /// # Caveats
