@@ -648,7 +648,6 @@ impl Message {
     /// # Example
     ///
     /// ```
-    /// # use std::convert::TryInto;
     /// # use zbus::Message;
     /// # (|| -> zbus::Result<()> {
     /// let send_body = (7i32, (2i32, "foo"), vec!["bar"]);

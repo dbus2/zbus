@@ -3,6 +3,12 @@
     html_logo_url = "https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
 )]
 #![doc = include_str!("../README.md")]
+#![doc(test(attr(
+    warn(unused),
+    deny(warnings),
+    // W/o this, we seem to get some bogus warning about `extern crate zbus`.
+    allow(unused_extern_crates),
+)))]
 
 #[cfg(doctest)]
 mod doctests {
@@ -171,20 +177,6 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 
 /// Derive macro to add [`Type`] implementation to structs serialized as `a{sv}` type.
 ///
-/// # Examples
-///
-/// ```
-/// use zvariant::{Signature, Type, TypeDict};
-///
-/// #[allow(deprecated)]
-/// #[derive(TypeDict)]
-/// struct Struct {
-///     field: u32,
-/// }
-///
-/// assert_eq!(Struct::signature(), Signature::from_str_unchecked("a{sv}"));
-/// ```
-///
 /// [`Type`]: ../zvariant/trait.Type.html
 #[proc_macro_derive(TypeDict)]
 #[deprecated(
@@ -250,6 +242,7 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// #[derive(DeserializeDict, Type)]
 /// #[zvariant(signature = "a{sv}")]
+///##[allow(unused)]
 /// struct Struct {
 ///     field1: u16,
 ///     #[zvariant(rename = "another-name")]
@@ -355,7 +348,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// ```
 ///# use std::convert::TryFrom;
-///# use zvariant::{OwnedObjectPath, OwnedValue, Value};
+///# use zvariant::{OwnedValue, Value};
 ///#
 /// #[derive(Debug, PartialEq, Value, OwnedValue)]
 /// #[repr(u8)]
