@@ -8,6 +8,8 @@ use crate::{
     Error, MatchRule, MatchRulePathSpec, MessageType, Result,
 };
 
+const MAX_ARGS: u8 = 64;
+
 /// Builder for [`MatchRule`].
 ///
 /// This is created by [`MatchRule::builder`].
@@ -133,7 +135,7 @@ impl<'m> MatchRuleBuilder<'m> {
     where
         S: Into<Str<'m>>,
     {
-        if idx >= 64 {
+        if idx >= MAX_ARGS {
             return Err(Error::InvalidMatchRule);
         }
         let value = (idx, arg.into());
@@ -178,7 +180,7 @@ impl<'m> MatchRuleBuilder<'m> {
         P: TryInto<ObjectPath<'m>>,
         P::Error: Into<Error>,
     {
-        if idx >= 64 {
+        if idx >= MAX_ARGS {
             return Err(Error::InvalidMatchRule);
         }
 
@@ -217,8 +219,8 @@ impl<'m> MatchRuleBuilder<'m> {
             member: None,
             path_spec: None,
             destination: None,
-            args: Vec::with_capacity(64),
-            arg_paths: Vec::with_capacity(64),
+            args: Vec::with_capacity(MAX_ARGS as usize),
+            arg_paths: Vec::with_capacity(MAX_ARGS as usize),
             arg0namespace: None,
         })
     }
