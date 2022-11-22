@@ -161,8 +161,8 @@ impl<'m> MatchRuleBuilder<'m> {
             member: None,
             path_spec: None,
             destination: None,
-            args: vec![],
-            arg_paths: vec![],
+            args: Vec::with_capacity(64),
+            arg_paths: Vec::with_capacity(64),
             arg0namespace: None,
         })
     }
