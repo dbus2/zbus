@@ -22,16 +22,45 @@ use crate::{
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # use zbus::MatchRule;
 /// use std::convert::TryFrom;
+///
+/// // Let's take the most typical example of match rule to subscribe to properties' changes:
 /// let rule = MatchRule::builder()
 ///     .msg_type(zbus::MessageType::Signal)
 ///     .sender("org.freedesktop.DBus")?
 ///     .interface("org.freedesktop.DBus.Properties")?
 ///     .member("PropertiesChanged")?
+///     .add_arg("org.zbus")?
 ///     .build();
 /// let rule_str = rule.to_string();
 /// assert_eq!(
 ///     rule_str,
-///     "type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged'",
+///     "type='signal',\
+///      sender='org.freedesktop.DBus',\
+///      interface='org.freedesktop.DBus.Properties',\
+///      member='PropertiesChanged',\
+///      arg0='org.zbus'",
+/// );
+///
+/// // Let's parse it back.
+/// let parsed_rule = MatchRule::try_from(rule_str.as_str())?;
+/// assert_eq!(rule, parsed_rule);
+///
+/// // Now for `ObjectManager::InterfacesAdded` signal.
+/// let rule = MatchRule::builder()
+///     .msg_type(zbus::MessageType::Signal)
+///     .sender("org.zbus")?
+///     .interface("org.freedesktop.DBus.ObjectManager")?
+///     .member("InterfacesAdded")?
+///     .arg_path(0, "/org/zbus/NewPath")?
+///     .build();
+/// let rule_str = rule.to_string();
+/// assert_eq!(
+///     rule_str,
+///     "type='signal',\
+///      sender='org.zbus',\
+///      interface='org.freedesktop.DBus.ObjectManager',\
+///      member='InterfacesAdded',\
+///      arg0path='/org/zbus/NewPath'",
 /// );
 ///
 /// // Let's parse it back.
@@ -56,8 +85,8 @@ pub struct MatchRule<'m> {
     pub(crate) member: Option<MemberName<'m>>,
     pub(crate) path_spec: Option<MatchRulePathSpec<'m>>,
     pub(crate) destination: Option<UniqueName<'m>>,
-    pub(crate) args: Vec<Str<'m>>,
-    pub(crate) arg_paths: Vec<ObjectPath<'m>>,
+    pub(crate) args: Vec<(u8, Str<'m>)>,
+    pub(crate) arg_paths: Vec<(u8, ObjectPath<'m>)>,
     pub(crate) arg0namespace: Option<InterfaceName<'m>>,
 }
 
@@ -100,12 +129,12 @@ impl<'m> MatchRule<'m> {
     }
 
     /// The arguments.
-    pub fn args(&self) -> &[Str<'_>] {
+    pub fn args(&self) -> &[(u8, Str<'_>)] {
         self.args.as_ref()
     }
 
     /// The argument paths.
-    pub fn arg_paths(&self) -> &[ObjectPath<'_>] {
+    pub fn arg_paths(&self) -> &[(u8, ObjectPath<'_>)] {
         self.arg_paths.as_ref()
     }
 
@@ -128,8 +157,12 @@ impl<'m> MatchRule<'m> {
             member: self.member.as_ref().map(|m| m.to_owned()),
             path_spec: self.path_spec.as_ref().map(|p| p.to_owned()),
             destination: self.destination.as_ref().map(|d| d.to_owned()),
-            args: self.args.iter().map(|a| a.to_owned()).collect(),
-            arg_paths: self.arg_paths.iter().map(|p| p.to_owned()).collect(),
+            args: self.args.iter().map(|(i, s)| (*i, s.to_owned())).collect(),
+            arg_paths: self
+                .arg_paths
+                .iter()
+                .map(|(i, p)| (*i, p.to_owned()))
+                .collect(),
             arg0namespace: self.arg0namespace.as_ref().map(|a| a.to_owned()),
         }
     }
@@ -143,8 +176,16 @@ impl<'m> MatchRule<'m> {
             member: self.member.map(|m| m.into_owned()),
             path_spec: self.path_spec.map(|p| p.into_owned()),
             destination: self.destination.map(|d| d.into_owned()),
-            args: self.args.into_iter().map(|a| a.into_owned()).collect(),
-            arg_paths: self.arg_paths.into_iter().map(|p| p.into_owned()).collect(),
+            args: self
+                .args
+                .into_iter()
+                .map(|(i, s)| (i, s.into_owned()))
+                .collect(),
+            arg_paths: self
+                .arg_paths
+                .into_iter()
+                .map(|(i, p)| (i, p.into_owned()))
+                .collect(),
             arg0namespace: self.arg0namespace.map(|a| a.into_owned()),
         }
     }
@@ -182,6 +223,12 @@ impl ToString for MatchRule<'_> {
                 MatchRulePathSpec::PathNamespace(ns) => ("path_namespace", ns),
             };
             add_match_rule_string_component(&mut s, key, value);
+        }
+        for (i, arg) in self.args() {
+            add_match_rule_string_component(&mut s, &format!("arg{}", i), arg);
+        }
+        for (i, arg_path) in self.arg_paths() {
+            add_match_rule_string_component(&mut s, &format!("arg{}path", i), arg_path);
         }
 
         s
@@ -236,8 +283,19 @@ impl<'m> TryFrom<&'m str> for MatchRule<'m> {
                 "path_namespace" => builder.path_namespace(value)?,
                 "destination" => builder.destination(value)?,
                 "arg0namespace" => builder.arg0namespace(value)?,
-                "arg" => builder.add_arg(value)?,
-                "arg_path" => builder.add_arg_path(value)?,
+                key if key.starts_with("arg") => {
+                    if let Some(trailing_idx) = key.find("path") {
+                        let idx = key[3..trailing_idx]
+                            .parse::<u8>()
+                            .map_err(|_| Error::InvalidMatchRule)?;
+                        builder.arg_path(idx, value)?
+                    } else {
+                        let idx = key[3..]
+                            .parse::<u8>()
+                            .map_err(|_| Error::InvalidMatchRule)?;
+                        builder.arg(idx, value)?
+                    }
+                }
                 _ => return Err(Error::InvalidMatchRule),
             };
         }
