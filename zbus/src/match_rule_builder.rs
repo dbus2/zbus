@@ -8,6 +8,8 @@ use crate::{
     Error, MatchRule, MatchRulePathSpec, MessageType, Result,
 };
 
+const MAX_ARGS: u8 = 64;
+
 /// Builder for [`MatchRule`].
 ///
 /// This is created by [`MatchRule::builder`].
@@ -108,35 +110,91 @@ impl<'m> MatchRuleBuilder<'m> {
         Ok(self)
     }
 
-    /// Add an argument.
+    /// Append an arguments.
+    ///
+    /// Use this in instead of [`MatchRuleBuilder::arg`] if you want to sequentially add args.
     ///
     /// # Errors
     ///
     /// [`Error::InvalidMatchRule`] on attempt to add the 65th argument.
-    pub fn add_arg<S>(mut self, arg: S) -> Result<Self>
+    pub fn add_arg<S>(self, arg: S) -> Result<Self>
     where
         S: Into<Str<'m>>,
     {
-        if self.0.args.len() == 64 {
+        let idx = self.0.args.len() as u8;
+
+        self.arg(idx, arg)
+    }
+
+    /// Add an argument of a specified index.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidMatchRule`] if `idx` is greater than 64.
+    pub fn arg<S>(mut self, idx: u8, arg: S) -> Result<Self>
+    where
+        S: Into<Str<'m>>,
+    {
+        if idx >= MAX_ARGS {
             return Err(Error::InvalidMatchRule);
         }
-        self.0.args.push(arg.into());
+        let value = (idx, arg.into());
+        let vec_idx = match self.0.args().binary_search_by(|(i, _)| i.cmp(&idx)) {
+            Ok(i) => {
+                // If the argument is already present, replace it.
+                self.0.args.remove(i);
+
+                i
+            }
+            Err(i) => i,
+        };
+        self.0.args.insert(vec_idx, value);
 
         Ok(self)
     }
 
-    /// Add an path arguments.
+    /// Append a path argument.
+    ///
+    /// Use this in instead of [`MatchRuleBuilder::arg_path`] if you want to sequentially add args.
     ///
     /// # Errors
     ///
     /// [`Error::InvalidMatchRule`] on attempt to add the 65th path argument.
-    pub fn add_arg_path<P>(mut self, arg_path: P) -> Result<Self>
+    pub fn add_arg_path<P>(self, arg_path: P) -> Result<Self>
     where
         P: TryInto<ObjectPath<'m>>,
         P::Error: Into<Error>,
     {
-        let arg_path = arg_path.try_into().map_err(Into::into)?;
-        self.0.arg_paths.push(arg_path);
+        let idx = self.0.arg_paths.len() as u8;
+
+        self.arg_path(idx, arg_path)
+    }
+
+    /// Add a path argument of a specified index.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidMatchRule`] if `idx` is greater than 64.
+    pub fn arg_path<P>(mut self, idx: u8, arg_path: P) -> Result<Self>
+    where
+        P: TryInto<ObjectPath<'m>>,
+        P::Error: Into<Error>,
+    {
+        if idx >= MAX_ARGS {
+            return Err(Error::InvalidMatchRule);
+        }
+
+        let value = (idx, arg_path.try_into().map_err(Into::into)?);
+        let vec_idx = match self.0.arg_paths().binary_search_by(|(i, _)| i.cmp(&idx)) {
+            Ok(i) => {
+                // If the argument is already present, replace it.
+                self.0.arg_paths.remove(i);
+
+                i
+            }
+            Err(i) => i,
+        };
+        self.0.arg_paths.insert(vec_idx, value);
 
         Ok(self)
     }
@@ -161,8 +219,8 @@ impl<'m> MatchRuleBuilder<'m> {
             member: None,
             path_spec: None,
             destination: None,
-            args: vec![],
-            arg_paths: vec![],
+            args: Vec::with_capacity(MAX_ARGS as usize),
+            arg_paths: Vec::with_capacity(MAX_ARGS as usize),
             arg0namespace: None,
         })
     }
