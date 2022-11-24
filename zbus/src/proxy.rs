@@ -15,7 +15,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
     task::{Context, Poll},
 };
-use tracing::{debug, instrument};
+use tracing::{debug, info_span, instrument, Instrument};
 
 use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName, WellKnownName};
 use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
@@ -269,8 +269,8 @@ impl PropertiesCache {
         });
 
         let cache_clone = cache.clone();
-
-        let task = executor.spawn(async move {
+        let task_name = format!("{} proxy caching", interface);
+        let proxy_caching = async move {
             let (proxy, interface, uncached_properties) = match cache_clone
                 .init(proxy, interface, uncached_properties)
                 .await
@@ -295,7 +295,9 @@ impl PropertiesCache {
             {
                 debug!("Error keeping properties cache updated: {e}");
             }
-        });
+        }
+        .instrument(info_span!("{}", task_name));
+        let task = executor.spawn(proxy_caching, &task_name);
 
         (cache, task)
     }
@@ -1359,7 +1361,7 @@ mod tests {
         let handle = {
             let tx = tx.clone();
             let conn = server_conn.clone();
-            server_conn.executor().spawn(async move {
+            let server_fut = async move {
                 use std::time::Duration;
 
                 #[cfg(not(feature = "tokio"))]
@@ -1388,7 +1390,8 @@ mod tests {
                     #[cfg(feature = "tokio")]
                     sleep(Duration::from_millis(5)).await;
                 }
-            })
+            };
+            server_conn.executor().spawn(server_fut, "server_task")
         };
 
         let signal_fut = async {
