@@ -38,6 +38,7 @@ impl<'a> Executor<'a> {
     pub fn spawn<T: Send + 'static>(
         &self,
         future: impl Future<Output = T> + Send + 'static,
+        #[allow(unused)] name: &str,
     ) -> Task<T> {
         #[cfg(not(feature = "tokio"))]
         {
@@ -46,7 +47,20 @@ impl<'a> Executor<'a> {
 
         #[cfg(feature = "tokio")]
         {
-            Task(Some(tokio::task::spawn(future)))
+            #[cfg(tokio_unstable)]
+            {
+                Task(Some(
+                    tokio::task::Builder::new()
+                        .name(name)
+                        .spawn(future)
+                        // SAFETY: Looking at the code, this call always returns an `Ok`.
+                        .unwrap(),
+                ))
+            }
+            #[cfg(not(tokio_unstable))]
+            {
+                Task(Some(tokio::task::spawn(future)))
+            }
         }
     }
 

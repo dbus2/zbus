@@ -675,7 +675,7 @@ async fn iface_and_proxy_(p2p: bool) {
     let listen = event.listen();
     let child = client_conn
         .executor()
-        .spawn(my_iface_test(client_conn.clone(), event));
+        .spawn(my_iface_test(client_conn.clone(), event), "client_task");
     debug!("Child task spawned.");
     // Wait for the listener to be ready
     listen.await;

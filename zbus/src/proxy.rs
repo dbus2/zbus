@@ -269,8 +269,7 @@ impl PropertiesCache {
         });
 
         let cache_clone = cache.clone();
-        let interface_str = interface.as_str();
-        let span = info_span!("{} proxy caching", interface_str);
+        let task_name = format!("{} proxy caching", interface);
         let proxy_caching = async move {
             let (proxy, interface, uncached_properties) = match cache_clone
                 .init(proxy, interface, uncached_properties)
@@ -297,8 +296,8 @@ impl PropertiesCache {
                 debug!("Error keeping properties cache updated: {e}");
             }
         }
-        .instrument(span);
-        let task = executor.spawn(proxy_caching);
+        .instrument(info_span!("{}", task_name));
+        let task = executor.spawn(proxy_caching, &task_name);
 
         (cache, task)
     }
@@ -1362,7 +1361,7 @@ mod tests {
         let handle = {
             let tx = tx.clone();
             let conn = server_conn.clone();
-            server_conn.executor().spawn(async move {
+            let server_fut = async move {
                 use std::time::Duration;
 
                 #[cfg(not(feature = "tokio"))]
@@ -1391,7 +1390,8 @@ mod tests {
                     #[cfg(feature = "tokio")]
                     sleep(Duration::from_millis(5)).await;
                 }
-            })
+            };
+            server_conn.executor().spawn(server_fut, "server_task")
         };
 
         let signal_fut = async {

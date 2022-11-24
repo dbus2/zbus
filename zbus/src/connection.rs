@@ -97,7 +97,7 @@ impl MessageReceiverTask {
     }
 
     fn spawn(self: Arc<Self>, executor: &Executor<'_>) -> Task<()> {
-        executor.spawn(self.receive_msg())
+        executor.spawn(self.receive_msg(), "socket reader")
     }
 
     // Keep receiving messages and put them on the queue.
@@ -643,10 +643,10 @@ impl Connection {
         let reply = dbus_proxy
             .request_name(well_known_name.clone(), flags)
             .await?;
+        let lost_task_name = format!("monitor name {well_known_name} lost");
         let name_lost_fut = if flags.contains(RequestNameFlags::AllowReplacement) {
             let weak_conn = WeakConnection::from(self);
             let well_known_name = well_known_name.to_owned();
-            let span = info_span!("monitor {name} lost", name = %well_known_name);
             Some(
                 async move {
                     loop {
@@ -686,7 +686,7 @@ impl Connection {
                         }
                     }
                 }
-                .instrument(span),
+                .instrument(info_span!("{}", lost_task_name)),
             )
         } else {
             None
@@ -695,7 +695,7 @@ impl Connection {
             RequestNameReply::InQueue => {
                 let weak_conn = WeakConnection::from(self);
                 let well_known_name = well_known_name.to_owned();
-                let span = info_span!("monitor name {name} acquired", name = %well_known_name);
+                let task_name = format!("monitor name {well_known_name} acquired");
                 let task = self.executor().spawn(
                     async move {
                         loop {
@@ -709,8 +709,9 @@ impl Connection {
                                     Ok(args) if args.name == well_known_name => {
                                         let mut names = inner.registered_names.lock().await;
                                         if let Some(status) = names.get_mut(&well_known_name) {
-                                            let task =
-                                                name_lost_fut.map(|fut| inner.executor.spawn(fut));
+                                            let task = name_lost_fut.map(|fut| {
+                                                inner.executor.spawn(fut, &lost_task_name)
+                                            });
                                             *status = NameStatus::Owner(task);
 
                                             break;
@@ -728,13 +729,14 @@ impl Connection {
                             }
                         }
                     }
-                    .instrument(span),
+                    .instrument(info_span!("{}", task_name)),
+                    &task_name,
                 );
 
                 NameStatus::Queued(task)
             }
             RequestNameReply::PrimaryOwner | RequestNameReply::AlreadyOwner => {
-                let task = name_lost_fut.map(|fut| self.executor().spawn(fut));
+                let task = name_lost_fut.map(|fut| self.executor().spawn(fut, &lost_task_name));
 
                 NameStatus::Owner(task)
             }
@@ -938,6 +940,7 @@ impl Connection {
                 ready(msg.as_ref().map(|m| m.message_type() == MessageType::MethodCall).unwrap_or_default())
             });
 
+            let obj_server_task_name = "ObjectServer task";
             self.inner.executor.spawn(
                 async move {
                     trace!("waiting for incoming method call messages..");
@@ -1011,7 +1014,8 @@ impl Connection {
                                             );
                                         }
                                     }
-                                    .instrument(trace_span!("{}", task_name))
+                                    .instrument(trace_span!("{}", task_name)),
+                                    &task_name,
                                 )
                                 .detach();
                         } else {
@@ -1021,7 +1025,8 @@ impl Connection {
                         }
                     }
                 }
-                .instrument(info_span!("ObjectServer task")),
+                .instrument(info_span!("{}", obj_server_task_name)),
+                obj_server_task_name,
             )
         });
     }
@@ -1077,9 +1082,10 @@ impl Connection {
 
     pub(crate) fn queue_remove_match(&self, rule: OwnedMatchRule) {
         let conn = self.clone();
-        let remove_match = async move { conn.remove_match(rule).await }
-            .instrument(trace_span!("Remove match `{rule}`"));
-        self.inner.executor.spawn(remove_match).detach()
+        let task_name = format!("Remove match `{}`", rule.to_string());
+        let remove_match =
+            async move { conn.remove_match(rule).await }.instrument(trace_span!("{}", task_name));
+        self.inner.executor.spawn(remove_match, &task_name).detach()
     }
 
     async fn hello_bus(&self) -> Result<()> {
@@ -1351,12 +1357,15 @@ mod tests {
         server2: Connection,
         client2: Connection,
     ) -> Result<()> {
-        let _forward_task = client1.executor().spawn(async move {
-            futures_util::try_join!(
-                MessageStream::from(&server1).forward(&client2),
-                MessageStream::from(&client2).forward(&server1),
-            )
-        });
+        let _forward_task = client1.executor().spawn(
+            async move {
+                futures_util::try_join!(
+                    MessageStream::from(&server1).forward(&client2),
+                    MessageStream::from(&client2).forward(&server1),
+                )
+            },
+            "forward_task",
+        );
 
         let server_future = async {
             let mut stream = MessageStream::from(&server2);
