@@ -15,7 +15,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
     task::{Context, Poll},
 };
-use tracing::{debug, instrument};
+use tracing::{debug, info_span, instrument, Instrument};
 
 use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName, WellKnownName};
 use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
@@ -269,8 +269,9 @@ impl PropertiesCache {
         });
 
         let cache_clone = cache.clone();
-
-        let task = executor.spawn(async move {
+        let interface_str = interface.as_str();
+        let span = info_span!("{} proxy caching", interface_str);
+        let proxy_caching = async move {
             let (proxy, interface, uncached_properties) = match cache_clone
                 .init(proxy, interface, uncached_properties)
                 .await
@@ -295,7 +296,9 @@ impl PropertiesCache {
             {
                 debug!("Error keeping properties cache updated: {e}");
             }
-        });
+        }
+        .instrument(span);
+        let task = executor.spawn(proxy_caching);
 
         (cache, task)
     }
