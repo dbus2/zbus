@@ -18,7 +18,7 @@ use std::{
     },
     task::{Context, Poll},
 };
-use tracing::{debug, instrument, trace, trace_span, warn, Instrument};
+use tracing::{debug, info_span, instrument, trace, trace_span, warn, Instrument};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
@@ -97,13 +97,11 @@ impl MessageReceiverTask {
     }
 
     fn spawn(self: Arc<Self>, executor: &Executor<'_>) -> Task<()> {
-        executor.spawn(async move {
-            self.receive_msg().await;
-        })
+        executor.spawn(self.receive_msg(), "socket reader")
     }
 
     // Keep receiving messages and put them on the queue.
-    #[instrument(skip(self))]
+    #[instrument(name = "socket reader", skip(self))]
     async fn receive_msg(self: Arc<Self>) {
         loop {
             trace!("Waiting for message on the socket..");
@@ -645,47 +643,51 @@ impl Connection {
         let reply = dbus_proxy
             .request_name(well_known_name.clone(), flags)
             .await?;
+        let lost_task_name = format!("monitor name {well_known_name} lost");
         let name_lost_fut = if flags.contains(RequestNameFlags::AllowReplacement) {
             let weak_conn = WeakConnection::from(self);
             let well_known_name = well_known_name.to_owned();
-            Some(async move {
-                loop {
-                    let signal = lost_stream.next().await;
-                    let inner = match weak_conn.upgrade() {
-                        Some(conn) => conn.inner.clone(),
-                        None => break,
-                    };
+            Some(
+                async move {
+                    loop {
+                        let signal = lost_stream.next().await;
+                        let inner = match weak_conn.upgrade() {
+                            Some(conn) => conn.inner.clone(),
+                            None => break,
+                        };
 
-                    match signal {
-                        Some(signal) => match signal.args() {
-                            Ok(args) if args.name == well_known_name => {
-                                tracing::info!(
-                                    "Connection `{}` lost name `{}`",
-                                    // SAFETY: This is bus connection so unique name can't be None.
-                                    inner.unique_name.get().unwrap(),
-                                    well_known_name
-                                );
-                                inner.registered_names.lock().await.remove(&well_known_name);
+                        match signal {
+                            Some(signal) => match signal.args() {
+                                Ok(args) if args.name == well_known_name => {
+                                    tracing::info!(
+                                        "Connection `{}` lost name `{}`",
+                                        // SAFETY: This is bus connection so unique name can't be None.
+                                        inner.unique_name.get().unwrap(),
+                                        well_known_name
+                                    );
+                                    inner.registered_names.lock().await.remove(&well_known_name);
 
+                                    break;
+                                }
+                                Ok(_) => (),
+                                Err(e) => warn!("Failed to parse `NameLost` signal: {}", e),
+                            },
+                            None => {
+                                trace!("`NameLost` signal stream closed");
+                                // This is a very strange state we end up in. Now the name is question
+                                // remains in the queue forever. Maybe we can do better here but I
+                                // think it's a very unlikely scenario anyway.
+                                //
+                                // Can happen if the connection is lost/dropped but then the whole
+                                // `Connection` instance will go away soon anyway and hence this
+                                // strange state along with it.
                                 break;
                             }
-                            Ok(_) => (),
-                            Err(e) => warn!("Failed to parse `NameLost` signal: {}", e),
-                        },
-                        None => {
-                            trace!("`NameLost` signal stream closed");
-                            // This is a very strange state we end up in. Now the name is question
-                            // remains in the queue forever. Maybe we can do better here but I
-                            // think it's a very unlikely scenario anyway.
-                            //
-                            // Can happen if the connection is lost/dropped but then the whole
-                            // `Connection` instance will go away soon anyway and hence this
-                            // strange state along with it.
-                            break;
                         }
                     }
                 }
-            })
+                .instrument(info_span!("{}", lost_task_name)),
+            )
         } else {
             None
         };
@@ -693,42 +695,48 @@ impl Connection {
             RequestNameReply::InQueue => {
                 let weak_conn = WeakConnection::from(self);
                 let well_known_name = well_known_name.to_owned();
-                let task = self.executor().spawn(async move {
-                    loop {
-                        let signal = acquired_stream.next().await;
-                        let inner = match weak_conn.upgrade() {
-                            Some(conn) => conn.inner.clone(),
-                            None => break,
-                        };
-                        match signal {
-                            Some(signal) => match signal.args() {
-                                Ok(args) if args.name == well_known_name => {
-                                    let mut names = inner.registered_names.lock().await;
-                                    if let Some(status) = names.get_mut(&well_known_name) {
-                                        let task =
-                                            name_lost_fut.map(|fut| inner.executor.spawn(fut));
-                                        *status = NameStatus::Owner(task);
+                let task_name = format!("monitor name {well_known_name} acquired");
+                let task = self.executor().spawn(
+                    async move {
+                        loop {
+                            let signal = acquired_stream.next().await;
+                            let inner = match weak_conn.upgrade() {
+                                Some(conn) => conn.inner.clone(),
+                                None => break,
+                            };
+                            match signal {
+                                Some(signal) => match signal.args() {
+                                    Ok(args) if args.name == well_known_name => {
+                                        let mut names = inner.registered_names.lock().await;
+                                        if let Some(status) = names.get_mut(&well_known_name) {
+                                            let task = name_lost_fut.map(|fut| {
+                                                inner.executor.spawn(fut, &lost_task_name)
+                                            });
+                                            *status = NameStatus::Owner(task);
 
-                                        break;
+                                            break;
+                                        }
+                                        // else the name was released in the meantime. :shrug:
                                     }
-                                    // else the name was released in the meantime. :shrug:
+                                    Ok(_) => (),
+                                    Err(e) => warn!("Failed to parse `NameAcquired` signal: {}", e),
+                                },
+                                None => {
+                                    trace!("`NameAcquired` signal stream closed");
+                                    // See comment above for similar state in case of `NameLost` stream.
+                                    break;
                                 }
-                                Ok(_) => (),
-                                Err(e) => warn!("Failed to parse `NameAcquired` signal: {}", e),
-                            },
-                            None => {
-                                trace!("`NameAcquired` signal stream closed");
-                                // See comment above for similar state in case of `NameLost` stream.
-                                break;
                             }
                         }
                     }
-                });
+                    .instrument(info_span!("{}", task_name)),
+                    &task_name,
+                );
 
                 NameStatus::Queued(task)
             }
             RequestNameReply::PrimaryOwner | RequestNameReply::AlreadyOwner => {
-                let task = name_lost_fut.map(|fut| self.executor().spawn(fut));
+                let task = name_lost_fut.map(|fut| self.executor().spawn(fut, &lost_task_name));
 
                 NameStatus::Owner(task)
             }
@@ -932,6 +940,7 @@ impl Connection {
                 ready(msg.as_ref().map(|m| m.message_type() == MessageType::MethodCall).unwrap_or_default())
             });
 
+            let obj_server_task_name = "ObjectServer task";
             self.inner.executor.spawn(
                 async move {
                     trace!("waiting for incoming method call messages..");
@@ -982,8 +991,17 @@ impl Connection {
                                     continue;
                                 }
                             }
+                            let member = match msg.member() {
+                                Some(member) => member,
+                                None => {
+                                    warn!("Got a method call with no `MEMBER` field: {}", msg);
+
+                                    continue;
+                                }
+                            };
                             trace!("Got `{}`. Will spawn a task for dispatch..", msg);
                             let executor = conn.inner.executor.clone();
+                            let task_name = format!("`{}` method dispatcher", member);
                             executor
                                 .spawn(
                                     async move {
@@ -996,7 +1014,8 @@ impl Connection {
                                             );
                                         }
                                     }
-                                    .instrument(trace_span!("ObjectServer method task"))
+                                    .instrument(trace_span!("{}", task_name)),
+                                    &task_name,
                                 )
                                 .detach();
                         } else {
@@ -1006,7 +1025,8 @@ impl Connection {
                         }
                     }
                 }
-                .instrument(trace_span!("ObjectServer task")),
+                .instrument(info_span!("{}", obj_server_task_name)),
+                obj_server_task_name,
             )
         });
     }
@@ -1062,10 +1082,10 @@ impl Connection {
 
     pub(crate) fn queue_remove_match(&self, rule: OwnedMatchRule) {
         let conn = self.clone();
-        self.inner
-            .executor
-            .spawn(async move { conn.remove_match(rule).await })
-            .detach()
+        let task_name = format!("Remove match `{}`", rule.to_string());
+        let remove_match =
+            async move { conn.remove_match(rule).await }.instrument(trace_span!("{}", task_name));
+        self.inner.executor.spawn(remove_match, &task_name).detach()
     }
 
     async fn hello_bus(&self) -> Result<()> {
@@ -1337,12 +1357,15 @@ mod tests {
         server2: Connection,
         client2: Connection,
     ) -> Result<()> {
-        let _forward_task = client1.executor().spawn(async move {
-            futures_util::try_join!(
-                MessageStream::from(&server1).forward(&client2),
-                MessageStream::from(&client2).forward(&server1),
-            )
-        });
+        let _forward_task = client1.executor().spawn(
+            async move {
+                futures_util::try_join!(
+                    MessageStream::from(&server1).forward(&client2),
+                    MessageStream::from(&client2).forward(&server1),
+                )
+            },
+            "forward_task",
+        );
 
         let server_future = async {
             let mut stream = MessageStream::from(&server2);

@@ -54,7 +54,7 @@ event-listener = "2.5.3"
 static_assertions = "1.1.0"
 async-recursion = "1.0.0"
 async-trait = "0.1.58"
-tokio = { version = "1.21.2", optional = true, features = ["rt", "net", "time", "fs", "io-util", "sync"] }
+tokio = { version = "1.21.2", optional = true, features = ["rt", "net", "time", "fs", "io-util", "sync", "tracing"] }
 lazy_static = { version = "1.4.0", optional = true }
 tracing = "0.1.37"
 dirs = "4.0.0"
