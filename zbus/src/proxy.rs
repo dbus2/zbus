@@ -893,6 +893,7 @@ impl<'a> Proxy<'a> {
         }
         let rule: OwnedMatchRule = rule_builder.build().to_owned().into();
         conn.add_match(rule.clone()).await?;
+        let stream = conn.msg_receiver.activate_cloned();
 
         let (src_bus_name, src_unique_name, src_query) = match self.destination().to_owned() {
             BusName::Unique(name) => (None, Some(name), None),
@@ -908,8 +909,6 @@ impl<'a> Proxy<'a> {
                 (Some(name), None, Some(id))
             }
         };
-
-        let stream = conn.msg_receiver.activate_cloned();
 
         Ok(SignalStream {
             stream,
