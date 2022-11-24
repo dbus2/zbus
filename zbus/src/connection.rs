@@ -97,9 +97,7 @@ impl MessageReceiverTask {
     }
 
     fn spawn(self: Arc<Self>, executor: &Executor<'_>) -> Task<()> {
-        executor.spawn(async move {
-            self.receive_msg().await;
-        })
+        executor.spawn(self.receive_msg())
     }
 
     // Keep receiving messages and put them on the queue.
