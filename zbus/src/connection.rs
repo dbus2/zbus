@@ -988,8 +988,17 @@ impl Connection {
                                     continue;
                                 }
                             }
+                            let member = match msg.member() {
+                                Some(member) => member,
+                                None => {
+                                    warn!("Got a method call with no `MEMBER` field: {}", msg);
+
+                                    continue;
+                                }
+                            };
                             trace!("Got `{}`. Will spawn a task for dispatch..", msg);
                             let executor = conn.inner.executor.clone();
+                            let task_name = format!("`{}` method dispatcher", member);
                             executor
                                 .spawn(
                                     async move {
@@ -1002,7 +1011,7 @@ impl Connection {
                                             );
                                         }
                                     }
-                                    .instrument(trace_span!("ObjectServer method task"))
+                                    .instrument(trace_span!("{}", task_name))
                                 )
                                 .detach();
                         } else {
