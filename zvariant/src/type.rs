@@ -4,6 +4,7 @@ use std::{
     convert::TryInto,
     marker::PhantomData,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, Mutex, RwLock},
 };
@@ -368,6 +369,9 @@ macro_rules! static_str_type {
         }
     };
 }
+
+static_str_type!(Path);
+static_str_type!(PathBuf);
 
 #[cfg(feature = "uuid")]
 impl Type for uuid::Uuid {
