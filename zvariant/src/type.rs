@@ -4,7 +4,7 @@ use std::{
     convert::TryInto,
     marker::PhantomData,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    path::{Path,PathBuf},
+    path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, Mutex, RwLock},
 };
