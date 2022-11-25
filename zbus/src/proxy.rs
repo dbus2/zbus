@@ -1113,9 +1113,10 @@ impl<'a> SignalStream<'a> {
             && path.as_ref() == Some(self.proxy.path())
             && iface.as_ref() == Some(self.proxy.interface())
         {
-            let header = msg.header()?;
-            let sender = header.sender()?;
-            if sender == self.src_unique_name.as_ref() {
+            // If unique name is not known for some reason, we don't match it.
+            if self.src_unique_name.is_none()
+                || msg.header()?.sender()? == self.src_unique_name.as_ref()
+            {
                 return Ok(true);
             }
         }
