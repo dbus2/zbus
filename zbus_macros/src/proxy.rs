@@ -963,7 +963,7 @@ fn gen_proxy_signal(
                 #[doc = "Try to construct a "]
                 #[doc = #signal_name]
                 #[doc = " from a [::zbus::Message]."]
-                fn from_message<M>(msg: M) -> ::std::option::Option<Self>
+                pub fn from_message<M>(msg: M) -> ::std::option::Option<Self>
                 where
                     M: ::std::convert::Into<::std::sync::Arc<#zbus::Message>>,
                 {
