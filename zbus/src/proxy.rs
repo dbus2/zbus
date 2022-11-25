@@ -2,14 +2,14 @@ use async_broadcast::Receiver;
 use enumflags2::{bitflags, BitFlags};
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
-use futures_util::{future::Either, stream::FilterMap};
+use futures_util::{future::Either, stream::Map};
 use once_cell::sync::OnceCell;
 use ordered_stream::{join as join_streams, FromFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
-    future::{Future, Ready},
+    future::Future,
     ops::Deref,
     pin::Pin,
     sync::{Arc, RwLock, RwLockReadGuard},
@@ -993,28 +993,19 @@ impl<'a> Proxy<'a> {
     /// will only receive the last update.
     pub async fn receive_owner_changed(&self) -> Result<OwnerChangedStream<'_>> {
         use futures_util::StreamExt;
-        use std::future::ready;
-
         let dbus_proxy = fdo::DBusProxy::builder(self.connection())
             .cache_properties(CacheProperties::No)
             .build()
             .await?;
-        let dest = self.destination().to_owned();
         Ok(OwnerChangedStream {
-            filter_stream: dbus_proxy
-                // TODO: this signal stream matches all arguments, but we are interested only by a
-                // specific arg0. Rewrite with a custom match, or teach a signal stream to filter by
-                // arg?
-                .receive_name_owner_changed()
+            stream: dbus_proxy
+                .receive_name_owner_changed_with_args(&[(0, self.destination().as_str())])
                 .await?
-                .filter_map(Box::new(move |signal| {
+                .map(Box::new(move |signal| {
                     let args = signal.args().unwrap();
-
-                    if args.name() != &dest {
-                        return ready(None);
-                    }
                     let new_owner = args.new_owner().as_ref().map(|owner| owner.to_owned());
-                    ready(Some(new_owner))
+
+                    new_owner
                 })),
             name: self.destination().clone(),
         })
@@ -1065,22 +1056,16 @@ impl From<MethodFlags> for crate::MessageFlags {
     }
 }
 
-type OwnerChangedStreamFilter<'a> = FilterMap<
+type OwnerChangedStreamMap<'a> = Map<
     fdo::NameOwnerChangedStream<'a>,
-    Ready<Option<Option<UniqueName<'static>>>>,
-    Box<
-        dyn FnMut(fdo::NameOwnerChanged) -> Ready<Option<Option<UniqueName<'static>>>>
-            + Send
-            + Sync
-            + Unpin,
-    >,
+    Box<dyn FnMut(fdo::NameOwnerChanged) -> Option<UniqueName<'static>> + Send + Sync + Unpin>,
 >;
 
 /// A [`stream::Stream`] implementation that yields `UniqueName` when the bus owner changes.
 ///
 /// Use [`Proxy::receive_owner_changed`] to create an instance of this type.
 pub struct OwnerChangedStream<'a> {
-    filter_stream: OwnerChangedStreamFilter<'a>,
+    stream: OwnerChangedStreamMap<'a>,
     name: BusName<'a>,
 }
 
@@ -1098,7 +1083,7 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         use futures_util::StreamExt;
-        self.get_mut().filter_stream.poll_next_unpin(cx)
+        self.get_mut().stream.poll_next_unpin(cx)
     }
 }
 
