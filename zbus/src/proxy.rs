@@ -1226,15 +1226,12 @@ impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
 
 #[cfg(test)]
 mod tests {
-    use zbus_names::UniqueName;
-
     use super::*;
     use crate::{dbus_interface, dbus_proxy, utils::block_on, ConnectionBuilder, SignalContext};
     use futures_util::StreamExt;
     use ntest::timeout;
     use std::future::ready;
     use test_log::test;
-    use zvariant::Optional;
 
     #[test]
     #[timeout(15000)]
@@ -1246,30 +1243,20 @@ mod tests {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = Connection::session().await?;
-        let unique_name = conn.unique_name().unwrap();
-
-        let proxy = fdo::DBusProxy::new(&conn).await?;
+        let dest_conn = Connection::session().await?;
+        let unique_name = dest_conn.unique_name().unwrap().clone();
 
         let well_known = "org.freedesktop.zbus.async.ProxySignalStreamTest";
-        let owner_changed_stream = proxy
-            .receive_signal("NameOwnerChanged")
-            .await?
-            .filter(|msg| {
-                if let Ok((name, _, new_owner)) = msg.body::<(
-                    BusName<'_>,
-                    Optional<UniqueName<'_>>,
-                    Optional<UniqueName<'_>>,
-                )>() {
-                    ready(match &*new_owner {
-                        Some(new_owner) => *new_owner == *unique_name && name == well_known,
-                        None => false,
-                    })
-                } else {
-                    ready(false)
-                }
-            });
+        let proxy: Proxy<'_> = ProxyBuilder::new_bare(&conn)
+            .destination(well_known)?
+            .path("/does/not/matter")?
+            .interface("does.not.matter")?
+            .build()
+            .await?;
+        let mut owner_changed_stream = proxy.receive_owner_changed().await?;
 
-        let name_acquired_stream = proxy.receive_signal("NameAcquired").await?.filter(|msg| {
+        let proxy = fdo::DBusProxy::new(&dest_conn).await?;
+        let mut name_acquired_stream = proxy.receive_signal("NameAcquired").await?.filter(|msg| {
             if let Ok(name) = msg.body::<BusName<'_>>() {
                 return ready(name == well_known);
             }
@@ -1277,7 +1264,7 @@ mod tests {
             ready(false)
         });
 
-        let _prop_stream =
+        let prop_stream =
             proxy
                 .receive_property_changed("SomeProp")
                 .await
@@ -1285,33 +1272,31 @@ mod tests {
                     let v: Option<u32> = changed.get().await.ok();
                     dbg!(v)
                 });
+        drop(proxy);
+        drop(prop_stream);
 
-        let reply = proxy
-            .request_name(
-                well_known.try_into()?,
-                fdo::RequestNameFlags::ReplaceExisting.into(),
-            )
-            .await?;
-        assert_eq!(reply, fdo::RequestNameReply::PrimaryOwner);
+        dest_conn.request_name(well_known).await?;
 
-        let (changed_signal, acquired_signal) = futures_util::join!(
-            owner_changed_stream.into_future(),
-            name_acquired_stream.into_future(),
-        );
+        let (new_owner, acquired_signal) =
+            futures_util::join!(owner_changed_stream.next(), name_acquired_stream.next(),);
 
-        let changed_signal = changed_signal.0.unwrap();
-        let (acquired_name, _, new_owner) = changed_signal
-            .body::<(
-                BusName<'_>,
-                Optional<UniqueName<'_>>,
-                Optional<UniqueName<'_>>,
-            )>()
-            .unwrap();
-        assert_eq!(acquired_name, well_known);
-        assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
+        assert_eq!(&new_owner.unwrap().unwrap(), &*unique_name);
 
-        let acquired_signal = acquired_signal.0.unwrap();
+        let acquired_signal = acquired_signal.unwrap();
         assert_eq!(acquired_signal.body::<&str>().unwrap(), well_known);
+
+        let proxy = Proxy::new(&conn, &unique_name, "/does/not/matter", "does.not.matter").await?;
+        let mut unique_name_changed_stream = proxy.receive_owner_changed().await?;
+
+        drop(dest_conn);
+        drop(name_acquired_stream);
+
+        // There shouldn't be an owner anymore.
+        let new_owner = owner_changed_stream.next().await;
+        assert!(new_owner.unwrap().is_none());
+
+        let new_unique_owner = unique_name_changed_stream.next().await;
+        assert!(new_unique_owner.unwrap().is_none());
 
         Ok(())
     }
