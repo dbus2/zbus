@@ -901,18 +901,15 @@ fn gen_proxy_signal(
             quote! { SignalStream },
         )
     };
-    let (receiver_name, stream_name, signal_args, signal_name_ident) = (
-        format_ident!("receive_{}", snake_case_name),
-        format_ident!("{}{}", signal_name, trait_name),
-        format_ident!("{}Args", signal_name),
-        format_ident!("{}", signal_name),
-    );
+    let receiver_name = format_ident!("receive_{snake_case_name}");
+    let stream_name = format_ident!("{signal_name}{trait_name}");
+    let signal_args = format_ident!("{signal_name}Args");
+    let signal_name_ident = format_ident!("{signal_name}");
 
     let receive_gen_doc = format!(
-        "Create a stream that receives `{}` signals.\n\
+        "Create a stream that receives `{signal_name}` signals.\n\
             \n\
-            This a convenient wrapper around [`{}::receive_signal`]({}).",
-        signal_name, proxy_path, receive_signal_link,
+            This a convenient wrapper around [`{proxy_path}::receive_signal`]({receive_signal_link}).",
     );
     let receive_signal = quote! {
         #[doc = #receive_gen_doc]
@@ -924,15 +921,14 @@ fn gen_proxy_signal(
     };
 
     let stream_gen_doc = format!(
-        "A [`{}`] implementation that yields [`{}`] signals.\n\
+        "A [`{trait_name}`] implementation that yields [`signal_name`] signals.\n\
             \n\
-            Use [`{}::receive_{}`] to create an instance of this type.\n\
+            Use [`{proxy_name}::{receiver_name}`] to create an instance of this type.\n\
             \n\
-            [`{}`]: {}",
-        trait_name, signal_name, proxy_name, snake_case_name, trait_name, trait_link,
+            [`{trait_name}`]: {trait_link}",
     );
-    let signal_args_gen_doc = format!("`{}` signal arguments.", signal_name);
-    let args_struct_gen_doc = format!("A `{}` signal.", signal_name);
+    let signal_args_gen_doc = format!("`{signal_name}` signal arguments.");
+    let args_struct_gen_doc = format!("A `{signal_name}` signal.");
     let args_struct_decl = if gen_sig_args {
         quote! {
             #[doc = #args_struct_gen_doc]
