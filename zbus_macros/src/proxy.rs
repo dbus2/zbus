@@ -884,10 +884,18 @@ fn gen_proxy_signal(
     generics.params.push(parse_quote!('s));
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let (proxy_path, receive_signal_link, trait_name, trait_link, signal_type) = if *blocking {
+    let (
+        proxy_path,
+        receive_signal_link,
+        receive_signal_with_args_link,
+        trait_name,
+        trait_link,
+        signal_type,
+    ) = if *blocking {
         (
             "zbus::blocking::Proxy",
             "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.receive_signal",
+            "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.receive_signal_with_args",
             "Iterator",
             "https://doc.rust-lang.org/std/iter/trait.Iterator.html",
             quote! { blocking::SignalIterator },
@@ -896,12 +904,14 @@ fn gen_proxy_signal(
         (
             "zbus::Proxy",
             "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.receive_signal",
+            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.receive_signal_with_args",
             "Stream",
             "https://docs.rs/futures/0.3.15/futures/stream/trait.Stream.html",
             quote! { SignalStream },
         )
     };
     let receiver_name = format_ident!("receive_{snake_case_name}");
+    let receiver_with_args_name = format_ident!("receive_{snake_case_name}_with_args");
     let stream_name = format_ident!("{signal_name}{trait_name}");
     let signal_args = format_ident!("{signal_name}Args");
     let signal_name_ident = format_ident!("{signal_name}");
@@ -911,12 +921,24 @@ fn gen_proxy_signal(
             \n\
             This a convenient wrapper around [`{proxy_path}::receive_signal`]({receive_signal_link}).",
     );
+    let receive_with_args_gen_doc = format!(
+        "Create a stream that receives `{signal_name}` signals.\n\
+            \n\
+            This a convenient wrapper around [`{proxy_path}::receive_signal_with_args`]({receive_signal_with_args_link}).",
+    );
     let receive_signal = quote! {
         #[doc = #receive_gen_doc]
         #(#other_attrs)*
         pub #usage fn #receiver_name(&self) -> #zbus::Result<#stream_name<'c>>
         {
             self.receive_signal(#signal_name)#wait.map(#stream_name)
+        }
+
+        #[doc = #receive_with_args_gen_doc]
+        #(#other_attrs)*
+        pub #usage fn #receiver_with_args_name(&self, args: &[(u8, &str)]) -> #zbus::Result<#stream_name<'c>>
+        {
+            self.receive_signal_with_args(#signal_name, args)#wait.map(#stream_name)
         }
     };
 
