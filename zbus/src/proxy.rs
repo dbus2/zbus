@@ -89,7 +89,7 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 pub(crate) struct ProxyInnerStatic {
     #[derivative(Debug = "ignore")]
     pub(crate) conn: Connection,
-    dest_name_watcher: OnceCell<OwnedMatchRule>,
+    dest_owner_change_match_rule: OnceCell<OwnedMatchRule>,
 }
 
 #[derive(Debug)]
@@ -108,7 +108,7 @@ pub(crate) struct ProxyInner<'a> {
 
 impl Drop for ProxyInnerStatic {
     fn drop(&mut self) {
-        if let Some(rule) = self.dest_name_watcher.take() {
+        if let Some(rule) = self.dest_owner_change_match_rule.take() {
             self.conn.queue_remove_match(rule);
         }
     }
@@ -453,7 +453,7 @@ impl<'a> ProxyInner<'a> {
         Self {
             inner_without_borrows: ProxyInnerStatic {
                 conn,
-                dest_name_watcher: OnceCell::new(),
+                dest_owner_change_match_rule: OnceCell::new(),
             },
             destination,
             path,
@@ -463,52 +463,52 @@ impl<'a> ProxyInner<'a> {
         }
     }
 
-    /// Resolves the destination name to the associated unique connection name and watches for any changes.
+    /// Subscribe to the "NameOwnerChanged" signal on the bus for our destination.
     ///
-    /// Typically you would want to create the [`Proxy`] with the well-known name of the destination
-    /// service but signal messages only specify the unique name of the peer (except for signals
-    /// from `org.freedesktop.DBus` service). This means we have no means to check the sender of
-    /// the message. While in most cases this will not be a problem, it becomes a problem if you
-    /// need to communicate with multiple services exposing the same interface, over the same
-    /// connection. Hence the need for this method.
-    ///
-    /// This is only called when the user show interest in receiving a signal so that we don't end up
-    /// doing all this needlessly.
-    pub(crate) async fn destination_unique_name(&self) -> Result<()> {
+    /// If the destination is a unique name, we will not subscribe to the signal.
+    pub(crate) async fn subscribe_dest_owner_change(&self) -> Result<()> {
         if !self.inner_without_borrows.conn.is_bus() {
             // Names don't mean much outside the bus context.
             return Ok(());
         }
 
-        if let BusName::WellKnown(well_known_name) = &self.destination {
-            if self.inner_without_borrows.dest_name_watcher.get().is_some() {
-                // Already watching over the bus for any name updates so nothing to do here.
-                return Ok(());
-            }
+        let well_known_name = match &self.destination {
+            BusName::WellKnown(well_known_name) => well_known_name,
+            BusName::Unique(_) => return Ok(()),
+        };
 
-            let conn = &self.inner_without_borrows.conn;
-            let signal_rule: OwnedMatchRule = MatchRule::builder()
-                .msg_type(MessageType::Signal)
-                .sender("org.freedesktop.DBus")?
-                .path("/org/freedesktop/DBus")?
-                .interface("org.freedesktop.DBus")?
-                .member("NameOwnerChanged")?
-                .add_arg(well_known_name.as_str())?
-                .build()
-                .to_owned()
-                .into();
+        if self
+            .inner_without_borrows
+            .dest_owner_change_match_rule
+            .get()
+            .is_some()
+        {
+            // Already watching over the bus for any name updates so nothing to do here.
+            return Ok(());
+        }
 
-            conn.add_match(signal_rule.clone()).await?;
+        let conn = &self.inner_without_borrows.conn;
+        let signal_rule: OwnedMatchRule = MatchRule::builder()
+            .msg_type(MessageType::Signal)
+            .sender("org.freedesktop.DBus")?
+            .path("/org/freedesktop/DBus")?
+            .interface("org.freedesktop.DBus")?
+            .member("NameOwnerChanged")?
+            .add_arg(well_known_name.as_str())?
+            .build()
+            .to_owned()
+            .into();
 
-            if self
-                .inner_without_borrows
-                .dest_name_watcher
-                .set(signal_rule.clone())
-                .is_err()
-            {
-                // we raced another destination_unique_name call and added it twice
-                conn.remove_match(signal_rule).await?;
-            }
+        conn.add_match(signal_rule.clone()).await?;
+
+        if self
+            .inner_without_borrows
+            .dest_owner_change_match_rule
+            .set(signal_rule.clone())
+            .is_err()
+        {
+            // we raced another destination_unique_name call and added it twice
+            conn.remove_match(signal_rule).await?;
         }
 
         Ok(())
@@ -902,7 +902,7 @@ impl<'a> Proxy<'a> {
     ) -> Result<SignalStream<'a>> {
         // Time to try & resolve the destination name & track changes to it.
         let conn = self.inner.inner_without_borrows.conn.clone();
-        self.inner.destination_unique_name().await?;
+        self.inner.subscribe_dest_owner_change().await?;
 
         let mut rule_builder = MatchRule::builder()
             .msg_type(MessageType::Signal)
