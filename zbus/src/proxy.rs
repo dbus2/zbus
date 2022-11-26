@@ -871,13 +871,34 @@ impl<'a> Proxy<'a> {
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
     {
+        self.receive_signal_with_args(signal_name, &[]).await
+    }
+
+    /// Same as [`Proxy::receive_signal`] but with a filter.
+    ///
+    /// The D-Bus specification allows you to filter signals by their arguments, which helps avoid
+    /// a lot of unnecessary traffic and processing since the filter is run on the server side. Use
+    /// this method where possible. Note that this filtering is limited to arguments of string
+    /// types.
+    ///
+    /// The arguments are passed as a tuples of argument index and expected value.
+    pub async fn receive_signal_with_args<'m: 'a, M>(
+        &self,
+        signal_name: M,
+        args: &[(u8, &str)],
+    ) -> Result<SignalStream<'a>>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+    {
         let signal_name = signal_name.try_into().map_err(Into::into)?;
-        self.receive_signals(Some(signal_name)).await
+        self.receive_signals(Some(signal_name), args).await
     }
 
     async fn receive_signals<'m: 'a>(
         &self,
         signal_name: Option<MemberName<'m>>,
+        args: &[(u8, &str)],
     ) -> Result<SignalStream<'a>> {
         // Time to try & resolve the destination name & track changes to it.
         let conn = self.inner.inner_without_borrows.conn.clone();
@@ -890,6 +911,9 @@ impl<'a> Proxy<'a> {
             .interface(self.interface())?;
         if let Some(name) = &signal_name {
             rule_builder = rule_builder.member(name)?;
+        }
+        for (i, arg) in args {
+            rule_builder = rule_builder.arg(*i, *arg)?;
         }
         let rule: OwnedMatchRule = rule_builder.build().to_owned().into();
         conn.add_match(rule.clone()).await?;
@@ -924,7 +948,7 @@ impl<'a> Proxy<'a> {
 
     /// Create a stream for all signals emitted by this service.
     pub async fn receive_all_signals(&self) -> Result<SignalStream<'a>> {
-        self.receive_signals(None).await
+        self.receive_signals(None, &[]).await
     }
 
     /// Get a stream to receive property changed events.
