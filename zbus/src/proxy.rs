@@ -18,11 +18,11 @@ use std::{
 use tracing::{debug, info_span, instrument, Instrument};
 
 use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName, WellKnownName};
-use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
+use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
     async_channel::channel,
-    fdo::{self, IntrospectableProxy, PropertiesProxy},
+    fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesProxy},
     CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageBuilder,
     MessageSequence, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
@@ -1103,16 +1103,16 @@ pub struct SignalStream<'a> {
 }
 
 impl<'a> SignalStream<'a> {
-    fn filter(&mut self, msg: &Message) -> Result<bool> {
-        if msg.message_type() == zbus::MessageType::MethodReturn
-            && self.src_query.is_some()
-            && msg.reply_serial() == self.src_query
-        {
-            self.src_query = None;
-            self.src_unique_name = Some(OwnedUniqueName::into(msg.body()?));
-        }
-        if msg.message_type() != zbus::MessageType::Signal {
-            return Ok(false);
+    fn filter(&mut self, msg: &Arc<Message>) -> Result<bool> {
+        match msg.message_type() {
+            zbus::MessageType::MethodReturn
+                if self.src_query.is_some() && msg.reply_serial() == self.src_query =>
+            {
+                self.src_query = None;
+                self.src_unique_name = Some(OwnedUniqueName::into(msg.body()?));
+            }
+            zbus::MessageType::Signal => (),
+            _ => return Ok(false),
         }
         let memb = msg.member();
         let iface = msg.interface();
@@ -1131,25 +1131,14 @@ impl<'a> SignalStream<'a> {
         }
 
         // The src_unique_name must be maintained in lock-step with the applied filter
-        if let Some(bus_name) = &self.src_bus_name {
-            if memb.as_deref() == Some("NameOwnerChanged")
-                && iface.as_deref() == Some("org.freedesktop.DBus")
-                && path.as_deref() == Some("/org/freedesktop/DBus")
-            {
-                let header = msg.header()?;
-                if let Ok(Some(sender)) = header.sender() {
-                    if sender == "org.freedesktop.DBus" {
-                        let (name, _, new_owner) = msg.body::<(
-                            WellKnownName<'_>,
-                            Optional<UniqueName<'_>>,
-                            Optional<UniqueName<'_>>,
-                        )>()?;
-
-                        if &name == bus_name {
-                            self.src_unique_name = new_owner.as_ref().map(|n| n.to_owned());
-                        }
-                    }
-                }
+        let bus_name = match &self.src_bus_name {
+            Some(bus_name) => bus_name,
+            None => return Ok(false),
+        };
+        if let Some(signal) = NameOwnerChanged::from_message(msg.clone()) {
+            let args = signal.args()?;
+            if args.name() == bus_name {
+                self.src_unique_name = args.new_owner().as_ref().map(|n| n.to_owned());
             }
         }
 
