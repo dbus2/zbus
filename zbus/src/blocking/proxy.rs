@@ -277,7 +277,27 @@ impl<'a> Proxy<'a> {
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
     {
-        block_on(self.inner().receive_signal(signal_name))
+        self.receive_signal_with_args(signal_name, &[])
+    }
+
+    /// Same as [`Proxy::receive_signal`] but with a filter.
+    ///
+    /// The D-Bus specification allows you to filter signals by their arguments, which helps avoid
+    /// a lot of unnecessary traffic and processing since the filter is run on the server side. Use
+    /// this method where possible. Note that this filtering is limited to arguments of string
+    /// types.
+    ///
+    /// The arguments are passed as a tuples of argument index and expected value.
+    pub fn receive_signal_with_args<'m: 'a, M>(
+        &self,
+        signal_name: M,
+        args: &[(u8, &str)],
+    ) -> Result<SignalIterator<'a>>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+    {
+        block_on(self.inner().receive_signal_with_args(signal_name, args))
             .map(Some)
             .map(SignalIterator)
     }
