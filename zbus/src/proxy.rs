@@ -2,14 +2,14 @@ use async_broadcast::Receiver;
 use enumflags2::{bitflags, BitFlags};
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
-use futures_util::{future::Either, stream::FilterMap};
+use futures_util::{future::Either, stream::Map};
 use once_cell::sync::OnceCell;
 use ordered_stream::{join as join_streams, FromFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
-    future::{Future, Ready},
+    future::Future,
     ops::Deref,
     pin::Pin,
     sync::{Arc, RwLock, RwLockReadGuard},
@@ -18,11 +18,11 @@ use std::{
 use tracing::{debug, info_span, instrument, Instrument};
 
 use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName, WellKnownName};
-use zvariant::{ObjectPath, Optional, OwnedValue, Str, Value};
+use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
     async_channel::channel,
-    fdo::{self, IntrospectableProxy, PropertiesProxy},
+    fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesProxy},
     CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageBuilder,
     MessageSequence, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
@@ -89,7 +89,7 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 pub(crate) struct ProxyInnerStatic {
     #[derivative(Debug = "ignore")]
     pub(crate) conn: Connection,
-    dest_name_watcher: OnceCell<OwnedMatchRule>,
+    dest_owner_change_match_rule: OnceCell<OwnedMatchRule>,
 }
 
 #[derive(Debug)]
@@ -108,7 +108,7 @@ pub(crate) struct ProxyInner<'a> {
 
 impl Drop for ProxyInnerStatic {
     fn drop(&mut self) {
-        if let Some(rule) = self.dest_name_watcher.take() {
+        if let Some(rule) = self.dest_owner_change_match_rule.take() {
             self.conn.queue_remove_match(rule);
         }
     }
@@ -453,7 +453,7 @@ impl<'a> ProxyInner<'a> {
         Self {
             inner_without_borrows: ProxyInnerStatic {
                 conn,
-                dest_name_watcher: OnceCell::new(),
+                dest_owner_change_match_rule: OnceCell::new(),
             },
             destination,
             path,
@@ -463,52 +463,52 @@ impl<'a> ProxyInner<'a> {
         }
     }
 
-    /// Resolves the destination name to the associated unique connection name and watches for any changes.
+    /// Subscribe to the "NameOwnerChanged" signal on the bus for our destination.
     ///
-    /// Typically you would want to create the [`Proxy`] with the well-known name of the destination
-    /// service but signal messages only specify the unique name of the peer (except for signals
-    /// from `org.freedesktop.DBus` service). This means we have no means to check the sender of
-    /// the message. While in most cases this will not be a problem, it becomes a problem if you
-    /// need to communicate with multiple services exposing the same interface, over the same
-    /// connection. Hence the need for this method.
-    ///
-    /// This is only called when the user show interest in receiving a signal so that we don't end up
-    /// doing all this needlessly.
-    pub(crate) async fn destination_unique_name(&self) -> Result<()> {
+    /// If the destination is a unique name, we will not subscribe to the signal.
+    pub(crate) async fn subscribe_dest_owner_change(&self) -> Result<()> {
         if !self.inner_without_borrows.conn.is_bus() {
             // Names don't mean much outside the bus context.
             return Ok(());
         }
 
-        if let BusName::WellKnown(well_known_name) = &self.destination {
-            if self.inner_without_borrows.dest_name_watcher.get().is_some() {
-                // Already watching over the bus for any name updates so nothing to do here.
-                return Ok(());
-            }
+        let well_known_name = match &self.destination {
+            BusName::WellKnown(well_known_name) => well_known_name,
+            BusName::Unique(_) => return Ok(()),
+        };
 
-            let conn = &self.inner_without_borrows.conn;
-            let signal_rule: OwnedMatchRule = MatchRule::builder()
-                .msg_type(MessageType::Signal)
-                .sender("org.freedesktop.DBus")?
-                .path("/org/freedesktop/DBus")?
-                .interface("org.freedesktop.DBus")?
-                .member("NameOwnerChanged")?
-                .add_arg(well_known_name.as_str())?
-                .build()
-                .to_owned()
-                .into();
+        if self
+            .inner_without_borrows
+            .dest_owner_change_match_rule
+            .get()
+            .is_some()
+        {
+            // Already watching over the bus for any name updates so nothing to do here.
+            return Ok(());
+        }
 
-            conn.add_match(signal_rule.clone()).await?;
+        let conn = &self.inner_without_borrows.conn;
+        let signal_rule: OwnedMatchRule = MatchRule::builder()
+            .msg_type(MessageType::Signal)
+            .sender("org.freedesktop.DBus")?
+            .path("/org/freedesktop/DBus")?
+            .interface("org.freedesktop.DBus")?
+            .member("NameOwnerChanged")?
+            .add_arg(well_known_name.as_str())?
+            .build()
+            .to_owned()
+            .into();
 
-            if self
-                .inner_without_borrows
-                .dest_name_watcher
-                .set(signal_rule.clone())
-                .is_err()
-            {
-                // we raced another destination_unique_name call and added it twice
-                conn.remove_match(signal_rule).await?;
-            }
+        conn.add_match(signal_rule.clone()).await?;
+
+        if self
+            .inner_without_borrows
+            .dest_owner_change_match_rule
+            .set(signal_rule.clone())
+            .is_err()
+        {
+            // we raced another destination_unique_name call and added it twice
+            conn.remove_match(signal_rule).await?;
         }
 
         Ok(())
@@ -871,17 +871,38 @@ impl<'a> Proxy<'a> {
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
     {
+        self.receive_signal_with_args(signal_name, &[]).await
+    }
+
+    /// Same as [`Proxy::receive_signal`] but with a filter.
+    ///
+    /// The D-Bus specification allows you to filter signals by their arguments, which helps avoid
+    /// a lot of unnecessary traffic and processing since the filter is run on the server side. Use
+    /// this method where possible. Note that this filtering is limited to arguments of string
+    /// types.
+    ///
+    /// The arguments are passed as a tuples of argument index and expected value.
+    pub async fn receive_signal_with_args<'m: 'a, M>(
+        &self,
+        signal_name: M,
+        args: &[(u8, &str)],
+    ) -> Result<SignalStream<'a>>
+    where
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+    {
         let signal_name = signal_name.try_into().map_err(Into::into)?;
-        self.receive_signals(Some(signal_name)).await
+        self.receive_signals(Some(signal_name), args).await
     }
 
     async fn receive_signals<'m: 'a>(
         &self,
         signal_name: Option<MemberName<'m>>,
+        args: &[(u8, &str)],
     ) -> Result<SignalStream<'a>> {
         // Time to try & resolve the destination name & track changes to it.
         let conn = self.inner.inner_without_borrows.conn.clone();
-        self.inner.destination_unique_name().await?;
+        self.inner.subscribe_dest_owner_change().await?;
 
         let mut rule_builder = MatchRule::builder()
             .msg_type(MessageType::Signal)
@@ -890,6 +911,9 @@ impl<'a> Proxy<'a> {
             .interface(self.interface())?;
         if let Some(name) = &signal_name {
             rule_builder = rule_builder.member(name)?;
+        }
+        for (i, arg) in args {
+            rule_builder = rule_builder.arg(*i, *arg)?;
         }
         let rule: OwnedMatchRule = rule_builder.build().to_owned().into();
         conn.add_match(rule.clone()).await?;
@@ -924,7 +948,7 @@ impl<'a> Proxy<'a> {
 
     /// Create a stream for all signals emitted by this service.
     pub async fn receive_all_signals(&self) -> Result<SignalStream<'a>> {
-        self.receive_signals(None).await
+        self.receive_signals(None, &[]).await
     }
 
     /// Get a stream to receive property changed events.
@@ -969,28 +993,19 @@ impl<'a> Proxy<'a> {
     /// will only receive the last update.
     pub async fn receive_owner_changed(&self) -> Result<OwnerChangedStream<'_>> {
         use futures_util::StreamExt;
-        use std::future::ready;
-
         let dbus_proxy = fdo::DBusProxy::builder(self.connection())
             .cache_properties(CacheProperties::No)
             .build()
             .await?;
-        let dest = self.destination().to_owned();
         Ok(OwnerChangedStream {
-            filter_stream: dbus_proxy
-                // TODO: this signal stream matches all arguments, but we are interested only by a
-                // specific arg0. Rewrite with a custom match, or teach a signal stream to filter by
-                // arg?
-                .receive_name_owner_changed()
+            stream: dbus_proxy
+                .receive_name_owner_changed_with_args(&[(0, self.destination().as_str())])
                 .await?
-                .filter_map(Box::new(move |signal| {
+                .map(Box::new(move |signal| {
                     let args = signal.args().unwrap();
-
-                    if args.name() != &dest {
-                        return ready(None);
-                    }
                     let new_owner = args.new_owner().as_ref().map(|owner| owner.to_owned());
-                    ready(Some(new_owner))
+
+                    new_owner
                 })),
             name: self.destination().clone(),
         })
@@ -1041,22 +1056,16 @@ impl From<MethodFlags> for crate::MessageFlags {
     }
 }
 
-type OwnerChangedStreamFilter<'a> = FilterMap<
+type OwnerChangedStreamMap<'a> = Map<
     fdo::NameOwnerChangedStream<'a>,
-    Ready<Option<Option<UniqueName<'static>>>>,
-    Box<
-        dyn FnMut(fdo::NameOwnerChanged) -> Ready<Option<Option<UniqueName<'static>>>>
-            + Send
-            + Sync
-            + Unpin,
-    >,
+    Box<dyn FnMut(fdo::NameOwnerChanged) -> Option<UniqueName<'static>> + Send + Sync + Unpin>,
 >;
 
 /// A [`stream::Stream`] implementation that yields `UniqueName` when the bus owner changes.
 ///
 /// Use [`Proxy::receive_owner_changed`] to create an instance of this type.
 pub struct OwnerChangedStream<'a> {
-    filter_stream: OwnerChangedStreamFilter<'a>,
+    stream: OwnerChangedStreamMap<'a>,
     name: BusName<'a>,
 }
 
@@ -1074,7 +1083,7 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         use futures_util::StreamExt;
-        self.get_mut().filter_stream.poll_next_unpin(cx)
+        self.get_mut().stream.poll_next_unpin(cx)
     }
 }
 
@@ -1094,16 +1103,16 @@ pub struct SignalStream<'a> {
 }
 
 impl<'a> SignalStream<'a> {
-    fn filter(&mut self, msg: &Message) -> Result<bool> {
-        if msg.message_type() == zbus::MessageType::MethodReturn
-            && self.src_query.is_some()
-            && msg.reply_serial() == self.src_query
-        {
-            self.src_query = None;
-            self.src_unique_name = Some(OwnedUniqueName::into(msg.body()?));
-        }
-        if msg.message_type() != zbus::MessageType::Signal {
-            return Ok(false);
+    fn filter(&mut self, msg: &Arc<Message>) -> Result<bool> {
+        match msg.message_type() {
+            zbus::MessageType::MethodReturn
+                if self.src_query.is_some() && msg.reply_serial() == self.src_query =>
+            {
+                self.src_query = None;
+                self.src_unique_name = Some(OwnedUniqueName::into(msg.body()?));
+            }
+            zbus::MessageType::Signal => (),
+            _ => return Ok(false),
         }
         let memb = msg.member();
         let iface = msg.interface();
@@ -1122,25 +1131,14 @@ impl<'a> SignalStream<'a> {
         }
 
         // The src_unique_name must be maintained in lock-step with the applied filter
-        if let Some(bus_name) = &self.src_bus_name {
-            if memb.as_deref() == Some("NameOwnerChanged")
-                && iface.as_deref() == Some("org.freedesktop.DBus")
-                && path.as_deref() == Some("/org/freedesktop/DBus")
-            {
-                let header = msg.header()?;
-                if let Ok(Some(sender)) = header.sender() {
-                    if sender == "org.freedesktop.DBus" {
-                        let (name, _, new_owner) = msg.body::<(
-                            WellKnownName<'_>,
-                            Optional<UniqueName<'_>>,
-                            Optional<UniqueName<'_>>,
-                        )>()?;
-
-                        if &name == bus_name {
-                            self.src_unique_name = new_owner.as_ref().map(|n| n.to_owned());
-                        }
-                    }
-                }
+        let bus_name = match &self.src_bus_name {
+            Some(bus_name) => bus_name,
+            None => return Ok(false),
+        };
+        if let Some(signal) = NameOwnerChanged::from_message(msg.clone()) {
+            let args = signal.args()?;
+            if args.name() == bus_name {
+                self.src_unique_name = args.new_owner().as_ref().map(|n| n.to_owned());
             }
         }
 
@@ -1217,15 +1215,12 @@ impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
 
 #[cfg(test)]
 mod tests {
-    use zbus_names::UniqueName;
-
     use super::*;
     use crate::{dbus_interface, dbus_proxy, utils::block_on, ConnectionBuilder, SignalContext};
     use futures_util::StreamExt;
     use ntest::timeout;
     use std::future::ready;
     use test_log::test;
-    use zvariant::Optional;
 
     #[test]
     #[timeout(15000)]
@@ -1237,30 +1232,20 @@ mod tests {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = Connection::session().await?;
-        let unique_name = conn.unique_name().unwrap();
-
-        let proxy = fdo::DBusProxy::new(&conn).await?;
+        let dest_conn = Connection::session().await?;
+        let unique_name = dest_conn.unique_name().unwrap().clone();
 
         let well_known = "org.freedesktop.zbus.async.ProxySignalStreamTest";
-        let owner_changed_stream = proxy
-            .receive_signal("NameOwnerChanged")
-            .await?
-            .filter(|msg| {
-                if let Ok((name, _, new_owner)) = msg.body::<(
-                    BusName<'_>,
-                    Optional<UniqueName<'_>>,
-                    Optional<UniqueName<'_>>,
-                )>() {
-                    ready(match &*new_owner {
-                        Some(new_owner) => *new_owner == *unique_name && name == well_known,
-                        None => false,
-                    })
-                } else {
-                    ready(false)
-                }
-            });
+        let proxy: Proxy<'_> = ProxyBuilder::new_bare(&conn)
+            .destination(well_known)?
+            .path("/does/not/matter")?
+            .interface("does.not.matter")?
+            .build()
+            .await?;
+        let mut owner_changed_stream = proxy.receive_owner_changed().await?;
 
-        let name_acquired_stream = proxy.receive_signal("NameAcquired").await?.filter(|msg| {
+        let proxy = fdo::DBusProxy::new(&dest_conn).await?;
+        let mut name_acquired_stream = proxy.receive_signal("NameAcquired").await?.filter(|msg| {
             if let Ok(name) = msg.body::<BusName<'_>>() {
                 return ready(name == well_known);
             }
@@ -1268,7 +1253,7 @@ mod tests {
             ready(false)
         });
 
-        let _prop_stream =
+        let prop_stream =
             proxy
                 .receive_property_changed("SomeProp")
                 .await
@@ -1276,33 +1261,31 @@ mod tests {
                     let v: Option<u32> = changed.get().await.ok();
                     dbg!(v)
                 });
+        drop(proxy);
+        drop(prop_stream);
 
-        let reply = proxy
-            .request_name(
-                well_known.try_into()?,
-                fdo::RequestNameFlags::ReplaceExisting.into(),
-            )
-            .await?;
-        assert_eq!(reply, fdo::RequestNameReply::PrimaryOwner);
+        dest_conn.request_name(well_known).await?;
 
-        let (changed_signal, acquired_signal) = futures_util::join!(
-            owner_changed_stream.into_future(),
-            name_acquired_stream.into_future(),
-        );
+        let (new_owner, acquired_signal) =
+            futures_util::join!(owner_changed_stream.next(), name_acquired_stream.next(),);
 
-        let changed_signal = changed_signal.0.unwrap();
-        let (acquired_name, _, new_owner) = changed_signal
-            .body::<(
-                BusName<'_>,
-                Optional<UniqueName<'_>>,
-                Optional<UniqueName<'_>>,
-            )>()
-            .unwrap();
-        assert_eq!(acquired_name, well_known);
-        assert_eq!(*new_owner.as_ref().unwrap(), *unique_name);
+        assert_eq!(&new_owner.unwrap().unwrap(), &*unique_name);
 
-        let acquired_signal = acquired_signal.0.unwrap();
+        let acquired_signal = acquired_signal.unwrap();
         assert_eq!(acquired_signal.body::<&str>().unwrap(), well_known);
+
+        let proxy = Proxy::new(&conn, &unique_name, "/does/not/matter", "does.not.matter").await?;
+        let mut unique_name_changed_stream = proxy.receive_owner_changed().await?;
+
+        drop(dest_conn);
+        drop(name_acquired_stream);
+
+        // There shouldn't be an owner anymore.
+        let new_owner = owner_changed_stream.next().await;
+        assert!(new_owner.unwrap().is_none());
+
+        let new_unique_owner = unique_name_changed_stream.next().await;
+        assert!(new_unique_owner.unwrap().is_none());
 
         Ok(())
     }
