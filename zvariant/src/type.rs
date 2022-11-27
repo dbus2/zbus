@@ -498,4 +498,16 @@ impl Type for time::Month {
     }
 }
 
+#[cfg(feature = "chrono")]
+impl<Tz: chrono::TimeZone> Type for chrono::DateTime<Tz> {
+    fn signature() -> Signature<'static> {
+        <&str>::signature()
+    }
+}
+
+#[cfg(feature = "chrono")]
+static_str_type!(chrono::NaiveDateTime);
+#[cfg(feature = "chrono")]
+static_str_type!(chrono::NaiveTime);
+
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
