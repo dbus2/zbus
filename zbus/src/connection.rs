@@ -33,7 +33,8 @@ use crate::{
     fdo::{self, RequestNameFlags, RequestNameReply},
     raw::{Connection as RawConnection, Socket},
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, Message,
-    MessageStream, MessageType, ObjectServer, OwnedMatchRule, Result, Task,
+    MessageBuilder, MessageFlags, MessageStream, MessageType, ObjectServer, OwnedMatchRule, Result,
+    Task,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -384,15 +385,17 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let m = Message::method(
-            self.unique_name(),
+        self.call_method_raw(
             destination,
             path,
             interface,
             method_name,
+            BitFlags::empty(),
             body,
-        )?;
-        self.call_method_raw(m).await?.await
+        )
+        .await?
+        .expect("no reply")
+        .await
     }
 
     /// Send a method call.
@@ -400,13 +403,50 @@ impl Connection {
     /// Send the given message, which must be a method call, over the connection and return an
     /// object that allows the reply to be retrieved.  Typically you'd want to use
     /// [`Connection::call_method`] instead.
-    pub(crate) async fn call_method_raw(&self, msg: Message) -> Result<PendingMethodCall> {
-        debug_assert_eq!(msg.message_type(), MessageType::MethodCall);
+    ///
+    /// If the `flags` do not contain `MethodFlags::NoReplyExpected`, the return value is
+    /// guaranteed to be `Ok(Some(_))`, if there was no error encountered.
+    ///
+    /// INTERNAL NOTE: If this method is ever made pub, flags should become `BitFlags<MethodFlags>`.
+    pub(crate) async fn call_method_raw<'d, 'p, 'i, 'm, D, P, I, M, B>(
+        &self,
+        destination: Option<D>,
+        path: P,
+        interface: Option<I>,
+        method_name: M,
+        flags: BitFlags<MessageFlags>,
+        body: &B,
+    ) -> Result<Option<PendingMethodCall>>
+    where
+        D: TryInto<BusName<'d>>,
+        P: TryInto<ObjectPath<'p>>,
+        I: TryInto<InterfaceName<'i>>,
+        M: TryInto<MemberName<'m>>,
+        D::Error: Into<Error>,
+        P::Error: Into<Error>,
+        I::Error: Into<Error>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        let mut builder = MessageBuilder::method_call(path, method_name)?;
+        if let Some(destination) = destination {
+            builder = builder.destination(destination)?
+        }
+        if let Some(interface) = interface {
+            builder = builder.interface(interface)?
+        }
+        for flag in flags {
+            builder = builder.with_flags(flag)?;
+        }
+        let msg = builder.build(body)?;
 
         let stream = Some(MessageStream::from(self.clone()));
         let serial = self.send_message(msg).await?;
-
-        Ok(PendingMethodCall { stream, serial })
+        if flags.contains(MessageFlags::NoReplyExpected) {
+            Ok(None)
+        } else {
+            Ok(Some(PendingMethodCall { stream, serial }))
+        }
     }
 
     /// Emit a signal.

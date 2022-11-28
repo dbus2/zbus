@@ -23,7 +23,7 @@ use zvariant::{ObjectPath, OwnedValue, Str, Value};
 use crate::{
     async_channel::channel,
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesProxy},
-    CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageBuilder,
+    CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageBuilder, MessageFlags,
     MessageSequence, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
 
@@ -320,16 +320,18 @@ impl PropertiesCache {
             .await
             .map(|s| s.map(Either::Left))?;
 
-        let get_all = MessageBuilder::method_call(proxy.path().as_ref(), "GetAll")?
-            .destination(proxy.destination())?
-            .interface(proxy.interface())?
-            .build(&interface)?;
-
         let get_all = proxy
             .connection()
-            .call_method_raw(get_all)
+            .call_method_raw(
+                Some(proxy.destination()),
+                proxy.path(),
+                Some(proxy.interface()),
+                "GetAll",
+                BitFlags::empty(),
+                &interface,
+            )
             .await
-            .map(|s| FromFuture::from(s).map(Either::Right))?;
+            .map(|r| FromFuture::from(r.expect("no reply")).map(Either::Right))?;
 
         let mut join = join_streams(prop_changes, get_all);
 
@@ -819,35 +821,27 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::DynamicType,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
-        let mut builder = MessageBuilder::method_call(self.inner.path.as_ref(), method_name)?
-            .destination(&self.inner.destination)?
-            .interface(&self.inner.interface)?;
-
-        let msg_flags = flags.into();
-        for flag in msg_flags {
-            builder = builder.with_flags(flag.into())?;
-        }
-
-        let msg = builder.build(body)?;
-
-        if msg_flags.contains(MethodFlags::NoReplyExpected) {
-            self.inner
-                .inner_without_borrows
-                .conn
-                .send_message(msg)
-                .await?;
-            Ok(None)
-        } else {
-            let response = self
-                .inner
-                .inner_without_borrows
-                .conn
-                .call_method_raw(msg)
-                .await?
-                .await?
-                .body()?;
-
-            Ok(Some(response))
+        let flags = flags
+            .into()
+            .iter()
+            .map(MessageFlags::from)
+            .collect::<BitFlags<_>>();
+        match self
+            .inner
+            .inner_without_borrows
+            .conn
+            .call_method_raw(
+                Some(self.destination()),
+                self.path(),
+                Some(self.interface()),
+                method_name,
+                flags,
+                body,
+            )
+            .await?
+        {
+            Some(reply) => reply.await?.body().map(Some),
+            None => Ok(None),
         }
     }
 
@@ -1046,7 +1040,7 @@ pub enum MethodFlags {
 
 assert_impl_all!(MethodFlags: Send, Sync, Unpin);
 
-impl From<MethodFlags> for crate::MessageFlags {
+impl From<MethodFlags> for MessageFlags {
     fn from(method_flag: MethodFlags) -> Self {
         match method_flag {
             MethodFlags::NoReplyExpected => Self::NoReplyExpected,
