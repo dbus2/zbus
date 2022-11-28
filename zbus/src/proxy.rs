@@ -808,21 +808,19 @@ impl<'a> Proxy<'a> {
     ///
     /// [`call`]: struct.Proxy.html#method.call
     /// [`call_noreply`]: struct.Proxy.html#method.call_noreply
-    pub async fn call_with_flags<'m, M, F, B, R>(
+    pub async fn call_with_flags<'m, M, B, R>(
         &self,
         method_name: M,
-        flags: F,
+        flags: BitFlags<MethodFlags>,
         body: &B,
     ) -> Result<Option<R>>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
-        F: Into<BitFlags<MethodFlags>>,
         B: serde::ser::Serialize + zvariant::DynamicType,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
         let flags = flags
-            .into()
             .iter()
             .map(MessageFlags::from)
             .collect::<BitFlags<_>>();
@@ -854,7 +852,7 @@ impl<'a> Proxy<'a> {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        self.call_with_flags::<_, _, _, ()>(method_name, MethodFlags::NoReplyExpected, body)
+        self.call_with_flags::<_, _, ()>(method_name, MethodFlags::NoReplyExpected.into(), body)
             .await?;
         Ok(())
     }
