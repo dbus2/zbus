@@ -1,4 +1,3 @@
-use async_broadcast::Receiver;
 use enumflags2::{bitflags, BitFlags};
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
@@ -24,7 +23,7 @@ use crate::{
     async_channel::channel,
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesProxy},
     CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageBuilder, MessageFlags,
-    MessageSequence, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
+    MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
 
 #[derive(Debug, Default)]
@@ -909,7 +908,7 @@ impl<'a> Proxy<'a> {
         }
         let rule: OwnedMatchRule = rule_builder.build().to_owned().into();
         conn.add_match(rule.clone()).await?;
-        let stream = conn.msg_receiver.activate_cloned();
+        let stream = MessageStream::from(&conn);
 
         let (src_bus_name, src_unique_name, src_query) = match self.destination().to_owned() {
             BusName::Unique(name) => (None, Some(name), None),
@@ -934,7 +933,6 @@ impl<'a> Proxy<'a> {
             src_query,
             src_unique_name,
             member: signal_name,
-            last_seq: MessageSequence::default(),
         })
     }
 
@@ -1084,14 +1082,13 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
 /// Use [`Proxy::receive_signal`] to create an instance of this type.
 #[derive(Debug)]
 pub struct SignalStream<'a> {
-    stream: Receiver<Arc<Message>>,
+    stream: MessageStream,
     proxy: Proxy<'a>,
     match_rule: Option<OwnedMatchRule>,
     src_bus_name: Option<WellKnownName<'a>>,
     src_query: Option<u32>,
     src_unique_name: Option<UniqueName<'static>>,
     member: Option<MemberName<'a>>,
-    last_seq: MessageSequence,
 }
 
 impl<'a> SignalStream<'a> {
@@ -1145,10 +1142,11 @@ impl<'a> stream::Stream for SignalStream<'a> {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
-        while let Some(msg) = ready!(Pin::new(&mut this.stream).poll_next(cx)) {
-            this.last_seq = msg.recv_position();
-            if let Ok(true) = this.filter(&msg) {
-                return Poll::Ready(Some(msg));
+        while let Some(res) = ready!(Pin::new(&mut this.stream).poll_next(cx)) {
+            if let Ok(msg) = res {
+                if let Ok(true) = this.filter(&msg) {
+                    return Poll::Ready(Some(msg));
+                }
             }
         }
         Poll::Ready(None)
@@ -1166,21 +1164,23 @@ impl<'a> OrderedStream for SignalStream<'a> {
     ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
         let this = self.get_mut();
         loop {
-            if let Some(before) = before {
-                if this.last_seq >= *before {
-                    return Poll::Ready(PollResult::NoneBefore);
+            match ready!(OrderedStream::poll_next_before(
+                Pin::new(&mut this.stream),
+                cx,
+                before
+            )) {
+                PollResult::Item { data, ordering } => {
+                    if let Ok(msg) = data {
+                        if let Ok(true) = this.filter(&msg) {
+                            return Poll::Ready(PollResult::Item {
+                                data: msg,
+                                ordering,
+                            });
+                        }
+                    }
                 }
-            }
-            if let Some(msg) = ready!(stream::Stream::poll_next(Pin::new(&mut this.stream), cx)) {
-                this.last_seq = msg.recv_position();
-                if let Ok(true) = this.filter(&msg) {
-                    return Poll::Ready(PollResult::Item {
-                        data: msg,
-                        ordering: this.last_seq,
-                    });
-                }
-            } else {
-                return Poll::Ready(PollResult::Terminated);
+                PollResult::Terminated => return Poll::Ready(PollResult::Terminated),
+                PollResult::NoneBefore => return Poll::Ready(PollResult::NoneBefore),
             }
         }
     }
