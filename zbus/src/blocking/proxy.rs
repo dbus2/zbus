@@ -240,13 +240,12 @@ impl<'a> Proxy<'a> {
     pub fn call_with_flags<'m, M, F, B, R>(
         &self,
         method_name: M,
-        flags: F,
+        flags: BitFlags<MethodFlags>,
         body: &B,
     ) -> Result<Option<R>>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
-        F: Into<BitFlags<MethodFlags>>,
         B: serde::ser::Serialize + zvariant::DynamicType,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {

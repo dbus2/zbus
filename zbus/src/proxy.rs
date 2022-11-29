@@ -1,4 +1,3 @@
-use async_broadcast::Receiver;
 use enumflags2::{bitflags, BitFlags};
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
@@ -23,8 +22,8 @@ use zvariant::{ObjectPath, OwnedValue, Str, Value};
 use crate::{
     async_channel::channel,
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesProxy},
-    CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageBuilder,
-    MessageSequence, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
+    CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageBuilder, MessageFlags,
+    MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
 
 #[derive(Debug, Default)]
@@ -320,16 +319,18 @@ impl PropertiesCache {
             .await
             .map(|s| s.map(Either::Left))?;
 
-        let get_all = MessageBuilder::method_call(proxy.path().as_ref(), "GetAll")?
-            .destination(proxy.destination())?
-            .interface(proxy.interface())?
-            .build(&interface)?;
-
         let get_all = proxy
             .connection()
-            .call_method_raw(get_all)
+            .call_method_raw(
+                Some(proxy.destination()),
+                proxy.path(),
+                Some(proxy.interface()),
+                "GetAll",
+                BitFlags::empty(),
+                &interface,
+            )
             .await
-            .map(|s| FromFuture::from(s).map(Either::Right))?;
+            .map(|r| FromFuture::from(r.expect("no reply")).map(Either::Right))?;
 
         let mut join = join_streams(prop_changes, get_all);
 
@@ -806,48 +807,38 @@ impl<'a> Proxy<'a> {
     ///
     /// [`call`]: struct.Proxy.html#method.call
     /// [`call_noreply`]: struct.Proxy.html#method.call_noreply
-    pub async fn call_with_flags<'m, M, F, B, R>(
+    pub async fn call_with_flags<'m, M, B, R>(
         &self,
         method_name: M,
-        flags: F,
+        flags: BitFlags<MethodFlags>,
         body: &B,
     ) -> Result<Option<R>>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
-        F: Into<BitFlags<MethodFlags>>,
         B: serde::ser::Serialize + zvariant::DynamicType,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
-        let mut builder = MessageBuilder::method_call(self.inner.path.as_ref(), method_name)?
-            .destination(&self.inner.destination)?
-            .interface(&self.inner.interface)?;
-
-        let msg_flags = flags.into();
-        for flag in msg_flags {
-            builder = builder.with_flags(flag.into())?;
-        }
-
-        let msg = builder.build(body)?;
-
-        if msg_flags.contains(MethodFlags::NoReplyExpected) {
-            self.inner
-                .inner_without_borrows
-                .conn
-                .send_message(msg)
-                .await?;
-            Ok(None)
-        } else {
-            let response = self
-                .inner
-                .inner_without_borrows
-                .conn
-                .call_method_raw(msg)
-                .await?
-                .await?
-                .body()?;
-
-            Ok(Some(response))
+        let flags = flags
+            .iter()
+            .map(MessageFlags::from)
+            .collect::<BitFlags<_>>();
+        match self
+            .inner
+            .inner_without_borrows
+            .conn
+            .call_method_raw(
+                Some(self.destination()),
+                self.path(),
+                Some(self.interface()),
+                method_name,
+                flags,
+                body,
+            )
+            .await?
+        {
+            Some(reply) => reply.await?.body().map(Some),
+            None => Ok(None),
         }
     }
 
@@ -860,7 +851,7 @@ impl<'a> Proxy<'a> {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        self.call_with_flags::<_, _, _, ()>(method_name, MethodFlags::NoReplyExpected, body)
+        self.call_with_flags::<_, _, ()>(method_name, MethodFlags::NoReplyExpected.into(), body)
             .await?;
         Ok(())
     }
@@ -917,7 +908,7 @@ impl<'a> Proxy<'a> {
         }
         let rule: OwnedMatchRule = rule_builder.build().to_owned().into();
         conn.add_match(rule.clone()).await?;
-        let stream = conn.msg_receiver.activate_cloned();
+        let stream = MessageStream::from(&conn);
 
         let (src_bus_name, src_unique_name, src_query) = match self.destination().to_owned() {
             BusName::Unique(name) => (None, Some(name), None),
@@ -942,7 +933,6 @@ impl<'a> Proxy<'a> {
             src_query,
             src_unique_name,
             member: signal_name,
-            last_seq: MessageSequence::default(),
         })
     }
 
@@ -1046,7 +1036,7 @@ pub enum MethodFlags {
 
 assert_impl_all!(MethodFlags: Send, Sync, Unpin);
 
-impl From<MethodFlags> for crate::MessageFlags {
+impl From<MethodFlags> for MessageFlags {
     fn from(method_flag: MethodFlags) -> Self {
         match method_flag {
             MethodFlags::NoReplyExpected => Self::NoReplyExpected,
@@ -1092,14 +1082,13 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
 /// Use [`Proxy::receive_signal`] to create an instance of this type.
 #[derive(Debug)]
 pub struct SignalStream<'a> {
-    stream: Receiver<Arc<Message>>,
+    stream: MessageStream,
     proxy: Proxy<'a>,
     match_rule: Option<OwnedMatchRule>,
     src_bus_name: Option<WellKnownName<'a>>,
     src_query: Option<u32>,
     src_unique_name: Option<UniqueName<'static>>,
     member: Option<MemberName<'a>>,
-    last_seq: MessageSequence,
 }
 
 impl<'a> SignalStream<'a> {
@@ -1153,10 +1142,11 @@ impl<'a> stream::Stream for SignalStream<'a> {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
-        while let Some(msg) = ready!(Pin::new(&mut this.stream).poll_next(cx)) {
-            this.last_seq = msg.recv_position();
-            if let Ok(true) = this.filter(&msg) {
-                return Poll::Ready(Some(msg));
+        while let Some(res) = ready!(Pin::new(&mut this.stream).poll_next(cx)) {
+            if let Ok(msg) = res {
+                if let Ok(true) = this.filter(&msg) {
+                    return Poll::Ready(Some(msg));
+                }
             }
         }
         Poll::Ready(None)
@@ -1174,21 +1164,23 @@ impl<'a> OrderedStream for SignalStream<'a> {
     ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
         let this = self.get_mut();
         loop {
-            if let Some(before) = before {
-                if this.last_seq >= *before {
-                    return Poll::Ready(PollResult::NoneBefore);
+            match ready!(OrderedStream::poll_next_before(
+                Pin::new(&mut this.stream),
+                cx,
+                before
+            )) {
+                PollResult::Item { data, ordering } => {
+                    if let Ok(msg) = data {
+                        if let Ok(true) = this.filter(&msg) {
+                            return Poll::Ready(PollResult::Item {
+                                data: msg,
+                                ordering,
+                            });
+                        }
+                    }
                 }
-            }
-            if let Some(msg) = ready!(stream::Stream::poll_next(Pin::new(&mut this.stream), cx)) {
-                this.last_seq = msg.recv_position();
-                if let Ok(true) = this.filter(&msg) {
-                    return Poll::Ready(PollResult::Item {
-                        data: msg,
-                        ordering: this.last_seq,
-                    });
-                }
-            } else {
-                return Poll::Ready(PollResult::Terminated);
+                PollResult::Terminated => return Poll::Ready(PollResult::Terminated),
+                PollResult::NoneBefore => return Poll::Ready(PollResult::NoneBefore),
             }
         }
     }
