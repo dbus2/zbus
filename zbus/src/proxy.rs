@@ -891,7 +891,6 @@ impl<'a> Proxy<'a> {
         signal_name: Option<MemberName<'m>>,
         args: &[(u8, &str)],
     ) -> Result<SignalStream<'a>> {
-        // Time to try & resolve the destination name & track changes to it.
         let conn = self.inner.inner_without_borrows.conn.clone();
         self.inner.subscribe_dest_owner_change().await?;
 
