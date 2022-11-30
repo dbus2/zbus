@@ -1,18 +1,18 @@
 .templates_sha: &templates_sha 79c325922670137e8f0a4dc5f6f097e0eb57c1af
 
 include:
-  - project: 'freedesktop/ci-templates'
+  - project: "freedesktop/ci-templates"
     ref: *templates_sha
-    file: '/templates/debian.yml'
+    file: "/templates/debian.yml"
 
 variables:
   FDO_UPSTREAM_REPO: dbus/zbus
-  UPSTREAM_BRANCH: 'main'
-  RUST_BACKTRACE: 'full'
+  UPSTREAM_BRANCH: "main"
+  RUST_BACKTRACE: "full"
 
   # If the MSRV needs to be updated, make sure to also change the
   # rust-version fields in packages' Cargo.toml files.
-  MSRV: '1.60'
+  MSRV: "1.60"
 
   ###
   # IMPORTANT
@@ -22,7 +22,7 @@ variables:
   ###
   WINDOWS_TAG: "2022-10-31.1"
 
-  WINDOWS_AMD64_SUFFIX: 'amd64/windows'
+  WINDOWS_AMD64_SUFFIX: "amd64/windows"
   WINDOWS_IMAGE: "$CI_REGISTRY_IMAGE/$WINDOWS_AMD64_SUFFIX:$WINDOWS_TAG-$UPSTREAM_BRANCH"
   WINDOWS_UPSTREAM_IMAGE: "$CI_REGISTRY/$UPSTREAM_REPO/$WINDOWS_AMD64_SUFFIX:$WINDOWS_TAG-$UPSTREAM_BRANCH"
 
@@ -37,7 +37,7 @@ stages:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: '2022-10-30.1'
+    FDO_DISTRIBUTION_TAG: "2022-10-30.1"
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
@@ -131,19 +131,19 @@ docs build:
     - cargo doc
 
 .cargo_test_var: &cargo_test
-    - rustc --version
-    - cargo --version
-    - mkdir -p /run/user/$UID
-    - sed -e s/UID/$UID/ -e s/PATH/path/ gitlab/dbus-session.conf > /tmp/dbus-session.conf
-    - sed -e s/UID/$UID/ -e s/PATH/abstract/ gitlab/dbus-session.conf > /tmp/dbus-session-abstract.conf
-    - dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo test --verbose -- basic_connection
-    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
-    # check cookie-sha1 auth against dbus-daemon
-    - sed -i s/EXTERNAL/DBUS_COOKIE_SHA1/g /tmp/dbus-session.conf
-    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- basic_connection
-    # Test tokio support.
-    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --tests -p zbus --no-default-features --features tokio -- --skip fdpass_systemd
-    - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
+  - rustc --version
+  - cargo --version
+  - mkdir -p /run/user/$UID
+  - sed -e s/UID/$UID/ -e s/PATH/path/ gitlab/dbus-session.conf > /tmp/dbus-session.conf
+  - sed -e s/UID/$UID/ -e s/PATH/abstract/ gitlab/dbus-session.conf > /tmp/dbus-session-abstract.conf
+  - dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo test --verbose -- basic_connection
+  - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
+  # check cookie-sha1 auth against dbus-daemon
+  - sed -i s/EXTERNAL/DBUS_COOKIE_SHA1/g /tmp/dbus-session.conf
+  - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- basic_connection
+  # Test tokio support.
+  - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --tests -p zbus --no-default-features --features tokio -- --skip fdpass_systemd
+  - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
 
 test:
   extends: .debian_img
@@ -170,18 +170,18 @@ msvc:
   image: $WINDOWS_IMAGE
   stage: test
   tags:
-    - 'docker'
-    - 'windows'
-    - '2022'
+    - "docker"
+    - "windows"
+    - "2022"
   needs:
     - "windows amd64 docker"
   variables:
-    ErrorActionPreference: 'Stop'
-    WarningPreference: 'Stop'
-    PKG_CONFIG_PATH: 'C:/lib/pkgconfig'
-    DBUS_SESSION_BUS_ADDRESS: 'tcp:host=127.0.0.1,port=9876'
-    TRYBUILD: 'overwrite' # ignore ui tests
-  timeout: '45min'
+    ErrorActionPreference: "Stop"
+    WarningPreference: "Stop"
+    PKG_CONFIG_PATH: "C:/lib/pkgconfig"
+    DBUS_SESSION_BUS_ADDRESS: "tcp:host=127.0.0.1,port=9876"
+    TRYBUILD: "overwrite" # ignore ui tests
+  timeout: "45min"
   script:
     - $env:PATH += ";C:\bin"
     - Start-Process dbus-daemon.exe --config-file=gitlab/win32-session.conf
@@ -223,7 +223,7 @@ coverage:
   when: manual
   artifacts:
     paths:
-      - 'coverage'
+      - "coverage"
     reports:
       coverage_report:
         coverage_format: cobertura
