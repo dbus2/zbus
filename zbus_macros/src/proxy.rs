@@ -521,9 +521,15 @@ fn gen_proxy_method_call(
         .any(|x| matches!(x, ItemAttribute::AllowInteractiveAuth));
 
     let method_flags = match (no_reply, no_autostart, allow_interactive_auth) {
-        (true, false, false) => Some(quote!(zbus::MethodFlags::NoReplyExpected)),
-        (false, true, false) => Some(quote!(zbus::MethodFlags::NoAutoStart)),
-        (false, false, true) => Some(quote!(zbus::MethodFlags::AllowInteractiveAuth)),
+        (true, false, false) => Some(quote!(::std::convert::Into::into(
+            zbus::MethodFlags::NoReplyExpected
+        ))),
+        (false, true, false) => Some(quote!(::std::convert::Into::into(
+            zbus::MethodFlags::NoAutoStart
+        ))),
+        (false, false, true) => Some(quote!(::std::convert::Into::into(
+            zbus::MethodFlags::AllowInteractiveAuth
+        ))),
 
         (true, true, false) => Some(quote!(
             zbus::MethodFlags::NoReplyExpected | zbus::MethodFlags::NoAutoStart
@@ -623,7 +629,7 @@ fn gen_proxy_method_call(
                 quote! {
                     #(#other_attrs)*
                     pub #usage #signature {
-                        self.0.call_with_flags::<_, _, _, ()>(#method_name, #method_flags, #body)#wait?;
+                        self.0.call_with_flags::<_, _, ()>(#method_name, #method_flags, #body)#wait?;
                         ::std::result::Result::Ok(())
                     }
                 }
