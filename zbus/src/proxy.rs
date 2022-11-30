@@ -891,48 +891,9 @@ impl<'a> Proxy<'a> {
         signal_name: Option<MemberName<'m>>,
         args: &[(u8, &str)],
     ) -> Result<SignalStream<'a>> {
-        let conn = self.inner.inner_without_borrows.conn.clone();
         self.inner.subscribe_dest_owner_change().await?;
 
-        let mut rule_builder = MatchRule::builder()
-            .msg_type(MessageType::Signal)
-            .sender(self.destination())?
-            .path(self.path())?
-            .interface(self.interface())?;
-        if let Some(name) = &signal_name {
-            rule_builder = rule_builder.member(name)?;
-        }
-        for (i, arg) in args {
-            rule_builder = rule_builder.arg(*i, *arg)?;
-        }
-        let rule: OwnedMatchRule = rule_builder.build().to_owned().into();
-        conn.add_match(rule.clone()).await?;
-        let stream = MessageStream::from(&conn);
-
-        let (src_bus_name, src_unique_name, src_query) = match self.destination().to_owned() {
-            BusName::Unique(name) => (None, Some(name), None),
-            BusName::WellKnown(name) => {
-                let id = conn
-                    .send_message(
-                        MessageBuilder::method_call("/org/freedesktop/DBus", "GetNameOwner")?
-                            .destination("org.freedesktop.DBus")?
-                            .interface("org.freedesktop.DBus")?
-                            .build(&name)?,
-                    )
-                    .await?;
-                (Some(name), None, Some(id))
-            }
-        };
-
-        Ok(SignalStream {
-            stream,
-            proxy: self.clone(),
-            match_rule: Some(rule),
-            src_bus_name,
-            src_query,
-            src_unique_name,
-            member: signal_name,
-        })
+        SignalStream::new(self.clone(), signal_name, args).await
     }
 
     /// Create a stream for all signals emitted by this service.
@@ -1091,6 +1052,53 @@ pub struct SignalStream<'a> {
 }
 
 impl<'a> SignalStream<'a> {
+    async fn new<'m: 'a>(
+        proxy: Proxy<'a>,
+        signal_name: Option<MemberName<'m>>,
+        args: &[(u8, &str)],
+    ) -> Result<SignalStream<'a>> {
+        let mut rule_builder = MatchRule::builder()
+            .msg_type(MessageType::Signal)
+            .sender(proxy.destination())?
+            .path(proxy.path())?
+            .interface(proxy.interface())?;
+        if let Some(name) = &signal_name {
+            rule_builder = rule_builder.member(name)?;
+        }
+        for (i, arg) in args {
+            rule_builder = rule_builder.arg(*i, *arg)?;
+        }
+        let rule: OwnedMatchRule = rule_builder.build().to_owned().into();
+        let conn = proxy.connection();
+        conn.add_match(rule.clone()).await?;
+        let stream = MessageStream::from(conn);
+
+        let (src_bus_name, src_unique_name, src_query) = match proxy.destination().to_owned() {
+            BusName::Unique(name) => (None, Some(name), None),
+            BusName::WellKnown(name) => {
+                let id = conn
+                    .send_message(
+                        MessageBuilder::method_call("/org/freedesktop/DBus", "GetNameOwner")?
+                            .destination("org.freedesktop.DBus")?
+                            .interface("org.freedesktop.DBus")?
+                            .build(&name)?,
+                    )
+                    .await?;
+                (Some(name), None, Some(id))
+            }
+        };
+
+        Ok(Self {
+            stream,
+            proxy,
+            match_rule: Some(rule),
+            src_bus_name,
+            src_query,
+            src_unique_name,
+            member: signal_name,
+        })
+    }
+
     fn filter(&mut self, msg: &Arc<Message>) -> Result<bool> {
         match msg.message_type() {
             zbus::MessageType::MethodReturn
