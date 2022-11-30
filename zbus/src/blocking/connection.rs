@@ -254,7 +254,7 @@ impl From<crate::Connection> for Connection {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use ntest::timeout;
     #[cfg(all(unix, not(feature = "tokio")))]
@@ -271,7 +271,6 @@ mod tests {
         Guid,
     };
 
-    #[cfg(unix)]
     #[test]
     #[timeout(15000)]
     fn unix_p2p() {
