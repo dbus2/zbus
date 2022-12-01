@@ -16,13 +16,13 @@ use std::{
 };
 use tracing::{debug, info_span, instrument, Instrument};
 
-use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName, WellKnownName};
+use zbus_names::{BusName, InterfaceName, MemberName, UniqueName, WellKnownName};
 use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
     async_channel::channel,
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesProxy},
-    CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageBuilder, MessageFlags,
+    CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageFlags,
     MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
 
@@ -1046,7 +1046,6 @@ pub struct SignalStream<'a> {
     proxy: Proxy<'a>,
     match_rule: Option<OwnedMatchRule>,
     src_bus_name: Option<WellKnownName<'a>>,
-    src_query: Option<u32>,
     src_unique_name: Option<UniqueName<'static>>,
     member: Option<MemberName<'a>>,
 }
@@ -1073,18 +1072,67 @@ impl<'a> SignalStream<'a> {
         conn.add_match(rule.clone()).await?;
         let stream = MessageStream::from(conn);
 
-        let (src_bus_name, src_unique_name, src_query) = match proxy.destination().to_owned() {
-            BusName::Unique(name) => (None, Some(name), None),
+        let (src_bus_name, src_unique_name, stream) = match proxy.destination().to_owned() {
+            BusName::Unique(name) => (None, Some(name), stream),
             BusName::WellKnown(name) => {
-                let id = conn
-                    .send_message(
-                        MessageBuilder::method_call("/org/freedesktop/DBus", "GetNameOwner")?
-                            .destination("org.freedesktop.DBus")?
-                            .interface("org.freedesktop.DBus")?
-                            .build(&name)?,
+                use ordered_stream::OrderedStreamExt;
+
+                let stream = stream.map(Either::Left);
+
+                let get_name_owner = conn
+                    .call_method_raw(
+                        Some("org.freedesktop.DBus"),
+                        "/org/freedesktop/DBus",
+                        Some("org.freedesktop.DBus"),
+                        "GetNameOwner",
+                        BitFlags::empty(),
+                        &name,
                     )
-                    .await?;
-                (Some(name), None, Some(id))
+                    .await
+                    .map(|r| FromFuture::from(r.expect("no reply")).map(Either::Right))?;
+
+                let mut join = join_streams(stream, get_name_owner);
+
+                let src_unique_name = loop {
+                    match join.next().await {
+                        Some(Either::Left(msg)) => {
+                            if let Some(signal) =
+                                msg.map(NameOwnerChanged::from_message).ok().flatten()
+                            {
+                                if let Ok(args) = signal.args() {
+                                    match (args.name(), args.new_owner().deref()) {
+                                        (BusName::WellKnown(n), Some(new_owner)) if n == &name => {
+                                            break Some(new_owner.to_owned());
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                            }
+                        }
+                        Some(Either::Right(Ok(response))) => {
+                            break Some(response.body::<UniqueName<'_>>()?.to_owned())
+                        }
+                        Some(Either::Right(Err(e))) => {
+                            // Probably the name is not owned. Not a problem but let's still log it.
+                            debug!("Failed to get owner of {name}: {e}");
+
+                            break None;
+                        }
+                        None => {
+                            return Err(Error::Io(std::io::Error::new(
+                                std::io::ErrorKind::BrokenPipe,
+                                "connection closed",
+                            )))
+                        }
+                    }
+                };
+
+                // Ignore any buffered message. We are only interested in the first one (which we
+                // already got since we're out of the loop).
+                let (stream, _, _) = join.into_inner();
+                let stream = stream.into_inner();
+
+                (Some(name), src_unique_name, stream)
             }
         };
 
@@ -1093,22 +1141,14 @@ impl<'a> SignalStream<'a> {
             proxy,
             match_rule: Some(rule),
             src_bus_name,
-            src_query,
             src_unique_name,
             member: signal_name,
         })
     }
 
     fn filter(&mut self, msg: &Arc<Message>) -> Result<bool> {
-        match msg.message_type() {
-            zbus::MessageType::MethodReturn
-                if self.src_query.is_some() && msg.reply_serial() == self.src_query =>
-            {
-                self.src_query = None;
-                self.src_unique_name = Some(OwnedUniqueName::into(msg.body()?));
-            }
-            zbus::MessageType::Signal => (),
-            _ => return Ok(false),
+        if msg.message_type() != zbus::MessageType::Signal {
+            return Ok(false);
         }
         let memb = msg.member();
         let iface = msg.interface();
