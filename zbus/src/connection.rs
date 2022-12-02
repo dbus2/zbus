@@ -429,6 +429,9 @@ impl Connection {
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
         let mut builder = MessageBuilder::method_call(path, method_name)?;
+        if let Some(sender) = self.unique_name() {
+            builder = builder.sender(sender)?
+        }
         if let Some(destination) = destination {
             builder = builder.destination(destination)?
         }
