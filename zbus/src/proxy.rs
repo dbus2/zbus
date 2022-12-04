@@ -16,13 +16,13 @@ use std::{
 };
 use tracing::{debug, info_span, instrument, Instrument};
 
-use zbus_names::{BusName, InterfaceName, MemberName, OwnedUniqueName, UniqueName, WellKnownName};
+use zbus_names::{BusName, InterfaceName, MemberName, UniqueName, WellKnownName};
 use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
     async_channel::channel,
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesProxy},
-    CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageBuilder, MessageFlags,
+    CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageFlags,
     MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
 
@@ -891,49 +891,9 @@ impl<'a> Proxy<'a> {
         signal_name: Option<MemberName<'m>>,
         args: &[(u8, &str)],
     ) -> Result<SignalStream<'a>> {
-        // Time to try & resolve the destination name & track changes to it.
-        let conn = self.inner.inner_without_borrows.conn.clone();
         self.inner.subscribe_dest_owner_change().await?;
 
-        let mut rule_builder = MatchRule::builder()
-            .msg_type(MessageType::Signal)
-            .sender(self.destination())?
-            .path(self.path())?
-            .interface(self.interface())?;
-        if let Some(name) = &signal_name {
-            rule_builder = rule_builder.member(name)?;
-        }
-        for (i, arg) in args {
-            rule_builder = rule_builder.arg(*i, *arg)?;
-        }
-        let rule: OwnedMatchRule = rule_builder.build().to_owned().into();
-        conn.add_match(rule.clone()).await?;
-        let stream = MessageStream::from(&conn);
-
-        let (src_bus_name, src_unique_name, src_query) = match self.destination().to_owned() {
-            BusName::Unique(name) => (None, Some(name), None),
-            BusName::WellKnown(name) => {
-                let id = conn
-                    .send_message(
-                        MessageBuilder::method_call("/org/freedesktop/DBus", "GetNameOwner")?
-                            .destination("org.freedesktop.DBus")?
-                            .interface("org.freedesktop.DBus")?
-                            .build(&name)?,
-                    )
-                    .await?;
-                (Some(name), None, Some(id))
-            }
-        };
-
-        Ok(SignalStream {
-            stream,
-            proxy: self.clone(),
-            match_rule: Some(rule),
-            src_bus_name,
-            src_query,
-            src_unique_name,
-            member: signal_name,
-        })
+        SignalStream::new(self.clone(), signal_name, args).await
     }
 
     /// Create a stream for all signals emitted by this service.
@@ -1086,22 +1046,109 @@ pub struct SignalStream<'a> {
     proxy: Proxy<'a>,
     match_rule: Option<OwnedMatchRule>,
     src_bus_name: Option<WellKnownName<'a>>,
-    src_query: Option<u32>,
     src_unique_name: Option<UniqueName<'static>>,
     member: Option<MemberName<'a>>,
 }
 
 impl<'a> SignalStream<'a> {
-    fn filter(&mut self, msg: &Arc<Message>) -> Result<bool> {
-        match msg.message_type() {
-            zbus::MessageType::MethodReturn
-                if self.src_query.is_some() && msg.reply_serial() == self.src_query =>
-            {
-                self.src_query = None;
-                self.src_unique_name = Some(OwnedUniqueName::into(msg.body()?));
+    async fn new<'m: 'a>(
+        proxy: Proxy<'a>,
+        signal_name: Option<MemberName<'m>>,
+        args: &[(u8, &str)],
+    ) -> Result<SignalStream<'a>> {
+        let mut rule_builder = MatchRule::builder()
+            .msg_type(MessageType::Signal)
+            .sender(proxy.destination())?
+            .path(proxy.path())?
+            .interface(proxy.interface())?;
+        if let Some(name) = &signal_name {
+            rule_builder = rule_builder.member(name)?;
+        }
+        for (i, arg) in args {
+            rule_builder = rule_builder.arg(*i, *arg)?;
+        }
+        let rule: OwnedMatchRule = rule_builder.build().to_owned().into();
+        let conn = proxy.connection();
+        conn.add_match(rule.clone()).await?;
+        let stream = MessageStream::from(conn);
+
+        let (src_bus_name, src_unique_name, stream) = match proxy.destination().to_owned() {
+            BusName::Unique(name) => (None, Some(name), stream),
+            BusName::WellKnown(name) => {
+                use ordered_stream::OrderedStreamExt;
+
+                let stream = stream.map(Either::Left);
+
+                let get_name_owner = conn
+                    .call_method_raw(
+                        Some("org.freedesktop.DBus"),
+                        "/org/freedesktop/DBus",
+                        Some("org.freedesktop.DBus"),
+                        "GetNameOwner",
+                        BitFlags::empty(),
+                        &name,
+                    )
+                    .await
+                    .map(|r| FromFuture::from(r.expect("no reply")).map(Either::Right))?;
+
+                let mut join = join_streams(stream, get_name_owner);
+
+                let src_unique_name = loop {
+                    match join.next().await {
+                        Some(Either::Left(msg)) => {
+                            if let Some(signal) =
+                                msg.map(NameOwnerChanged::from_message).ok().flatten()
+                            {
+                                if let Ok(args) = signal.args() {
+                                    match (args.name(), args.new_owner().deref()) {
+                                        (BusName::WellKnown(n), Some(new_owner)) if n == &name => {
+                                            break Some(new_owner.to_owned());
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                            }
+                        }
+                        Some(Either::Right(Ok(response))) => {
+                            break Some(response.body::<UniqueName<'_>>()?.to_owned())
+                        }
+                        Some(Either::Right(Err(e))) => {
+                            // Probably the name is not owned. Not a problem but let's still log it.
+                            debug!("Failed to get owner of {name}: {e}");
+
+                            break None;
+                        }
+                        None => {
+                            return Err(Error::Io(std::io::Error::new(
+                                std::io::ErrorKind::BrokenPipe,
+                                "connection closed",
+                            )))
+                        }
+                    }
+                };
+
+                // Ignore any buffered message. We are only interested in the first one (which we
+                // already got since we're out of the loop).
+                let (stream, _, _) = join.into_inner();
+                let stream = stream.into_inner();
+
+                (Some(name), src_unique_name, stream)
             }
-            zbus::MessageType::Signal => (),
-            _ => return Ok(false),
+        };
+
+        Ok(Self {
+            stream,
+            proxy,
+            match_rule: Some(rule),
+            src_bus_name,
+            src_unique_name,
+            member: signal_name,
+        })
+    }
+
+    fn filter(&mut self, msg: &Arc<Message>) -> Result<bool> {
+        if msg.message_type() != zbus::MessageType::Signal {
+            return Ok(false);
         }
         let memb = msg.member();
         let iface = msg.interface();
@@ -1111,10 +1158,9 @@ impl<'a> SignalStream<'a> {
             && path.as_ref() == Some(self.proxy.path())
             && iface.as_ref() == Some(self.proxy.interface())
         {
-            // If unique name is not known for some reason, we don't match it.
-            if self.src_unique_name.is_none()
-                || msg.header()?.sender()? == self.src_unique_name.as_ref()
-            {
+            let header = msg.header()?;
+            let sender = header.sender()?;
+            if sender == self.src_unique_name.as_ref() {
                 return Ok(true);
             }
         }
