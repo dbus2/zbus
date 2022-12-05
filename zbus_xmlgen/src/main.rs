@@ -1,6 +1,7 @@
 #![deny(rust_2018_idioms)]
 
 use std::{
+    convert::TryInto,
     env::args,
     error::Error,
     fs::File,
@@ -12,11 +13,13 @@ use std::{
 
 use zbus::{
     blocking::{Connection, ConnectionBuilder, ProxyBuilder},
+    names::BusName,
     quick_xml::{Interface, Node},
 };
 
 mod gen;
 use gen::GenTrait;
+use zvariant::ObjectPath;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let input_src;
@@ -31,15 +34,21 @@ fn main() -> Result<(), Box<dyn Error>> {
             .unwrap()
     };
 
-    let node: Node<'_> = match args().nth(1) {
+    let (node, service, path) = match args().nth(1) {
         Some(bus) if bus == "--system" || bus == "--session" => {
             let connection = if bus == "--system" {
                 Connection::system()?
             } else {
                 Connection::session()?
             };
-            let service = args().nth(2).expect("Missing param for service");
-            let path = args().nth(3).expect("Missing param for object path");
+            let service: BusName<'_> = args()
+                .nth(2)
+                .expect("Missing param for service")
+                .try_into()?;
+            let path: ObjectPath<'_> = args()
+                .nth(3)
+                .expect("Missing param for object path")
+                .try_into()?;
 
             input_src = format!(
                 "Interface '{}' from service '{}' on {} bus",
@@ -48,20 +57,34 @@ fn main() -> Result<(), Box<dyn Error>> {
                 bus.trim_start_matches("--")
             );
 
-            let xml = proxy(connection, &*service, &*path).introspect()?;
-            Node::from_reader(xml.as_bytes())?
+            let xml = proxy(connection, service.clone(), path.clone()).introspect()?;
+            (
+                Node::from_reader(xml.as_bytes())?,
+                Some(service),
+                Some(path),
+            )
         }
         Some(address) if address == "--address" => {
             let address = args().nth(2).expect("Missing param for address path");
-            let service = args().nth(3).expect("Missing param for service");
-            let path = args().nth(4).expect("Missing param for object path");
+            let service: BusName<'_> = args()
+                .nth(3)
+                .expect("Missing param for service")
+                .try_into()?;
+            let path: ObjectPath<'_> = args()
+                .nth(4)
+                .expect("Missing param for object path")
+                .try_into()?;
 
             let connection = ConnectionBuilder::address(&*address)?.build()?;
 
             input_src = format!("Interface '{}' from service '{}'", path, service);
 
-            let xml = proxy(connection, &*service, &*path).introspect()?;
-            Node::from_reader(xml.as_bytes())?
+            let xml = proxy(connection, service.clone(), path.clone()).introspect()?;
+            (
+                Node::from_reader(xml.as_bytes())?,
+                Some(service),
+                Some(path),
+            )
         }
         Some(path) => {
             input_src = Path::new(&path)
@@ -70,7 +93,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .to_string_lossy()
                 .to_string();
             let f = File::open(path)?;
-            Node::from_reader(f)?
+            (Node::from_reader(f)?, None, None)
         }
         None => {
             eprintln!(
@@ -160,7 +183,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
     for iface in &needed_ifaces {
         writeln!(rustfmt_stdin)?;
-        let gen = GenTrait(iface).to_string();
+        let gen = GenTrait {
+            interface: iface,
+            service: service.as_ref(),
+            path: path.as_ref(),
+        }
+        .to_string();
         rustfmt_stdin.write_all(gen.as_bytes())?;
     }
     process.wait()?;
