@@ -29,24 +29,24 @@ Nonetheless you can use a similar approach for other services.
 
 This command shows us several aspects of the D-Bus communication:
 
- - `--user`: Connect to and use the user/session bus.
+- `--user`: Connect to and use the user/session bus.
 
- - `call`: Send a method call message. (D-Bus also supports signals, error messages, and method
-   replies)
+- `call`: Send a method call message. (D-Bus also supports signals, error messages, and method
+  replies)
 
- - **destination**: The name of the service (`org.freedesktop.Notifications`).
+- **destination**: The name of the service (`org.freedesktop.Notifications`).
 
- - **object path**: Object/interface path (`/org/freedesktop/Notifications`).
+- **object path**: Object/interface path (`/org/freedesktop/Notifications`).
 
- - **interface**: The interface name (methods are organized in interfaces, here
-   `org.freedesktop.Notifications`, same name as the service).
+- **interface**: The interface name (methods are organized in interfaces, here
+  `org.freedesktop.Notifications`, same name as the service).
 
- - **method**: The name of the method to call, `Notify`.
+- **method**: The name of the method to call, `Notify`.
 
- - **signature**: That `susssasa{sv}i` means the method takes 8 arguments of various types. 's', for
-   example, is for a string. 'as' is for array of strings.
+- **signature**: That `susssasa{sv}i` means the method takes 8 arguments of various types. 's', for
+  example, is for a string. 'as' is for array of strings.
 
- - The method arguments.
+- The method arguments.
 
 See [`busctl`] man page for more details.
 
