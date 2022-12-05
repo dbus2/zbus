@@ -29,6 +29,9 @@ impl<'i> Display for GenTrait<'i> {
         if let Some(path) = self.path {
             write!(f, ", default_path = \"{}\"", path)?;
         }
+        if self.path.is_none() || self.service.is_none() {
+            write!(f, ", assume_defaults = true")?;
+        }
         writeln!(f, ")]")?;
         writeln!(f, "trait {} {{", name)?;
 
