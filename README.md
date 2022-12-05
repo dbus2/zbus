@@ -25,58 +25,6 @@ where we start with basic D-Bus concepts and explain with code samples, how zbus
 
 ## Example code
 
-### Client
-
-This code display a notification on your Freedesktop.org-compatible OS:
-
-```rust,no_run
-use std::{collections::HashMap, error::Error};
-
-use zbus::{Connection, dbus_proxy};
-use zvariant::Value;
-
-#[dbus_proxy(
-    interface = "org.freedesktop.Notifications",
-    default_service = "org.freedesktop.Notifications",
-    default_path = "/org/freedesktop/Notifications"
-)]
-trait Notifications {
-    fn notify(
-        &self,
-        app_name: &str,
-        replaces_id: u32,
-        app_icon: &str,
-        summary: &str,
-        body: &str,
-        actions: &[&str],
-        hints: &HashMap<&str, &Value<'_>>,
-        expire_timeout: i32,
-    ) -> zbus::Result<u32>;
-}
-
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::session().await?;
-
-    // `dbus_proxy` macro creates `NotificationProxy` based on `Notifications` trait.
-    let proxy = NotificationsProxy::new(&connection).await?;
-    let reply = proxy.notify(
-        "my-app",
-        0,
-        "dialog-information",
-        "A summary",
-        "Some body",
-        &[],
-        &HashMap::new(),
-        5000,
-    ).await?;
-    dbg!(reply);
-
-    Ok(())
-}
-```
-
 ### Server
 
 A simple service that politely greets whoever calls its `SayHello` method:
@@ -108,7 +56,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build()
         .await?;
 
-    // Do other things or wait forever
+    // Do other things or go to wait forever
     pending::<()>().await;
 
     Ok(())
@@ -120,6 +68,36 @@ You can use the following command to test it:
 ```bash
 $ busctl --user call org.zbus.MyGreeter /org/zbus/MyGreeter org.zbus.MyGreeter1 SayHello s "Maria"
 s "Hello Maria! I have been called 1 times."
+```
+
+### Client
+
+Now let's write the client-side code for `MyGreeter` service:
+
+```rust,no_run
+use zbus::{Connection, Result, dbus_proxy};
+
+#[dbus_proxy(
+    interface = "org.zbus.MyGreeter1",
+    default_service = "org.zbus.MyGreeter",
+    default_path = "/org/zbus/MyGreeter"
+)]
+trait MyGreeter {
+    async fn say_hello(&self, name: &str) -> Result<String>;
+}
+
+// Although we use `async-std` here, you can use any async runtime of choice.
+#[async_std::main]
+async fn main() -> Result<()> {
+    let connection = Connection::session().await?;
+
+    // `dbus_proxy` macro creates `MyGreaterProxy` based on `Notifications` trait.
+    let proxy = MyGreeterProxy::new(&connection).await?;
+    let reply = proxy.say_hello("Maria").await?;
+    println!("{reply}");
+
+    Ok(())
+}
 ```
 
 ## Getting Help
