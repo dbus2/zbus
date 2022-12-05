@@ -1,3 +1,5 @@
+#[cfg(feature = "quick-xml")]
+use quick_xml::de::DeError;
 use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, sync::Arc};
 use zbus_names::{Error as NamesError, OwnedErrorName};
@@ -47,6 +49,9 @@ pub enum Error {
     #[cfg(feature = "xml")]
     /// An XML error
     SerdeXml(serde_xml_rs::Error),
+    #[cfg(feature = "quick-xml")]
+    /// An XML error from quick_xml
+    QuickXml(DeError),
     NoBodySignature,
     /// The requested name was already claimed by another peer.
     NameTaken,
@@ -81,6 +86,8 @@ impl PartialEq for Error {
             (Error::Io(_), Self::Io(_)) => false,
             #[cfg(feature = "xml")]
             (Self::SerdeXml(_), Self::SerdeXml(_)) => false,
+            #[cfg(feature = "quick-xml")]
+            (Self::QuickXml(_), Self::QuickXml(_)) => false,
             (_, _) => false,
         }
     }
@@ -104,6 +111,8 @@ impl error::Error for Error {
             Error::FDO(e) => Some(e),
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => Some(e),
+            #[cfg(feature = "quick-xml")]
+            Error::QuickXml(e) => Some(e),
             Error::NoBodySignature => None,
             Error::InvalidField => None,
             Error::MissingField => None,
@@ -138,6 +147,8 @@ impl fmt::Display for Error {
             Error::FDO(e) => write!(f, "{}", e),
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => write!(f, "XML error: {}", e),
+            #[cfg(feature = "quick-xml")]
+            Error::QuickXml(e) => write!(f, "XML error: {}", e),
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
             Error::NameTaken => write!(f, "name already taken on the bus"),
             Error::InvalidMatchRule => write!(f, "Invalid match rule string"),
@@ -186,6 +197,13 @@ impl From<fdo::Error> for Error {
 impl From<serde_xml_rs::Error> for Error {
     fn from(val: serde_xml_rs::Error) -> Self {
         Error::SerdeXml(val)
+    }
+}
+
+#[cfg(feature = "quick-xml")]
+impl From<DeError> for Error {
+    fn from(val: DeError) -> Self {
+        Error::QuickXml(val)
     }
 }
 
