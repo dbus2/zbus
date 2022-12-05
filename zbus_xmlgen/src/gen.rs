@@ -1,21 +1,38 @@
 use snakecase::ascii::to_snakecase;
 use std::fmt::{Display, Formatter};
 
-use zbus::quick_xml::{Arg, ArgDirection, Interface};
+use zbus::{
+    names::BusName,
+    quick_xml::{Arg, ArgDirection, Interface},
+};
 use zvariant::{
     Basic, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
     DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_CHAR, STRUCT_SIG_START_CHAR, VARIANT_SIGNATURE_CHAR,
 };
 
-pub struct GenTrait<'i>(pub &'i Interface<'i>);
+pub struct GenTrait<'i> {
+    pub interface: &'i Interface<'i>,
+    pub service: Option<&'i BusName<'i>>,
+    pub path: Option<&'i ObjectPath<'i>>,
+}
 
 impl<'i> Display for GenTrait<'i> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let iface = self.0;
+        let iface = self.interface;
         let idx = iface.name().rfind('.').unwrap() + 1;
         let name = &iface.name()[idx..];
 
-        writeln!(f, "#[dbus_proxy(interface = \"{}\")]", iface.name())?;
+        write!(f, "#[dbus_proxy(interface = \"{}\"", iface.name())?;
+        if let Some(service) = self.service {
+            write!(f, ", default_service = \"{}\"", service)?;
+        }
+        if let Some(path) = self.path {
+            write!(f, ", default_path = \"{}\"", path)?;
+        }
+        if self.path.is_none() || self.service.is_none() {
+            write!(f, ", assume_defaults = true")?;
+        }
+        writeln!(f, ")]")?;
         writeln!(f, "trait {} {{", name)?;
 
         let mut methods = iface.methods().to_vec();
@@ -326,7 +343,14 @@ mod tests {
     #[test]
     fn gen() -> Result<(), Box<dyn Error>> {
         let node = Node::from_reader(EXAMPLE.as_bytes())?;
-        let t = format!("{}", GenTrait(&node.interfaces()[0]));
+        let t = format!(
+            "{}",
+            GenTrait {
+                interface: &node.interfaces()[0],
+                path: None,
+                service: None,
+            }
+        );
         println!("{}", t);
         Ok(())
     }
