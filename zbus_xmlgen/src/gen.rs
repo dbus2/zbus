@@ -1,13 +1,13 @@
 use snakecase::ascii::to_snakecase;
 use std::fmt::{Display, Formatter};
 
-use zbus::xml::{Arg, Interface};
+use zbus::quick_xml::{Arg, ArgDirection, Interface};
 use zvariant::{
     Basic, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
     DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_CHAR, STRUCT_SIG_START_CHAR, VARIANT_SIGNATURE_CHAR,
 };
 
-pub struct GenTrait<'i>(pub &'i Interface);
+pub struct GenTrait<'i>(pub &'i Interface<'i>);
 
 impl<'i> Display for GenTrait<'i> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -19,13 +19,13 @@ impl<'i> Display for GenTrait<'i> {
         writeln!(f, "trait {} {{", name)?;
 
         let mut methods = iface.methods().to_vec();
-        methods.sort_by(|a, b| a.name().partial_cmp(b.name()).unwrap());
+        methods.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
         for m in &methods {
-            let (inputs, output) = inputs_output_from_args(&m.args());
-            let name = to_identifier(&to_snakecase(m.name()));
+            let (inputs, output) = inputs_output_from_args(m.args());
+            let name = to_identifier(&to_snakecase(m.name().as_str()));
             writeln!(f)?;
             writeln!(f, "    /// {} method", m.name())?;
-            if pascal_case(&name) != m.name() {
+            if pascal_case(&name) != m.name().as_str() {
                 writeln!(f, "    #[dbus_proxy(name = \"{}\")]", m.name())?;
             }
             writeln!(
@@ -38,13 +38,13 @@ impl<'i> Display for GenTrait<'i> {
         }
 
         let mut signals = iface.signals().to_vec();
-        signals.sort_by(|a, b| a.name().partial_cmp(b.name()).unwrap());
+        signals.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
         for signal in &signals {
-            let args = parse_signal_args(&signal.args());
-            let name = to_identifier(&to_snakecase(signal.name()));
+            let args = parse_signal_args(signal.args());
+            let name = to_identifier(&to_snakecase(signal.name().as_str()));
             writeln!(f)?;
             writeln!(f, "    /// {} signal", signal.name())?;
-            if pascal_case(&name) != signal.name() {
+            if pascal_case(&name) != signal.name().as_str() {
                 writeln!(f, "    #[dbus_proxy(signal, name = \"{}\")]", signal.name())?;
             } else {
                 writeln!(f, "    #[dbus_proxy(signal)]")?;
@@ -58,20 +58,19 @@ impl<'i> Display for GenTrait<'i> {
         }
 
         let mut props = iface.properties().to_vec();
-        props.sort_by(|a, b| a.name().partial_cmp(b.name()).unwrap());
+        props.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
         for p in props {
-            let (read, write) = read_write_from_access(p.access());
-            let name = to_identifier(&to_snakecase(p.name()));
+            let name = to_identifier(&to_snakecase(p.name().as_str()));
 
             writeln!(f)?;
             writeln!(f, "    /// {} property", p.name())?;
-            if pascal_case(&name) != p.name() {
+            if pascal_case(&name) != p.name().as_str() {
                 writeln!(f, "    #[dbus_proxy(property, name = \"{}\")]", p.name())?;
             } else {
                 writeln!(f, "    #[dbus_proxy(property)]")?;
             }
 
-            if read {
+            if p.access().read() {
                 let output = to_rust_type(p.ty(), false, false);
                 writeln!(
                     f,
@@ -81,7 +80,7 @@ impl<'i> Display for GenTrait<'i> {
                 )?;
             }
 
-            if write {
+            if p.access().write() {
                 let input = to_rust_type(p.ty(), true, true);
                 writeln!(
                     f,
@@ -95,16 +94,7 @@ impl<'i> Display for GenTrait<'i> {
     }
 }
 
-fn read_write_from_access(access: &str) -> (bool, bool) {
-    match access {
-        "read" => (true, false),
-        "write" => (false, true),
-        "readwrite" => (true, true),
-        _ => panic!(),
-    }
-}
-
-fn inputs_output_from_args(args: &[&Arg]) -> (String, String) {
+fn inputs_output_from_args(args: &[Arg]) -> (String, String) {
     let mut inputs = vec!["&self".to_string()];
     let mut output = vec![];
     let mut n = 0;
@@ -115,7 +105,7 @@ fn inputs_output_from_args(args: &[&Arg]) -> (String, String) {
 
     for a in args {
         match a.direction() {
-            None | Some("in") => {
+            None | Some(ArgDirection::In) => {
                 let ty = to_rust_type(a.ty(), true, true);
                 let arg = if let Some(name) = a.name() {
                     to_identifier(name)
@@ -124,11 +114,10 @@ fn inputs_output_from_args(args: &[&Arg]) -> (String, String) {
                 };
                 inputs.push(format!("{}: {}", arg, ty));
             }
-            Some("out") => {
+            Some(ArgDirection::Out) => {
                 let ty = to_rust_type(a.ty(), false, false);
                 output.push(ty);
             }
-            _ => unimplemented!(),
         }
     }
 
@@ -141,7 +130,7 @@ fn inputs_output_from_args(args: &[&Arg]) -> (String, String) {
     (inputs.join(", "), format!(" -> zbus::Result<{}>", output))
 }
 
-fn parse_signal_args(args: &[&Arg]) -> String {
+fn parse_signal_args(args: &[Arg]) -> String {
     let mut inputs = vec!["&self".to_string()];
     let mut n = 0;
     let mut gen_name = || {
@@ -299,7 +288,7 @@ mod tests {
     use std::{error::Error, result::Result};
 
     use super::GenTrait;
-    use zbus::xml::Node;
+    use zbus::quick_xml::Node;
 
     static EXAMPLE: &str = r##"
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
@@ -337,7 +326,7 @@ mod tests {
     #[test]
     fn gen() -> Result<(), Box<dyn Error>> {
         let node = Node::from_reader(EXAMPLE.as_bytes())?;
-        let t = format!("{}", GenTrait(node.interfaces()[0]));
+        let t = format!("{}", GenTrait(&node.interfaces()[0]));
         println!("{}", t);
         Ok(())
     }
