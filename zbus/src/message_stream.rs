@@ -10,9 +10,7 @@ use futures_util::stream::FusedStream;
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 
-use crate::{
-    async_channel::Receiver, Connection, ConnectionInner, Error, Message, MessageSequence, Result,
-};
+use crate::{Connection, ConnectionInner, Message, MessageSequence, Result};
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
@@ -28,8 +26,7 @@ use crate::{
 #[must_use = "streams do nothing unless polled"]
 pub struct MessageStream {
     conn_inner: Arc<ConnectionInner>,
-    msg_receiver: ActiveReceiver<Arc<Message>>,
-    error_receiver: Receiver<Error>,
+    msg_receiver: ActiveReceiver<Result<Arc<Message>>>,
     last_seq: MessageSequence,
 }
 
@@ -41,16 +38,13 @@ impl stream::Stream for MessageStream {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-        if !this.msg_receiver.is_terminated() {
-            if let Some(msg) = ready!(Pin::new(&mut this.msg_receiver).poll_next(cx)) {
+        Pin::new(&mut this.msg_receiver).poll_next(cx).map(|msg| {
+            if let Some(Ok(msg)) = &msg {
                 this.last_seq = msg.recv_position();
-                return Poll::Ready(Some(Ok(msg)));
             }
-        }
-        // If msg_receiver is terminated or returns None, try returning the error
-        Pin::new(&mut this.error_receiver)
-            .poll_next(cx)
-            .map(|v| v.map(Err))
+
+            msg
+        })
     }
 }
 
@@ -82,7 +76,7 @@ impl OrderedStream for MessageStream {
 
 impl FusedStream for MessageStream {
     fn is_terminated(&self) -> bool {
-        self.msg_receiver.is_terminated() && self.error_receiver.is_terminated()
+        self.msg_receiver.is_terminated()
     }
 }
 
@@ -90,12 +84,10 @@ impl From<Connection> for MessageStream {
     fn from(conn: Connection) -> Self {
         let conn_inner = conn.inner.clone();
         let msg_receiver = conn.msg_receiver.activate();
-        let error_receiver = conn.error_receiver;
 
         Self {
             conn_inner,
             msg_receiver,
-            error_receiver,
             last_seq: Default::default(),
         }
     }
@@ -111,7 +103,6 @@ impl From<MessageStream> for Connection {
     fn from(stream: MessageStream) -> Connection {
         Connection {
             msg_receiver: stream.msg_receiver.deactivate(),
-            error_receiver: stream.error_receiver,
             inner: stream.conn_inner,
         }
     }
