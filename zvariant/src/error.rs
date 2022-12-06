@@ -1,6 +1,6 @@
 use serde::{de, ser};
 use static_assertions::assert_impl_all;
-use std::{convert::Infallible, error, fmt, result};
+use std::{convert::Infallible, error, fmt, result, sync::Arc};
 
 /// Enum representing the max depth exceeded error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,7 +40,10 @@ pub enum Error {
     Message(String),
 
     /// Wrapper for [`std::io::Error`](https://doc.rust-lang.org/std/io/struct.Error.html)
+    #[deprecated(note = "Use `Error::InputOutput` instead")]
     Io(std::io::Error),
+    /// Wrapper for [`std::io::Error`](https://doc.rust-lang.org/std/io/struct.Error.html)
+    InputOutput(Arc<std::io::Error>),
     /// Type conversions errors.
     IncorrectType,
     /// Wrapper for [`std::str::Utf8Error`](https://doc.rust-lang.org/std/str/struct.Utf8Error.html)
@@ -82,7 +85,9 @@ impl PartialEq for Error {
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
+            #[allow(deprecated)]
             Error::Io(e) => Some(e),
+            Error::InputOutput(e) => Some(e),
             Error::Utf8(e) => Some(e),
             _ => None,
         }
@@ -93,7 +98,9 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Message(s) => write!(f, "{}", s),
+            #[allow(deprecated)]
             Error::Io(e) => e.fmt(f),
+            Error::InputOutput(e) => e.fmt(f),
             Error::IncorrectType => write!(f, "incorrect type"),
             Error::Utf8(e) => write!(f, "{}", e),
             Error::PaddingNot0(b) => write!(f, "Unexpected non-0 padding byte `{}`", b),
