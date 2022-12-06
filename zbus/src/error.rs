@@ -170,6 +170,41 @@ impl fmt::Display for Error {
     }
 }
 
+impl Clone for Error {
+    fn clone(&self) -> Self {
+        match self {
+            Error::InterfaceNotFound => Error::InterfaceNotFound,
+            Error::Address(e) => Error::Address(e.clone()),
+            Error::ExcessData => Error::ExcessData,
+            #[allow(deprecated)]
+            Error::Io(e) => Error::Io(io::Error::new(e.kind(), e.to_string())),
+            Error::InputOutput(e) => Error::InputOutput(e.clone()),
+            Error::Handshake(e) => Error::Handshake(e.clone()),
+            Error::IncorrectEndian => Error::IncorrectEndian,
+            Error::InvalidField => Error::InvalidField,
+            Error::Variant(e) => Error::Variant(e.clone()),
+            Error::Names(e) => Error::Names(e.clone()),
+            Error::InvalidReply => Error::InvalidReply,
+            Error::MissingField => Error::MissingField,
+            Error::MethodError(name, detail, reply) => {
+                Error::MethodError(name.clone(), detail.clone(), reply.clone())
+            }
+            Error::InvalidGUID => Error::InvalidGUID,
+            Error::Unsupported => Error::Unsupported,
+            Error::FDO(e) => Error::FDO(e.clone()),
+            #[cfg(feature = "xml")]
+            Error::SerdeXml(e) => Error::Failure(e.to_string()),
+            #[cfg(feature = "quick-xml")]
+            // Until https://github.com/tafia/quick-xml/pull/521 is merged and released.
+            Error::QuickXml(e) => Error::Failure(e.to_string()),
+            Error::NoBodySignature => Error::NoBodySignature,
+            Error::NameTaken => Error::NameTaken,
+            Error::InvalidMatchRule => Error::InvalidMatchRule,
+            Error::Failure(e) => Error::Failure(e.clone()),
+        }
+    }
+}
+
 impl From<io::Error> for Error {
     fn from(val: io::Error) -> Self {
         Error::InputOutput(Arc::new(val))
