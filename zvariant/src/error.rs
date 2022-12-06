@@ -129,6 +129,30 @@ impl fmt::Display for Error {
     }
 }
 
+impl Clone for Error {
+    fn clone(&self) -> Self {
+        match self {
+            Error::Message(s) => Error::Message(s.clone()),
+            #[allow(deprecated)]
+            Error::Io(e) => Error::Message(e.to_string()),
+            Error::InputOutput(e) => Error::InputOutput(e.clone()),
+            Error::IncorrectType => Error::IncorrectType,
+            Error::Utf8(e) => Error::Utf8(*e),
+            Error::PaddingNot0(b) => Error::PaddingNot0(*b),
+            Error::UnknownFd => Error::UnknownFd,
+            Error::MissingFramingOffset => Error::MissingFramingOffset,
+            Error::IncompatibleFormat(sig, format) => {
+                Error::IncompatibleFormat(sig.clone(), *format)
+            }
+            Error::SignatureMismatch(provided, expected) => {
+                Error::SignatureMismatch(provided.clone(), expected.clone())
+            }
+            Error::OutOfBounds => Error::OutOfBounds,
+            Error::MaxDepthExceeded(max) => Error::MaxDepthExceeded(*max),
+        }
+    }
+}
+
 impl From<Infallible> for Error {
     fn from(i: Infallible) -> Self {
         match i {}
