@@ -285,10 +285,9 @@ impl Future for PendingMethodCall {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.poll_before(cx, None).map(|ret| {
             ret.map(|(_, r)| r).unwrap_or_else(|| {
-                Err(crate::Error::Io(io::Error::new(
-                    ErrorKind::BrokenPipe,
-                    "socket closed",
-                )))
+                Err(crate::Error::InputOutput(
+                    io::Error::new(ErrorKind::BrokenPipe, "socket closed").into(),
+                ))
             })
         })
     }

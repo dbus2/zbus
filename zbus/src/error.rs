@@ -19,7 +19,10 @@ pub enum Error {
     /// Invalid D-Bus address.
     Address(String),
     /// An I/O error.
+    #[deprecated(note = "Use `Error::InputOutput` instead")]
     Io(io::Error),
+    /// Invalid message field.
+    InputOutput(Arc<io::Error>),
     /// Invalid message field.
     InvalidField,
     /// Data too large.
@@ -83,7 +86,9 @@ impl PartialEq for Error {
             (Self::Variant(s), Self::Variant(o)) => s == o,
             (Self::Names(s), Self::Names(o)) => s == o,
             (Self::NameTaken, Self::NameTaken) => true,
+            #[allow(deprecated)]
             (Error::Io(_), Self::Io(_)) => false,
+            (Error::InputOutput(_), Self::InputOutput(_)) => false,
             #[cfg(feature = "xml")]
             (Self::SerdeXml(_), Self::SerdeXml(_)) => false,
             #[cfg(feature = "quick-xml")]
@@ -98,7 +103,9 @@ impl error::Error for Error {
         match self {
             Error::InterfaceNotFound => None,
             Error::Address(_) => None,
+            #[allow(deprecated)]
             Error::Io(e) => Some(e),
+            Error::InputOutput(e) => Some(e),
             Error::ExcessData => None,
             Error::Handshake(_) => None,
             Error::IncorrectEndian => None,
@@ -128,7 +135,9 @@ impl fmt::Display for Error {
             Error::InterfaceNotFound => write!(f, "Interface not found"),
             Error::Address(e) => write!(f, "address error: {}", e),
             Error::ExcessData => write!(f, "excess data"),
+            #[allow(deprecated)]
             Error::Io(e) => write!(f, "I/O error: {}", e),
+            Error::InputOutput(e) => write!(f, "I/O error: {}", e),
             Error::Handshake(e) => write!(f, "D-Bus handshake failed: {}", e),
             Error::IncorrectEndian => write!(f, "incorrect endian"),
             Error::InvalidField => write!(f, "invalid message field"),
@@ -158,7 +167,7 @@ impl fmt::Display for Error {
 
 impl From<io::Error> for Error {
     fn from(val: io::Error) -> Self {
-        Error::Io(val)
+        Error::InputOutput(Arc::new(val))
     }
 }
 

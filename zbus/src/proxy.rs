@@ -1119,10 +1119,13 @@ impl<'a> SignalStream<'a> {
                             break None;
                         }
                         None => {
-                            return Err(Error::Io(std::io::Error::new(
-                                std::io::ErrorKind::BrokenPipe,
-                                "connection closed",
-                            )))
+                            return Err(Error::InputOutput(
+                                std::io::Error::new(
+                                    std::io::ErrorKind::BrokenPipe,
+                                    "connection closed",
+                                )
+                                .into(),
+                            ))
                         }
                     }
                 };
