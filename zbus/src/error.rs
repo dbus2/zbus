@@ -62,6 +62,8 @@ pub enum Error {
     ///
     /// [MR]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-bus-routing-match-rules
     InvalidMatchRule,
+    /// Generic error.
+    Failure(String),
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -93,6 +95,7 @@ impl PartialEq for Error {
             (Self::SerdeXml(_), Self::SerdeXml(_)) => false,
             #[cfg(feature = "quick-xml")]
             (Self::QuickXml(_), Self::QuickXml(_)) => false,
+            (Self::Failure(s1), Self::Failure(s2)) => s1 == s2,
             (_, _) => false,
         }
     }
@@ -125,6 +128,7 @@ impl error::Error for Error {
             Error::MissingField => None,
             Error::NameTaken => None,
             Error::InvalidMatchRule => None,
+            Error::Failure(_) => None,
         }
     }
 }
@@ -161,6 +165,7 @@ impl fmt::Display for Error {
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
             Error::NameTaken => write!(f, "name already taken on the bus"),
             Error::InvalidMatchRule => write!(f, "Invalid match rule string"),
+            Error::Failure(e) => write!(f, "{}", e),
         }
     }
 }
