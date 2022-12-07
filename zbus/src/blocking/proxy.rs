@@ -237,7 +237,7 @@ impl<'a> Proxy<'a> {
     ///
     /// [`call`]: struct.Proxy.html#method.call
     /// [`call_noreply`]: struct.Proxy.html#method.call_noreply
-    pub fn call_with_flags<'m, M, F, B, R>(
+    pub fn call_with_flags<'m, M, B, R>(
         &self,
         method_name: M,
         flags: BitFlags<MethodFlags>,
