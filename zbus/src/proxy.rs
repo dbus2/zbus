@@ -26,18 +26,6 @@ use crate::{
     MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
 
-#[derive(Debug, Default)]
-struct PropertyValue {
-    value: Option<OwnedValue>,
-    event: Event,
-}
-
-#[derive(Debug)]
-pub(crate) struct PropertiesCache {
-    values: RwLock<HashMap<String, PropertyValue>>,
-    ready: crate::async_channel::Receiver<Result<()>>,
-}
-
 /// A client-side interface proxy.
 ///
 /// A `Proxy` is a helper to interact with an interface on a remote object.
@@ -250,6 +238,12 @@ where
             phantom: std::marker::PhantomData,
         }))
     }
+}
+
+#[derive(Debug)]
+pub(crate) struct PropertiesCache {
+    values: RwLock<HashMap<String, PropertyValue>>,
+    ready: crate::async_channel::Receiver<Result<()>>,
 }
 
 impl PropertiesCache {
@@ -960,6 +954,12 @@ impl<'a> Proxy<'a> {
             name: self.destination().clone(),
         })
     }
+}
+
+#[derive(Debug, Default)]
+struct PropertyValue {
+    value: Option<OwnedValue>,
+    event: Event,
 }
 
 /// Flags to use with [`Proxy::call_with_flags`].
