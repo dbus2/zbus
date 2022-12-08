@@ -390,10 +390,9 @@ impl PropertiesCache {
 
         for inval in invalidated {
             if uncached_properties.contains(&Str::from(inval)) {
-                tracing::debug!(
+                debug!(
                     "Ignoring invalidation of uncached property `{}.{}`",
-                    interface,
-                    inval
+                    interface, inval
                 );
                 continue;
             }
@@ -406,10 +405,9 @@ impl PropertiesCache {
 
         for (property_name, value) in changed {
             if uncached_properties.contains(&Str::from(*property_name)) {
-                tracing::debug!(
+                debug!(
                     "Ignoring update of uncached property `{}.{}`",
-                    interface,
-                    property_name
+                    interface, property_name
                 );
                 continue;
             }
