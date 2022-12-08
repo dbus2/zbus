@@ -57,13 +57,24 @@ where
     F: Send + 'static,
     T: Send + 'static,
 {
-    let (s, r) = crate::async_channel::channel(1);
+    let event = event_listener::Event::new();
+    let listener = event.listen();
+    let value = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let value_clone = value.clone();
 
     std::thread::spawn(move || {
         let res = f();
 
-        s.try_send(res).expect("Failed to send result");
+        *value_clone.lock().expect("Failed to set result") = Some(res);
+        event.notify(1);
     });
+    listener.await;
 
-    r.recv().await.expect("Failed to receive result")
+    let value = value
+        .lock()
+        .expect("Failed to receive result")
+        .take()
+        .expect("Failed to receive result");
+
+    value
 }
