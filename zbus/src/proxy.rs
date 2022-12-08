@@ -20,7 +20,6 @@ use zbus_names::{BusName, InterfaceName, MemberName, UniqueName, WellKnownName};
 use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
-    async_channel::channel,
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesProxy},
     CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageFlags,
     MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
@@ -243,7 +242,13 @@ where
 #[derive(Debug)]
 pub(crate) struct PropertiesCache {
     values: RwLock<HashMap<String, PropertyValue>>,
-    ready: crate::async_channel::Receiver<Result<()>>,
+    caching_result: RwLock<CachingResult>,
+}
+
+#[derive(Debug)]
+enum CachingResult {
+    Caching { ready: Event },
+    Cached { result: Result<()> },
 }
 
 impl PropertiesCache {
@@ -254,33 +259,42 @@ impl PropertiesCache {
         executor: &Executor<'_>,
         uncached_properties: HashSet<zvariant::Str<'static>>,
     ) -> (Arc<Self>, Task<()>) {
-        let (send, recv) = channel(1);
-
         let cache = Arc::new(PropertiesCache {
             values: Default::default(),
-            ready: recv,
+            caching_result: RwLock::new(CachingResult::Caching {
+                ready: Event::new(),
+            }),
         });
 
         let cache_clone = cache.clone();
         let task_name = format!("{} proxy caching", interface);
         let proxy_caching = async move {
-            let (proxy, interface, uncached_properties) = match cache_clone
+            let result = cache_clone
                 .init(proxy, interface, uncached_properties)
-                .await
-            {
-                Ok((proxy, interface, uncached_properties)) => {
-                    // ignore send errors, it just means the original future was cancelled
-                    let _ = send.send(Ok(())).await;
+                .await;
+            let (proxy, interface, uncached_properties) = {
+                let mut caching_result = cache_clone.caching_result.write().expect("lock poisoned");
+                let ready = match &*caching_result {
+                    CachingResult::Caching { ready } => ready,
+                    // SAFETY: This is the only part of the code that changes this state and it's
+                    // only run once.
+                    _ => unreachable!(),
+                };
+                match result {
+                    Ok((proxy, interface, uncached_properties)) => {
+                        ready.notify(usize::MAX);
+                        *caching_result = CachingResult::Cached { result: Ok(()) };
 
-                    (proxy, interface, uncached_properties)
-                }
-                Err(e) => {
-                    let _ = send.send(Err(e)).await;
+                        (proxy, interface, uncached_properties)
+                    }
+                    Err(e) => {
+                        ready.notify(usize::MAX);
+                        *caching_result = CachingResult::Cached { result: Err(e) };
 
-                    return;
+                        return;
+                    }
                 }
             };
-            drop(send);
 
             if let Err(e) = cache_clone
                 .keep_updated(proxy, interface, uncached_properties)
@@ -423,10 +437,19 @@ impl PropertiesCache {
 
     /// Wait for the cache to be populated and return any error encountered during population
     pub(crate) async fn ready(&self) -> Result<()> {
-        // Only one caller will actually get the result; all other callers see a closed channel,
-        // but that indicates the cache is ready (and on error, the cache will be empty, which just
-        // means we bypass it)
-        self.ready.recv().await.unwrap_or(Ok(()))
+        let listener = match &*self.caching_result.read().expect("lock poisoned") {
+            CachingResult::Caching { ready } => ready.listen(),
+            CachingResult::Cached { result } => return result.clone(),
+        };
+        listener.await;
+
+        // It must be ready now.
+        match &*self.caching_result.read().expect("lock poisoned") {
+            // SAFETY: We were just notified that state has changed to `Cached` and we never go back
+            // to `Caching` once in `Cached`.
+            CachingResult::Caching { .. } => unreachable!(),
+            CachingResult::Cached { result } => result.clone(),
+        }
     }
 }
 
@@ -1378,7 +1401,7 @@ mod tests {
             .build()
             .await?;
 
-        let (tx, rx) = channel(1);
+        let (tx, rx) = crate::async_channel::channel(1);
 
         let handle = {
             let tx = tx.clone();
