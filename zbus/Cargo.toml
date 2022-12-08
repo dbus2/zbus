@@ -84,7 +84,7 @@ doc-comment = "0.3.3"
 futures-util = "0.3.25" # activate default features
 ntest = "0.8.1"
 test-log = { version = "0.2.11", features = ["trace"], default-features = false }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-util", "net"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-util", "net", "sync"] }
 async-std = { version = "1.12.0", features = ["attributes" ] }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter" , "fmt"], default-features = false }
 tempfile = "3.3.0"
