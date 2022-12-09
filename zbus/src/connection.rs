@@ -84,20 +84,20 @@ impl MessageReceiverTask {
     fn new(
         raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
         msg_sender: Broadcaster<Result<Arc<Message>>>,
-    ) -> Arc<Self> {
-        Arc::new(Self {
+    ) -> Self {
+        Self {
             raw_conn,
             msg_sender,
-        })
+        }
     }
 
-    fn spawn(self: Arc<Self>, executor: &Executor<'_>) -> Task<()> {
+    fn spawn(self, executor: &Executor<'_>) -> Task<()> {
         executor.spawn(self.receive_msg(), "socket reader")
     }
 
     // Keep receiving messages and put them on the queue.
     #[instrument(name = "socket reader", skip(self))]
-    async fn receive_msg(self: Arc<Self>) {
+    async fn receive_msg(self) {
         loop {
             trace!("Waiting for message on the socket..");
             let receive_msg = ReceiveMessage {
