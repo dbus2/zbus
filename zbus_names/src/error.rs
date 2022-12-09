@@ -5,7 +5,7 @@ use zvariant::Error as VariantError;
 /// The error type for `zbus_names`.
 ///
 /// The various errors that can be reported by this crate.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[allow(clippy::upper_case_acronyms)]
 #[non_exhaustive]
 pub enum Error {

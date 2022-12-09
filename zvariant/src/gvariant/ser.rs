@@ -72,7 +72,9 @@ where
                 self.0.container_depths = self.0.container_depths.dec_maybe();
 
                 if !fixed_sized_child {
-                    self.0.write_all(&b"\0"[..]).map_err(Error::Io)?;
+                    self.0
+                        .write_all(&b"\0"[..])
+                        .map_err(|e| Error::InputOutput(e.into()))?;
                 }
             }
             None => {
@@ -174,15 +176,22 @@ where
         // Strings in GVariant format require no alignment.
 
         self.0.sig_parser.skip_char()?;
-        self.0.write_all(v.as_bytes()).map_err(Error::Io)?;
-        self.0.write_all(&b"\0"[..]).map_err(Error::Io)?;
+        self.0
+            .write_all(v.as_bytes())
+            .map_err(|e| Error::InputOutput(e.into()))?;
+        self.0
+            .write_all(&b"\0"[..])
+            .map_err(|e| Error::InputOutput(e.into()))?;
 
         Ok(())
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
         let seq = self.serialize_seq(Some(v.len()))?;
-        seq.ser.0.write(v).map_err(Error::Io)?;
+        seq.ser
+            .0
+            .write(v)
+            .map_err(|e| Error::InputOutput(e.into()))?;
         seq.end()
     }
 
@@ -198,7 +207,9 @@ where
     }
 
     fn serialize_unit(self) -> Result<()> {
-        self.0.write_all(&b"\0"[..]).map_err(Error::Io)
+        self.0
+            .write_all(&b"\0"[..])
+            .map_err(|e| Error::InputOutput(e.into()))
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<()> {
@@ -516,11 +527,14 @@ where
                 value.serialize(&mut ser)?;
                 self.ser.0.bytes_written = ser.0.bytes_written;
 
-                self.ser.0.write_all(&b"\0"[..]).map_err(Error::Io)?;
+                self.ser
+                    .0
+                    .write_all(&b"\0"[..])
+                    .map_err(|e| Error::InputOutput(e.into()))?;
                 self.ser
                     .0
                     .write_all(signature.as_bytes())
-                    .map_err(Error::Io)?;
+                    .map_err(|e| Error::InputOutput(e.into()))?;
 
                 Ok(())
             }
