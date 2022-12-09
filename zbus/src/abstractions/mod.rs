@@ -4,6 +4,4 @@
 /// enabled.
 mod executor;
 pub use executor::*;
-#[doc(hidden)]
-pub mod async_channel;
 pub(crate) mod async_lock;

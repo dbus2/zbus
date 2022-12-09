@@ -1401,7 +1401,7 @@ mod tests {
             .build()
             .await?;
 
-        let (tx, rx) = crate::async_channel::channel(1);
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 
         let handle = {
             let tx = tx.clone();
@@ -1442,15 +1442,14 @@ mod tests {
         let signal_fut = async {
             let mut signal_stream = test_proxy.receive_my_signal().await.unwrap();
 
-            assert!(tx.send(()).await.is_none());
+            tx.send(()).await.unwrap();
 
             while let Some(_signal) = signal_stream.next().await {}
         };
 
-        let prop_fut = async {
+        let prop_fut = async move {
             rx.recv().await.unwrap();
             let _prop_stream = test_prop_proxy.receive_properties_changed().await.unwrap();
-            rx.close().await;
         };
 
         futures_util::pin_mut!(signal_fut);

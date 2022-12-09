@@ -10,9 +10,9 @@ use futures_util::StreamExt;
 use ntest::timeout;
 use serde::{Deserialize, Serialize};
 use test_log::test;
+use tokio::sync::mpsc::{channel, Sender};
 use tracing::{debug, instrument};
 use zbus::{
-    async_channel::{channel, Sender},
     block_on,
     fdo::{ObjectManager, ObjectManagerProxy},
     DBusError,
@@ -155,7 +155,7 @@ impl MyIfaceImpl {
     #[instrument]
     async fn quit(&self) {
         debug!("Client asked to quit.");
-        assert!(self.next_tx.send(NextAction::Quit).await.is_none());
+        self.next_tx.send(NextAction::Quit).await.unwrap();
     }
 
     #[instrument]
@@ -220,11 +220,7 @@ impl MyIfaceImpl {
     #[instrument]
     async fn create_obj(&self, key: String) {
         debug!("`CreateObj` called.");
-        assert!(self
-            .next_tx
-            .send(NextAction::CreateObj(key))
-            .await
-            .is_none());
+        self.next_tx.send(NextAction::CreateObj(key)).await.unwrap();
     }
 
     #[instrument]
@@ -246,11 +242,10 @@ impl MyIfaceImpl {
     #[instrument]
     async fn destroy_obj(&self, key: String) {
         debug!("`DestroyObj` called.");
-        assert!(self
-            .next_tx
+        self.next_tx
             .send(NextAction::DestroyObj(key))
             .await
-            .is_none());
+            .unwrap();
     }
 
     #[instrument]
@@ -664,7 +659,7 @@ async fn iface_and_proxy_(p2p: bool) {
         "Service connection builder created: {:?}",
         service_conn_builder
     );
-    let (next_tx, next_rx) = channel(64);
+    let (next_tx, mut next_rx) = channel(64);
     let iface = MyIfaceImpl::new(next_tx.clone());
     let service_conn_builder = service_conn_builder
         .serve_at("/org/freedesktop/MyService", iface)
