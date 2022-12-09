@@ -46,7 +46,7 @@ pub struct RefType<'a> {
     field1: Str<'a>,
 }
 
-#[dbus_proxy(assume_defaults = true, gen_blocking = false)]
+#[dbus_proxy(assume_defaults = true, gen_blocking = true)]
 trait MyIface {
     fn ping(&self) -> zbus::Result<u32>;
 
