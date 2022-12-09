@@ -46,7 +46,7 @@ impl FramingOffsetSize {
             FramingOffsetSize::U64 => writer.write_u64::<LE>(offset as u64),
             FramingOffsetSize::U128 => writer.write_u128::<LE>(offset as u128),
         }
-        .map_err(Error::Io)
+        .map_err(|e| Error::InputOutput(e.into()))
     }
 
     pub fn read_last_offset_from_buffer(self, buffer: &[u8]) -> usize {

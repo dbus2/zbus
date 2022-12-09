@@ -219,7 +219,7 @@ async fn connect_tcp(addr: TcpAddress) -> Result<Async<TcpStream>> {
 async fn connect_tcp(addr: TcpAddress) -> Result<TcpStream> {
     TcpStream::connect((addr.host(), addr.port()))
         .await
-        .map_err(Error::Io)
+        .map_err(|e| Error::InputOutput(e.into()))
 }
 
 impl Address {
@@ -254,7 +254,9 @@ impl Address {
                     #[cfg(windows)]
                     {
                         let stream = run_in_thread(move || UnixStream::connect(p)).await?;
-                        Async::new(stream).map(Stream::Unix).map_err(Error::Io)
+                        Async::new(stream)
+                            .map(Stream::Unix)
+                            .map_err(|e| Error::InputOutput(e.into()))
                     }
 
                     #[cfg(not(windows))]
@@ -262,7 +264,7 @@ impl Address {
                         Async::<UnixStream>::connect(p)
                             .await
                             .map(Stream::Unix)
-                            .map_err(Error::Io)
+                            .map_err(|e| Error::InputOutput(e.into()))
                     }
                 }
 
@@ -273,7 +275,7 @@ impl Address {
                         UnixStream::connect(p)
                             .await
                             .map(Stream::Unix)
-                            .map_err(Error::Io)
+                            .map_err(|e| Error::InputOutput(e.into()))
                     }
 
                     #[cfg(not(unix))]

@@ -437,7 +437,8 @@ where
         if padding > 0 {
             let byte = [0_u8; 1];
             for _ in 0..padding {
-                self.write_all(&byte).map_err(Error::Io)?;
+                self.write_all(&byte)
+                    .map_err(|e| Error::InputOutput(e.into()))?;
             }
         }
 
@@ -471,7 +472,8 @@ where
         self.add_padding(alignment)?;
 
         // Now serialize the veriant index.
-        self.write_u32::<B>(variant_index).map_err(Error::Io)?;
+        self.write_u32::<B>(variant_index)
+            .map_err(|e| Error::InputOutput(e.into()))?;
 
         // Skip the `(`, `u`.
         self.sig_parser.skip_chars(2)?;

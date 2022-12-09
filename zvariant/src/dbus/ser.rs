@@ -61,7 +61,7 @@ macro_rules! serialize_basic {
     ($method:ident($type:ty) $write_method:ident($as:ty)) => {
         fn $method(self, v: $type) -> Result<()> {
             self.0.prep_serialize_basic::<$type>()?;
-            self.0.$write_method::<B>(v as $as).map_err(Error::Io)
+            self.0.$write_method::<B>(v as $as).map_err(|e| Error::InputOutput(e.into()))
         }
     };
 }
@@ -95,11 +95,15 @@ where
                 self.0.sig_parser.skip_char()?;
                 self.0.add_padding(u32::alignment(EncodingFormat::DBus))?;
                 let v = self.0.add_fd(v);
-                self.0.write_u32::<B>(v).map_err(Error::Io)
+                self.0
+                    .write_u32::<B>(v)
+                    .map_err(|e| Error::InputOutput(e.into()))
             }
             _ => {
                 self.0.prep_serialize_basic::<i32>()?;
-                self.0.write_i32::<B>(v).map_err(Error::Io)
+                self.0
+                    .write_i32::<B>(v)
+                    .map_err(|e| Error::InputOutput(e.into()))
             }
         }
     }
@@ -107,7 +111,7 @@ where
     fn serialize_u8(self, v: u8) -> Result<()> {
         self.0.prep_serialize_basic::<u8>()?;
         // Endianness is irrelevant for single bytes.
-        self.0.write_u8(v).map_err(Error::Io)
+        self.0.write_u8(v).map_err(|e| Error::InputOutput(e.into()))
     }
 
     serialize_basic!(serialize_u16(u16) write_u16);
@@ -140,10 +144,12 @@ where
                     .add_padding(<&str>::alignment(EncodingFormat::DBus))?;
                 self.0
                     .write_u32::<B>(usize_to_u32(v.len()))
-                    .map_err(Error::Io)?;
+                    .map_err(|e| Error::InputOutput(e.into()))?;
             }
             Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
-                self.0.write_u8(usize_to_u8(v.len())).map_err(Error::Io)?;
+                self.0
+                    .write_u8(usize_to_u8(v.len()))
+                    .map_err(|e| Error::InputOutput(e.into()))?;
             }
             _ => {
                 let expected = format!(
@@ -161,15 +167,22 @@ where
         }
 
         self.0.sig_parser.skip_char()?;
-        self.0.write_all(v.as_bytes()).map_err(Error::Io)?;
-        self.0.write_all(&b"\0"[..]).map_err(Error::Io)?;
+        self.0
+            .write_all(v.as_bytes())
+            .map_err(|e| Error::InputOutput(e.into()))?;
+        self.0
+            .write_all(&b"\0"[..])
+            .map_err(|e| Error::InputOutput(e.into()))?;
 
         Ok(())
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
         let seq = self.serialize_seq(Some(v.len()))?;
-        seq.ser.0.write(v).map_err(Error::Io)?;
+        seq.ser
+            .0
+            .write(v)
+            .map_err(|e| Error::InputOutput(e.into()))?;
         seq.end()
     }
 
@@ -237,7 +250,9 @@ where
         self.0.add_padding(ARRAY_ALIGNMENT_DBUS)?;
         // Length in bytes (unfortunately not the same as len passed to us here) which we
         // initially set to 0.
-        self.0.write_u32::<B>(0_u32).map_err(Error::Io)?;
+        self.0
+            .write_u32::<B>(0_u32)
+            .map_err(|e| Error::InputOutput(e.into()))?;
 
         let element_signature = self.0.sig_parser.next_signature()?;
         let element_signature_len = element_signature.len();
@@ -344,13 +359,17 @@ where
             .0
             .writer
             .seek(std::io::SeekFrom::Current(-total_array_len))
-            .map_err(Error::Io)?;
-        self.ser.0.writer.write_u32::<B>(len).map_err(Error::Io)?;
+            .map_err(|e| Error::InputOutput(e.into()))?;
+        self.ser
+            .0
+            .writer
+            .write_u32::<B>(len)
+            .map_err(|e| Error::InputOutput(e.into()))?;
         self.ser
             .0
             .writer
             .seek(std::io::SeekFrom::Current(total_array_len - 4))
-            .map_err(Error::Io)?;
+            .map_err(|e| Error::InputOutput(e.into()))?;
 
         self.ser.0.container_depths = self.ser.0.container_depths.dec_array();
 

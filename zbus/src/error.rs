@@ -19,7 +19,10 @@ pub enum Error {
     /// Invalid D-Bus address.
     Address(String),
     /// An I/O error.
+    #[deprecated(note = "Use `Error::InputOutput` instead")]
     Io(io::Error),
+    /// Invalid message field.
+    InputOutput(Arc<io::Error>),
     /// Invalid message field.
     InvalidField,
     /// Data too large.
@@ -59,6 +62,8 @@ pub enum Error {
     ///
     /// [MR]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-bus-routing-match-rules
     InvalidMatchRule,
+    /// Generic error.
+    Failure(String),
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -83,11 +88,14 @@ impl PartialEq for Error {
             (Self::Variant(s), Self::Variant(o)) => s == o,
             (Self::Names(s), Self::Names(o)) => s == o,
             (Self::NameTaken, Self::NameTaken) => true,
+            #[allow(deprecated)]
             (Error::Io(_), Self::Io(_)) => false,
+            (Error::InputOutput(_), Self::InputOutput(_)) => false,
             #[cfg(feature = "xml")]
             (Self::SerdeXml(_), Self::SerdeXml(_)) => false,
             #[cfg(feature = "quick-xml")]
             (Self::QuickXml(_), Self::QuickXml(_)) => false,
+            (Self::Failure(s1), Self::Failure(s2)) => s1 == s2,
             (_, _) => false,
         }
     }
@@ -98,7 +106,9 @@ impl error::Error for Error {
         match self {
             Error::InterfaceNotFound => None,
             Error::Address(_) => None,
+            #[allow(deprecated)]
             Error::Io(e) => Some(e),
+            Error::InputOutput(e) => Some(e),
             Error::ExcessData => None,
             Error::Handshake(_) => None,
             Error::IncorrectEndian => None,
@@ -118,6 +128,7 @@ impl error::Error for Error {
             Error::MissingField => None,
             Error::NameTaken => None,
             Error::InvalidMatchRule => None,
+            Error::Failure(_) => None,
         }
     }
 }
@@ -128,7 +139,9 @@ impl fmt::Display for Error {
             Error::InterfaceNotFound => write!(f, "Interface not found"),
             Error::Address(e) => write!(f, "address error: {}", e),
             Error::ExcessData => write!(f, "excess data"),
+            #[allow(deprecated)]
             Error::Io(e) => write!(f, "I/O error: {}", e),
+            Error::InputOutput(e) => write!(f, "I/O error: {}", e),
             Error::Handshake(e) => write!(f, "D-Bus handshake failed: {}", e),
             Error::IncorrectEndian => write!(f, "incorrect endian"),
             Error::InvalidField => write!(f, "invalid message field"),
@@ -152,13 +165,49 @@ impl fmt::Display for Error {
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
             Error::NameTaken => write!(f, "name already taken on the bus"),
             Error::InvalidMatchRule => write!(f, "Invalid match rule string"),
+            Error::Failure(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl Clone for Error {
+    fn clone(&self) -> Self {
+        match self {
+            Error::InterfaceNotFound => Error::InterfaceNotFound,
+            Error::Address(e) => Error::Address(e.clone()),
+            Error::ExcessData => Error::ExcessData,
+            #[allow(deprecated)]
+            Error::Io(e) => Error::Io(io::Error::new(e.kind(), e.to_string())),
+            Error::InputOutput(e) => Error::InputOutput(e.clone()),
+            Error::Handshake(e) => Error::Handshake(e.clone()),
+            Error::IncorrectEndian => Error::IncorrectEndian,
+            Error::InvalidField => Error::InvalidField,
+            Error::Variant(e) => Error::Variant(e.clone()),
+            Error::Names(e) => Error::Names(e.clone()),
+            Error::InvalidReply => Error::InvalidReply,
+            Error::MissingField => Error::MissingField,
+            Error::MethodError(name, detail, reply) => {
+                Error::MethodError(name.clone(), detail.clone(), reply.clone())
+            }
+            Error::InvalidGUID => Error::InvalidGUID,
+            Error::Unsupported => Error::Unsupported,
+            Error::FDO(e) => Error::FDO(e.clone()),
+            #[cfg(feature = "xml")]
+            Error::SerdeXml(e) => Error::Failure(e.to_string()),
+            #[cfg(feature = "quick-xml")]
+            // Until https://github.com/tafia/quick-xml/pull/521 is merged and released.
+            Error::QuickXml(e) => Error::Failure(e.to_string()),
+            Error::NoBodySignature => Error::NoBodySignature,
+            Error::NameTaken => Error::NameTaken,
+            Error::InvalidMatchRule => Error::InvalidMatchRule,
+            Error::Failure(e) => Error::Failure(e.clone()),
         }
     }
 }
 
 impl From<io::Error> for Error {
     fn from(val: io::Error) -> Self {
-        Error::Io(val)
+        Error::InputOutput(Arc::new(val))
     }
 }
 

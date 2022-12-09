@@ -126,10 +126,13 @@ impl<S: Socket> Connection<S> {
                 };
                 self.raw_in_pos += len;
                 if len == 0 {
-                    return Poll::Ready(Err(crate::Error::Io(std::io::Error::new(
-                        std::io::ErrorKind::UnexpectedEof,
-                        "failed to receive message",
-                    ))));
+                    return Poll::Ready(Err(crate::Error::InputOutput(
+                        std::io::Error::new(
+                            std::io::ErrorKind::UnexpectedEof,
+                            "failed to receive message",
+                        )
+                        .into(),
+                    )));
                 }
             }
 

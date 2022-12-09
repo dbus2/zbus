@@ -27,7 +27,6 @@ use futures_sink::Sink;
 use futures_util::{sink::SinkExt, StreamExt, TryFutureExt};
 
 use crate::{
-    async_channel::{channel, Receiver, Sender},
     async_lock::Mutex,
     blocking,
     fdo::{self, RequestNameFlags, RequestNameReply},
@@ -78,22 +77,17 @@ struct MessageReceiverTask {
     raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
 
     // Message broadcaster.
-    msg_sender: Broadcaster<Arc<Message>>,
-
-    // Sender side of the error channel
-    error_sender: Sender<Error>,
+    msg_sender: Broadcaster<Result<Arc<Message>>>,
 }
 
 impl MessageReceiverTask {
     fn new(
         raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
-        msg_sender: Broadcaster<Arc<Message>>,
-        error_sender: Sender<Error>,
+        msg_sender: Broadcaster<Result<Arc<Message>>>,
     ) -> Arc<Self> {
         Arc::new(Self {
             raw_conn,
             msg_sender,
-            error_sender,
         })
     }
 
@@ -109,27 +103,25 @@ impl MessageReceiverTask {
             let receive_msg = ReceiveMessage {
                 raw_conn: &self.raw_conn,
             };
-            let msg = match receive_msg.await {
-                Ok(msg) => msg,
-                Err(e) => {
-                    trace!("Error reading from the socket: {:?}", e);
-                    self.error_sender.send(e).await;
-                    self.msg_sender.close();
-                    trace!("Socket reading task stopped");
+            let msg = receive_msg.await.map(Arc::new);
+            match &msg {
+                Ok(msg) => trace!("Message received on the socket: {:?}", msg),
+                Err(e) => trace!("Error reading from the socket: {:?}", e),
+            }
 
-                    return;
-                }
-            };
-            trace!("Message received on the socket: {:?}", msg);
-
-            let msg = Arc::new(msg);
             if let Err(e) = self.msg_sender.broadcast(msg.clone()).await {
                 // An error would be due to the channel being closed, which only happens when the
                 // connection is dropped, so just stop the task.
                 debug!("Error broadcasting message to streams: {:?}", e);
                 return;
             }
-            trace!("Message broadcasted to all streams: {:?}", msg);
+            trace!("Broadcasted to all streams: {:?}", msg);
+
+            if msg.is_err() {
+                trace!("Socket reading task stopped");
+
+                return;
+            }
         }
     }
 }
@@ -260,10 +252,7 @@ impl MessageReceiverTask {
 pub struct Connection {
     pub(crate) inner: Arc<ConnectionInner>,
 
-    pub(crate) msg_receiver: InactiveReceiver<Arc<Message>>,
-
-    // Receiver side of the error channel
-    pub(crate) error_receiver: Receiver<Error>,
+    pub(crate) msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
@@ -285,10 +274,9 @@ impl Future for PendingMethodCall {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.poll_before(cx, None).map(|ret| {
             ret.map(|(_, r)| r).unwrap_or_else(|| {
-                Err(crate::Error::Io(io::Error::new(
-                    ErrorKind::BrokenPipe,
-                    "socket closed",
-                )))
+                Err(crate::Error::InputOutput(
+                    io::Error::new(ErrorKind::BrokenPipe, "socket closed").into(),
+                ))
             })
         })
     }
@@ -1170,16 +1158,14 @@ impl Connection {
 
         let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
         let msg_receiver = msg_receiver.deactivate();
-        let (error_sender, error_receiver) = channel(1);
         let executor = Executor::new();
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
         // Start the message receiver task.
         let msg_receiver_task =
-            MessageReceiverTask::new(raw_conn.clone(), msg_sender, error_sender).spawn(&executor);
+            MessageReceiverTask::new(raw_conn.clone(), msg_sender).spawn(&executor);
 
         let connection = Self {
-            error_receiver,
             msg_receiver,
             inner: Arc::new(ConnectionInner {
                 raw_conn,
@@ -1348,8 +1334,7 @@ impl From<crate::blocking::Connection> for Connection {
 #[derive(Debug)]
 pub(crate) struct WeakConnection {
     inner: Weak<ConnectionInner>,
-    msg_receiver: InactiveReceiver<Arc<Message>>,
-    error_receiver: Receiver<Error>,
+    msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
 }
 
 impl WeakConnection {
@@ -1358,7 +1343,6 @@ impl WeakConnection {
         self.inner.upgrade().map(|inner| Connection {
             inner,
             msg_receiver: self.msg_receiver.clone(),
-            error_receiver: self.error_receiver.clone(),
         })
     }
 }
@@ -1368,7 +1352,6 @@ impl From<&Connection> for WeakConnection {
         Self {
             inner: Arc::downgrade(&conn.inner),
             msg_receiver: conn.msg_receiver.clone(),
-            error_receiver: conn.error_receiver.clone(),
         }
     }
 }
