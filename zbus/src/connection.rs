@@ -110,10 +110,15 @@ impl MessageReceiverTask {
             }
 
             if let Err(e) = self.msg_sender.broadcast(msg.clone()).await {
-                // An error would be due to the channel being closed, which only happens when the
-                // connection is dropped, so just stop the task.
+                // An error would be due to either of these:
+                //
+                // 1. the channel being closed, which only happens when the connection is dropped.
+                // 2. No active receivers.
+                //
+                // Just log it in either case.
                 debug!("Error broadcasting message to streams: {:?}", e);
-                return;
+
+                continue;
             }
             trace!("Broadcasted to all streams: {:?}", msg);
 
@@ -1157,7 +1162,8 @@ impl Connection {
         let cap_unix_fd = auth.cap_unix_fd;
 
         let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
-        let msg_receiver = msg_receiver.deactivate();
+        let mut msg_receiver = msg_receiver.deactivate();
+        msg_receiver.set_await_active(false);
         let executor = Executor::new();
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
