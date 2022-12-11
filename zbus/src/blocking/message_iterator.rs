@@ -53,3 +53,9 @@ impl From<MessageIterator> for Connection {
         Connection::from(crate::Connection::from(iter.0))
     }
 }
+
+impl From<&MessageIterator> for Connection {
+    fn from(iter: &MessageIterator) -> Connection {
+        Connection::from(crate::Connection::from(&iter.0))
+    }
+}

@@ -101,9 +101,15 @@ impl From<&Connection> for MessageStream {
 
 impl From<MessageStream> for Connection {
     fn from(stream: MessageStream) -> Connection {
+        Connection::from(&stream)
+    }
+}
+
+impl From<&MessageStream> for Connection {
+    fn from(stream: &MessageStream) -> Connection {
         Connection {
-            msg_receiver: stream.msg_receiver.deactivate(),
-            inner: stream.conn_inner,
+            msg_receiver: stream.msg_receiver.clone().deactivate(),
+            inner: stream.conn_inner.clone(),
         }
     }
 }
