@@ -1,4 +1,5 @@
 use std::{
+    convert::TryInto,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -10,7 +11,9 @@ use futures_util::stream::FusedStream;
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 
-use crate::{Connection, ConnectionInner, Message, MessageSequence, Result};
+use crate::{
+    Connection, ConnectionInner, MatchRule, Message, MessageSequence, OwnedMatchRule, Result,
+};
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
@@ -29,6 +32,91 @@ pub struct MessageStream {
 }
 
 assert_impl_all!(MessageStream: Send, Sync, Unpin);
+
+impl MessageStream {
+    /// Create a message stream for the given match rule.
+    ///
+    /// If `conn` is a bus connection and match rule is for a signal, the match rule will be
+    /// registered with the bus and deregistered when the stream is dropped. The reason match rules
+    /// are only registered with the bus for signals is that D-Bus specification only allows signals
+    /// to be broadcasted and unicast messages are always sent to their destination (regardless of
+    /// any match rules registered by the destination) by the bus. Hence there is no need to
+    /// register match rules for non-signal messages with the bus.
+    ///
+    /// Having said that, stream created by this method can still very useful as it allows you to
+    /// avoid needless task wakeups and simplify your stream consuming code.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use zbus::{Connection, MatchRule, MessageStream, fdo::NameOwnerChanged};
+    /// use futures_util::TryStreamExt;
+    ///
+    ///# zbus::block_on(async {
+    /// let conn = Connection::session().await?;
+    /// let rule = MatchRule::builder()
+    ///     .msg_type(zbus::MessageType::Signal)
+    ///     .sender("org.freedesktop.DBus")?
+    ///     .interface("org.freedesktop.DBus")?
+    ///     .member("NameOwnerChanged")?
+    ///     .add_arg("org.freedesktop.zbus.MatchRuleStreamTest42")?
+    ///     .build();
+    /// let mut stream = MessageStream::for_match_rule(rule, &conn).await?;
+    ///
+    /// let rule_str = "type='signal',sender='org.freedesktop.DBus',\
+    ///                 interface='org.freedesktop.DBus',member='NameOwnerChanged',\
+    ///                 arg0='org.freedesktop.zbus.MatchRuleStreamTest42'";
+    /// assert_eq!(
+    ///     stream.match_rule().map(|r| r.to_string()).as_deref(),
+    ///     Some(rule_str),
+    /// );
+    ///
+    /// // We register 2 names, starting with the uninteresting one. If `stream` wasn't filtering
+    /// // messages based on the match rule, we'd receive method return call for each of these 2
+    /// // calls first.
+    /// //
+    /// // Note that the `NameOwnerChanged` signal will not be sent by the bus  for the first name
+    /// // we register since we setup an arg filter.
+    /// conn.request_name("org.freedesktop.zbus.MatchRuleStreamTest44")
+    ///     .await?;
+    /// conn.request_name("org.freedesktop.zbus.MatchRuleStreamTest42")
+    ///     .await?;
+    ///
+    /// let msg = stream.try_next().await?.unwrap();
+    /// let signal = NameOwnerChanged::from_message(msg).unwrap();
+    /// assert_eq!(signal.args()?.name(), "org.freedesktop.zbus.MatchRuleStreamTest42");
+    ///
+    ///# Ok::<(), zbus::Error>(())
+    ///# }).unwrap();
+    /// ```
+    ///
+    /// # Caveats
+    ///
+    /// Since this method relies on [`MatchRule::matches`], it inherits its caveats.
+    pub async fn for_match_rule<R>(rule: R, conn: &Connection) -> Result<Self>
+    where
+        R: TryInto<OwnedMatchRule>,
+        R::Error: Into<crate::Error>,
+    {
+        let rule = rule.try_into().map_err(Into::into)?;
+        let msg_receiver = conn.add_match(rule.clone()).await?;
+        let conn_inner = conn.inner.clone();
+
+        Ok(Self {
+            inner: Inner {
+                conn_inner,
+                msg_receiver,
+                last_seq: Default::default(),
+                match_rule: Some(rule),
+            },
+        })
+    }
+
+    /// The associated match rule, if any.
+    pub fn match_rule(&self) -> Option<MatchRule<'_>> {
+        self.inner.match_rule.as_deref().cloned()
+    }
+}
 
 impl stream::Stream for MessageStream {
     type Item = Result<Arc<Message>>;
@@ -90,6 +178,7 @@ impl From<Connection> for MessageStream {
                 conn_inner,
                 msg_receiver,
                 last_seq: Default::default(),
+                match_rule: None,
             },
         }
     }
@@ -120,4 +209,17 @@ struct Inner {
     conn_inner: Arc<ConnectionInner>,
     msg_receiver: ActiveReceiver<Result<Arc<Message>>>,
     last_seq: MessageSequence,
+    match_rule: Option<OwnedMatchRule>,
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        let conn = Connection {
+            inner: self.conn_inner.clone(),
+        };
+
+        if let Some(rule) = self.match_rule.take() {
+            conn.queue_remove_match(rule);
+        }
+    }
 }

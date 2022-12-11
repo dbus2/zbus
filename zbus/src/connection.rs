@@ -1,4 +1,4 @@
-use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
+use async_broadcast::{broadcast, InactiveReceiver, Receiver, Sender as Broadcaster};
 use enumflags2::BitFlags;
 use event_listener::EventListener;
 use once_cell::sync::OnceCell;
@@ -61,12 +61,15 @@ pub(crate) struct ConnectionInner {
     msg_receiver_task: Task<()>,
 
     pub(crate) msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
+    msg_senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
 
-    signal_matches: Mutex<HashMap<OwnedMatchRule, u64>>,
+    subscriptions: Mutex<Subscriptions>,
 
     object_server: OnceCell<blocking::ObjectServer>,
     object_server_dispatch_task: OnceCell<Task<()>>,
 }
+
+type Subscriptions = HashMap<OwnedMatchRule, (u64, InactiveReceiver<Result<Arc<Message>>>)>;
 
 // FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
 //        cancel `msg_receiver_task` manually to ensure task is gone before the connection is. Same
@@ -77,20 +80,15 @@ pub(crate) struct ConnectionInner {
 #[derive(Debug)]
 struct MessageReceiverTask {
     raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
-
-    // Message broadcaster.
-    msg_sender: Broadcaster<Result<Arc<Message>>>,
+    senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
 }
 
 impl MessageReceiverTask {
     fn new(
         raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
-        msg_sender: Broadcaster<Result<Arc<Message>>>,
+        senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
     ) -> Self {
-        Self {
-            raw_conn,
-            msg_sender,
-        }
+        Self { raw_conn, senders }
     }
 
     fn spawn(self, executor: &Executor<'_>) -> Task<()> {
@@ -109,22 +107,42 @@ impl MessageReceiverTask {
             match &msg {
                 Ok(msg) => trace!("Message received on the socket: {:?}", msg),
                 Err(e) => trace!("Error reading from the socket: {:?}", e),
-            }
+            };
 
-            if let Err(e) = self.msg_sender.broadcast(msg.clone()).await {
-                // An error would be due to either of these:
-                //
-                // 1. the channel being closed, which only happens when the connection is dropped.
-                // 2. No active receivers.
-                //
-                // Just log it in either case.
-                debug!("Error broadcasting message to streams: {:?}", e);
+            let mut senders = self.senders.lock().await;
+            for (rule, sender) in &*senders {
+                if let Ok(msg) = &msg {
+                    if let Some(rule) = rule.as_ref() {
+                        match rule.matches(msg) {
+                            Ok(true) => (),
+                            Ok(false) => continue,
+                            Err(e) => {
+                                debug!("Error matching message against rule: {:?}", e);
 
-                continue;
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                if let Err(e) = sender.broadcast(msg.clone()).await {
+                    // An error would be due to either of these:
+                    //
+                    // 1. the channel is closed.
+                    // 2. No active receivers.
+                    //
+                    // In either case, just log it.
+                    trace!(
+                        "Error broadcasting message to stream for `{:?}`: {:?}",
+                        rule,
+                        e
+                    );
+                }
             }
             trace!("Broadcasted to all streams: {:?}", msg);
 
             if msg.is_err() {
+                senders.clear();
                 trace!("Socket reading task stopped");
 
                 return;
@@ -132,6 +150,8 @@ impl MessageReceiverTask {
         }
     }
 }
+
+type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 
 /// A D-Bus connection.
 ///
@@ -1067,49 +1087,78 @@ impl Connection {
         });
     }
 
-    pub(crate) async fn add_match(&self, rule: OwnedMatchRule) -> Result<()> {
+    pub(crate) async fn add_match(
+        &self,
+        rule: OwnedMatchRule,
+    ) -> Result<Receiver<Result<Arc<Message>>>> {
         use std::collections::hash_map::Entry;
-        if !self.is_bus() {
-            return Ok(());
-        }
-        let mut subscriptions = self.inner.signal_matches.lock().await;
-        match subscriptions.entry(rule) {
-            Entry::Vacant(e) => {
-                fdo::DBusProxy::builder(self)
-                    .cache_properties(CacheProperties::No)
-                    .build()
-                    .await?
-                    .add_match_rule(e.key().inner().clone())
-                    .await?;
-                e.insert(1);
-            }
-            Entry::Occupied(mut e) => {
-                *e.get_mut() += 1;
-            }
-        }
-        Ok(())
-    }
 
-    pub(crate) async fn remove_match(&self, rule: OwnedMatchRule) -> Result<bool> {
-        use std::collections::hash_map::Entry;
-        if !self.is_bus() {
-            return Ok(true);
+        if self.inner.msg_senders.lock().await.is_empty() {
+            // This only happens if message receiver task has errored out.
+            return Err(Error::InputOutput(Arc::new(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "Message receiver task has errored out",
+            ))));
         }
-        let mut subscriptions = self.inner.signal_matches.lock().await;
-        // TODO when it becomes stable, use HashMap::raw_entry and only require expr: &str
-        // (both here and in add_match)
-        match subscriptions.entry(rule) {
-            Entry::Vacant(_) => Ok(false),
-            Entry::Occupied(mut e) => {
-                *e.get_mut() -= 1;
-                if *e.get() == 0 {
+
+        let mut subscriptions = self.inner.subscriptions.lock().await;
+        let msg_type = rule.msg_type().unwrap_or(MessageType::Signal);
+        match subscriptions.entry(rule.clone()) {
+            Entry::Vacant(e) => {
+                let (sender, mut receiver) = broadcast(DEFAULT_MAX_QUEUED);
+                receiver.set_await_active(false);
+                if self.is_bus() && msg_type == MessageType::Signal {
                     fdo::DBusProxy::builder(self)
                         .cache_properties(CacheProperties::No)
                         .build()
                         .await?
-                        .remove_match_rule(e.key().inner().clone())
+                        .add_match_rule(e.key().inner().clone())
                         .await?;
+                }
+                e.insert((1, receiver.clone().deactivate()));
+                self.inner
+                    .msg_senders
+                    .lock()
+                    .await
+                    .insert(Some(rule), sender);
+
+                Ok(receiver)
+            }
+            Entry::Occupied(mut e) => {
+                let (num_subscriptions, receiver) = e.get_mut();
+                *num_subscriptions += 1;
+
+                Ok(receiver.activate_cloned())
+            }
+        }
+    }
+
+    pub(crate) async fn remove_match(&self, rule: OwnedMatchRule) -> Result<bool> {
+        use std::collections::hash_map::Entry;
+        let mut subscriptions = self.inner.subscriptions.lock().await;
+        // TODO when it becomes stable, use HashMap::raw_entry and only require expr: &str
+        // (both here and in add_match)
+        let msg_type = rule.msg_type().unwrap_or(MessageType::Signal);
+        match subscriptions.entry(rule) {
+            Entry::Vacant(_) => Ok(false),
+            Entry::Occupied(mut e) => {
+                let rule = e.key().inner().clone();
+                e.get_mut().0 -= 1;
+                if e.get().0 == 0 {
+                    if self.is_bus() && msg_type == MessageType::Signal {
+                        fdo::DBusProxy::builder(self)
+                            .cache_properties(CacheProperties::No)
+                            .build()
+                            .await?
+                            .remove_match_rule(rule.clone())
+                            .await?;
+                    }
                     e.remove();
+                    self.inner
+                        .msg_senders
+                        .lock()
+                        .await
+                        .remove(&Some(rule.into()));
                 }
                 Ok(true)
             }
@@ -1164,12 +1213,17 @@ impl Connection {
         let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
         let mut msg_receiver = msg_receiver.deactivate();
         msg_receiver.set_await_active(false);
+        let mut msg_senders = HashMap::new();
+        msg_senders.insert(None, msg_sender);
+        let msg_senders = Arc::new(Mutex::new(msg_senders));
+        let subscriptions = Mutex::new(HashMap::new());
+
         let executor = Executor::new();
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
         // Start the message receiver task.
         let msg_receiver_task =
-            MessageReceiverTask::new(raw_conn.clone(), msg_sender).spawn(&executor);
+            MessageReceiverTask::new(raw_conn.clone(), msg_senders.clone()).spawn(&executor);
 
         let connection = Self {
             inner: Arc::new(ConnectionInner {
@@ -1180,11 +1234,12 @@ impl Connection {
                 bus_conn: bus_connection,
                 serial: AtomicU32::new(1),
                 unique_name: OnceCell::new(),
-                signal_matches: Mutex::new(HashMap::new()),
+                subscriptions,
                 object_server: OnceCell::new(),
                 object_server_dispatch_task: OnceCell::new(),
                 executor: executor.clone(),
                 msg_receiver_task,
+                msg_senders,
                 msg_receiver,
                 registered_names: Mutex::new(HashMap::new()),
             }),
