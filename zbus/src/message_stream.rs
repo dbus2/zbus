@@ -83,7 +83,7 @@ impl FusedStream for MessageStream {
 impl From<Connection> for MessageStream {
     fn from(conn: Connection) -> Self {
         let conn_inner = conn.inner.clone();
-        let msg_receiver = conn.msg_receiver.activate();
+        let msg_receiver = conn_inner.msg_receiver.activate_cloned();
 
         Self {
             conn_inner,
@@ -108,7 +108,6 @@ impl From<MessageStream> for Connection {
 impl From<&MessageStream> for Connection {
     fn from(stream: &MessageStream) -> Connection {
         Connection {
-            msg_receiver: stream.msg_receiver.clone().deactivate(),
             inner: stream.conn_inner.clone(),
         }
     }

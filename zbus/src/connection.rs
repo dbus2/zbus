@@ -60,6 +60,8 @@ pub(crate) struct ConnectionInner {
     #[allow(unused)]
     msg_receiver_task: Task<()>,
 
+    pub(crate) msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
+
     signal_matches: Mutex<HashMap<OwnedMatchRule, u64>>,
 
     object_server: OnceCell<blocking::ObjectServer>,
@@ -256,8 +258,6 @@ impl MessageReceiverTask {
 #[derive(Clone, Debug)]
 pub struct Connection {
     pub(crate) inner: Arc<ConnectionInner>,
-
-    pub(crate) msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
@@ -869,12 +869,12 @@ impl Connection {
 
     /// Max number of messages to queue.
     pub fn max_queued(&self) -> usize {
-        self.msg_receiver.capacity()
+        self.inner.msg_receiver.capacity()
     }
 
     /// Set the max number of messages to queue.
     pub fn set_max_queued(&mut self, max: usize) {
-        self.msg_receiver.set_capacity(max);
+        self.inner.msg_receiver.clone().set_capacity(max);
     }
 
     /// The server's GUID.
@@ -1172,7 +1172,6 @@ impl Connection {
             MessageReceiverTask::new(raw_conn.clone(), msg_sender).spawn(&executor);
 
         let connection = Self {
-            msg_receiver,
             inner: Arc::new(ConnectionInner {
                 raw_conn,
                 server_guid: auth.server_guid,
@@ -1186,6 +1185,7 @@ impl Connection {
                 object_server_dispatch_task: OnceCell::new(),
                 executor: executor.clone(),
                 msg_receiver_task,
+                msg_receiver,
                 registered_names: Mutex::new(HashMap::new()),
             }),
         };
@@ -1340,16 +1340,12 @@ impl From<crate::blocking::Connection> for Connection {
 #[derive(Debug)]
 pub(crate) struct WeakConnection {
     inner: Weak<ConnectionInner>,
-    msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
 }
 
 impl WeakConnection {
     /// Upgrade to a Connection.
     pub fn upgrade(&self) -> Option<Connection> {
-        self.inner.upgrade().map(|inner| Connection {
-            inner,
-            msg_receiver: self.msg_receiver.clone(),
-        })
+        self.inner.upgrade().map(|inner| Connection { inner })
     }
 }
 
@@ -1357,7 +1353,6 @@ impl From<&Connection> for WeakConnection {
     fn from(conn: &Connection) -> Self {
         Self {
             inner: Arc::downgrade(&conn.inner),
-            msg_receiver: conn.msg_receiver.clone(),
         }
     }
 }
