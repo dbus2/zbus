@@ -25,9 +25,7 @@ use crate::{Connection, ConnectionInner, Message, MessageSequence, Result};
 #[derive(Clone, Debug)]
 #[must_use = "streams do nothing unless polled"]
 pub struct MessageStream {
-    conn_inner: Arc<ConnectionInner>,
-    msg_receiver: ActiveReceiver<Result<Arc<Message>>>,
-    last_seq: MessageSequence,
+    inner: Inner,
 }
 
 assert_impl_all!(MessageStream: Send, Sync, Unpin);
@@ -38,13 +36,15 @@ impl stream::Stream for MessageStream {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-        Pin::new(&mut this.msg_receiver).poll_next(cx).map(|msg| {
-            if let Some(Ok(msg)) = &msg {
-                this.last_seq = msg.recv_position();
-            }
+        Pin::new(&mut this.inner.msg_receiver)
+            .poll_next(cx)
+            .map(|msg| {
+                if let Some(Ok(msg)) = &msg {
+                    this.inner.last_seq = msg.recv_position();
+                }
 
-            msg
-        })
+                msg
+            })
     }
 }
 
@@ -59,14 +59,14 @@ impl OrderedStream for MessageStream {
     ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
         let this = self.get_mut();
         if let Some(before) = before {
-            if this.last_seq >= *before {
+            if this.inner.last_seq >= *before {
                 return Poll::Ready(PollResult::NoneBefore);
             }
         }
         if let Some(msg) = ready!(stream::Stream::poll_next(Pin::new(this), cx)) {
             Poll::Ready(PollResult::Item {
                 data: msg,
-                ordering: this.last_seq,
+                ordering: this.inner.last_seq,
             })
         } else {
             Poll::Ready(PollResult::Terminated)
@@ -76,7 +76,7 @@ impl OrderedStream for MessageStream {
 
 impl FusedStream for MessageStream {
     fn is_terminated(&self) -> bool {
-        self.msg_receiver.is_terminated()
+        self.inner.msg_receiver.is_terminated()
     }
 }
 
@@ -86,9 +86,11 @@ impl From<Connection> for MessageStream {
         let msg_receiver = conn_inner.msg_receiver.activate_cloned();
 
         Self {
-            conn_inner,
-            msg_receiver,
-            last_seq: Default::default(),
+            inner: Inner {
+                conn_inner,
+                msg_receiver,
+                last_seq: Default::default(),
+            },
         }
     }
 }
@@ -108,7 +110,14 @@ impl From<MessageStream> for Connection {
 impl From<&MessageStream> for Connection {
     fn from(stream: &MessageStream) -> Connection {
         Connection {
-            inner: stream.conn_inner.clone(),
+            inner: stream.inner.conn_inner.clone(),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+struct Inner {
+    conn_inner: Arc<ConnectionInner>,
+    msg_receiver: ActiveReceiver<Result<Arc<Message>>>,
+    last_seq: MessageSequence,
 }
