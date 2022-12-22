@@ -82,7 +82,7 @@ impl FusedStream for MessageStream {
 
 impl From<Connection> for MessageStream {
     fn from(conn: Connection) -> Self {
-        let conn_inner = conn.inner.clone();
+        let conn_inner = conn.inner;
         let msg_receiver = conn_inner.msg_receiver.activate_cloned();
 
         Self {
