@@ -1,6 +1,6 @@
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use static_assertions::assert_impl_all;
-use std::os::unix::io;
+use std::os::unix::io::{self, FromRawFd, IntoRawFd};
 
 use crate::{Basic, EncodingFormat, Signature, Type};
 
@@ -151,5 +151,27 @@ impl io::IntoRawFd for OwnedFd {
 impl std::fmt::Display for OwnedFd {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)
+    }
+}
+
+impl io_lifetimes::AsFd for OwnedFd {
+    fn as_fd(&self) -> io_lifetimes::BorrowedFd<'_> {
+        unsafe { io_lifetimes::BorrowedFd::borrow_raw(self.inner) }
+    }
+}
+
+impl From<io_lifetimes::OwnedFd> for OwnedFd {
+    fn from(value: io_lifetimes::OwnedFd) -> Self {
+        Self {
+            inner: value.into_raw_fd(),
+        }
+    }
+}
+
+impl From<OwnedFd> for io_lifetimes::OwnedFd {
+    fn from(value: OwnedFd) -> Self {
+        let fd = value.inner;
+        std::mem::forget(value);
+        unsafe { Self::from_raw_fd(fd) }
     }
 }
