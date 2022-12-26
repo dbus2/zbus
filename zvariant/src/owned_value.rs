@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[cfg(unix)]
-use crate::Fd;
+use crate::FdWrapper;
 
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
@@ -77,7 +77,7 @@ ov_try_from!(Maybe<'static>);
 ov_try_from!(Str<'static>);
 ov_try_from!(Structure<'static>);
 #[cfg(unix)]
-ov_try_from!(Fd);
+ov_try_from!(FdWrapper);
 
 ov_try_from_ref!(u8);
 ov_try_from_ref!(bool);
@@ -97,8 +97,6 @@ ov_try_from_ref!(&'a Str<'a>);
 ov_try_from_ref!(&'a Structure<'a>);
 #[cfg(feature = "gvariant")]
 ov_try_from_ref!(&'a Maybe<'a>);
-#[cfg(unix)]
-ov_try_from_ref!(Fd);
 
 impl<'a, T> TryFrom<OwnedValue> for Vec<T>
 where
@@ -223,7 +221,7 @@ to_value!(Signature<'a>);
 to_value!(Structure<'a>);
 to_value!(ObjectPath<'a>);
 #[cfg(unix)]
-to_value!(Fd);
+to_value!(FdWrapper);
 
 impl From<OwnedValue> for Value<'static> {
     fn from(v: OwnedValue) -> Value<'static> {

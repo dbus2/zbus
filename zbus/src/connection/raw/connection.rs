@@ -8,7 +8,7 @@ use std::{
 use event_listener::{Event, EventListener};
 
 #[cfg(unix)]
-use crate::OwnedFd;
+use crate::Fd;
 use crate::{
     message::{
         header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
@@ -37,7 +37,7 @@ pub struct Connection<S> {
     event: Event,
     raw_in_buffer: Vec<u8>,
     #[cfg(unix)]
-    raw_in_fds: Vec<OwnedFd>,
+    raw_in_fds: Vec<Fd>,
     raw_in_pos: usize,
     out_pos: usize,
     out_msgs: VecDeque<Arc<Message>>,

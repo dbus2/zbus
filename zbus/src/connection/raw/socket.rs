@@ -31,10 +31,10 @@ use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 
 #[cfg(unix)]
-use crate::{utils::FDS_MAX, OwnedFd};
+use crate::{utils::FDS_MAX, Fd};
 
 #[cfg(unix)]
-fn fd_recvmsg(fd: RawFd, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
+fn fd_recvmsg(fd: RawFd, buffer: &mut [u8]) -> io::Result<(usize, Vec<Fd>)> {
     let mut iov = [IoSliceMut::new(buffer)];
     let mut cmsgspace = cmsg_space!([RawFd; FDS_MAX]);
 
@@ -52,7 +52,7 @@ fn fd_recvmsg(fd: RawFd, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)>
             continue;
         }
         if let ControlMessageOwned::ScmRights(fd) = cmsg {
-            fds.extend(fd.iter().map(|&f| unsafe { OwnedFd::from_raw_fd(f) }));
+            fds.extend(fd.iter().map(|&f| unsafe { Fd::from_raw_fd(f) }));
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -153,7 +153,7 @@ fn send_zero_byte(fd: &impl AsRawFd) -> io::Result<usize> {
 }
 
 #[cfg(unix)]
-type PollRecvmsg = Poll<io::Result<(usize, Vec<OwnedFd>)>>;
+type PollRecvmsg = Poll<io::Result<(usize, Vec<Fd>)>>;
 
 #[cfg(not(unix))]
 type PollRecvmsg = Poll<io::Result<usize>>;

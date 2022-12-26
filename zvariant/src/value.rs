@@ -1,4 +1,6 @@
 use core::str;
+#[cfg(unix)]
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::{
     fmt::{Display, Write},
     marker::PhantomData,
@@ -22,7 +24,7 @@ use crate::{
 use crate::{maybe_display_fmt, Maybe};
 
 #[cfg(unix)]
-use crate::Fd;
+use crate::{Fd, FdWrapper};
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
@@ -97,7 +99,7 @@ pub enum Value<'a> {
     Maybe(Maybe<'a>),
 
     #[cfg(unix)]
-    Fd(Fd),
+    Fd(FdWrapper),
 }
 
 assert_impl_all!(Value<'_>: Send, Sync, Unpin);
@@ -193,7 +195,7 @@ impl<'a> Value<'a> {
             #[cfg(feature = "gvariant")]
             Value::Maybe(v) => Value::Maybe(v.to_owned()),
             #[cfg(unix)]
-            Value::Fd(v) => Value::Fd(*v),
+            Value::Fd(v) => Value::Fd(v.clone()),
         })
     }
 
@@ -465,7 +467,7 @@ pub(crate) fn value_display_fmt(
             if type_annotate {
                 f.write_str("handle ")?;
             }
-            write!(f, "{}", handle)
+            write!(f, "{}", handle.as_raw_fd())
         }
     }
 }
@@ -712,7 +714,7 @@ where
             )
         })? {
             #[cfg(unix)]
-            b'h' => Fd::from(value).into(),
+            b'h' => unsafe { Value::Fd(FdWrapper::new(Fd::from_raw_fd(value))) },
             _ => value.into(),
         };
 
@@ -985,10 +987,12 @@ mod tests {
         );
 
         #[cfg(unix)]
-        assert_eq!(
-            Value::new(vec![Fd::from(0), Fd::from(-100)]).to_string(),
-            "[handle 0, -100]"
-        );
+        unsafe {
+            assert_eq!(
+                Value::new(vec![Fd::from_raw_fd(0), Fd::from_raw_fd(-100)]).to_string(),
+                "[handle 0, -100]"
+            );
+        }
 
         assert_eq!(
             Value::new((

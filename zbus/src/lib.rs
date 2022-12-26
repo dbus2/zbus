@@ -192,7 +192,7 @@ pub use zbus_names as names;
 pub use zvariant;
 
 #[cfg(unix)]
-use zvariant::OwnedFd;
+use zvariant::Fd;
 
 #[cfg(test)]
 mod tests {
@@ -201,10 +201,7 @@ mod tests {
         sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
     #[cfg(unix)]
-    use std::{
-        fs::File,
-        os::unix::io::{AsRawFd, FromRawFd},
-    };
+    use std::{fs::File, os::unix::io::AsRawFd};
 
     use crate::utils::block_on;
     use enumflags2::BitFlags;
@@ -336,7 +333,7 @@ mod tests {
         let fd: Fd = reply.body().unwrap();
         let _fds = reply.take_fds();
         assert!(fd.as_raw_fd() >= 0);
-        let f = unsafe { File::from_raw_fd(fd.as_raw_fd()) };
+        let f = File::from(std::os::fd::OwnedFd::from(fd));
         f.metadata().unwrap();
     }
 

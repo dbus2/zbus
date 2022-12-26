@@ -359,9 +359,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn fd_value() {
-        basic_type_test!(LE, DBus, Fd::from(42), 4, Fd, 4, Fd, 8);
+        let file = std::fs::File::create("foo.txt").unwrap();
+        let fd = Fd::from(file);
+        basic_type_test!(LE, DBus, fd, 4, Fd, 4, Fd, 8);
         #[cfg(feature = "gvariant")]
-        basic_type_test!(LE, GVariant, Fd::from(42), 4, Fd, 4, Fd, 6);
+        basic_type_test!(LE, GVariant, fd, 4, Fd, 4, Fd, 6);
     }
 
     #[test]
@@ -1535,7 +1537,7 @@ mod tests {
         #[cfg(unix)]
         {
             let stdout = std::io::stdout();
-            let l = crate::serialized_size_fds(ctxt, &Fd::from(&stdout)).unwrap();
+            let l = crate::serialized_size_fds(ctxt, &Fd::from(stdout)).unwrap();
             assert_eq!(l, (4, 1));
         }
 

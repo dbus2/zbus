@@ -168,12 +168,7 @@ fn to_rust_type(ty: &CompleteType, input: bool, as_ref: bool) -> String {
             u64::SIGNATURE_CHAR => "u64".into(),
             f64::SIGNATURE_CHAR => "f64".into(),
             // xmlgen accepts 'h' on Windows, only for code generation
-            'h' => (if input {
-                "zbus::zvariant::Fd"
-            } else {
-                "zbus::zvariant::OwnedFd"
-            })
-            .into(),
+            'h' => "zbus::zvariant::Fd".into(),
             <&str>::SIGNATURE_CHAR => (if input || as_ref { "&str" } else { "String" }).into(),
             ObjectPath::SIGNATURE_CHAR => (if input {
                 if as_ref {

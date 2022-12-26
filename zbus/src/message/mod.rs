@@ -11,7 +11,7 @@ use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 #[cfg(unix)]
-use crate::OwnedFd;
+use crate::Fd;
 use crate::{
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type as VariantType},
@@ -41,9 +41,9 @@ macro_rules! dbus_context {
 }
 
 #[cfg(unix)]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub(crate) enum Fds {
-    Owned(Vec<OwnedFd>),
+    Owned(Vec<Fd>),
     Raw(Vec<RawFd>),
 }
 
@@ -218,7 +218,7 @@ impl Message {
     /// # Safety
     ///
     /// This method is unsafe as bytes may have an invalid encoding.
-    pub unsafe fn from_bytes(bytes: Vec<u8>, #[cfg(unix)] fds: Vec<OwnedFd>) -> Result<Self> {
+    pub unsafe fn from_bytes(bytes: Vec<u8>, #[cfg(unix)] fds: Vec<Fd>) -> Result<Self> {
         Self::from_raw_parts(
             bytes,
             #[cfg(unix)]
@@ -230,7 +230,7 @@ impl Message {
     /// Create a message from its full contents
     pub(crate) fn from_raw_parts(
         bytes: Vec<u8>,
-        #[cfg(unix)] fds: Vec<OwnedFd>,
+        #[cfg(unix)] fds: Vec<Fd>,
         recv_seq: u64,
     ) -> Result<Self> {
         if EndianSig::try_from(bytes[0])? != NATIVE_ENDIAN_SIG {
@@ -268,7 +268,7 @@ impl Message {
     /// Note: the message will continue to reference the files, so you must keep them open for as
     /// long as the message itself.
     #[cfg(unix)]
-    pub fn take_fds(&self) -> Vec<OwnedFd> {
+    pub fn take_fds(&self) -> Vec<Fd> {
         let mut fds_lock = self.fds.write().expect(LOCK_PANIC_MSG);
         if let Fds::Owned(ref mut fds) = *fds_lock {
             // From now on, it's the caller responsibility to close the fds
@@ -605,7 +605,7 @@ mod tests {
             "do",
             &(
                 #[cfg(unix)]
-                Fd::from(&stdout),
+                Fd::from(stdout),
                 "foo",
             ),
         )
@@ -616,7 +616,11 @@ mod tests {
             if cfg!(unix) { "hs" } else { "s" }
         );
         #[cfg(unix)]
-        assert_eq!(*m.fds.read().unwrap(), Fds::Raw(vec![stdout.as_raw_fd()]));
+        if let Fds::Raw(raw_fds) = &*m.fds.read().unwrap() {
+            assert_eq!(raw_fds, &vec![stdout.as_raw_fd()]);
+        } else {
+            panic!();
+        }
 
         let body: Result<u32, Error> = m.body();
         assert!(matches!(
