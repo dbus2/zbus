@@ -1,4 +1,6 @@
 use core::str;
+#[cfg(unix)]
+use std::os::unix::io::AsRawFd;
 use std::{
     convert::TryFrom,
     fmt::{Display, Write},
@@ -23,7 +25,7 @@ use crate::{
 use crate::{maybe_display_fmt, Maybe};
 
 #[cfg(unix)]
-use crate::Fd;
+use crate::BorrowedFd;
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
@@ -100,7 +102,7 @@ pub enum Value<'a> {
     Maybe(Maybe<'a>),
 
     #[cfg(unix)]
-    Fd(Fd),
+    Fd(BorrowedFd<'a>),
 }
 
 assert_impl_all!(Value<'_>: Send, Sync, Unpin);
@@ -196,7 +198,18 @@ impl<'a> Value<'a> {
             #[cfg(feature = "gvariant")]
             Value::Maybe(v) => Value::Maybe(v.to_owned()),
             #[cfg(unix)]
-            Value::Fd(v) => Value::Fd(*v),
+            Value::Fd(v) => unsafe {
+                // NOTE We could do this safely via duplicating the descriptor,
+                // the problem is that now we are left with a new owned fd which is
+                // not going to be closed on Drop. Is this an issue?
+                //
+                // FIXME This is intrinsically unsafe as we are extending the
+                // lifetime of a descriptor.
+                let raw_fd = v.as_raw_fd();
+                let borrowed_fd = BorrowedFd::borrow_raw(raw_fd);
+
+                Value::Fd(borrowed_fd)
+            },
         })
     }
 
@@ -225,7 +238,7 @@ impl<'a> Value<'a> {
             Value::Maybe(value) => value.full_signature().clone(),
 
             #[cfg(unix)]
-            Value::Fd(_) => Fd::signature(),
+            Value::Fd(_) => BorrowedFd::signature(),
         }
     }
 
@@ -470,7 +483,7 @@ pub(crate) fn value_display_fmt(
             if type_annotate {
                 f.write_str("handle ")?;
             }
-            write!(f, "{}", handle)
+            write!(f, "{}", handle.as_raw_fd())
         }
     }
 }
@@ -717,7 +730,11 @@ where
             )
         })? {
             #[cfg(unix)]
-            b'h' => Fd::from(value).into(),
+            b'h' => unsafe {
+                let borrowed_fd = BorrowedFd::borrow_raw(value);
+
+                Value::Fd(borrowed_fd)
+            },
             _ => value.into(),
         };
 
@@ -989,10 +1006,16 @@ mod tests {
                 (@mmn nothing, @mmmn just nothing))"
         );
 
-        assert_eq!(
-            Value::new(vec![Fd::from(0), Fd::from(-100)]).to_string(),
-            "[handle 0, -100]"
-        );
+        unsafe {
+            assert_eq!(
+                Value::new(vec![
+                    BorrowedFd::borrow_raw(0),
+                    BorrowedFd::borrow_raw(-100)
+                ])
+                .to_string(),
+                "[handle 0, -100]"
+            );
+        }
 
         assert_eq!(
             Value::new((

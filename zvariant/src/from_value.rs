@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[cfg(unix)]
-use crate::Fd;
+use crate::BorrowedFd;
 
 use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
 
@@ -76,7 +76,7 @@ value_try_from_all!(I64, i64);
 value_try_from_all!(U64, u64);
 value_try_from_all!(F64, f64);
 #[cfg(unix)]
-value_try_from_all!(Fd, Fd);
+value_try_from_all!(Fd, BorrowedFd<'a>);
 
 value_try_from_all!(Str, Str<'a>);
 value_try_from_all!(Signature, Signature<'a>);
