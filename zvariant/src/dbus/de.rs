@@ -14,7 +14,7 @@ use crate::{
 };
 
 #[cfg(unix)]
-use crate::Fd;
+use crate::BorrowedFd;
 
 /// Our D-Bus deserialization implementation.
 #[derive(Debug)]
@@ -160,7 +160,7 @@ where
     {
         let v = match self.0.sig_parser.next_char()? {
             #[cfg(unix)]
-            Fd::SIGNATURE_CHAR => {
+            BorrowedFd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
                 let alignment = u32::alignment(EncodingFormat::DBus);
                 self.0.parse_padding(alignment)?;

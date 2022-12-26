@@ -339,7 +339,7 @@ impl<'a> MessageBuilder<'a> {
 }
 
 #[cfg(unix)]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 enum Fds {
     Owned(Vec<OwnedFd>),
     Raw(Vec<RawFd>),

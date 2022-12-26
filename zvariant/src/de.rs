@@ -18,7 +18,7 @@ use crate::{
 };
 
 #[cfg(unix)]
-use crate::Fd;
+use crate::BorrowedFd;
 
 /// Deserialize `T` from a given slice of bytes, containing file descriptor indices.
 ///
@@ -578,7 +578,7 @@ where
         u16::SIGNATURE_CHAR => de.deserialize_u16(visitor),
         i32::SIGNATURE_CHAR => de.deserialize_i32(visitor),
         #[cfg(unix)]
-        Fd::SIGNATURE_CHAR => de.deserialize_i32(visitor),
+        BorrowedFd::SIGNATURE_CHAR => de.deserialize_i32(visitor),
         u32::SIGNATURE_CHAR => de.deserialize_u32(visitor),
         i64::SIGNATURE_CHAR => de.deserialize_i64(visitor),
         u64::SIGNATURE_CHAR => de.deserialize_u64(visitor),
