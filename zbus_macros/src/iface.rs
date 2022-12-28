@@ -138,13 +138,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
         let mut typed_inputs = inputs
             .iter()
-            .filter_map(|i| {
-                if let FnArg::Typed(t) = i {
-                    Some(t)
-                } else {
-                    None
-                }
-            })
+            .filter_map(typed_arg)
             .cloned()
             .collect::<Vec<_>>();
         let signal_context_arg = if is_signal {
@@ -623,7 +617,7 @@ fn get_args_from_inputs(
                     };
                 });
             } else {
-                args.push(&input.pat);
+                args.push(pat_ident(input).unwrap());
                 tys.push(&input.ty);
             }
         }
@@ -648,7 +642,7 @@ fn get_args_from_inputs(
                 };
         };
 
-        let all_args = inputs.iter().map(|t| &t.pat);
+        let all_args = inputs.iter().filter_map(pat_ident);
         let all_args = quote! { #(#all_args,)* };
 
         Ok((args_from_msg, all_args))
@@ -691,7 +685,7 @@ fn introspect_input_args(
 ) -> impl Iterator<Item = TokenStream> + '_ {
     inputs
         .iter()
-        .filter_map(move |PatType { pat, ty, attrs, .. }| {
+        .filter_map(move |pat_type @ PatType { ty, attrs, .. }| {
             let is_special_arg = attrs.iter().any(|attr| {
                 if !attr.path.is_ident("zbus") {
                     return false;
@@ -721,7 +715,8 @@ fn introspect_input_args(
                 return None;
             }
 
-            let arg_name = quote!(#pat).to_string();
+            let ident = pat_ident(pat_type).unwrap();
+            let arg_name = quote!(#ident).to_string();
             let dir = if is_signal { "" } else { " direction=\"in\"" };
             Some(quote!(
                 ::std::writeln!(writer, "{:indent$}<arg name=\"{}\" type=\"{}\"{}/>", "",

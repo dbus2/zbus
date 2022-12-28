@@ -484,7 +484,13 @@ fn gen_proxy_method_call(
         .iter()
         .filter(|a| !a.path.is_ident("dbus_proxy"))
         .collect();
-    let args: Vec<_> = m.sig.inputs.iter().filter_map(arg_ident).collect();
+    let args: Vec<_> = m
+        .sig
+        .inputs
+        .iter()
+        .filter_map(typed_arg)
+        .filter_map(pat_ident)
+        .collect();
     let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
     let async_proxy_object = attrs.iter().find_map(|x| match x {
         ItemAttribute::AsyncObject(o) => Some(o.clone()),
@@ -716,7 +722,7 @@ fn gen_proxy_property(
         .collect();
     let signature = &m.sig;
     if signature.inputs.len() > 1 {
-        let value = arg_ident(signature.inputs.last().unwrap()).unwrap();
+        let value = pat_ident(typed_arg(signature.inputs.last().unwrap()).unwrap()).unwrap();
         quote! {
             #(#other_attrs)*
             #[allow(clippy::needless_question_mark)]
@@ -865,7 +871,8 @@ fn gen_proxy_signal(
         .sig
         .inputs
         .iter()
-        .filter_map(|arg| arg_ident(arg).cloned())
+        .filter_map(typed_arg)
+        .filter_map(|arg| pat_ident(arg).cloned())
         .collect();
     let args_nth: Vec<Literal> = args
         .iter()

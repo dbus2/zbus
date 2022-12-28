@@ -16,14 +16,16 @@ pub fn zbus_path() -> TokenStream {
     }
 }
 
-pub fn arg_ident(arg: &FnArg) -> Option<&Ident> {
+pub fn typed_arg(arg: &FnArg) -> Option<&PatType> {
     match arg {
-        FnArg::Typed(PatType { pat, .. }) => {
-            if let Pat::Ident(PatIdent { ident, .. }) = &**pat {
-                return Some(ident);
-            }
-            None
-        }
+        FnArg::Typed(t) => Some(t),
+        _ => None,
+    }
+}
+
+pub fn pat_ident(pat: &PatType) -> Option<&Ident> {
+    match &*pat.pat {
+        Pat::Ident(PatIdent { ident, .. }) => Some(ident),
         _ => None,
     }
 }
