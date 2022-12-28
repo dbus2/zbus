@@ -1,7 +1,8 @@
+use io_lifetimes::AsFd;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use static_assertions::assert_impl_all;
 use std::cmp::PartialEq;
-use std::os::fd::{self, AsFd, AsRawFd, FromRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 
 use crate::{Basic, EncodingFormat, Signature, Type};
 
@@ -16,7 +17,7 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
 /// [serializer]: fn.to_bytes_fds.html
 #[derive(Debug, Clone, Copy)]
-pub struct BorrowedFd<'f>(fd::BorrowedFd<'f>);
+pub struct BorrowedFd<'f>(io_lifetimes::BorrowedFd<'f>);
 
 macro_rules! fd_impl {
     ($i:ident  $(<$a:lifetime>)? ) => {
@@ -65,7 +66,7 @@ impl<'f> PartialEq for BorrowedFd<'f> {
 }
 
 impl<'f> AsFd for BorrowedFd<'f> {
-    fn as_fd(&self) -> fd::BorrowedFd<'_> {
+    fn as_fd(&self) -> io_lifetimes::BorrowedFd<'_> {
         self.0.as_fd()
     }
 }
@@ -84,7 +85,7 @@ impl<'f> BorrowedFd<'f> {
     /// The resource pointed to by `fd` must remain open for the duration of
     /// the returned `BorrowedFd`, and it must not have the value `-1`.
     pub const unsafe fn borrow_raw(fd: RawFd) -> Self {
-        Self(fd::BorrowedFd::borrow_raw(fd))
+        Self(io_lifetimes::BorrowedFd::borrow_raw(fd))
     }
 
     pub fn try_clone_to_owned(&self) -> std::io::Result<OwnedFd> {
@@ -99,7 +100,7 @@ impl<'f> BorrowedFd<'f> {
 /// See also [`BorrowedFd`]. This type owns the file and will close it on drop.
 /// On deserialize, it will duplicate the file descriptor.
 #[derive(Debug)]
-pub struct OwnedFd(fd::OwnedFd);
+pub struct OwnedFd(io_lifetimes::OwnedFd);
 
 assert_impl_all!(OwnedFd: Send, Sync, Unpin);
 
@@ -120,7 +121,7 @@ impl<'de> Deserialize<'de> for OwnedFd {
     where
         D: Deserializer<'de>,
     {
-        let fd = unsafe { fd::BorrowedFd::borrow_raw(i32::deserialize(deserializer)?) };
+        let fd = unsafe { io_lifetimes::BorrowedFd::borrow_raw(i32::deserialize(deserializer)?) };
         // TODO Is this duplication needed?
         // We duplicate the descriptor.
         let dup_fd = fd.try_clone_to_owned().map_err(|err| {
@@ -133,26 +134,26 @@ impl<'de> Deserialize<'de> for OwnedFd {
 }
 
 impl AsFd for OwnedFd {
-    fn as_fd(&self) -> fd::BorrowedFd<'_> {
+    fn as_fd(&self) -> io_lifetimes::BorrowedFd<'_> {
         self.0.as_fd()
     }
 }
 
-impl From<fd::OwnedFd> for OwnedFd {
-    fn from(fd: fd::OwnedFd) -> Self {
+impl From<io_lifetimes::OwnedFd> for OwnedFd {
+    fn from(fd: io_lifetimes::OwnedFd) -> Self {
         Self(fd)
     }
 }
 
-impl From<OwnedFd> for fd::OwnedFd {
-    fn from(fd: OwnedFd) -> fd::OwnedFd {
+impl From<OwnedFd> for io_lifetimes::OwnedFd {
+    fn from(fd: OwnedFd) -> io_lifetimes::OwnedFd {
         fd.0
     }
 }
 
 impl FromRawFd for OwnedFd {
     unsafe fn from_raw_fd(fd: RawFd) -> Self {
-        fd::OwnedFd::from_raw_fd(fd).into()
+        io_lifetimes::OwnedFd::from_raw_fd(fd).into()
     }
 }
 
