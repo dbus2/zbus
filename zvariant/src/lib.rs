@@ -137,7 +137,7 @@ mod tests {
     use crate::{from_slice_fds, to_bytes_fds};
 
     #[cfg(unix)]
-    use crate::Fd;
+    use crate::BorrowedFd;
     use crate::{
         Array, Basic, DeserializeDict, DeserializeValue, Dict, EncodingContext as Context,
         EncodingFormat, Error, ObjectPath, Result, SerializeDict, SerializeValue, Signature, Str,
@@ -322,27 +322,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn fd_value() {
-        basic_type_test!(
-            LE,
-            DBus,
-            unsafe { BorrowedFd::borrow_raw(42) },
-            4,
-            Fd,
-            4,
-            Fd,
-            8
-        );
+        let file = std::fs::File::create("foo.txt").unwrap();
+        let fd = BorrowedFd::from(&file);
+        basic_type_test!(LE, DBus, fd, 4, BorrowedFd<'_>, 4, Fd, 8);
         #[cfg(feature = "gvariant")]
-        basic_type_test!(
-            LE,
-            GVariant,
-            unsafe { BorrowedFd::borrow_raw(42) },
-            4,
-            Fd,
-            4,
-            Fd,
-            6
-        );
+        basic_type_test!(LE, GVariant, fd, 4, BorrowedFd<'_>, 4, Fd, 6);
     }
 
     #[test]
@@ -1483,8 +1467,8 @@ mod tests {
         #[cfg(unix)]
         {
             let stdout = std::io::stdout();
-            let l = crate::serialized_size_fds(ctxt, unsafe { &BorrowedFd::borrow_raw(&stdout) })
-                .unwrap();
+            let fd = BorrowedFd::from(&stdout);
+            let l = crate::serialized_size_fds(ctxt, &fd).unwrap();
             assert_eq!(l, (4, 1));
         }
 

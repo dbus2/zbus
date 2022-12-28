@@ -2,7 +2,7 @@ use io_lifetimes::AsFd;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use static_assertions::assert_impl_all;
 use std::cmp::PartialEq;
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use crate::{Basic, EncodingFormat, Signature, Type};
 
@@ -54,6 +54,21 @@ impl<'f> Serialize for BorrowedFd<'f> {
         S: Serializer,
     {
         serializer.serialize_i32(self.0.as_fd().as_raw_fd())
+    }
+}
+
+impl<'de> Deserialize<'de> for BorrowedFd<'static> {
+    /// Deserialize into an owned fd, the underlying descriptor is duplicated.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // FIXME This is super unsafe, we can create an invalid BorrowedFd for
+        // any integer. Even if the fd is valid, it could be closed from
+        // somewhere else.
+        let raw_fd = i32::deserialize(deserializer)?;
+
+        Ok(unsafe { BorrowedFd::borrow_raw(raw_fd) })
     }
 }
 
@@ -121,15 +136,17 @@ impl<'de> Deserialize<'de> for OwnedFd {
     where
         D: Deserializer<'de>,
     {
-        let fd = unsafe { io_lifetimes::BorrowedFd::borrow_raw(i32::deserialize(deserializer)?) };
+        let fd = unsafe { BorrowedFd::borrow_raw(i32::deserialize(deserializer)?) };
         // TODO Is this duplication needed?
-        // We duplicate the descriptor.
+        //
+        // We duplicate the descriptor. This catches if the descriptor is
+        // invalid.
         let dup_fd = fd.try_clone_to_owned().map_err(|err| {
             let msg = format!("Could not clone the fd: {err:?}");
             serde::de::Error::custom(msg)
         })?;
 
-        Ok(dup_fd.into())
+        Ok(dup_fd)
     }
 }
 
@@ -160,6 +177,12 @@ impl FromRawFd for OwnedFd {
 impl AsRawFd for OwnedFd {
     fn as_raw_fd(&self) -> RawFd {
         self.0.as_raw_fd()
+    }
+}
+
+impl IntoRawFd for OwnedFd {
+    fn into_raw_fd(self) -> RawFd {
+        self.0.into_raw_fd()
     }
 }
 

@@ -136,10 +136,7 @@ mod tests {
         sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
     #[cfg(unix)]
-    use std::{
-        fs::File,
-        os::unix::io::{AsRawFd, FromRawFd},
-    };
+    use std::{fs::File, os::unix::io::AsRawFd};
 
     use crate::utils::block_on;
     use enumflags2::BitFlags;
@@ -149,7 +146,7 @@ mod tests {
 
     use zbus_names::UniqueName;
     #[cfg(unix)]
-    use zvariant::Fd;
+    use zvariant::{BorrowedFd, OwnedFd};
     use zvariant::{OwnedObjectPath, OwnedValue, Type};
 
     use crate::{
@@ -267,13 +264,13 @@ mod tests {
 
         assert!(reply
             .body_signature()
-            .map(|s| s == <Fd>::signature())
+            .map(|s| s == <BorrowedFd<'_>>::signature())
             .unwrap());
 
-        let fd: Fd = reply.body().unwrap();
+        let fd: OwnedFd = reply.body().unwrap();
         let _fds = reply.take_fds();
         assert!(fd.as_raw_fd() >= 0);
-        let f = unsafe { File::from_raw_fd(fd.as_raw_fd()) };
+        let f = File::from(io_lifetimes::OwnedFd::from(fd));
         f.metadata().unwrap();
     }
 

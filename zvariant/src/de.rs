@@ -32,12 +32,14 @@ use crate::BorrowedFd;
 ///
 /// ```
 /// use zvariant::{to_bytes_fds, from_slice_fds};
-/// use zvariant::{EncodingContext, Fd};
+/// use zvariant::{EncodingContext, BorrowedFd};
 ///
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
-/// let (encoded, fds) = to_bytes_fds(ctxt, &Fd::from(42)).unwrap();
-/// let decoded: Fd = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
-/// assert_eq!(decoded, Fd::from(42));
+/// let file = std::fs::File::create("foo.txt").unwrap();
+/// let fd = BorrowedFd::from(&file);
+/// let (encoded, fds) = to_bytes_fds(ctxt, &fd).unwrap();
+/// let decoded: BorrowedFd<'_> = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
+/// assert_eq!(decoded, fd);
 /// ```
 ///
 /// [`from_slice`]: fn.from_slice.html

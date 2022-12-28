@@ -87,6 +87,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-util
 async-std = { version = "1.12.0", features = ["attributes" ] }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter" , "fmt"], default-features = false }
 tempfile = "3.3.0"
+io-lifetimes = "1.0.3"
 
 [package.metadata.docs.rs]
 all-features = true
