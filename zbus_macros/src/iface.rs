@@ -157,7 +157,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         intro_args.extend(introspect_input_args(&typed_inputs, is_signal));
         let is_result_output = introspect_add_output_args(&mut intro_args, output, &out_args)?;
 
-        let (args_from_msg, args) = get_args_from_inputs(&typed_inputs, &zbus)?;
+        let (args_from_msg, args_names) = get_args_from_inputs(&typed_inputs, &zbus)?;
 
         clean_input_args(inputs);
 
@@ -201,7 +201,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     #signal_context.path(),
                     <#self_ty as #zbus::Interface>::name(),
                     #member_name,
-                    &(#args),
+                    &(#args_names),
                 )
                 .await
             });
@@ -361,7 +361,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 #member_name => {
                     let future = async move {
                         #args_from_msg
-                        let reply = self.#ident(#args)#method_await;
+                        let reply = self.#ident(#args_names)#method_await;
                         #reply
                     };
                     #zbus::DispatchResult::Async(::std::boxed::Box::pin(async move {
@@ -508,7 +508,7 @@ fn get_args_from_inputs(
         let mut conn_arg_decl = None;
         let mut header_arg_decl = None;
         let mut signal_context_arg_decl = None;
-        let mut args = Vec::new();
+        let mut args_names = Vec::new();
         let mut tys = Vec::new();
 
         for input in inputs {
@@ -617,7 +617,7 @@ fn get_args_from_inputs(
                     };
                 });
             } else {
-                args.push(pat_ident(input).unwrap());
+                args_names.push(pat_ident(input).unwrap());
                 tys.push(&input.ty);
             }
         }
@@ -631,7 +631,7 @@ fn get_args_from_inputs(
 
             #signal_context_arg_decl
 
-            let (#(#args),*): (#(#tys),*) =
+            let (#(#args_names),*): (#(#tys),*) =
                 match m.body() {
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
@@ -642,10 +642,10 @@ fn get_args_from_inputs(
                 };
         };
 
-        let all_args = inputs.iter().filter_map(pat_ident);
-        let all_args = quote! { #(#all_args,)* };
+        let all_args_names = inputs.iter().filter_map(pat_ident);
+        let all_args_names = quote! { #(#all_args_names,)* };
 
-        Ok((args_from_msg, all_args))
+        Ok((args_from_msg, all_args_names))
     }
 }
 
