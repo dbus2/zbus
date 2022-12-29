@@ -3,12 +3,15 @@ use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
 use futures_util::{future::Either, stream::Map};
 use once_cell::sync::OnceCell;
-use ordered_stream::{join as join_streams, FromFuture, OrderedStream, PollResult};
+use ordered_stream::{
+    join as join_streams, FromFuture, JoinMultiple, OrderedStream, Peekable, PollResult,
+};
 use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
     future::Future,
+    marker::PhantomData,
     ops::Deref,
     pin::Pin,
     sync::{Arc, RwLock, RwLockReadGuard},
@@ -16,7 +19,7 @@ use std::{
 };
 use tracing::{debug, info_span, instrument, Instrument};
 
-use zbus_names::{BusName, InterfaceName, MemberName, UniqueName, WellKnownName};
+use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
@@ -1063,12 +1066,9 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
 /// Use [`Proxy::receive_signal`] to create an instance of this type.
 #[derive(Debug)]
 pub struct SignalStream<'a> {
-    stream: MessageStream,
-    proxy: Proxy<'a>,
-    match_rule: Option<OwnedMatchRule>,
-    src_bus_name: Option<WellKnownName<'a>>,
+    stream: JoinMultiple<Vec<Peekable<MessageStream>>>,
     src_unique_name: Option<UniqueName<'static>>,
-    member: Option<MemberName<'a>>,
+    phantom: PhantomData<&'a ()>,
 }
 
 impl<'a> SignalStream<'a> {
@@ -1088,17 +1088,31 @@ impl<'a> SignalStream<'a> {
         for (i, arg) in args {
             rule_builder = rule_builder.arg(*i, *arg)?;
         }
-        let rule: OwnedMatchRule = rule_builder.build().to_owned().into();
+        let signal_rule: OwnedMatchRule = rule_builder.build().to_owned().into();
         let conn = proxy.connection();
-        conn.add_match(rule.clone()).await?;
-        let stream = MessageStream::from(conn);
 
-        let (src_bus_name, src_unique_name, stream) = match proxy.destination().to_owned() {
-            BusName::Unique(name) => (None, Some(name), stream),
+        let (src_unique_name, stream) = match proxy.destination().to_owned() {
+            BusName::Unique(name) => (
+                Some(name),
+                JoinMultiple(vec![ordered_stream::OrderedStreamExt::peekable(
+                    MessageStream::for_match_rule(signal_rule, conn).await?,
+                )]),
+            ),
             BusName::WellKnown(name) => {
                 use ordered_stream::OrderedStreamExt;
 
-                let stream = stream.map(Either::Left);
+                let name_owner_changed_rule = MatchRule::builder()
+                    .msg_type(MessageType::Signal)
+                    .sender("org.freedesktop.DBus")?
+                    .path("/org/freedesktop/DBus")?
+                    .interface("org.freedesktop.DBus")?
+                    .member("NameOwnerChanged")?
+                    .add_arg(name.as_str())?
+                    .build();
+                let name_owner_changed_stream =
+                    MessageStream::for_match_rule(name_owner_changed_rule, conn)
+                        .await?
+                        .map(Either::Left);
 
                 let get_name_owner = conn
                     .call_method_raw(
@@ -1112,9 +1126,9 @@ impl<'a> SignalStream<'a> {
                     .await
                     .map(|r| FromFuture::from(r.expect("no reply")).map(Either::Right))?;
 
-                let mut join = join_streams(stream, get_name_owner);
+                let mut join = join_streams(name_owner_changed_stream, get_name_owner);
 
-                let src_unique_name = loop {
+                let mut src_unique_name = loop {
                     match join.next().await {
                         Some(Either::Left(msg)) => {
                             if let Some(signal) =
@@ -1154,51 +1168,37 @@ impl<'a> SignalStream<'a> {
                 // Ignore any buffered message. We are only interested in the first one (which we
                 // already got since we're out of the loop).
                 let (stream, _, _) = join.into_inner();
-                let stream = stream.into_inner();
+                let name_owner_changed_stream = stream.into_inner();
 
-                (Some(name), src_unique_name, stream)
+                let stream = JoinMultiple(vec![
+                    MessageStream::for_match_rule(signal_rule, conn)
+                        .await?
+                        .peekable(),
+                    name_owner_changed_stream.peekable(),
+                ]);
+
+                (src_unique_name, stream)
             }
         };
 
         Ok(Self {
             stream,
-            proxy,
-            match_rule: Some(rule),
-            src_bus_name,
             src_unique_name,
-            member: signal_name,
+            phantom: PhantomData,
         })
     }
 
     fn filter(&mut self, msg: &Arc<Message>) -> Result<bool> {
-        if msg.message_type() != zbus::MessageType::Signal {
-            return Ok(false);
-        }
-        let memb = msg.member();
-        let iface = msg.interface();
-        let path = msg.path();
-
-        if (self.member.is_none() || memb == self.member)
-            && path.as_ref() == Some(self.proxy.path())
-            && iface.as_ref() == Some(self.proxy.interface())
-        {
-            let header = msg.header()?;
-            let sender = header.sender()?;
-            if sender == self.src_unique_name.as_ref() {
-                return Ok(true);
-            }
+        let header = msg.header()?;
+        let sender = header.sender()?;
+        if sender == self.src_unique_name.as_ref() {
+            return Ok(true);
         }
 
         // The src_unique_name must be maintained in lock-step with the applied filter
-        let bus_name = match &self.src_bus_name {
-            Some(bus_name) => bus_name,
-            None => return Ok(false),
-        };
         if let Some(signal) = NameOwnerChanged::from_message(msg.clone()) {
             let args = signal.args()?;
-            if args.name() == bus_name {
-                self.src_unique_name = args.new_owner().as_ref().map(|n| n.to_owned());
-            }
+            self.src_unique_name = args.new_owner().as_ref().map(|n| n.to_owned());
         }
 
         Ok(false)
@@ -1210,16 +1210,21 @@ assert_impl_all!(SignalStream<'_>: Send, Sync, Unpin);
 impl<'a> stream::Stream for SignalStream<'a> {
     type Item = Arc<Message>;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.get_mut();
-        while let Some(res) = ready!(Pin::new(&mut this.stream).poll_next(cx)) {
-            if let Ok(msg) = res {
-                if let Ok(true) = this.filter(&msg) {
-                    return Poll::Ready(Some(msg));
-                }
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        loop {
+            match ready!(OrderedStream::poll_next_before(self.as_mut(), cx, None)) {
+                // FIXME: We should make use of `Stream` impl of `Join` when that's available:
+                //
+                // https://github.com/danieldg/ordered-stream/issues/7
+                PollResult::Item {
+                    data: msg,
+                    ordering: _,
+                } => return Poll::Ready(Some(msg)),
+                PollResult::Terminated => return Poll::Ready(None),
+                // SAFETY: We didn't specify a before ordering, so we should never get this.
+                PollResult::NoneBefore => unreachable!(),
             }
         }
-        Poll::Ready(None)
     }
 }
 
@@ -1258,14 +1263,7 @@ impl<'a> OrderedStream for SignalStream<'a> {
 
 impl<'a> stream::FusedStream for SignalStream<'a> {
     fn is_terminated(&self) -> bool {
-        self.stream.is_terminated()
-    }
-}
-
-impl<'a> std::ops::Drop for SignalStream<'a> {
-    fn drop(&mut self) {
-        let rule = self.match_rule.take().expect("match rule already removed");
-        self.proxy.connection().queue_remove_match(rule);
+        ordered_stream::FusedOrderedStream::is_terminated(&self.stream)
     }
 }
 
