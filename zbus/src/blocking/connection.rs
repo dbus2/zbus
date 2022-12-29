@@ -279,12 +279,14 @@ mod tests {
         // Tokio needs us to call the sync function from async context. :shrug:
         let (p0, p1) = crate::utils::block_on(async { UnixStream::pair().unwrap() });
 
+        let (tx, rx) = std::sync::mpsc::channel();
         let server_thread = thread::spawn(move || {
             let c = ConnectionBuilder::unix_stream(p0)
                 .server(&guid)
                 .p2p()
                 .build()
                 .unwrap();
+            let _ = rx.recv().unwrap();
             let reply = c
                 .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
                 .unwrap();
@@ -296,6 +298,7 @@ mod tests {
         let c = ConnectionBuilder::unix_stream(p1).p2p().build().unwrap();
         let listener = c.monitor_activity();
         let mut s = MessageIterator::from(&c);
+        tx.send(()).unwrap();
         let m = s.next().unwrap().unwrap();
         assert_eq!(m.to_string(), "Method call Test");
         c.reply(&m, &("yay")).unwrap();
