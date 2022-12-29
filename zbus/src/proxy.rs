@@ -1165,9 +1165,23 @@ impl<'a> SignalStream<'a> {
                     }
                 };
 
-                // Ignore any buffered message. We are only interested in the first one (which we
-                // already got since we're out of the loop).
-                let (stream, _, _) = join.into_inner();
+                // Let's take into account any buffered NameOwnerChanged signal.
+                let (stream, _, queued) = join.into_inner();
+                if let Some(msg) = queued.and_then(|e| match e.0 {
+                    Either::Left(Ok(msg)) => Some(msg),
+                    Either::Left(Err(_)) | Either::Right(_) => None,
+                }) {
+                    if let Some(signal) = NameOwnerChanged::from_message(msg) {
+                        if let Ok(args) = signal.args() {
+                            match (args.name(), args.new_owner().deref()) {
+                                (BusName::WellKnown(n), Some(new_owner)) if n == &name => {
+                                    src_unique_name = Some(new_owner.to_owned());
+                                }
+                                _ => (),
+                            }
+                        }
+                    }
+                }
                 let name_owner_changed_stream = stream.into_inner();
 
                 let stream = JoinMultiple(vec![
