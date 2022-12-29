@@ -36,6 +36,7 @@ use crate::{
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
+const DEFAULT_MAX_METHOD_RETURN_QUEUED: usize = 8;
 
 /// Inner state shared by Connection and WeakConnection
 #[derive(Debug)]
@@ -60,6 +61,7 @@ pub(crate) struct ConnectionInner {
     msg_receiver_task: Task<()>,
 
     pub(crate) msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
+    pub(crate) method_return_receiver: InactiveReceiver<Result<Arc<Message>>>,
     msg_senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
 
     subscriptions: Mutex<Subscriptions>,
@@ -455,7 +457,13 @@ impl Connection {
         }
         let msg = builder.build(body)?;
 
-        let stream = Some(MessageStream::from(self.clone()));
+        let msg_receiver = self.inner.method_return_receiver.activate_cloned();
+        let stream = Some(MessageStream::for_subscription_channel(
+            msg_receiver,
+            // This is a lie but we only use the stream internally so it's fine.
+            None,
+            self,
+        ));
         let serial = self.send_message(msg).await?;
         if flags.contains(MessageFlags::NoReplyExpected) {
             Ok(None)
@@ -1235,11 +1243,33 @@ impl Connection {
         #[cfg(unix)]
         let cap_unix_fd = auth.cap_unix_fd;
 
-        let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
-        let mut msg_receiver = msg_receiver.deactivate();
-        msg_receiver.set_await_active(false);
+        macro_rules! create_msg_broadcast_channel {
+            ($size:expr) => {{
+                let (msg_sender, msg_receiver) = broadcast($size);
+                let mut msg_receiver = msg_receiver.deactivate();
+                msg_receiver.set_await_active(false);
+
+                (msg_sender, msg_receiver)
+            }};
+        }
+        // The unfiltered message channel.
+        let (msg_sender, msg_receiver) = create_msg_broadcast_channel!(DEFAULT_MAX_QUEUED);
         let mut msg_senders = HashMap::new();
         msg_senders.insert(None, msg_sender);
+
+        // The special method return & error channel.
+        let (method_return_sender, method_return_receiver) =
+            create_msg_broadcast_channel!(DEFAULT_MAX_METHOD_RETURN_QUEUED);
+        let rule = MatchRule::builder()
+            .msg_type(MessageType::MethodReturn)
+            .build()
+            .into();
+        msg_senders.insert(Some(rule), method_return_sender.clone());
+        let rule = MatchRule::builder()
+            .msg_type(MessageType::Error)
+            .build()
+            .into();
+        msg_senders.insert(Some(rule), method_return_sender);
         let msg_senders = Arc::new(Mutex::new(msg_senders));
         let subscriptions = Mutex::new(HashMap::new());
 
@@ -1266,6 +1296,7 @@ impl Connection {
                 msg_receiver_task,
                 msg_senders,
                 msg_receiver,
+                method_return_receiver,
                 registered_names: Mutex::new(HashMap::new()),
             }),
         };

@@ -100,21 +100,34 @@ impl MessageStream {
     {
         let rule = rule.try_into().map_err(Into::into)?;
         let msg_receiver = conn.add_match(rule.clone()).await?;
-        let conn_inner = conn.inner.clone();
 
-        Ok(Self {
-            inner: Inner {
-                conn_inner,
-                msg_receiver,
-                last_seq: Default::default(),
-                match_rule: Some(rule),
-            },
-        })
+        Ok(Self::for_subscription_channel(
+            msg_receiver,
+            Some(rule),
+            conn,
+        ))
     }
 
     /// The associated match rule, if any.
     pub fn match_rule(&self) -> Option<MatchRule<'_>> {
         self.inner.match_rule.as_deref().cloned()
+    }
+
+    pub(crate) fn for_subscription_channel(
+        msg_receiver: ActiveReceiver<Result<Arc<Message>>>,
+        rule: Option<OwnedMatchRule>,
+        conn: &Connection,
+    ) -> Self {
+        let conn_inner = conn.inner.clone();
+
+        Self {
+            inner: Inner {
+                conn_inner,
+                msg_receiver,
+                last_seq: Default::default(),
+                match_rule: rule,
+            },
+        }
     }
 }
 
