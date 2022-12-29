@@ -1,13 +1,12 @@
 use async_broadcast::{broadcast, InactiveReceiver, Receiver, Sender as Broadcaster};
 use enumflags2::BitFlags;
-use event_listener::EventListener;
+use event_listener::{Event, EventListener};
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
     convert::TryInto,
-    future::ready,
     io::{self, ErrorKind},
     ops::Deref,
     pin::Pin,
@@ -31,9 +30,9 @@ use crate::{
     blocking,
     fdo::{self, RequestNameFlags, RequestNameReply},
     raw::{Connection as RawConnection, Socket},
-    Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, Message,
-    MessageBuilder, MessageFlags, MessageStream, MessageType, ObjectServer, OwnedMatchRule, Result,
-    Task,
+    Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule,
+    Message, MessageBuilder, MessageFlags, MessageStream, MessageType, ObjectServer,
+    OwnedMatchRule, Result, Task,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -970,35 +969,67 @@ impl Connection {
             }
         }
 
-        Wrapper(self.sync_object_server(true))
+        Wrapper(self.sync_object_server(true, None))
     }
 
-    pub(crate) fn sync_object_server(&self, start: bool) -> &blocking::ObjectServer {
+    pub(crate) fn sync_object_server(
+        &self,
+        start: bool,
+        started_event: Option<Event>,
+    ) -> &blocking::ObjectServer {
         self.inner
             .object_server
-            .get_or_init(|| self.setup_object_server(start))
+            .get_or_init(move || self.setup_object_server(start, started_event))
     }
 
-    fn setup_object_server(&self, start: bool) -> blocking::ObjectServer {
+    fn setup_object_server(
+        &self,
+        start: bool,
+        started_event: Option<Event>,
+    ) -> blocking::ObjectServer {
         if start {
-            self.start_object_server();
+            self.start_object_server(started_event);
         }
 
         blocking::ObjectServer::new(self)
     }
 
     #[instrument(skip(self))]
-    pub(crate) fn start_object_server(&self) {
+    pub(crate) fn start_object_server(&self, started_event: Option<Event>) {
         self.inner.object_server_dispatch_task.get_or_init(|| {
             trace!("starting ObjectServer task");
             let weak_conn = WeakConnection::from(self);
-            let mut stream = MessageStream::from(self.clone()).filter(|msg| {
-                ready(msg.as_ref().map(|m| m.message_type() == MessageType::MethodCall).unwrap_or_default())
-            });
 
             let obj_server_task_name = "ObjectServer task";
             self.inner.executor.spawn(
                 async move {
+                    let mut stream = match weak_conn.upgrade() {
+                        Some(conn) => {
+                            let mut builder = MatchRule::builder().msg_type(MessageType::MethodCall);
+                            if let Some(unique_name) = conn.unique_name() {
+                                builder = builder.destination(&**unique_name).expect("unique name");
+                            }
+                            let rule = builder.build();
+                            match MessageStream::for_match_rule(rule, &conn).await {
+                                Ok(stream) => stream,
+                                Err(e) => {
+                                    // Very unlikely but can happen I guess if connection is closed.
+                                    debug!("Failed to create message stream: {}", e);
+
+                                    return;
+                                }
+                            }
+                        }
+                        None => {
+                            trace!("Connection is gone, stopping associated object server task");
+
+                            return;
+                        }
+                    };
+                    if let Some(started_event) = started_event {
+                        started_event.notify(1);
+                    }
+
                     trace!("waiting for incoming method call messages..");
                     while let Some(msg) = stream.next().await.and_then(|m| {
                         if let Err(e) = &m {
@@ -1016,16 +1047,8 @@ impl Connection {
                                 }
                             };
                             match hdr.destination() {
-                                Ok(Some(BusName::Unique(dest))) => {
-                                    match conn.unique_name().map(|n| &**n) {
-                                        Some(unique_name) if dest != unique_name => {
-                                            trace!("Got a method call for a different destination: {}", dest);
-
-                                            continue;
-                                        }
-                                        _ => (),
-                                    }
-                                }
+                                // Unique name is already checked by the match rule.
+                                Ok(Some(BusName::Unique(_))) => (),
                                 Ok(Some(BusName::WellKnown(dest))) => {
                                     let names = conn.inner.registered_names.lock().await;
                                     // destination doesn't matter if no name has been registered

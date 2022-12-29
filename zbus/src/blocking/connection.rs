@@ -227,7 +227,7 @@ impl Connection {
     ///
     /// The `ObjectServer` is created on-demand.
     pub fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
-        self.inner.sync_object_server(true)
+        self.inner.sync_object_server(true, None)
     }
 
     /// Get a reference to the underlying async Connection.

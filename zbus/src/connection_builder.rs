@@ -1,5 +1,6 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
+use event_listener::Event;
 use static_assertions::assert_impl_all;
 #[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
@@ -303,7 +304,7 @@ impl<'a> ConnectionBuilder<'a> {
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
 
         if !self.interfaces.is_empty() {
-            let object_server = conn.sync_object_server(false);
+            let object_server = conn.sync_object_server(false, None);
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
                     let future = object_server.at_ready(path.to_owned(), name, || iface);
@@ -313,7 +314,12 @@ impl<'a> ConnectionBuilder<'a> {
                 }
             }
 
-            conn.start_object_server();
+            let started_event = Event::new();
+            let listener = started_event.listen();
+            conn.start_object_server(Some(started_event));
+
+            // Wait for the object server to start.
+            listener.await;
         }
 
         for name in self.names {
