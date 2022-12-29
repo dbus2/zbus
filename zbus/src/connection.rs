@@ -1407,8 +1407,14 @@ mod tests {
             "forward_task",
         );
 
-        let server_future = async {
+        let server_ready = Event::new();
+        let server_ready_listener = server_ready.listen();
+        let client_done = Event::new();
+        let client_done_listener = client_done.listen();
+
+        let server_future = async move {
             let mut stream = MessageStream::from(&server2);
+            server_ready.notify(1);
             let method = loop {
                 let m = stream.try_next().await?.unwrap();
                 if m.to_string() == "Method call Test" {
@@ -1420,17 +1426,22 @@ mod tests {
             server2
                 .emit_signal(None::<()>, "/", "org.zbus.p2p", "ASignalForYou", &())
                 .await?;
-            server2.reply(&method, &("yay")).await
+            server2.reply(&method, &("yay")).await?;
+            client_done_listener.await;
+
+            Ok(())
         };
 
-        let client_future = async {
+        let client_future = async move {
             let mut stream = MessageStream::from(&client1);
+            server_ready_listener.await;
             let reply = client1
                 .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
             // Check we didn't miss the signal that was sent during the call.
             let m = stream.try_next().await?.unwrap();
+            client_done.notify(1);
             assert_eq!(m.to_string(), "Signal ASignalForYou");
             reply.body::<String>()
         };
