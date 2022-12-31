@@ -9,6 +9,7 @@ variables:
   FDO_UPSTREAM_REPO: dbus/zbus
   UPSTREAM_BRANCH: "main"
   RUST_BACKTRACE: "full"
+  RUST_LOG: "trace"
 
   # If the MSRV needs to be updated, make sure to also change the
   # rust-version fields in packages' Cargo.toml files.
@@ -150,7 +151,6 @@ test:
   stage: test
   variables:
     RUSTFLAGS: "-D warnings"
-    RUST_LOG: "trace"
   script:
     - rustup override set stable
     - *cargo_test
@@ -161,7 +161,6 @@ nightly:
   allow_failure: true
   variables:
     RUSTFLAGS: "-D warnings"
-    RUST_LOG: "trace"
   script:
     - rustup override set nightly
     - *cargo_test
@@ -185,7 +184,9 @@ msvc:
   script:
     - $env:PATH += ";C:\bin"
     - Start-Process dbus-daemon.exe --config-file=gitlab/win32-session.conf
-    - cargo test
+    - cargo test --tests
+    # We were getting stack overflow for doc tests. So let's run 1 test at a time.
+    - cargo test --doc -- --test-threads 1
 
     - $env:DBUS_SESSION_BUS_ADDRESS = $null
     - $env:ZBUS_GDBUS_TEST = "1"
@@ -194,13 +195,13 @@ msvc:
     # The gdbus process above will exit when idle for more than three seconds, usually right in the middle
     # of the doc tests. This process will keep it alive.
     - Start-Process gdbus.exe 'monitor -e -d org.freedesktop.DBus'
-    - cargo test --package zbus --features windows-gdbus
+    - cargo test --package zbus --features windows-gdbus --tests
+    # We were getting stack overflow for doc tests. So let's run 1 test at a time.
+    - cargo test --package zbus --features windows-gdbus --doc -- --test-threads 1
 
 zvariant_fuzz:
   extends: .debian_img
   stage: test
-  variables:
-    RUST_LOG: "trace"
   script:
     - rustup override set nightly
     - cargo fuzz run --fuzz-dir zvariant/fuzz dbus -- -max_total_time=30 -max_len=100M
