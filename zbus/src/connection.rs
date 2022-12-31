@@ -1032,7 +1032,7 @@ impl Connection {
                             };
                             trace!("Got `{}`. Will spawn a task for dispatch..", msg);
                             let executor = conn.inner.executor.clone();
-                            let task_name = format!("`{}` method dispatcher", member);
+                            let task_name = format!("`{member}` method dispatcher");
                             executor
                                 .spawn(
                                     async move {

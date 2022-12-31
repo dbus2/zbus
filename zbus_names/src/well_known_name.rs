@@ -229,8 +229,7 @@ fn ensure_correct_well_known_name(name: &str) -> Result<()> {
             )));
         } else if !c.is_ascii_alphanumeric() && c != '_' && c != '-' {
             return Err(Error::InvalidWellKnownName(format!(
-                "`{}` character not allowed",
-                c
+                "`{c}` character not allowed"
             )));
         }
 

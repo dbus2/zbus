@@ -231,7 +231,7 @@ impl<'a> DynamicDeserialize<'a> for Structure<'a> {
         let mut signature = signature.try_into().map_err(Into::into)?;
         if !signature.starts_with(zvariant::STRUCT_SIG_START_CHAR) {
             // This is certainly not a valid struct signature
-            signature = format!("({})", signature).try_into()?;
+            signature = format!("({signature})").try_into()?;
             return signature.try_into();
         }
 
@@ -240,7 +240,7 @@ impl<'a> DynamicDeserialize<'a> for Structure<'a> {
         parser.parse_next_signature()?;
         if !parser.done() {
             // more than one element - we must wrap it
-            signature = format!("({})", signature).try_into()?;
+            signature = format!("({signature})").try_into()?;
         }
         signature.try_into()
     }

@@ -137,16 +137,16 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::InterfaceNotFound => write!(f, "Interface not found"),
-            Error::Address(e) => write!(f, "address error: {}", e),
+            Error::Address(e) => write!(f, "address error: {e}"),
             Error::ExcessData => write!(f, "excess data"),
             #[allow(deprecated)]
-            Error::Io(e) => write!(f, "I/O error: {}", e),
-            Error::InputOutput(e) => write!(f, "I/O error: {}", e),
-            Error::Handshake(e) => write!(f, "D-Bus handshake failed: {}", e),
+            Error::Io(e) => write!(f, "I/O error: {e}"),
+            Error::InputOutput(e) => write!(f, "I/O error: {e}"),
+            Error::Handshake(e) => write!(f, "D-Bus handshake failed: {e}"),
             Error::IncorrectEndian => write!(f, "incorrect endian"),
             Error::InvalidField => write!(f, "invalid message field"),
-            Error::Variant(e) => write!(f, "{}", e),
-            Error::Names(e) => write!(f, "{}", e),
+            Error::Variant(e) => write!(f, "{e}"),
+            Error::Names(e) => write!(f, "{e}"),
             Error::InvalidReply => write!(f, "Invalid D-Bus method reply"),
             Error::MissingField => write!(f, "A required field is missing from message headers"),
             Error::MethodError(name, detail, _reply) => write!(
@@ -157,15 +157,15 @@ impl fmt::Display for Error {
             ),
             Error::InvalidGUID => write!(f, "Invalid GUID"),
             Error::Unsupported => write!(f, "Connection support is lacking"),
-            Error::FDO(e) => write!(f, "{}", e),
+            Error::FDO(e) => write!(f, "{e}"),
             #[cfg(feature = "xml")]
             Error::SerdeXml(e) => write!(f, "XML error: {}", e),
             #[cfg(feature = "quick-xml")]
-            Error::QuickXml(e) => write!(f, "XML error: {}", e),
+            Error::QuickXml(e) => write!(f, "XML error: {e}"),
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
             Error::NameTaken => write!(f, "name already taken on the bus"),
             Error::InvalidMatchRule => write!(f, "Invalid match rule string"),
-            Error::Failure(e) => write!(f, "{}", e),
+            Error::Failure(e) => write!(f, "{e}"),
         }
     }
 }

@@ -51,8 +51,7 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     let mut string_array: Vec<&str> = Vec::new();
     for idx in 0..1024 * 10 {
         strings.push(format!(
-            "{}{}{}{}{}{}{}{}{}{}{}{}",
-            idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx
+            "{idx}{idx}{idx}{idx}{idx}{idx}{idx}{idx}{idx}{idx}{idx}{idx}"
         ));
     }
     for s in &strings {

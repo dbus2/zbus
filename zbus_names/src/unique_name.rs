@@ -228,8 +228,7 @@ fn ensure_correct_unique_name(name: &str) -> Result<()> {
             }
         } else if !c.is_ascii_alphanumeric() && c != '_' && c != '-' {
             return Err(Error::InvalidUniqueName(format!(
-                "`{}` character not allowed",
-                c
+                "`{c}` character not allowed"
             )));
         }
 

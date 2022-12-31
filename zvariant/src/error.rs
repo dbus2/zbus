@@ -97,27 +97,24 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Message(s) => write!(f, "{}", s),
+            Error::Message(s) => write!(f, "{s}"),
             #[allow(deprecated)]
             Error::Io(e) => e.fmt(f),
             Error::InputOutput(e) => e.fmt(f),
             Error::IncorrectType => write!(f, "incorrect type"),
-            Error::Utf8(e) => write!(f, "{}", e),
-            Error::PaddingNot0(b) => write!(f, "Unexpected non-0 padding byte `{}`", b),
+            Error::Utf8(e) => write!(f, "{e}"),
+            Error::PaddingNot0(b) => write!(f, "Unexpected non-0 padding byte `{b}`"),
             Error::UnknownFd => write!(f, "File descriptor not in the given FD index"),
             Error::MissingFramingOffset => write!(
                 f,
                 "Missing framing offset at the end of GVariant-encoded container"
             ),
-            Error::IncompatibleFormat(sig, format) => write!(
-                f,
-                "Type `{}` is not compatible with `{}` format",
-                sig, format,
-            ),
+            Error::IncompatibleFormat(sig, format) => {
+                write!(f, "Type `{sig}` is not compatible with `{format}` format",)
+            }
             Error::SignatureMismatch(provided, expected) => write!(
                 f,
-                "Signature mismatch: got `{}`, expected {}",
-                provided, expected,
+                "Signature mismatch: got `{provided}`, expected {expected}",
             ),
             Error::OutOfBounds => write!(
                 f,

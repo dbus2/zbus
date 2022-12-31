@@ -225,10 +225,10 @@ impl ToString for MatchRule<'_> {
             add_match_rule_string_component(&mut s, key, value);
         }
         for (i, arg) in self.args() {
-            add_match_rule_string_component(&mut s, &format!("arg{}", i), arg);
+            add_match_rule_string_component(&mut s, &format!("arg{i}"), arg);
         }
         for (i, arg_path) in self.arg_paths() {
-            add_match_rule_string_component(&mut s, &format!("arg{}path", i), arg_path);
+            add_match_rule_string_component(&mut s, &format!("arg{i}path"), arg_path);
         }
 
         s

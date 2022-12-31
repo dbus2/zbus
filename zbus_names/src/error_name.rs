@@ -229,8 +229,7 @@ fn ensure_correct_error_name(name: &str) -> Result<()> {
             )));
         } else if !c.is_ascii_alphanumeric() && c != '_' {
             return Err(Error::InvalidErrorName(format!(
-                "`{}` character not allowed",
-                c
+                "`{c}` character not allowed"
             )));
         }
 

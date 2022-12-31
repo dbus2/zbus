@@ -59,19 +59,18 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Variant(e) => write!(f, "{}", e),
+            Error::Variant(e) => write!(f, "{e}"),
             Error::InvalidBusName(unique_err, well_known_err) => {
                 write!(
                     f,
-                    "Neither a valid unique ({}) nor a well-known ({}) bus name",
-                    unique_err, well_known_err
+                    "Neither a valid unique ({unique_err}) nor a well-known ({well_known_err}) bus name"
                 )
             }
-            Error::InvalidWellKnownName(s) => write!(f, "Invalid well-known bus name: {}", s),
-            Error::InvalidUniqueName(s) => write!(f, "Invalid unique bus name: {}", s),
-            Error::InvalidInterfaceName(s) => write!(f, "Invalid interface or error name: {}", s),
-            Error::InvalidErrorName(s) => write!(f, "Invalid interface or error name: {}", s),
-            Error::InvalidMemberName(s) => write!(f, "Invalid method or signal name: {}", s),
+            Error::InvalidWellKnownName(s) => write!(f, "Invalid well-known bus name: {s}"),
+            Error::InvalidUniqueName(s) => write!(f, "Invalid unique bus name: {s}"),
+            Error::InvalidInterfaceName(s) => write!(f, "Invalid interface or error name: {s}"),
+            Error::InvalidErrorName(s) => write!(f, "Invalid interface or error name: {s}"),
+            Error::InvalidMemberName(s) => write!(f, "Invalid method or signal name: {s}"),
         }
     }
 }

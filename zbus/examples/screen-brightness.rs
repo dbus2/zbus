@@ -33,5 +33,5 @@ fn main() {
         .unwrap();
 
     let (percent, _) = reply.body::<(i32, &str)>().unwrap();
-    println!("New level: {}%", percent);
+    println!("New level: {percent}%");
 }

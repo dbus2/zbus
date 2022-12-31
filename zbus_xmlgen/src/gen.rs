@@ -24,16 +24,16 @@ impl<'i> Display for GenTrait<'i> {
 
         write!(f, "#[dbus_proxy(interface = \"{}\"", iface.name())?;
         if let Some(service) = self.service {
-            write!(f, ", default_service = \"{}\"", service)?;
+            write!(f, ", default_service = \"{service}\"")?;
         }
         if let Some(path) = self.path {
-            write!(f, ", default_path = \"{}\"", path)?;
+            write!(f, ", default_path = \"{path}\"")?;
         }
         if self.path.is_none() || self.service.is_none() {
             write!(f, ", assume_defaults = true")?;
         }
         writeln!(f, ")]")?;
-        writeln!(f, "trait {} {{", name)?;
+        writeln!(f, "trait {name} {{")?;
 
         let mut methods = iface.methods().to_vec();
         methods.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
@@ -45,13 +45,7 @@ impl<'i> Display for GenTrait<'i> {
             if pascal_case(&name) != m.name().as_str() {
                 writeln!(f, "    #[dbus_proxy(name = \"{}\")]", m.name())?;
             }
-            writeln!(
-                f,
-                "    fn {name}({inputs}){output};",
-                name = name,
-                inputs = inputs,
-                output = output
-            )?;
+            writeln!(f, "    fn {name}({inputs}){output};")?;
         }
 
         let mut signals = iface.signals().to_vec();
@@ -66,12 +60,7 @@ impl<'i> Display for GenTrait<'i> {
             } else {
                 writeln!(f, "    #[dbus_proxy(signal)]")?;
             }
-            writeln!(
-                f,
-                "    fn {name}({args}) -> zbus::Result<()>;",
-                name = name,
-                args = args,
-            )?;
+            writeln!(f, "    fn {name}({args}) -> zbus::Result<()>;",)?;
         }
 
         let mut props = iface.properties().to_vec();
@@ -89,12 +78,7 @@ impl<'i> Display for GenTrait<'i> {
 
             if p.access().read() {
                 let output = to_rust_type(p.ty(), false, false);
-                writeln!(
-                    f,
-                    "    fn {name}(&self) -> zbus::Result<{output}>;",
-                    name = name,
-                    output = output,
-                )?;
+                writeln!(f, "    fn {name}(&self) -> zbus::Result<{output}>;",)?;
             }
 
             if p.access().write() {
@@ -102,8 +86,6 @@ impl<'i> Display for GenTrait<'i> {
                 writeln!(
                     f,
                     "    fn set_{name}(&self, value: {input}) -> zbus::Result<()>;",
-                    name = name,
-                    input = input,
                 )?;
             }
         }
@@ -117,7 +99,7 @@ fn inputs_output_from_args(args: &[Arg]) -> (String, String) {
     let mut n = 0;
     let mut gen_name = || {
         n += 1;
-        format!("arg_{}", n)
+        format!("arg_{n}")
     };
 
     for a in args {
@@ -129,7 +111,7 @@ fn inputs_output_from_args(args: &[Arg]) -> (String, String) {
                 } else {
                     gen_name()
                 };
-                inputs.push(format!("{}: {}", arg, ty));
+                inputs.push(format!("{arg}: {ty}"));
             }
             Some(ArgDirection::Out) => {
                 let ty = to_rust_type(a.ty(), false, false);
@@ -144,7 +126,7 @@ fn inputs_output_from_args(args: &[Arg]) -> (String, String) {
         _ => format!("({})", output.join(", ")),
     };
 
-    (inputs.join(", "), format!(" -> zbus::Result<{}>", output))
+    (inputs.join(", "), format!(" -> zbus::Result<{output}>"))
 }
 
 fn parse_signal_args(args: &[Arg]) -> String {
@@ -152,7 +134,7 @@ fn parse_signal_args(args: &[Arg]) -> String {
     let mut n = 0;
     let mut gen_name = || {
         n += 1;
-        format!("arg_{}", n)
+        format!("arg_{n}")
     };
 
     for a in args {
@@ -162,7 +144,7 @@ fn parse_signal_args(args: &[Arg]) -> String {
         } else {
             gen_name()
         };
-        inputs.push(format!("{}: {}", arg, ty));
+        inputs.push(format!("{arg}: {ty}"));
     }
 
     inputs.join(", ")
@@ -234,7 +216,7 @@ fn to_rust_type(ty: &str, input: bool, as_ref: bool) -> String {
                     _ => {
                         let ty = iter_to_rust_type(it, input, false);
                         if input {
-                            format!("&[{}]", ty)
+                            format!("&[{ty}]")
                         } else {
                             format!("{}Vec<{}>", if as_ref { "&" } else { "" }, ty)
                         }
@@ -277,7 +259,7 @@ static KWORDS: &[&str] = &[
 
 fn to_identifier(id: &str) -> String {
     if KWORDS.contains(&id) {
-        format!("{}_", id)
+        format!("{id}_")
     } else {
         id.replace('-', "_")
     }
@@ -351,7 +333,7 @@ mod tests {
                 service: None,
             }
         );
-        println!("{}", t);
+        println!("{t}");
         Ok(())
     }
 }

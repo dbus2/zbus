@@ -321,8 +321,7 @@ where
             c => Err(de::Error::invalid_type(
                 de::Unexpected::Char(c),
                 &format!(
-                    "`{}`, `{}` or `{}`",
-                    VARIANT_SIGNATURE_CHAR, ARRAY_SIGNATURE_CHAR, STRUCT_SIG_START_CHAR,
+                    "`{VARIANT_SIGNATURE_CHAR}`, `{ARRAY_SIGNATURE_CHAR}` or `{STRUCT_SIG_START_CHAR}`",
                 )
                 .as_str(),
             )),

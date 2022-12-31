@@ -105,7 +105,7 @@ pub struct Identity<'a> {
 assert_impl_all!(Identity<'_>: Send, Sync, Unpin);
 
 fn pid_start_time(pid: u32) -> Result<u64, Error> {
-    let fname = format!("/proc/{}/stat", pid);
+    let fname = format!("/proc/{pid}/stat");
     let content = std::fs::read_to_string(fname)?;
 
     if let Some(i) = content.rfind(')') {
@@ -121,7 +121,7 @@ fn pid_start_time(pid: u32) -> Result<u64, Error> {
 // obsolete by the time this function returns; this function only guarantees that the UID was valid
 // at some point during its execution.
 fn pid_uid_racy(pid: u32) -> Result<u32, Error> {
-    let fname = format!("/proc/{}/status", pid);
+    let fname = format!("/proc/{pid}/status");
     let file = std::fs::File::open(fname)?;
     let lines = std::io::BufReader::new(file).lines();
     for line in lines.flatten() {

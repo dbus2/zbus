@@ -213,8 +213,7 @@ fn ensure_correct_member_name(name: &str) -> Result<()> {
     for c in name.chars() {
         if !c.is_ascii_alphanumeric() && c != '_' {
             return Err(Error::InvalidMemberName(format!(
-                "`{}` character not allowed",
-                c
+                "`{c}` character not allowed"
             )));
         }
     }
