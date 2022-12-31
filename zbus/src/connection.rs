@@ -913,7 +913,9 @@ impl Connection {
     /// scheduler:
     ///
     /// ```
-    ///# #[cfg(not(feature = "tokio"))]
+    ///# // Disable on windows because somehow it triggers a stack overflow there:
+    ///# // https://gitlab.freedesktop.org/zeenix/zbus/-/jobs/34023494
+    ///# #[cfg(all(not(feature = "tokio"), not(target_os = "windows")))]
     ///# {
     /// use zbus::ConnectionBuilder;
     /// use async_std::task::{block_on, spawn};
