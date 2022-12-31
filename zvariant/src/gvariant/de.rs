@@ -369,7 +369,7 @@ where
     }
 }
 
-fn deserialize_ay<'de, 'sig, 'f, B>(de: &mut Deserializer<'de, 'sig, 'f, B>) -> Result<&'de [u8]>
+fn deserialize_ay<'de, B>(de: &mut Deserializer<'de, '_, '_, B>) -> Result<&'de [u8]>
 where
     B: byteorder::ByteOrder,
 {
