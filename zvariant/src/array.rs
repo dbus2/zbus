@@ -283,5 +283,5 @@ impl<'de> Visitor<'de> for ArrayVisitor<'de> {
 }
 
 fn create_signature(element_signature: &Signature<'_>) -> Signature<'static> {
-    Signature::from_string_unchecked(format!("a{}", element_signature))
+    Signature::from_string_unchecked(format!("a{element_signature}"))
 }

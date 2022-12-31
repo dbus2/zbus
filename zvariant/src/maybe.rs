@@ -4,9 +4,9 @@ use std::convert::TryFrom;
 
 use crate::{Error, Signature, Type, Value};
 
-/// A helper type to wrap Option<T> (GVariant's Maybe type) in [`Value`].
+/// A helper type to wrap `Option<T>` (GVariant's Maybe type) in [`Value`].
 ///
-/// API is provided to convert from, and to Option<T>.
+/// API is provided to convert from, and to `Option<T>`.
 ///
 /// [`Value`]: enum.Value.html
 #[derive(Debug, Clone, PartialEq)]
@@ -144,5 +144,5 @@ impl<'a> Serialize for Maybe<'a> {
 }
 
 fn create_signature(value_signature: &Signature<'_>) -> Signature<'static> {
-    Signature::from_string_unchecked(format!("m{}", value_signature))
+    Signature::from_string_unchecked(format!("m{value_signature}"))
 }

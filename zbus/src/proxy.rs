@@ -267,7 +267,7 @@ impl PropertiesCache {
         });
 
         let cache_clone = cache.clone();
-        let task_name = format!("{} proxy caching", interface);
+        let task_name = format!("{interface} proxy caching");
         let proxy_caching = async move {
             let result = cache_clone
                 .init(proxy, interface, uncached_properties)

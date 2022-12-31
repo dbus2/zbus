@@ -21,7 +21,7 @@ variables:
   # If you are hacking on them or need a them to rebuild, its enough
   # to change any part of the string of the image you want.
   ###
-  WINDOWS_TAG: "2022-10-31.1"
+  WINDOWS_TAG: "2022-12-31.1"
 
   WINDOWS_AMD64_SUFFIX: "amd64/windows"
   WINDOWS_IMAGE: "$CI_REGISTRY_IMAGE/$WINDOWS_AMD64_SUFFIX:$WINDOWS_TAG-$UPSTREAM_BRANCH"
@@ -38,7 +38,7 @@ stages:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: "2022-10-30.1"
+    FDO_DISTRIBUTION_TAG: "2022-12-31.1"
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
@@ -184,9 +184,7 @@ msvc:
   script:
     - $env:PATH += ";C:\bin"
     - Start-Process dbus-daemon.exe --config-file=gitlab/win32-session.conf
-    - cargo test --tests
-    # We were getting stack overflow for doc tests. So let's run 1 test at a time.
-    - cargo test --doc -- --test-threads 1
+    - cargo test
 
     - $env:DBUS_SESSION_BUS_ADDRESS = $null
     - $env:ZBUS_GDBUS_TEST = "1"
@@ -195,9 +193,7 @@ msvc:
     # The gdbus process above will exit when idle for more than three seconds, usually right in the middle
     # of the doc tests. This process will keep it alive.
     - Start-Process gdbus.exe 'monitor -e -d org.freedesktop.DBus'
-    - cargo test --package zbus --features windows-gdbus --tests
-    # We were getting stack overflow for doc tests. So let's run 1 test at a time.
-    - cargo test --package zbus --features windows-gdbus --doc -- --test-threads 1
+    - cargo test --package zbus --features windows-gdbus
 
 zvariant_fuzz:
   extends: .debian_img

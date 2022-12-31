@@ -277,7 +277,7 @@ impl<'s> SignatureParser<'s> {
         if signature.len() < end {
             return Err(serde::de::Error::invalid_length(
                 signature.len(),
-                &format!(">= {} characters", end).as_str(),
+                &format!(">= {end} characters").as_str(),
             ));
         }
         if bytes[end - 1] as char != DICT_ENTRY_SIG_END_CHAR {

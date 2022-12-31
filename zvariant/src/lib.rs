@@ -112,7 +112,7 @@ pub mod export {
 }
 
 #[cfg(test)]
-#[allow(clippy::blacklisted_name)]
+#[allow(clippy::disallowed_names)]
 mod tests {
     use std::{
         collections::HashMap,

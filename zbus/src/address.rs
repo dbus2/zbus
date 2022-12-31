@@ -109,7 +109,7 @@ impl TcpAddress {
         }
 
         if let Some(family) = &self.family {
-            write!(f, ",family={}", family)?;
+            write!(f, ",family={family}")?;
         }
 
         Ok(())
@@ -201,7 +201,7 @@ async fn connect_tcp(addr: TcpAddress) -> Result<Async<TcpStream>> {
         Ok(addrs.collect())
     })
     .await
-    .map_err(|e| Error::Address(format!("Failed to receive TCP addresses: {}", e)))?;
+    .map_err(|e| Error::Address(format!("Failed to receive TCP addresses: {e}")))?;
 
     // we could attempt connections in parallel?
     let mut last_err = Error::Address("Failed to connect".into());
@@ -363,7 +363,7 @@ impl Address {
                 {
                     let runtime_dir = env::var("XDG_RUNTIME_DIR")
                         .unwrap_or_else(|_| format!("/run/user/{}", Uid::effective()));
-                    let path = format!("unix:path={}/bus", runtime_dir);
+                    let path = format!("unix:path={runtime_dir}/bus");
 
                     Self::from_str(&path)
                 }
@@ -441,8 +441,7 @@ impl FromStr for TcpAddressFamily {
             "ipv4" => Ok(Self::Ipv4),
             "ipv6" => Ok(Self::Ipv6),
             _ => Err(Error::Address(format!(
-                "invalid tcp address `family`: {}",
-                family
+                "invalid tcp address `family`: {family}"
             ))),
         }
     }
@@ -605,8 +604,7 @@ impl FromStr for Address {
                 };
                 if options.insert(k, v).is_some() {
                     return Err(Error::Address(format!(
-                        "Key `{}` specified multiple times",
-                        k
+                        "Key `{k}` specified multiple times"
                     )));
                 }
             }
@@ -639,8 +637,7 @@ impl FromStr for Address {
             )),
 
             _ => Err(Error::Address(format!(
-                "unsupported transport '{}'",
-                transport
+                "unsupported transport '{transport}'"
             ))),
         }
     }
@@ -850,7 +847,7 @@ mod tests {
     fn connect_tcp() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let addr = Address::from_str(&format!("tcp:host=localhost,port={}", port)).unwrap();
+        let addr = Address::from_str(&format!("tcp:host=localhost,port={port}")).unwrap();
         crate::utils::block_on(async { addr.connect().await }).unwrap();
     }
 
@@ -880,8 +877,7 @@ mod tests {
         );
 
         let addr = Address::from_str(&format!(
-            "nonce-tcp:host=localhost,port={},noncefile={}",
-            port, encoded_path
+            "nonce-tcp:host=localhost,port={port},noncefile={encoded_path}"
         ))
         .unwrap();
 

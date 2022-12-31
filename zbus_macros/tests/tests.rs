@@ -136,7 +136,7 @@ fn test_interface() {
 
         fn str_u32(&self, val: &str) -> zbus::fdo::Result<u32> {
             val.parse()
-                .map_err(|e| zbus::fdo::Error::Failed(format!("Invalid val: {}", e)))
+                .map_err(|e| zbus::fdo::Error::Failed(format!("Invalid val: {e}")))
         }
 
         // TODO: naming output arguments after "RFC: Structural Records #2584"

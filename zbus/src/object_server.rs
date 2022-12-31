@@ -222,7 +222,7 @@ impl Node {
                 obj_manager_path = Some((*node.path).clone());
             }
 
-            write!(&mut node_path, "/{}", i).unwrap();
+            write!(&mut node_path, "/{i}").unwrap();
             match node.children.entry(i.into()) {
                 Entry::Vacant(e) => {
                     if create {
@@ -535,7 +535,7 @@ impl ObjectServer {
             let mut path_parts = path.rsplit('/').filter(|i| !i.is_empty());
             let last_part = path_parts.next().unwrap();
             let ppath = ObjectPath::from_string_unchecked(
-                path_parts.fold(String::new(), |a, p| format!("/{}{}", p, a)),
+                path_parts.fold(String::new(), |a, p| format!("/{p}{a}")),
             );
             root.get_child_mut(&ppath, false)
                 .0
@@ -646,10 +646,10 @@ impl ObjectServer {
             let root = self.root.read().await;
             let node = root
                 .get_child(&path)
-                .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{}'", path)))?;
+                .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{path}'")))?;
 
             node.interface_lock(iface_name.as_ref()).ok_or_else(|| {
-                fdo::Error::UnknownInterface(format!("Unknown interface '{}'", iface_name))
+                fdo::Error::UnknownInterface(format!("Unknown interface '{iface_name}'"))
             })?
         };
 
@@ -659,8 +659,7 @@ impl ObjectServer {
         match read_lock.call(self, connection, msg, member.as_ref()) {
             DispatchResult::NotFound => {
                 return Err(fdo::Error::UnknownMethod(format!(
-                    "Unknown method '{}'",
-                    member
+                    "Unknown method '{member}'"
                 )));
             }
             DispatchResult::Async(f) => {
@@ -681,8 +680,7 @@ impl ObjectServer {
         }
         drop(write_lock);
         Err(fdo::Error::UnknownMethod(format!(
-            "Unknown method '{}'",
-            member
+            "Unknown method '{member}'"
         )))
     }
 

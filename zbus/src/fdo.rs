@@ -55,7 +55,7 @@ impl Introspectable {
         let root = server.root().read().await;
         let node = root
             .get_child(path)
-            .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{}'", path)))?;
+            .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{path}'")))?;
 
         Ok(node.introspect().await)
     }
@@ -129,14 +129,13 @@ impl Properties {
             .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
-                Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
+                Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
         let res = iface.read().await.get(property_name).await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
-                "Unknown property '{}'",
-                property_name
+                "Unknown property '{property_name}'"
             )))
         })
     }
@@ -156,15 +155,14 @@ impl Properties {
             .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
-                Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
+                Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
         match iface.read().await.set(property_name, &value, &ctxt) {
             zbus::DispatchResult::RequiresMut => {}
             zbus::DispatchResult::NotFound => {
                 return Err(Error::UnknownProperty(format!(
-                    "Unknown property '{}'",
-                    property_name
+                    "Unknown property '{property_name}'"
                 )));
             }
             zbus::DispatchResult::Async(f) => {
@@ -178,8 +176,7 @@ impl Properties {
             .await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
-                "Unknown property '{}'",
-                property_name
+                "Unknown property '{property_name}'"
             )))
         })
     }
@@ -196,7 +193,7 @@ impl Properties {
             .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
-                Error::UnknownInterface(format!("Unknown interface '{}'", interface_name))
+                Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
         let res = iface.read().await.get_all().await;
@@ -296,7 +293,7 @@ impl ObjectManager {
         let root = server.root().read().await;
         let node = root
             .get_child(path)
-            .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{}'", path)))?;
+            .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{path}'")))?;
 
         Ok(node.get_managed_objects().await)
     }
@@ -366,8 +363,7 @@ impl Peer {
                     id
                 } else {
                     return Err(Error::IOError(format!(
-                        "Failed to read from /var/lib/dbus/machine-id or /etc/machine-id: {}",
-                        e
+                        "Failed to read from /var/lib/dbus/machine-id or /etc/machine-id: {e}"
                     )));
                 }
             }

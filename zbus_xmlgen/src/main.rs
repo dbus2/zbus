@@ -77,7 +77,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             let connection = ConnectionBuilder::address(&*address)?.build()?;
 
-            input_src = format!("Interface '{}' from service '{}'", path, service);
+            input_src = format!("Interface '{path}' from service '{service}'");
 
             let xml = proxy(connection, service.clone(), path.clone()).introspect()?;
             (
@@ -165,7 +165,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         for iface in &fdo_standard_ifaces {
             let idx = iface.name().rfind('.').unwrap() + 1;
             let name = &iface.name()[idx..];
-            writeln!(rustfmt_stdin, "//! * [`zbus::fdo::{}Proxy`]", name)?;
+            writeln!(rustfmt_stdin, "//! * [`zbus::fdo::{name}Proxy`]")?;
         }
         write!(
             rustfmt_stdin,

@@ -91,7 +91,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         let impl_from_zbus_error = attrs.iter().any(|x| x == &ItemAttribute::ZbusError);
 
         let fqn = if !impl_from_zbus_error {
-            format!("{}.{}", prefix, name)
+            format!("{prefix}.{name}")
         } else {
             // The ZBus error variant will always be a hardcoded string.
             String::from("org.freedesktop.zbus.Error")
@@ -260,7 +260,7 @@ fn gen_reply_for_variant(
         Fields::Unnamed(f) => {
             // Name the unnamed fields as the number of the field with an 'f' in front.
             let in_fields = (0..f.unnamed.len())
-                .map(|n| Ident::new(&format!("f{}", n), ident.span()).to_token_stream())
+                .map(|n| Ident::new(&format!("f{n}"), ident.span()).to_token_stream())
                 .collect::<Vec<_>>();
             let out_fields = if zbus_error_variant {
                 let error_field = in_fields.first().ok_or_else(|| {
