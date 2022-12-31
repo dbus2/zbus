@@ -227,8 +227,7 @@ fn ensure_correct_interface_name(name: &str) -> Result<()> {
             )));
         } else if !c.is_ascii_alphanumeric() && c != '_' {
             return Err(Error::InvalidInterfaceName(format!(
-                "`{}` character not allowed",
-                c
+                "`{c}` character not allowed"
             )));
         }
 

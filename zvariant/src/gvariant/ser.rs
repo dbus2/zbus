@@ -454,10 +454,7 @@ where
     fn structure(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
         let c = ser.0.sig_parser.next_char()?;
         if c != STRUCT_SIG_START_CHAR && c != DICT_ENTRY_SIG_START_CHAR {
-            let expected = format!(
-                "`{}` or `{}`",
-                STRUCT_SIG_START_STR, DICT_ENTRY_SIG_START_STR,
-            );
+            let expected = format!("`{STRUCT_SIG_START_STR}` or `{DICT_ENTRY_SIG_START_STR}`",);
 
             return Err(serde::de::Error::invalid_type(
                 serde::de::Unexpected::Char(c),

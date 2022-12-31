@@ -72,7 +72,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             _ => return Err(Error::new_spanned(&arg, "Unknown attribute")),
         }
     }
-    let iface_name = iface_name.unwrap_or(format!("org.freedesktop.{}", ty));
+    let iface_name = iface_name.unwrap_or(format!("org.freedesktop.{ty}"));
 
     for method in &mut input.items {
         let mut method = match method {
@@ -732,7 +732,7 @@ fn introspect_input_args(
 
 fn introspect_output_arg(ty: &Type, arg_name: Option<&String>) -> TokenStream {
     let arg_name = match arg_name {
-        Some(name) => format!("name=\"{}\" ", name),
+        Some(name) => format!("name=\"{name}\" "),
         None => String::from(""),
     };
 

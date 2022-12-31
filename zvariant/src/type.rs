@@ -134,7 +134,7 @@ where
             let expected = <T as Type>::signature();
             Err(zvariant::Error::SignatureMismatch(
                 original.to_owned(),
-                format!("`{}`", expected),
+                format!("`{expected}`"),
             ))
         }
     }

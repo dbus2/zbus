@@ -464,7 +464,7 @@ where
         if self.sig_parser.next_char()? != STRUCT_SIG_START_CHAR {
             return Err(Error::SignatureMismatch(
                 signature.to_owned(),
-                format!("expected `{}`", STRUCT_SIG_START_CHAR),
+                format!("expected `{STRUCT_SIG_START_CHAR}`"),
             ));
         }
 

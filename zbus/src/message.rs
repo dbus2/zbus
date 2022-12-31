@@ -782,7 +782,7 @@ impl fmt::Display for Message {
             Some(MessageType::MethodCall) => {
                 write!(f, "Method call")?;
                 if let Some(m) = member {
-                    write!(f, " {}", m)?;
+                    write!(f, " {m}")?;
                 }
             }
             Some(MessageType::MethodReturn) => {
@@ -791,18 +791,18 @@ impl fmt::Display for Message {
             Some(MessageType::Error) => {
                 write!(f, "Error")?;
                 if let Some(e) = error_name {
-                    write!(f, " {}", e)?;
+                    write!(f, " {e}")?;
                 }
 
                 let msg = self.body_unchecked::<&str>();
                 if let Ok(msg) = msg {
-                    write!(f, ": {}", msg)?;
+                    write!(f, ": {msg}")?;
                 }
             }
             Some(MessageType::Signal) => {
                 write!(f, "Signal")?;
                 if let Some(m) = member {
-                    write!(f, " {}", m)?;
+                    write!(f, " {m}")?;
                 }
             }
             _ => {
@@ -811,7 +811,7 @@ impl fmt::Display for Message {
         }
 
         if let Some(s) = sender {
-            write!(f, " from {}", s)?;
+            write!(f, " from {s}")?;
         }
 
         Ok(())

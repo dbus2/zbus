@@ -298,8 +298,7 @@ where
             c => Err(de::Error::invalid_type(
                 de::Unexpected::Char(c),
                 &format!(
-                    "`{}`, `{}` or `{}`",
-                    VARIANT_SIGNATURE_CHAR, ARRAY_SIGNATURE_CHAR, STRUCT_SIG_START_CHAR,
+                    "`{VARIANT_SIGNATURE_CHAR}`, `{ARRAY_SIGNATURE_CHAR}` or `{STRUCT_SIG_START_CHAR}`",
                 )
                 .as_str(),
             )),
@@ -455,7 +454,7 @@ where
     }
 }
 
-fn deserialize_ay<'de, 'sig, 'f, B>(de: &mut Deserializer<'de, 'sig, 'f, B>) -> Result<&'de [u8]>
+fn deserialize_ay<'de, B>(de: &mut Deserializer<'de, '_, '_, B>) -> Result<&'de [u8]>
 where
     B: byteorder::ByteOrder,
 {

@@ -185,18 +185,17 @@ pub fn create_proxy(
     let ident = input.ident.to_string();
     let iface_name = iface_name
         .map(ToString::to_string)
-        .unwrap_or(format!("org.freedesktop.{}", ident));
+        .unwrap_or(format!("org.freedesktop.{ident}"));
     if assume_defaults.is_none() && default_path.is_none() && default_service.is_none() {
         eprintln!(
-            "#[dbus_proxy(...)] macro invocation on '{}' without explicit defaults. Please set 'assume_defaults = true', or configure default path/service directly.",
-            proxy_name
+            "#[dbus_proxy(...)] macro invocation on '{proxy_name}' without explicit defaults. Please set 'assume_defaults = true', or configure default path/service directly."
         );
     };
     let assume_defaults = assume_defaults.unwrap_or(true);
     let (default_path, default_service) = if assume_defaults {
         let path = default_path
             .map(ToString::to_string)
-            .or_else(|| Some(format!("/org/freedesktop/{}", ident)));
+            .or_else(|| Some(format!("/org/freedesktop/{ident}")));
         let svc = default_service
             .map(ToString::to_string)
             .or_else(|| Some(iface_name.clone()));
@@ -502,12 +501,12 @@ fn gen_proxy_method_call(
                 blocking_proxy_object
                     .as_ref()
                     .cloned()
-                    .or_else(|| Some(format!("{}ProxyBlocking", o)))
+                    .or_else(|| Some(format!("{o}ProxyBlocking")))
             } else {
                 async_proxy_object
                     .as_ref()
                     .cloned()
-                    .or_else(|| Some(format!("{}Proxy", o)))
+                    .or_else(|| Some(format!("{o}Proxy")))
             }
         }
         _ => None,
@@ -756,9 +755,8 @@ fn gen_proxy_property(
                 let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
                 let receive = format_ident!("receive_{}_changed", method_name);
                 let gen_doc = format!(
-                    "Create a stream for the `{}` property changes. \
-                This is a convenient wrapper around [`{}::receive_property_changed`].",
-                    property_name, proxy_name
+                    "Create a stream for the `{property_name}` property changes. \
+                This is a convenient wrapper around [`{proxy_name}::receive_property_changed`]."
                 );
                 quote! {
                     #[doc = #gen_doc]
@@ -782,8 +780,7 @@ fn gen_proxy_property(
             | PropertyEmitsChangedSignal::Const => {
                 let cached_getter = format_ident!("cached_{}", method_name);
                 let cached_doc = format!(
-                    " Get the cached value of the `{}` property, or `None` if the property is not cached.",
-                    property_name,
+                    " Get the cached value of the `{property_name}` property, or `None` if the property is not cached.",
                 );
                 quote! {
                     #[doc = #cached_doc]

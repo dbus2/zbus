@@ -225,9 +225,9 @@ impl<S: Socket> ClientHandshake<S> {
 
                 let cookie = Cookie::lookup(name, id)?;
                 let client_chall = random_ascii(16);
-                let sec = format!("{}:{}:{}", server_chall, client_chall, cookie);
+                let sec = format!("{server_chall}:{client_chall}:{cookie}");
                 let sha1 = hex::encode(Sha1::digest(sec));
-                let data = format!("{} {}", client_chall, sha1);
+                let data = format!("{client_chall} {sha1}");
                 Ok((WaitingForOK, Command::Data(data.into())))
             }
             _ => Err(Error::Handshake("Unexpected mechanism DATA".into())),
@@ -339,7 +339,7 @@ impl Cookie {
         let c = keyring
             .iter()
             .find(|c| c.id == id)
-            .ok_or_else(|| Error::Handshake(format!("DBus cookie ID {} not found", id)))?;
+            .ok_or_else(|| Error::Handshake(format!("DBus cookie ID {id} not found")))?;
         Ok(c.cookie.to_string())
     }
 }
@@ -401,8 +401,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                         }
                         (_, reply) => {
                             return Poll::Ready(Err(Error::Handshake(format!(
-                                "Unexpected server AUTH OK reply: {}",
-                                reply
+                                "Unexpected server AUTH OK reply: {reply}"
                             ))));
                         }
                     }
@@ -414,8 +413,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                         Command::Error(_) => self.cap_unix_fd = false,
                         _ => {
                             return Poll::Ready(Err(Error::Handshake(format!(
-                                "Unexpected server UNIX_FD reply: {}",
-                                reply
+                                "Unexpected server UNIX_FD reply: {reply}"
                             ))));
                         }
                     }
@@ -427,7 +425,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                 // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
                 && !cfg!(any(target_os = "freebsd", target_os = "dragonfly"))
             {
-                format!("\0{}", cmd).into()
+                format!("\0{cmd}").into()
             } else {
                 cmd.into()
             };
@@ -586,7 +584,7 @@ impl<S: Socket> ServerHandshake<S> {
             #[cfg(unix)]
             {
                 let uid = id_from_str(sasl_id)
-                    .map_err(|e| Error::Handshake(format!("Invalid UID: {}", e)))?;
+                    .map_err(|e| Error::Handshake(format!("Invalid UID: {e}")))?;
                 // Safe to unwrap since we checked earlier external & UID
                 uid == self.client_uid.unwrap()
             }
@@ -621,7 +619,7 @@ impl<S: Socket> ServerHandshake<S> {
             .map(|m| m.to_string())
             .collect::<Vec<_>>()
             .join(" ");
-        self.write_buffer = format!("REJECTED {}\r\n", mechanisms).into();
+        self.write_buffer = format!("REJECTED {mechanisms}\r\n").into();
         self.step = ServerHandshakeStep::SendingAuthError;
     }
 }
@@ -772,7 +770,7 @@ impl fmt::Display for AuthMechanism {
             AuthMechanism::Cookie => "DBUS_COOKIE_SHA1",
             AuthMechanism::Anonymous => "ANONYMOUS",
         };
-        write!(f, "{}", mech)
+        write!(f, "{mech}")
     }
 }
 
@@ -784,7 +782,7 @@ impl FromStr for AuthMechanism {
             "EXTERNAL" => Ok(AuthMechanism::External),
             "DBUS_COOKIE_SHA1" => Ok(AuthMechanism::Cookie),
             "ANONYMOUS" => Ok(AuthMechanism::Anonymous),
-            _ => Err(Error::Handshake(format!("Unknown mechanism: {}", s))),
+            _ => Err(Error::Handshake(format!("Unknown mechanism: {s}"))),
         }
     }
 }
@@ -799,8 +797,8 @@ impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let cmd = match self {
             Command::Auth(mech, resp) => match (mech, resp) {
-                (Some(mech), Some(resp)) => format!("AUTH {} {}", mech, resp),
-                (Some(mech), None) => format!("AUTH {}", mech),
+                (Some(mech), Some(resp)) => format!("AUTH {mech} {resp}"),
+                (Some(mech), None) => format!("AUTH {mech}"),
                 _ => "AUTH".into(),
             },
             Command::Cancel => "CANCEL".into(),
@@ -809,7 +807,7 @@ impl fmt::Display for Command {
                 format!("DATA {}", hex::encode(data))
             }
             Command::Error(expl) => {
-                format!("ERROR {}", expl)
+                format!("ERROR {expl}")
             }
             Command::NegotiateUnixFD => "NEGOTIATE_UNIX_FD".into(),
             Command::Rejected(mechs) => {
@@ -823,17 +821,17 @@ impl fmt::Display for Command {
                 )
             }
             Command::Ok(guid) => {
-                format!("OK {}", guid)
+                format!("OK {guid}")
             }
             Command::AgreeUnixFD => "AGREE_UNIX_FD".into(),
         };
-        write!(f, "{}\r\n", cmd)
+        write!(f, "{cmd}\r\n")
     }
 }
 
 impl From<hex::FromHexError> for Error {
     fn from(e: hex::FromHexError) -> Self {
-        Error::Handshake(format!("Invalid hexcode: {}", e))
+        Error::Handshake(format!("Invalid hexcode: {e}"))
     }
 }
 
@@ -873,7 +871,7 @@ impl FromStr for Command {
                 Command::Ok(guid.parse()?)
             }
             Some("AGREE_UNIX_FD") => Command::AgreeUnixFD,
-            _ => return Err(Error::Handshake(format!("Unknown command: {}", s))),
+            _ => return Err(Error::Handshake(format!("Unknown command: {s}"))),
         };
         Ok(cmd)
     }

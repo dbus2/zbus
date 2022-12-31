@@ -252,5 +252,5 @@ fn create_signature(
     key_signature: &Signature<'_>,
     value_signature: &Signature<'_>,
 ) -> Signature<'static> {
-    Signature::from_string_unchecked(format!("a{{{}{}}}", key_signature, value_signature,))
+    Signature::from_string_unchecked(format!("a{{{key_signature}{value_signature}}}",))
 }

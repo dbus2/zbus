@@ -1,4 +1,4 @@
-#![allow(clippy::blacklisted_name)]
+#![allow(clippy::disallowed_names)]
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 use std::{collections::HashMap, convert::TryInto};
@@ -232,7 +232,7 @@ impl MyIfaceImpl {
         debug!("`CreateObjInside` called.");
         object_server
             .at(
-                format!("/zbus/test/{}", key),
+                format!("/zbus/test/{key}"),
                 MyIfaceImpl::new(self.next_tx.clone()),
             )
             .await
@@ -705,7 +705,7 @@ async fn iface_and_proxy_(p2p: bool) {
         match next_rx.recv().await.unwrap() {
             NextAction::Quit => break,
             NextAction::CreateObj(key) => {
-                let path = format!("/zbus/test/{}", key);
+                let path = format!("/zbus/test/{key}");
                 service_conn
                     .object_server()
                     .at(path.clone(), MyIfaceImpl::new(next_tx.clone()))
@@ -714,7 +714,7 @@ async fn iface_and_proxy_(p2p: bool) {
                 debug!("Object `{path}` added.");
             }
             NextAction::DestroyObj(key) => {
-                let path = format!("/zbus/test/{}", key);
+                let path = format!("/zbus/test/{key}");
                 service_conn
                     .object_server()
                     .remove::<MyIfaceImpl, _>(path.clone())

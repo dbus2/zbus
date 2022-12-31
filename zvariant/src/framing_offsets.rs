@@ -42,7 +42,7 @@ impl FramingOffsets {
             if offset > offsets_start {
                 return Err(serde::de::Error::invalid_length(
                     offset,
-                    &format!("< {}", offsets_start).as_str(),
+                    &format!("< {offsets_start}").as_str(),
                 ));
             }
             let offset = offset_size.read_last_offset_from_buffer(&container[i..end]);
