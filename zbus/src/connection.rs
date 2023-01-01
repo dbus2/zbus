@@ -30,6 +30,7 @@ use crate::{
     blocking,
     fdo::{self, RequestNameFlags, RequestNameReply},
     raw::{Connection as RawConnection, Socket},
+    socket_reader::SocketReader,
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule,
     Message, MessageBuilder, MessageFlags, MessageStream, MessageType, ObjectServer,
     OwnedMatchRule, Result, Task,
@@ -56,9 +57,9 @@ pub(crate) struct ConnectionInner {
     // Our executor
     executor: Executor<'static>,
 
-    // Message receiver task
+    // Socket reader task
     #[allow(unused)]
-    msg_receiver_task: Task<()>,
+    socket_reader_task: Task<()>,
 
     pub(crate) msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
     pub(crate) method_return_receiver: InactiveReceiver<Result<Arc<Message>>>,
@@ -73,86 +74,12 @@ pub(crate) struct ConnectionInner {
 type Subscriptions = HashMap<OwnedMatchRule, (u64, InactiveReceiver<Result<Arc<Message>>>)>;
 
 // FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
-//        cancel `msg_receiver_task` manually to ensure task is gone before the connection is. Same
+//        cancel `socket_reader_task` manually to ensure task is gone before the connection is. Same
 //        goes for the registered well-known names.
 //
 // [`AsyncDrop`]: https://github.com/rust-lang/wg-async-foundations/issues/65
 
-#[derive(Debug)]
-struct MessageReceiverTask {
-    raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
-    senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
-}
-
-impl MessageReceiverTask {
-    fn new(
-        raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
-        senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
-    ) -> Self {
-        Self { raw_conn, senders }
-    }
-
-    fn spawn(self, executor: &Executor<'_>) -> Task<()> {
-        executor.spawn(self.receive_msg(), "socket reader")
-    }
-
-    // Keep receiving messages and put them on the queue.
-    #[instrument(name = "socket reader", skip(self))]
-    async fn receive_msg(self) {
-        loop {
-            trace!("Waiting for message on the socket..");
-            let receive_msg = ReceiveMessage {
-                raw_conn: &self.raw_conn,
-            };
-            let msg = receive_msg.await.map(Arc::new);
-            match &msg {
-                Ok(msg) => trace!("Message received on the socket: {:?}", msg),
-                Err(e) => trace!("Error reading from the socket: {:?}", e),
-            };
-
-            let mut senders = self.senders.lock().await;
-            for (rule, sender) in &*senders {
-                if let Ok(msg) = &msg {
-                    if let Some(rule) = rule.as_ref() {
-                        match rule.matches(msg) {
-                            Ok(true) => (),
-                            Ok(false) => continue,
-                            Err(e) => {
-                                debug!("Error matching message against rule: {:?}", e);
-
-                                continue;
-                            }
-                        }
-                    }
-                }
-
-                if let Err(e) = sender.broadcast(msg.clone()).await {
-                    // An error would be due to either of these:
-                    //
-                    // 1. the channel is closed.
-                    // 2. No active receivers.
-                    //
-                    // In either case, just log it.
-                    trace!(
-                        "Error broadcasting message to stream for `{:?}`: {:?}",
-                        rule,
-                        e
-                    );
-                }
-            }
-            trace!("Broadcasted to all streams: {:?}", msg);
-
-            if msg.is_err() {
-                senders.clear();
-                trace!("Socket reading task stopped");
-
-                return;
-            }
-        }
-    }
-}
-
-type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
+pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 
 /// A D-Bus connection.
 ///
@@ -1127,10 +1054,10 @@ impl Connection {
         use std::collections::hash_map::Entry;
 
         if self.inner.msg_senders.lock().await.is_empty() {
-            // This only happens if message receiver task has errored out.
+            // This only happens if socket reader task has errored out.
             return Err(Error::InputOutput(Arc::new(io::Error::new(
                 io::ErrorKind::BrokenPipe,
-                "Message receiver task has errored out",
+                "Socket reader task has errored out",
             ))));
         }
 
@@ -1276,9 +1203,9 @@ impl Connection {
         let executor = Executor::new();
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
-        // Start the message receiver task.
-        let msg_receiver_task =
-            MessageReceiverTask::new(raw_conn.clone(), msg_senders.clone()).spawn(&executor);
+        // Start the socket reader task.
+        let socket_reader_task =
+            SocketReader::new(raw_conn.clone(), msg_senders.clone()).spawn(&executor);
 
         let connection = Self {
             inner: Arc::new(ConnectionInner {
@@ -1293,7 +1220,7 @@ impl Connection {
                 object_server: OnceCell::new(),
                 object_server_dispatch_task: OnceCell::new(),
                 executor: executor.clone(),
-                msg_receiver_task,
+                socket_reader_task,
                 msg_senders,
                 msg_receiver,
                 method_return_receiver,
@@ -1425,19 +1352,6 @@ where
         }
 
         Poll::Ready(raw_conn.close())
-    }
-}
-
-struct ReceiveMessage<'r> {
-    raw_conn: &'r sync::Mutex<RawConnection<Box<dyn Socket>>>,
-}
-
-impl<'r> Future for ReceiveMessage<'r> {
-    type Output = Result<Message>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut raw_conn = self.raw_conn.lock().expect("poisoned lock");
-        raw_conn.try_receive_message(cx)
     }
 }
 
