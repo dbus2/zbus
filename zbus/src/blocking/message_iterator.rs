@@ -10,19 +10,24 @@ use crate::{blocking::Connection, utils::block_on, MatchRule, Message, OwnedMatc
 /// over this type until it's consumed or dropped.
 #[derive(derivative::Derivative, Clone)]
 #[derivative(Debug)]
-pub struct MessageIterator(pub(crate) crate::MessageStream);
+pub struct MessageIterator {
+    // Wrap it in an `Option` to ensure the proxy is dropped in a `block_on` call. This is needed
+    // for tokio because the proxy spawns a task in its `Drop` impl and that needs a runtime
+    // context in case of tokio.
+    pub(crate) azync: Option<crate::MessageStream>,
+}
 
 assert_impl_all!(MessageIterator: Send, Sync, Unpin);
 
 impl MessageIterator {
     /// Get a reference to the underlying async message stream.
     pub fn inner(&self) -> &crate::MessageStream {
-        &self.0
+        self.azync.as_ref().expect("Inner stream is `None`")
     }
 
     /// Get the underlying async message stream, consuming `self`.
-    pub fn into_inner(self) -> crate::MessageStream {
-        self.0
+    pub fn into_inner(mut self) -> crate::MessageStream {
+        self.azync.take().expect("Inner stream is `None`")
     }
 
     /// Create a message iterator for the given match rule.
@@ -78,12 +83,17 @@ impl MessageIterator {
         R: TryInto<OwnedMatchRule>,
         R::Error: Into<crate::Error>,
     {
-        block_on(crate::MessageStream::for_match_rule(rule, conn.inner())).map(Self)
+        block_on(crate::MessageStream::for_match_rule(rule, conn.inner()))
+            .map(Some)
+            .map(|s| Self { azync: s })
     }
 
     /// The associated match rule, if any.
     pub fn match_rule(&self) -> Option<MatchRule<'_>> {
-        self.0.match_rule()
+        self.azync
+            .as_ref()
+            .expect("Inner stream is `None`")
+            .match_rule()
     }
 }
 
@@ -91,7 +101,7 @@ impl Iterator for MessageIterator {
     type Item = Result<Arc<Message>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        block_on(self.0.next())
+        block_on(self.azync.as_mut().expect("Inner stream is `None`").next())
     }
 }
 
@@ -99,7 +109,7 @@ impl From<Connection> for MessageIterator {
     fn from(conn: Connection) -> Self {
         let azync = crate::MessageStream::from(conn.into_inner());
 
-        Self(azync)
+        Self { azync: Some(azync) }
     }
 }
 
@@ -110,13 +120,25 @@ impl From<&Connection> for MessageIterator {
 }
 
 impl From<MessageIterator> for Connection {
-    fn from(iter: MessageIterator) -> Connection {
-        Connection::from(crate::Connection::from(iter.0))
+    fn from(mut iter: MessageIterator) -> Connection {
+        Connection::from(crate::Connection::from(
+            iter.azync.take().expect("Inner stream is `None`"),
+        ))
     }
 }
 
 impl From<&MessageIterator> for Connection {
     fn from(iter: &MessageIterator) -> Connection {
-        Connection::from(crate::Connection::from(&iter.0))
+        Connection::from(crate::Connection::from(
+            iter.azync.as_ref().expect("Inner stream is `None`"),
+        ))
+    }
+}
+
+impl std::ops::Drop for MessageIterator {
+    fn drop(&mut self) {
+        block_on(async {
+            self.azync.take();
+        });
     }
 }
