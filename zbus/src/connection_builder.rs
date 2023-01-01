@@ -27,7 +27,7 @@ use zvariant::ObjectPath;
 use crate::{
     address::{self, Address},
     async_lock::RwLock,
-    names::{InterfaceName, WellKnownName},
+    names::{InterfaceName, UniqueName, WellKnownName},
     raw::Socket,
     AuthMechanism, Authenticated, Connection, Error, Guid, Interface, Result,
 };
@@ -63,6 +63,7 @@ pub struct ConnectionBuilder<'a> {
     interfaces: Interfaces<'a>,
     names: HashSet<WellKnownName<'a>>,
     auth_mechanisms: Option<VecDeque<AuthMechanism>>,
+    unique_name: Option<UniqueName<'a>>,
 }
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -237,6 +238,28 @@ impl<'a> ConnectionBuilder<'a> {
         Ok(self)
     }
 
+    /// Sets the unique name of the connection.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the to-be-created connection is not a peer-to-peer connection.
+    /// It will always panic if the connection is to a message bus as it's the bus that assigns
+    /// peers their unique names. This is mainly provided for bus implementations. All other users
+    /// should not need to use this method.
+    pub fn unique_name<U>(mut self, unique_name: U) -> Result<Self>
+    where
+        U: TryInto<UniqueName<'a>>,
+        U::Error: Into<Error>,
+    {
+        if !self.p2p {
+            panic!("unique name can only be set for peer-to-peer connections");
+        }
+        let name = unique_name.try_into().map_err(Into::into)?;
+        self.unique_name = Some(name);
+
+        Ok(self)
+    }
+
     /// Build the connection, consuming the builder.
     ///
     /// # Errors
@@ -302,6 +325,9 @@ impl<'a> ConnectionBuilder<'a> {
 
         let mut conn = Connection::new(auth, !self.p2p).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
+        if let Some(unique_name) = self.unique_name {
+            conn.set_unique_name(unique_name)?;
+        }
 
         if !self.interfaces.is_empty() {
             let object_server = conn.sync_object_server(false, None);
@@ -357,6 +383,7 @@ impl<'a> ConnectionBuilder<'a> {
             interfaces: HashMap::new(),
             names: HashSet::new(),
             auth_mechanisms: None,
+            unique_name: None,
         }
     }
 }

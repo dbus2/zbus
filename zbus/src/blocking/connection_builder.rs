@@ -14,8 +14,11 @@ use uds_windows::UnixStream;
 use zvariant::ObjectPath;
 
 use crate::{
-    address::Address, blocking::Connection, names::WellKnownName, utils::block_on, AuthMechanism,
-    Error, Guid, Interface, Result,
+    address::Address,
+    blocking::Connection,
+    names::{UniqueName, WellKnownName},
+    utils::block_on,
+    AuthMechanism, Error, Guid, Interface, Result,
 };
 
 /// A builder for [`zbus::blocking::Connection`].
@@ -137,6 +140,22 @@ impl<'a> ConnectionBuilder<'a> {
         W::Error: Into<Error>,
     {
         self.0.name(well_known_name).map(Self)
+    }
+
+    /// Sets the unique name of the connection.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the to-be-created connection is not a peer-to-peer connection.
+    /// It will always panic if the connection is to a message bus as it's the bus that assigns
+    /// peers their unique names. This is mainly provided for bus implementations. All other users
+    /// should not need to use this method.
+    pub fn unique_name<U>(self, unique_name: U) -> Result<Self>
+    where
+        U: TryInto<UniqueName<'a>>,
+        U::Error: Into<Error>,
+    {
+        self.0.unique_name(unique_name).map(Self)
     }
 
     /// Build the connection, consuming the builder.
