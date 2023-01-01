@@ -37,12 +37,12 @@ impl Connection {
         block_on(crate::Connection::system()).map(Self::from)
     }
 
-    /// Max number of messages to queue.
+    /// The capacity of the main (unfiltered) queue.
     pub fn max_queued(&self) -> usize {
         self.inner.max_queued()
     }
 
-    /// Set the max number of messages to queue.
+    /// Set the capacity of the main (unfiltered) queue.
     pub fn set_max_queued(mut self, max: usize) {
         self.inner.set_max_queued(max)
     }

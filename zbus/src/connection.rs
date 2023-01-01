@@ -102,11 +102,12 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 /// parts of your code. `Connection` also implements [`std::marker::Sync`] and [`std::marker::Send`]
 /// so you can send and share a connection instance across threads as well.
 ///
-/// `Connection` keeps an internal queue of incoming message. The maximum capacity of this queue
-/// is configurable through the [`set_max_queued`] method. The default size is 64. When the queue is
-/// full, no more messages can be received until room is created for more. This is why it's
-/// important to ensure that all [`crate::MessageStream`] and [`crate::blocking::MessageIterator`]
-/// instances are continuously polled and iterated on, respectively.
+/// `Connection` keeps internal queues of incoming message. The default capacity of each of these is
+/// 64. The capacity of the main (unfiltered) queue is configurable through the [`set_max_queued`]
+/// method. When the queue is full, no more messages can be received until room is created for more.
+/// This is why it's important to ensure that all [`crate::MessageStream`] and
+/// [`crate::blocking::MessageIterator`] instances are continuously polled and iterated on,
+/// respectively.
 ///
 /// For sending messages you can either use [`Connection::send_message`] method or make use of the
 /// [`Sink`] implementation. For latter, you might find [`SinkExt`] API very useful. Keep in mind
@@ -821,12 +822,12 @@ impl Connection {
         Ok(())
     }
 
-    /// Max number of messages to queue.
+    /// The capacity of the main (unfiltered) queue.
     pub fn max_queued(&self) -> usize {
         self.inner.msg_receiver.capacity()
     }
 
-    /// Set the max number of messages to queue.
+    /// Set the capacity of the main (unfiltered) queue.
     pub fn set_max_queued(&mut self, max: usize) {
         self.inner.msg_receiver.clone().set_capacity(max);
     }

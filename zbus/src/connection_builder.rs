@@ -159,7 +159,7 @@ impl<'a> ConnectionBuilder<'a> {
         self
     }
 
-    /// Set the max number of messages to queue.
+    /// Set the capacity of the main (unfiltered) queue.
     ///
     /// Since typically you'd want to set this at instantiation time, you can set it through the builder.
     ///
