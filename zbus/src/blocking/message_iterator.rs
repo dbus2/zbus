@@ -48,7 +48,12 @@ impl MessageIterator {
     ///     .member("NameOwnerChanged")?
     ///     .add_arg("org.freedesktop.zbus.MatchRuleStreamTest42")?
     ///     .build();
-    /// let mut iter = MessageIterator::for_match_rule(rule, &conn)?;
+    /// let mut iter = MessageIterator::for_match_rule(
+    ///     rule,
+    ///     &conn,
+    ///     // For such a specific match rule, we don't need a big queue.
+    ///     Some(1),
+    /// )?;
     ///
     /// let rule_str = "type='signal',sender='org.freedesktop.DBus',\
     ///                 interface='org.freedesktop.DBus',member='NameOwnerChanged',\
@@ -78,14 +83,18 @@ impl MessageIterator {
     /// # Caveats
     ///
     /// Since this method relies on [`MatchRule::matches`], it inherits its caveats.
-    pub fn for_match_rule<R>(rule: R, conn: &Connection) -> Result<Self>
+    pub fn for_match_rule<R>(rule: R, conn: &Connection, max_queued: Option<usize>) -> Result<Self>
     where
         R: TryInto<OwnedMatchRule>,
         R::Error: Into<crate::Error>,
     {
-        block_on(crate::MessageStream::for_match_rule(rule, conn.inner()))
-            .map(Some)
-            .map(|s| Self { azync: s })
+        block_on(crate::MessageStream::for_match_rule(
+            rule,
+            conn.inner(),
+            max_queued,
+        ))
+        .map(Some)
+        .map(|s| Self { azync: s })
     }
 
     /// The associated match rule, if any.

@@ -518,7 +518,11 @@ impl<'a> ProxyInner<'a> {
             .to_owned()
             .into();
 
-        conn.add_match(signal_rule.clone()).await?;
+        conn.add_match(
+            signal_rule.clone(),
+            Some(MAX_NAME_OWNER_CHANGED_SIGNALS_QUEUED),
+        )
+        .await?;
 
         if self
             .inner_without_borrows
@@ -533,6 +537,8 @@ impl<'a> ProxyInner<'a> {
         Ok(())
     }
 }
+
+const MAX_NAME_OWNER_CHANGED_SIGNALS_QUEUED: usize = 8;
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
@@ -1095,7 +1101,7 @@ impl<'a> SignalStream<'a> {
             BusName::Unique(name) => (
                 Some(name),
                 JoinMultiple(vec![ordered_stream::OrderedStreamExt::peekable(
-                    MessageStream::for_match_rule(signal_rule, conn).await?,
+                    MessageStream::for_match_rule(signal_rule, conn, None).await?,
                 )]),
             ),
             BusName::WellKnown(name) => {
@@ -1109,10 +1115,13 @@ impl<'a> SignalStream<'a> {
                     .member("NameOwnerChanged")?
                     .add_arg(name.as_str())?
                     .build();
-                let name_owner_changed_stream =
-                    MessageStream::for_match_rule(name_owner_changed_rule, conn)
-                        .await?
-                        .map(Either::Left);
+                let name_owner_changed_stream = MessageStream::for_match_rule(
+                    name_owner_changed_rule,
+                    conn,
+                    Some(MAX_NAME_OWNER_CHANGED_SIGNALS_QUEUED),
+                )
+                .await?
+                .map(Either::Left);
 
                 let get_name_owner = conn
                     .call_method_raw(
@@ -1185,7 +1194,7 @@ impl<'a> SignalStream<'a> {
                 let name_owner_changed_stream = stream.into_inner();
 
                 let stream = JoinMultiple(vec![
-                    MessageStream::for_match_rule(signal_rule, conn)
+                    MessageStream::for_match_rule(signal_rule, conn, None)
                         .await?
                         .peekable(),
                     name_owner_changed_stream.peekable(),

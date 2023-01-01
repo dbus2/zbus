@@ -46,6 +46,9 @@ impl MessageStream {
     /// Having said that, stream created by this method can still very useful as it allows you to
     /// avoid needless task wakeups and simplify your stream consuming code.
     ///
+    /// You can optionally also configure the capacity of the internal message queue through
+    /// `max_queued`. If not specified, the default of 64 is assumed.
+    ///
     /// # Example
     ///
     /// ```
@@ -61,7 +64,12 @@ impl MessageStream {
     ///     .member("NameOwnerChanged")?
     ///     .add_arg("org.freedesktop.zbus.MatchRuleStreamTest42")?
     ///     .build();
-    /// let mut stream = MessageStream::for_match_rule(rule, &conn).await?;
+    /// let mut stream = MessageStream::for_match_rule(
+    ///     rule,
+    ///     &conn,
+    ///     // For such a specific match rule, we don't need a big queue.
+    ///     Some(1),
+    /// ).await?;
     ///
     /// let rule_str = "type='signal',sender='org.freedesktop.DBus',\
     ///                 interface='org.freedesktop.DBus',member='NameOwnerChanged',\
@@ -93,13 +101,17 @@ impl MessageStream {
     /// # Caveats
     ///
     /// Since this method relies on [`MatchRule::matches`], it inherits its caveats.
-    pub async fn for_match_rule<R>(rule: R, conn: &Connection) -> Result<Self>
+    pub async fn for_match_rule<R>(
+        rule: R,
+        conn: &Connection,
+        max_queued: Option<usize>,
+    ) -> Result<Self>
     where
         R: TryInto<OwnedMatchRule>,
         R::Error: Into<crate::Error>,
     {
         let rule = rule.try_into().map_err(Into::into)?;
-        let msg_receiver = conn.add_match(rule.clone()).await?;
+        let msg_receiver = conn.add_match(rule.clone(), max_queued).await?;
 
         Ok(Self::for_subscription_channel(
             msg_receiver,

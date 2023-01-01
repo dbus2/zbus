@@ -948,7 +948,7 @@ impl Connection {
                                 builder = builder.destination(&**unique_name).expect("unique name");
                             }
                             let rule = builder.build();
-                            match MessageStream::for_match_rule(rule, &conn).await {
+                            match MessageStream::for_match_rule(rule, &conn, None).await {
                                 Ok(stream) => stream,
                                 Err(e) => {
                                     // Very unlikely but can happen I guess if connection is closed.
@@ -1051,6 +1051,7 @@ impl Connection {
     pub(crate) async fn add_match(
         &self,
         rule: OwnedMatchRule,
+        max_queued: Option<usize>,
     ) -> Result<Receiver<Result<Arc<Message>>>> {
         use std::collections::hash_map::Entry;
 
@@ -1066,7 +1067,8 @@ impl Connection {
         let msg_type = rule.msg_type().unwrap_or(MessageType::Signal);
         match subscriptions.entry(rule.clone()) {
             Entry::Vacant(e) => {
-                let (sender, mut receiver) = broadcast(DEFAULT_MAX_QUEUED);
+                let max_queued = max_queued.unwrap_or(DEFAULT_MAX_QUEUED);
+                let (sender, mut receiver) = broadcast(max_queued);
                 receiver.set_await_active(false);
                 if self.is_bus() && msg_type == MessageType::Signal {
                     fdo::DBusProxy::builder(self)
