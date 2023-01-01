@@ -59,7 +59,7 @@ pub(crate) struct ConnectionInner {
 
     // Socket reader task
     #[allow(unused)]
-    socket_reader_task: Task<()>,
+    socket_reader_task: OnceCell<Task<()>>,
 
     pub(crate) msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
     pub(crate) method_return_receiver: InactiveReceiver<Result<Arc<Message>>>,
@@ -1133,7 +1133,7 @@ impl Connection {
         self.inner.executor.spawn(remove_match, &task_name).detach()
     }
 
-    async fn hello_bus(&self) -> Result<()> {
+    pub(crate) async fn hello_bus(&self) -> Result<()> {
         let dbus_proxy = fdo::DBusProxy::builder(self)
             .cache_properties(CacheProperties::No)
             .build()
@@ -1164,7 +1164,6 @@ impl Connection {
     pub(crate) async fn new(
         auth: Authenticated<Box<dyn Socket>>,
         bus_connection: bool,
-        #[allow(unused)] internal_executor: bool,
     ) -> Result<Self> {
         let auth = auth.into_inner();
         #[cfg(unix)]
@@ -1203,10 +1202,6 @@ impl Connection {
         let executor = Executor::new();
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
-        // Start the socket reader task.
-        let socket_reader_task =
-            SocketReader::new(raw_conn.clone(), msg_senders.clone()).spawn(&executor);
-
         let connection = Self {
             inner: Arc::new(ConnectionInner {
                 raw_conn,
@@ -1219,35 +1214,14 @@ impl Connection {
                 subscriptions,
                 object_server: OnceCell::new(),
                 object_server_dispatch_task: OnceCell::new(),
-                executor: executor.clone(),
-                socket_reader_task,
+                executor,
+                socket_reader_task: OnceCell::new(),
                 msg_senders,
                 msg_receiver,
                 method_return_receiver,
                 registered_names: Mutex::new(HashMap::new()),
             }),
         };
-
-        #[cfg(not(feature = "tokio"))]
-        if internal_executor {
-            std::thread::Builder::new()
-                .name("zbus::Connection executor".into())
-                .spawn(move || {
-                    crate::utils::block_on(async move {
-                        // Run as long as there is a task to run.
-                        while !executor.is_empty() {
-                            executor.tick().await;
-                        }
-                    })
-                })?;
-        }
-
-        if !bus_connection {
-            return Ok(connection);
-        }
-
-        // Now that the server has approved us, we must send the bus Hello, as per specs
-        connection.hello_bus().await?;
 
         Ok(connection)
     }
@@ -1285,6 +1259,17 @@ impl Connection {
             .expect("poisoned lock")
             .socket()
             .peer_pid()
+    }
+
+    pub(crate) fn init_socket_reader(&self) {
+        let inner = &self.inner;
+        inner
+            .socket_reader_task
+            .set(
+                SocketReader::new(inner.raw_conn.clone(), inner.msg_senders.clone())
+                    .spawn(&inner.executor),
+            )
+            .expect("Attempted to set `socket_reader_task` twice");
     }
 }
 

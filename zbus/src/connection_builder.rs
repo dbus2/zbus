@@ -300,7 +300,7 @@ impl<'a> ConnectionBuilder<'a> {
             }
         };
 
-        let mut conn = Connection::new(auth, !self.p2p, self.internal_executor).await?;
+        let mut conn = Connection::new(auth, !self.p2p).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
 
         if !self.interfaces.is_empty() {
@@ -318,8 +318,25 @@ impl<'a> ConnectionBuilder<'a> {
             let listener = started_event.listen();
             conn.start_object_server(Some(started_event));
 
-            // Wait for the object server to start.
+            #[cfg(not(feature = "tokio"))]
+            start_internal_executor(&conn, self.internal_executor)?;
+
             listener.await;
+
+            // Start the socket reader task.
+            conn.init_socket_reader();
+        } else {
+            // When there is no object server, we start the socket reader task first so that the
+            // executor ticking thread doesn't end up giving up due to lack of tasks.
+            conn.init_socket_reader();
+            #[cfg(not(feature = "tokio"))]
+            start_internal_executor(&conn, self.internal_executor)?;
+        }
+
+        if !self.p2p {
+            // Now that the server has approved us, we must send the bus Hello, as per specs
+            let future = conn.hello_bus();
+            conn.run_future_at_init(future).await?;
         }
 
         for name in self.names {
@@ -342,4 +359,23 @@ impl<'a> ConnectionBuilder<'a> {
             auth_mechanisms: None,
         }
     }
+}
+
+#[cfg(not(feature = "tokio"))]
+fn start_internal_executor(conn: &Connection, internal_executor: bool) -> Result<()> {
+    if internal_executor {
+        let executor = conn.executor().clone();
+        std::thread::Builder::new()
+            .name("zbus::Connection executor".into())
+            .spawn(move || {
+                crate::utils::block_on(async move {
+                    // Run as long as there is a task to run.
+                    while !executor.is_empty() {
+                        executor.tick().await;
+                    }
+                })
+            })?;
+    }
+
+    Ok(())
 }
