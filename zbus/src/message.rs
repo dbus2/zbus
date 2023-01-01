@@ -20,7 +20,7 @@ use crate::OwnedFd;
 use crate::{
     utils::padding_for_8_bytes, EndianSig, Error, MessageField, MessageFieldCode, MessageFields,
     MessageFlags, MessageHeader, MessagePrimaryHeader, MessageType, QuickMessageFields, Result,
-    MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
+    MIN_MESSAGE_SIZE,
 };
 
 #[cfg(unix)]
@@ -500,28 +500,46 @@ impl Message {
         #[cfg(unix)] fds: Vec<OwnedFd>,
         recv_seq: u64,
     ) -> Result<Self> {
-        if EndianSig::try_from(bytes[0])? != NATIVE_ENDIAN_SIG {
-            return Err(Error::IncorrectEndian);
+        fn from_raw_parts_internal<B: byteorder::ByteOrder>(
+            bytes: Vec<u8>,
+            #[cfg(unix)] fds: Vec<OwnedFd>,
+            recv_seq: u64,
+        ) -> Result<Message> {
+            let (primary_header, fields_len) = MessagePrimaryHeader::read(&bytes)?;
+            let header = zvariant::from_slice(&bytes, EncodingContext::<B>::new_dbus(0))?;
+            #[cfg(unix)]
+            let fds = Arc::new(RwLock::new(Fds::Owned(fds)));
+
+            let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
+            let body_offset = header_len + padding_for_8_bytes(header_len);
+            let quick_fields = QuickMessageFields::new(&bytes, &header)?;
+
+            Ok(Message {
+                primary_header,
+                quick_fields,
+                bytes,
+                body_offset,
+                #[cfg(unix)]
+                fds,
+                recv_seq: MessageSequence { recv_seq },
+            })
         }
 
-        let (primary_header, fields_len) = MessagePrimaryHeader::read(&bytes)?;
-        let header = zvariant::from_slice(&bytes, dbus_context!(0))?;
-        #[cfg(unix)]
-        let fds = Arc::new(RwLock::new(Fds::Owned(fds)));
-
-        let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
-        let body_offset = header_len + padding_for_8_bytes(header_len);
-        let quick_fields = QuickMessageFields::new(&bytes, &header)?;
-
-        Ok(Self {
-            primary_header,
-            quick_fields,
-            bytes,
-            body_offset,
-            #[cfg(unix)]
-            fds,
-            recv_seq: MessageSequence { recv_seq },
-        })
+        let endian_sig = EndianSig::try_from(bytes[0])?;
+        match endian_sig {
+            EndianSig::Little => from_raw_parts_internal::<byteorder::LittleEndian>(
+                bytes,
+                #[cfg(unix)]
+                fds,
+                recv_seq,
+            ),
+            EndianSig::Big => from_raw_parts_internal::<byteorder::BigEndian>(
+                bytes,
+                #[cfg(unix)]
+                fds,
+                recv_seq,
+            ),
+        }
     }
 
     /// Take ownership of the associated file descriptors in the message.
@@ -569,31 +587,67 @@ impl Message {
         &self.primary_header
     }
 
-    pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<()>
+    pub(crate) fn modify_primary_header<F>(&mut self, modifier: F) -> Result<()>
     where
         F: FnMut(&mut MessagePrimaryHeader) -> Result<()>,
     {
-        modifier(&mut self.primary_header)?;
+        fn modify_primary_header_internal<F, B>(msg: &mut Message, mut modifier: F) -> Result<()>
+        where
+            F: FnMut(&mut MessagePrimaryHeader) -> Result<()>,
+            B: byteorder::ByteOrder,
+        {
+            let ctxt = EncodingContext::<B>::new_dbus(0);
+            modifier(&mut msg.primary_header)?;
 
-        let mut cursor = Cursor::new(&mut self.bytes);
-        zvariant::to_writer(&mut cursor, dbus_context!(0), &self.primary_header)
-            .map(|_| ())
-            .map_err(Error::from)
+            let mut cursor = Cursor::new(&mut msg.bytes);
+            zvariant::to_writer(&mut cursor, ctxt, &msg.primary_header)
+                .map(|_| ())
+                .map_err(Error::from)
+        }
+
+        let endian_sig = EndianSig::try_from(self.bytes[0])?;
+        match endian_sig {
+            EndianSig::Little => {
+                modify_primary_header_internal::<F, byteorder::LittleEndian>(self, modifier)
+            }
+            EndianSig::Big => {
+                modify_primary_header_internal::<F, byteorder::BigEndian>(self, modifier)
+            }
+        }
     }
 
     /// Deserialize the header.
     ///
     /// Note: prefer using the direct access methods if possible; they are more efficient.
     pub fn header(&self) -> Result<MessageHeader<'_>> {
-        zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(Error::from)
+        fn header_internal<B: byteorder::ByteOrder>(msg: &Message) -> Result<MessageHeader<'_>> {
+            zvariant::from_slice(&msg.bytes, EncodingContext::<B>::new_dbus(0)).map_err(Error::from)
+        }
+
+        let endian_sig = EndianSig::try_from(self.bytes[0])?;
+        match endian_sig {
+            EndianSig::Little => header_internal::<byteorder::LittleEndian>(self),
+            EndianSig::Big => header_internal::<byteorder::BigEndian>(self),
+        }
     }
 
     /// Deserialize the fields.
     ///
     /// Note: prefer using the direct access methods if possible; they are more efficient.
     pub fn fields(&self) -> Result<MessageFields<'_>> {
-        let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
-        zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
+        fn fields_internal<B: byteorder::ByteOrder>(msg: &Message) -> Result<MessageFields<'_>> {
+            zvariant::from_slice(
+                &msg.bytes[crate::PRIMARY_HEADER_SIZE..],
+                EncodingContext::<B>::new_dbus(crate::PRIMARY_HEADER_SIZE),
+            )
+            .map_err(Error::from)
+        }
+
+        let endian_sig = EndianSig::try_from(self.bytes[0])?;
+        match endian_sig {
+            EndianSig::Little => fields_internal::<byteorder::LittleEndian>(self),
+            EndianSig::Big => fields_internal::<byteorder::BigEndian>(self),
+        }
     }
 
     /// The message type.
@@ -626,21 +680,34 @@ impl Message {
     where
         B: serde::de::Deserialize<'d> + Type,
     {
+        fn body_unchecked_internal<'d, 'm: 'd, B, BO>(msg: &'m Message) -> Result<B>
+        where
+            B: serde::de::Deserialize<'d> + Type,
+            BO: byteorder::ByteOrder,
         {
-            #[cfg(unix)]
+            let ctxt = EncodingContext::<BO>::new_dbus(0);
             {
-                zvariant::from_slice_fds(
-                    &self.bytes[self.body_offset..],
-                    Some(&self.fds()),
-                    dbus_context!(0),
-                )
+                #[cfg(unix)]
+                {
+                    zvariant::from_slice_fds(
+                        &self.bytes[self.body_offset..],
+                        Some(&self.fds()),
+                        ctx,
+                    )
+                }
+                #[cfg(not(unix))]
+                {
+                    zvariant::from_slice(&msg.bytes[msg.body_offset..], ctxt)
+                }
             }
-            #[cfg(not(unix))]
-            {
-                zvariant::from_slice(&self.bytes[self.body_offset..], dbus_context!(0))
-            }
+            .map_err(Error::from)
         }
-        .map_err(Error::from)
+
+        let endian_sig = EndianSig::try_from(self.bytes[0])?;
+        match endian_sig {
+            EndianSig::Little => body_unchecked_internal::<B, byteorder::LittleEndian>(self),
+            EndianSig::Big => body_unchecked_internal::<B, byteorder::BigEndian>(self),
+        }
     }
 
     /// Deserialize the body using the contained signature.
@@ -669,32 +736,45 @@ impl Message {
     where
         B: zvariant::DynamicDeserialize<'d>,
     {
-        let body_sig = match self.body_signature() {
-            Ok(sig) => sig,
-            Err(Error::NoBodySignature) => Signature::from_static_str_unchecked(""),
-            Err(e) => return Err(e),
-        };
-
+        fn body_internal<'d, 'm: 'd, B, BO>(msg: &'m Message) -> Result<B>
+        where
+            B: zvariant::DynamicDeserialize<'d>,
+            BO: byteorder::ByteOrder,
         {
-            #[cfg(unix)]
+            let ctxt = EncodingContext::<BO>::new_dbus(0);
+            let body_sig = match msg.body_signature() {
+                Ok(sig) => sig,
+                Err(Error::NoBodySignature) => Signature::from_static_str_unchecked(""),
+                Err(e) => return Err(e),
+            };
+
             {
-                zvariant::from_slice_fds_for_dynamic_signature(
-                    &self.bytes[self.body_offset..],
-                    Some(&self.fds()),
-                    dbus_context!(0),
-                    &body_sig,
-                )
+                #[cfg(unix)]
+                {
+                    zvariant::from_slice_fds_for_dynamic_signature(
+                        &msg.bytes[msg.body_offset..],
+                        Some(&msg.fds()),
+                        ctxt,
+                        &body_sig,
+                    )
+                }
+                #[cfg(not(unix))]
+                {
+                    zvariant::from_slice_for_dynamic_signature(
+                        &msg.bytes[msg.body_offset..],
+                        ctxt,
+                        &body_sig,
+                    )
+                }
             }
-            #[cfg(not(unix))]
-            {
-                zvariant::from_slice_for_dynamic_signature(
-                    &self.bytes[self.body_offset..],
-                    dbus_context!(0),
-                    &body_sig,
-                )
-            }
+            .map_err(Error::from)
         }
-        .map_err(Error::from)
+
+        let endian_sig = EndianSig::try_from(self.bytes[0])?;
+        match endian_sig {
+            EndianSig::Little => body_internal::<B, byteorder::LittleEndian>(self),
+            EndianSig::Big => body_internal::<B, byteorder::BigEndian>(self),
+        }
     }
 
     #[cfg(unix)]
