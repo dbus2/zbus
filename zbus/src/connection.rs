@@ -1,13 +1,12 @@
-use async_broadcast::{broadcast, InactiveReceiver, Sender as Broadcaster};
+use async_broadcast::{broadcast, InactiveReceiver, Receiver, Sender as Broadcaster};
 use enumflags2::BitFlags;
-use event_listener::EventListener;
+use event_listener::{Event, EventListener};
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
     convert::TryInto,
-    future::ready,
     io::{self, ErrorKind},
     ops::Deref,
     pin::Pin,
@@ -31,12 +30,14 @@ use crate::{
     blocking,
     fdo::{self, RequestNameFlags, RequestNameReply},
     raw::{Connection as RawConnection, Socket},
-    Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, Message,
-    MessageBuilder, MessageFlags, MessageStream, MessageType, ObjectServer, OwnedMatchRule, Result,
-    Task,
+    socket_reader::SocketReader,
+    Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule,
+    Message, MessageBuilder, MessageFlags, MessageStream, MessageType, ObjectServer,
+    OwnedMatchRule, Result, Task,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
+const DEFAULT_MAX_METHOD_RETURN_QUEUED: usize = 8;
 
 /// Inner state shared by Connection and WeakConnection
 #[derive(Debug)]
@@ -56,75 +57,29 @@ pub(crate) struct ConnectionInner {
     // Our executor
     executor: Executor<'static>,
 
-    // Message receiver task
+    // Socket reader task
     #[allow(unused)]
-    msg_receiver_task: Task<()>,
+    socket_reader_task: OnceCell<Task<()>>,
 
-    signal_matches: Mutex<HashMap<OwnedMatchRule, u64>>,
+    pub(crate) msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
+    pub(crate) method_return_receiver: InactiveReceiver<Result<Arc<Message>>>,
+    msg_senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
+
+    subscriptions: Mutex<Subscriptions>,
 
     object_server: OnceCell<blocking::ObjectServer>,
     object_server_dispatch_task: OnceCell<Task<()>>,
 }
 
+type Subscriptions = HashMap<OwnedMatchRule, (u64, InactiveReceiver<Result<Arc<Message>>>)>;
+
 // FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
-//        cancel `msg_receiver_task` manually to ensure task is gone before the connection is. Same
+//        cancel `socket_reader_task` manually to ensure task is gone before the connection is. Same
 //        goes for the registered well-known names.
 //
 // [`AsyncDrop`]: https://github.com/rust-lang/wg-async-foundations/issues/65
 
-#[derive(Debug)]
-struct MessageReceiverTask {
-    raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
-
-    // Message broadcaster.
-    msg_sender: Broadcaster<Result<Arc<Message>>>,
-}
-
-impl MessageReceiverTask {
-    fn new(
-        raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
-        msg_sender: Broadcaster<Result<Arc<Message>>>,
-    ) -> Self {
-        Self {
-            raw_conn,
-            msg_sender,
-        }
-    }
-
-    fn spawn(self, executor: &Executor<'_>) -> Task<()> {
-        executor.spawn(self.receive_msg(), "socket reader")
-    }
-
-    // Keep receiving messages and put them on the queue.
-    #[instrument(name = "socket reader", skip(self))]
-    async fn receive_msg(self) {
-        loop {
-            trace!("Waiting for message on the socket..");
-            let receive_msg = ReceiveMessage {
-                raw_conn: &self.raw_conn,
-            };
-            let msg = receive_msg.await.map(Arc::new);
-            match &msg {
-                Ok(msg) => trace!("Message received on the socket: {:?}", msg),
-                Err(e) => trace!("Error reading from the socket: {:?}", e),
-            }
-
-            if let Err(e) = self.msg_sender.broadcast(msg.clone()).await {
-                // An error would be due to the channel being closed, which only happens when the
-                // connection is dropped, so just stop the task.
-                debug!("Error broadcasting message to streams: {:?}", e);
-                return;
-            }
-            trace!("Broadcasted to all streams: {:?}", msg);
-
-            if msg.is_err() {
-                trace!("Socket reading task stopped");
-
-                return;
-            }
-        }
-    }
-}
+pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 
 /// A D-Bus connection.
 ///
@@ -147,11 +102,12 @@ impl MessageReceiverTask {
 /// parts of your code. `Connection` also implements [`std::marker::Sync`] and [`std::marker::Send`]
 /// so you can send and share a connection instance across threads as well.
 ///
-/// `Connection` keeps an internal queue of incoming message. The maximum capacity of this queue
-/// is configurable through the [`set_max_queued`] method. The default size is 64. When the queue is
-/// full, no more messages can be received until room is created for more. This is why it's
-/// important to ensure that all [`crate::MessageStream`] and [`crate::blocking::MessageIterator`]
-/// instances are continuously polled and iterated on, respectively.
+/// `Connection` keeps internal queues of incoming message. The default capacity of each of these is
+/// 64. The capacity of the main (unfiltered) queue is configurable through the [`set_max_queued`]
+/// method. When the queue is full, no more messages can be received until room is created for more.
+/// This is why it's important to ensure that all [`crate::MessageStream`] and
+/// [`crate::blocking::MessageIterator`] instances are continuously polled and iterated on,
+/// respectively.
 ///
 /// For sending messages you can either use [`Connection::send_message`] method or make use of the
 /// [`Sink`] implementation. For latter, you might find [`SinkExt`] API very useful. Keep in mind
@@ -251,8 +207,6 @@ impl MessageReceiverTask {
 #[derive(Clone, Debug)]
 pub struct Connection {
     pub(crate) inner: Arc<ConnectionInner>,
-
-    pub(crate) msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
 }
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
@@ -431,7 +385,13 @@ impl Connection {
         }
         let msg = builder.build(body)?;
 
-        let stream = Some(MessageStream::from(self.clone()));
+        let msg_receiver = self.inner.method_return_receiver.activate_cloned();
+        let stream = Some(MessageStream::for_subscription_channel(
+            msg_receiver,
+            // This is a lie but we only use the stream internally so it's fine.
+            None,
+            self,
+        ));
         let serial = self.send_message(msg).await?;
         if flags.contains(MessageFlags::NoReplyExpected) {
             Ok(None)
@@ -862,14 +822,14 @@ impl Connection {
         Ok(())
     }
 
-    /// Max number of messages to queue.
+    /// The capacity of the main (unfiltered) queue.
     pub fn max_queued(&self) -> usize {
-        self.msg_receiver.capacity()
+        self.inner.msg_receiver.capacity()
     }
 
-    /// Set the max number of messages to queue.
+    /// Set the capacity of the main (unfiltered) queue.
     pub fn set_max_queued(&mut self, max: usize) {
-        self.msg_receiver.set_capacity(max);
+        self.inner.msg_receiver.clone().set_capacity(max);
     }
 
     /// The server's GUID.
@@ -889,7 +849,9 @@ impl Connection {
     /// scheduler:
     ///
     /// ```
-    ///# #[cfg(not(feature = "tokio"))]
+    ///# // Disable on windows because somehow it triggers a stack overflow there:
+    ///# // https://gitlab.freedesktop.org/zeenix/zbus/-/jobs/34023494
+    ///# #[cfg(all(not(feature = "tokio"), not(target_os = "windows")))]
     ///# {
     /// use zbus::ConnectionBuilder;
     /// use async_std::task::{block_on, spawn};
@@ -918,8 +880,8 @@ impl Connection {
     /// **Note**: zbus 2.1 added support for tight integration with tokio. This means, if you use
     /// zbus with tokio, you do not need to worry about this at all. All you need to do is enable
     /// `tokio` feature. You should also disable the (default) `async-io` feature in your
-    /// `Cargo.toml` to drop avoid unused dependencies. Also note that **prior** to zbus 3.0,
-    /// disabling `async-io` was required to enable tight `tokio` integration.
+    /// `Cargo.toml` to avoid unused dependencies. Also note that **prior** to zbus 3.0, disabling
+    /// `async-io` was required to enable tight `tokio` integration.
     ///
     /// [tte]: https://docs.rs/async-executor/1.4.1/async_executor/struct.Executor.html#method.tick
     pub fn executor(&self) -> &Executor<'static> {
@@ -945,35 +907,67 @@ impl Connection {
             }
         }
 
-        Wrapper(self.sync_object_server(true))
+        Wrapper(self.sync_object_server(true, None))
     }
 
-    pub(crate) fn sync_object_server(&self, start: bool) -> &blocking::ObjectServer {
+    pub(crate) fn sync_object_server(
+        &self,
+        start: bool,
+        started_event: Option<Event>,
+    ) -> &blocking::ObjectServer {
         self.inner
             .object_server
-            .get_or_init(|| self.setup_object_server(start))
+            .get_or_init(move || self.setup_object_server(start, started_event))
     }
 
-    fn setup_object_server(&self, start: bool) -> blocking::ObjectServer {
+    fn setup_object_server(
+        &self,
+        start: bool,
+        started_event: Option<Event>,
+    ) -> blocking::ObjectServer {
         if start {
-            self.start_object_server();
+            self.start_object_server(started_event);
         }
 
         blocking::ObjectServer::new(self)
     }
 
     #[instrument(skip(self))]
-    pub(crate) fn start_object_server(&self) {
+    pub(crate) fn start_object_server(&self, started_event: Option<Event>) {
         self.inner.object_server_dispatch_task.get_or_init(|| {
             trace!("starting ObjectServer task");
             let weak_conn = WeakConnection::from(self);
-            let mut stream = MessageStream::from(self.clone()).filter(|msg| {
-                ready(msg.as_ref().map(|m| m.message_type() == MessageType::MethodCall).unwrap_or_default())
-            });
 
             let obj_server_task_name = "ObjectServer task";
             self.inner.executor.spawn(
                 async move {
+                    let mut stream = match weak_conn.upgrade() {
+                        Some(conn) => {
+                            let mut builder = MatchRule::builder().msg_type(MessageType::MethodCall);
+                            if let Some(unique_name) = conn.unique_name() {
+                                builder = builder.destination(&**unique_name).expect("unique name");
+                            }
+                            let rule = builder.build();
+                            match MessageStream::for_match_rule(rule, &conn, None).await {
+                                Ok(stream) => stream,
+                                Err(e) => {
+                                    // Very unlikely but can happen I guess if connection is closed.
+                                    debug!("Failed to create message stream: {}", e);
+
+                                    return;
+                                }
+                            }
+                        }
+                        None => {
+                            trace!("Connection is gone, stopping associated object server task");
+
+                            return;
+                        }
+                    };
+                    if let Some(started_event) = started_event {
+                        started_event.notify(1);
+                    }
+
                     trace!("waiting for incoming method call messages..");
                     while let Some(msg) = stream.next().await.and_then(|m| {
                         if let Err(e) = &m {
@@ -991,16 +985,8 @@ impl Connection {
                                 }
                             };
                             match hdr.destination() {
-                                Ok(Some(BusName::Unique(dest))) => {
-                                    match conn.unique_name().map(|n| &**n) {
-                                        Some(unique_name) if dest != unique_name => {
-                                            trace!("Got a method call for a different destination: {}", dest);
-
-                                            continue;
-                                        }
-                                        _ => (),
-                                    }
-                                }
+                                // Unique name is already checked by the match rule.
+                                Ok(Some(BusName::Unique(_))) => (),
                                 Ok(Some(BusName::WellKnown(dest))) => {
                                     let names = conn.inner.registered_names.lock().await;
                                     // destination doesn't matter if no name has been registered
@@ -1062,49 +1048,80 @@ impl Connection {
         });
     }
 
-    pub(crate) async fn add_match(&self, rule: OwnedMatchRule) -> Result<()> {
+    pub(crate) async fn add_match(
+        &self,
+        rule: OwnedMatchRule,
+        max_queued: Option<usize>,
+    ) -> Result<Receiver<Result<Arc<Message>>>> {
         use std::collections::hash_map::Entry;
-        if !self.is_bus() {
-            return Ok(());
-        }
-        let mut subscriptions = self.inner.signal_matches.lock().await;
-        match subscriptions.entry(rule) {
-            Entry::Vacant(e) => {
-                fdo::DBusProxy::builder(self)
-                    .cache_properties(CacheProperties::No)
-                    .build()
-                    .await?
-                    .add_match_rule(e.key().inner().clone())
-                    .await?;
-                e.insert(1);
-            }
-            Entry::Occupied(mut e) => {
-                *e.get_mut() += 1;
-            }
-        }
-        Ok(())
-    }
 
-    pub(crate) async fn remove_match(&self, rule: OwnedMatchRule) -> Result<bool> {
-        use std::collections::hash_map::Entry;
-        if !self.is_bus() {
-            return Ok(true);
+        if self.inner.msg_senders.lock().await.is_empty() {
+            // This only happens if socket reader task has errored out.
+            return Err(Error::InputOutput(Arc::new(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "Socket reader task has errored out",
+            ))));
         }
-        let mut subscriptions = self.inner.signal_matches.lock().await;
-        // TODO when it becomes stable, use HashMap::raw_entry and only require expr: &str
-        // (both here and in add_match)
-        match subscriptions.entry(rule) {
-            Entry::Vacant(_) => Ok(false),
-            Entry::Occupied(mut e) => {
-                *e.get_mut() -= 1;
-                if *e.get() == 0 {
+
+        let mut subscriptions = self.inner.subscriptions.lock().await;
+        let msg_type = rule.msg_type().unwrap_or(MessageType::Signal);
+        match subscriptions.entry(rule.clone()) {
+            Entry::Vacant(e) => {
+                let max_queued = max_queued.unwrap_or(DEFAULT_MAX_QUEUED);
+                let (sender, mut receiver) = broadcast(max_queued);
+                receiver.set_await_active(false);
+                if self.is_bus() && msg_type == MessageType::Signal {
                     fdo::DBusProxy::builder(self)
                         .cache_properties(CacheProperties::No)
                         .build()
                         .await?
-                        .remove_match_rule(e.key().inner().clone())
+                        .add_match_rule(e.key().inner().clone())
                         .await?;
+                }
+                e.insert((1, receiver.clone().deactivate()));
+                self.inner
+                    .msg_senders
+                    .lock()
+                    .await
+                    .insert(Some(rule), sender);
+
+                Ok(receiver)
+            }
+            Entry::Occupied(mut e) => {
+                let (num_subscriptions, receiver) = e.get_mut();
+                *num_subscriptions += 1;
+
+                Ok(receiver.activate_cloned())
+            }
+        }
+    }
+
+    pub(crate) async fn remove_match(&self, rule: OwnedMatchRule) -> Result<bool> {
+        use std::collections::hash_map::Entry;
+        let mut subscriptions = self.inner.subscriptions.lock().await;
+        // TODO when it becomes stable, use HashMap::raw_entry and only require expr: &str
+        // (both here and in add_match)
+        let msg_type = rule.msg_type().unwrap_or(MessageType::Signal);
+        match subscriptions.entry(rule) {
+            Entry::Vacant(_) => Ok(false),
+            Entry::Occupied(mut e) => {
+                let rule = e.key().inner().clone();
+                e.get_mut().0 -= 1;
+                if e.get().0 == 0 {
+                    if self.is_bus() && msg_type == MessageType::Signal {
+                        fdo::DBusProxy::builder(self)
+                            .cache_properties(CacheProperties::No)
+                            .build()
+                            .await?
+                            .remove_match_rule(rule.clone())
+                            .await?;
+                    }
                     e.remove();
+                    self.inner
+                        .msg_senders
+                        .lock()
+                        .await
+                        .remove(&Some(rule.into()));
                 }
                 Ok(true)
             }
@@ -1119,7 +1136,7 @@ impl Connection {
         self.inner.executor.spawn(remove_match, &task_name).detach()
     }
 
-    async fn hello_bus(&self) -> Result<()> {
+    pub(crate) async fn hello_bus(&self) -> Result<()> {
         let dbus_proxy = fdo::DBusProxy::builder(self)
             .cache_properties(CacheProperties::No)
             .build()
@@ -1150,23 +1167,45 @@ impl Connection {
     pub(crate) async fn new(
         auth: Authenticated<Box<dyn Socket>>,
         bus_connection: bool,
-        #[allow(unused)] internal_executor: bool,
     ) -> Result<Self> {
         let auth = auth.into_inner();
         #[cfg(unix)]
         let cap_unix_fd = auth.cap_unix_fd;
 
-        let (msg_sender, msg_receiver) = broadcast(DEFAULT_MAX_QUEUED);
-        let msg_receiver = msg_receiver.deactivate();
+        macro_rules! create_msg_broadcast_channel {
+            ($size:expr) => {{
+                let (msg_sender, msg_receiver) = broadcast($size);
+                let mut msg_receiver = msg_receiver.deactivate();
+                msg_receiver.set_await_active(false);
+
+                (msg_sender, msg_receiver)
+            }};
+        }
+        // The unfiltered message channel.
+        let (msg_sender, msg_receiver) = create_msg_broadcast_channel!(DEFAULT_MAX_QUEUED);
+        let mut msg_senders = HashMap::new();
+        msg_senders.insert(None, msg_sender);
+
+        // The special method return & error channel.
+        let (method_return_sender, method_return_receiver) =
+            create_msg_broadcast_channel!(DEFAULT_MAX_METHOD_RETURN_QUEUED);
+        let rule = MatchRule::builder()
+            .msg_type(MessageType::MethodReturn)
+            .build()
+            .into();
+        msg_senders.insert(Some(rule), method_return_sender.clone());
+        let rule = MatchRule::builder()
+            .msg_type(MessageType::Error)
+            .build()
+            .into();
+        msg_senders.insert(Some(rule), method_return_sender);
+        let msg_senders = Arc::new(Mutex::new(msg_senders));
+        let subscriptions = Mutex::new(HashMap::new());
+
         let executor = Executor::new();
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
-        // Start the message receiver task.
-        let msg_receiver_task =
-            MessageReceiverTask::new(raw_conn.clone(), msg_sender).spawn(&executor);
-
         let connection = Self {
-            msg_receiver,
             inner: Arc::new(ConnectionInner {
                 raw_conn,
                 server_guid: auth.server_guid,
@@ -1175,35 +1214,17 @@ impl Connection {
                 bus_conn: bus_connection,
                 serial: AtomicU32::new(1),
                 unique_name: OnceCell::new(),
-                signal_matches: Mutex::new(HashMap::new()),
+                subscriptions,
                 object_server: OnceCell::new(),
                 object_server_dispatch_task: OnceCell::new(),
-                executor: executor.clone(),
-                msg_receiver_task,
+                executor,
+                socket_reader_task: OnceCell::new(),
+                msg_senders,
+                msg_receiver,
+                method_return_receiver,
                 registered_names: Mutex::new(HashMap::new()),
             }),
         };
-
-        #[cfg(not(feature = "tokio"))]
-        if internal_executor {
-            std::thread::Builder::new()
-                .name("zbus::Connection executor".into())
-                .spawn(move || {
-                    crate::utils::block_on(async move {
-                        // Run as long as there is a task to run.
-                        while !executor.is_empty() {
-                            executor.tick().await;
-                        }
-                    })
-                })?;
-        }
-
-        if !bus_connection {
-            return Ok(connection);
-        }
-
-        // Now that the server has approved us, we must send the bus Hello, as per specs
-        connection.hello_bus().await?;
 
         Ok(connection)
     }
@@ -1241,6 +1262,17 @@ impl Connection {
             .expect("poisoned lock")
             .socket()
             .peer_pid()
+    }
+
+    pub(crate) fn init_socket_reader(&self) {
+        let inner = &self.inner;
+        inner
+            .socket_reader_task
+            .set(
+                SocketReader::new(inner.raw_conn.clone(), inner.msg_senders.clone())
+                    .spawn(&inner.executor),
+            )
+            .expect("Attempted to set `socket_reader_task` twice");
     }
 }
 
@@ -1311,19 +1343,6 @@ where
     }
 }
 
-struct ReceiveMessage<'r> {
-    raw_conn: &'r sync::Mutex<RawConnection<Box<dyn Socket>>>,
-}
-
-impl<'r> Future for ReceiveMessage<'r> {
-    type Output = Result<Message>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut raw_conn = self.raw_conn.lock().expect("poisoned lock");
-        raw_conn.try_receive_message(cx)
-    }
-}
-
 impl From<crate::blocking::Connection> for Connection {
     fn from(conn: crate::blocking::Connection) -> Self {
         conn.into_inner()
@@ -1334,16 +1353,12 @@ impl From<crate::blocking::Connection> for Connection {
 #[derive(Debug)]
 pub(crate) struct WeakConnection {
     inner: Weak<ConnectionInner>,
-    msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
 }
 
 impl WeakConnection {
     /// Upgrade to a Connection.
     pub fn upgrade(&self) -> Option<Connection> {
-        self.inner.upgrade().map(|inner| Connection {
-            inner,
-            msg_receiver: self.msg_receiver.clone(),
-        })
+        self.inner.upgrade().map(|inner| Connection { inner })
     }
 }
 
@@ -1351,7 +1366,6 @@ impl From<&Connection> for WeakConnection {
     fn from(conn: &Connection) -> Self {
         Self {
             inner: Arc::downgrade(&conn.inner),
-            msg_receiver: conn.msg_receiver.clone(),
         }
     }
 }
@@ -1393,8 +1407,14 @@ mod tests {
             "forward_task",
         );
 
-        let server_future = async {
+        let server_ready = Event::new();
+        let server_ready_listener = server_ready.listen();
+        let client_done = Event::new();
+        let client_done_listener = client_done.listen();
+
+        let server_future = async move {
             let mut stream = MessageStream::from(&server2);
+            server_ready.notify(1);
             let method = loop {
                 let m = stream.try_next().await?.unwrap();
                 if m.to_string() == "Method call Test" {
@@ -1406,17 +1426,22 @@ mod tests {
             server2
                 .emit_signal(None::<()>, "/", "org.zbus.p2p", "ASignalForYou", &())
                 .await?;
-            server2.reply(&method, &("yay")).await
+            server2.reply(&method, &("yay")).await?;
+            client_done_listener.await;
+
+            Ok(())
         };
 
-        let client_future = async {
+        let client_future = async move {
             let mut stream = MessageStream::from(&client1);
+            server_ready_listener.await;
             let reply = client1
                 .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
                 .await?;
             assert_eq!(reply.to_string(), "Method return");
             // Check we didn't miss the signal that was sent during the call.
             let m = stream.try_next().await?.unwrap();
+            client_done.notify(1);
             assert_eq!(m.to_string(), "Signal ASignalForYou");
             reply.body::<String>()
         };

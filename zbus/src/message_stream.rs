@@ -1,4 +1,5 @@
 use std::{
+    convert::TryInto,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -10,7 +11,9 @@ use futures_util::stream::FusedStream;
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 
-use crate::{Connection, ConnectionInner, Message, MessageSequence, Result};
+use crate::{
+    Connection, ConnectionInner, MatchRule, Message, MessageSequence, OwnedMatchRule, Result,
+};
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
 ///
@@ -25,12 +28,120 @@ use crate::{Connection, ConnectionInner, Message, MessageSequence, Result};
 #[derive(Clone, Debug)]
 #[must_use = "streams do nothing unless polled"]
 pub struct MessageStream {
-    conn_inner: Arc<ConnectionInner>,
-    msg_receiver: ActiveReceiver<Result<Arc<Message>>>,
-    last_seq: MessageSequence,
+    inner: Inner,
 }
 
 assert_impl_all!(MessageStream: Send, Sync, Unpin);
+
+impl MessageStream {
+    /// Create a message stream for the given match rule.
+    ///
+    /// If `conn` is a bus connection and match rule is for a signal, the match rule will be
+    /// registered with the bus and deregistered when the stream is dropped. The reason match rules
+    /// are only registered with the bus for signals is that D-Bus specification only allows signals
+    /// to be broadcasted and unicast messages are always sent to their destination (regardless of
+    /// any match rules registered by the destination) by the bus. Hence there is no need to
+    /// register match rules for non-signal messages with the bus.
+    ///
+    /// Having said that, stream created by this method can still very useful as it allows you to
+    /// avoid needless task wakeups and simplify your stream consuming code.
+    ///
+    /// You can optionally also configure the capacity of the internal message queue through
+    /// `max_queued`. If not specified, the default of 64 is assumed.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use zbus::{Connection, MatchRule, MessageStream, fdo::NameOwnerChanged};
+    /// use futures_util::TryStreamExt;
+    ///
+    ///# zbus::block_on(async {
+    /// let conn = Connection::session().await?;
+    /// let rule = MatchRule::builder()
+    ///     .msg_type(zbus::MessageType::Signal)
+    ///     .sender("org.freedesktop.DBus")?
+    ///     .interface("org.freedesktop.DBus")?
+    ///     .member("NameOwnerChanged")?
+    ///     .add_arg("org.freedesktop.zbus.MatchRuleStreamTest42")?
+    ///     .build();
+    /// let mut stream = MessageStream::for_match_rule(
+    ///     rule,
+    ///     &conn,
+    ///     // For such a specific match rule, we don't need a big queue.
+    ///     Some(1),
+    /// ).await?;
+    ///
+    /// let rule_str = "type='signal',sender='org.freedesktop.DBus',\
+    ///                 interface='org.freedesktop.DBus',member='NameOwnerChanged',\
+    ///                 arg0='org.freedesktop.zbus.MatchRuleStreamTest42'";
+    /// assert_eq!(
+    ///     stream.match_rule().map(|r| r.to_string()).as_deref(),
+    ///     Some(rule_str),
+    /// );
+    ///
+    /// // We register 2 names, starting with the uninteresting one. If `stream` wasn't filtering
+    /// // messages based on the match rule, we'd receive method return call for each of these 2
+    /// // calls first.
+    /// //
+    /// // Note that the `NameOwnerChanged` signal will not be sent by the bus  for the first name
+    /// // we register since we setup an arg filter.
+    /// conn.request_name("org.freedesktop.zbus.MatchRuleStreamTest44")
+    ///     .await?;
+    /// conn.request_name("org.freedesktop.zbus.MatchRuleStreamTest42")
+    ///     .await?;
+    ///
+    /// let msg = stream.try_next().await?.unwrap();
+    /// let signal = NameOwnerChanged::from_message(msg).unwrap();
+    /// assert_eq!(signal.args()?.name(), "org.freedesktop.zbus.MatchRuleStreamTest42");
+    ///
+    ///# Ok::<(), zbus::Error>(())
+    ///# }).unwrap();
+    /// ```
+    ///
+    /// # Caveats
+    ///
+    /// Since this method relies on [`MatchRule::matches`], it inherits its caveats.
+    pub async fn for_match_rule<R>(
+        rule: R,
+        conn: &Connection,
+        max_queued: Option<usize>,
+    ) -> Result<Self>
+    where
+        R: TryInto<OwnedMatchRule>,
+        R::Error: Into<crate::Error>,
+    {
+        let rule = rule.try_into().map_err(Into::into)?;
+        let msg_receiver = conn.add_match(rule.clone(), max_queued).await?;
+
+        Ok(Self::for_subscription_channel(
+            msg_receiver,
+            Some(rule),
+            conn,
+        ))
+    }
+
+    /// The associated match rule, if any.
+    pub fn match_rule(&self) -> Option<MatchRule<'_>> {
+        self.inner.match_rule.as_deref().cloned()
+    }
+
+    pub(crate) fn for_subscription_channel(
+        msg_receiver: ActiveReceiver<Result<Arc<Message>>>,
+        rule: Option<OwnedMatchRule>,
+        conn: &Connection,
+    ) -> Self {
+        let conn_inner = conn.inner.clone();
+
+        Self {
+            inner: Inner {
+                conn_inner,
+                msg_receiver,
+                last_seq: Default::default(),
+                match_rule: rule,
+            },
+        }
+    }
+}
 
 impl stream::Stream for MessageStream {
     type Item = Result<Arc<Message>>;
@@ -38,13 +149,15 @@ impl stream::Stream for MessageStream {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-        Pin::new(&mut this.msg_receiver).poll_next(cx).map(|msg| {
-            if let Some(Ok(msg)) = &msg {
-                this.last_seq = msg.recv_position();
-            }
+        Pin::new(&mut this.inner.msg_receiver)
+            .poll_next(cx)
+            .map(|msg| {
+                if let Some(Ok(msg)) = &msg {
+                    this.inner.last_seq = msg.recv_position();
+                }
 
-            msg
-        })
+                msg
+            })
     }
 }
 
@@ -59,14 +172,14 @@ impl OrderedStream for MessageStream {
     ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
         let this = self.get_mut();
         if let Some(before) = before {
-            if this.last_seq >= *before {
+            if this.inner.last_seq >= *before {
                 return Poll::Ready(PollResult::NoneBefore);
             }
         }
         if let Some(msg) = ready!(stream::Stream::poll_next(Pin::new(this), cx)) {
             Poll::Ready(PollResult::Item {
                 data: msg,
-                ordering: this.last_seq,
+                ordering: this.inner.last_seq,
             })
         } else {
             Poll::Ready(PollResult::Terminated)
@@ -76,19 +189,22 @@ impl OrderedStream for MessageStream {
 
 impl FusedStream for MessageStream {
     fn is_terminated(&self) -> bool {
-        self.msg_receiver.is_terminated()
+        self.inner.msg_receiver.is_terminated()
     }
 }
 
 impl From<Connection> for MessageStream {
     fn from(conn: Connection) -> Self {
-        let conn_inner = conn.inner.clone();
-        let msg_receiver = conn.msg_receiver.activate();
+        let conn_inner = conn.inner;
+        let msg_receiver = conn_inner.msg_receiver.activate_cloned();
 
         Self {
-            conn_inner,
-            msg_receiver,
-            last_seq: Default::default(),
+            inner: Inner {
+                conn_inner,
+                msg_receiver,
+                last_seq: Default::default(),
+                match_rule: None,
+            },
         }
     }
 }
@@ -101,9 +217,34 @@ impl From<&Connection> for MessageStream {
 
 impl From<MessageStream> for Connection {
     fn from(stream: MessageStream) -> Connection {
+        Connection::from(&stream)
+    }
+}
+
+impl From<&MessageStream> for Connection {
+    fn from(stream: &MessageStream) -> Connection {
         Connection {
-            msg_receiver: stream.msg_receiver.deactivate(),
-            inner: stream.conn_inner,
+            inner: stream.inner.conn_inner.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Inner {
+    conn_inner: Arc<ConnectionInner>,
+    msg_receiver: ActiveReceiver<Result<Arc<Message>>>,
+    last_seq: MessageSequence,
+    match_rule: Option<OwnedMatchRule>,
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        let conn = Connection {
+            inner: self.conn_inner.clone(),
+        };
+
+        if let Some(rule) = self.match_rule.take() {
+            conn.queue_remove_match(rule);
         }
     }
 }
