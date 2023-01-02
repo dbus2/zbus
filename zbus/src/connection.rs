@@ -1397,13 +1397,10 @@ mod tests {
         server2: Connection,
         client2: Connection,
     ) -> Result<()> {
+        let forward1 = MessageStream::from(server1.clone()).forward(client2.clone());
+        let forward2 = MessageStream::from(&client2).forward(server1);
         let _forward_task = client1.executor().spawn(
-            async move {
-                futures_util::try_join!(
-                    MessageStream::from(&server1).forward(&client2),
-                    MessageStream::from(&client2).forward(&server1),
-                )
-            },
+            async move { futures_util::try_join!(forward1, forward2) },
             "forward_task",
         );
 
