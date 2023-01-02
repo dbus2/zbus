@@ -21,7 +21,7 @@ pub enum Error {
     /// An I/O error.
     #[deprecated(note = "Use `Error::InputOutput` instead")]
     Io(io::Error),
-    /// Invalid message field.
+    /// An I/O error.
     InputOutput(Arc<io::Error>),
     /// Invalid message field.
     InvalidField,

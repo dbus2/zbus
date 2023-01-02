@@ -2,6 +2,7 @@ use std::{convert::TryFrom, ops::Deref};
 
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
+use zvariant::Structure;
 
 use crate::{
     names::{BusName, InterfaceName, MemberName, UniqueName},
@@ -188,6 +189,133 @@ impl<'m> MatchRule<'m> {
                 .collect(),
             arg0namespace: self.arg0namespace.map(|a| a.into_owned()),
         }
+    }
+
+    /// Match the given message against this rule.
+    ///
+    /// # Caveats
+    ///
+    /// Since this method doesn't have any knowledge of names on the bus (or even connection to a
+    /// bus) matching always succeeds for:
+    ///
+    /// * `sender` in the rule (if set) that is a well-known name. The `sender` on a message is
+    ///   always a unique name.
+    /// * `destination` in the rule when `destination` on the `msg` is a well-known name. The
+    ///   `destination` on match rule is always a unique name.
+    pub fn matches(&self, msg: &zbus::Message) -> Result<bool> {
+        let hdr = msg.header()?;
+
+        // Start with message type.
+        if let Some(msg_type) = self.msg_type() {
+            if msg_type != msg.message_type() {
+                return Ok(false);
+            }
+        }
+
+        // Then check sender.
+        if let Some(sender) = self.sender() {
+            match sender {
+                BusName::Unique(name) if Some(name) != hdr.sender()? => {
+                    return Ok(false);
+                }
+                BusName::Unique(_) => (),
+                // We can't match against a well-known name.
+                BusName::WellKnown(_) => (),
+            }
+        }
+
+        // The interface.
+        if let Some(interface) = self.interface() {
+            match msg.interface().as_ref() {
+                Some(msg_interface) if interface != msg_interface => return Ok(false),
+                Some(_) => (),
+                None => return Ok(false),
+            }
+        }
+
+        // The member.
+        if let Some(member) = self.member() {
+            match msg.member().as_ref() {
+                Some(msg_member) if member != msg_member => return Ok(false),
+                Some(_) => (),
+                None => return Ok(false),
+            }
+        }
+
+        // The destination.
+        if let Some(destination) = self.destination() {
+            match hdr.destination()? {
+                Some(BusName::Unique(name)) if destination != name => {
+                    return Ok(false);
+                }
+                Some(BusName::Unique(_)) | None => (),
+                // We can't match against a well-known name.
+                Some(BusName::WellKnown(_)) => (),
+            };
+        }
+
+        // The path.
+        if let Some(path_spec) = self.path_spec() {
+            let msg_path = match msg.path() {
+                Some(p) => p,
+                None => return Ok(false),
+            };
+            match path_spec {
+                MatchRulePathSpec::Path(path) if path != &msg_path => return Ok(false),
+                MatchRulePathSpec::PathNamespace(path_ns)
+                    if !msg_path.starts_with(path_ns.as_str()) =>
+                {
+                    return Ok(false);
+                }
+                MatchRulePathSpec::Path(_) | MatchRulePathSpec::PathNamespace(_) => (),
+            }
+        }
+
+        // The arg0 namespace.
+        if let Some(arg0_ns) = self.arg0namespace() {
+            if let Ok(arg0) = msg.body_unchecked::<InterfaceName<'_>>() {
+                if !arg0.starts_with(arg0_ns.as_str()) {
+                    return Ok(false);
+                }
+            } else {
+                return Ok(false);
+            }
+        }
+
+        // Args
+        if self.args().is_empty() && self.arg_paths().is_empty() {
+            return Ok(true);
+        }
+        let structure = match msg.body::<Structure<'_>>() {
+            Ok(s) => s,
+            Err(_) => return Ok(false),
+        };
+        let args = structure.fields();
+
+        for (i, arg) in self.args() {
+            match args.get(*i as usize) {
+                Some(msg_arg) => match <&str>::try_from(msg_arg) {
+                    Ok(msg_arg) if arg != msg_arg => return Ok(false),
+                    Ok(_) => (),
+                    Err(_) => return Ok(false),
+                },
+                None => return Ok(false),
+            }
+        }
+
+        // Path args
+        for (i, path) in self.arg_paths() {
+            match args.get(*i as usize) {
+                Some(msg_arg) => match <ObjectPath<'_>>::try_from(msg_arg) {
+                    Ok(msg_arg) if *path != msg_arg => return Ok(false),
+                    Ok(_) => (),
+                    Err(_) => return Ok(false),
+                },
+                None => return Ok(false),
+            }
+        }
+
+        Ok(true)
     }
 }
 

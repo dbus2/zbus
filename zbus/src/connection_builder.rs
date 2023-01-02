@@ -1,5 +1,6 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
+use event_listener::Event;
 use static_assertions::assert_impl_all;
 #[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
@@ -26,7 +27,7 @@ use zvariant::ObjectPath;
 use crate::{
     address::{self, Address},
     async_lock::RwLock,
-    names::{InterfaceName, WellKnownName},
+    names::{InterfaceName, UniqueName, WellKnownName},
     raw::Socket,
     AuthMechanism, Authenticated, Connection, Error, Guid, Interface, Result,
 };
@@ -62,6 +63,7 @@ pub struct ConnectionBuilder<'a> {
     interfaces: Interfaces<'a>,
     names: HashSet<WellKnownName<'a>>,
     auth_mechanisms: Option<VecDeque<AuthMechanism>>,
+    unique_name: Option<UniqueName<'a>>,
 }
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -157,7 +159,7 @@ impl<'a> ConnectionBuilder<'a> {
         self
     }
 
-    /// Set the max number of messages to queue.
+    /// Set the capacity of the main (unfiltered) queue.
     ///
     /// Since typically you'd want to set this at instantiation time, you can set it through the builder.
     ///
@@ -236,6 +238,28 @@ impl<'a> ConnectionBuilder<'a> {
         Ok(self)
     }
 
+    /// Sets the unique name of the connection.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the to-be-created connection is not a peer-to-peer connection.
+    /// It will always panic if the connection is to a message bus as it's the bus that assigns
+    /// peers their unique names. This is mainly provided for bus implementations. All other users
+    /// should not need to use this method.
+    pub fn unique_name<U>(mut self, unique_name: U) -> Result<Self>
+    where
+        U: TryInto<UniqueName<'a>>,
+        U::Error: Into<Error>,
+    {
+        if !self.p2p {
+            panic!("unique name can only be set for peer-to-peer connections");
+        }
+        let name = unique_name.try_into().map_err(Into::into)?;
+        self.unique_name = Some(name);
+
+        Ok(self)
+    }
+
     /// Build the connection, consuming the builder.
     ///
     /// # Errors
@@ -299,11 +323,14 @@ impl<'a> ConnectionBuilder<'a> {
             }
         };
 
-        let mut conn = Connection::new(auth, !self.p2p, self.internal_executor).await?;
+        let mut conn = Connection::new(auth, !self.p2p).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
+        if let Some(unique_name) = self.unique_name {
+            conn.set_unique_name(unique_name)?;
+        }
 
         if !self.interfaces.is_empty() {
-            let object_server = conn.sync_object_server(false);
+            let object_server = conn.sync_object_server(false, None);
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
                     let future = object_server.at_ready(path.to_owned(), name, || iface);
@@ -313,7 +340,29 @@ impl<'a> ConnectionBuilder<'a> {
                 }
             }
 
-            conn.start_object_server();
+            let started_event = Event::new();
+            let listener = started_event.listen();
+            conn.start_object_server(Some(started_event));
+
+            #[cfg(not(feature = "tokio"))]
+            start_internal_executor(&conn, self.internal_executor)?;
+
+            listener.await;
+
+            // Start the socket reader task.
+            conn.init_socket_reader();
+        } else {
+            // When there is no object server, we start the socket reader task first so that the
+            // executor ticking thread doesn't end up giving up due to lack of tasks.
+            conn.init_socket_reader();
+            #[cfg(not(feature = "tokio"))]
+            start_internal_executor(&conn, self.internal_executor)?;
+        }
+
+        if !self.p2p {
+            // Now that the server has approved us, we must send the bus Hello, as per specs
+            let future = conn.hello_bus();
+            conn.run_future_at_init(future).await?;
         }
 
         for name in self.names {
@@ -334,6 +383,26 @@ impl<'a> ConnectionBuilder<'a> {
             interfaces: HashMap::new(),
             names: HashSet::new(),
             auth_mechanisms: None,
+            unique_name: None,
         }
     }
+}
+
+#[cfg(not(feature = "tokio"))]
+fn start_internal_executor(conn: &Connection, internal_executor: bool) -> Result<()> {
+    if internal_executor {
+        let executor = conn.executor().clone();
+        std::thread::Builder::new()
+            .name("zbus::Connection executor".into())
+            .spawn(move || {
+                crate::utils::block_on(async move {
+                    // Run as long as there is a task to run.
+                    while !executor.is_empty() {
+                        executor.tick().await;
+                    }
+                })
+            })?;
+    }
+
+    Ok(())
 }
