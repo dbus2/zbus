@@ -1090,6 +1090,11 @@ impl Connection {
             Entry::Occupied(mut e) => {
                 let (num_subscriptions, receiver) = e.get_mut();
                 *num_subscriptions += 1;
+                if let Some(max_queued) = max_queued {
+                    if max_queued > receiver.capacity() {
+                        receiver.set_capacity(max_queued);
+                    }
+                }
 
                 Ok(receiver.activate_cloned())
             }
