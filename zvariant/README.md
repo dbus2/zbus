@@ -161,7 +161,7 @@ accomplish. However, community contribution can change that. 😊
 | Feature | Description |
 | ---     | ----------- |
 | arrayvec | Implement `Type` for [`arrayvec::ArrayVec`] and [`arrayvec::ArrayString`] |
-| enumflags2 | Implement `Type` for [`struct@enumflags2::BitFlags<F>`] |
+| enumflags2 | Implement `Type` for [`enumflags2::BitFlags`]`<F>` |
 
 [dwf]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-marshaling
 [GVariant]: https://developer.gnome.org/documentation/specifications/gvariant-specification-1.0.html
@@ -181,4 +181,5 @@ accomplish. However, community contribution can change that. 😊
 [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 [`arrayvec::ArrayVec`]: https://docs.rs/arrayvec/0.7.1/arrayvec/struct.ArrayVec.html
 [`arrayvec::ArrayString`]: https://docs.rs/arrayvec/0.7.1/arrayvec/struct.ArrayString.html
+[`enumflags2::Bitflags`]: https://docs.rs/enumflags2/latest/enumflags2/struct.BitFlags.html
 [`Value` module documentation]: https://docs.rs/zvariant/latest/zvariant/enum.Value.html
