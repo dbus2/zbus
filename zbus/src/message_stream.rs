@@ -46,8 +46,9 @@ impl MessageStream {
     /// Having said that, stream created by this method can still very useful as it allows you to
     /// avoid needless task wakeups and simplify your stream consuming code.
     ///
-    /// You can optionally also configure the capacity of the internal message queue through
-    /// `max_queued`. If not specified, the default of 64 is assumed.
+    /// You can optionally also request the capacity of the underlying message queue through
+    /// `max_queued`. If specified, the capacity is guaranteed to be at least `max_queued`. If not
+    /// specified, the default of 64 is assumed.
     ///
     /// # Example
     ///
