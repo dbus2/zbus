@@ -888,7 +888,7 @@ mod tests {
     use crate::{fdo, DBusError, Error, Message};
     use futures_util::StreamExt;
     use ntest::timeout;
-    use std::{convert::TryInto, future::ready};
+    use std::convert::TryInto;
     use test_log::test;
     use tokio::runtime;
     use zbus_names::WellKnownName;
@@ -932,33 +932,15 @@ mod tests {
         // signals called for that.
         let well_known = "org.freedesktop.zbus.FdoSignalStreamTest";
         let unique_name = conn.unique_name().unwrap();
-        let owner_change_stream =
-            proxy
-                .receive_name_owner_changed()
-                .await
-                .unwrap()
-                .filter(|signal| {
-                    let args = signal.args().unwrap();
-
-                    if args.name() != well_known {
-                        // Meant for the other testcase then
-                        return ready(false);
-                    }
-                    assert_eq!(*args.new_owner().as_ref().unwrap(), *unique_name);
-
-                    ready(true)
-                });
+        let owner_change_stream = proxy
+            .receive_name_owner_changed_with_args(&[(0, well_known), (2, unique_name.as_str())])
+            .await
+            .unwrap();
 
         let name_acquired_stream = proxy
-            .receive_name_acquired()
+            .receive_name_acquired_with_args(&[(0, well_known)])
             .await
-            .unwrap()
-            .filter(|signal| {
-                let args = signal.args().unwrap();
-                // `NameAcquired` is emitted twice, first when the unique name is assigned on
-                // connection and secondly after we ask for a specific name.
-                ready(args.name() == well_known)
-            });
+            .unwrap();
         let mut stream = owner_change_stream.zip(name_acquired_stream);
 
         let well_known: WellKnownName<'static> = well_known.try_into().unwrap();

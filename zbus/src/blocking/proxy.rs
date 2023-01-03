@@ -484,12 +484,16 @@ mod tests {
         // Register a well-known name with the session bus and ensure we get the appropriate
         // signals called for that.
         let conn = Connection::session().unwrap();
+        let unique_name = conn.unique_name().unwrap().to_string();
 
         let proxy = blocking::fdo::DBusProxy::new(&conn).unwrap();
-        let owner_changed = proxy.receive_name_owner_changed().unwrap();
-        let name_acquired = proxy.receive_name_acquired().unwrap();
         let well_known = "org.freedesktop.zbus.ProxySignalTest";
-        let unique_name = conn.unique_name().unwrap().to_string();
+        let mut owner_changed = proxy
+            .receive_name_owner_changed_with_args(&[(0, well_known), (2, unique_name.as_str())])
+            .unwrap();
+        let mut name_acquired = proxy
+            .receive_name_acquired_with_args(&[(0, well_known)])
+            .unwrap();
 
         blocking::fdo::DBusProxy::new(&conn)
             .unwrap()
@@ -499,20 +503,15 @@ mod tests {
             )
             .unwrap();
 
-        for signal in owner_changed {
-            let args = signal.args().unwrap();
-            if args.name() == well_known {
-                // Meant for the this testcase.
-                assert_eq!(*args.new_owner().as_ref().unwrap(), *unique_name);
-                break;
-            }
-        }
+        let signal = owner_changed.next().unwrap();
+        let args = signal.args().unwrap();
+        assert!(args.name() == well_known);
+        assert!(*args.new_owner().as_ref().unwrap() == *unique_name);
+
+        let signal = name_acquired.next().unwrap();
         // `NameAcquired` is emitted twice, first when the unique name is assigned on
-        // connection and secondly after we ask for a specific name.
-        for signal in name_acquired {
-            if signal.args().unwrap().name() == well_known {
-                break;
-            }
-        }
+        // connection and secondly after we ask for a specific name. Let's make sure we only get the
+        // one we subscribed to.
+        assert!(signal.args().unwrap().name() == well_known);
     }
 }

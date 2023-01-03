@@ -1302,7 +1302,6 @@ mod tests {
     use crate::{dbus_interface, dbus_proxy, utils::block_on, ConnectionBuilder, SignalContext};
     use futures_util::StreamExt;
     use ntest::timeout;
-    use std::future::ready;
     use test_log::test;
 
     #[test]
@@ -1328,13 +1327,9 @@ mod tests {
         let mut owner_changed_stream = proxy.receive_owner_changed().await?;
 
         let proxy = fdo::DBusProxy::new(&dest_conn).await?;
-        let mut name_acquired_stream = proxy.receive_signal("NameAcquired").await?.filter(|msg| {
-            if let Ok(name) = msg.body::<BusName<'_>>() {
-                return ready(name == well_known);
-            }
-
-            ready(false)
-        });
+        let mut name_acquired_stream = proxy
+            .receive_signal_with_args("NameAcquired", &[(0, well_known)])
+            .await?;
 
         let prop_stream =
             proxy
