@@ -929,6 +929,18 @@ fn gen_proxy_signal(
             \n\
             This a convenient wrapper around [`{proxy_path}::receive_signal_with_args`]({receive_signal_with_args_link}).",
     );
+    let receive_signal_with_args = if args.is_empty() {
+        quote!()
+    } else {
+        quote! {
+            #[doc = #receive_with_args_gen_doc]
+            #(#other_attrs)*
+            pub #usage fn #receiver_with_args_name(&self, args: &[(u8, &str)]) -> #zbus::Result<#stream_name<'c>>
+            {
+                self.receive_signal_with_args(#signal_name, args)#wait.map(#stream_name)
+            }
+        }
+    };
     let receive_signal = quote! {
         #[doc = #receive_gen_doc]
         #(#other_attrs)*
@@ -937,12 +949,7 @@ fn gen_proxy_signal(
             self.receive_signal(#signal_name)#wait.map(#stream_name)
         }
 
-        #[doc = #receive_with_args_gen_doc]
-        #(#other_attrs)*
-        pub #usage fn #receiver_with_args_name(&self, args: &[(u8, &str)]) -> #zbus::Result<#stream_name<'c>>
-        {
-            self.receive_signal_with_args(#signal_name, args)#wait.map(#stream_name)
-        }
+        #receive_signal_with_args
     };
 
     let stream_gen_doc = format!(
