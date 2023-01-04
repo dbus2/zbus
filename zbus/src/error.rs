@@ -196,7 +196,7 @@ impl Clone for Error {
             Error::SerdeXml(e) => Error::Failure(e.to_string()),
             #[cfg(feature = "quick-xml")]
             // Until https://github.com/tafia/quick-xml/pull/521 is merged and released.
-            Error::QuickXml(e) => Error::Failure(e.to_string()),
+            Error::QuickXml(e) => Error::QuickXml(e.clone()),
             Error::NoBodySignature => Error::NoBodySignature,
             Error::NameTaken => Error::NameTaken,
             Error::InvalidMatchRule => Error::InvalidMatchRule,

@@ -33,7 +33,9 @@ use crate::{
 /// Annotations are generic key/value pairs of metadata.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Annotation {
+    #[serde(rename = "@name")]
     name: String,
+    #[serde(rename = "@value")]
     value: String,
 }
 
@@ -63,8 +65,11 @@ pub enum ArgDirection {
 /// An argument
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Arg {
+    #[serde(rename = "@name")]
     name: Option<String>,
+    #[serde(rename = "@type")]
     r#type: String,
+    #[serde(rename = "@direction")]
     direction: Option<ArgDirection>,
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
@@ -97,7 +102,7 @@ impl Arg {
 /// A method
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Method<'a> {
-    #[serde(borrow)]
+    #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
     #[serde(rename = "arg", default)]
     args: Vec<Arg>,
@@ -127,7 +132,7 @@ impl<'a> Method<'a> {
 /// A signal
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Signal<'a> {
-    #[serde(borrow)]
+    #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
 
     #[serde(rename = "arg", default)]
@@ -179,10 +184,12 @@ impl PropertyAccess {
 /// A property
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Property<'a> {
-    #[serde(borrow)]
+    #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
 
+    #[serde(rename = "@type")]
     r#type: String,
+    #[serde(rename = "@access")]
     access: PropertyAccess,
 
     #[serde(rename = "annotation", default)]
@@ -216,7 +223,7 @@ impl<'a> Property<'a> {
 /// An interface
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Interface<'a> {
-    #[serde(borrow)]
+    #[serde(rename = "@name", borrow)]
     name: InterfaceName<'a>,
 
     #[serde(rename = "method", default)]
@@ -261,6 +268,7 @@ impl<'a> Interface<'a> {
 /// An introspection tree node (typically the root of the XML document).
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Node<'a> {
+    #[serde(rename = "@name")]
     name: Option<String>,
 
     #[serde(rename = "interface", default, borrow)]
@@ -281,7 +289,21 @@ impl<'a> Node<'a> {
 
     /// Write the XML document to writer.
     pub fn to_writer<W: Write>(&self, writer: W) -> Result<(), Error> {
-        Ok(to_writer(writer, &self)?)
+        // Need this wrapper until this is resolved: https://github.com/tafia/quick-xml/issues/499
+        struct Writer<T>(T);
+
+        impl<T> std::fmt::Write for Writer<T>
+        where
+            T: Write,
+        {
+            fn write_str(&mut self, s: &str) -> std::fmt::Result {
+                self.0.write_all(s.as_bytes()).map_err(|_| std::fmt::Error)
+            }
+        }
+
+        to_writer(Writer(writer), &self)?;
+
+        Ok(())
     }
 
     /// Returns the node name, if any.
