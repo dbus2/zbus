@@ -291,6 +291,7 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
     hash::{BuildHasher, Hash},
+    time::SystemTime,
 };
 
 macro_rules! map_impl {
@@ -311,6 +312,18 @@ macro_rules! map_impl {
 
 map_impl!(BTreeMap<K: Ord, V>);
 map_impl!(HashMap<K: Eq + Hash, V, H: BuildHasher>);
+
+impl Type for SystemTime {
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <(
+            // seconds
+            u64,
+            // nano
+            u32,
+        )>::signature()
+    }
+}
 
 impl Type for Ipv4Addr {
     #[inline]
