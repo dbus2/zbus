@@ -13,14 +13,15 @@ use std::{
 use enumflags2::BitFlags;
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type};
 
 #[cfg(unix)]
 use crate::OwnedFd;
 use crate::{
-    utils::padding_for_8_bytes, EndianSig, Error, MessageField, MessageFieldCode, MessageFields,
-    MessageFlags, MessageHeader, MessagePrimaryHeader, MessageType, QuickMessageFields, Result,
-    MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
+    utils::padding_for_8_bytes,
+    zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type},
+    EndianSig, Error, MessageField, MessageFieldCode, MessageFields, MessageFlags, MessageHeader,
+    MessagePrimaryHeader, MessageType, QuickMessageFields, Result, MIN_MESSAGE_SIZE,
+    NATIVE_ENDIAN_SIG,
 };
 
 #[cfg(unix)]
@@ -652,7 +653,7 @@ impl Message {
     /// # (|| -> zbus::Result<()> {
     /// let send_body = (7i32, (2i32, "foo"), vec!["bar"]);
     /// let message = Message::method(None::<&str>, Some("zbus.test"), "/", Some("zbus.test"), "ping", &send_body)?;
-    /// let body : zvariant::Structure = message.body()?;
+    /// let body : zbus::zvariant::Structure = message.body()?;
     /// let fields = body.fields();
     /// assert!(matches!(fields[0], zvariant::Value::I32(7)));
     /// assert!(matches!(fields[1], zvariant::Value::Structure(_)));
