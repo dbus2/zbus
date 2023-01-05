@@ -2,7 +2,10 @@
 name = "zbus_macros"
 # Keep version in sync with zbus crate
 version = "3.6.2"
-authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
+authors = [
+    "Marc-André Lureau <marcandre.lureau@redhat.com>",
+    "Zeeshan Ali Khan <zeeshanak@gnome.org>",
+]
 edition = "2018"
 rust-version = "1.60"
 
