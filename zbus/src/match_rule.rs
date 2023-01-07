@@ -358,6 +358,9 @@ impl ToString for MatchRule<'_> {
         for (i, arg_path) in self.arg_paths() {
             add_match_rule_string_component(&mut s, &format!("arg{i}path"), arg_path);
         }
+        if let Some(arg0namespace) = self.arg0namespace() {
+            add_match_rule_string_component(&mut s, "arg0namespace", arg0namespace)
+        }
 
         s
     }
