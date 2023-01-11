@@ -2,6 +2,7 @@ use crate::{utils::*, Signature};
 use serde::de::{Deserialize, DeserializeSeed};
 use std::{
     convert::TryInto,
+    ffi::{CStr, CString, OsStr, OsString},
     marker::PhantomData,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     path::{Path, PathBuf},
@@ -509,5 +510,33 @@ impl<Tz: chrono::TimeZone> Type for chrono::DateTime<Tz> {
 static_str_type!(chrono::NaiveDateTime);
 #[cfg(feature = "chrono")]
 static_str_type!(chrono::NaiveTime);
+
+impl Type for OsString {
+    #[inline]
+    fn signature() -> Signature<'static> {
+        Signature::from_static_str_unchecked("(uay)")
+    }
+}
+
+impl Type for OsStr {
+    #[inline]
+    fn signature() -> Signature<'static> {
+        Signature::from_static_str_unchecked("(uay)")
+    }
+}
+
+impl Type for CStr {
+    #[inline]
+    fn signature() -> Signature<'static> {
+        Signature::from_static_str_unchecked("ay")
+    }
+}
+
+impl Type for CString {
+    #[inline]
+    fn signature() -> Signature<'static> {
+        Signature::from_static_str_unchecked("ay")
+    }
+}
 
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
