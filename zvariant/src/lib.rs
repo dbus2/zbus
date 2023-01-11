@@ -1231,6 +1231,7 @@ mod tests {
                 (Context::<BE>::new_dbus(3), 5),
                 (Context::<BE>::new_dbus(4), 4),
             ],
+            #[cfg(feature = "gvariant")]
             [
                 (Context::<BE>::new_gvariant(0), 4usize),
                 (Context::<BE>::new_gvariant(1), 7),
@@ -1264,6 +1265,7 @@ mod tests {
                 (Context::<BE>::new_dbus(3), 19),
                 (Context::<BE>::new_dbus(4), 18),
             ],
+            #[cfg(feature = "gvariant")]
             [
                 (Context::<BE>::new_gvariant(0), 10usize),
                 (Context::<BE>::new_gvariant(1), 13),
@@ -1298,6 +1300,7 @@ mod tests {
                 (Context::<BE>::new_dbus(3), 21),
                 (Context::<BE>::new_dbus(4), 20),
             ],
+            #[cfg(feature = "gvariant")]
             [
                 (Context::<BE>::new_gvariant(0), 12usize),
                 (Context::<BE>::new_gvariant(1), 15),
