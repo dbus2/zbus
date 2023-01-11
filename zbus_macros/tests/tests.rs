@@ -134,9 +134,14 @@ fn test_interface() {
             unimplemented!()
         }
 
-        fn str_u32(&self, val: &str) -> zbus::fdo::Result<u32> {
-            val.parse()
-                .map_err(|e| zbus::fdo::Error::Failed(format!("Invalid val: {e}")))
+        // Also tests that mut argument bindings work for regular methods
+        #[allow(unused_assignments)]
+        fn str_u32(&self, mut val: &str) -> zbus::fdo::Result<u32> {
+            let res = val
+                .parse()
+                .map_err(|e| zbus::fdo::Error::Failed(format!("Invalid val: {e}")));
+            val = "test mut";
+            res
         }
 
         // TODO: naming output arguments after "RFC: Structural Records #2584"
@@ -153,8 +158,11 @@ fn test_interface() {
             unimplemented!()
         }
 
+        // Also tests that mut argument bindings work for properties
         #[dbus_interface(property)]
-        fn set_my_custom_property(&self, _value: MyCustomPropertyType) {}
+        fn set_my_custom_property(&self, mut _value: MyCustomPropertyType) {
+            _value = MyCustomPropertyType(42);
+        }
 
         #[dbus_interface(name = "CheckVEC")]
         fn check_vec(&self) -> Vec<u8> {
