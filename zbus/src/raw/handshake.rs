@@ -354,12 +354,14 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
+    #[instrument(skip(cx))]
     fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         use ClientHandshakeStep::*;
         loop {
             ready!(self.flush_buffer(cx))?;
             let (next_step, cmd) = match self.step {
                 Init => {
+                    trace!("Initializing");
                     #[allow(clippy::let_and_return)]
                     let ret = self.mechanism_init()?;
                     // The dbus daemon on some platforms requires sending the zero byte as a separate message with SCM_CREDS.
@@ -381,17 +383,26 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
 
                     ret
                 }
-                MechanismInit => self.mechanism_init()?,
+                MechanismInit => {
+                    trace!("Initializing auth mechanisms");
+                    self.mechanism_init()?
+                }
                 WaitingForData | WaitingForOK => {
+                    trace!("Waiting for DATA or OK from server");
                     let reply = ready!(self.read_command(cx))?;
                     match (self.step, reply) {
-                        (_, Command::Data(data)) => self.mechanism_data(data)?,
+                        (_, Command::Data(data)) => {
+                            trace!("Received DATA from server");
+                            self.mechanism_data(data)?
+                        }
                         (_, Command::Rejected(_)) => {
+                            trace!("Received REJECT from server. Will try next auth mechanism..");
                             self.mechanisms.pop_front();
                             self.step = MechanismInit;
                             continue;
                         }
                         (WaitingForOK, Command::Ok(guid)) => {
+                            trace!("Received OK from server");
                             self.server_guid = Some(guid);
                             if self.socket.can_pass_unix_fd() {
                                 (WaitingForAgreeUnixFD, Command::NegotiateUnixFD)
@@ -407,10 +418,17 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     }
                 }
                 WaitingForAgreeUnixFD => {
+                    trace!("Waiting for Unix FD passing agreement from server");
                     let reply = ready!(self.read_command(cx))?;
                     match reply {
-                        Command::AgreeUnixFD => self.cap_unix_fd = true,
-                        Command::Error(_) => self.cap_unix_fd = false,
+                        Command::AgreeUnixFD => {
+                            trace!("Unix FD passing agreed by server");
+                            self.cap_unix_fd = true
+                        }
+                        Command::Error(_) => {
+                            trace!("Unix FD passing rejected by server");
+                            self.cap_unix_fd = false
+                        }
                         _ => {
                             return Poll::Ready(Err(Error::Handshake(format!(
                                 "Unexpected server UNIX_FD reply: {reply}"
@@ -419,7 +437,10 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     }
                     (Done, Command::Begin)
                 }
-                Done => return Poll::Ready(Ok(())),
+                Done => {
+                    trace!("Handshake done");
+                    return Poll::Ready(Ok(()));
+                }
             };
             self.send_buffer = if self.step == Init
                 // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
@@ -642,6 +663,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                             "First client byte is not NUL!".to_string(),
                         )));
                     }
+                    trace!("Received NULL from client");
                     self.step = ServerHandshakeStep::WaitingForAuth;
                 }
                 ServerHandshakeStep::WaitingForAuth => {
@@ -713,11 +735,16 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                     let mut words = reply.split_whitespace();
                     match (words.next(), words.next()) {
                         (Some("BEGIN"), None) => {
+                            trace!("Received Begin command from the client");
                             self.step = ServerHandshakeStep::Done;
                         }
-                        (Some("CANCEL"), None) | (Some("ERROR"), _) => self.rejected_error(),
+                        (Some("CANCEL"), None) | (Some("ERROR"), _) => {
+                            trace!("Received CANCEL or ERROR command from the client");
+                            self.rejected_error()
+                        }
                         #[cfg(unix)]
                         (Some("NEGOTIATE_UNIX_FD"), None) => {
+                            trace!("Received NEGOTIATE_UNIX_FD command from the client");
                             self.cap_unix_fd = true;
                             self.write_buffer = Vec::from(&b"AGREE_UNIX_FD\r\n"[..]);
                             self.step = ServerHandshakeStep::SendingBeginMessage;
