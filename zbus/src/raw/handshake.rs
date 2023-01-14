@@ -483,7 +483,7 @@ enum ServerHandshakeStep {
     SendingAuthError,
     WaitingForBegin,
     #[cfg(unix)]
-    SendingBeginMessage,
+    SendingAgreeUnixFD,
     Done,
 }
 
@@ -747,14 +747,14 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                             trace!("Received NEGOTIATE_UNIX_FD command from the client");
                             self.cap_unix_fd = true;
                             self.write_buffer = Vec::from(&b"AGREE_UNIX_FD\r\n"[..]);
-                            self.step = ServerHandshakeStep::SendingBeginMessage;
+                            self.step = ServerHandshakeStep::SendingAgreeUnixFD;
                         }
                         _ => self.unsupported_command_error(),
                     }
                 }
                 #[cfg(unix)]
-                ServerHandshakeStep::SendingBeginMessage => {
-                    trace!("Sending Begin message to the client");
+                ServerHandshakeStep::SendingAgreeUnixFD => {
+                    trace!("Sending AGREE_UNIX_FD to the client");
                     ready!(self.flush_buffer(cx))?;
                     self.step = ServerHandshakeStep::WaitingForBegin;
                 }
