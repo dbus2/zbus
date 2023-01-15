@@ -70,14 +70,8 @@ enum Command {
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
 pub struct ClientHandshake<S> {
-    socket: S,
-    recv_buffer: Vec<u8>,
-    send_buffer: Vec<u8>,
+    common: HandshakeCommon<S>,
     step: ClientHandshakeStep,
-    server_guid: Option<Guid>,
-    cap_unix_fd: bool,
-    // the current AUTH mechanism is front, ordered by priority
-    mechanisms: VecDeque<AuthMechanism>,
 }
 
 /// The result of a finalized handshake
@@ -130,66 +124,14 @@ impl<S: Socket> ClientHandshake<S> {
         });
 
         ClientHandshake {
-            socket,
-            recv_buffer: Vec::new(),
-            send_buffer: Vec::new(),
+            common: HandshakeCommon::new(socket, mechanisms, None),
             step: ClientHandshakeStep::Init,
-            server_guid: None,
-            cap_unix_fd: false,
-            mechanisms,
         }
-    }
-
-    fn flush_buffer(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        while !self.send_buffer.is_empty() {
-            let written = ready!(self.socket.poll_sendmsg(
-                cx,
-                &self.send_buffer,
-                #[cfg(unix)]
-                &[]
-            ))?;
-            self.send_buffer.drain(..written);
-        }
-        Ok(()).into()
-    }
-
-    fn read_command(&mut self, cx: &mut Context<'_>) -> Poll<Result<Command>> {
-        self.recv_buffer.clear(); // maybe until \r\n instead?
-        while !self.recv_buffer.ends_with(b"\r\n") {
-            let mut buf = [0; 40];
-            let res = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
-            let read = {
-                #[cfg(unix)]
-                {
-                    let (read, fds) = res;
-                    if !fds.is_empty() {
-                        return Poll::Ready(Err(Error::Handshake(
-                            "Unexpected FDs during handshake".into(),
-                        )));
-                    }
-                    read
-                }
-                #[cfg(not(unix))]
-                {
-                    res
-                }
-            };
-            self.recv_buffer.extend(&buf[..read]);
-        }
-
-        let line = String::from_utf8_lossy(&self.recv_buffer);
-        Poll::Ready(line.parse())
-    }
-
-    fn mechanism(&self) -> Result<&AuthMechanism> {
-        self.mechanisms
-            .front()
-            .ok_or_else(|| Error::Handshake("Exhausted available AUTH mechanisms".into()))
     }
 
     fn mechanism_init(&mut self) -> Result<(ClientHandshakeStep, Command)> {
         use ClientHandshakeStep::*;
-        let mech = self.mechanism()?;
+        let mech = self.common.mechanism()?;
         match mech {
             AuthMechanism::Anonymous => Ok((
                 WaitingForOK,
@@ -208,7 +150,7 @@ impl<S: Socket> ClientHandshake<S> {
 
     fn mechanism_data(&mut self, data: Vec<u8>) -> Result<(ClientHandshakeStep, Command)> {
         use ClientHandshakeStep::*;
-        let mech = self.mechanism()?;
+        let mech = self.common.mechanism()?;
         match mech {
             AuthMechanism::Cookie => {
                 let context = String::from_utf8_lossy(&data);
@@ -358,7 +300,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         use ClientHandshakeStep::*;
         loop {
-            ready!(self.flush_buffer(cx))?;
+            ready!(self.common.flush_buffer(cx))?;
             let (next_step, cmd) = match self.step {
                 Init => {
                     trace!("Initializing");
@@ -366,7 +308,8 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     let ret = self.mechanism_init()?;
                     // The dbus daemon on some platforms requires sending the zero byte as a separate message with SCM_CREDS.
                     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-                    self.socket
+                    self.common
+                        .socket
                         .send_zero_byte()
                         .map_err(|e| {
                             Error::Handshake(format!(
@@ -389,7 +332,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                 }
                 WaitingForData | WaitingForOK => {
                     trace!("Waiting for DATA or OK from server");
-                    let reply = ready!(self.read_command(cx))?;
+                    let reply = ready!(self.common.read_command(cx))?;
                     match (self.step, reply) {
                         (_, Command::Data(data)) => {
                             trace!("Received DATA from server");
@@ -397,14 +340,14 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                         }
                         (_, Command::Rejected(_)) => {
                             trace!("Received REJECT from server. Will try next auth mechanism..");
-                            self.mechanisms.pop_front();
+                            self.common.mechanisms.pop_front();
                             self.step = MechanismInit;
                             continue;
                         }
                         (WaitingForOK, Command::Ok(guid)) => {
                             trace!("Received OK from server");
-                            self.server_guid = Some(guid);
-                            if self.socket.can_pass_unix_fd() {
+                            self.common.server_guid = Some(guid);
+                            if self.common.socket.can_pass_unix_fd() {
                                 (WaitingForAgreeUnixFD, Command::NegotiateUnixFD)
                             } else {
                                 (Done, Command::Begin)
@@ -419,15 +362,15 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                 }
                 WaitingForAgreeUnixFD => {
                     trace!("Waiting for Unix FD passing agreement from server");
-                    let reply = ready!(self.read_command(cx))?;
+                    let reply = ready!(self.common.read_command(cx))?;
                     match reply {
                         Command::AgreeUnixFD => {
                             trace!("Unix FD passing agreed by server");
-                            self.cap_unix_fd = true
+                            self.common.cap_unix_fd = true
                         }
                         Command::Error(_) => {
                             trace!("Unix FD passing rejected by server");
-                            self.cap_unix_fd = false
+                            self.common.cap_unix_fd = false
                         }
                         _ => {
                             return Poll::Ready(Err(Error::Handshake(format!(
@@ -442,7 +385,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     return Poll::Ready(Ok(()));
                 }
             };
-            self.send_buffer = if self.step == Init
+            self.common.send_buffer = if self.step == Init
                 // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
                 && !cfg!(any(target_os = "freebsd", target_os = "dragonfly"))
             {
@@ -457,10 +400,10 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ClientHandshakeStep::Done = self.step {
             Ok(Authenticated {
-                conn: Connection::wrap(self.socket),
-                server_guid: self.server_guid.unwrap(),
+                conn: Connection::wrap(self.common.socket),
+                server_guid: self.common.server_guid.unwrap(),
                 #[cfg(unix)]
-                cap_unix_fd: self.cap_unix_fd,
+                cap_unix_fd: self.common.cap_unix_fd,
             })
         } else {
             Err(self)
@@ -503,18 +446,12 @@ enum ServerHandshakeStep {
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
 pub struct ServerHandshake<S> {
-    socket: S,
-    read_buffer: Vec<u8>,
-    write_buffer: Vec<u8>,
+    common: HandshakeCommon<S>,
     step: ServerHandshakeStep,
-    server_guid: Guid,
-    #[cfg(unix)]
-    cap_unix_fd: bool,
     #[cfg(unix)]
     client_uid: Option<u32>,
     #[cfg(windows)]
     client_sid: Option<String>,
-    mechanisms: VecDeque<AuthMechanism>,
 }
 
 impl<S: Socket> ServerHandshake<S> {
@@ -552,51 +489,17 @@ impl<S: Socket> ServerHandshake<S> {
         }
 
         Ok(ServerHandshake {
-            socket,
-            read_buffer: Vec::new(),
-            write_buffer: Vec::new(),
+            common: HandshakeCommon::new(socket, mechanisms, Some(guid)),
             step: ServerHandshakeStep::WaitingForNull,
-            server_guid: guid,
-            #[cfg(unix)]
-            cap_unix_fd: false,
             #[cfg(unix)]
             client_uid,
             #[cfg(windows)]
             client_sid,
-            mechanisms,
         })
     }
 
-    fn flush_buffer(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        while !self.write_buffer.is_empty() {
-            let written = ready!(self.socket.poll_sendmsg(
-                cx,
-                &self.write_buffer,
-                #[cfg(unix)]
-                &[]
-            ))?;
-            self.write_buffer.drain(..written);
-        }
-        Poll::Ready(Ok(()))
-    }
-
-    fn read_command(&mut self, cx: &mut Context<'_>) -> Poll<Result<String>> {
-        while !self.read_buffer.ends_with(b"\r\n") {
-            let mut buf = [0; 40];
-            let read = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
-            #[cfg(unix)]
-            let read = read.0;
-            self.read_buffer.extend(&buf[..read]);
-        }
-
-        let mut line = String::new();
-        let read = (&self.read_buffer[..]).read_line(&mut line).unwrap();
-        self.read_buffer.drain(..read);
-        Poll::Ready(Ok(line.trim_end().to_string()))
-    }
-
     fn auth_ok(&mut self) {
-        self.write_buffer = format!("OK {}\r\n", self.server_guid).into();
+        self.common.send_buffer = Command::Ok(self.guid().clone()).into();
         self.step = ServerHandshakeStep::SendingAuthOK;
     }
 
@@ -629,19 +532,22 @@ impl<S: Socket> ServerHandshake<S> {
     }
 
     fn unsupported_command_error(&mut self) {
-        self.write_buffer = Vec::from(&b"ERROR Unsupported command\r\n"[..]);
+        self.common.send_buffer = Command::Error("Unsupported command".to_string()).into();
         self.step = ServerHandshakeStep::SendingAuthError;
     }
 
     fn rejected_error(&mut self) {
-        let mechanisms = self
-            .mechanisms
-            .iter()
-            .map(|m| m.to_string())
-            .collect::<Vec<_>>()
-            .join(" ");
-        self.write_buffer = format!("REJECTED {mechanisms}\r\n").into();
+        let mechanisms = self.common.mechanisms.iter().cloned().collect();
+        self.common.send_buffer = Command::Rejected(mechanisms).into();
         self.step = ServerHandshakeStep::SendingAuthError;
+    }
+
+    fn guid(&self) -> &Guid {
+        // SAFETY: We know that the server GUID is set because we set it in the constructor.
+        self.common
+            .server_guid
+            .as_ref()
+            .expect("Server GUID not set")
     }
 }
 
@@ -653,7 +559,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                 ServerHandshakeStep::WaitingForNull => {
                     trace!("Waiting for NULL");
                     let mut buffer = [0; 1];
-                    let read = ready!(self.socket.poll_recvmsg(cx, &mut buffer))?;
+                    let read = ready!(self.common.socket.poll_recvmsg(cx, &mut buffer))?;
                     #[cfg(unix)]
                     let read = read.0;
                     // recvmsg cannot return anything else than Ok(1) or Err
@@ -668,31 +574,27 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                 }
                 ServerHandshakeStep::WaitingForAuth => {
                     trace!("Waiting for authentication");
-                    let reply = ready!(self.read_command(cx))?;
-                    let mut words = reply.split_whitespace();
-                    match words.next() {
-                        Some("AUTH") => {
-                            let mech = words
-                                .next()
-                                .and_then(|m| AuthMechanism::from_str(m).ok())
-                                .filter(|m| self.mechanisms.contains(m));
+                    let reply = ready!(self.common.read_command(cx))?;
+                    match reply {
+                        Command::Auth(mech, resp) => {
+                            let mech = mech.filter(|m| self.common.mechanisms.contains(m));
 
-                            match (mech, words.next(), words.next()) {
-                                (Some(mech), None, None) => {
-                                    self.write_buffer = "DATA\r\n".into();
+                            match (mech, &resp) {
+                                (Some(mech), None) => {
+                                    self.common.send_buffer = Command::Data(vec![]).into();
                                     self.step = ServerHandshakeStep::SendingAuthData(mech);
                                 }
-                                (Some(AuthMechanism::Anonymous), Some(_), None) => {
+                                (Some(AuthMechanism::Anonymous), Some(_)) => {
                                     self.auth_ok();
                                 }
-                                (Some(AuthMechanism::External), Some(sasl_id), None) => {
+                                (Some(AuthMechanism::External), Some(sasl_id)) => {
                                     self.check_external_auth(sasl_id)?;
                                 }
                                 _ => self.rejected_error(),
                             }
                         }
-                        Some("ERROR") => self.rejected_error(),
-                        Some("BEGIN") => {
+                        Command::Error(_) => self.rejected_error(),
+                        Command::Begin => {
                             return Poll::Ready(Err(Error::Handshake(
                                 "Received BEGIN while not authenticated".to_string(),
                             )));
@@ -702,51 +604,55 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                 }
                 ServerHandshakeStep::SendingAuthData(mech) => {
                     trace!("Sending data request");
-                    ready!(self.flush_buffer(cx))?;
+                    ready!(self.common.flush_buffer(cx))?;
                     self.step = ServerHandshakeStep::WaitingForData(mech);
                 }
                 ServerHandshakeStep::WaitingForData(mech) => {
                     trace!("Waiting for authentication");
-                    let reply = ready!(self.read_command(cx))?;
-                    let mut words = reply.split_whitespace();
-                    match (mech, words.next(), words.next(), words.next()) {
-                        (AuthMechanism::External, Some("DATA"), Some(sasl_id), None) => {
-                            self.check_external_auth(sasl_id)?;
+                    let reply = ready!(self.common.read_command(cx))?;
+                    match (mech, reply) {
+                        (AuthMechanism::External, Command::Data(data)) => {
+                            if data.is_empty() {
+                                self.auth_ok();
+                            } else {
+                                let sasl_id = std::str::from_utf8(&data).map_err(|e| {
+                                    Error::Handshake(format!("Invalid SASL ID: {e}"))
+                                })?;
+                                self.check_external_auth(sasl_id)?;
+                            }
                         }
-                        (AuthMechanism::External, Some("DATA"), None, None)
-                        | (AuthMechanism::Anonymous, Some("DATA"), _, None) => self.auth_ok(),
-                        (_, Some("DATA"), _, _) => self.rejected_error(),
-                        (_, _, _, _) => self.unsupported_command_error(),
+                        (AuthMechanism::Anonymous, Command::Data(_)) => self.auth_ok(),
+                        (_, Command::Data(_)) => self.rejected_error(),
+                        (_, _) => self.unsupported_command_error(),
                     }
                 }
                 ServerHandshakeStep::SendingAuthError => {
                     trace!("Sending authentication error");
-                    ready!(self.flush_buffer(cx))?;
+                    ready!(self.common.flush_buffer(cx))?;
                     self.step = ServerHandshakeStep::WaitingForAuth;
                 }
                 ServerHandshakeStep::SendingAuthOK => {
                     trace!("Sending authentication OK");
-                    ready!(self.flush_buffer(cx))?;
+                    ready!(self.common.flush_buffer(cx))?;
                     self.step = ServerHandshakeStep::WaitingForBegin;
                 }
                 ServerHandshakeStep::WaitingForBegin => {
                     trace!("Waiting for Begin command from the client");
-                    let reply = ready!(self.read_command(cx))?;
-                    let mut words = reply.split_whitespace();
-                    match (words.next(), words.next()) {
-                        (Some("BEGIN"), None) => {
+                    let reply = ready!(self.common.read_command(cx))?;
+                    match reply {
+                        Command::Begin => {
                             trace!("Received Begin command from the client");
                             self.step = ServerHandshakeStep::Done;
                         }
-                        (Some("CANCEL"), None) | (Some("ERROR"), _) => {
+                        Command::Cancel | Command::Error(_) => {
                             trace!("Received CANCEL or ERROR command from the client");
                             self.rejected_error()
                         }
                         #[cfg(unix)]
-                        (Some("NEGOTIATE_UNIX_FD"), None) => {
+                        Command::NegotiateUnixFD => {
                             trace!("Received NEGOTIATE_UNIX_FD command from the client");
-                            self.cap_unix_fd = true;
-                            self.write_buffer = Vec::from(&b"AGREE_UNIX_FD\r\n"[..]);
+                            self.common.cap_unix_fd = true;
+                            self.common.send_buffer = Command::AgreeUnixFD.into();
                             self.step = ServerHandshakeStep::SendingAgreeUnixFD;
                         }
                         _ => self.unsupported_command_error(),
@@ -755,7 +661,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                 #[cfg(unix)]
                 ServerHandshakeStep::SendingAgreeUnixFD => {
                     trace!("Sending AGREE_UNIX_FD to the client");
-                    ready!(self.flush_buffer(cx))?;
+                    ready!(self.common.flush_buffer(cx))?;
                     self.step = ServerHandshakeStep::WaitingForBegin;
                 }
                 ServerHandshakeStep::Done => {
@@ -769,10 +675,11 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
     fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ServerHandshakeStep::Done = self.step {
             Ok(Authenticated {
-                conn: Connection::wrap(self.socket),
-                server_guid: self.server_guid,
+                conn: Connection::wrap(self.common.socket),
+                // SAFETY: We know that the server GUID is set because we set it in the constructor.
+                server_guid: self.common.server_guid.expect("Server GUID not set"),
                 #[cfg(unix)]
-                cap_unix_fd: self.cap_unix_fd,
+                cap_unix_fd: self.common.cap_unix_fd,
             })
         } else {
             Err(self)
@@ -901,6 +808,98 @@ impl FromStr for Command {
             _ => return Err(Error::Handshake(format!("Unknown command: {s}"))),
         };
         Ok(cmd)
+    }
+}
+
+// Common code for the client and server side of the handshake.
+#[derive(Debug)]
+pub struct HandshakeCommon<S> {
+    socket: S,
+    recv_buffer: Vec<u8>,
+    send_buffer: Vec<u8>,
+    server_guid: Option<Guid>,
+    cap_unix_fd: bool,
+    // the current AUTH mechanism is front, ordered by priority
+    mechanisms: VecDeque<AuthMechanism>,
+}
+
+impl<S: Socket> HandshakeCommon<S> {
+    /// Start a handshake on this client socket
+    pub fn new(socket: S, mechanisms: VecDeque<AuthMechanism>, server_guid: Option<Guid>) -> Self {
+        Self {
+            socket,
+            recv_buffer: Vec::new(),
+            send_buffer: Vec::new(),
+            server_guid,
+            cap_unix_fd: false,
+            mechanisms,
+        }
+    }
+
+    #[instrument(skip(self, cx))]
+    fn flush_buffer(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        while !self.send_buffer.is_empty() {
+            let written = ready!(self.socket.poll_sendmsg(
+                cx,
+                &self.send_buffer,
+                #[cfg(unix)]
+                &[]
+            ))?;
+            self.send_buffer.drain(..written);
+        }
+        Ok(()).into()
+    }
+
+    #[instrument(skip(self, cx))]
+    fn read_command(&mut self, cx: &mut Context<'_>) -> Poll<Result<Command>> {
+        let mut cmd_end = 0;
+        loop {
+            if let Some(i) = self.recv_buffer[cmd_end..].iter().position(|b| *b == b'\n') {
+                if cmd_end + i == 0 || self.recv_buffer.get(cmd_end + i - 1) != Some(&b'\r') {
+                    return Poll::Ready(Err(Error::Handshake(
+                        "Invalid line ending in handshake".into(),
+                    )));
+                }
+                cmd_end += i + 1;
+
+                break;
+            } else {
+                cmd_end = self.recv_buffer.len();
+            }
+
+            let mut buf = [0; 40];
+            let res = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
+            let read = {
+                #[cfg(unix)]
+                {
+                    let (read, fds) = res;
+                    if !fds.is_empty() {
+                        return Poll::Ready(Err(Error::Handshake(
+                            "Unexpected FDs during handshake".into(),
+                        )));
+                    }
+                    read
+                }
+                #[cfg(not(unix))]
+                {
+                    res
+                }
+            };
+            self.recv_buffer.extend(&buf[..read]);
+        }
+
+        let line_bytes = self.recv_buffer.drain(..cmd_end);
+        let line = std::str::from_utf8(line_bytes.as_slice())
+            .map_err(|e| Error::Handshake(e.to_string()))?;
+        let cmd = line.parse();
+
+        Poll::Ready(cmd)
+    }
+
+    fn mechanism(&self) -> Result<&AuthMechanism> {
+        self.mechanisms
+            .front()
+            .ok_or_else(|| Error::Handshake("Exhausted available AUTH mechanisms".into()))
     }
 }
 
