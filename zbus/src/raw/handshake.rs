@@ -505,20 +505,21 @@ impl<S: Socket> ServerHandshake<S> {
 
     fn check_external_auth(&mut self, sasl_id: &str) -> Result<()> {
         let auth_ok = {
+            let id = hex::decode(sasl_id)?;
+            let id = std::str::from_utf8(&id)
+                .map_err(|e| Error::Handshake(format!("Invalid ID: {}", e)))?;
             #[cfg(unix)]
             {
-                let uid = id_from_str(sasl_id)
+                let uid = id
+                    .parse::<u32>()
                     .map_err(|e| Error::Handshake(format!("Invalid UID: {e}")))?;
                 // Safe to unwrap since we checked earlier external & UID
                 uid == self.client_uid.unwrap()
             }
             #[cfg(windows)]
             {
-                let sid = hex::decode(sasl_id)?;
-                let sid = std::str::from_utf8(&sid)
-                    .map_err(|e| Error::Handshake(format!("Invalid SID: {}", e)))?;
                 // Safe to unwrap since we checked earlier external & SID
-                sid == self.client_sid.as_ref().unwrap()
+                id == self.client_sid.as_ref().unwrap()
             }
         };
 
@@ -685,16 +686,6 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
             Err(self)
         }
     }
-}
-
-#[cfg(unix)]
-fn id_from_str(s: &str) -> std::result::Result<u32, Box<dyn std::error::Error>> {
-    let mut id = String::new();
-    for s in s.as_bytes().chunks(2) {
-        let c = char::from(u8::from_str_radix(std::str::from_utf8(s)?, 16)?);
-        id.push(c);
-    }
-    Ok(id.parse::<u32>()?)
 }
 
 impl fmt::Display for AuthMechanism {
