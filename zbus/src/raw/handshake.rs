@@ -867,7 +867,14 @@ impl<S: Socket> HandshakeCommon<S> {
                 cmd_end = self.recv_buffer.len();
             }
 
-            let mut buf = [0; 40];
+            // FIXME: Using a very small buffer here, just big enough for `BEGIN\r\n`. When server
+            // is waiting for the final `BEGIN` command from client, the client can (and does)
+            // immediately start sending the first `Hello` method on the socket and the server will
+            // read it as part of the `BEGIN` command if we used a bigger buffer.
+            //
+            // Would be nice to have a way to read (exactly) one line from the socket. However,
+            // since handshake only happens in the beginning, this is not a big deal IMO.
+            let mut buf = [0; 7];
             let res = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
             let read = {
                 #[cfg(unix)]
