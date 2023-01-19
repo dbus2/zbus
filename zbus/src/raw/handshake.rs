@@ -45,10 +45,10 @@ enum ClientHandshakeStep {
 #[derive(Debug)]
 #[allow(clippy::upper_case_acronyms)]
 enum Command {
-    Auth(Option<AuthMechanism>, Option<String>),
+    Auth(Option<AuthMechanism>, Option<Vec<u8>>),
     Cancel,
     Begin,
-    Data(Vec<u8>),
+    Data(Option<Vec<u8>>),
     Error(String),
     NegotiateUnixFD,
     Rejected(Vec<AuthMechanism>),
@@ -135,15 +135,15 @@ impl<S: Socket> ClientHandshake<S> {
         match mech {
             AuthMechanism::Anonymous => Ok((
                 WaitingForOK,
-                Command::Auth(Some(*mech), Some(hex::encode("zbus"))),
+                Command::Auth(Some(*mech), Some("zbus".into())),
             )),
             AuthMechanism::External => Ok((
                 WaitingForOK,
-                Command::Auth(Some(*mech), Some(sasl_auth_id()?)),
+                Command::Auth(Some(*mech), Some(sasl_auth_id()?.into_bytes())),
             )),
             AuthMechanism::Cookie => Ok((
                 WaitingForData,
-                Command::Auth(Some(*mech), Some(sasl_auth_id()?)),
+                Command::Auth(Some(*mech), Some(sasl_auth_id()?.into_bytes())),
             )),
         }
     }
@@ -170,7 +170,7 @@ impl<S: Socket> ClientHandshake<S> {
                 let sec = format!("{server_chall}:{client_chall}:{cookie}");
                 let sha1 = hex::encode(Sha1::digest(sec));
                 let data = format!("{client_chall} {sha1}");
-                Ok((WaitingForOK, Command::Data(data.into())))
+                Ok((WaitingForOK, Command::Data(Some(data.into()))))
             }
             _ => Err(Error::Handshake("Unexpected mechanism DATA".into())),
         }
@@ -202,7 +202,7 @@ fn sasl_auth_id() -> Result<String> {
         }
     };
 
-    Ok(hex::encode(id))
+    Ok(id)
 }
 
 #[derive(Debug)]
@@ -336,6 +336,9 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     match (self.step, reply) {
                         (_, Command::Data(data)) => {
                             trace!("Received DATA from server");
+                            let data = data.ok_or_else(|| {
+                                Error::Handshake("Received DATA with no data from server".into())
+                            })?;
                             self.mechanism_data(data)?
                         }
                         (_, Command::Rejected(_)) => {
@@ -503,11 +506,10 @@ impl<S: Socket> ServerHandshake<S> {
         self.step = ServerHandshakeStep::SendingAuthOK;
     }
 
-    fn check_external_auth(&mut self, sasl_id: &str) -> Result<()> {
+    fn check_external_auth(&mut self, sasl_id: &[u8]) -> Result<()> {
         let auth_ok = {
-            let id = hex::decode(sasl_id)?;
-            let id = std::str::from_utf8(&id)
-                .map_err(|e| Error::Handshake(format!("Invalid ID: {}", e)))?;
+            let id = std::str::from_utf8(sasl_id)
+                .map_err(|e| Error::Handshake(format!("Invalid ID: {e}")))?;
             #[cfg(unix)]
             {
                 let uid = id
@@ -582,7 +584,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
 
                             match (mech, &resp) {
                                 (Some(mech), None) => {
-                                    self.common.send_buffer = Command::Data(vec![]).into();
+                                    self.common.send_buffer = Command::Data(None).into();
                                     self.step = ServerHandshakeStep::SendingAuthData(mech);
                                 }
                                 (Some(AuthMechanism::Anonymous), Some(_)) => {
@@ -612,16 +614,10 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                     trace!("Waiting for authentication");
                     let reply = ready!(self.common.read_command(cx))?;
                     match (mech, reply) {
-                        (AuthMechanism::External, Command::Data(data)) => {
-                            if data.is_empty() {
-                                self.auth_ok();
-                            } else {
-                                let sasl_id = std::str::from_utf8(&data).map_err(|e| {
-                                    Error::Handshake(format!("Invalid SASL ID: {e}"))
-                                })?;
-                                self.check_external_auth(sasl_id)?;
-                            }
-                        }
+                        (AuthMechanism::External, Command::Data(data)) => match data {
+                            None => self.auth_ok(),
+                            Some(data) => self.check_external_auth(&data)?,
+                        },
                         (AuthMechanism::Anonymous, Command::Data(_)) => self.auth_ok(),
                         (_, Command::Data(_)) => self.rejected_error(),
                         (_, _) => self.unsupported_command_error(),
@@ -722,15 +718,16 @@ impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let cmd = match self {
             Command::Auth(mech, resp) => match (mech, resp) {
-                (Some(mech), Some(resp)) => format!("AUTH {mech} {resp}"),
+                (Some(mech), Some(resp)) => format!("AUTH {mech} {}", hex::encode(resp)),
                 (Some(mech), None) => format!("AUTH {mech}"),
                 _ => "AUTH".into(),
             },
             Command::Cancel => "CANCEL".into(),
             Command::Begin => "BEGIN".into(),
-            Command::Data(data) => {
-                format!("DATA {}", hex::encode(data))
-            }
+            Command::Data(data) => match data {
+                None => "DATA".to_string(),
+                Some(data) => format!("DATA {}", hex::encode(data)),
+            },
             Command::Error(expl) => {
                 format!("ERROR {expl}")
             }
@@ -772,16 +769,21 @@ impl FromStr for Command {
                 } else {
                     None
                 };
-                let resp = words.next().map(|s| s.into());
+                let resp = match words.next() {
+                    Some(resp) => Some(hex::decode(resp)?),
+                    None => None,
+                };
                 Command::Auth(mech, resp)
             }
             Some("CANCEL") => Command::Cancel,
             Some("BEGIN") => Command::Begin,
             Some("DATA") => {
-                let data = words
-                    .next()
-                    .ok_or_else(|| Error::Handshake("Missing DATA data".into()))?;
-                Command::Data(hex::decode(data)?)
+                let data = match words.next() {
+                    Some(data) => Some(hex::decode(data)?),
+                    None => None,
+                };
+
+                Command::Data(data)
             }
             Some("ERROR") => Command::Error(s.into()),
             Some("NEGOTIATE_UNIX_FD") => Command::NegotiateUnixFD,
@@ -990,7 +992,7 @@ mod tests {
             p0.write_all(
                 format!(
                     "\0AUTH EXTERNAL {}\r\nNEGOTIATE_UNIX_FD\r\nBEGIN\r\n",
-                    sasl_auth_id().unwrap()
+                    hex::encode(sasl_auth_id().unwrap())
                 )
                 .as_bytes(),
             ),
@@ -1015,7 +1017,7 @@ mod tests {
             p0.write_all(
                 format!(
                     "\0AUTH EXTERNAL\r\nDATA {}\r\nBEGIN\r\n",
-                    sasl_auth_id().unwrap()
+                    hex::encode(sasl_auth_id().unwrap())
                 )
                 .as_bytes(),
             ),
