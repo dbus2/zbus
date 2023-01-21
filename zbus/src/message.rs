@@ -20,8 +20,8 @@ use crate::{
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type},
     EndianSig, Error, MessageField, MessageFieldCode, MessageFields, MessageFlags, MessageHeader,
-    MessagePrimaryHeader, MessageType, QuickMessageFields, Result, MIN_MESSAGE_SIZE,
-    NATIVE_ENDIAN_SIG,
+    MessagePrimaryHeader, MessageType, QuickMessageFields, Result, MAX_MESSAGE_SIZE,
+    MIN_MESSAGE_SIZE, NATIVE_ENDIAN_SIG,
 };
 
 #[cfg(unix)]
@@ -313,8 +313,11 @@ impl<'a> MessageBuilder<'a> {
         }
 
         let hdr_len = zvariant::serialized_size(ctxt, &header)?;
-
-        let mut bytes: Vec<u8> = Vec::with_capacity(hdr_len + body_len);
+        let total_len = hdr_len + body_len;
+        if total_len > MAX_MESSAGE_SIZE {
+            return Err(Error::ExcessData);
+        }
+        let mut bytes: Vec<u8> = Vec::with_capacity(total_len);
         let mut cursor = Cursor::new(&mut bytes);
 
         zvariant::to_writer(&mut cursor, ctxt, &header)?;
