@@ -10,8 +10,10 @@ use event_listener::{Event, EventListener};
 #[cfg(unix)]
 use crate::OwnedFd;
 use crate::{
-    message_header::MIN_MESSAGE_SIZE, raw::Socket, utils::padding_for_8_bytes, Message,
-    MessagePrimaryHeader,
+    message_header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
+    raw::Socket,
+    utils::padding_for_8_bytes,
+    Message, MessagePrimaryHeader,
 };
 
 use futures_core::ready;
@@ -141,10 +143,14 @@ impl<S: Socket> Connection<S> {
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_padding = padding_for_8_bytes(header_len);
         let body_len = primary_header.body_len() as usize;
+        let total_len = header_len + body_padding + body_len;
+        if total_len > MAX_MESSAGE_SIZE {
+            return Poll::Ready(Err(crate::Error::ExcessData));
+        }
 
         // By this point we have a full primary header, so we know the exact length of the complete
         // message.
-        self.raw_in_buffer.resize(header_len + body_padding + body_len, 0);
+        self.raw_in_buffer.resize(total_len, 0);
 
         // Now we have an incomplete message; read the rest
         while self.raw_in_buffer.len() > self.raw_in_pos {
