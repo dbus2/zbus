@@ -403,7 +403,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ClientHandshakeStep::Done = self.step {
             Ok(Authenticated {
-                conn: Connection::wrap(self.common.socket),
+                conn: Connection::new(self.common.socket, self.common.recv_buffer),
                 server_guid: self.common.server_guid.unwrap(),
                 #[cfg(unix)]
                 cap_unix_fd: self.common.cap_unix_fd,
@@ -672,7 +672,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
     fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ServerHandshakeStep::Done = self.step {
             Ok(Authenticated {
-                conn: Connection::wrap(self.common.socket),
+                conn: Connection::new(self.common.socket, self.common.recv_buffer),
                 // SAFETY: We know that the server GUID is set because we set it in the constructor.
                 server_guid: self.common.server_guid.expect("Server GUID not set"),
                 #[cfg(unix)]
