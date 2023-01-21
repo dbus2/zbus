@@ -10,8 +10,10 @@ use event_listener::{Event, EventListener};
 #[cfg(unix)]
 use crate::OwnedFd;
 use crate::{
-    message_header::MIN_MESSAGE_SIZE, raw::Socket, utils::padding_for_8_bytes, Message,
-    MessagePrimaryHeader,
+    message_header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
+    raw::Socket,
+    utils::padding_for_8_bytes,
+    Message, MessagePrimaryHeader,
 };
 
 use futures_core::ready;
@@ -40,14 +42,14 @@ pub struct Connection<S> {
 }
 
 impl<S: Socket> Connection<S> {
-    pub(crate) fn wrap(socket: S) -> Connection<S> {
+    pub(crate) fn new(socket: S, raw_in_buffer: Vec<u8>) -> Connection<S> {
         Connection {
             socket,
             event: Event::new(),
-            raw_in_buffer: vec![],
+            raw_in_pos: raw_in_buffer.len(),
+            raw_in_buffer,
             #[cfg(unix)]
             raw_in_fds: vec![],
-            raw_in_pos: 0,
             out_pos: 0,
             out_msgs: VecDeque::new(),
             prev_seq: 0,
@@ -135,16 +137,20 @@ impl<S: Socket> Connection<S> {
                     )));
                 }
             }
-
-            let (primary_header, fields_len) = MessagePrimaryHeader::read(&self.raw_in_buffer)?;
-            let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
-            let body_padding = padding_for_8_bytes(header_len);
-            let body_len = primary_header.body_len() as usize;
-
-            // We now have a full message header, so we know the exact length of the complete message
-            self.raw_in_buffer
-                .resize(header_len + body_padding + body_len, 0);
         }
+
+        let (primary_header, fields_len) = MessagePrimaryHeader::read(&self.raw_in_buffer)?;
+        let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
+        let body_padding = padding_for_8_bytes(header_len);
+        let body_len = primary_header.body_len() as usize;
+        let total_len = header_len + body_padding + body_len;
+        if total_len > MAX_MESSAGE_SIZE {
+            return Poll::Ready(Err(crate::Error::ExcessData));
+        }
+
+        // By this point we have a full primary header, so we know the exact length of the complete
+        // message.
+        self.raw_in_buffer.resize(total_len, 0);
 
         // Now we have an incomplete message; read the rest
         while self.raw_in_buffer.len() > self.raw_in_pos {
@@ -238,8 +244,8 @@ mod tests {
         #[cfg(feature = "tokio")]
         let (p0, p1) = tokio::net::UnixStream::pair().unwrap();
 
-        let mut conn0 = Connection::wrap(p0);
-        let mut conn1 = Connection::wrap(p1);
+        let mut conn0 = Connection::new(p0, vec![]);
+        let mut conn1 = Connection::new(p1, vec![]);
 
         let msg = Message::method(
             None::<()>,
