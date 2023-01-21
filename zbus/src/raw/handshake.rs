@@ -860,7 +860,7 @@ impl<S: Socket> HandshakeCommon<S> {
                 cmd_end = self.recv_buffer.len();
             }
 
-            let mut buf = [0; 40];
+            let mut buf = [0; 64];
             let res = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
             let read = {
                 #[cfg(unix)]
