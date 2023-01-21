@@ -296,7 +296,7 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
-    #[instrument(skip(cx))]
+    #[instrument(skip(self, cx))]
     fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         use ClientHandshakeStep::*;
         loop {
@@ -555,7 +555,7 @@ impl<S: Socket> ServerHandshake<S> {
 }
 
 impl<S: Socket> Handshake<S> for ServerHandshake<S> {
-    #[instrument(skip(cx))]
+    #[instrument(skip(self, cx))]
     fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         loop {
             match self.step {
