@@ -46,7 +46,7 @@ impl MessageIterator {
     ///     .sender("org.freedesktop.DBus")?
     ///     .interface("org.freedesktop.DBus")?
     ///     .member("NameOwnerChanged")?
-    ///     .add_arg("org.freedesktop.zbus.MatchRuleStreamTest42")?
+    ///     .add_arg("org.freedesktop.zbus.MatchRuleIteratorTest42")?
     ///     .build();
     /// let mut iter = MessageIterator::for_match_rule(
     ///     rule,
@@ -57,7 +57,7 @@ impl MessageIterator {
     ///
     /// let rule_str = "type='signal',sender='org.freedesktop.DBus',\
     ///                 interface='org.freedesktop.DBus',member='NameOwnerChanged',\
-    ///                 arg0='org.freedesktop.zbus.MatchRuleStreamTest42'";
+    ///                 arg0='org.freedesktop.zbus.MatchRuleIteratorTest42'";
     /// assert_eq!(
     ///     iter.match_rule().map(|r| r.to_string()).as_deref(),
     ///     Some(rule_str),
@@ -69,12 +69,12 @@ impl MessageIterator {
     /// //
     /// // Note that the `NameOwnerChanged` signal will not be sent by the bus  for the first name
     /// // we register since we setup an arg filter.
-    /// conn.request_name("org.freedesktop.zbus.MatchRuleStreamTest44")?;
-    /// conn.request_name("org.freedesktop.zbus.MatchRuleStreamTest42")?;
+    /// conn.request_name("org.freedesktop.zbus.MatchRuleIteratorTest44")?;
+    /// conn.request_name("org.freedesktop.zbus.MatchRuleIteratorTest42")?;
     ///
     /// let msg = iter.next().unwrap()?;
     /// let signal = NameOwnerChanged::from_message(msg).unwrap();
-    /// assert_eq!(signal.args()?.name(), "org.freedesktop.zbus.MatchRuleStreamTest42");
+    /// assert_eq!(signal.args()?.name(), "org.freedesktop.zbus.MatchRuleIteratorTest42");
     ///
     ///# Ok(())
     ///# }
