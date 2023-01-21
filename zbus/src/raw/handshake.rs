@@ -296,7 +296,7 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
-    #[instrument(skip(cx))]
+    #[instrument(skip(self, cx))]
     fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         use ClientHandshakeStep::*;
         loop {
@@ -403,7 +403,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ClientHandshakeStep::Done = self.step {
             Ok(Authenticated {
-                conn: Connection::wrap(self.common.socket),
+                conn: Connection::new(self.common.socket, self.common.recv_buffer),
                 server_guid: self.common.server_guid.unwrap(),
                 #[cfg(unix)]
                 cap_unix_fd: self.common.cap_unix_fd,
@@ -555,7 +555,7 @@ impl<S: Socket> ServerHandshake<S> {
 }
 
 impl<S: Socket> Handshake<S> for ServerHandshake<S> {
-    #[instrument(skip(cx))]
+    #[instrument(skip(self, cx))]
     fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
         loop {
             match self.step {
@@ -672,7 +672,7 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
     fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
         if let ServerHandshakeStep::Done = self.step {
             Ok(Authenticated {
-                conn: Connection::wrap(self.common.socket),
+                conn: Connection::new(self.common.socket, self.common.recv_buffer),
                 // SAFETY: We know that the server GUID is set because we set it in the constructor.
                 server_guid: self.common.server_guid.expect("Server GUID not set"),
                 #[cfg(unix)]
@@ -860,14 +860,7 @@ impl<S: Socket> HandshakeCommon<S> {
                 cmd_end = self.recv_buffer.len();
             }
 
-            // FIXME: Using a very small buffer here, just big enough for `BEGIN\r\n`. When server
-            // is waiting for the final `BEGIN` command from client, the client can (and does)
-            // immediately start sending the first `Hello` method on the socket and the server will
-            // read it as part of the `BEGIN` command if we used a bigger buffer.
-            //
-            // Would be nice to have a way to read (exactly) one line from the socket. However,
-            // since handshake only happens in the beginning, this is not a big deal IMO.
-            let mut buf = [0; 7];
+            let mut buf = [0; 64];
             let res = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
             let read = {
                 #[cfg(unix)]
