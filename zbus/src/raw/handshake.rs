@@ -863,6 +863,11 @@ impl<S: Socket> HandshakeCommon<S> {
                     res
                 }
             };
+            if read == 0 {
+                return Poll::Ready(Err(Error::Handshake(
+                    "Unexpected EOF during handshake".into(),
+                )));
+            }
             self.recv_buffer.extend(&buf[..read]);
         }
 
