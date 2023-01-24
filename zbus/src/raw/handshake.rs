@@ -465,29 +465,16 @@ impl<S: Socket> ServerHandshake<S> {
         #[cfg(windows)] client_sid: Option<String>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
     ) -> Result<ServerHandshake<S>> {
-        let can_external = (|| {
-            #[cfg(unix)]
-            return client_uid.is_some();
-
-            #[cfg(windows)]
-            return client_sid.is_some();
-
-            #[cfg(not(any(unix, windows)))]
-            return false;
-        })();
-        let mechanisms = mechanisms.unwrap_or_else(|| {
-            let mut mechanisms = VecDeque::new();
-            if can_external {
+        let mechanisms = match mechanisms {
+            Some(mechanisms) => mechanisms,
+            None => {
+                let mut mechanisms = VecDeque::new();
                 mechanisms.push_back(AuthMechanism::External);
+
+                mechanisms
             }
-            mechanisms
-        });
-
+        };
         if mechanisms.contains(&AuthMechanism::Cookie) {
-            return Err(Error::Unsupported);
-        }
-
-        if mechanisms.contains(&AuthMechanism::External) && !can_external {
             return Err(Error::Unsupported);
         }
 
@@ -515,13 +502,11 @@ impl<S: Socket> ServerHandshake<S> {
                 let uid = id
                     .parse::<u32>()
                     .map_err(|e| Error::Handshake(format!("Invalid UID: {e}")))?;
-                // Safe to unwrap since we checked earlier external & UID
-                uid == self.client_uid.unwrap()
+                self.client_uid.map(|u| u == uid).unwrap_or(false)
             }
             #[cfg(windows)]
             {
-                // Safe to unwrap since we checked earlier external & SID
-                id == self.client_sid.as_ref().unwrap()
+                self.client_sid.as_ref().map(|u| u == id).unwrap_or(false)
             }
         };
 
@@ -878,6 +863,11 @@ impl<S: Socket> HandshakeCommon<S> {
                     res
                 }
             };
+            if read == 0 {
+                return Poll::Ready(Err(Error::Handshake(
+                    "Unexpected EOF during handshake".into(),
+                )));
+            }
             self.recv_buffer.extend(&buf[..read]);
         }
 
