@@ -4,6 +4,7 @@ use serde::{
     ser::{Serialize, Serializer},
 };
 use static_assertions::assert_impl_all;
+use std::borrow::Cow;
 
 use crate::{Basic, EncodingFormat, Error, Result, Signature, Str, Type};
 
@@ -166,6 +167,17 @@ impl<'a> TryFrom<String> for ObjectPath<'a> {
         ensure_correct_object_path_str(value.as_bytes())?;
 
         Ok(Self::from_string_unchecked(value))
+    }
+}
+
+impl<'a> TryFrom<Cow<'a, str>> for ObjectPath<'a> {
+    type Error = Error;
+
+    fn try_from(value: Cow<'a, str>) -> Result<Self> {
+        match value {
+            Cow::Borrowed(s) => Self::try_from(s),
+            Cow::Owned(s) => Self::try_from(s),
+        }
     }
 }
 
