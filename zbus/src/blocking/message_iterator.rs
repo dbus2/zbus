@@ -11,7 +11,7 @@ use crate::{blocking::Connection, utils::block_on, MatchRule, Message, OwnedMatc
 #[derive(derivative::Derivative, Clone)]
 #[derivative(Debug)]
 pub struct MessageIterator {
-    // Wrap it in an `Option` to ensure the proxy is dropped in a `block_on` call. This is needed
+    // Wrap it in an `Option` to ensure the stream is dropped in a `block_on` call. This is needed
     // for tokio because the proxy spawns a task in its `Drop` impl and that needs a runtime
     // context in case of tokio.
     pub(crate) azync: Option<crate::MessageStream>,
