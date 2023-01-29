@@ -10,7 +10,7 @@ a struct, you might find yourself wanting to use a struct as a dictionary.
 [`DeserializeDict`]. You'll also need to tell [`Type`] macro to treat the type as a dictionary using
 the `signature` attribute. Here is a simple example:
 
-```rust
+```rust,noplayground
 use zbus::{
     dbus_proxy, dbus_interface, fdo::Result,
     zvariant::{DeserializeDict, SerializeDict, Type},

@@ -36,7 +36,7 @@ once the connection is established (both ends are equal, and can send any messag
 
 For example to create a bus-less peer-to-peer connection on Unix, you can do:
 
-```rust
+```rust,noplayground
 # #[tokio::main]
 # async fn main() -> zbus::Result<()> {
 # #[cfg(unix)]
