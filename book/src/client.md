@@ -261,7 +261,7 @@ Interfaces can have associated properties, which can be read or set with the
 `org.freedesktop.DBus.Properties` interface. Here again, the `#[dbus_proxy]` attribute comes to the
 rescue to help you. You can annotate a trait method to be a getter:
 
-```rust
+```rust,noplayground
 # use zbus::{dbus_proxy, Result};
 #
 #[dbus_proxy]
@@ -465,7 +465,7 @@ zbus-xmlgen notify.xml
 This will give back effortlessly the corresponding Rust traits boilerplate
 code:
 
-```rust
+```rust,noplayground
 # use zbus::dbus_proxy;
 #
 #[dbus_proxy(
@@ -512,7 +512,7 @@ functions to make the binding more pleasing to use from Rust.
 
 For example, the generated `GetServerInformation` method can be improved to a nicer version:
 
-```rust
+```rust,noplayground
 # use serde::{Serialize, Deserialize};
 # use zbus::{zvariant::Type, dbus_proxy};
 #
