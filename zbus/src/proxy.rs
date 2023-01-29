@@ -24,7 +24,7 @@ use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesProxy},
-    CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageFlags,
+    AsyncDrop, CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageFlags,
     MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
 
@@ -1070,6 +1070,9 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
 /// A [`stream::Stream`] implementation that yields signal [messages](`Message`).
 ///
 /// Use [`Proxy::receive_signal`] to create an instance of this type.
+///
+/// This type uses a [`MessageStream::for_match_rule`] internally and therefore the note about match
+/// rule registration and [`AsyncDrop`] in its documentation applies here as well.
 #[derive(Debug)]
 pub struct SignalStream<'a> {
     stream: JoinMultiple<Vec<Peekable<MessageStream>>>,
@@ -1290,6 +1293,15 @@ impl<'a> stream::FusedStream for SignalStream<'a> {
     }
 }
 
+#[async_trait::async_trait]
+impl AsyncDrop for SignalStream<'_> {
+    async fn async_drop(self) {
+        for stream in self.stream.0 {
+            stream.into_inner().0.async_drop().await
+        }
+    }
+}
+
 impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
     fn from(proxy: crate::blocking::Proxy<'a>) -> Self {
         proxy.into_inner()
@@ -1299,7 +1311,9 @@ impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{dbus_interface, dbus_proxy, utils::block_on, ConnectionBuilder, SignalContext};
+    use crate::{
+        dbus_interface, dbus_proxy, utils::block_on, AsyncDrop, ConnectionBuilder, SignalContext,
+    };
     use futures_util::StreamExt;
     use ntest::timeout;
     use test_log::test;
@@ -1356,7 +1370,7 @@ mod tests {
         let mut unique_name_changed_stream = proxy.receive_owner_changed().await?;
 
         drop(dest_conn);
-        drop(name_acquired_stream);
+        name_acquired_stream.async_drop().await;
 
         // There shouldn't be an owner anymore.
         let new_owner = owner_changed_stream.next().await;
