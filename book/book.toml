@@ -5,6 +5,9 @@ multilingual = false
 src = "src"
 title = "zbus: D-Bus for Rust made easy"
 
+[rust]
+edition = "2018"
+
 [output.html]
 default-theme = "Rust"
 curly-quotes = true
