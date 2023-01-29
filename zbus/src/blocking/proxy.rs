@@ -393,7 +393,9 @@ impl std::iter::Iterator for SignalIterator<'_> {
 impl std::ops::Drop for SignalIterator<'_> {
     fn drop(&mut self) {
         block_on(async {
-            self.0.take();
+            if let Some(azync) = self.0.take() {
+                crate::AsyncDrop::async_drop(azync).await;
+            }
         });
     }
 }

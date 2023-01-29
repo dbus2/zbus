@@ -10,9 +10,11 @@ use futures_core::{ready, stream};
 use futures_util::stream::FusedStream;
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
+use tracing::warn;
 
 use crate::{
-    Connection, ConnectionInner, MatchRule, Message, MessageSequence, OwnedMatchRule, Result,
+    AsyncDrop, Connection, ConnectionInner, MatchRule, Message, MessageSequence, OwnedMatchRule,
+    Result,
 };
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
@@ -37,11 +39,12 @@ impl MessageStream {
     /// Create a message stream for the given match rule.
     ///
     /// If `conn` is a bus connection and match rule is for a signal, the match rule will be
-    /// registered with the bus and deregistered when the stream is dropped. The reason match rules
-    /// are only registered with the bus for signals is that D-Bus specification only allows signals
-    /// to be broadcasted and unicast messages are always sent to their destination (regardless of
-    /// any match rules registered by the destination) by the bus. Hence there is no need to
-    /// register match rules for non-signal messages with the bus.
+    /// registered with the bus and queued for deregistration when the stream is dropped. If you'd
+    /// like immediate deregistration, use [`AsyncDrop::async_drop`]. The reason match rules are
+    /// only registered with the bus for signals is that D-Bus specification only allows signals to
+    /// be broadcasted and unicast messages are always sent to their destination (regardless of any
+    /// match rules registered by the destination) by the bus. Hence there is no need to register
+    /// match rules for non-signal messages with the bus.
     ///
     /// Having said that, stream created by this method can still very useful as it allows you to
     /// avoid needless task wakeups and simplify your stream consuming code.
@@ -53,8 +56,9 @@ impl MessageStream {
     /// # Example
     ///
     /// ```
-    /// use zbus::{Connection, MatchRule, MessageStream, fdo::NameOwnerChanged};
-    /// use futures_util::TryStreamExt;
+    /// use async_io::Timer;
+    /// use zbus::{AsyncDrop, Connection, MatchRule, MessageStream, fdo::NameOwnerChanged};
+    /// use futures_util::{TryStreamExt, future::select, future::Either::{Left, Right}, pin_mut};
     ///
     ///# zbus::block_on(async {
     /// let conn = Connection::session().await?;
@@ -94,6 +98,24 @@ impl MessageStream {
     /// let msg = stream.try_next().await?.unwrap();
     /// let signal = NameOwnerChanged::from_message(msg).unwrap();
     /// assert_eq!(signal.args()?.name(), "org.freedesktop.zbus.MatchRuleStreamTest42");
+    /// stream.async_drop().await;
+    ///
+    /// // Ensure the match rule is deregistered and this connection doesn't receive
+    /// // `NameOwnerChanged` signals.
+    /// let stream = MessageStream::from(&conn).try_filter_map(|msg| async move {
+    ///     Ok(NameOwnerChanged::from_message(msg))
+    /// });
+    /// conn.release_name("org.freedesktop.zbus.MatchRuleStreamTest42").await?;
+    ///
+    /// pin_mut!(stream);
+    /// let next = stream.try_next();
+    /// pin_mut!(next);
+    /// let timeout = Timer::after(std::time::Duration::from_millis(50));
+    /// pin_mut!(timeout);
+    /// match select(next, timeout).await {
+    ///    Left((msg, _)) => unreachable!("unexpected message: {:?}", msg),
+    ///    Right((_, _)) => (),
+    /// }
     ///
     ///# Ok::<(), zbus::Error>(())
     ///# }).unwrap();
@@ -246,6 +268,21 @@ impl Drop for Inner {
 
         if let Some(rule) = self.match_rule.take() {
             conn.queue_remove_match(rule);
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncDrop for MessageStream {
+    async fn async_drop(mut self) {
+        let conn = Connection {
+            inner: self.inner.conn_inner.clone(),
+        };
+
+        if let Some(rule) = self.inner.match_rule.take() {
+            if let Err(e) = conn.remove_match(rule).await {
+                warn!("Failed to remove match rule: {}", e);
+            }
         }
     }
 }

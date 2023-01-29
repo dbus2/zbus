@@ -11,9 +11,10 @@ use crate::{blocking::Connection, utils::block_on, MatchRule, Message, OwnedMatc
 #[derive(derivative::Derivative, Clone)]
 #[derivative(Debug)]
 pub struct MessageIterator {
-    // Wrap it in an `Option` to ensure the proxy is dropped in a `block_on` call. This is needed
+    // Wrap it in an `Option` to ensure the stream is dropped in a `block_on` call. This is needed
     // for tokio because the proxy spawns a task in its `Drop` impl and that needs a runtime
-    // context in case of tokio.
+    // context in case of tokio. Moreover, we want to use `AsyncDrop::async_drop` to drop the stream
+    // to ensure any associated match rule is deregistered before the iterator is dropped.
     pub(crate) azync: Option<crate::MessageStream>,
 }
 
@@ -32,7 +33,8 @@ impl MessageIterator {
 
     /// Create a message iterator for the given match rule.
     ///
-    /// This is a wrapper around [`crate::MessageStream::for_match_rule`].
+    /// This is a wrapper around [`crate::MessageStream::for_match_rule`]. Unlike the underlying
+    /// `MessageStream`, the match rule is immediately deregistered when the iterator is dropped.
     ///
     /// # Example
     ///
@@ -147,7 +149,9 @@ impl From<&MessageIterator> for Connection {
 impl std::ops::Drop for MessageIterator {
     fn drop(&mut self) {
         block_on(async {
-            self.azync.take();
+            if let Some(azync) = self.azync.take() {
+                crate::AsyncDrop::async_drop(azync).await;
+            }
         });
     }
 }

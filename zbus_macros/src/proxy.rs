@@ -1137,6 +1137,13 @@ fn gen_proxy_signal(
                     self.0.is_terminated()
                 }
             }
+
+            #[#zbus::export::async_trait::async_trait]
+            impl #zbus::AsyncDrop for #stream_name<'_> {
+                async fn async_drop(self) {
+                    self.0.async_drop().await
+                }
+            }
         }
     };
     let stream_types = quote! {
