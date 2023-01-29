@@ -28,12 +28,27 @@ variables:
   WINDOWS_UPSTREAM_IMAGE: "$CI_REGISTRY/$UPSTREAM_REPO/$WINDOWS_AMD64_SUFFIX:$WINDOWS_TAG-$UPSTREAM_BRANCH"
 
 stages:
+  - sanity check
   - container
   - lint
   - test
   - extras
   - crosscheck
   - pages
+
+fail-if-fork-is-not-public:
+  stage: sanity check
+  script:
+    - |
+      if [ $CI_PROJECT_VISIBILITY != "public" ]; then
+           echo "*************************************************************************************"
+           echo "Project visibility must be set to 'public'"
+           echo "Change this in $CI_PROJECT_URL/edit under 'Visibility, project features, permissions'"
+           echo "*************************************************************************************"
+           exit 1
+      fi
+  except:
+    - main@dbus/zbus
 
 .debian:
   variables:

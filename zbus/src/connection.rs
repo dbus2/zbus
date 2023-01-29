@@ -1533,13 +1533,13 @@ mod tests {
 
         let (p0, p1) = UnixStream::pair().unwrap();
 
-        let server = ConnectionBuilder::unix_stream(p0)
-            .server(&guid)
-            .p2p()
-            .build();
-        let client = ConnectionBuilder::unix_stream(p1).p2p().build();
-
-        futures_util::try_join!(client, server)
+        futures_util::try_join!(
+            ConnectionBuilder::unix_stream(p1).p2p().build(),
+            ConnectionBuilder::unix_stream(p0)
+                .server(&guid)
+                .p2p()
+                .build(),
+        )
     }
 
     // Compile-test only since we don't have a VM setup to run this with/in.
@@ -1574,14 +1574,14 @@ mod tests {
         let client = vsock::VsockStream::connect(&addr).unwrap();
         let server = listener.incoming().next().unwrap().unwrap();
 
-        let server = ConnectionBuilder::vsock_stream(server)
-            .server(&guid)
-            .p2p()
-            .auth_mechanisms(&[AuthMechanism::Anonymous])
-            .build();
-        let client = ConnectionBuilder::vsock_stream(client).p2p().build();
-
-        futures_util::try_join!(server, client)
+        futures_util::try_join!(
+            ConnectionBuilder::vsock_stream(server)
+                .server(&guid)
+                .p2p()
+                .auth_mechanisms(&[AuthMechanism::Anonymous])
+                .build(),
+            ConnectionBuilder::vsock_stream(client).p2p().build(),
+        )
     }
 
     #[cfg(feature = "tokio-vsock")]
@@ -1592,14 +1592,14 @@ mod tests {
         let client = tokio_vsock::VsockStream::connect(3, 42).await.unwrap();
         let server = listener.incoming().next().await.unwrap().unwrap();
 
-        let server = ConnectionBuilder::vsock_stream(server)
-            .server(&guid)
-            .p2p()
-            .auth_mechanisms(&[AuthMechanism::Anonymous])
-            .build();
-        let client = ConnectionBuilder::vsock_stream(client).p2p().build();
-
-        futures_util::try_join!(server, client)
+        futures_util::try_join!(
+            ConnectionBuilder::vsock_stream(server)
+                .server(&guid)
+                .p2p()
+                .auth_mechanisms(&[AuthMechanism::Anonymous])
+                .build(),
+            ConnectionBuilder::vsock_stream(client).p2p().build(),
+        )
     }
 
     #[test]
