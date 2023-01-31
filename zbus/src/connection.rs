@@ -73,12 +73,6 @@ pub(crate) struct ConnectionInner {
 
 type Subscriptions = HashMap<OwnedMatchRule, (u64, InactiveReceiver<Result<Arc<Message>>>)>;
 
-// FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
-//        cancel `socket_reader_task` manually to ensure task is gone before the connection is. Same
-//        goes for the registered well-known names.
-//
-// [`AsyncDrop`]: https://github.com/rust-lang/wg-async-foundations/issues/65
-
 pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 
 /// A D-Bus connection.
@@ -948,7 +942,7 @@ impl Connection {
                                 builder = builder.destination(&**unique_name).expect("unique name");
                             }
                             let rule = builder.build();
-                            match MessageStream::for_match_rule(rule, &conn, None).await {
+                            match conn.add_match(rule.into(), None).await {
                                 Ok(stream) => stream,
                                 Err(e) => {
                                     // Very unlikely but can happen I guess if connection is closed.
@@ -1389,7 +1383,7 @@ mod tests {
     use ntest::timeout;
     use test_log::test;
 
-    use crate::AuthMechanism;
+    use crate::{fdo::DBusProxy, AuthMechanism};
 
     use super::*;
 
@@ -1624,5 +1618,49 @@ mod tests {
             .expect("Unable to get GDBus session bus address");
 
         crate::block_on(async { addr.connect().await }).expect("Unable to connect to session bus");
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn disconnect_on_drop() {
+        // Reproducer for https://gitlab.freedesktop.org/dbus/zbus/-/issues/308 where setting up the
+        // objectserver would cause the connection to not disconnect on drop.
+        crate::utils::block_on(test_disconnect_on_drop());
+    }
+
+    async fn test_disconnect_on_drop() {
+        #[derive(Default)]
+        struct MyInterface {}
+
+        #[crate::dbus_interface(name = "dev.peelz.FooBar.Baz")]
+        impl MyInterface {
+            fn do_thing(&self) {}
+        }
+        let name = "dev.peelz.foobar";
+        let connection = ConnectionBuilder::session()
+            .unwrap()
+            .name(name)
+            .unwrap()
+            .serve_at("/dev/peelz/FooBar", MyInterface::default())
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        let connection2 = Connection::session().await.unwrap();
+        let dbus = DBusProxy::new(&connection2).await.unwrap();
+        let mut stream = dbus
+            .receive_name_owner_changed_with_args(&[(0, name), (2, "")])
+            .await
+            .unwrap();
+
+        drop(connection);
+
+        // If the connection is not dropped, this will hang forever.
+        stream.next().await.unwrap();
+
+        // Let's still make sure the name is gone.
+        let name_has_owner = dbus.name_has_owner(name.try_into().unwrap()).await.unwrap();
+        assert!(!name_has_owner);
     }
 }
