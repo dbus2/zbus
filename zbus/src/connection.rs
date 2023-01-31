@@ -1383,7 +1383,7 @@ mod tests {
     use ntest::timeout;
     use test_log::test;
 
-    use crate::AuthMechanism;
+    use crate::{fdo::DBusProxy, AuthMechanism};
 
     use super::*;
 
@@ -1618,5 +1618,49 @@ mod tests {
             .expect("Unable to get GDBus session bus address");
 
         crate::block_on(async { addr.connect().await }).expect("Unable to connect to session bus");
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn disconnect_on_drop() {
+        // Reproducer for https://gitlab.freedesktop.org/dbus/zbus/-/issues/308 where setting up the
+        // objectserver would cause the connection to not disconnect on drop.
+        crate::utils::block_on(test_disconnect_on_drop());
+    }
+
+    async fn test_disconnect_on_drop() {
+        #[derive(Default)]
+        struct MyInterface {}
+
+        #[crate::dbus_interface(name = "dev.peelz.FooBar.Baz")]
+        impl MyInterface {
+            fn do_thing(&self) {}
+        }
+        let name = "dev.peelz.foobar";
+        let connection = ConnectionBuilder::session()
+            .unwrap()
+            .name(name)
+            .unwrap()
+            .serve_at("/dev/peelz/FooBar", MyInterface::default())
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        let connection2 = Connection::session().await.unwrap();
+        let dbus = DBusProxy::new(&connection2).await.unwrap();
+        let mut stream = dbus
+            .receive_name_owner_changed_with_args(&[(0, name), (2, "")])
+            .await
+            .unwrap();
+
+        drop(connection);
+
+        // If the connection is not dropped, this will hang forever.
+        stream.next().await.unwrap();
+
+        // Let's still make sure the name is gone.
+        let name_has_owner = dbus.name_has_owner(name.try_into().unwrap()).await.unwrap();
+        assert!(!name_has_owner);
     }
 }
