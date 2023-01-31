@@ -942,7 +942,7 @@ impl Connection {
                                 builder = builder.destination(&**unique_name).expect("unique name");
                             }
                             let rule = builder.build();
-                            match MessageStream::for_match_rule(rule, &conn, None).await {
+                            match conn.add_match(rule.into(), None).await {
                                 Ok(stream) => stream,
                                 Err(e) => {
                                     // Very unlikely but can happen I guess if connection is closed.
