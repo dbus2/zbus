@@ -73,12 +73,6 @@ pub(crate) struct ConnectionInner {
 
 type Subscriptions = HashMap<OwnedMatchRule, (u64, InactiveReceiver<Result<Arc<Message>>>)>;
 
-// FIXME: Should really use [`AsyncDrop`] for `ConnectionInner` when we've something like that to
-//        cancel `socket_reader_task` manually to ensure task is gone before the connection is. Same
-//        goes for the registered well-known names.
-//
-// [`AsyncDrop`]: https://github.com/rust-lang/wg-async-foundations/issues/65
-
 pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 
 /// A D-Bus connection.
