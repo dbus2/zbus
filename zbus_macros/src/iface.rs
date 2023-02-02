@@ -208,6 +208,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         } else if is_property {
             let p = properties.entry(member_name.to_string());
             let prop_changed_method_name = format_ident!("{}_changed", snake_case(&member_name));
+            let prop_invalidate_method_name =
+                format_ident!("{}_invalidate", snake_case(&member_name));
 
             let p = p.or_insert_with(Property::new);
             p.doc_comments.extend(doc_comments);
@@ -352,6 +354,21 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     }
                 );
                 generated_signals.extend(prop_changed_method);
+
+                let prop_invalidate_method = quote!(
+                    pub async fn #prop_invalidate_method_name(
+                        &self,
+                        signal_context: &#zbus::SignalContext<'_>,
+                    ) -> #zbus::Result<()> {
+                        #zbus::fdo::Properties::properties_changed(
+                            signal_context,
+                            #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
+                            &::std::collections::HashMap::new(),
+                            &[#member_name],
+                        ).await
+                    }
+                );
+                generated_signals.extend(prop_invalidate_method);
             }
         } else {
             introspect.extend(doc_comments);
