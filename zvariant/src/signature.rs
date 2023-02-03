@@ -489,6 +489,12 @@ impl<'de> Deserialize<'de> for OwnedSignature {
     }
 }
 
+impl std::fmt::Display for OwnedSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.as_str(), f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Signature;

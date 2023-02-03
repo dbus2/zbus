@@ -17,13 +17,13 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
     task::{Context, Poll},
 };
-use tracing::{debug, info_span, instrument, Instrument};
+use tracing::{debug, info_span, instrument, trace, Instrument};
 
 use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
-    fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesProxy},
+    fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesChangedStream, PropertiesProxy},
     AsyncDrop, CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageFlags,
     MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
@@ -166,12 +166,14 @@ impl<'a, T> PropertyChanged<'a, T> {
             .map_err(crate::Error::from)?;
 
         // Save the new value
-        let mut values = self.properties.values.write().expect("lock poisoned");
+        {
+            let mut values = self.properties.values.write().expect("lock poisoned");
 
-        values
-            .get_mut(self.name)
-            .expect("PropertyStream with no corresponding property")
-            .value = Some(value);
+            values
+                .get_mut(self.name)
+                .expect("PropertyStream with no corresponding property")
+                .value = Some(value);
+        }
 
         Ok(Wrapper {
             name: self.name,
@@ -205,7 +207,7 @@ where
 pub struct PropertyStream<'a, T> {
     name: &'a str,
     proxy: Proxy<'a>,
-    event: EventListener,
+    changed_listener: EventListener,
     phantom: std::marker::PhantomData<T>,
 }
 
@@ -222,9 +224,9 @@ where
             // With no cache, we will get no updates; return immediately
             None => return Poll::Ready(None),
         };
-        ready!(Pin::new(&mut m.event).poll(cx));
+        ready!(Pin::new(&mut m.changed_listener).poll(cx));
 
-        m.event = properties
+        m.changed_listener = properties
             .values
             .read()
             .expect("lock poisoned")
@@ -255,7 +257,7 @@ enum CachingResult {
 }
 
 impl PropertiesCache {
-    #[instrument]
+    #[instrument(skip_all)]
     fn new(
         proxy: PropertiesProxy<'static>,
         interface: InterfaceName<'static>,
@@ -275,7 +277,7 @@ impl PropertiesCache {
             let result = cache_clone
                 .init(proxy, interface, uncached_properties)
                 .await;
-            let (proxy, interface, uncached_properties) = {
+            let (prop_changes, interface, uncached_properties) = {
                 let mut caching_result = cache_clone.caching_result.write().expect("lock poisoned");
                 let ready = match &*caching_result {
                     CachingResult::Caching { ready } => ready,
@@ -284,11 +286,11 @@ impl PropertiesCache {
                     _ => unreachable!(),
                 };
                 match result {
-                    Ok((proxy, interface, uncached_properties)) => {
+                    Ok((prop_changes, interface, uncached_properties)) => {
                         ready.notify(usize::MAX);
                         *caching_result = CachingResult::Cached { result: Ok(()) };
 
-                        (proxy, interface, uncached_properties)
+                        (prop_changes, interface, uncached_properties)
                     }
                     Err(e) => {
                         ready.notify(usize::MAX);
@@ -300,7 +302,7 @@ impl PropertiesCache {
             };
 
             if let Err(e) = cache_clone
-                .keep_updated(proxy, interface, uncached_properties)
+                .keep_updated(prop_changes, interface, uncached_properties)
                 .await
             {
                 debug!("Error keeping properties cache updated: {e}");
@@ -319,7 +321,7 @@ impl PropertiesCache {
         interface: InterfaceName<'static>,
         uncached_properties: HashSet<zvariant::Str<'static>>,
     ) -> Result<(
-        PropertiesProxy<'static>,
+        PropertiesChangedStream<'static>,
         InterfaceName<'static>,
         HashSet<zvariant::Str<'static>>,
     )> {
@@ -365,21 +367,22 @@ impl PropertiesCache {
             }
             None => (),
         }
+        let prop_changes = join.into_inner().0.into_inner();
 
-        Ok((proxy, interface, uncached_properties))
+        Ok((prop_changes, interface, uncached_properties))
     }
 
     // new() runs this in a task it spawns for keeping the cache in sync.
+    #[instrument(skip_all)]
     async fn keep_updated(
         &self,
-        proxy: PropertiesProxy<'static>,
+        mut prop_changes: PropertiesChangedStream<'static>,
         interface: InterfaceName<'static>,
         uncached_properties: HashSet<zvariant::Str<'static>>,
     ) -> Result<()> {
         use futures_util::StreamExt;
 
-        let mut prop_changes = proxy.receive_properties_changed().await?;
-
+        trace!("Listening for property changes on {interface}...");
         while let Some(update) = prop_changes.next().await {
             if let Ok(args) = update.args() {
                 if args.interface_name == interface {
@@ -413,6 +416,7 @@ impl PropertiesCache {
                 );
                 continue;
             }
+            trace!("Property `{interface}.{inval}` invalidated");
 
             if let Some(entry) = values.get_mut(inval) {
                 entry.value = None;
@@ -428,6 +432,7 @@ impl PropertiesCache {
                 );
                 continue;
             }
+            trace!("Property `{interface}.{property_name}` updated");
 
             let entry = values
                 .entry(property_name.to_string())
@@ -936,7 +941,7 @@ impl<'a> Proxy<'a> {
         name: &'name str,
     ) -> PropertyStream<'a, T> {
         let properties = self.get_property_cache();
-        let event = if let Some(properties) = &properties {
+        let changed_listener = if let Some(properties) = &properties {
             let mut values = properties.values.write().expect("lock poisoned");
             let entry = values
                 .entry(name.to_string())
@@ -949,7 +954,7 @@ impl<'a> Proxy<'a> {
         PropertyStream {
             name,
             proxy: self.clone(),
-            event,
+            changed_listener,
             phantom: std::marker::PhantomData,
         }
     }
