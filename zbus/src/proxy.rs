@@ -17,7 +17,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
     task::{Context, Poll},
 };
-use tracing::{debug, info_span, instrument, Instrument};
+use tracing::{debug, info_span, instrument, trace, Instrument};
 
 use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Str, Value};
@@ -380,6 +380,7 @@ impl PropertiesCache {
 
         let mut prop_changes = proxy.receive_properties_changed().await?;
 
+        trace!("Listening for property changes on {interface}...");
         while let Some(update) = prop_changes.next().await {
             if let Ok(args) = update.args() {
                 if args.interface_name == interface {
@@ -413,6 +414,7 @@ impl PropertiesCache {
                 );
                 continue;
             }
+            trace!("Property `{interface}.{inval}` invalidated");
 
             if let Some(entry) = values.get_mut(inval) {
                 entry.value = None;
@@ -428,6 +430,7 @@ impl PropertiesCache {
                 );
                 continue;
             }
+            trace!("Property `{interface}.{property_name}` updated");
 
             let entry = values
                 .entry(property_name.to_string())
