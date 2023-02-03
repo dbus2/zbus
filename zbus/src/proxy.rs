@@ -23,7 +23,7 @@ use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
-    fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesProxy},
+    fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesChangedStream, PropertiesProxy},
     AsyncDrop, CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageFlags,
     MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
@@ -275,7 +275,7 @@ impl PropertiesCache {
             let result = cache_clone
                 .init(proxy, interface, uncached_properties)
                 .await;
-            let (proxy, interface, uncached_properties) = {
+            let (prop_changes, interface, uncached_properties) = {
                 let mut caching_result = cache_clone.caching_result.write().expect("lock poisoned");
                 let ready = match &*caching_result {
                     CachingResult::Caching { ready } => ready,
@@ -284,11 +284,11 @@ impl PropertiesCache {
                     _ => unreachable!(),
                 };
                 match result {
-                    Ok((proxy, interface, uncached_properties)) => {
+                    Ok((prop_changes, interface, uncached_properties)) => {
                         ready.notify(usize::MAX);
                         *caching_result = CachingResult::Cached { result: Ok(()) };
 
-                        (proxy, interface, uncached_properties)
+                        (prop_changes, interface, uncached_properties)
                     }
                     Err(e) => {
                         ready.notify(usize::MAX);
@@ -300,7 +300,7 @@ impl PropertiesCache {
             };
 
             if let Err(e) = cache_clone
-                .keep_updated(proxy, interface, uncached_properties)
+                .keep_updated(prop_changes, interface, uncached_properties)
                 .await
             {
                 debug!("Error keeping properties cache updated: {e}");
@@ -319,7 +319,7 @@ impl PropertiesCache {
         interface: InterfaceName<'static>,
         uncached_properties: HashSet<zvariant::Str<'static>>,
     ) -> Result<(
-        PropertiesProxy<'static>,
+        PropertiesChangedStream<'static>,
         InterfaceName<'static>,
         HashSet<zvariant::Str<'static>>,
     )> {
@@ -365,21 +365,20 @@ impl PropertiesCache {
             }
             None => (),
         }
+        let prop_changes = join.into_inner().0.into_inner();
 
-        Ok((proxy, interface, uncached_properties))
+        Ok((prop_changes, interface, uncached_properties))
     }
 
     // new() runs this in a task it spawns for keeping the cache in sync.
     #[instrument(skip_all)]
     async fn keep_updated(
         &self,
-        proxy: PropertiesProxy<'static>,
+        mut prop_changes: PropertiesChangedStream<'static>,
         interface: InterfaceName<'static>,
         uncached_properties: HashSet<zvariant::Str<'static>>,
     ) -> Result<()> {
         use futures_util::StreamExt;
-
-        let mut prop_changes = proxy.receive_properties_changed().await?;
 
         trace!("Listening for property changes on {interface}...");
         while let Some(update) = prop_changes.next().await {
