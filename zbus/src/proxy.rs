@@ -205,7 +205,7 @@ where
 pub struct PropertyStream<'a, T> {
     name: &'a str,
     proxy: Proxy<'a>,
-    event: EventListener,
+    changed_listener: EventListener,
     phantom: std::marker::PhantomData<T>,
 }
 
@@ -222,9 +222,9 @@ where
             // With no cache, we will get no updates; return immediately
             None => return Poll::Ready(None),
         };
-        ready!(Pin::new(&mut m.event).poll(cx));
+        ready!(Pin::new(&mut m.changed_listener).poll(cx));
 
-        m.event = properties
+        m.changed_listener = properties
             .values
             .read()
             .expect("lock poisoned")
@@ -939,7 +939,7 @@ impl<'a> Proxy<'a> {
         name: &'name str,
     ) -> PropertyStream<'a, T> {
         let properties = self.get_property_cache();
-        let event = if let Some(properties) = &properties {
+        let changed_listener = if let Some(properties) = &properties {
             let mut values = properties.values.write().expect("lock poisoned");
             let entry = values
                 .entry(name.to_string())
@@ -952,7 +952,7 @@ impl<'a> Proxy<'a> {
         PropertyStream {
             name,
             proxy: self.clone(),
-            event,
+            changed_listener,
             phantom: std::marker::PhantomData,
         }
     }
