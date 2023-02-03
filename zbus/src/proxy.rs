@@ -166,12 +166,14 @@ impl<'a, T> PropertyChanged<'a, T> {
             .map_err(crate::Error::from)?;
 
         // Save the new value
-        let mut values = self.properties.values.write().expect("lock poisoned");
+        {
+            let mut values = self.properties.values.write().expect("lock poisoned");
 
-        values
-            .get_mut(self.name)
-            .expect("PropertyStream with no corresponding property")
-            .value = Some(value);
+            values
+                .get_mut(self.name)
+                .expect("PropertyStream with no corresponding property")
+                .value = Some(value);
+        }
 
         Ok(Wrapper {
             name: self.name,
