@@ -372,6 +372,12 @@ impl<'de> Deserialize<'de> for OwnedObjectPath {
     }
 }
 
+impl std::fmt::Display for OwnedObjectPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.as_str(), f)
+    }
+}
+
 #[cfg(test)]
 mod unit {
     use super::*;
