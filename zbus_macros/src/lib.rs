@@ -241,7 +241,11 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// exists) will automatically call this method. For instance, a property setter named `set_foo`
 /// will be called to set the property "Foo", and will emit the "PropertiesChanged" signal with the
 /// new value for "Foo". Other changes to the "Foo" property can be signaled manually with the
-/// generated `foo_changed` method.
+/// generated `foo_changed` method. In addition, a `<property_name_in_snake_case>_invalidated`
+/// method is also generated that much like `_changed` method, emits a "PropertyChanged" signal
+/// but does not send over the new value of the property along with it. It is usually best to avoid
+/// using this since it will force all interested peers to fetch the new value and hence result in
+/// excess traffic on the bus.
 ///
 /// The method arguments support the following `zbus` attributes:
 ///
