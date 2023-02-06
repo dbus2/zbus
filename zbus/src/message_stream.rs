@@ -6,7 +6,7 @@ use std::{
 };
 
 use async_broadcast::Receiver as ActiveReceiver;
-use futures_core::{ready, stream};
+use futures_core::stream;
 use futures_util::stream::FusedStream;
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
@@ -159,7 +159,6 @@ impl MessageStream {
             inner: Inner {
                 conn_inner,
                 msg_receiver,
-                last_seq: Default::default(),
                 match_rule: rule,
             },
         }
@@ -172,15 +171,7 @@ impl stream::Stream for MessageStream {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-        Pin::new(&mut this.inner.msg_receiver)
-            .poll_next(cx)
-            .map(|msg| {
-                if let Some(Ok(msg)) = &msg {
-                    this.inner.last_seq = msg.recv_position();
-                }
-
-                msg
-            })
+        Pin::new(&mut this.inner.msg_receiver).poll_next(cx)
     }
 }
 
@@ -194,18 +185,31 @@ impl OrderedStream for MessageStream {
         before: Option<&Self::Ordering>,
     ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
         let this = self.get_mut();
-        if let Some(before) = before {
-            if this.inner.last_seq >= *before {
-                return Poll::Ready(PollResult::NoneBefore);
+
+        match stream::Stream::poll_next(Pin::new(this), cx) {
+            Poll::Pending if before.is_some() => {
+                // Assume the provided MessageSequence in before was obtained from a Message
+                // associated with our Connection (because that's the only supported use case).
+                // Because there is only one socket-reader task, any messages that would have been
+                // ordered before that message would have already been sitting in the broadcast
+                // queue (and we would have seen Ready in our poll).  Because we didn't, we can
+                // guarantee that we won't ever produce a message whose sequence is before that
+                // provided value, and so we can return NoneBefore.
+                //
+                // This ensures that ordered_stream::Join will never return Pending while it
+                // has a message buffered.
+                Poll::Ready(PollResult::NoneBefore)
             }
-        }
-        if let Some(msg) = ready!(stream::Stream::poll_next(Pin::new(this), cx)) {
-            Poll::Ready(PollResult::Item {
-                data: msg,
-                ordering: this.inner.last_seq,
-            })
-        } else {
-            Poll::Ready(PollResult::Terminated)
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Some(Ok(msg))) => Poll::Ready(PollResult::Item {
+                ordering: msg.recv_position(),
+                data: Ok(msg),
+            }),
+            Poll::Ready(Some(Err(e))) => Poll::Ready(PollResult::Item {
+                ordering: MessageSequence::LAST,
+                data: Err(e),
+            }),
+            Poll::Ready(None) => Poll::Ready(PollResult::Terminated),
         }
     }
 }
@@ -225,7 +229,6 @@ impl From<Connection> for MessageStream {
             inner: Inner {
                 conn_inner,
                 msg_receiver,
-                last_seq: Default::default(),
                 match_rule: None,
             },
         }
@@ -256,7 +259,6 @@ impl From<&MessageStream> for Connection {
 struct Inner {
     conn_inner: Arc<ConnectionInner>,
     msg_receiver: ActiveReceiver<Result<Arc<Message>>>,
-    last_seq: MessageSequence,
     match_rule: Option<OwnedMatchRule>,
 }
 
