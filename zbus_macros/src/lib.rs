@@ -217,7 +217,8 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * `name` - override the D-Bus name (pascal case form of the method by default)
 ///
 /// * `property` - expose the method as a property. If the method takes an argument, it must be a
-///   setter, with a `set_` prefix. Otherwise, it's a getter.
+///   setter, with a `set_` prefix. Otherwise, it's a getter. If it may fail, a property method must
+///   return `zbus::fdo::Result`.
 ///
 /// * `signal` - the method is a "signal". It must be a method declaration (without body). Its code
 ///   block will be expanded to emit the signal from the object path associated with the interface
@@ -292,6 +293,14 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     #[dbus_interface(property, name = "TheAnswer")]
 ///     fn answer(&self) -> u32 {
 ///         2 * 3 * 7
+///     }
+///
+///     // "IFail" property with its associated getter.
+///     // An `i_fail_changed` method has also been generated to emit the
+///     // "PropertiesChanged" signal for this property.
+///     #[dbus_interface(property)]
+///     fn i_fail(&self) -> zbus::fdo::Result<i32> {
+///         Err(zbus::fdo::Error::UnknownProperty("IFail".into()))
 ///     }
 ///
 ///     // "Bye" signal (note: no implementation body).
