@@ -98,6 +98,9 @@ trait MyIface {
     #[dbus_proxy(property)]
     fn set_ref_type(&self, ref_type: RefType<'_>) -> zbus::Result<()>;
 
+    #[dbus_proxy(property)]
+    fn fail_property(&self) -> zbus::Result<u32>;
+
     #[dbus_proxy(no_reply)]
     fn test_no_reply(&self) -> zbus::Result<()>;
 
@@ -275,6 +278,14 @@ impl MyIfaceImpl {
 
     #[instrument]
     #[dbus_interface(property)]
+    async fn fail_property(&self) -> zbus::fdo::Result<u32> {
+        Err(zbus::fdo::Error::UnknownProperty(
+            "FailProperty".to_string(),
+        ))
+    }
+
+    #[instrument]
+    #[dbus_interface(property)]
     fn address_data(&self) -> IP4Adress {
         debug!("`AddressData` getter called.");
         IP4Adress {
@@ -446,6 +457,15 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     proxy.test_no_reply().await?;
     proxy.test_no_autostart().await?;
     proxy.test_interactive_auth().await?;
+
+    let err = proxy.fail_property().await;
+    assert_eq!(
+        err.unwrap_err(),
+        zbus::Error::FDO(Box::new(zbus::fdo::Error::UnknownProperty(
+            "FailProperty".into()
+        )))
+    );
+
     #[cfg(any(feature = "xml", feature = "quick-xml"))]
     {
         let xml = proxy.introspect().await?;

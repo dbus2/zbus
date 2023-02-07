@@ -136,6 +136,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             quote! {}
         };
 
+        let handle_fallible_property = quote! { .map(|e| <#zbus::zvariant::Value as ::std::convert::From<_>>::from(e).to_owned()) };
+
         let mut typed_inputs = inputs
             .iter()
             .filter_map(typed_arg)
@@ -309,33 +311,58 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     set_dispatch.extend(q);
                 }
             } else {
+                let is_fallible_property = is_result_output;
+
                 p.ty = Some(get_property_type(output)?);
                 p.read = true;
+                let inner = if is_fallible_property {
+                    quote!(self.#ident()#method_await#handle_fallible_property)
+                } else {
+                    quote!(::std::result::Result::Ok(
+                        ::std::convert::Into::into(
+                            <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
+                                self.#ident()#method_await,
+                            ),
+                        ),
+                    ))
+                };
 
                 let q = quote!(
                     #member_name => {
-                        ::std::option::Option::Some(::std::result::Result::Ok(
-                            ::std::convert::Into::into(
-                                <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
-                                    self.#ident()#method_await,
-                                ),
-                            ),
-                        ))
-                    }
+                        ::std::option::Option::Some(#inner)
+                    },
                 );
                 get_dispatch.extend(q);
 
-                let q = quote!(
-                    props.insert(
+                let q = if is_fallible_property {
+                    quote!(if let Ok(prop) = self.#ident()#method_await {
+                        props.insert(
+                            ::std::string::ToString::to_string(#member_name),
+                            ::std::convert::Into::into(
+                                <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
+                                    prop,
+                                ),
+                            ),
+                        );
+                    })
+                } else {
+                    quote!(props.insert(
                         ::std::string::ToString::to_string(#member_name),
                         ::std::convert::Into::into(
                             <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
                                 self.#ident()#method_await,
                             ),
                         ),
-                    );
-                );
+                    );)
+                };
+
                 get_all.extend(q);
+
+                let prop_value_handled = if is_fallible_property {
+                    quote!(self.#ident()#method_await?)
+                } else {
+                    quote!(self.#ident()#method_await)
+                };
 
                 let prop_changed_method = quote!(
                     pub async fn #prop_changed_method_name(
@@ -343,7 +370,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         signal_context: &#zbus::SignalContext<'_>,
                     ) -> #zbus::Result<()> {
                         let mut changed = ::std::collections::HashMap::new();
-                        let value = <#zbus::zvariant::Value as ::std::convert::From<_>>::from(self.#ident()#method_await);
+                        let value = <#zbus::zvariant::Value as ::std::convert::From<_>>::from(#prop_value_handled);
                         changed.insert(#member_name, &value);
                         #zbus::fdo::Properties::properties_changed(
                             signal_context,
