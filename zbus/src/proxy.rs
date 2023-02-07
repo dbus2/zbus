@@ -1,11 +1,14 @@
 use enumflags2::{bitflags, BitFlags};
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
-use futures_util::{future::Either, stream::Map};
-use once_cell::sync::OnceCell;
-use ordered_stream::{
-    join as join_streams, FromFuture, JoinMultiple, OrderedStream, Peekable, PollResult,
+use futures_util::{
+    future::{select, Either},
+    pin_mut,
+    stream::{select_all, Map, SelectAll},
+    StreamExt,
 };
+use once_cell::sync::OnceCell;
+use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet},
@@ -23,7 +26,10 @@ use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
-    fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesChangedStream, PropertiesProxy},
+    fdo::{
+        self, DBusProxy, IntrospectableProxy, NameOwnerChanged, PropertiesChangedStream,
+        PropertiesProxy,
+    },
     AsyncDrop, CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageFlags,
     MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
 };
@@ -325,30 +331,12 @@ impl PropertiesCache {
         InterfaceName<'static>,
         HashSet<zvariant::Str<'static>>,
     )> {
-        use ordered_stream::OrderedStreamExt;
+        let mut prop_changes = proxy.receive_properties_changed().await?;
+        let get_all = proxy.get_all(interface.clone());
+        pin_mut!(get_all);
 
-        let prop_changes = proxy
-            .receive_properties_changed()
-            .await
-            .map(|s| s.map(Either::Left))?;
-
-        let get_all = proxy
-            .connection()
-            .call_method_raw(
-                Some(proxy.destination()),
-                proxy.path(),
-                Some(proxy.interface()),
-                "GetAll",
-                BitFlags::empty(),
-                &interface,
-            )
-            .await
-            .map(|r| FromFuture::from(r.expect("no reply")).map(Either::Right))?;
-
-        let mut join = join_streams(prop_changes, get_all);
-
-        match join.next().await {
-            Some(Either::Left(update)) => {
+        match select(prop_changes.next(), get_all).await {
+            Either::Left((Some(update), _)) => {
                 if let Ok(args) = update.args() {
                     if args.interface_name == interface {
                         self.update_cache(
@@ -360,14 +348,19 @@ impl PropertiesCache {
                     }
                 }
             }
-            Some(Either::Right(populate)) => {
-                populate?.body().map(|values| {
-                    self.update_cache(&uncached_properties, &values, Vec::new(), &interface);
-                })?;
+            Either::Left((None, _)) => (),
+            Either::Right((values, _)) => {
+                self.update_cache(
+                    &uncached_properties,
+                    &values?
+                        .iter()
+                        .map(|(k, v)| (k.as_str(), Value::from(v)))
+                        .collect(),
+                    Vec::new(),
+                    &interface,
+                );
             }
-            None => (),
         }
-        let prop_changes = join.into_inner().0.into_inner();
 
         Ok((prop_changes, interface, uncached_properties))
     }
@@ -866,7 +859,7 @@ impl<'a> Proxy<'a> {
             )
             .await?
         {
-            Some(reply) => reply.await?.body().map(Some),
+            Some(reply) => reply.body().map(Some),
             None => Ok(None),
         }
     }
@@ -971,7 +964,6 @@ impl<'a> Proxy<'a> {
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
     pub async fn receive_owner_changed(&self) -> Result<OwnerChangedStream<'_>> {
-        use futures_util::StreamExt;
         let dbus_proxy = fdo::DBusProxy::builder(self.connection())
             .cache_properties(CacheProperties::No)
             .build()
@@ -1067,7 +1059,6 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
     type Item = Option<UniqueName<'static>>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        use futures_util::StreamExt;
         self.get_mut().stream.poll_next_unpin(cx)
     }
 }
@@ -1080,8 +1071,9 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
 /// rule registration and [`AsyncDrop`] in its documentation applies here as well.
 #[derive(Debug)]
 pub struct SignalStream<'a> {
-    stream: JoinMultiple<Vec<Peekable<MessageStream>>>,
+    stream: SelectAll<MessageStream>,
     src_unique_name: Option<UniqueName<'static>>,
+    last_seq: MessageSequence,
     phantom: PhantomData<&'a ()>,
 }
 
@@ -1108,13 +1100,11 @@ impl<'a> SignalStream<'a> {
         let (src_unique_name, stream) = match proxy.destination().to_owned() {
             BusName::Unique(name) => (
                 Some(name),
-                JoinMultiple(vec![ordered_stream::OrderedStreamExt::peekable(
+                select_all(vec![
                     MessageStream::for_match_rule(signal_rule, conn, None).await?,
-                )]),
+                ]),
             ),
             BusName::WellKnown(name) => {
-                use ordered_stream::OrderedStreamExt;
-
                 let name_owner_changed_rule = MatchRule::builder()
                     .msg_type(MessageType::Signal)
                     .sender("org.freedesktop.DBus")?
@@ -1123,31 +1113,20 @@ impl<'a> SignalStream<'a> {
                     .member("NameOwnerChanged")?
                     .add_arg(name.as_str())?
                     .build();
-                let name_owner_changed_stream = MessageStream::for_match_rule(
+                let mut name_owner_changed_stream = MessageStream::for_match_rule(
                     name_owner_changed_rule,
                     conn,
                     Some(MAX_NAME_OWNER_CHANGED_SIGNALS_QUEUED),
                 )
-                .await?
-                .map(Either::Left);
+                .await?;
 
-                let get_name_owner = conn
-                    .call_method_raw(
-                        Some("org.freedesktop.DBus"),
-                        "/org/freedesktop/DBus",
-                        Some("org.freedesktop.DBus"),
-                        "GetNameOwner",
-                        BitFlags::empty(),
-                        &name,
-                    )
-                    .await
-                    .map(|r| FromFuture::from(r.expect("no reply")).map(Either::Right))?;
+                let dbus_proxy = DBusProxy::new(conn).await?;
 
-                let mut join = join_streams(name_owner_changed_stream, get_name_owner);
-
-                let mut src_unique_name = loop {
-                    match join.next().await {
-                        Some(Either::Left(Ok(msg))) => {
+                let src_unique_name = loop {
+                    let get_name_owner = dbus_proxy.get_name_owner(name.clone().into());
+                    pin_mut!(get_name_owner);
+                    match select(name_owner_changed_stream.next(), get_name_owner).await {
+                        Either::Left((Some(Ok(msg)), _)) => {
                             let signal = NameOwnerChanged::from_message(msg)
                                 .expect("`NameOwnerChanged` signal stream got wrong message");
                             {
@@ -1161,17 +1140,8 @@ impl<'a> SignalStream<'a> {
                                     .map(UniqueName::to_owned);
                             }
                         }
-                        Some(Either::Left(Err(_))) => (),
-                        Some(Either::Right(Ok(response))) => {
-                            break Some(response.body::<UniqueName<'_>>()?.to_owned())
-                        }
-                        Some(Either::Right(Err(e))) => {
-                            // Probably the name is not owned. Not a problem but let's still log it.
-                            debug!("Failed to get owner of {name}: {e}");
-
-                            break None;
-                        }
-                        None => {
+                        Either::Left((Some(Err(_)), _)) => (),
+                        Either::Left((None, _)) => {
                             return Err(Error::InputOutput(
                                 std::io::Error::new(
                                     std::io::ErrorKind::BrokenPipe,
@@ -1180,33 +1150,19 @@ impl<'a> SignalStream<'a> {
                                 .into(),
                             ))
                         }
+                        Either::Right((Ok(unique_name), _)) => break Some(unique_name.into()),
+                        Either::Right((Err(e), _)) => {
+                            // Probably the name is not owned. Not a problem but let's still log it.
+                            debug!("Failed to get owner of {name}: {e}");
+
+                            break None;
+                        }
                     }
                 };
 
-                // Let's take into account any buffered NameOwnerChanged signal.
-                let (stream, _, queued) = join.into_inner();
-                if let Some(msg) = queued.and_then(|e| match e.0 {
-                    Either::Left(Ok(msg)) => Some(msg),
-                    Either::Left(Err(_)) | Either::Right(_) => None,
-                }) {
-                    if let Some(signal) = NameOwnerChanged::from_message(msg) {
-                        if let Ok(args) = signal.args() {
-                            match (args.name(), args.new_owner().deref()) {
-                                (BusName::WellKnown(n), Some(new_owner)) if n == &name => {
-                                    src_unique_name = Some(new_owner.to_owned());
-                                }
-                                _ => (),
-                            }
-                        }
-                    }
-                }
-                let name_owner_changed_stream = stream.into_inner();
-
-                let stream = JoinMultiple(vec![
-                    MessageStream::for_match_rule(signal_rule, conn, None)
-                        .await?
-                        .peekable(),
-                    name_owner_changed_stream.peekable(),
+                let stream = select_all(vec![
+                    MessageStream::for_match_rule(signal_rule, conn, None).await?,
+                    name_owner_changed_stream,
                 ]);
 
                 (src_unique_name, stream)
@@ -1216,6 +1172,7 @@ impl<'a> SignalStream<'a> {
         Ok(Self {
             stream,
             src_unique_name,
+            last_seq: Default::default(),
             phantom: PhantomData,
         })
     }
@@ -1242,19 +1199,21 @@ assert_impl_all!(SignalStream<'_>: Send, Sync, Unpin);
 impl<'a> stream::Stream for SignalStream<'a> {
     type Item = Arc<Message>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
         loop {
-            match ready!(OrderedStream::poll_next_before(self.as_mut(), cx, None)) {
-                // FIXME: We should make use of `Stream` impl of `Join` when that's available:
-                //
-                // https://github.com/danieldg/ordered-stream/issues/7
-                PollResult::Item {
-                    data: msg,
-                    ordering: _,
-                } => return Poll::Ready(Some(msg)),
-                PollResult::Terminated => return Poll::Ready(None),
-                // SAFETY: We didn't specify a before ordering, so we should never get this.
-                PollResult::NoneBefore => unreachable!(),
+            let msg = ready!(stream::Stream::poll_next(Pin::new(&mut this.stream), cx))
+                .map(|msg| msg.ok())
+                .flatten();
+            match &msg {
+                Some(m) => {
+                    this.last_seq = m.recv_position();
+
+                    if this.filter(m).unwrap_or(false) {
+                        return Poll::Ready(msg);
+                    }
+                }
+                None => return Poll::Ready(None),
             }
         }
     }
@@ -1270,40 +1229,33 @@ impl<'a> OrderedStream for SignalStream<'a> {
         before: Option<&Self::Ordering>,
     ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
         let this = self.get_mut();
-        loop {
-            match ready!(OrderedStream::poll_next_before(
-                Pin::new(&mut this.stream),
-                cx,
-                before
-            )) {
-                PollResult::Item { data, ordering } => {
-                    if let Ok(msg) = data {
-                        if let Ok(true) = this.filter(&msg) {
-                            return Poll::Ready(PollResult::Item {
-                                data: msg,
-                                ordering,
-                            });
-                        }
-                    }
-                }
-                PollResult::Terminated => return Poll::Ready(PollResult::Terminated),
-                PollResult::NoneBefore => return Poll::Ready(PollResult::NoneBefore),
+        if let Some(before) = before {
+            if this.last_seq >= *before {
+                return Poll::Ready(PollResult::NoneBefore);
             }
+        }
+        if let Some(msg) = ready!(stream::Stream::poll_next(Pin::new(this), cx)) {
+            Poll::Ready(PollResult::Item {
+                data: msg,
+                ordering: this.last_seq,
+            })
+        } else {
+            Poll::Ready(PollResult::Terminated)
         }
     }
 }
 
 impl<'a> stream::FusedStream for SignalStream<'a> {
     fn is_terminated(&self) -> bool {
-        ordered_stream::FusedOrderedStream::is_terminated(&self.stream)
+        stream::FusedStream::is_terminated(&self.stream)
     }
 }
 
 #[async_trait::async_trait]
 impl AsyncDrop for SignalStream<'_> {
     async fn async_drop(self) {
-        for stream in self.stream.0 {
-            stream.into_inner().0.async_drop().await
+        for stream in self.stream.into_iter() {
+            stream.async_drop().await;
         }
     }
 }
