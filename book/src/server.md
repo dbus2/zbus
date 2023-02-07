@@ -299,6 +299,9 @@ trait, and should cover most common use cases. However, when a custom error type
 from the method as an error reply, it can be created using `derive(zbus::DBusError)`, and used in
 the returned `Result<T, E>`.
 
+Property methods may also return errors, but they must be `zbus::fdo::Error`. Most often
+you'll want to use `zbus::fdo::Error::UnknownProperty` variant.
+
 ### Sending signals
 
 As you might have noticed in the previous example, the signal methods don't take a `&self` argument
