@@ -6,7 +6,6 @@ use syn::{
     Data, DeriveInput, Error,
     Meta::{NameValue, Path},
     NestedMeta::Meta,
-    Type, TypePath,
 };
 
 use crate::utils::*;
@@ -47,13 +46,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
         let dict_name = get_rename_attribute(&f.attrs, f.span())?
             .unwrap_or_else(|| f.ident.as_ref().unwrap().to_string());
 
-        let is_option = match &f.ty {
-            Type::Path(TypePath {
-                path: syn::Path { segments, .. },
-                ..
-            }) => segments.last().unwrap().ident == "Option",
-            _ => false,
-        };
+        let is_option = ty_is_option(&f.ty);
 
         let e = if is_option {
             quote! {
@@ -134,13 +127,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
         let dict_name = get_rename_attribute(&f.attrs, f.span())?
             .unwrap_or_else(|| f.ident.as_ref().unwrap().to_string());
 
-        let is_option = match &f.ty {
-            Type::Path(TypePath {
-                path: syn::Path { segments, .. },
-                ..
-            }) => segments.last().unwrap().ident == "Option",
-            _ => false,
-        };
+        let is_option = ty_is_option(&f.ty);
 
         entries.push(quote! {
             #dict_name => {

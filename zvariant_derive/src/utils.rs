@@ -1,7 +1,7 @@
 use proc_macro2::{Span, TokenStream};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
-use syn::{Attribute, Lit, Meta, Meta::List, MetaList, NestedMeta, Result};
+use syn::{Attribute, Lit, Meta, Meta::List, MetaList, NestedMeta, Result, Type, TypePath};
 
 pub fn zvariant_path() -> TokenStream {
     if let Ok(FoundCrate::Name(name)) = crate_name("zvariant") {
@@ -129,5 +129,15 @@ pub fn get_meta_items(attr: &Attribute) -> Result<Vec<NestedMeta>> {
     match attr.parse_meta() {
         Ok(List(meta)) => Ok(meta.nested.into_iter().collect()),
         _ => panic!("unsupported attribute"),
+    }
+}
+
+pub fn ty_is_option(ty: &Type) -> bool {
+    match ty {
+        Type::Path(TypePath {
+            path: syn::Path { segments, .. },
+            ..
+        }) => segments.last().unwrap().ident == "Option",
+        _ => false,
     }
 }
