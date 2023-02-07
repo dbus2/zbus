@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use syn::{punctuated::Punctuated, spanned::Spanned, Data, DeriveInput, Error};
+use syn::{punctuated::Punctuated, spanned::Spanned, Data, DeriveInput, Error, Field};
 
 use crate::utils::*;
 
@@ -25,11 +25,38 @@ pub fn expand_type_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     })
 }
 
+fn dict_name_for_field(
+    f: &Field,
+    rename_attr: Option<String>,
+    rename_all_attr: Option<&str>,
+) -> Result<String, Error> {
+    if let Some(name) = rename_attr {
+        Ok(name)
+    } else {
+        let ident = f.ident.as_ref().unwrap().to_string();
+
+        match rename_all_attr {
+            Some("lowercase") => Ok(ident.to_ascii_lowercase()),
+            Some("UPPERCASE") => Ok(ident.to_ascii_uppercase()),
+            Some("PascalCase") => Ok(pascal_or_camel_case(&ident, true)),
+            Some("camelCase") => Ok(pascal_or_camel_case(&ident, false)),
+            Some("snake_case") => Ok(snake_case(&ident)),
+            None => Ok(ident),
+            Some(other) => Err(Error::new(
+                f.span(),
+                format!("invalid `rename_all` attribute value {other}"),
+            )),
+        }
+    }
+}
+
 pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     let (name, data) = match input.data {
         Data::Struct(data) => (input.ident, data),
         _ => return Err(Error::new(input.span(), "only structs supported")),
     };
+
+    let StructAttributes { rename_all, .. } = StructAttributes::parse(&input.attrs)?;
 
     let zv = zvariant_path();
     let mut entries = quote! {};
@@ -39,7 +66,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
         let FieldAttributes { rename } = FieldAttributes::parse(&f.attrs)?;
 
         let name = &f.ident;
-        let dict_name = rename.unwrap_or_else(|| name.as_ref().unwrap().to_string());
+        let dict_name = dict_name_for_field(f, rename, rename_all.as_deref())?;
 
         let is_option = ty_is_option(&f.ty);
 
@@ -89,6 +116,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
     };
 
     let StructAttributes {
+        rename_all,
         deny_unknown_fields,
         ..
     } = StructAttributes::parse(&input.attrs)?;
@@ -104,7 +132,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
         let FieldAttributes { rename } = FieldAttributes::parse(&f.attrs)?;
 
         let name = &f.ident;
-        let dict_name = rename.unwrap_or_else(|| name.as_ref().unwrap().to_string());
+        let dict_name = dict_name_for_field(f, rename, rename_all.as_deref())?;
 
         let is_option = ty_is_option(&f.ty);
 
