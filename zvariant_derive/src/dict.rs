@@ -1,12 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use syn::{
-    punctuated::Punctuated,
-    spanned::Spanned,
-    Data, DeriveInput, Error,
-    Meta::{NameValue, Path},
-    NestedMeta::Meta,
-};
+use syn::{punctuated::Punctuated, spanned::Spanned, Data, DeriveInput, Error};
 
 use crate::utils::*;
 
@@ -42,9 +36,10 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
     let mut num_entries: usize = 0;
 
     for f in &data.fields {
+        let FieldAttributes { rename } = FieldAttributes::parse(&f.attrs)?;
+
         let name = &f.ident;
-        let dict_name = get_rename_attribute(&f.attrs, f.span())?
-            .unwrap_or_else(|| f.ident.as_ref().unwrap().to_string());
+        let dict_name = rename.unwrap_or_else(|| name.as_ref().unwrap().to_string());
 
         let is_option = ty_is_option(&f.ty);
 
@@ -93,27 +88,10 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
         _ => return Err(Error::new(input.span(), "only structs supported")),
     };
 
-    let mut deny_unknown_fields = false;
-    for meta_item in input.attrs.iter().flat_map(get_meta_items).flatten() {
-        match &meta_item {
-            Meta(Path(p)) if p.is_ident("deny_unknown_fields") => {
-                deny_unknown_fields = true;
-            }
-            Meta(NameValue(name_val)) => {
-                match name_val
-                    .path
-                    .get_ident()
-                    .map(ToString::to_string)
-                    .unwrap_or_default()
-                    .as_str()
-                {
-                    "signature" => continue,
-                    _ => return Err(Error::new(meta_item.span(), "unsupported attribute")),
-                }
-            }
-            _ => return Err(Error::new(meta_item.span(), "unsupported attribute")),
-        }
-    }
+    let StructAttributes {
+        deny_unknown_fields,
+        ..
+    } = StructAttributes::parse(&input.attrs)?;
 
     let visitor = format_ident!("{}Visitor", name);
     let zv = zvariant_path();
@@ -123,9 +101,10 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
     let mut entries = Vec::new();
 
     for f in &data.fields {
+        let FieldAttributes { rename } = FieldAttributes::parse(&f.attrs)?;
+
         let name = &f.ident;
-        let dict_name = get_rename_attribute(&f.attrs, f.span())?
-            .unwrap_or_else(|| f.ident.as_ref().unwrap().to_string());
+        let dict_name = rename.unwrap_or_else(|| name.as_ref().unwrap().to_string());
 
         let is_option = ty_is_option(&f.ty);
 
