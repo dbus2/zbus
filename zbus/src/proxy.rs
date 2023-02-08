@@ -8,6 +8,7 @@ use futures_util::{
     StreamExt,
 };
 use once_cell::sync::OnceCell;
+#[cfg(feature = "ordered-stream")]
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
@@ -1219,6 +1220,7 @@ impl<'a> stream::Stream for SignalStream<'a> {
     }
 }
 
+#[cfg(feature = "ordered-stream")]
 impl<'a> OrderedStream for SignalStream<'a> {
     type Data = Arc<Message>;
     type Ordering = MessageSequence;

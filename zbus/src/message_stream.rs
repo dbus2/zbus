@@ -6,8 +6,9 @@ use std::{
 };
 
 use async_broadcast::Receiver as ActiveReceiver;
-use futures_core::{ready, stream};
+use futures_core::stream;
 use futures_util::stream::FusedStream;
+#[cfg(feature = "ordered-stream")]
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use tracing::warn;
@@ -184,6 +185,7 @@ impl stream::Stream for MessageStream {
     }
 }
 
+#[cfg(feature = "ordered-stream")]
 impl OrderedStream for MessageStream {
     type Data = Result<Arc<Message>>;
     type Ordering = MessageSequence;
@@ -199,7 +201,7 @@ impl OrderedStream for MessageStream {
                 return Poll::Ready(PollResult::NoneBefore);
             }
         }
-        if let Some(msg) = ready!(stream::Stream::poll_next(Pin::new(this), cx)) {
+        if let Some(msg) = futures_core::ready!(stream::Stream::poll_next(Pin::new(this), cx)) {
             Poll::Ready(PollResult::Item {
                 data: msg,
                 ordering: this.inner.last_seq,
