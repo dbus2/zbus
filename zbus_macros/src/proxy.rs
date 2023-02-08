@@ -960,7 +960,7 @@ fn gen_proxy_signal(
     };
 
     let stream_gen_doc = format!(
-        "A [`{trait_name}`] implementation that yields [`signal_name`] signals.\n\
+        "A [`{trait_name}`] implementation that yields [`{signal_name}`] signals.\n\
             \n\
             Use [`{proxy_name}::{receiver_name}`] to create an instance of this type.\n\
             \n\
