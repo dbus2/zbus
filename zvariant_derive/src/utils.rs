@@ -1,7 +1,9 @@
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
-use syn::{Attribute, Lit, Meta, Meta::List, MetaList, NestedMeta, Result};
+use syn::{
+    spanned::Spanned, Attribute, Lit, LitStr, Meta, MetaList, NestedMeta, Result, Type, TypePath,
+};
 
 pub fn zvariant_path() -> TokenStream {
     if let Ok(FoundCrate::Name(name)) = crate_name("zvariant") {
@@ -27,19 +29,18 @@ fn find_attribute_meta(attrs: &[Attribute], attr_name: &str) -> Result<Option<Me
     }
 }
 
-// parse a single meta like: ident = "value"
-fn parse_attribute(meta: &NestedMeta) -> (String, String) {
+fn parse_attribute(meta: &NestedMeta) -> (&Ident, Option<&LitStr>) {
     let meta = match &meta {
         NestedMeta::Meta(m) => m,
         _ => panic!("wrong meta type"),
     };
     let meta = match meta {
-        Meta::Path(p) => return (p.get_ident().unwrap().to_string(), "".to_string()),
+        Meta::Path(p) => return (p.get_ident().unwrap(), None),
         Meta::NameValue(n) => n,
         _ => panic!("wrong meta type"),
     };
     let value = match &meta.lit {
-        Lit::Str(s) => s.value(),
+        Lit::Str(s) => s,
         _ => panic!("wrong meta type"),
     };
 
@@ -48,86 +49,173 @@ fn parse_attribute(meta: &NestedMeta) -> (String, String) {
         Some(ident) => ident,
     };
 
-    (ident.to_string(), value)
+    (ident, Some(value))
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum ItemAttribute {
-    Rename(String),
-    Signature(String),
-}
-
-fn parse_item_attribute(meta: &NestedMeta) -> Result<Option<ItemAttribute>> {
-    let (ident, v) = parse_attribute(meta);
-
-    match ident.as_ref() {
-        "rename" => Ok(Some(ItemAttribute::Rename(v))),
-        "signature" => {
-            let signature = match v.as_str() {
-                "dict" => "a{sv}".to_string(),
-                _ => v,
-            };
-            Ok(Some(ItemAttribute::Signature(signature)))
+fn match_attribute_with_value<'a>(
+    attr: &str,
+    ident: &Ident,
+    value: Option<&'a LitStr>,
+    span: Span,
+) -> Result<Option<&'a LitStr>> {
+    if ident == attr {
+        if let Some(value) = value {
+            Ok(Some(value))
+        } else {
+            Err(syn::Error::new(
+                span,
+                format!("attribute `{attr}` must have a value"),
+            ))
         }
-        "deny_unknown_fields" => Ok(None),
-        s => panic!("Unknown item meta {}", s),
+    } else {
+        Ok(None)
     }
 }
 
-// Parse optional item attributes such as:
-// #[zvariant(rename = "MyName")]
-pub fn parse_item_attributes(attrs: &[Attribute]) -> Result<Vec<ItemAttribute>> {
+fn match_attribute_without_value(
+    attr: &str,
+    ident: &Ident,
+    value: Option<&LitStr>,
+    span: Span,
+) -> Result<bool> {
+    if ident == attr {
+        if value.is_some() {
+            Err(syn::Error::new(
+                span,
+                format!("attribute `{attr}` must not have a value"),
+            ))
+        } else {
+            Ok(true)
+        }
+    } else {
+        Ok(false)
+    }
+}
+
+fn iter_item_attributes(attrs: &[Attribute]) -> Result<impl Iterator<Item = NestedMeta>> {
     let meta = find_attribute_meta(attrs, "zvariant")?;
 
-    let v = match meta {
-        Some(meta) => meta
-            .nested
-            .iter()
-            .filter_map(|m| parse_item_attribute(m).unwrap())
-            .collect(),
-        None => Vec::new(),
+    Ok(meta.into_iter().flat_map(|meta| meta.nested.into_iter()))
+}
+
+static ALLOWED_ATTRS: &[&str] = &["signature", "rename_all", "deny_unknown_fields", "rename"];
+
+fn is_valid_attr(ident: &Ident) -> bool {
+    ALLOWED_ATTRS.iter().any(|attr| ident == attr)
+}
+
+macro_rules! def_attrs {
+    (@attr_ty with) => {Option<String>};
+    (@attr_ty without) => {bool};
+    (@match_attr with $attr_name:ident, $ident:ident, $value:expr, $span:expr, $self:ident) => {
+        if let Some(value) = match_attribute_with_value(stringify!($attr_name), $ident, $value, $span)? {
+            if $self.$attr_name.is_none() {
+                $self.$attr_name = Some(value.value());
+                continue;
+            } else {
+                return Err(crate::syn::Error::new(
+                    $span,
+                    concat!("duplicate `", stringify!($attr_name), "` attribute")
+                ));
+            }
+        }
     };
+    (@match_attr without $attr_name:ident, $ident:ident, $value:expr, $span:expr, $self:ident) => {
+        if match_attribute_without_value(stringify!($attr_name), $ident, $value, $span)? {
+            if !$self.$attr_name {
+                $self.$attr_name = true;
+                continue;
+            } else {
+                return Err(crate::syn::Error::new(
+                    $span,
+                    concat!("duplicate `", stringify!($attr_name), "` attribute")
+                ));
+            }
+        }
+    };
+    ($name:ident, $what:literal, $($attr_name:ident $kind:tt),+) => {
+        #[derive(Default, Clone, Debug)]
+        pub struct $name {
+            $(pub $attr_name: def_attrs!(@attr_ty $kind)),+
+        }
 
-    Ok(v)
+        impl $name {
+            pub fn parse(attrs: &[Attribute]) -> Result<Self> {
+                let mut parsed = $name::default();
+
+                for nested_meta in iter_item_attributes(attrs)? {
+                    let (ident, value) = parse_attribute(&nested_meta);
+                    let span = nested_meta.span();
+
+                    // This creates subsequent if blocks for simplicity. Any block that is taken
+                    // either returns an error or sets the attribute field and continues.
+                    $(
+                        def_attrs!(@match_attr $kind $attr_name, ident, value, span, parsed);
+                    )+
+
+                    // None of the if blocks have been taken, return the appropriate error.
+                    return Err(syn::Error::new(span, if is_valid_attr(ident) {
+                        format!(concat!("attribute `{}` is not allowed on ", $what), ident)
+                    } else {
+                        format!("unknown attribute `{ident}`")
+                    }))
+                }
+
+                Ok(parsed)
+            }
+        }
+    };
 }
 
-pub fn get_signature_attribute(attrs: &[Attribute], span: Span) -> Result<Option<String>> {
-    let attrs = parse_item_attributes(attrs)?;
-    attrs
-        .into_iter()
-        .map(|x| match x {
-            ItemAttribute::Signature(s) => Ok(s),
-            ItemAttribute::Rename(_) => Err(syn::Error::new(
-                span,
-                "`rename` attribute is not applicable to type declarations",
-            )),
-        })
-        .next()
-        .transpose()
-}
+def_attrs!(StructAttributes, "struct", signature with, rename_all with, deny_unknown_fields without);
+def_attrs!(FieldAttributes, "field", rename with);
 
-pub fn get_rename_attribute(attrs: &[Attribute], span: Span) -> Result<Option<String>> {
-    let attrs = parse_item_attributes(attrs)?;
-    attrs
-        .into_iter()
-        .map(|x| match x {
-            ItemAttribute::Rename(s) => Ok(s),
-            ItemAttribute::Signature(_) => Err(syn::Error::new(
-                span,
-                "`signature` not applicable to fields",
-            )),
-        })
-        .next()
-        .transpose()
-}
+/// Convert to pascal or camel case, assuming snake case.
+///
+/// If `s` is already in pascal or camel case, should yield the same result.
+pub fn pascal_or_camel_case(s: &str, is_pascal_case: bool) -> String {
+    let mut result = String::new();
+    let mut capitalize = is_pascal_case;
+    let mut first = true;
+    for ch in s.chars() {
+        if ch == '_' {
+            capitalize = true;
+        } else if capitalize {
+            result.push(ch.to_ascii_uppercase());
+            capitalize = false;
+        } else if first && !is_pascal_case {
+            result.push(ch.to_ascii_lowercase());
+        } else {
+            result.push(ch);
+        }
 
-pub fn get_meta_items(attr: &Attribute) -> Result<Vec<NestedMeta>> {
-    if !attr.path.is_ident("zvariant") {
-        return Ok(Vec::new());
+        if first {
+            first = false;
+        }
     }
+    result
+}
 
-    match attr.parse_meta() {
-        Ok(List(meta)) => Ok(meta.nested.into_iter().collect()),
-        _ => panic!("unsupported attribute"),
+/// Convert to snake case, assuming pascal case.
+///
+/// If `s` is already in snake case, should yield the same result.
+pub fn snake_case(s: &str) -> String {
+    let mut snake = String::new();
+    for ch in s.chars() {
+        if ch.is_ascii_uppercase() && !snake.is_empty() {
+            snake.push('_');
+        }
+        snake.push(ch.to_ascii_lowercase());
+    }
+    snake
+}
+
+pub fn ty_is_option(ty: &Type) -> bool {
+    match ty {
+        Type::Path(TypePath {
+            path: syn::Path { segments, .. },
+            ..
+        }) => segments.last().unwrap().ident == "Option",
+        _ => false,
     }
 }

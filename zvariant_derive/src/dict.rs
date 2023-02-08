@@ -1,13 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use syn::{
-    punctuated::Punctuated,
-    spanned::Spanned,
-    Data, DeriveInput, Error,
-    Meta::{NameValue, Path},
-    NestedMeta::Meta,
-    Type, TypePath,
-};
+use syn::{punctuated::Punctuated, spanned::Spanned, Data, DeriveInput, Error, Field};
 
 use crate::utils::*;
 
@@ -32,28 +25,50 @@ pub fn expand_type_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     })
 }
 
+fn dict_name_for_field(
+    f: &Field,
+    rename_attr: Option<String>,
+    rename_all_attr: Option<&str>,
+) -> Result<String, Error> {
+    if let Some(name) = rename_attr {
+        Ok(name)
+    } else {
+        let ident = f.ident.as_ref().unwrap().to_string();
+
+        match rename_all_attr {
+            Some("lowercase") => Ok(ident.to_ascii_lowercase()),
+            Some("UPPERCASE") => Ok(ident.to_ascii_uppercase()),
+            Some("PascalCase") => Ok(pascal_or_camel_case(&ident, true)),
+            Some("camelCase") => Ok(pascal_or_camel_case(&ident, false)),
+            Some("snake_case") => Ok(snake_case(&ident)),
+            None => Ok(ident),
+            Some(other) => Err(Error::new(
+                f.span(),
+                format!("invalid `rename_all` attribute value {other}"),
+            )),
+        }
+    }
+}
+
 pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     let (name, data) = match input.data {
         Data::Struct(data) => (input.ident, data),
         _ => return Err(Error::new(input.span(), "only structs supported")),
     };
 
+    let StructAttributes { rename_all, .. } = StructAttributes::parse(&input.attrs)?;
+
     let zv = zvariant_path();
     let mut entries = quote! {};
     let mut num_entries: usize = 0;
 
     for f in &data.fields {
-        let name = &f.ident;
-        let dict_name = get_rename_attribute(&f.attrs, f.span())?
-            .unwrap_or_else(|| f.ident.as_ref().unwrap().to_string());
+        let FieldAttributes { rename } = FieldAttributes::parse(&f.attrs)?;
 
-        let is_option = match &f.ty {
-            Type::Path(TypePath {
-                path: syn::Path { segments, .. },
-                ..
-            }) => segments.last().unwrap().ident == "Option",
-            _ => false,
-        };
+        let name = &f.ident;
+        let dict_name = dict_name_for_field(f, rename, rename_all.as_deref())?;
+
+        let is_option = ty_is_option(&f.ty);
 
         let e = if is_option {
             quote! {
@@ -100,27 +115,11 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
         _ => return Err(Error::new(input.span(), "only structs supported")),
     };
 
-    let mut deny_unknown_fields = false;
-    for meta_item in input.attrs.iter().flat_map(get_meta_items).flatten() {
-        match &meta_item {
-            Meta(Path(p)) if p.is_ident("deny_unknown_fields") => {
-                deny_unknown_fields = true;
-            }
-            Meta(NameValue(name_val)) => {
-                match name_val
-                    .path
-                    .get_ident()
-                    .map(ToString::to_string)
-                    .unwrap_or_default()
-                    .as_str()
-                {
-                    "signature" => continue,
-                    _ => return Err(Error::new(meta_item.span(), "unsupported attribute")),
-                }
-            }
-            _ => return Err(Error::new(meta_item.span(), "unsupported attribute")),
-        }
-    }
+    let StructAttributes {
+        rename_all,
+        deny_unknown_fields,
+        ..
+    } = StructAttributes::parse(&input.attrs)?;
 
     let visitor = format_ident!("{}Visitor", name);
     let zv = zvariant_path();
@@ -130,17 +129,12 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
     let mut entries = Vec::new();
 
     for f in &data.fields {
-        let name = &f.ident;
-        let dict_name = get_rename_attribute(&f.attrs, f.span())?
-            .unwrap_or_else(|| f.ident.as_ref().unwrap().to_string());
+        let FieldAttributes { rename } = FieldAttributes::parse(&f.attrs)?;
 
-        let is_option = match &f.ty {
-            Type::Path(TypePath {
-                path: syn::Path { segments, .. },
-                ..
-            }) => segments.last().unwrap().ident == "Option",
-            _ => false,
-        };
+        let name = &f.ident;
+        let dict_name = dict_name_for_field(f, rename, rename_all.as_deref())?;
+
+        let is_option = ty_is_option(&f.ty);
 
         entries.push(quote! {
             #dict_name => {
