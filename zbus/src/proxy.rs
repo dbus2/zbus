@@ -1070,6 +1070,14 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
 ///
 /// This type uses a [`MessageStream::for_match_rule`] internally and therefore the note about match
 /// rule registration and [`AsyncDrop`] in its documentation applies here as well.
+///
+/// When `ordered-stream` feature is enabled (default), this type implements [`OrderedStream`].
+/// However, it is **highly** recommended **not** to use it. All message streams on the same
+/// connection are guaranteed to be ordered, so there is no need to use [`OrderedStream`]. Moreover,
+/// the implementation is slightly broken in the sense that [`ordered_stream::Join`] and
+/// [`ordered_stream::JoinMultiple`] will not yield any results until all streams have produced an
+/// item. This trait implementation should be considered deprecated and will be dropped in the
+/// future.
 #[derive(Debug)]
 pub struct SignalStream<'a> {
     stream: SelectAll<MessageStream>,

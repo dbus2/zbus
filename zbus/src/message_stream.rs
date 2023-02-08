@@ -28,6 +28,14 @@ use crate::{
 /// conversion is not an expensive operation so you don't need to  worry about performance, unless
 /// you do it very frequently. If you need to convert back and forth frequently, you may want to
 /// consider keeping both a connection and stream around.
+///
+/// When `ordered-stream` feature is enabled (default), this type implements [`OrderedStream`].
+/// However, it is **highly** recommended **not** to use it. All message streams on the same
+/// connection are guaranteed to be ordered, so there is no need to use [`OrderedStream`]. Moreover,
+/// the implementation is slightly broken if the stream is based on a match rule in the sense that
+/// [`ordered_stream::Join`] and [`ordered_stream::JoinMultiple`] will not yield any results until
+/// all streams have produced an item. This trait implementation should be considered deprecated and
+/// will be dropped in the future.
 #[derive(Clone, Debug)]
 #[must_use = "streams do nothing unless polled"]
 pub struct MessageStream {

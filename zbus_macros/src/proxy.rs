@@ -1100,6 +1100,10 @@ fn gen_proxy_signal(
     } else {
         #[cfg(feature = "ordered-stream")]
         let ordered_stream_impl = quote! {
+            /// This implementation is provided When `ordered-stream` feature is enabled (default).
+            /// However, it is **highly** recommended **not** to use it. All message streams on the
+            /// same connection are guaranteed to be ordered, so there is no need to use it. This
+            /// implementation should be considered deprecated and will be dropped in the future.
             impl #zbus::export::ordered_stream::OrderedStream for #stream_name<'_> {
                 type Data = #signal_name_ident;
                 type Ordering = #zbus::MessageSequence;
