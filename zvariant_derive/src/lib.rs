@@ -217,6 +217,37 @@ pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// The serialized D-Bus version of `Struct {42, 77, None}`
 /// will be `{"field1": Value::U16(42), "another-name": Value::I64(77)}`.
 ///
+/// # Auto renaming fields
+///
+/// The macro supports specifying a Serde-like `#[zvariant(rename_all = "case")]` attribute on
+/// structures. The attribute allows to rename all the fields from snake case to another case
+/// automatically:
+///
+/// ```
+/// use zvariant::{SerializeDict, Type};
+///
+/// #[derive(SerializeDict, Type)]
+/// #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+/// struct Struct {
+///     field1: u16,
+///     #[zvariant(rename = "another-name")]
+///     field2: i64,
+///     optional_field: Option<String>,
+/// }
+/// ```
+///
+/// It's still possible to specify custom names for individual fields using the
+/// `#[zvariant(rename = "another-name")]` attribute even when the `rename_all` attribute is
+/// present.
+///
+/// Currently the macro supports the following values for `case`:
+///
+/// * `"lowercase"`
+/// * `"UPPERCASE"`
+/// * `"PascalCase"`
+/// * `"camelCase"`
+/// * `"snake_case"`
+///
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
 #[proc_macro_derive(SerializeDict, attributes(zvariant))]
 pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
@@ -253,6 +284,37 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// The deserialized D-Bus dictionary `{"field1": Value::U16(42), "another-name": Value::I64(77)}`
 /// will be `Struct {42, 77, None}`.
+///
+/// # Auto renaming fields
+///
+/// The macro supports specifying a Serde-like `#[zvariant(rename_all = "case")]` attribute on
+/// structures. The attribute allows to rename all the fields from snake case to another case
+/// automatically:
+///
+/// ```
+/// use zvariant::{SerializeDict, Type};
+///
+/// #[derive(SerializeDict, Type)]
+/// #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+/// struct Struct {
+///     field1: u16,
+///     #[zvariant(rename = "another-name")]
+///     field2: i64,
+///     optional_field: Option<String>,
+/// }
+/// ```
+///
+/// It's still possible to specify custom names for individual fields using the
+/// `#[zvariant(rename = "another-name")]` attribute even when the `rename_all` attribute is
+/// present.
+///
+/// Currently the macro supports the following values for `case`:
+///
+/// * `"lowercase"`
+/// * `"UPPERCASE"`
+/// * `"PascalCase"`
+/// * `"camelCase"`
+/// * `"snake_case"`
 ///
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
 #[proc_macro_derive(DeserializeDict, attributes(zvariant))]

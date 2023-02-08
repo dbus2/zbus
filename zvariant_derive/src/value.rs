@@ -5,7 +5,7 @@ use syn::{
     Ident, Lifetime, LifetimeDef,
 };
 
-use crate::utils::{get_signature_attribute, zvariant_path};
+use crate::utils::*;
 
 pub enum ValueType {
     Value,
@@ -18,7 +18,12 @@ pub fn expand_derive(ast: DeriveInput, value_type: ValueType) -> Result<TokenStr
     match &ast.data {
         Data::Struct(ds) => match &ds.fields {
             Fields::Named(_) | Fields::Unnamed(_) => {
-                let signature = get_signature_attribute(&ast.attrs, ast.span())?;
+                let StructAttributes { signature, .. } = StructAttributes::parse(&ast.attrs)?;
+                let signature = signature.map(|signature| match signature.as_str() {
+                    "dict" => "a{sv}".to_string(),
+                    _ => signature,
+                });
+
                 impl_struct(
                     value_type,
                     ast.ident,
