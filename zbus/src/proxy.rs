@@ -21,7 +21,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
     task::{Context, Poll},
 };
-use tracing::{debug, info_span, instrument, trace, Instrument};
+use tracing::{debug, info_span, instrument, trace, warn, Instrument};
 
 use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Str, Value};
@@ -1238,6 +1238,10 @@ impl<'a> OrderedStream for SignalStream<'a> {
         cx: &mut Context<'_>,
         before: Option<&Self::Ordering>,
     ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
+        warn!(
+            "`OrderedStream` implementation is deprecated and will be removed in the future. Consult \
+            the `SignalStream` documentation for more information.",
+        );
         let this = self.get_mut();
         if let Some(before) = before {
             if this.last_seq >= *before {

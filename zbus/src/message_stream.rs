@@ -203,6 +203,10 @@ impl OrderedStream for MessageStream {
         cx: &mut Context<'_>,
         before: Option<&Self::Ordering>,
     ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
+        warn!(
+            "`OrderedStream` implementation is deprecated and will be removed in the future. Consult \
+            the `SignalStream` documentation for more information.",
+        );
         let this = self.get_mut();
         if let Some(before) = before {
             if this.inner.last_seq >= *before {
