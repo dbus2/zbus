@@ -1098,22 +1098,12 @@ fn gen_proxy_signal(
             }
         }
     } else {
-        quote! {
-            impl #zbus::export::futures_core::stream::Stream for #stream_name<'_> {
-                type Item = #signal_name_ident;
-
-                fn poll_next(
-                    self: ::std::pin::Pin<&mut Self>,
-                    cx: &mut ::std::task::Context<'_>,
-                    ) -> ::std::task::Poll<::std::option::Option<Self::Item>> {
-                    #zbus::export::futures_core::stream::Stream::poll_next(
-                        ::std::pin::Pin::new(&mut self.get_mut().0),
-                        cx,
-                    )
-                    .map(|msg| msg.map(#signal_name_ident))
-                }
-            }
-
+        #[cfg(feature = "ordered-stream")]
+        let ordered_stream_impl = quote! {
+            /// This implementation is provided When `ordered-stream` feature is enabled (default).
+            /// However, it is **highly** recommended **not** to use it. All message streams on the
+            /// same connection are guaranteed to be ordered, so there is no need to use it. This
+            /// implementation should be considered deprecated and will be dropped in the future.
             impl #zbus::export::ordered_stream::OrderedStream for #stream_name<'_> {
                 type Data = #signal_name_ident;
                 type Ordering = #zbus::MessageSequence;
@@ -1131,6 +1121,26 @@ fn gen_proxy_signal(
                     .map(|msg| msg.map_data(#signal_name_ident))
                 }
             }
+        };
+        #[cfg(not(feature = "ordered-stream"))]
+        let ordered_stream_impl = quote!();
+        quote! {
+            impl #zbus::export::futures_core::stream::Stream for #stream_name<'_> {
+                type Item = #signal_name_ident;
+
+                fn poll_next(
+                    self: ::std::pin::Pin<&mut Self>,
+                    cx: &mut ::std::task::Context<'_>,
+                    ) -> ::std::task::Poll<::std::option::Option<Self::Item>> {
+                    #zbus::export::futures_core::stream::Stream::poll_next(
+                        ::std::pin::Pin::new(&mut self.get_mut().0),
+                        cx,
+                    )
+                    .map(|msg| msg.map(#signal_name_ident))
+                }
+            }
+
+            #ordered_stream_impl
 
             impl #zbus::export::futures_core::stream::FusedStream for #stream_name<'_> {
                 fn is_terminated(&self) -> bool {

@@ -115,6 +115,7 @@ pub mod export {
     pub use async_trait;
     pub use futures_core;
     pub use futures_util;
+    #[cfg(feature = "ordered-stream")]
     pub use ordered_stream;
     pub use serde;
     pub use static_assertions;

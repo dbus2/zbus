@@ -2,7 +2,6 @@ use async_broadcast::{broadcast, InactiveReceiver, Receiver, Sender as Broadcast
 use enumflags2::BitFlags;
 use event_listener::{Event, EventListener};
 use once_cell::sync::OnceCell;
-use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
@@ -205,80 +204,6 @@ pub struct Connection {
 
 assert_impl_all!(Connection: Send, Sync, Unpin);
 
-/// A method call whose completion can be awaited or joined with other streams.
-///
-/// This is useful for cache population method calls, where joining the [`JoinableStream`] with
-/// an update signal stream can be used to ensure that cache updates are not overwritten by a cache
-/// population whose task is scheduled later.
-#[derive(Debug)]
-pub(crate) struct PendingMethodCall {
-    stream: Option<MessageStream>,
-    serial: u32,
-}
-
-impl Future for PendingMethodCall {
-    type Output = Result<Arc<Message>>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.poll_before(cx, None).map(|ret| {
-            ret.map(|(_, r)| r).unwrap_or_else(|| {
-                Err(crate::Error::InputOutput(
-                    io::Error::new(ErrorKind::BrokenPipe, "socket closed").into(),
-                ))
-            })
-        })
-    }
-}
-
-impl OrderedFuture for PendingMethodCall {
-    type Output = Result<Arc<Message>>;
-    type Ordering = zbus::MessageSequence;
-
-    fn poll_before(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        before: Option<&Self::Ordering>,
-    ) -> Poll<Option<(Self::Ordering, Self::Output)>> {
-        let this = self.get_mut();
-        if let Some(stream) = &mut this.stream {
-            loop {
-                match Pin::new(&mut *stream).poll_next_before(cx, before) {
-                    Poll::Ready(PollResult::Item {
-                        data: Ok(msg),
-                        ordering,
-                    }) => {
-                        if msg.reply_serial() != Some(this.serial) {
-                            continue;
-                        }
-                        let res = match msg.message_type() {
-                            MessageType::Error => Err(msg.into()),
-                            MessageType::MethodReturn => Ok(msg),
-                            _ => continue,
-                        };
-                        this.stream = None;
-                        return Poll::Ready(Some((ordering, res)));
-                    }
-                    Poll::Ready(PollResult::Item {
-                        data: Err(e),
-                        ordering,
-                    }) => {
-                        return Poll::Ready(Some((ordering, Err(e))));
-                    }
-
-                    Poll::Ready(PollResult::NoneBefore) => {
-                        return Poll::Ready(None);
-                    }
-                    Poll::Ready(PollResult::Terminated) => {
-                        return Poll::Ready(None);
-                    }
-                    Poll::Pending => return Poll::Pending,
-                }
-            }
-        }
-        Poll::Ready(None)
-    }
-}
-
 impl Connection {
     /// Send `msg` to the peer.
     ///
@@ -329,16 +254,13 @@ impl Connection {
             BitFlags::empty(),
             body,
         )
-        .await?
-        .expect("no reply")
         .await
+        .map(|reply| reply.expect("expected reply"))
     }
 
     /// Send a method call.
     ///
-    /// Send the given message, which must be a method call, over the connection and return an
-    /// object that allows the reply to be retrieved.  Typically you'd want to use
-    /// [`Connection::call_method`] instead.
+    /// Typically you'd want to use [`Connection::call_method`] instead.
     ///
     /// If the `flags` do not contain `MethodFlags::NoReplyExpected`, the return value is
     /// guaranteed to be `Ok(Some(_))`, if there was no error encountered.
@@ -352,7 +274,7 @@ impl Connection {
         method_name: M,
         flags: BitFlags<MessageFlags>,
         body: &B,
-    ) -> Result<Option<PendingMethodCall>>
+    ) -> Result<Option<Arc<Message>>>
     where
         D: TryInto<BusName<'d>>,
         P: TryInto<ObjectPath<'p>>,
@@ -380,7 +302,7 @@ impl Connection {
         let msg = builder.build(body)?;
 
         let msg_receiver = self.inner.method_return_receiver.activate_cloned();
-        let stream = Some(MessageStream::for_subscription_channel(
+        let mut stream = Some(MessageStream::for_subscription_channel(
             msg_receiver,
             // This is a lie but we only use the stream internally so it's fine.
             None,
@@ -390,7 +312,23 @@ impl Connection {
         if flags.contains(MessageFlags::NoReplyExpected) {
             Ok(None)
         } else {
-            Ok(Some(PendingMethodCall { stream, serial }))
+            while let Some(msg) = stream.as_mut().unwrap().next().await {
+                let msg = msg?;
+                if msg.reply_serial() != Some(serial) {
+                    continue;
+                }
+                let res = match msg.message_type() {
+                    MessageType::Error => Err(msg.into()),
+                    MessageType::MethodReturn => Ok(Some(msg)),
+                    _ => continue,
+                };
+
+                return res;
+            }
+
+            Err(crate::Error::InputOutput(
+                io::Error::new(ErrorKind::BrokenPipe, "socket closed").into(),
+            ))
         }
     }
 

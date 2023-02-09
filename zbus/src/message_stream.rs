@@ -6,8 +6,9 @@ use std::{
 };
 
 use async_broadcast::Receiver as ActiveReceiver;
-use futures_core::{ready, stream};
+use futures_core::stream;
 use futures_util::stream::FusedStream;
+#[cfg(feature = "ordered-stream")]
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use tracing::warn;
@@ -27,6 +28,14 @@ use crate::{
 /// conversion is not an expensive operation so you don't need to  worry about performance, unless
 /// you do it very frequently. If you need to convert back and forth frequently, you may want to
 /// consider keeping both a connection and stream around.
+///
+/// When `ordered-stream` feature is enabled (default), this type implements [`OrderedStream`].
+/// However, it is **highly** recommended **not** to use it. All message streams on the same
+/// connection are guaranteed to be ordered, so there is no need to use [`OrderedStream`]. Moreover,
+/// the implementation is slightly broken if the stream is based on a match rule in the sense that
+/// [`ordered_stream::Join`] and [`ordered_stream::JoinMultiple`] will not yield any results until
+/// all streams have produced an item. This trait implementation should be considered deprecated and
+/// will be dropped in the future.
 #[derive(Clone, Debug)]
 #[must_use = "streams do nothing unless polled"]
 pub struct MessageStream {
@@ -184,6 +193,7 @@ impl stream::Stream for MessageStream {
     }
 }
 
+#[cfg(feature = "ordered-stream")]
 impl OrderedStream for MessageStream {
     type Data = Result<Arc<Message>>;
     type Ordering = MessageSequence;
@@ -193,13 +203,17 @@ impl OrderedStream for MessageStream {
         cx: &mut Context<'_>,
         before: Option<&Self::Ordering>,
     ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
+        warn!(
+            "`OrderedStream` implementation is deprecated and will be removed in the future. Consult \
+            the `SignalStream` documentation for more information.",
+        );
         let this = self.get_mut();
         if let Some(before) = before {
             if this.inner.last_seq >= *before {
                 return Poll::Ready(PollResult::NoneBefore);
             }
         }
-        if let Some(msg) = ready!(stream::Stream::poll_next(Pin::new(this), cx)) {
+        if let Some(msg) = futures_core::ready!(stream::Stream::poll_next(Pin::new(this), cx)) {
             Poll::Ready(PollResult::Item {
                 data: msg,
                 ordering: this.inner.last_seq,
