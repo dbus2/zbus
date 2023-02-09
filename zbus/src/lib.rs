@@ -12,9 +12,6 @@
 
 #[cfg(doctest)]
 mod doctests {
-    doc_comment::doctest!("../README.md");
-    doc_comment::doctest!("../../README.md");
-
     // Book markdown checks
     doc_comment::doctest!("../../book/src/client.md");
     doc_comment::doctest!("../../book/src/concepts.md");

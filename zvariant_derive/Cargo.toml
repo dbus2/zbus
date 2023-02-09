@@ -23,7 +23,6 @@ quote = "1.0.21"
 proc-macro-crate = "1.2.1"
 
 [dev-dependencies]
-doc-comment = "0.3.3"
 byteorder = "1.4.3"
 zvariant = { path = "../zvariant", features = ["enumflags2"] }
 enumflags2 = { version = "0.7.5", features = ["serde"] }

@@ -1147,20 +1147,21 @@ impl<'a> SignalStream<'a> {
 
                 let mut src_unique_name = loop {
                     match join.next().await {
-                        Some(Either::Left(msg)) => {
-                            if let Some(signal) =
-                                msg.map(NameOwnerChanged::from_message).ok().flatten()
+                        Some(Either::Left(Ok(msg))) => {
+                            let signal = NameOwnerChanged::from_message(msg)
+                                .expect("`NameOwnerChanged` signal stream got wrong message");
                             {
-                                if let Ok(args) = signal.args() {
-                                    match (args.name(), args.new_owner().deref()) {
-                                        (BusName::WellKnown(n), Some(new_owner)) if n == &name => {
-                                            break Some(new_owner.to_owned());
-                                        }
-                                        _ => (),
-                                    }
-                                }
+                                break signal
+                                    .args()
+                                    // SAFETY: The filtering code couldn't have let this through if
+                                    // args were not in order.
+                                    .expect("`NameOwnerChanged` signal has no args")
+                                    .new_owner()
+                                    .as_ref()
+                                    .map(UniqueName::to_owned);
                             }
                         }
+                        Some(Either::Left(Err(_))) => (),
                         Some(Either::Right(Ok(response))) => {
                             break Some(response.body::<UniqueName<'_>>()?.to_owned())
                         }
