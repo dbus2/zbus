@@ -10,11 +10,6 @@
     allow(unused_extern_crates),
 )))]
 
-#[cfg(doctest)]
-mod doctests {
-    doc_comment::doctest!("../README.md");
-}
-
 use proc_macro::TokenStream;
 use syn::{self, DeriveInput};
 

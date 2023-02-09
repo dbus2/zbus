@@ -17,9 +17,6 @@ serde = { version = "1.0", features = ["derive"] }
 zvariant = { path = "../zvariant", version = "3.10", default-features = false, features = ["enumflags2"] }
 static_assertions = "1.1.0"
 
-[dev-dependencies]
-doc-comment = "0.3.3"
-
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
