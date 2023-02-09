@@ -37,7 +37,6 @@ time = { version = "0.3.16", features = ["serde"], optional = true }
 chrono = { version = "0.4.23", features = ["serde"], default-features = false, optional = true }
 
 [dev-dependencies]
-doc-comment = "0.3.3"
 serde_json = "1.0"
 serde_repr = "0.1.9"
 glib = { git = "https://github.com/gtk-rs/glib", rev = "c9ee583cea0" }

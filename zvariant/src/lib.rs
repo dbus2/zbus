@@ -11,11 +11,6 @@
     allow(unused_extern_crates),
 )))]
 
-#[cfg(doctest)]
-mod doctests {
-    doc_comment::doctest!("../README.md");
-}
-
 #[macro_use]
 mod utils;
 pub use utils::*;
