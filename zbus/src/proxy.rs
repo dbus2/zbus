@@ -1250,21 +1250,8 @@ assert_impl_all!(SignalStream<'_>: Send, Sync, Unpin);
 impl<'a> stream::Stream for SignalStream<'a> {
     type Item = Arc<Message>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        loop {
-            match ready!(OrderedStream::poll_next_before(self.as_mut(), cx, None)) {
-                // FIXME: We should make use of `Stream` impl of `Join` when that's available:
-                //
-                // https://github.com/danieldg/ordered-stream/issues/7
-                PollResult::Item {
-                    data: msg,
-                    ordering: _,
-                } => return Poll::Ready(Some(msg)),
-                PollResult::Terminated => return Poll::Ready(None),
-                // SAFETY: We didn't specify a before ordering, so we should never get this.
-                PollResult::NoneBefore => unreachable!(),
-            }
-        }
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        OrderedStream::poll_next_before(self, cx, None).map(|res| res.into_data())
     }
 }
 
