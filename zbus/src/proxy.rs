@@ -327,10 +327,7 @@ impl PropertiesCache {
     )> {
         use ordered_stream::OrderedStreamExt;
 
-        let prop_changes = proxy
-            .receive_properties_changed()
-            .await
-            .map(|s| s.map(Either::Left))?;
+        let prop_changes = proxy.receive_properties_changed().await?.map(Either::Left);
 
         let get_all = proxy
             .connection()
@@ -347,26 +344,37 @@ impl PropertiesCache {
 
         let mut join = join_streams(prop_changes, get_all);
 
-        match join.next().await {
-            Some(Either::Left(update)) => {
-                if let Ok(args) = update.args() {
-                    if args.interface_name == interface {
-                        self.update_cache(
-                            &uncached_properties,
-                            &args.changed_properties,
-                            args.invalidated_properties,
-                            &interface,
-                        );
-                    }
+        loop {
+            match join.next().await {
+                Some(Either::Left(_update)) => {
+                    // discard updates prior to the initial population
+                }
+                Some(Either::Right(populate)) => {
+                    populate?.body().map(|values| {
+                        self.update_cache(&uncached_properties, &values, Vec::new(), &interface);
+                    })?;
+                    break;
+                }
+                None => break,
+            }
+        }
+        if let Some((Either::Left(update), _)) = Pin::new(&mut join).take_buffered() {
+            // if an update was buffered, then it happened after the get_all returned and needs to
+            // be applied before we discard the join
+            if let Ok(args) = update.args() {
+                if args.interface_name == interface {
+                    self.update_cache(
+                        &uncached_properties,
+                        &args.changed_properties,
+                        args.invalidated_properties,
+                        &interface,
+                    );
                 }
             }
-            Some(Either::Right(populate)) => {
-                populate?.body().map(|values| {
-                    self.update_cache(&uncached_properties, &values, Vec::new(), &interface);
-                })?;
-            }
-            None => (),
         }
+        // This is needed to avoid a "implementation of `OrderedStream` is not general enough"
+        // error that occurs if you apply the map and join to Pin::new(&mut prop_changes) instead
+        // of directly to the stream.
         let prop_changes = join.into_inner().0.into_inner();
 
         Ok((prop_changes, interface, uncached_properties))
