@@ -149,7 +149,6 @@ impl<S: Socket> ClientHandshake<S> {
     }
 
     fn mechanism_data(&mut self, data: Vec<u8>) -> Result<(ClientHandshakeStep, Command)> {
-        use ClientHandshakeStep::*;
         let mech = self.common.mechanism()?;
         match mech {
             AuthMechanism::Cookie => {
@@ -170,7 +169,10 @@ impl<S: Socket> ClientHandshake<S> {
                 let sec = format!("{server_chall}:{client_chall}:{cookie}");
                 let sha1 = hex::encode(Sha1::digest(sec));
                 let data = format!("{client_chall} {sha1}");
-                Ok((WaitingForOK, Command::Data(Some(data.into()))))
+                Ok((
+                    ClientHandshakeStep::WaitingForOK,
+                    Command::Data(Some(data.into())),
+                ))
             }
             _ => Err(Error::Handshake("Unexpected mechanism DATA".into())),
         }
