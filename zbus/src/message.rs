@@ -350,9 +350,17 @@ enum Fds {
 }
 
 /// A position in the stream of [`Message`] objects received by a single [`zbus::Connection`].
+///
+/// Note: the relative ordering of values obtained from distinct [`zbus::Connection`] objects is
+/// not specified; only sequence numbers originating from the same connection should be compared.
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct MessageSequence {
     recv_seq: u64,
+}
+
+impl MessageSequence {
+    /// A sequence number that is higher than any other; used by errors that terminate a stream.
+    pub(crate) const LAST: Self = Self { recv_seq: u64::MAX };
 }
 
 /// A D-Bus Message.
