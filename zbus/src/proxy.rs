@@ -3,9 +3,7 @@ use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
 use futures_util::{future::Either, stream::Map};
 use once_cell::sync::OnceCell;
-use ordered_stream::{
-    join as join_streams, FromFuture, JoinMultiple, OrderedStream, Peekable, PollResult,
-};
+use ordered_stream::{join as join_streams, FromFuture, Join, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet},
@@ -1088,7 +1086,7 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
 /// rule registration and [`AsyncDrop`] in its documentation applies here as well.
 #[derive(Debug)]
 pub struct SignalStream<'a> {
-    stream: JoinMultiple<Vec<Peekable<MessageStream>>>,
+    stream: Join<MessageStream, Option<MessageStream>>,
     src_unique_name: Option<UniqueName<'static>>,
     phantom: PhantomData<&'a ()>,
 }
@@ -1116,9 +1114,10 @@ impl<'a> SignalStream<'a> {
         let (src_unique_name, stream) = match proxy.destination().to_owned() {
             BusName::Unique(name) => (
                 Some(name),
-                JoinMultiple(vec![ordered_stream::OrderedStreamExt::peekable(
+                join_streams(
                     MessageStream::for_match_rule(signal_rule, conn, None).await?,
-                )]),
+                    None,
+                ),
             ),
             BusName::WellKnown(name) => {
                 use ordered_stream::OrderedStreamExt;
@@ -1210,12 +1209,10 @@ impl<'a> SignalStream<'a> {
                 }
                 let name_owner_changed_stream = stream.into_inner();
 
-                let stream = JoinMultiple(vec![
-                    MessageStream::for_match_rule(signal_rule, conn, None)
-                        .await?
-                        .peekable(),
-                    name_owner_changed_stream.peekable(),
-                ]);
+                let stream = join_streams(
+                    MessageStream::for_match_rule(signal_rule, conn, None).await?,
+                    Some(name_owner_changed_stream),
+                );
 
                 (src_unique_name, stream)
             }
@@ -1297,8 +1294,10 @@ impl<'a> stream::FusedStream for SignalStream<'a> {
 #[async_trait::async_trait]
 impl AsyncDrop for SignalStream<'_> {
     async fn async_drop(self) {
-        for stream in self.stream.0 {
-            stream.into_inner().0.async_drop().await
+        let (signals, names, _buffered) = self.stream.into_inner();
+        signals.async_drop().await;
+        if let Some(names) = names {
+            names.async_drop().await;
         }
     }
 }
