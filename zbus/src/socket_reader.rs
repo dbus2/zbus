@@ -1,16 +1,14 @@
 use std::{
     collections::HashMap,
-    future::Future,
-    pin::Pin,
     sync::{self, Arc},
-    task::{Context, Poll},
 };
 
+use futures_util::future::poll_fn;
 use tracing::{debug, instrument, trace};
 
 use crate::{
-    async_lock::Mutex, raw::Connection as RawConnection, Executor, Message, MsgBroadcaster,
-    OwnedMatchRule, Result, Socket, Task,
+    async_lock::Mutex, raw::Connection as RawConnection, Executor, MsgBroadcaster, OwnedMatchRule,
+    Socket, Task,
 };
 
 #[derive(Debug)]
@@ -36,10 +34,14 @@ impl SocketReader {
     async fn receive_msg(self) {
         loop {
             trace!("Waiting for message on the socket..");
-            let receive_msg = ReceiveMessage {
-                raw_conn: &self.raw_conn,
+            let msg = {
+                poll_fn(|cx| {
+                    let mut raw_conn = self.raw_conn.lock().expect("poisoned lock");
+                    raw_conn.try_receive_message(cx)
+                })
+                .await
+                .map(Arc::new)
             };
-            let msg = receive_msg.await.map(Arc::new);
             match &msg {
                 Ok(msg) => trace!("Message received on the socket: {:?}", msg),
                 Err(e) => trace!("Error reading from the socket: {:?}", e),
@@ -84,18 +86,5 @@ impl SocketReader {
                 return;
             }
         }
-    }
-}
-
-struct ReceiveMessage<'r> {
-    raw_conn: &'r sync::Mutex<RawConnection<Box<dyn Socket>>>,
-}
-
-impl<'r> Future for ReceiveMessage<'r> {
-    type Output = Result<Message>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut raw_conn = self.raw_conn.lock().expect("poisoned lock");
-        raw_conn.try_receive_message(cx)
     }
 }
