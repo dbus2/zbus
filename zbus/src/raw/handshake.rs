@@ -152,7 +152,8 @@ impl<S: Socket> ClientHandshake<S> {
         let mech = self.common.mechanism()?;
         match mech {
             AuthMechanism::Cookie => {
-                let context = String::from_utf8_lossy(&data);
+                let context = String::from_utf8(data)
+                    .map_err(|_| Error::Handshake("Cookie context was not valid UTF-8".into()))?;
                 let mut split = context.split_ascii_whitespace();
                 let name = split
                     .next()
