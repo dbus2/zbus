@@ -892,7 +892,7 @@ impl<'a> Proxy<'a> {
     }
 
     /// Create a stream for signal named `signal_name`.
-    pub async fn receive_signal<'m: 'a, M>(&self, signal_name: M) -> Result<SignalStream<'a>>
+    pub async fn receive_signal<'m, M>(&self, signal_name: M) -> Result<SignalStream<'m>>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
@@ -908,11 +908,11 @@ impl<'a> Proxy<'a> {
     /// types.
     ///
     /// The arguments are passed as a tuples of argument index and expected value.
-    pub async fn receive_signal_with_args<'m: 'a, M>(
+    pub async fn receive_signal_with_args<'m, M>(
         &self,
         signal_name: M,
         args: &[(u8, &str)],
-    ) -> Result<SignalStream<'a>>
+    ) -> Result<SignalStream<'m>>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
@@ -921,18 +921,18 @@ impl<'a> Proxy<'a> {
         self.receive_signals(Some(signal_name), args).await
     }
 
-    async fn receive_signals<'m: 'a>(
+    async fn receive_signals<'m>(
         &self,
         signal_name: Option<MemberName<'m>>,
         args: &[(u8, &str)],
-    ) -> Result<SignalStream<'a>> {
+    ) -> Result<SignalStream<'m>> {
         self.inner.subscribe_dest_owner_change().await?;
 
         SignalStream::new(self.clone(), signal_name, args).await
     }
 
     /// Create a stream for all signals emitted by this service.
-    pub async fn receive_all_signals(&self) -> Result<SignalStream<'a>> {
+    pub async fn receive_all_signals(&self) -> Result<SignalStream<'static>> {
         self.receive_signals(None, &[]).await
     }
 
@@ -1092,9 +1092,9 @@ pub struct SignalStream<'a> {
 }
 
 impl<'a> SignalStream<'a> {
-    async fn new<'m: 'a>(
-        proxy: Proxy<'a>,
-        signal_name: Option<MemberName<'m>>,
+    async fn new(
+        proxy: Proxy<'_>,
+        signal_name: Option<MemberName<'a>>,
         args: &[(u8, &str)],
     ) -> Result<SignalStream<'a>> {
         let mut rule_builder = MatchRule::builder()
@@ -1218,7 +1218,7 @@ impl<'a> SignalStream<'a> {
             }
         };
 
-        Ok(Self {
+        Ok(SignalStream {
             stream,
             src_unique_name,
             phantom: PhantomData,

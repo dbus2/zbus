@@ -271,7 +271,7 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub fn receive_signal<'m: 'a, M>(&self, signal_name: M) -> Result<SignalIterator<'a>>
+    pub fn receive_signal<'m, M>(&self, signal_name: M) -> Result<SignalIterator<'m>>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
@@ -287,11 +287,11 @@ impl<'a> Proxy<'a> {
     /// types.
     ///
     /// The arguments are passed as a tuples of argument index and expected value.
-    pub fn receive_signal_with_args<'m: 'a, M>(
+    pub fn receive_signal_with_args<'m, M>(
         &self,
         signal_name: M,
         args: &[(u8, &str)],
-    ) -> Result<SignalIterator<'a>>
+    ) -> Result<SignalIterator<'m>>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
@@ -308,7 +308,7 @@ impl<'a> Proxy<'a> {
     /// Apart from general I/O errors that can result from socket communications, calling this
     /// method will also result in an error if the destination service has not yet registered its
     /// well-known name with the bus (assuming you're using the well-known name as destination).
-    pub fn receive_all_signals(&self) -> Result<SignalIterator<'a>> {
+    pub fn receive_all_signals(&self) -> Result<SignalIterator<'static>> {
         block_on(self.inner().receive_all_signals())
             .map(Some)
             .map(SignalIterator)
