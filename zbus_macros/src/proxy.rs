@@ -942,7 +942,7 @@ fn gen_proxy_signal(
         quote! {
             #[doc = #receive_with_args_gen_doc]
             #(#other_attrs)*
-            pub #usage fn #receiver_with_args_name(&self, args: &[(u8, &str)]) -> #zbus::Result<#stream_name<'c>>
+            pub #usage fn #receiver_with_args_name(&self, args: &[(u8, &str)]) -> #zbus::Result<#stream_name<'static>>
             {
                 self.receive_signal_with_args(#signal_name, args)#wait.map(#stream_name)
             }
@@ -951,7 +951,7 @@ fn gen_proxy_signal(
     let receive_signal = quote! {
         #[doc = #receive_gen_doc]
         #(#other_attrs)*
-        pub #usage fn #receiver_name(&self) -> #zbus::Result<#stream_name<'c>>
+        pub #usage fn #receiver_name(&self) -> #zbus::Result<#stream_name<'static>>
         {
             self.receive_signal(#signal_name)#wait.map(#stream_name)
         }
