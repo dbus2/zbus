@@ -9,7 +9,6 @@ use std::{
     collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
     future::Future,
-    marker::PhantomData,
     ops::Deref,
     pin::Pin,
     sync::{Arc, RwLock, RwLockReadGuard},
@@ -1088,10 +1087,15 @@ impl<'a> stream::Stream for OwnerChangedStream<'a> {
 pub struct SignalStream<'a> {
     stream: Join<MessageStream, Option<MessageStream>>,
     src_unique_name: Option<UniqueName<'static>>,
-    phantom: PhantomData<&'a ()>,
+    signal_name: Option<MemberName<'a>>,
 }
 
 impl<'a> SignalStream<'a> {
+    /// The signal name.
+    pub fn name(&self) -> Option<&MemberName<'a>> {
+        self.signal_name.as_ref()
+    }
+
     async fn new(
         proxy: Proxy<'_>,
         signal_name: Option<MemberName<'a>>,
@@ -1221,7 +1225,7 @@ impl<'a> SignalStream<'a> {
         Ok(SignalStream {
             stream,
             src_unique_name,
-            phantom: PhantomData,
+            signal_name,
         })
     }
 

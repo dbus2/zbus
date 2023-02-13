@@ -380,6 +380,13 @@ impl std::ops::Drop for Proxy<'_> {
 #[derive(Debug)]
 pub struct SignalIterator<'a>(Option<crate::SignalStream<'a>>);
 
+impl<'a> SignalIterator<'a> {
+    /// The signal name.
+    pub fn name(&self) -> Option<&MemberName<'a>> {
+        self.0.as_ref().expect("`SignalStream` is `None`").name()
+    }
+}
+
 assert_impl_all!(SignalIterator<'_>: Send, Sync, Unpin);
 
 impl std::iter::Iterator for SignalIterator<'_> {
