@@ -160,6 +160,16 @@ where
     }
 }
 
+impl<I> Clone for InterfaceRef<I> {
+    fn clone(&self) -> Self {
+        Self {
+            ctxt: self.ctxt.clone(),
+            lock: self.lock.clone(),
+            phantom: PhantomData,
+        }
+    }
+}
+
 #[derive(Default, derivative::Derivative)]
 #[derivative(Debug)]
 pub(crate) struct Node {
