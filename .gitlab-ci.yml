@@ -53,7 +53,7 @@ fail-if-fork-is-not-public:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: "2022-12-31.1"
+    FDO_DISTRIBUTION_TAG: "2023-02-18.1"
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
@@ -136,7 +136,8 @@ check msrv:
   script:
     - rustup override set $MSRV
     - cargo check
-    - cargo check --all-features
+    # This would be nice but some optional deps (e.g `time`) move very fast wrt to MSRV.
+    #- cargo check --all-features
 
 docs build:
   extends: .debian_img
