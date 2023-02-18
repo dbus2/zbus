@@ -136,7 +136,8 @@ check msrv:
   script:
     - rustup override set $MSRV
     - cargo check
-    - cargo check --all-features
+    # This would be nice but some optional deps (e.g `time`) move very fast wrt to MSRV.
+    #- cargo check --all-features
 
 docs build:
   extends: .debian_img
