@@ -1,9 +1,6 @@
-//! Contains utilities useful for development of procedural macros, in particular parsing the
-//! attributes.
-
-use proc_macro2::{Ident, Span};
 use syn::{
-    spanned::Spanned, Attribute, Lit, LitStr, Meta, MetaList, NestedMeta, Result, Type, TypePath,
+    spanned::Spanned, Attribute, Lit, LitBool, LitStr, Meta, MetaList, NestedMeta, Result, Type,
+    TypePath,
 };
 
 // find the #[@attr_name] attribute in @attrs
@@ -21,65 +18,94 @@ fn find_attribute_meta(attrs: &[Attribute], attr_name: &str) -> Result<Option<Me
     }
 }
 
-/// Parses a [`NestedMeta`] into an attribute identifier with an optional string literal value.
-pub fn parse_attribute(meta: &NestedMeta) -> Result<(&Ident, Option<&LitStr>)> {
-    let meta = match &meta {
-        NestedMeta::Meta(m) => m,
-        _ => {
-            return Err(syn::Error::new(
-                meta.span(),
-                "expected meta, found a literal",
-            ))
-        }
-    };
-    let meta = match meta {
-        Meta::Path(p) => return Ok((p.get_ident().unwrap(), None)),
-        Meta::NameValue(n) => n,
-        Meta::List(_) => {
-            return Err(syn::Error::new(
-                meta.span(),
-                "expected either a path or a name-value meta, found a list",
-            ))
-        }
-    };
-    let value = match &meta.lit {
-        Lit::Str(s) => s,
-        _ => {
-            return Err(syn::Error::new(
-                meta.lit.span(),
-                "the value must be a string literal",
-            ))
-        }
-    };
-
-    let ident = match meta.path.get_ident() {
-        None => panic!("missing ident"),
-        Some(ident) => ident,
-    };
-
-    Ok((ident, Some(value)))
+fn get_meta_value<'a>(meta: &'a Meta, attr: &str) -> Result<&'a Lit> {
+    match meta {
+        Meta::NameValue(meta) => Ok(&meta.lit),
+        Meta::Path(_) => Err(syn::Error::new(
+            meta.span(),
+            format!("attribute `{attr}` must have a value"),
+        )),
+        Meta::List(_) => Err(syn::Error::new(
+            meta.span(),
+            format!("attribute {attr} is not a list"),
+        )),
+    }
 }
 
-/// Compares `ident` and `attr` and in case they match ensures `value` is `Some`. Returns `true` in
-/// case `ident` and `attr` match, otherwise false.
+/// Compares `ident` and `attr` and in case they match ensures `value` is `Some` and contains a
+/// [`struct@LitStr`]. Returns `true` in case `ident` and `attr` match, otherwise false.
 ///
 /// # Errors
 ///
-/// Returns an error in case `ident` and `attr` match but the value is not `Some`.
-pub fn match_attribute_with_value<'a>(
+/// Returns an error in case `ident` and `attr` match but the value is not `Some` or is not a
+/// [`struct@LitStr`].
+pub fn match_attribute_with_str_value<'a>(
+    meta: &'a Meta,
     attr: &str,
-    ident: &Ident,
-    value: Option<&'a LitStr>,
-    span: Span,
 ) -> Result<Option<&'a LitStr>> {
-    if ident == attr {
-        if let Some(value) = value {
-            Ok(Some(value))
-        } else {
-            Err(syn::Error::new(
-                span,
-                format!("attribute `{attr}` must have a value"),
-            ))
+    if meta.path().is_ident(attr) {
+        match get_meta_value(meta, attr)? {
+            Lit::Str(value) => Ok(Some(value)),
+            _ => Err(syn::Error::new(
+                meta.span(),
+                format!("value of the `{attr}` attribute must be a string literal"),
+            )),
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+/// Compares `ident` and `attr` and in case they match ensures `value` is `Some` and contains a
+/// [`struct@LitBool`]. Returns `true` in case `ident` and `attr` match, otherwise false.
+///
+/// # Errors
+///
+/// Returns an error in case `ident` and `attr` match but the value is not `Some` or is not a
+/// [`struct@LitBool`].
+pub fn match_attribute_with_bool_value<'a>(
+    meta: &'a Meta,
+    attr: &str,
+) -> Result<Option<&'a LitBool>> {
+    if meta.path().is_ident(attr) {
+        match get_meta_value(meta, attr)? {
+            Lit::Bool(value) => Ok(Some(value)),
+            other => Err(syn::Error::new(
+                other.span(),
+                format!("value of the `{attr}` attribute must be a boolean literal"),
+            )),
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn match_attribute_with_str_list_value(meta: &Meta, attr: &str) -> Result<Option<Vec<String>>> {
+    if meta.path().is_ident(attr) {
+        match meta {
+            Meta::List(list) => {
+                let mut values = Vec::with_capacity(list.nested.len());
+
+                for meta in &list.nested {
+                    values.push(match meta {
+                        NestedMeta::Lit(Lit::Str(lit)) => Ok(lit.value()),
+                        NestedMeta::Lit(lit) => Err(syn::Error::new(
+                            lit.span(),
+                            format!("invalid literal type for `{attr}` attribute"),
+                        )),
+                        NestedMeta::Meta(meta) => Err(syn::Error::new(
+                            meta.span(),
+                            format!("`{attr}` attribute must be a list of string literals"),
+                        )),
+                    }?)
+                }
+
+                Ok(Some(values))
+            }
+            _ => Err(syn::Error::new(
+                meta.span(),
+                format!("invalid meta type for attribute `{attr}`"),
+            )),
         }
     } else {
         Ok(None)
@@ -92,20 +118,18 @@ pub fn match_attribute_with_value<'a>(
 /// # Errors
 ///
 /// Returns an error in case `ident` and `attr` match but the value is not `None`.
-pub fn match_attribute_without_value(
-    attr: &str,
-    ident: &Ident,
-    value: Option<&LitStr>,
-    span: Span,
-) -> Result<bool> {
-    if ident == attr {
-        if value.is_some() {
-            Err(syn::Error::new(
-                span,
+pub fn match_attribute_without_value(meta: &Meta, attr: &str) -> Result<bool> {
+    if meta.path().is_ident(attr) {
+        match meta {
+            Meta::Path(_) => Ok(true),
+            Meta::List(_) => Err(syn::Error::new(
+                meta.span(),
+                format!("attribute {attr} is not a list"),
+            )),
+            Meta::NameValue(_) => Err(syn::Error::new(
+                meta.span(),
                 format!("attribute `{attr}` must not have a value"),
-            ))
-        } else {
-            Ok(true)
+            )),
         }
     } else {
         Ok(false)
@@ -131,14 +155,15 @@ pub fn iter_meta_lists(
 ///
 /// The expected input looks as follows:
 ///
-/// ```ignore
+/// ```
+/// # use zvariant_utils::def_attrs;
 /// def_attrs! {
 ///     crate zvariant;
 ///
 ///     /// A comment.
-///     pub StructAttributes("struct") { foo with, bar with, baz without };
+///     pub StructAttributes("struct") { foo str, bar str, baz none };
 ///     #[derive(Hash)]
-///     FieldAttributes("field") { field_attr with };
+///     FieldAttributes("field") { field_attr bool };
 /// }
 /// ```
 ///
@@ -146,7 +171,7 @@ pub fn iter_meta_lists(
 /// another one for `FieldAttributes`. The former has three defined attributes: `foo`, `bar` and
 /// `baz`. The generated structures will look like this in that case:
 ///
-/// ```ignore
+/// ```
 /// /// A comment.
 /// #[derive(Default, Clone, Debug)]
 /// pub struct StructAttributes {
@@ -158,19 +183,56 @@ pub fn iter_meta_lists(
 /// #[derive(Hash)]
 /// #[derive(Default, Clone, Debug)]
 /// struct FieldAttributes {
-///     field_attr: Option<String>,
+///     field_attr: Option<bool>,
 /// }
 /// ```
 ///
 /// `foo` and `bar` attributes got translated to fields with `Option<String>` type which contain the
-/// value of the attribute when one is specified. They are marked with `with` keyword which stands
-/// for _with value_. The `baz` attribute, on the other hand, has `bool` type because it's an
-/// attribute _without value_.
+/// value of the attribute when one is specified. They are marked with `str` keyword which stands
+/// for string literals. The `baz` attribute, on the other hand, has `bool` type because it's an
+/// attribute without value marked by the `none` keyword.
+///
+/// Currently the following literals are supported:
+///
+/// * `str` - string literals;
+/// * `bool` - boolean literals;
+/// * `[str]` - lists of string literals (`#[macro_name(foo("bar", "baz"))]`);
+/// * `none` - no literal at all, the attribute is specified alone.
 ///
 /// The strings between braces are embedded into error messages produced when an attribute defined
 /// for one attribute group is used on another group where it is not defined. For example, if the
 /// `field_attr` attribute was encountered by the generated `StructAttributes::parse` method, the
 /// error message would say that it "is not allowed on structs".
+///
+/// # Nested attribute lists
+///
+/// It is possible to create nested lists for specific attributes. This is done as follows:
+///
+/// ```
+/// # use zvariant_utils::def_attrs;
+/// def_attrs! {
+///     crate zvariant;
+///
+///     pub OuterAttributes("outer") {
+///         simple_attr bool,
+///         nested_attr {
+///             /// An example of nested attributes.
+///             pub InnerAttributes("inner") {
+///                 inner_attr str
+///             }
+///         }
+///     };
+/// }
+/// ```
+///
+/// The syntax for inner attributes is the same as for the outer attributes, but you can specify
+/// only one inner attribute per outer attribute.
+///
+/// # Calling the macro multiple times
+///
+/// The macro generates an array called `ALLOWED_ATTRS` that contains a list of allowed attributes.
+/// Calling the macro twice in the same scope will cause a name alias and thus will fail to compile.
+/// You need to place each macro invocation into a module in that case.
 ///
 /// # Errors
 ///
@@ -180,43 +242,225 @@ pub fn iter_meta_lists(
 /// one gets a different error message when providing an attribute from a different attribute group.
 /// 2. Duplicate attributes.
 /// 3. Missing attribute value or present attribute value when none is expected.
+/// 4. Invalid literal type for attributes with values.
 #[macro_export]
 macro_rules! def_attrs {
     (@attr_ty str) => {::std::option::Option<::std::string::String>};
+    (@attr_ty bool) => {::std::option::Option<bool>};
+    (@attr_ty [str]) => {::std::option::Option<::std::vec::Vec<::std::string::String>>};
     (@attr_ty none) => {bool};
-    (@match_attr str $attr_name:ident, $ident:ident, $value:expr, $span:expr, $self:ident) => {
-        if let ::std::option::Option::Some(value) = $crate::macros::match_attribute_with_value(
-            ::std::stringify!($attr_name),
-            $ident,
-            $value,
-            $span
-        )? {
+    (@attr_ty {
+        $(#[$m:meta])*
+        $vis:vis $name:ident($what:literal) {
+            $($attr_name:ident $kind:tt),+
+        }
+    }) => {::std::option::Option<$name>};
+    (@match_attr_with $attr_name:ident, $meta:ident, $self:ident, $matched:expr) => {
+        if let ::std::option::Option::Some(value) = $matched? {
             if $self.$attr_name.is_none() {
                 $self.$attr_name = ::std::option::Option::Some(value.value());
-                continue;
+                return Ok(());
             } else {
                 return ::std::result::Result::Err(::syn::Error::new(
-                    $span,
-                    concat!("duplicate `", ::std::stringify!($attr_name), "` attribute")
+                    $meta.span(),
+                    ::std::concat!("duplicate `", ::std::stringify!($attr_name), "` attribute")
                 ));
             }
         }
     };
-    (@match_attr none $attr_name:ident, $ident:ident, $value:expr, $span:expr, $self:ident) => {
-        if $crate::macros::match_attribute_without_value(
+    (@match_attr str $attr_name:ident, $meta:ident, $self:ident) => {
+        $crate::def_attrs!(
+            @match_attr_with
+            $attr_name,
+            $meta,
+            $self,
+            $crate::macros::match_attribute_with_str_value(
+                $meta,
+                ::std::stringify!($attr_name),
+            )
+        )
+    };
+    (@match_attr bool $attr_name:ident, $meta:ident, $self:ident) => {
+        $crate::def_attrs!(
+            @match_attr_with
+            $attr_name,
+            $meta,
+            $self,
+            $crate::macros::match_attribute_with_bool_value(
+                $meta,
+                ::std::stringify!($attr_name),
+            )
+        )
+    };
+    (@match_attr [str] $attr_name:ident, $meta:ident, $self:ident) => {
+        if let Some(list) = $crate::macros::match_attribute_with_str_list_value(
+            $meta,
             ::std::stringify!($attr_name),
-            $ident,
-            $value,
-            $span
+        )? {
+            if $self.$attr_name.is_none() {
+                $self.$attr_name = Some(list);
+                return Ok(());
+            } else {
+                return ::std::result::Result::Err(::syn::Error::new(
+                    $meta.span(),
+                    concat!("duplicate `", stringify!($attr_name), "` attribute")
+                ));
+            }
+        }
+    };
+    (@match_attr none $attr_name:ident, $meta:ident, $self:ident) => {
+        if $crate::macros::match_attribute_without_value(
+            $meta,
+            ::std::stringify!($attr_name),
         )? {
             if !$self.$attr_name {
                 $self.$attr_name = true;
-                continue;
+                return Ok(());
             } else {
                 return ::std::result::Result::Err(::syn::Error::new(
-                    $span,
+                    $meta.span(),
                     concat!("duplicate `", stringify!($attr_name), "` attribute")
                 ));
+            }
+        }
+    };
+    (@match_attr {
+        $(#[$m:meta])*
+        $vis:vis $name:ident($what:literal) $body:tt
+    } $attr_name:ident, $meta:expr, $self:ident) => {
+        if $meta.path().is_ident(::std::stringify!($attr_name)) {
+            return if $self.$attr_name.is_none() {
+                match $meta {
+                    ::syn::Meta::List(meta) => {
+                        $self.$attr_name = ::std::option::Option::Some($name::parse_nested_metas(
+                            meta.nested.iter()
+                        )?);
+                        ::std::result::Result::Ok(())
+                    }
+                    ::syn::Meta::Path(_) => {
+                        $self.$attr_name = ::std::option::Option::Some($name::default());
+                        ::std::result::Result::Ok(())
+                    }
+                    ::syn::Meta::NameValue(_) => Err(::syn::Error::new(
+                        $meta.span(),
+                        ::std::format!(::std::concat!(
+                            "attribute `", ::std::stringify!($attr_name),
+                            "` must be either a list or a path"
+                        )),
+                    ))
+                }
+            } else {
+                ::std::result::Result::Err(::syn::Error::new(
+                    $meta.span(),
+                    concat!("duplicate `", stringify!($attr_name), "` attribute")
+                ))
+            }
+        }
+    };
+    (@def_ty $list_name:ident str) => {};
+    (@def_ty $list_name:ident bool) => {};
+    (@def_ty $list_name:ident [str]) => {};
+    (@def_ty $list_name:ident none) => {};
+    (
+        @def_ty $list_name:ident {
+            $(#[$m:meta])*
+            $vis:vis $name:ident($what:literal) {
+                $($attr_name:ident $kind:tt),+
+            }
+        }
+    ) => {
+        // Recurse further to potentially define nested lists.
+        $($crate::def_attrs!(@def_ty $attr_name $kind);)+
+
+        $crate::def_attrs!(
+            @def_struct
+            $list_name
+            $(#[$m])*
+            $vis $name($what) {
+                $($attr_name $kind),+
+            }
+        );
+    };
+    (
+        @def_struct
+        $list_name:ident
+        $(#[$m:meta])*
+        $vis:vis $name:ident($what:literal) {
+            $($attr_name:ident $kind:tt),+
+        }
+    ) => {
+        $(#[$m])*
+        #[derive(Default, Clone, Debug)]
+        $vis struct $name {
+            $(pub $attr_name: $crate::def_attrs!(@attr_ty $kind)),+
+        }
+
+        impl $name {
+            pub fn parse_meta(
+                &mut self,
+                meta: &::syn::Meta
+            ) -> ::syn::Result<()> {
+                use ::syn::spanned::Spanned;
+
+                // This creates subsequent if blocks for simplicity. Any block that is taken
+                // either returns an error or sets the attribute field and returns success.
+                $(
+                    $crate::def_attrs!(@match_attr $kind $attr_name, meta, self);
+                )+
+
+                // None of the if blocks have been taken, return the appropriate error.
+                let is_valid_attr = ALLOWED_ATTRS.iter().any(|attr| meta.path().is_ident(attr));
+                return ::std::result::Result::Err(::syn::Error::new(meta.span(), if is_valid_attr {
+                    ::std::format!(
+                        ::std::concat!("attribute `{}` is not allowed on ", $what),
+                        meta.path().get_ident().unwrap()
+                    )
+                } else {
+                    ::std::format!("unknown attribute `{}`", meta.path().get_ident().unwrap())
+                }))
+            }
+
+            pub fn parse_nested_metas<'a, I>(iter: I) -> syn::Result<Self>
+            where
+                I: ::std::iter::IntoIterator<Item=&'a ::syn::NestedMeta>
+            {
+                let mut parsed = $name::default();
+                for nested_meta in iter {
+                    match nested_meta {
+                        ::syn::NestedMeta::Meta(meta) => parsed.parse_meta(meta),
+                        ::syn::NestedMeta::Lit(lit) => {
+                            ::std::result::Result::Err(::syn::Error::new(
+                                lit.span(),
+                                ::std::concat!(
+                                    "attribute `", ::std::stringify!($list_name),
+                                    "` does not support literals in meta lists"
+                                )
+                            ))
+                        }
+                    }?;
+                }
+
+                Ok(parsed)
+            }
+
+            pub fn parse(attrs: &[::syn::Attribute]) -> ::syn::Result<Self> {
+                let mut parsed = $name::default();
+                for nested_meta in $crate::macros::iter_meta_lists(attrs, ::std::stringify!($list_name))? {
+                    match &nested_meta {
+                        ::syn::NestedMeta::Meta(meta) => parsed.parse_meta(meta),
+                        ::syn::NestedMeta::Lit(lit) => {
+                            ::std::result::Result::Err(::syn::Error::new(
+                                lit.span(),
+                                ::std::concat!(
+                                    "attribute `", ::std::stringify!($list_name),
+                                    "` does not support literals in meta lists"
+                                )
+                            ))
+                        }
+                    }?;
+                }
+
+                Ok(parsed)
             }
         }
     };
@@ -234,46 +478,15 @@ macro_rules! def_attrs {
         ];
 
         $(
-            $(#[$m])*
-            #[derive(Default, Clone, Debug)]
-            $vis struct $name {
-                $(pub $attr_name: $crate::def_attrs!(@attr_ty $kind)),+
-            }
-
-            impl $name {
-                pub fn parse(attrs: &[::syn::Attribute]) -> ::syn::Result<Self> {
-                    use ::syn::spanned::Spanned;
-
-                    let mut parsed = $name::default();
-
-                    for nested_meta in $crate::macros::iter_meta_lists(
-                        attrs,
-                        ::std::stringify!($list_name)
-                    )? {
-                        let (ident, value) = $crate::macros::parse_attribute(&nested_meta)?;
-                        let span = nested_meta.span();
-
-                        // This creates subsequent if blocks for simplicity. Any block that is taken
-                        // either returns an error or sets the attribute field and continues.
-                        $(
-                            $crate::def_attrs!(@match_attr $kind $attr_name, ident, value, span, parsed);
-                        )+
-
-                        // None of the if blocks have been taken, return the appropriate error.
-                        let is_valid_attr = ALLOWED_ATTRS.iter().any(|attr| ident == attr);
-                        return ::std::result::Result::Err(::syn::Error::new(span, if is_valid_attr {
-                            ::std::format!(
-                                ::std::concat!("attribute `{}` is not allowed on ", $what),
-                                ident
-                            )
-                        } else {
-                            ::std::format!("unknown attribute `{ident}`")
-                        }))
+            $crate::def_attrs!(
+                @def_ty
+                $list_name {
+                    $(#[$m])*
+                    $vis $name($what) {
+                        $($attr_name $kind),+
                     }
-
-                    ::std::result::Result::Ok(parsed)
                 }
-            }
+            );
         )+
     }
 }
