@@ -286,7 +286,7 @@ mod tests {
                 .p2p()
                 .build()
                 .unwrap();
-            let _ = rx.recv().unwrap();
+            rx.recv().unwrap();
             let reply = c
                 .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
                 .unwrap();
