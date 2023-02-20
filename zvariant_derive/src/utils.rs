@@ -19,7 +19,7 @@ def_attrs! {
     crate zvariant;
 
     /// Attributes defined on structures.
-    pub StructAttributes("struct") { signature with, rename_all with, deny_unknown_fields without };
+    pub StructAttributes("struct") { signature str, rename_all str, deny_unknown_fields none };
     /// Attributes defined on fields.
-    pub FieldAttributes("field") { rename with };
+    pub FieldAttributes("field") { rename str };
 }

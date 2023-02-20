@@ -182,9 +182,9 @@ pub fn iter_meta_lists(
 /// 3. Missing attribute value or present attribute value when none is expected.
 #[macro_export]
 macro_rules! def_attrs {
-    (@attr_ty with) => {::std::option::Option<::std::string::String>};
-    (@attr_ty without) => {bool};
-    (@match_attr with $attr_name:ident, $ident:ident, $value:expr, $span:expr, $self:ident) => {
+    (@attr_ty str) => {::std::option::Option<::std::string::String>};
+    (@attr_ty none) => {bool};
+    (@match_attr str $attr_name:ident, $ident:ident, $value:expr, $span:expr, $self:ident) => {
         if let ::std::option::Option::Some(value) = $crate::macros::match_attribute_with_value(
             ::std::stringify!($attr_name),
             $ident,
@@ -202,7 +202,7 @@ macro_rules! def_attrs {
             }
         }
     };
-    (@match_attr without $attr_name:ident, $ident:ident, $value:expr, $span:expr, $self:ident) => {
+    (@match_attr none $attr_name:ident, $ident:ident, $value:expr, $span:expr, $self:ident) => {
         if $crate::macros::match_attribute_without_value(
             ::std::stringify!($attr_name),
             $ident,
