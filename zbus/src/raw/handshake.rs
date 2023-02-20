@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+use futures_util::future::poll_fn;
 #[cfg(unix)]
 use nix::unistd::Uid;
 use std::{
@@ -7,7 +9,6 @@ use std::{
     io::{BufRead, BufReader},
     path::PathBuf,
     str::FromStr,
-    task::{Context, Poll},
 };
 use tracing::{instrument, trace};
 
@@ -18,8 +19,6 @@ use crate::{
     raw::{Connection, Socket},
     AuthMechanism, Error, Result,
 };
-
-use futures_core::ready;
 
 use sha1::{Digest, Sha1};
 
@@ -92,6 +91,7 @@ pub struct Authenticated<S> {
     pub(crate) cap_unix_fd: bool,
 }
 
+#[async_trait]
 pub trait Handshake<S> {
     /// Attempt to advance the handshake
     ///
@@ -101,7 +101,7 @@ pub trait Handshake<S> {
     ///
     /// Note that only the initial handshake is done. If you need to send a
     /// Bus Hello, this remains to be done.
-    fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>>;
+    async fn advance_handshake(&mut self) -> Result<()>;
 
     /// Attempt to finalize this handshake into an initialized client.
     ///
@@ -298,12 +298,13 @@ fn home_dir() -> Option<PathBuf> {
     }
 }
 
+#[async_trait]
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
-    #[instrument(skip(self, cx))]
-    fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
+    #[instrument(skip(self))]
+    async fn advance_handshake(&mut self) -> Result<()> {
         use ClientHandshakeStep::*;
         loop {
-            ready!(self.common.flush_buffer(cx))?;
+            self.common.flush_buffer().await?;
             let (next_step, cmd) = match self.step {
                 Init => {
                     trace!("Initializing");
@@ -335,7 +336,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                 }
                 WaitingForData | WaitingForOK => {
                     trace!("Waiting for DATA or OK from server");
-                    let reply = ready!(self.common.read_command(cx))?;
+                    let reply = self.common.read_command().await?;
                     match (self.step, reply) {
                         (_, Command::Data(data)) => {
                             trace!("Received DATA from server");
@@ -360,15 +361,15 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                             }
                         }
                         (_, reply) => {
-                            return Poll::Ready(Err(Error::Handshake(format!(
+                            return Err(Error::Handshake(format!(
                                 "Unexpected server AUTH OK reply: {reply}"
-                            ))));
+                            )));
                         }
                     }
                 }
                 WaitingForAgreeUnixFD => {
                     trace!("Waiting for Unix FD passing agreement from server");
-                    let reply = ready!(self.common.read_command(cx))?;
+                    let reply = self.common.read_command().await?;
                     match reply {
                         Command::AgreeUnixFD => {
                             trace!("Unix FD passing agreed by server");
@@ -379,16 +380,16 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                             self.common.cap_unix_fd = false
                         }
                         _ => {
-                            return Poll::Ready(Err(Error::Handshake(format!(
+                            return Err(Error::Handshake(format!(
                                 "Unexpected server UNIX_FD reply: {reply}"
-                            ))));
+                            )));
                         }
                     }
                     (Done, Command::Begin)
                 }
                 Done => {
                     trace!("Handshake done");
-                    return Poll::Ready(Ok(()));
+                    return Ok(());
                 }
             };
             self.common.send_buffer = if self.step == Init
@@ -542,30 +543,32 @@ impl<S: Socket> ServerHandshake<S> {
     }
 }
 
+#[async_trait]
 impl<S: Socket> Handshake<S> for ServerHandshake<S> {
-    #[instrument(skip(self, cx))]
-    fn advance_handshake(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
+    #[instrument(skip(self))]
+    async fn advance_handshake(&mut self) -> Result<()> {
         loop {
             match self.step {
                 ServerHandshakeStep::WaitingForNull => {
                     trace!("Waiting for NULL");
                     let mut buffer = [0; 1];
-                    let read = ready!(self.common.socket.poll_recvmsg(cx, &mut buffer))?;
+                    let read =
+                        poll_fn(|cx| self.common.socket.poll_recvmsg(cx, &mut buffer)).await?;
                     #[cfg(unix)]
                     let read = read.0;
                     // recvmsg cannot return anything else than Ok(1) or Err
                     debug_assert!(read == 1);
                     if buffer[0] != 0 {
-                        return Poll::Ready(Err(Error::Handshake(
+                        return Err(Error::Handshake(
                             "First client byte is not NUL!".to_string(),
-                        )));
+                        ));
                     }
                     trace!("Received NULL from client");
                     self.step = ServerHandshakeStep::WaitingForAuth;
                 }
                 ServerHandshakeStep::WaitingForAuth => {
                     trace!("Waiting for authentication");
-                    let reply = ready!(self.common.read_command(cx))?;
+                    let reply = self.common.read_command().await?;
                     match reply {
                         Command::Auth(mech, resp) => {
                             let mech = mech.filter(|m| self.common.mechanisms.contains(m));
@@ -586,21 +589,21 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                         }
                         Command::Error(_) => self.rejected_error(),
                         Command::Begin => {
-                            return Poll::Ready(Err(Error::Handshake(
+                            return Err(Error::Handshake(
                                 "Received BEGIN while not authenticated".to_string(),
-                            )));
+                            ));
                         }
                         _ => self.unsupported_command_error(),
                     }
                 }
                 ServerHandshakeStep::SendingAuthData(mech) => {
                     trace!("Sending data request");
-                    ready!(self.common.flush_buffer(cx))?;
+                    self.common.flush_buffer().await?;
                     self.step = ServerHandshakeStep::WaitingForData(mech);
                 }
                 ServerHandshakeStep::WaitingForData(mech) => {
                     trace!("Waiting for authentication");
-                    let reply = ready!(self.common.read_command(cx))?;
+                    let reply = self.common.read_command().await?;
                     match (mech, reply) {
                         (AuthMechanism::External, Command::Data(data)) => match data {
                             None => self.auth_ok(),
@@ -613,17 +616,17 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                 }
                 ServerHandshakeStep::SendingAuthError => {
                     trace!("Sending authentication error");
-                    ready!(self.common.flush_buffer(cx))?;
+                    self.common.flush_buffer().await?;
                     self.step = ServerHandshakeStep::WaitingForAuth;
                 }
                 ServerHandshakeStep::SendingAuthOK => {
                     trace!("Sending authentication OK");
-                    ready!(self.common.flush_buffer(cx))?;
+                    self.common.flush_buffer().await?;
                     self.step = ServerHandshakeStep::WaitingForBegin;
                 }
                 ServerHandshakeStep::WaitingForBegin => {
                     trace!("Waiting for Begin command from the client");
-                    let reply = ready!(self.common.read_command(cx))?;
+                    let reply = self.common.read_command().await?;
                     match reply {
                         Command::Begin => {
                             trace!("Received Begin command from the client");
@@ -646,12 +649,12 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                 #[cfg(unix)]
                 ServerHandshakeStep::SendingAgreeUnixFD => {
                     trace!("Sending AGREE_UNIX_FD to the client");
-                    ready!(self.common.flush_buffer(cx))?;
+                    self.common.flush_buffer().await?;
                     self.step = ServerHandshakeStep::WaitingForBegin;
                 }
                 ServerHandshakeStep::Done => {
                     trace!("Handshake done");
-                    return Poll::Ready(Ok(()));
+                    return Ok(());
                 }
             }
         }
@@ -817,29 +820,30 @@ impl<S: Socket> HandshakeCommon<S> {
         }
     }
 
-    #[instrument(skip(self, cx))]
-    fn flush_buffer(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
+    #[instrument(skip(self))]
+    async fn flush_buffer(&mut self) -> Result<()> {
         while !self.send_buffer.is_empty() {
-            let written = ready!(self.socket.poll_sendmsg(
-                cx,
-                &self.send_buffer,
-                #[cfg(unix)]
-                &[]
-            ))?;
+            let written = poll_fn(|cx| {
+                self.socket.poll_sendmsg(
+                    cx,
+                    &self.send_buffer,
+                    #[cfg(unix)]
+                    &[],
+                )
+            })
+            .await?;
             self.send_buffer.drain(..written);
         }
-        Ok(()).into()
+        Ok(())
     }
 
-    #[instrument(skip(self, cx))]
-    fn read_command(&mut self, cx: &mut Context<'_>) -> Poll<Result<Command>> {
+    #[instrument(skip(self))]
+    async fn read_command(&mut self) -> Result<Command> {
         let mut cmd_end = 0;
         loop {
             if let Some(i) = self.recv_buffer[cmd_end..].iter().position(|b| *b == b'\n') {
                 if cmd_end + i == 0 || self.recv_buffer.get(cmd_end + i - 1) != Some(&b'\r') {
-                    return Poll::Ready(Err(Error::Handshake(
-                        "Invalid line ending in handshake".into(),
-                    )));
+                    return Err(Error::Handshake("Invalid line ending in handshake".into()));
                 }
                 cmd_end += i + 1;
 
@@ -849,15 +853,13 @@ impl<S: Socket> HandshakeCommon<S> {
             }
 
             let mut buf = [0; 64];
-            let res = ready!(self.socket.poll_recvmsg(cx, &mut buf))?;
+            let res = poll_fn(|cx| self.socket.poll_recvmsg(cx, &mut buf)).await?;
             let read = {
                 #[cfg(unix)]
                 {
                     let (read, fds) = res;
                     if !fds.is_empty() {
-                        return Poll::Ready(Err(Error::Handshake(
-                            "Unexpected FDs during handshake".into(),
-                        )));
+                        return Err(Error::Handshake("Unexpected FDs during handshake".into()));
                     }
                     read
                 }
@@ -867,9 +869,7 @@ impl<S: Socket> HandshakeCommon<S> {
                 }
             };
             if read == 0 {
-                return Poll::Ready(Err(Error::Handshake(
-                    "Unexpected EOF during handshake".into(),
-                )));
+                return Err(Error::Handshake("Unexpected EOF during handshake".into()));
             }
             self.recv_buffer.extend(&buf[..read]);
         }
@@ -877,9 +877,8 @@ impl<S: Socket> HandshakeCommon<S> {
         let line_bytes = self.recv_buffer.drain(..cmd_end);
         let line = std::str::from_utf8(line_bytes.as_slice())
             .map_err(|e| Error::Handshake(e.to_string()))?;
-        let cmd = line.parse();
 
-        Poll::Ready(cmd)
+        line.parse()
     }
 
     fn mechanism(&self) -> Result<&AuthMechanism> {
@@ -894,7 +893,7 @@ impl<S: Socket> HandshakeCommon<S> {
 mod tests {
     #[cfg(not(feature = "tokio"))]
     use async_std::io::{Write as AsyncWrite, WriteExt};
-    use futures_util::future::poll_fn;
+    use futures_util::future::join;
     use ntest::timeout;
     #[cfg(not(feature = "tokio"))]
     use std::os::unix::net::UnixStream;
@@ -938,29 +937,18 @@ mod tests {
                 .unwrap();
 
         // proceed to the handshakes
-        let mut client_done = false;
-        let mut server_done = false;
-        crate::utils::block_on(poll_fn(|cx| {
-            match client.advance_handshake(cx) {
-                Poll::Ready(Ok(())) => client_done = true,
-                Poll::Ready(Err(e)) => panic!("Unexpected error: {:?}", e),
-                Poll::Pending => {}
-            }
+        let (client, server) = crate::utils::block_on(join(
+            async move {
+                client.advance_handshake().await.unwrap();
 
-            match server.advance_handshake(cx) {
-                Poll::Ready(Ok(())) => server_done = true,
-                Poll::Ready(Err(e)) => panic!("Unexpected error: {:?}", e),
-                Poll::Pending => {}
-            }
-            if client_done && server_done {
-                Poll::Ready(())
-            } else {
-                Poll::Pending
-            }
-        }));
+                client.try_finish().unwrap()
+            },
+            async move {
+                server.advance_handshake().await.unwrap();
 
-        let client = client.try_finish().unwrap();
-        let server = server.try_finish().unwrap();
+                server.try_finish().unwrap()
+            },
+        ));
 
         assert_eq!(client.server_guid, server.server_guid);
         assert_eq!(client.cap_unix_fd, server.cap_unix_fd);
@@ -984,7 +972,7 @@ mod tests {
             ),
         )
         .unwrap();
-        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+        crate::utils::block_on(server.advance_handshake()).unwrap();
 
         let server = server.try_finish().unwrap();
 
@@ -1009,7 +997,7 @@ mod tests {
             ),
         )
         .unwrap();
-        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+        crate::utils::block_on(server.advance_handshake()).unwrap();
 
         server.try_finish().unwrap();
     }
@@ -1023,7 +1011,7 @@ mod tests {
                 .unwrap();
 
         crate::utils::block_on(p0.write_all(b"\0AUTH EXTERNAL\r\nDATA\r\nBEGIN\r\n")).unwrap();
-        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+        crate::utils::block_on(server.advance_handshake()).unwrap();
 
         server.try_finish().unwrap();
     }
@@ -1041,7 +1029,7 @@ mod tests {
         .unwrap();
 
         crate::utils::block_on(p0.write_all(b"\0AUTH ANONYMOUS abcd\r\nBEGIN\r\n")).unwrap();
-        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+        crate::utils::block_on(server.advance_handshake()).unwrap();
 
         server.try_finish().unwrap();
     }
@@ -1060,7 +1048,7 @@ mod tests {
 
         crate::utils::block_on(p0.write_all(b"\0AUTH ANONYMOUS\r\nDATA abcd\r\nBEGIN\r\n"))
             .unwrap();
-        crate::utils::block_on(poll_fn(|cx| server.advance_handshake(cx))).unwrap();
+        crate::utils::block_on(server.advance_handshake()).unwrap();
 
         server.try_finish().unwrap();
     }

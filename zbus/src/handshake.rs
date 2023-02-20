@@ -1,14 +1,4 @@
-use futures_core::ready;
-
-use std::{
-    collections::VecDeque,
-    fmt::Debug,
-    future::Future,
-    marker::PhantomData,
-    ops::Deref,
-    pin::Pin,
-    task::{Context, Poll},
-};
+use std::{collections::VecDeque, fmt::Debug, marker::PhantomData, ops::Deref};
 
 use crate::{
     guid::Guid,
@@ -63,9 +53,10 @@ where
     /// Create a client-side `Authenticated` for the given `socket`.
     pub async fn client(socket: S, mechanisms: Option<VecDeque<AuthMechanism>>) -> Result<Self> {
         Handshake {
-            handshake: Some(raw::ClientHandshake::new(socket, mechanisms)),
+            handshake: raw::ClientHandshake::new(socket, mechanisms),
             phantom: PhantomData,
         }
+        .perform()
         .await
     }
 
@@ -80,7 +71,7 @@ where
         auth_mechanisms: Option<VecDeque<AuthMechanism>>,
     ) -> Result<Self> {
         Handshake {
-            handshake: Some(raw::ServerHandshake::new(
+            handshake: raw::ServerHandshake::new(
                 socket,
                 guid,
                 #[cfg(unix)]
@@ -88,43 +79,33 @@ where
                 #[cfg(windows)]
                 client_sid,
                 auth_mechanisms,
-            )?),
+            )?,
             phantom: PhantomData,
         }
+        .perform()
         .await
     }
 }
 
 struct Handshake<H, S> {
-    handshake: Option<H>,
+    handshake: H,
     phantom: PhantomData<S>,
 }
 
-impl<H, S> Future for Handshake<H, S>
+impl<H, S> Handshake<H, S>
 where
     H: SyncHandshake<S> + Unpin + Debug,
     S: Unpin,
 {
-    type Output = Result<Authenticated<S>>;
+    async fn perform(mut self) -> Result<Authenticated<S>> {
+        self.handshake.advance_handshake().await?;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let self_mut = &mut self.get_mut();
-        let handshake = self_mut
+        let authenticated = self
             .handshake
-            .as_mut()
-            .expect("ClientHandshake::poll() called unexpectedly");
-
-        ready!(handshake.advance_handshake(cx))?;
-
-        let handshake = self_mut
-            .handshake
-            .take()
-            .expect("<Handshake as Future>::poll() called unexpectedly");
-        let authenticated = handshake
             .try_finish()
             .expect("Failed to finish a successful handshake");
 
-        Poll::Ready(Ok(Authenticated(authenticated)))
+        Ok(Authenticated(authenticated))
     }
 }
 
