@@ -304,7 +304,6 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     async fn advance_handshake(&mut self) -> Result<()> {
         use ClientHandshakeStep::*;
         loop {
-            self.common.flush_buffer().await?;
             let (next_step, cmd) = match self.step {
                 Init => {
                     trace!("Initializing");
@@ -312,7 +311,8 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     let ret = self.mechanism_init()?;
                     // The dbus daemon on some platforms requires sending the zero byte as a separate message with SCM_CREDS.
                     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-                    self.common
+                    let written = self
+                        .common
                         .socket
                         .send_zero_byte()
                         .map_err(|e| {
@@ -322,11 +322,29 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                             ))
                         })
                         .and_then(|n| match n {
-                            Some(n) if n != 1 => Err(Error::Handshake(
+                            None => Err(Error::Handshake(
                                 "Could not send zero byte with credentials".to_string(),
                             )),
-                            _ => Ok(()),
+                            Some(n) => Ok(n),
                         })?;
+
+                    // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
+                    #[cfg(not(any(target_os = "freebsd", target_os = "dragonfly")))]
+                    let written = poll_fn(|cx| {
+                        self.common.socket.poll_sendmsg(
+                            cx,
+                            &[b'\0'],
+                            #[cfg(unix)]
+                            &[],
+                        )
+                    })
+                    .await?;
+
+                    if written != 1 {
+                        return Err(Error::Handshake(
+                            "Could not send zero byte with credentials".to_string(),
+                        ));
+                    }
 
                     ret
                 }
@@ -392,14 +410,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     return Ok(());
                 }
             };
-            self.common.send_buffer = if self.step == Init
-                // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
-                && !cfg!(any(target_os = "freebsd", target_os = "dragonfly"))
-            {
-                format!("\0{cmd}").into()
-            } else {
-                cmd.into()
-            };
+            self.common.write_command(cmd).await?;
             self.step = next_step;
         }
     }
@@ -427,13 +438,8 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
 enum ServerHandshakeStep {
     WaitingForNull,
     WaitingForAuth,
-    SendingAuthData(AuthMechanism),
     WaitingForData(AuthMechanism),
-    SendingAuthOK,
-    SendingAuthError,
     WaitingForBegin,
-    #[cfg(unix)]
-    SendingAgreeUnixFD,
     Done,
 }
 
@@ -492,12 +498,16 @@ impl<S: Socket> ServerHandshake<S> {
         })
     }
 
-    fn auth_ok(&mut self) {
-        self.common.send_buffer = Command::Ok(self.guid().clone()).into();
-        self.step = ServerHandshakeStep::SendingAuthOK;
+    async fn auth_ok(&mut self) -> Result<()> {
+        let cmd = Command::Ok(self.guid().clone());
+        trace!("Sending authentication OK");
+        self.common.write_command(cmd).await?;
+        self.step = ServerHandshakeStep::WaitingForBegin;
+
+        Ok(())
     }
 
-    fn check_external_auth(&mut self, sasl_id: &[u8]) -> Result<()> {
+    async fn check_external_auth(&mut self, sasl_id: &[u8]) -> Result<()> {
         let auth_ok = {
             let id = std::str::from_utf8(sasl_id)
                 .map_err(|e| Error::Handshake(format!("Invalid ID: {e}")))?;
@@ -515,23 +525,31 @@ impl<S: Socket> ServerHandshake<S> {
         };
 
         if auth_ok {
-            self.auth_ok();
+            self.auth_ok().await?;
         } else {
-            self.rejected_error();
+            self.rejected_error().await?;
         }
 
         Ok(())
     }
 
-    fn unsupported_command_error(&mut self) {
-        self.common.send_buffer = Command::Error("Unsupported command".to_string()).into();
-        self.step = ServerHandshakeStep::SendingAuthError;
+    async fn unsupported_command_error(&mut self) -> Result<()> {
+        let cmd = Command::Error("Unsupported command".to_string());
+        trace!("Sending authentication error");
+        self.common.write_command(cmd).await?;
+        self.step = ServerHandshakeStep::WaitingForAuth;
+
+        Ok(())
     }
 
-    fn rejected_error(&mut self) {
+    async fn rejected_error(&mut self) -> Result<()> {
         let mechanisms = self.common.mechanisms.iter().cloned().collect();
-        self.common.send_buffer = Command::Rejected(mechanisms).into();
-        self.step = ServerHandshakeStep::SendingAuthError;
+        let cmd = Command::Rejected(mechanisms);
+        trace!("Sending authentication error");
+        self.common.write_command(cmd).await?;
+        self.step = ServerHandshakeStep::WaitingForAuth;
+
+        Ok(())
     }
 
     fn guid(&self) -> &Guid {
@@ -575,54 +593,40 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
 
                             match (mech, &resp) {
                                 (Some(mech), None) => {
-                                    self.common.send_buffer = Command::Data(None).into();
-                                    self.step = ServerHandshakeStep::SendingAuthData(mech);
+                                    trace!("Sending data request");
+                                    self.common.write_command(Command::Data(None)).await?;
+                                    self.step = ServerHandshakeStep::WaitingForData(mech);
                                 }
                                 (Some(AuthMechanism::Anonymous), Some(_)) => {
-                                    self.auth_ok();
+                                    self.auth_ok().await?;
                                 }
                                 (Some(AuthMechanism::External), Some(sasl_id)) => {
-                                    self.check_external_auth(sasl_id)?;
+                                    self.check_external_auth(sasl_id).await?;
                                 }
-                                _ => self.rejected_error(),
+                                _ => self.rejected_error().await?,
                             }
                         }
-                        Command::Error(_) => self.rejected_error(),
+                        Command::Error(_) => self.rejected_error().await?,
                         Command::Begin => {
                             return Err(Error::Handshake(
                                 "Received BEGIN while not authenticated".to_string(),
                             ));
                         }
-                        _ => self.unsupported_command_error(),
+                        _ => self.unsupported_command_error().await?,
                     }
-                }
-                ServerHandshakeStep::SendingAuthData(mech) => {
-                    trace!("Sending data request");
-                    self.common.flush_buffer().await?;
-                    self.step = ServerHandshakeStep::WaitingForData(mech);
                 }
                 ServerHandshakeStep::WaitingForData(mech) => {
                     trace!("Waiting for authentication");
                     let reply = self.common.read_command().await?;
                     match (mech, reply) {
                         (AuthMechanism::External, Command::Data(data)) => match data {
-                            None => self.auth_ok(),
-                            Some(data) => self.check_external_auth(&data)?,
+                            None => self.auth_ok().await?,
+                            Some(data) => self.check_external_auth(&data).await?,
                         },
-                        (AuthMechanism::Anonymous, Command::Data(_)) => self.auth_ok(),
-                        (_, Command::Data(_)) => self.rejected_error(),
-                        (_, _) => self.unsupported_command_error(),
+                        (AuthMechanism::Anonymous, Command::Data(_)) => self.auth_ok().await?,
+                        (_, Command::Data(_)) => self.rejected_error().await?,
+                        (_, _) => self.unsupported_command_error().await?,
                     }
-                }
-                ServerHandshakeStep::SendingAuthError => {
-                    trace!("Sending authentication error");
-                    self.common.flush_buffer().await?;
-                    self.step = ServerHandshakeStep::WaitingForAuth;
-                }
-                ServerHandshakeStep::SendingAuthOK => {
-                    trace!("Sending authentication OK");
-                    self.common.flush_buffer().await?;
-                    self.step = ServerHandshakeStep::WaitingForBegin;
                 }
                 ServerHandshakeStep::WaitingForBegin => {
                     trace!("Waiting for Begin command from the client");
@@ -634,23 +638,18 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                         }
                         Command::Cancel | Command::Error(_) => {
                             trace!("Received CANCEL or ERROR command from the client");
-                            self.rejected_error()
+                            self.rejected_error().await?;
                         }
                         #[cfg(unix)]
                         Command::NegotiateUnixFD => {
                             trace!("Received NEGOTIATE_UNIX_FD command from the client");
                             self.common.cap_unix_fd = true;
-                            self.common.send_buffer = Command::AgreeUnixFD.into();
-                            self.step = ServerHandshakeStep::SendingAgreeUnixFD;
+                            trace!("Sending AGREE_UNIX_FD to the client");
+                            self.common.write_command(Command::AgreeUnixFD).await?;
+                            self.step = ServerHandshakeStep::WaitingForBegin;
                         }
-                        _ => self.unsupported_command_error(),
+                        _ => self.unsupported_command_error().await?,
                     }
-                }
-                #[cfg(unix)]
-                ServerHandshakeStep::SendingAgreeUnixFD => {
-                    trace!("Sending AGREE_UNIX_FD to the client");
-                    self.common.flush_buffer().await?;
-                    self.step = ServerHandshakeStep::WaitingForBegin;
                 }
                 ServerHandshakeStep::Done => {
                     trace!("Handshake done");
@@ -800,7 +799,6 @@ impl FromStr for Command {
 pub struct HandshakeCommon<S> {
     socket: S,
     recv_buffer: Vec<u8>,
-    send_buffer: Vec<u8>,
     server_guid: Option<Guid>,
     cap_unix_fd: bool,
     // the current AUTH mechanism is front, ordered by priority
@@ -813,7 +811,6 @@ impl<S: Socket> HandshakeCommon<S> {
         Self {
             socket,
             recv_buffer: Vec::new(),
-            send_buffer: Vec::new(),
             server_guid,
             cap_unix_fd: false,
             mechanisms,
@@ -821,18 +818,19 @@ impl<S: Socket> HandshakeCommon<S> {
     }
 
     #[instrument(skip(self))]
-    async fn flush_buffer(&mut self) -> Result<()> {
-        while !self.send_buffer.is_empty() {
+    async fn write_command(&mut self, command: Command) -> Result<()> {
+        let mut send_buffer = Vec::<u8>::from(command);
+        while !send_buffer.is_empty() {
             let written = poll_fn(|cx| {
                 self.socket.poll_sendmsg(
                     cx,
-                    &self.send_buffer,
+                    &send_buffer,
                     #[cfg(unix)]
                     &[],
                 )
             })
             .await?;
-            self.send_buffer.drain(..written);
+            send_buffer.drain(..written);
         }
         Ok(())
     }
