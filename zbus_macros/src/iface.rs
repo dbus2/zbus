@@ -2,13 +2,48 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use syn::{
-    self, parse_quote, punctuated::Punctuated, AngleBracketedGenericArguments, AttributeArgs,
-    Error, FnArg, GenericArgument, ImplItem, ItemImpl, Lit::Str, Meta, Meta::NameValue, MetaList,
-    MetaNameValue, NestedMeta, PatType, PathArguments, ReturnType, Signature, Token, Type,
-    TypePath,
+    self, parse_quote, punctuated::Punctuated, spanned::Spanned, AngleBracketedGenericArguments,
+    AttributeArgs, Error, FnArg, GenericArgument, ImplItem, ItemImpl, Lit::Str, Meta,
+    Meta::NameValue, MetaList, MetaNameValue, NestedMeta, PatType, PathArguments, ReturnType,
+    Signature, Token, Type, TypePath,
 };
+use zvariant_utils::{case, def_attrs};
 
 use crate::utils::*;
+
+// FIXME: The list name should once be "zbus" instead of "dbus_interface" (like in serde).
+def_attrs! {
+    crate dbus_interface;
+
+    pub TraitAttributes("trait") {
+        interface str,
+        name str
+    };
+
+    pub MethodAttributes("method") {
+        name str,
+        signal none,
+        property none,
+        out_args [str]
+    };
+}
+
+mod arg_attrs {
+    use zvariant_utils::def_attrs;
+
+    def_attrs! {
+        crate zbus;
+
+        pub ArgAttributes("argument") {
+            object_server none,
+            connection none,
+            header none,
+            signal_context none
+        };
+    }
+}
+
+use arg_attrs::ArgAttributes;
 
 #[derive(Debug)]
 struct Property<'a> {
@@ -55,24 +90,19 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         _ => return Err(Error::new_spanned(&input.self_ty, "Invalid type")),
     };
 
-    let mut iface_name = None;
-    for arg in args {
-        match arg {
-            NestedMeta::Meta(NameValue(nv)) => {
-                if nv.path.is_ident("interface") || nv.path.is_ident("name") {
-                    if let Str(lit) = nv.lit {
-                        iface_name = Some(lit.value());
-                    } else {
-                        return Err(Error::new_spanned(&nv.lit, "Invalid interface argument"));
-                    }
-                } else {
-                    return Err(Error::new_spanned(&nv.path, "Unsupported argument"));
-                }
+    let iface_name =
+        {
+            let TraitAttributes { name, interface } = TraitAttributes::parse_nested_metas(&args)?;
+
+            match (name, interface) {
+                (Some(name), None) | (None, Some(name)) => name,
+                (None, None) => format!("org.freedesktop.{ty}"),
+                (Some(_), Some(_)) => return Err(syn::Error::new(
+                    input.span(),
+                    "`name` and `interface` attributes should not be specified at the same time",
+                )),
             }
-            _ => return Err(Error::new_spanned(&arg, "Unknown attribute")),
-        }
-    }
-    let iface_name = iface_name.unwrap_or(format!("org.freedesktop.{ty}"));
+        };
 
     for method in &mut input.items {
         let mut method = match method {
@@ -89,10 +119,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             ..
         } = &mut method.sig;
 
-        let attrs = parse_item_attributes(&method.attrs, "dbus_interface")?;
+        let attrs = MethodAttributes::parse(&method.attrs)?;
         method
             .attrs
             .retain(|attr| !attr.path.is_ident("dbus_interface"));
+
         let docs = get_doc_attrs(&method.attrs)
             .iter()
             .filter_map(|attr| {
@@ -107,12 +138,9 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             .collect();
 
         let doc_comments = to_xml_docs(docs);
-        let is_property = attrs.iter().any(|x| x.is_property());
-        let is_signal = attrs.iter().any(|x| x.is_signal());
-        let out_args = attrs.iter().find(|x| x.is_out_args()).map(|x| match x {
-            ItemAttribute::OutArgs(a) => a,
-            _ => unreachable!(),
-        });
+        let is_property = attrs.property;
+        let is_signal = attrs.signal;
+        let out_args = attrs.out_args.as_deref();
         assert!(!is_property || !is_signal);
 
         let has_inputs = inputs.len() > 1;
@@ -157,7 +185,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
         let mut intro_args = quote!();
         intro_args.extend(introspect_input_args(&typed_inputs, is_signal));
-        let is_result_output = introspect_add_output_args(&mut intro_args, output, &out_args)?;
+        let is_result_output = introspect_add_output_args(&mut intro_args, output, out_args)?;
 
         let (args_from_msg, args_names) = get_args_from_inputs(&typed_inputs, &zbus)?;
 
@@ -177,20 +205,14 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             quote!(c.reply(m, &reply).await)
         };
 
-        let member_name = attrs
-            .iter()
-            .find_map(|x| match x {
-                ItemAttribute::Name(n) => Some(n.to_string()),
-                _ => None,
-            })
-            .unwrap_or_else(|| {
-                let mut name = ident.to_string();
-                if is_property && has_inputs {
-                    assert!(name.starts_with("set_"));
-                    name = name[4..].to_string();
-                }
-                pascal_case(&name)
-            });
+        let member_name = attrs.name.clone().unwrap_or_else(|| {
+            let mut name = ident.to_string();
+            if is_property && has_inputs {
+                assert!(name.starts_with("set_"));
+                name = name[4..].to_string();
+            }
+            pascal_case(&name)
+        });
 
         if is_signal {
             introspect.extend(doc_comments);
@@ -209,9 +231,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             });
         } else if is_property {
             let p = properties.entry(member_name.to_string());
-            let prop_changed_method_name = format_ident!("{}_changed", snake_case(&member_name));
-            let prop_invalidate_method_name =
-                format_ident!("{}_invalidate", snake_case(&member_name));
+
+            let sk_member_name = case::snake_case(&member_name);
+            let prop_changed_method_name = format_ident!("{sk_member_name}_changed");
+            let prop_invalidate_method_name = format_ident!("{sk_member_name}_invalidate");
 
             let p = p.or_insert_with(Property::new);
             p.doc_comments.extend(doc_comments);
@@ -556,56 +579,9 @@ fn get_args_from_inputs(
         let mut tys = Vec::new();
 
         for input in inputs {
-            let mut is_server = false;
-            let mut is_conn = false;
-            let mut is_header = false;
-            let mut is_signal_context = false;
+            let attrs = ArgAttributes::parse(&input.attrs)?;
 
-            for attr in &input.attrs {
-                if !attr.path.is_ident("zbus") {
-                    continue;
-                }
-
-                let nested = match attr.parse_meta()? {
-                    Meta::List(MetaList { nested, .. }) => nested,
-                    meta => {
-                        return Err(Error::new_spanned(
-                            meta,
-                            "Unsupported syntax\n
-                             Did you mean `#[zbus(...)]`?",
-                        ));
-                    }
-                };
-
-                for item in nested {
-                    match &item {
-                        NestedMeta::Meta(Meta::Path(p)) => {
-                            if p.is_ident("object_server") {
-                                is_server = true;
-                            } else if p.is_ident("connection") {
-                                is_conn = true;
-                            } else if p.is_ident("header") {
-                                is_header = true;
-                            } else if p.is_ident("signal_context") {
-                                is_signal_context = true;
-                            } else {
-                                return Err(Error::new_spanned(
-                                    item,
-                                    "Unrecognized zbus attribute",
-                                ));
-                            }
-                        }
-                        NestedMeta::Meta(_) => {
-                            return Err(Error::new_spanned(item, "Unrecognized zbus attribute"));
-                        }
-                        NestedMeta::Lit(l) => {
-                            return Err(Error::new_spanned(l, "Unexpected literal"))
-                        }
-                    }
-                }
-            }
-
-            if is_server {
+            if attrs.object_server {
                 if server_arg_decl.is_some() {
                     return Err(Error::new_spanned(
                         input,
@@ -615,7 +591,7 @@ fn get_args_from_inputs(
 
                 let server_arg = &input.pat;
                 server_arg_decl = Some(quote! { let #server_arg = &s; });
-            } else if is_conn {
+            } else if attrs.connection {
                 if conn_arg_decl.is_some() {
                     return Err(Error::new_spanned(
                         input,
@@ -625,7 +601,7 @@ fn get_args_from_inputs(
 
                 let conn_arg = &input.pat;
                 conn_arg_decl = Some(quote! { let #conn_arg = &c; });
-            } else if is_header {
+            } else if attrs.header {
                 if header_arg_decl.is_some() {
                     return Err(Error::new_spanned(
                         input,
@@ -638,7 +614,7 @@ fn get_args_from_inputs(
                 header_arg_decl = Some(quote! {
                     let #header_arg = m.header()?;
                 });
-            } else if is_signal_context {
+            } else if attrs.signal_context {
                 if signal_context_arg_decl.is_some() {
                     return Err(Error::new_spanned(
                         input,
@@ -800,7 +776,7 @@ fn get_result_type(p: &TypePath) -> syn::Result<&Type> {
 fn introspect_add_output_args(
     args: &mut TokenStream,
     output: &ReturnType,
-    arg_names: &Option<&Vec<String>>,
+    arg_names: Option<&[String]>,
 ) -> syn::Result<bool> {
     let mut is_result_output = false;
 

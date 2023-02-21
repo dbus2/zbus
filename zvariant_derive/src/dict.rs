@@ -1,6 +1,7 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::{punctuated::Punctuated, spanned::Spanned, Data, DeriveInput, Error, Field};
+use zvariant_utils::{case, macros};
 
 use crate::utils::*;
 
@@ -38,9 +39,9 @@ fn dict_name_for_field(
         match rename_all_attr {
             Some("lowercase") => Ok(ident.to_ascii_lowercase()),
             Some("UPPERCASE") => Ok(ident.to_ascii_uppercase()),
-            Some("PascalCase") => Ok(pascal_or_camel_case(&ident, true)),
-            Some("camelCase") => Ok(pascal_or_camel_case(&ident, false)),
-            Some("snake_case") => Ok(snake_case(&ident)),
+            Some("PascalCase") => Ok(case::pascal_or_camel_case(&ident, true)),
+            Some("camelCase") => Ok(case::pascal_or_camel_case(&ident, false)),
+            Some("snake_case") => Ok(case::snake_case(&ident)),
             None => Ok(ident),
             Some(other) => Err(Error::new(
                 f.span(),
@@ -68,7 +69,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
         let name = &f.ident;
         let dict_name = dict_name_for_field(f, rename, rename_all.as_deref())?;
 
-        let is_option = ty_is_option(&f.ty);
+        let is_option = macros::ty_is_option(&f.ty);
 
         let e = if is_option {
             quote! {
@@ -134,7 +135,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
         let name = &f.ident;
         let dict_name = dict_name_for_field(f, rename, rename_all.as_deref())?;
 
-        let is_option = ty_is_option(&f.ty);
+        let is_option = macros::ty_is_option(&f.ty);
 
         entries.push(quote! {
             #dict_name => {

@@ -1,69 +1,33 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{
-    spanned::Spanned,
-    Attribute, Data, DeriveInput, Error, Fields, Ident, Lit,
-    Meta::{List, NameValue},
-    NestedMeta,
-    NestedMeta::Meta,
-    Variant,
-};
+use syn::{spanned::Spanned, Data, DeriveInput, Error, Fields, Ident, Variant};
+use zvariant_utils::def_attrs;
+
+// FIXME: The list name should once be "zbus" instead of "dbus_error" (like in serde).
+def_attrs! {
+    crate dbus_error;
+
+    pub StructAttributes("struct") {
+        prefix str,
+        impl_display bool
+    };
+
+    pub VariantAttributes("enum variant") {
+        name str,
+        zbus_error none
+    };
+}
 
 use crate::utils::*;
 
-pub fn get_dbus_error_meta_items(attr: &Attribute) -> Result<Vec<NestedMeta>, Error> {
-    if !attr.path.is_ident("dbus_error") {
-        return Ok(Vec::new());
-    }
-
-    match attr.parse_meta()? {
-        List(meta) => Ok(meta.nested.into_iter().collect()),
-        _ => Err(Error::new(
-            attr.path.get_ident().unwrap().span(),
-            "unsupported attribute",
-        )),
-    }
-}
-
 pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
-    let mut prefix = "org.freedesktop.DBus".to_string();
-    let mut generate_display = true;
-    for meta_item in input
-        .attrs
-        .iter()
-        .flat_map(get_dbus_error_meta_items)
-        .flatten()
-    {
-        match &meta_item {
-            Meta(meta) => {
-                let value = match meta {
-                    NameValue(v) => v,
-                    _ => {
-                        return Err(Error::new(meta.span(), "unsupported attribute"));
-                    }
-                };
-                if meta.path().is_ident("prefix") {
-                    // Parse `#[dbus_error(prefix = "foo")]`
-                    if let Lit::Str(s) = &value.lit {
-                        prefix = s.value();
-                    }
-                } else if meta.path().is_ident("impl_display") {
-                    // Parse `#[dbus_error(impl_display = bool)]`
-                    if let Lit::Bool(b) = &value.lit {
-                        generate_display = b.value;
-                    } else {
-                        return Err(Error::new(
-                            meta.span(),
-                            "`impl_display` must be `true` or `false`",
-                        ));
-                    }
-                } else {
-                    return Err(Error::new(meta.span(), "unsupported attribute"));
-                }
-            }
-            NestedMeta::Lit(lit) => return Err(Error::new(lit.span(), "unsupported attribute")),
-        }
-    }
+    let StructAttributes {
+        prefix,
+        impl_display,
+    } = StructAttributes::parse(&input.attrs)?;
+    let prefix = prefix.unwrap_or_else(|| "org.freedesktop.DBus".to_string());
+    let generate_display = impl_display.unwrap_or(true);
+
     let (_vis, name, _generics, data) = match input.data {
         Data::Enum(data) => (input.vis, input.ident, input.generics, data),
         _ => return Err(Error::new(input.span(), "only enums supported")),
@@ -78,19 +42,12 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     let mut zbus_error_variant = None;
 
     for variant in data.variants {
-        let attrs = error_parse_item_attributes(&variant.attrs)?;
+        let VariantAttributes { name, zbus_error } = VariantAttributes::parse(&variant.attrs)?;
+
         let ident = &variant.ident;
-        let name = attrs
-            .iter()
-            .find_map(|x| match x {
-                ItemAttribute::Name(n) => Some(n.to_string()),
-                _ => None,
-            })
-            .unwrap_or_else(|| ident.to_string());
+        let name = name.unwrap_or_else(|| ident.to_string());
 
-        let impl_from_zbus_error = attrs.iter().any(|x| x == &ItemAttribute::ZbusError);
-
-        let fqn = if !impl_from_zbus_error {
+        let fqn = if !zbus_error {
             format!("{prefix}.{name}")
         } else {
             // The ZBus error variant will always be a hardcoded string.
@@ -113,7 +70,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         };
         error_names.extend(e);
 
-        if impl_from_zbus_error {
+        if zbus_error {
             if zbus_error_variant.is_some() {
                 panic!("More than 1 `zbus_error` variant found");
             }
@@ -128,7 +85,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
                 Self::#ident => None,
             },
             Fields::Unnamed(_) => {
-                if impl_from_zbus_error {
+                if zbus_error {
                     quote! {
                         Self::#ident(#zbus::Error::MethodError(_, desc, _)) => desc.as_deref(),
                         Self::#ident(_) => None,
@@ -153,7 +110,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         error_descriptions.extend(e);
 
         // The conversion for zbus_error variant is handled separately/explicitly.
-        if !impl_from_zbus_error {
+        if !zbus_error {
             // FIXME: deserialize msg to error field instead, to support variable args
             let e = match &variant.fields {
                 Fields::Unit => quote! {
@@ -180,7 +137,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             error_converts.extend(e);
         }
 
-        let r = gen_reply_for_variant(&variant, impl_from_zbus_error)?;
+        let r = gen_reply_for_variant(&variant, zbus_error)?;
         replies.extend(r);
     }
 
