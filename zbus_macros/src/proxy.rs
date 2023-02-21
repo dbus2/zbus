@@ -1,13 +1,45 @@
+use crate::utils::{pat_ident, typed_arg, zbus_path};
 use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use regex::Regex;
-use std::collections::HashMap;
 use syn::{
     self, fold::Fold, parse_quote, spanned::Spanned, AttributeArgs, Error, FnArg, Ident, ItemTrait,
-    NestedMeta, ReturnType, TraitItemMethod, Type,
+    ReturnType, TraitItemMethod,
 };
+use zvariant_utils::{case, def_attrs};
 
-use crate::utils::*;
+// FIXME: The list name should once be "zbus" instead of "dbus_proxy" (like in serde).
+def_attrs! {
+    crate dbus_proxy;
+
+    pub ImplAttributes("impl block") {
+        interface str,
+        name str,
+        assume_defaults bool,
+        default_path str,
+        default_service str,
+        async_name str,
+        blocking_name str,
+        gen_async bool,
+        gen_blocking bool
+    };
+
+    pub MethodAttributes("method") {
+        name str,
+        property {
+            pub PropertyAttributes("property") {
+                emits_changed_signal str
+            }
+        },
+        signal none,
+        object str,
+        async_object str,
+        blocking_object str,
+        no_reply none,
+        no_autostart none,
+        allow_interactive_auth none
+    };
+}
 
 struct AsyncOpts {
     blocking: bool,
@@ -31,76 +63,28 @@ impl AsyncOpts {
 }
 
 pub fn expand(args: AttributeArgs, input: ItemTrait) -> Result<TokenStream, Error> {
-    let (mut gen_async, mut gen_blocking) = (true, true);
-    let (mut async_name, mut blocking_name) = (None, None);
-    let mut iface_name = None;
-    let mut assume_defaults = None;
-    let mut default_path = None;
-    let mut default_service = None;
-    for arg in &args {
-        match arg {
-            NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
-                if nv.path.is_ident("interface") || nv.path.is_ident("name") {
-                    if let syn::Lit::Str(lit) = &nv.lit {
-                        iface_name = Some(lit.value());
-                    } else {
-                        return Err(Error::new_spanned(&nv.lit, "invalid interface argument"));
-                    }
-                } else if nv.path.is_ident("assume_defaults") {
-                    if let syn::Lit::Bool(lit) = &nv.lit {
-                        assume_defaults = Some(lit.value());
-                    } else {
-                        return Err(Error::new_spanned(
-                            &nv.lit,
-                            "invalid assume_defaults argument",
-                        ));
-                    }
-                } else if nv.path.is_ident("default_path") {
-                    if let syn::Lit::Str(lit) = &nv.lit {
-                        default_path = Some(lit.value());
-                    } else {
-                        return Err(Error::new_spanned(&nv.lit, "invalid path argument"));
-                    }
-                } else if nv.path.is_ident("default_service") {
-                    if let syn::Lit::Str(lit) = &nv.lit {
-                        default_service = Some(lit.value());
-                    } else {
-                        return Err(Error::new_spanned(&nv.lit, "invalid service argument"));
-                    }
-                } else if nv.path.is_ident("async_name") {
-                    if let syn::Lit::Str(lit) = &nv.lit {
-                        async_name = Some(lit.value());
-                    } else {
-                        return Err(Error::new_spanned(&nv.lit, "invalid async_name argument"));
-                    }
-                } else if nv.path.is_ident("blocking_name") {
-                    if let syn::Lit::Str(lit) = &nv.lit {
-                        blocking_name = Some(lit.value());
-                    } else {
-                        return Err(Error::new_spanned(
-                            &nv.lit,
-                            "invalid blocking_name argument",
-                        ));
-                    }
-                } else if nv.path.is_ident("gen_async") {
-                    if let syn::Lit::Bool(lit) = &nv.lit {
-                        gen_async = lit.value();
-                    } else {
-                        return Err(Error::new_spanned(&nv.lit, "invalid gen_async argument"));
-                    }
-                } else if nv.path.is_ident("gen_blocking") {
-                    if let syn::Lit::Bool(lit) = &nv.lit {
-                        gen_blocking = lit.value();
-                    } else {
-                        return Err(Error::new_spanned(&nv.lit, "invalid gen_blocking argument"));
-                    }
-                } else {
-                    return Err(Error::new_spanned(&nv.lit, "unsupported argument"));
-                }
-            }
-            _ => return Err(Error::new_spanned(arg, "unknown attribute")),
-        }
-    }
+    let ImplAttributes {
+        interface,
+        name,
+        assume_defaults,
+        default_path,
+        default_service,
+        async_name,
+        blocking_name,
+        gen_async,
+        gen_blocking,
+    } = ImplAttributes::parse_nested_metas(&args)?;
+
+    let iface_name = match (interface, name) {
+        (Some(name), None) | (None, Some(name)) => Ok(Some(name)),
+        (None, None) => Ok(None),
+        (Some(_), Some(_)) => Err(syn::Error::new(
+            input.span(),
+            "both `interface` and `name` attributes shouldn't be specified at the same time",
+        )),
+    }?;
+    let gen_async = gen_async.unwrap_or(true);
+    let gen_blocking = gen_blocking.unwrap_or(true);
 
     // Some sanity checks
     assert!(
@@ -214,36 +198,39 @@ pub fn create_proxy(
 
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
+            let mut attrs = MethodAttributes::parse(&m.attrs)?;
+
             let method_name = m.sig.ident.to_string();
-            let attrs = parse_item_attributes(&m.attrs, "dbus_proxy")?;
-            let property_attrs = attrs.iter().find_map(|x| match x {
-                ItemAttribute::Property(v) => Some(v),
-                _ => None,
-            });
-            let is_property = property_attrs.is_some();
-            let is_signal = attrs.iter().any(|x| x.is_signal());
+
+            let is_property = attrs.property.is_some();
+            let is_signal = attrs.signal;
             let has_inputs = m.sig.inputs.len() > 1;
-            let member_name = attrs
-                .iter()
-                .find_map(|x| match x {
-                    ItemAttribute::Name(n) => Some(n.to_string()),
-                    _ => None,
-                })
-                .unwrap_or_else(|| {
-                    pascal_case(if is_property && has_inputs {
+
+            let member_name = attrs.name.take().unwrap_or_else(|| {
+                case::pascal_or_camel_case(
+                    if is_property && has_inputs {
                         assert!(method_name.starts_with("set_"));
                         &method_name[4..]
                     } else {
                         &method_name
-                    })
-                });
-            let m = if let Some(prop_attrs) = property_attrs {
-                assert!(is_property);
+                    },
+                    true,
+                )
+            });
+
+            let m = if let Some(prop_attrs) = &attrs.property {
                 has_properties = true;
-                let emits_changed_signal = PropertyEmitsChangedSignal::parse_from_attrs(prop_attrs);
+
+                let emits_changed_signal = if let Some(s) = &prop_attrs.emits_changed_signal {
+                    PropertyEmitsChangedSignal::parse(s, m.span())?
+                } else {
+                    PropertyEmitsChangedSignal::True
+                };
+
                 if let PropertyEmitsChangedSignal::False = emits_changed_signal {
                     uncached_properties.push(member_name.clone());
                 }
+
                 gen_proxy_property(
                     &member_name,
                     &method_name,
@@ -265,7 +252,7 @@ pub fn create_proxy(
 
                 method
             } else {
-                gen_proxy_method_call(&member_name, &method_name, m, &async_opts)
+                gen_proxy_method_call(&member_name, &method_name, m, &attrs, &async_opts)
             };
             methods.extend(m);
         }
@@ -471,6 +458,7 @@ fn gen_proxy_method_call(
     method_name: &str,
     snake_case_name: &str,
     m: &TraitItemMethod,
+    attrs: &MethodAttributes,
     async_opts: &AsyncOpts,
 ) -> TokenStream {
     let AsyncOpts {
@@ -491,39 +479,26 @@ fn gen_proxy_method_call(
         .filter_map(typed_arg)
         .filter_map(pat_ident)
         .collect();
-    let attrs = parse_item_attributes(&m.attrs, "dbus_proxy").unwrap();
-    let async_proxy_object = attrs.iter().find_map(|x| match x {
-        ItemAttribute::AsyncObject(o) => Some(o.clone()),
-        _ => None,
-    });
-    let blocking_proxy_object = attrs.iter().find_map(|x| match x {
-        ItemAttribute::BlockingObject(o) => Some(o.clone()),
-        _ => None,
-    });
-    let proxy_object = attrs.iter().find_map(|x| match x {
-        ItemAttribute::Object(o) => {
-            if *blocking {
-                // FIXME: for some reason Rust doesn't let us move `blocking_proxy_object` so we've to clone.
-                blocking_proxy_object
-                    .as_ref()
-                    .cloned()
-                    .or_else(|| Some(format!("{o}ProxyBlocking")))
-            } else {
-                async_proxy_object
-                    .as_ref()
-                    .cloned()
-                    .or_else(|| Some(format!("{o}Proxy")))
-            }
+
+    let proxy_object = attrs.object.as_ref().map(|o| {
+        if *blocking {
+            // FIXME: for some reason Rust doesn't let us move `blocking_proxy_object` so we've to clone.
+            attrs
+                .blocking_object
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| format!("{o}ProxyBlocking"))
+        } else {
+            attrs
+                .async_object
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| format!("{o}Proxy"))
         }
-        _ => None,
     });
-    let no_reply = attrs.iter().any(|x| matches!(x, ItemAttribute::NoReply));
-    let no_autostart = attrs
-        .iter()
-        .any(|x| matches!(x, ItemAttribute::NoAutoStart));
-    let allow_interactive_auth = attrs
-        .iter()
-        .any(|x| matches!(x, ItemAttribute::AllowInteractiveAuth));
+    let no_reply = attrs.no_reply;
+    let no_autostart = attrs.no_autostart;
+    let allow_interactive_auth = attrs.allow_interactive_auth;
 
     let method_flags = match (no_reply, no_autostart, allow_interactive_auth) {
         (true, false, false) => Some(quote!(::std::convert::Into::into(
@@ -684,21 +659,19 @@ impl Default for PropertyEmitsChangedSignal {
 }
 
 impl PropertyEmitsChangedSignal {
-    /// Macro property attribute key, like `#[dbus_proxy(property(emits_changed_signal = "..."))]`.
-    const ATTRIBUTE_KEY: &'static str = "emits_changed_signal";
+    fn parse(s: &str, span: Span) -> syn::Result<Self> {
+        use PropertyEmitsChangedSignal::*;
 
-    /// Parse the value from macro attributes.
-    fn parse_from_attrs(attrs: &HashMap<String, String>) -> Self {
-        attrs
-            .get(Self::ATTRIBUTE_KEY)
-            .map(|val| match val.as_str() {
-                "true" => PropertyEmitsChangedSignal::True,
-                "invalidates" => PropertyEmitsChangedSignal::Invalidates,
-                "const" => PropertyEmitsChangedSignal::Const,
-                "false" => PropertyEmitsChangedSignal::False,
-                x => panic!("Invalid attribute '{} = {}'", Self::ATTRIBUTE_KEY, x),
-            })
-            .unwrap_or_default()
+        match s {
+            "true" => Ok(True),
+            "invalidates" => Ok(Invalidates),
+            "const" => Ok(Const),
+            "false" => Ok(False),
+            other => Err(syn::Error::new(
+                span,
+                format!("invalid value \"{other}\" for attribute `property(emits_changed_signal)`"),
+            )),
+        }
     }
 }
 
@@ -834,7 +807,7 @@ fn gen_proxy_signal(
     iface_name: &str,
     signal_name: &str,
     snake_case_name: &str,
-    m: &TraitItemMethod,
+    method: &TraitItemMethod,
     async_opts: &AsyncOpts,
     gen_sig_args: bool,
 ) -> (TokenStream, TokenStream) {
@@ -844,22 +817,22 @@ fn gen_proxy_signal(
         blocking,
     } = async_opts;
     let zbus = zbus_path();
-    let other_attrs: Vec<_> = m
+    let other_attrs: Vec<_> = method
         .attrs
         .iter()
         .filter(|a| !a.path.is_ident("dbus_proxy"))
         .collect();
-    let input_types: Vec<Box<Type>> = m
+    let input_types: Vec<_> = method
         .sig
         .inputs
         .iter()
         .filter_map(|arg| match arg {
-            FnArg::Typed(p) => Some(p.ty.clone()),
+            FnArg::Typed(p) => Some(&*p.ty),
             _ => None,
         })
         .collect();
     let input_types_s: Vec<_> = SetLifetimeS
-        .fold_signature(m.sig.clone())
+        .fold_signature(method.sig.clone())
         .inputs
         .iter()
         .filter_map(|arg| match arg {
@@ -867,7 +840,7 @@ fn gen_proxy_signal(
             _ => None,
         })
         .collect();
-    let args: Vec<Ident> = m
+    let args: Vec<Ident> = method
         .sig
         .inputs
         .iter()
@@ -880,7 +853,7 @@ fn gen_proxy_signal(
         .map(|(i, _)| Literal::usize_unsuffixed(i))
         .collect();
 
-    let mut generics = m.sig.generics.clone();
+    let mut generics = method.sig.generics.clone();
     let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
     for param in generics
         .params
