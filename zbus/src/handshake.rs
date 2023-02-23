@@ -97,13 +97,8 @@ where
     H: SyncHandshake<S> + Unpin + Debug,
     S: Unpin,
 {
-    async fn perform(mut self) -> Result<Authenticated<S>> {
-        self.handshake.advance_handshake().await?;
-
-        let authenticated = self
-            .handshake
-            .try_finish()
-            .expect("Failed to finish a successful handshake");
+    async fn perform(self) -> Result<Authenticated<S>> {
+        let authenticated = self.handshake.perform().await?;
 
         Ok(Authenticated(authenticated))
     }

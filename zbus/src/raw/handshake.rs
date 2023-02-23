@@ -93,23 +93,11 @@ pub struct Authenticated<S> {
 
 #[async_trait]
 pub trait Handshake<S> {
-    /// Attempt to advance the handshake
+    /// Perform the handshake.
     ///
-    /// In non-blocking mode, you need to invoke this method repeatedly
-    /// until it returns `Ok(())`. Once it does, the handshake is finished
-    /// and you can invoke the [`Handshake::try_finish`] method.
-    ///
-    /// Note that only the initial handshake is done. If you need to send a
-    /// Bus Hello, this remains to be done.
-    async fn advance_handshake(&mut self) -> Result<()>;
-
-    /// Attempt to finalize this handshake into an initialized client.
-    ///
-    /// This method should only be called once `advance_handshake()` has
-    /// returned `Ok(())`. Otherwise it'll error and return you the object.
-    fn try_finish(self) -> std::result::Result<Authenticated<S>, Self>
-    where
-        Self: Sized;
+    /// On a successful handshake, you get an `Authenticated`. If you need to send a Bus Hello,
+    /// this remains to be done.
+    async fn perform(mut self) -> Result<Authenticated<S>>;
 }
 
 impl<S: Socket> ClientHandshake<S> {
@@ -301,7 +289,7 @@ fn home_dir() -> Option<PathBuf> {
 #[async_trait]
 impl<S: Socket> Handshake<S> for ClientHandshake<S> {
     #[instrument(skip(self))]
-    async fn advance_handshake(&mut self) -> Result<()> {
+    async fn perform(mut self) -> Result<Authenticated<S>> {
         use ClientHandshakeStep::*;
         loop {
             let (next_step, cmd) = match self.step {
@@ -407,24 +395,16 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                 }
                 Done => {
                     trace!("Handshake done");
-                    return Ok(());
+                    return Ok(Authenticated {
+                        conn: Connection::new(self.common.socket, self.common.recv_buffer),
+                        server_guid: self.common.server_guid.unwrap(),
+                        #[cfg(unix)]
+                        cap_unix_fd: self.common.cap_unix_fd,
+                    });
                 }
             };
             self.common.write_command(cmd).await?;
             self.step = next_step;
-        }
-    }
-
-    fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
-        if let ClientHandshakeStep::Done = self.step {
-            Ok(Authenticated {
-                conn: Connection::new(self.common.socket, self.common.recv_buffer),
-                server_guid: self.common.server_guid.unwrap(),
-                #[cfg(unix)]
-                cap_unix_fd: self.common.cap_unix_fd,
-            })
-        } else {
-            Err(self)
         }
     }
 }
@@ -564,7 +544,7 @@ impl<S: Socket> ServerHandshake<S> {
 #[async_trait]
 impl<S: Socket> Handshake<S> for ServerHandshake<S> {
     #[instrument(skip(self))]
-    async fn advance_handshake(&mut self) -> Result<()> {
+    async fn perform(mut self) -> Result<Authenticated<S>> {
         loop {
             match self.step {
                 ServerHandshakeStep::WaitingForNull => {
@@ -653,23 +633,15 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                 }
                 ServerHandshakeStep::Done => {
                     trace!("Handshake done");
-                    return Ok(());
+                    return Ok(Authenticated {
+                        conn: Connection::new(self.common.socket, self.common.recv_buffer),
+                        // SAFETY: We know that the server GUID is set because we set it in the constructor.
+                        server_guid: self.common.server_guid.expect("Server GUID not set"),
+                        #[cfg(unix)]
+                        cap_unix_fd: self.common.cap_unix_fd,
+                    });
                 }
             }
-        }
-    }
-
-    fn try_finish(self) -> std::result::Result<Authenticated<S>, Self> {
-        if let ServerHandshakeStep::Done = self.step {
-            Ok(Authenticated {
-                conn: Connection::new(self.common.socket, self.common.recv_buffer),
-                // SAFETY: We know that the server GUID is set because we set it in the constructor.
-                server_guid: self.common.server_guid.expect("Server GUID not set"),
-                #[cfg(unix)]
-                cap_unix_fd: self.common.cap_unix_fd,
-            })
-        } else {
-            Err(self)
         }
     }
 }
@@ -929,23 +901,15 @@ mod tests {
     fn handshake() {
         let (p0, p1) = create_async_socket_pair();
 
-        let mut client = ClientHandshake::new(p0, None);
-        let mut server =
+        let client = ClientHandshake::new(p0, None);
+        let server =
             ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
                 .unwrap();
 
         // proceed to the handshakes
         let (client, server) = crate::utils::block_on(join(
-            async move {
-                client.advance_handshake().await.unwrap();
-
-                client.try_finish().unwrap()
-            },
-            async move {
-                server.advance_handshake().await.unwrap();
-
-                server.try_finish().unwrap()
-            },
+            async move { client.perform().await.unwrap() },
+            async move { server.perform().await.unwrap() },
         ));
 
         assert_eq!(client.server_guid, server.server_guid);
@@ -956,7 +920,7 @@ mod tests {
     #[timeout(15000)]
     fn pipelined_handshake() {
         let (mut p0, p1) = create_async_socket_pair();
-        let mut server =
+        let server =
             ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
                 .unwrap();
 
@@ -970,9 +934,7 @@ mod tests {
             ),
         )
         .unwrap();
-        crate::utils::block_on(server.advance_handshake()).unwrap();
-
-        let server = server.try_finish().unwrap();
+        let server = crate::utils::block_on(server.perform()).unwrap();
 
         assert!(server.cap_unix_fd);
     }
@@ -981,7 +943,7 @@ mod tests {
     #[timeout(15000)]
     fn separate_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
-        let mut server =
+        let server =
             ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
                 .unwrap();
 
@@ -995,30 +957,26 @@ mod tests {
             ),
         )
         .unwrap();
-        crate::utils::block_on(server.advance_handshake()).unwrap();
-
-        server.try_finish().unwrap();
+        crate::utils::block_on(server.perform()).unwrap();
     }
 
     #[test]
     #[timeout(15000)]
     fn missing_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
-        let mut server =
+        let server =
             ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
                 .unwrap();
 
         crate::utils::block_on(p0.write_all(b"\0AUTH EXTERNAL\r\nDATA\r\nBEGIN\r\n")).unwrap();
-        crate::utils::block_on(server.advance_handshake()).unwrap();
-
-        server.try_finish().unwrap();
+        crate::utils::block_on(server.perform()).unwrap();
     }
 
     #[test]
     #[timeout(15000)]
     fn anonymous_handshake() {
         let (mut p0, p1) = create_async_socket_pair();
-        let mut server = ServerHandshake::new(
+        let server = ServerHandshake::new(
             p1,
             Guid::generate(),
             Some(Uid::effective().into()),
@@ -1027,16 +985,14 @@ mod tests {
         .unwrap();
 
         crate::utils::block_on(p0.write_all(b"\0AUTH ANONYMOUS abcd\r\nBEGIN\r\n")).unwrap();
-        crate::utils::block_on(server.advance_handshake()).unwrap();
-
-        server.try_finish().unwrap();
+        crate::utils::block_on(server.perform()).unwrap();
     }
 
     #[test]
     #[timeout(15000)]
     fn separate_anonymous_data() {
         let (mut p0, p1) = create_async_socket_pair();
-        let mut server = ServerHandshake::new(
+        let server = ServerHandshake::new(
             p1,
             Guid::generate(),
             Some(Uid::effective().into()),
@@ -1046,8 +1002,6 @@ mod tests {
 
         crate::utils::block_on(p0.write_all(b"\0AUTH ANONYMOUS\r\nDATA abcd\r\nBEGIN\r\n"))
             .unwrap();
-        crate::utils::block_on(server.advance_handshake()).unwrap();
-
-        server.try_finish().unwrap();
+        crate::utils::block_on(server.perform()).unwrap();
     }
 }
