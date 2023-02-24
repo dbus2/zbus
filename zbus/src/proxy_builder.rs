@@ -116,15 +116,17 @@ impl<'a, T> ProxyBuilder<'a, T> {
         self
     }
 
-    pub(crate) fn build_internal(self) -> Proxy<'a> {
+    pub(crate) fn build_internal(self) -> Result<Proxy<'a>> {
         let conn = self.conn;
-        let destination = self.destination.expect("missing `destination`");
-        let path = self.path.expect("missing `path`");
-        let interface = self.interface.expect("missing `interface`");
+        let destination = self
+            .destination
+            .ok_or(Error::MissingParameter("destination"))?;
+        let path = self.path.ok_or(Error::MissingParameter("path"))?;
+        let interface = self.interface.ok_or(Error::MissingParameter("interface"))?;
         let cache = self.cache;
         let uncached_properties = self.uncached_properties.unwrap_or_default();
 
-        Proxy {
+        Ok(Proxy {
             inner: Arc::new(ProxyInner::new(
                 conn,
                 destination,
@@ -133,20 +135,21 @@ impl<'a, T> ProxyBuilder<'a, T> {
                 cache,
                 uncached_properties,
             )),
-        }
+        })
     }
 
     /// Build a proxy from the builder.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the builder is lacking the necessary details to build a proxy.
+    /// If the builder is lacking the necessary parameters to build a proxy,
+    /// [`Error::MissingParameter`] is returned.
     pub async fn build(self) -> Result<T>
     where
         T: From<Proxy<'a>>,
     {
         let cache_upfront = self.cache == CacheProperties::Yes;
-        let proxy = self.build_internal();
+        let proxy = self.build_internal()?;
 
         if cache_upfront {
             proxy

@@ -64,6 +64,8 @@ pub enum Error {
     InvalidMatchRule,
     /// Generic error.
     Failure(String),
+    /// A required parameter was missing.
+    MissingParameter(&'static str),
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -129,6 +131,7 @@ impl error::Error for Error {
             Error::NameTaken => None,
             Error::InvalidMatchRule => None,
             Error::Failure(_) => None,
+            Error::MissingParameter(_) => None,
         }
     }
 }
@@ -166,6 +169,9 @@ impl fmt::Display for Error {
             Error::NameTaken => write!(f, "name already taken on the bus"),
             Error::InvalidMatchRule => write!(f, "Invalid match rule string"),
             Error::Failure(e) => write!(f, "{e}"),
+            Error::MissingParameter(p) => {
+                write!(f, "Parameter `{}` was not specified but it is required", p)
+            }
         }
     }
 }
@@ -201,6 +207,7 @@ impl Clone for Error {
             Error::NameTaken => Error::NameTaken,
             Error::InvalidMatchRule => Error::InvalidMatchRule,
             Error::Failure(e) => Error::Failure(e.clone()),
+            Error::MissingParameter(p) => Error::MissingParameter(p),
         }
     }
 }
