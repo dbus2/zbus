@@ -642,6 +642,7 @@ impl<'a> Proxy<'a> {
             // does not have properties
             .cache_properties(CacheProperties::No)
             .build_internal()
+            .unwrap()
             .into()
     }
 
@@ -656,6 +657,7 @@ impl<'a> Proxy<'a> {
             // does not have properties
             .cache_properties(CacheProperties::No)
             .build_internal()
+            .unwrap()
             .into()
     }
 
