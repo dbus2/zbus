@@ -1167,7 +1167,6 @@ impl Connection {
         auth: Authenticated<Box<dyn Socket>>,
         bus_connection: bool,
     ) -> Result<Self> {
-        let auth = auth.into_inner();
         #[cfg(unix)]
         let cap_unix_fd = auth.cap_unix_fd;
 
