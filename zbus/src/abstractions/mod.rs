@@ -7,3 +7,4 @@ pub use executor::*;
 mod async_drop;
 pub(crate) mod async_lock;
 pub use async_drop::*;
+pub(crate) mod file;
