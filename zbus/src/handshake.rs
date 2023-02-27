@@ -1,12 +1,10 @@
 use async_trait::async_trait;
-use futures_util::future::poll_fn;
+use futures_util::{future::poll_fn, StreamExt};
 #[cfg(unix)]
 use nix::unistd::Uid;
 use std::{
     collections::VecDeque,
     fmt::{self, Debug},
-    fs::File,
-    io::{BufRead, BufReader},
     path::PathBuf,
     str::FromStr,
 };
@@ -17,6 +15,7 @@ use sha1::{Digest, Sha1};
 #[cfg(windows)]
 use crate::win32;
 use crate::{
+    file::FileLines,
     guid::Guid,
     raw::{Connection, Socket},
     Error, Result,
@@ -188,7 +187,7 @@ impl<S: Socket> ClientHandshake<S> {
         }
     }
 
-    fn mechanism_data(&mut self, data: Vec<u8>) -> Result<(ClientHandshakeStep, Command)> {
+    async fn mechanism_data(&mut self, data: Vec<u8>) -> Result<(ClientHandshakeStep, Command)> {
         let mech = self.common.mechanism()?;
         match mech {
             AuthMechanism::Cookie => {
@@ -205,7 +204,7 @@ impl<S: Socket> ClientHandshake<S> {
                     .next()
                     .ok_or_else(|| Error::Handshake("Missing cookie challenge".into()))?;
 
-                let cookie = Cookie::lookup(name, id)?;
+                let cookie = Cookie::lookup(name, id).await?;
                 let client_chall = random_ascii(16);
                 let sec = format!("{server_chall}:{client_chall}:{cookie}");
                 let sha1 = hex::encode(Sha1::digest(sec));
@@ -262,13 +261,13 @@ impl Cookie {
         Ok(path)
     }
 
-    fn read_keyring(name: &str) -> Result<Vec<Cookie>> {
+    async fn read_keyring(name: &str) -> Result<Vec<Cookie>> {
         let mut path = Cookie::keyring_path()?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
 
-            let perms = std::fs::metadata(&path)?.permissions().mode();
+            let perms = crate::file::metadata(&path).await?.permissions().mode();
             if perms & 0o066 != 0 {
                 return Err(Error::Handshake(
                     "DBus keyring has invalid permissions".into(),
@@ -281,9 +280,9 @@ impl Cookie {
         }
         path.push(name);
         trace!("Reading keyring {:?}", path);
-        let file = File::open(&path)?;
+        let mut lines = FileLines::open(&path).await?.enumerate();
         let mut cookies = vec![];
-        for (n, line) in BufReader::new(file).lines().enumerate() {
+        while let Some((n, line)) = lines.next().await {
             let line = line?;
             let mut split = line.split_whitespace();
             let id = split
@@ -319,8 +318,8 @@ impl Cookie {
         Ok(cookies)
     }
 
-    fn lookup(name: &str, id: &str) -> Result<String> {
-        let keyring = Self::read_keyring(name)?;
+    async fn lookup(name: &str, id: &str) -> Result<String> {
+        let keyring = Self::read_keyring(name).await?;
         let c = keyring
             .iter()
             .find(|c| c.id == id)
@@ -401,7 +400,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                             let data = data.ok_or_else(|| {
                                 Error::Handshake("Received DATA with no data from server".into())
                             })?;
-                            self.mechanism_data(data)?
+                            self.mechanism_data(data).await?
                         }
                         (_, Command::Rejected(_)) => {
                             trace!("Received REJECT from server. Will try next auth mechanism..");
