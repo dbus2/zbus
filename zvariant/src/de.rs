@@ -561,7 +561,7 @@ pub(crate) enum ValueParseStage {
     Done,
 }
 
-pub(crate) fn deserialize_any<'de, 'sig, 'f, B, D, V>(
+pub(crate) fn deserialize_any<'de, 'sig, 'f, D, V>(
     de: D,
     next_char: char,
     visitor: V,
@@ -569,7 +569,6 @@ pub(crate) fn deserialize_any<'de, 'sig, 'f, B, D, V>(
 where
     D: de::Deserializer<'de, Error = Error>,
     V: Visitor<'de>,
-    B: byteorder::ByteOrder,
 {
     match next_char {
         u8::SIGNATURE_CHAR => de.deserialize_u8(visitor),
