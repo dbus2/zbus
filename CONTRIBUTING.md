@@ -14,12 +14,27 @@ reporting a bug or asking for help, please include enough details so that the pe
 can reproduce the behavior you are seeing. For some tips on how to approach this, read about how to
 produce a [Minimal, Complete, and Verifiable example](https://stackoverflow.com/help/mcve).
 
-Please consider choosing the appropriate labels when creating the issue. This will help us
-prioritise better.
-
 When making a feature request, please make it clear what problem you intend to solve with the
 feature, any ideas for how the crate in question could support solving that problem, any possible
 alternatives, and any disadvantages.
+
+## Submitting Merge Requests (or Pull Requests on Github)
+
+Same rules apply here as for bug reports and feature requests. Plus:
+
+* We prefer atomic commits. Please read
+  [this excellent blog post](https://www.aleksandrhovhannisyan.com/blog/atomic-git-commits/) for
+  more information, including the rationale.
+* Please try your best to follow [these guidelines](https://wiki.gnome.org/Git/CommitMessages) for
+  commit messages.
+* Add details to each commit about the changes it contains. MR description is for summarizing the
+  overall changes in the MR, while commit logs are for describing the specific changes of the
+  commit in question.
+* When addressesing review comments, fix the existing commits in the MR (rather than adding
+  additional commits) and force push (as in `git push -f`) to your branch. You may find
+  [`git-absorb`](https://github.com/tummychow/git-absorb) and
+  [`git-revise`](https://github.com/mystor/git-revise) extremely useful, especially if you're not
+  very familiar with interactive rebasing and modifying commits in git.
 
 ## Github
 
