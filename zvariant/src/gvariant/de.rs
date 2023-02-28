@@ -107,7 +107,7 @@ where
     {
         let c = self.0.sig_parser.next_char()?;
 
-        crate::de::deserialize_any::<B, Self, V>(self, c, visitor)
+        crate::de::deserialize_any::<Self, V>(self, c, visitor)
     }
 
     deserialize_basic!(deserialize_bool);
