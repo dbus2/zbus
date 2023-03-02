@@ -23,7 +23,7 @@ use zvariant::ObjectPath;
 
 use futures_core::{ready, Future};
 use futures_sink::Sink;
-use futures_util::{sink::SinkExt, StreamExt, TryFutureExt};
+use futures_util::{sink::SinkExt, StreamExt};
 
 use crate::{
     async_lock::Mutex,
@@ -850,10 +850,19 @@ impl Connection {
     /// use zbus::ConnectionBuilder;
     /// use async_std::task::{block_on, spawn};
     ///
+    ///# struct SomeIface;
+    ///#
+    ///# #[zbus::dbus_interface]
+    ///# impl SomeIface {
+    ///# }
+    ///#
     /// block_on(async {
     ///     let conn = ConnectionBuilder::session()
     ///         .unwrap()
     ///         .internal_executor(false)
+    ///#         // This is only for testing a deadlock that used to happen with this combo.
+    ///#         .serve_at("/some/iface", SomeIface)
+    ///#         .unwrap()
     ///         .build()
     ///         .await
     ///         .unwrap();
@@ -1140,7 +1149,7 @@ impl Connection {
             .cache_properties(CacheProperties::No)
             .build()
             .await?;
-        let future = dbus_proxy.hello().map_err(Into::into);
+        let future = dbus_proxy.hello();
         let name = self.run_future_at_init(future).await?;
 
         self.inner
@@ -1156,9 +1165,9 @@ impl Connection {
     // completed and some futures need to run to completion before that is done so we need to tick
     // the executor ourselves in parallel to making the method call. With the internal executor,
     /// this is not needed but harmless.
-    pub(crate) async fn run_future_at_init<F, O>(&self, future: F) -> Result<O>
+    pub(crate) async fn run_future_at_init<F, O>(&self, future: F) -> O
     where
-        F: Future<Output = Result<O>>,
+        F: Future<Output = O>,
     {
         self.inner.executor.run(future).await
     }

@@ -347,7 +347,7 @@ impl<'a> ConnectionBuilder<'a> {
             #[cfg(not(feature = "tokio"))]
             start_internal_executor(&conn, self.internal_executor)?;
 
-            listener.await;
+            conn.run_future_at_init(listener).await;
 
             // Start the socket reader task.
             conn.init_socket_reader();
