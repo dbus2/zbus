@@ -5,7 +5,7 @@ use crate::signature_parser::SignatureParser;
 use crate::{Basic, EncodingFormat, Error, ObjectPath, Result, Signature};
 
 #[cfg(unix)]
-use crate::Fd;
+use crate::BorrowedFd;
 
 /// The prefix of ARRAY type signature, as a character. Provided for manual signature creation.
 pub const ARRAY_SIGNATURE_CHAR: char = 'a';
@@ -100,7 +100,7 @@ pub(crate) fn alignment_for_signature(
         i32::SIGNATURE_CHAR => i32::alignment(format),
         u32::SIGNATURE_CHAR => u32::alignment(format),
         #[cfg(unix)]
-        Fd::SIGNATURE_CHAR => u32::alignment(format),
+        BorrowedFd::SIGNATURE_CHAR => u32::alignment(format),
         i64::SIGNATURE_CHAR => i64::alignment(format),
         u64::SIGNATURE_CHAR => u64::alignment(format),
         f64::SIGNATURE_CHAR => f64::alignment(format),
@@ -146,7 +146,7 @@ pub(crate) fn is_fixed_sized_signature<'a>(signature: &'a Signature<'a>) -> Resu
         | u64::SIGNATURE_CHAR
         | f64::SIGNATURE_CHAR => Ok(true),
         #[cfg(unix)]
-        Fd::SIGNATURE_CHAR => Ok(true),
+        BorrowedFd::SIGNATURE_CHAR => Ok(true),
         STRUCT_SIG_START_CHAR => is_fixed_sized_struct_signature(signature),
         DICT_ENTRY_SIG_START_CHAR => is_fixed_sized_dict_entry_signature(signature),
         _ => Ok(false),

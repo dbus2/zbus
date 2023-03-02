@@ -16,7 +16,7 @@ use crate::{
 };
 
 #[cfg(unix)]
-use crate::Fd;
+use crate::BorrowedFd;
 
 /// Our D-Bus serialization implementation.
 pub struct Serializer<'ser, 'sig, B, W>(pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>);
@@ -91,7 +91,7 @@ where
     fn serialize_i32(self, v: i32) -> Result<()> {
         match self.0.sig_parser.next_char()? {
             #[cfg(unix)]
-            Fd::SIGNATURE_CHAR => {
+            BorrowedFd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
                 self.0.add_padding(u32::alignment(EncodingFormat::DBus))?;
                 let v = self.0.add_fd(v);
