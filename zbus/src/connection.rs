@@ -850,10 +850,19 @@ impl Connection {
     /// use zbus::ConnectionBuilder;
     /// use async_std::task::{block_on, spawn};
     ///
+    ///# struct SomeIface;
+    ///#
+    ///# #[zbus::dbus_interface]
+    ///# impl SomeIface {
+    ///# }
+    ///#
     /// block_on(async {
     ///     let conn = ConnectionBuilder::session()
     ///         .unwrap()
     ///         .internal_executor(false)
+    ///#         // This is only for testing a deadlock that used to happen with this combo.
+    ///#         .serve_at("/some/iface", SomeIface)
+    ///#         .unwrap()
     ///         .build()
     ///         .await
     ///         .unwrap();
