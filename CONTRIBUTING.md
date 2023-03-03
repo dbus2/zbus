@@ -36,6 +36,14 @@ Same rules apply here as for bug reports and feature requests. Plus:
   [`git-revise`](https://github.com/mystor/git-revise) extremely useful, especially if you're not
   very familiar with interactive rebasing and modifying commits in git.
 
+### Legal Notice
+
+When contributing to this project, you **implicitly** declare that you:
+
+* have authored 100% of the content.
+* have the necessary rights to the content.
+* agree to providing the content under the [project's license](LICENSE).
+
 ## Github
 
 Although Gitlab is our main and preferred code repository host, the
