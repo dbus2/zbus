@@ -13,7 +13,7 @@
 //! `dbus_interface` allows non-async methods for convenience, these methods are called from an
 //! async context. The [`blocking` crate] provides an easy way around this problem though.
 //!
-//! [asf]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
+//! [asf]: https://rust-lang.github.io/wg-async/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
 //! [`blocking` crate]: https://docs.rs/blocking/
 
 mod connection;
