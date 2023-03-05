@@ -127,7 +127,7 @@ hooks:
 
 * Pre-push hook that goes in the `.git/hooks/pre-push` file:
 
-  ```
+  ```sh
   if ! which rustup &> /dev/null; then
       curl https://sh.rustup.rs -sSf  | sh -s -- -y
       export PATH=$PATH:$HOME/.cargo/bin
