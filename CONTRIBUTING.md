@@ -90,8 +90,8 @@ cargo clippy -- -D warnings
 ```
 
 Please not that there are times when clippy is wrong and you know what you are doing. In such cases,
-it's acceptable to tell clippy to [ignore the specific error or warning in the code](
-https://github.com/rust-lang/rust-clippy#allowingdenying-lints).
+it's acceptable to tell clippy to
+[ignore the specific error or warning in the code](https://github.com/rust-lang/rust-clippy#allowingdenying-lints).
 
 If you intend to contribute often or think that's very likely, we recommend you setup the following git
 hooks:
@@ -127,7 +127,7 @@ hooks:
 
 * Pre-push hook that goes in the `.git/hooks/pre-push` file:
 
-  ```
+  ```sh
   if ! which rustup &> /dev/null; then
       curl https://sh.rustup.rs -sSf  | sh -s -- -y
       export PATH=$PATH:$HOME/.cargo/bin
