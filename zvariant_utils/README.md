@@ -6,6 +6,6 @@ This crate provides various utilities for [`zvariant`].
 
 ## Stability
 
-The API is NOT expected to be stable. The crate, however, will follow semver rules: breaking changes would cause a minor version bump.
+The API is NOT expected to be stable. The crate, however, will follow semver rules: breaking changes would cause a major version bump.
 
 [`zvariant`]: https://crates.io/crates/zvariant
