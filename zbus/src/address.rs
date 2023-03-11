@@ -801,6 +801,10 @@ mod tests {
             Address::Autolaunch(Some("*my_cool_scope*".to_owned())),
             Address::from_str("autolaunch:scope=*my_cool_scope*").unwrap()
         );
+        assert_eq!(
+            Address::Launchd("my_cool_env_key".to_owned()),
+            Address::from_str("launchd:env=my_cool_env_key").unwrap()
+        );
 
         #[cfg(all(feature = "vsock", not(feature = "tokio")))]
         assert_eq!(
@@ -865,6 +869,10 @@ mod tests {
         assert_eq!(
             Address::Autolaunch(Some("*my_cool_scope*".to_owned())).to_string(),
             "autolaunch:scope=*my_cool_scope*"
+        );
+        assert_eq!(
+            Address::Launchd("my_cool_key".to_owned()).to_string(),
+            "launchd:env=my_cool_key"
         );
 
         #[cfg(all(feature = "vsock", not(feature = "tokio")))]
