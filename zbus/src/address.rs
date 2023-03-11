@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+use crate::process::run;
 #[cfg(not(feature = "tokio"))]
 use crate::run_in_thread;
 #[cfg(all(windows))]
@@ -153,6 +155,8 @@ pub enum Address {
     },
     /// Autolaunch address with optional scope
     Autolaunch(Option<String>),
+    /// Launchd address with a required env key
+    Launchd(String),
     #[cfg(any(
         all(feature = "vsock", not(feature = "tokio")),
         feature = "tokio-vsock"
@@ -220,6 +224,26 @@ async fn connect_tcp(addr: TcpAddress) -> Result<TcpStream> {
     TcpStream::connect((addr.host(), addr.port()))
         .await
         .map_err(|e| Error::InputOutput(e.into()))
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) async fn macos_launchd_bus_address(env_key: &str) -> Result<Address> {
+    let output = run("launchctl", ["getenv", env_key])
+        .await
+        .expect("failed to wait on launchctl output");
+
+    if !output.status.success() {
+        return Err(crate::Error::Address(format!(
+            "launchctl terminated with code: {}",
+            output.status
+        )));
+    }
+
+    let addr = String::from_utf8(output.stdout).map_err(|e| {
+        crate::Error::Address(format!("Unable to parse launchctl output as UTF-8: {}", e))
+    })?;
+
+    format!("unix:path={}", addr.trim()).parse()
 }
 
 impl Address {
@@ -328,6 +352,17 @@ impl Address {
                 let addr = windows_autolaunch_bus_address()?;
                 addr.connect().await
             }
+
+            #[cfg(not(target_os = "macos"))]
+            Address::Launchd(_) => Err(Error::Address(
+                "Launchd addresses are only supported on macOS".to_owned(),
+            )),
+
+            #[cfg(target_os = "macos")]
+            Address::Launchd(env) => {
+                let addr = macos_launchd_bus_address(&env).await?;
+                addr.connect().await
+            }
         }
     }
 
@@ -355,6 +390,9 @@ impl Address {
 
                     Self::from_str(&path)
                 }
+
+                #[cfg(target_os = "macos")]
+                return Self::from_str("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET");
             }
         }
     }
@@ -371,6 +409,9 @@ impl Address {
 
                 #[cfg(windows)]
                 return Self::from_str("autolaunch:");
+
+                #[cfg(target_os = "macos")]
+                return Self::from_str("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET");
             }
         }
     }
@@ -559,6 +600,10 @@ impl Display for Address {
                     write!(f, "scope={scope}")?;
                 }
             }
+
+            Self::Launchd(env) => {
+                write!(f, "launchd:env={}", env)?;
+            }
         }
 
         Ok(())
@@ -618,6 +663,12 @@ impl FromStr for Address {
                         })
                     })
                     .transpose()?,
+            )),
+            "launchd" => Ok(Self::Launchd(
+                options
+                    .get("env")
+                    .ok_or_else(|| Error::Address("missing env key".into()))?
+                    .to_string(),
             )),
 
             _ => Err(Error::Address(format!(
