@@ -765,24 +765,23 @@ impl From<Command> for Vec<u8> {
 
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let cmd = match self {
+        match self {
             Command::Auth(mech, resp) => match (mech, resp) {
-                (Some(mech), Some(resp)) => format!("AUTH {mech} {}", hex::encode(resp)),
-                (Some(mech), None) => format!("AUTH {mech}"),
-                _ => "AUTH".into(),
+                (Some(mech), Some(resp)) => write!(f, "AUTH {mech} {}", hex::encode(resp)),
+                (Some(mech), None) => write!(f, "AUTH {mech}"),
+                _ => write!(f, "AUTH"),
             },
-            Command::Cancel => "CANCEL".into(),
-            Command::Begin => "BEGIN".into(),
+            Command::Cancel => write!(f, "CANCEL"),
+            Command::Begin => write!(f, "BEGIN"),
             Command::Data(data) => match data {
-                None => "DATA".to_string(),
-                Some(data) => format!("DATA {}", hex::encode(data)),
+                None => write!(f, "DATA"),
+                Some(data) => write!(f, "DATA {}", hex::encode(data)),
             },
-            Command::Error(expl) => {
-                format!("ERROR {expl}")
-            }
-            Command::NegotiateUnixFD => "NEGOTIATE_UNIX_FD".into(),
+            Command::Error(expl) => write!(f, "ERROR {expl}"),
+            Command::NegotiateUnixFD => write!(f, "NEGOTIATE_UNIX_FD"),
             Command::Rejected(mechs) => {
-                format!(
+                write!(
+                    f,
                     "REJECTED {}",
                     mechs
                         .iter()
@@ -791,12 +790,10 @@ impl fmt::Display for Command {
                         .join(" ")
                 )
             }
-            Command::Ok(guid) => {
-                format!("OK {guid}")
-            }
-            Command::AgreeUnixFD => "AGREE_UNIX_FD".into(),
-        };
-        write!(f, "{cmd}\r\n")
+            Command::Ok(guid) => write!(f, "OK {guid}"),
+            Command::AgreeUnixFD => write!(f, "AGREE_UNIX_FD"),
+        }?;
+        write!(f, "\r\n")
     }
 }
 
