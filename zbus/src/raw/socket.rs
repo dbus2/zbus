@@ -30,6 +30,9 @@ use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 
+#[cfg(all(unix, feature = "tokio"))]
+use crate::ChildProcess;
+
 #[cfg(unix)]
 use crate::{utils::FDS_MAX, OwnedFd};
 
@@ -394,6 +397,62 @@ impl Socket for tokio::net::UnixStream {
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
     fn send_zero_byte(&self) -> io::Result<Option<usize>> {
         send_zero_byte(self).map(Some)
+    }
+}
+
+#[cfg(all(unix, feature = "tokio"))]
+impl Socket for ChildProcess {
+    fn can_pass_unix_fd(&self) -> bool {
+        false
+    }
+
+    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
+        use tokio::io::{AsyncRead, ReadBuf};
+
+        let mut read_buf = ReadBuf::new(buf);
+        Pin::new(&mut self.stdout)
+            .poll_read(cx, &mut read_buf)
+            .map(|res| {
+                res.map(|_| {
+                    let ret = read_buf.filled().len();
+                    #[cfg(unix)]
+                    let ret = (ret, vec![]);
+
+                    ret
+                })
+            })
+    }
+
+    fn poll_sendmsg(
+        &mut self,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+        #[cfg(unix)] fds: &[RawFd],
+    ) -> Poll<io::Result<usize>> {
+        use tokio::io::AsyncWrite;
+
+        #[cfg(unix)]
+        if !fds.is_empty() {
+            return Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "fds cannot be sent with a unixexec",
+            )));
+        }
+
+        Pin::new(&mut self.stdin).poll_write(cx, buf)
+    }
+
+    fn close(&self) -> io::Result<()> {
+        use nix::{
+            sys::signal::{kill, Signal},
+            unistd::Pid,
+        };
+
+        let id = self
+            .child
+            .id()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "child closed"))?;
+        Ok(kill(Pid::from_raw(id as i32), Some(Signal::SIGTERM))?)
     }
 }
 
