@@ -318,6 +318,7 @@ impl Address {
                     // Perhaps we should capture stderr here and return it in the error on poll_recvmsg/poll_sendmsg?
                     command
                         .args(&cmd.args)
+                        .kill_on_drop(true)
                         .stdin(Stdio::piped())
                         .stdout(Stdio::piped())
                         .stderr(Stdio::inherit());
