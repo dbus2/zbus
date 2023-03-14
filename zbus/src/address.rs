@@ -2,6 +2,8 @@
 use crate::run_in_thread;
 #[cfg(all(windows))]
 use crate::win32::windows_autolaunch_bus_address;
+#[cfg(all(unix, feature = "tokio"))]
+use crate::ChildProcess;
 use crate::{Error, Result};
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
@@ -11,11 +13,13 @@ use nix::unistd::Uid;
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
+#[cfg(all(unix, feature = "tokio"))]
+use std::process::Stdio;
 use std::{collections::HashMap, convert::TryFrom, env, str::FromStr};
 #[cfg(all(feature = "tokio"))]
 use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "tokio"))]
-use tokio::net::UnixStream;
+use tokio::{net::UnixStream, process::Command};
 #[cfg(feature = "tokio-vsock")]
 use tokio_vsock::VsockStream;
 #[cfg(all(windows, not(feature = "tokio")))]
@@ -138,12 +142,21 @@ impl VsockAddress {
     }
 }
 
+/// A `unixexec:` D-Bus address.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnixCommand {
+    pub(crate) path: OsString,
+    pub(crate) arg0: Option<OsString>,
+    pub(crate) args: Vec<OsString>,
+}
+
 /// A bus address
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Address {
     /// A path on the filesystem
     Unix(OsString),
+    UnixExec(UnixCommand),
     /// TCP address details
     Tcp(TcpAddress),
     /// TCP address details with nonce file path
@@ -179,6 +192,8 @@ pub(crate) enum Stream {
 pub(crate) enum Stream {
     #[cfg(unix)]
     Unix(UnixStream),
+    #[cfg(unix)]
+    UnixExec(ChildProcess),
     Tcp(TcpStream),
     #[cfg(feature = "tokio-vsock")]
     Vsock(VsockStream),
@@ -283,6 +298,36 @@ impl Address {
                         let _ = p;
                         Err(Error::Unsupported)
                     }
+                }
+            }
+
+            Address::UnixExec(cmd) => {
+                #[cfg(not(all(unix, feature = "tokio")))]
+                {
+                    _ = cmd;
+                    Err(Error::Unsupported)
+                }
+
+                #[cfg(all(unix, feature = "tokio"))]
+                {
+                    let mut command = Command::new(&cmd.path);
+                    if let Some(arg0) = &cmd.arg0 {
+                        command.arg0(arg0);
+                    }
+
+                    // Perhaps we should capture stderr here and return it in the error on poll_recvmsg/poll_sendmsg?
+                    command
+                        .args(&cmd.args)
+                        .stdin(Stdio::piped())
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::inherit());
+
+                    let mut child = command.spawn()?;
+                    Ok(Stream::UnixExec(ChildProcess {
+                        stdin: child.stdin.take().unwrap(),
+                        stdout: child.stdout.take().unwrap(),
+                        child,
+                    }))
                 }
             }
 
@@ -412,6 +457,29 @@ impl Address {
         };
 
         Ok(Address::Unix(path))
+    }
+
+    fn from_unixexec(opts: HashMap<&str, &str>) -> Result<Self> {
+        let path = opts
+            .get("path")
+            .ok_or_else(|| Error::Address("`path` is missing".into()))?;
+
+        let argv0 = opts.get("argv0").map(|arg| arg.into());
+
+        let mut args = vec![];
+        for i in 1.. {
+            let key = format!("argv{}", i);
+            match opts.get(&key.as_str()) {
+                None => break,
+                Some(arg) => args.push(arg.into()),
+            }
+        }
+
+        Ok(Address::UnixExec(UnixCommand {
+            path: path.into(),
+            arg0: argv0,
+            args,
+        }))
     }
 
     #[cfg(all(feature = "vsock", not(feature = "tokio")))]
@@ -561,6 +629,16 @@ impl Display for Address {
                 write!(f, "unix:path={}", path.to_str().ok_or(std::fmt::Error)?)?;
             }
 
+            Self::UnixExec(command) => {
+                write!(f, "unixexec:path={}", command.path.to_string_lossy())?;
+                if let Some(argv0) = &command.arg0 {
+                    write!(f, ",argv0={}", argv0.to_string_lossy())?;
+                }
+                for (i, arg) in command.args.iter().enumerate() {
+                    write!(f, ",argv{}={}", i + 1, arg.to_string_lossy())?;
+                }
+            }
+
             #[cfg(any(
                 all(feature = "vsock", not(feature = "tokio")),
                 feature = "tokio-vsock"
@@ -613,6 +691,7 @@ impl FromStr for Address {
         match transport {
             #[cfg(any(unix, not(feature = "tokio")))]
             "unix" => Self::from_unix(options),
+            "unixexec" => Self::from_unixexec(options),
             "tcp" => TcpAddress::from_tcp(options).map(Self::Tcp),
 
             "nonce-tcp" => Ok(Self::NonceTcp {
@@ -654,7 +733,7 @@ impl TryFrom<&str> for Address {
 #[cfg(test)]
 mod tests {
     use super::Address;
-    use crate::{Error, TcpAddress, TcpAddressFamily};
+    use crate::{Error, TcpAddress, TcpAddressFamily, UnixCommand};
     use std::str::FromStr;
     use test_log::test;
 
@@ -698,6 +777,10 @@ mod tests {
             }
             _ => panic!(),
         }
+        assert_eq!(
+            Address::UnixExec(UnixCommand { path: "ssh".into(), arg0: None, args: vec!["-xT".into(), "-p".into(), "22".into(), "--".into(), "user@host.test".into(), "systemd-stdio-bridge".into()] }),
+            Address::from_str("unixexec:path=ssh,argv1=-xT,argv2=-p,argv3=22,argv4=--,argv5=user@host.test,argv6=systemd-stdio-bridge").unwrap()
+        );
         assert_eq!(
             Address::Unix("/tmp/dbus-foo".into()),
             Address::from_str("unix:path=/tmp/dbus-foo").unwrap()
@@ -830,6 +913,10 @@ mod tests {
         assert_eq!(
             Address::Autolaunch(Some("*my_cool_scope*".to_owned())).to_string(),
             "autolaunch:scope=*my_cool_scope*"
+        );
+        assert_eq!(
+            Address::UnixExec(UnixCommand { path: "ssh".into(), arg0: None, args: vec!["-xT".into(), "-p".into(), "22".into(), "--".into(), "user@host.test".into(), "systemd-stdio-bridge".into()] }).to_string(),
+            "unixexec:path=ssh,argv1=-xT,argv2=-p,argv3=22,argv4=--,argv5=user@host.test,argv6=systemd-stdio-bridge"
         );
 
         #[cfg(all(feature = "vsock", not(feature = "tokio")))]

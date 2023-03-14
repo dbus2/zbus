@@ -15,6 +15,8 @@ use std::{
 use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
+#[cfg(all(unix, feature = "tokio"))]
+use tokio::process::{Child, ChildStdin, ChildStdout};
 #[cfg(feature = "tokio-vsock")]
 use tokio_vsock::VsockStream;
 #[cfg(windows)]
@@ -31,6 +33,14 @@ use crate::{
     raw::Socket,
     AuthMechanism, Authenticated, Connection, Error, Guid, Interface, Result,
 };
+
+#[cfg(all(unix, feature = "tokio"))]
+#[derive(Debug)]
+pub(crate) struct ChildProcess {
+    pub(crate) child: Child,
+    pub(crate) stdin: ChildStdin,
+    pub(crate) stdout: ChildStdout,
+}
 
 const DEFAULT_MAX_QUEUED: usize = 64;
 
@@ -285,6 +295,8 @@ impl<'a> ConnectionBuilder<'a> {
             Target::Address(address) => match address.connect().await? {
                 #[cfg(any(unix, not(feature = "tokio")))]
                 address::Stream::Unix(stream) => Box::new(stream) as Box<dyn Socket>,
+                #[cfg(all(unix, feature = "tokio"))]
+                address::Stream::UnixExec(child) => Box::new(child) as Box<dyn Socket>,
                 address::Stream::Tcp(stream) => Box::new(stream) as Box<dyn Socket>,
                 #[cfg(any(
                     all(feature = "vsock", not(feature = "tokio")),
