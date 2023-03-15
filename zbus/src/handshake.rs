@@ -202,15 +202,15 @@ impl<S: Socket> ClientHandshake<S> {
                 let id = split
                     .next()
                     .ok_or_else(|| Error::Handshake("Missing cookie ID".into()))?;
-                let server_chall = split
+                let server_challenge = split
                     .next()
                     .ok_or_else(|| Error::Handshake("Missing cookie challenge".into()))?;
 
                 let cookie = Cookie::lookup(name, id).await?;
-                let client_chall = random_ascii(16);
-                let sec = format!("{server_chall}:{client_chall}:{cookie}");
+                let client_challenge = random_ascii(16);
+                let sec = format!("{server_challenge}:{client_challenge}:{cookie}");
                 let sha1 = hex::encode(Sha1::digest(sec));
-                let data = format!("{client_chall} {sha1}");
+                let data = format!("{client_challenge} {sha1}");
                 Ok((
                     ClientHandshakeStep::WaitingForOK,
                     Command::Data(Some(data.into())),
