@@ -291,17 +291,15 @@ impl Cookie {
                 .next()
                 .ok_or_else(|| {
                     Error::Handshake(format!(
-                        "DBus cookie `{}` missing ID at line {}",
-                        path.to_str().unwrap(),
-                        n
+                        "DBus cookie `{}` missing ID at line {n}",
+                        path.display(),
                     ))
                 })?
                 .to_string();
             let _ = split.next().ok_or_else(|| {
                 Error::Handshake(format!(
-                    "DBus cookie `{}` missing creation time at line {}",
-                    path.to_str().unwrap(),
-                    n
+                    "DBus cookie `{}` missing creation time at line {n}",
+                    path.display(),
                 ))
             })?;
             let cookie = split
