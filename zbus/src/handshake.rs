@@ -6,11 +6,13 @@ use nix::unistd::{Uid, User};
 use std::io;
 use std::{
     collections::VecDeque,
+    convert::{TryFrom, TryInto},
     fmt::{self, Debug},
     path::PathBuf,
     str::FromStr,
 };
 use tracing::{instrument, trace};
+use zvariant::Str;
 
 use sha1::{Digest, Sha1};
 
@@ -196,17 +198,21 @@ impl<S: Socket> ClientHandshake<S> {
                 let context = std::str::from_utf8(&data)
                     .map_err(|_| Error::Handshake("Cookie context was not valid UTF-8".into()))?;
                 let mut split = context.split_ascii_whitespace();
-                let name = split
+                let context = split
                     .next()
                     .ok_or_else(|| Error::Handshake("Missing cookie context name".into()))?;
+                let context = Str::from(context).try_into()?;
                 let id = split
                     .next()
                     .ok_or_else(|| Error::Handshake("Missing cookie ID".into()))?;
+                let id = id
+                    .parse()
+                    .map_err(|e| Error::Handshake(format!("Invalid cookie ID `{id}`: {e}")))?;
                 let server_challenge = split
                     .next()
                     .ok_or_else(|| Error::Handshake("Missing cookie challenge".into()))?;
 
-                let cookie = Cookie::lookup(name, id).await?;
+                let cookie = Cookie::lookup(&context, id).await?;
                 let client_challenge = random_ascii(16);
                 let sec = format!("{server_challenge}:{client_challenge}:{cookie}");
                 let sha1 = hex::encode(Sha1::digest(sec));
@@ -251,7 +257,7 @@ fn sasl_auth_id() -> Result<String> {
 
 #[derive(Debug)]
 struct Cookie {
-    id: String,
+    id: usize,
     cookie: String,
 }
 
@@ -263,7 +269,7 @@ impl Cookie {
         Ok(path)
     }
 
-    async fn read_keyring(name: &str) -> Result<Vec<Cookie>> {
+    async fn read_keyring(context: &CookieContext<'_>) -> Result<Vec<Cookie>> {
         let mut path = Cookie::keyring_path()?;
         #[cfg(unix)]
         {
@@ -280,7 +286,7 @@ impl Cookie {
         {
             // FIXME: add code to check directory permissions
         }
-        path.push(name);
+        path.push(&*context.0);
         trace!("Reading keyring {:?}", path);
         let mut lines = FileLines::open(&path).await?.enumerate();
         let mut cookies = vec![];
@@ -295,7 +301,13 @@ impl Cookie {
                         path.display(),
                     ))
                 })?
-                .to_string();
+                .parse()
+                .map_err(|e| {
+                    Error::Handshake(format!(
+                        "Failed to parse cookie ID in file `{}` at line {n}: {e}",
+                        path.display(),
+                    ))
+                })?;
             let _ = split.next().ok_or_else(|| {
                 Error::Handshake(format!(
                     "DBus cookie `{}` missing creation time at line {n}",
@@ -318,13 +330,38 @@ impl Cookie {
         Ok(cookies)
     }
 
-    async fn lookup(name: &str, id: &str) -> Result<String> {
-        let keyring = Self::read_keyring(name).await?;
+    async fn lookup(context: &CookieContext<'_>, id: usize) -> Result<String> {
+        let keyring = Self::read_keyring(context).await?;
         let c = keyring
             .iter()
             .find(|c| c.id == id)
             .ok_or_else(|| Error::Handshake(format!("DBus cookie ID {id} not found")))?;
         Ok(c.cookie.to_string())
+    }
+}
+
+#[derive(Debug)]
+pub struct CookieContext<'c>(Str<'c>);
+
+impl<'c> TryFrom<Str<'c>> for CookieContext<'c> {
+    type Error = Error;
+
+    fn try_from(value: Str<'c>) -> Result<Self> {
+        if value.is_empty() {
+            return Err(Error::Handshake("Empty cookie context".into()));
+        } else if !value.is_ascii() || value.contains(['/', '\\', ' ', '\n', '\r', '\t', '.']) {
+            return Err(Error::Handshake(
+                "Invalid characters in cookie context".into(),
+            ));
+        }
+
+        Ok(Self(value))
+    }
+}
+
+impl Default for CookieContext<'_> {
+    fn default() -> Self {
+        Self(Str::from_static("org_freedesktop_general"))
     }
 }
 
