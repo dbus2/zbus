@@ -2,8 +2,9 @@
 //!
 //! Proving only specific API that we need internally.
 
+#[cfg(unix)]
+use std::fs::Metadata;
 use std::{
-    fs::Metadata,
     io::Result,
     path::Path,
     pin::Pin,

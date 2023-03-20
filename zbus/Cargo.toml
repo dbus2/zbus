@@ -28,7 +28,6 @@ tokio-vsock = ["dep:tokio-vsock", "tokio"]
 
 [dependencies]
 byteorder = "1.4.3"
-nix = "0.26.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1.9"
 zvariant = { path = "../zvariant", version = "3.10.0", default-features = false, features = ["enumflags2"] }
@@ -78,6 +77,9 @@ winapi = { version = "0.3", features = [
   "winsock2",
 ] }
 uds_windows = "1.0.2"
+
+[target.'cfg(unix)'.dependencies]
+nix = "0.26.0"
 
 [dev-dependencies]
 doc-comment = "0.3.3"
