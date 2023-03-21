@@ -64,12 +64,15 @@ quick-xml = { version = "0.27.1", features = ["serialize", "overlapped-lists"], 
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
+  "combaseapi",
   "handleapi",
   "iphlpapi",
+  "knownfolders",
   "memoryapi",
   "processthreadsapi",
   "sddl",
   "securitybaseapi",
+  "shlobj",
   "synchapi",
   "tcpmib",
   "winbase",
