@@ -336,38 +336,39 @@ impl Cookie {
 // 2. `dirs::home_dir` doesn't do the full job for us anyway:
 //    https://github.com/dirs-dev/dirs-rs/issues/45
 fn home_dir() -> Result<PathBuf> {
-    if let Ok(home) = std::env::var("HOME") {
-        Ok(home.into())
-    } else {
-        #[cfg(unix)]
-        {
-            let uid = Uid::effective();
-            let user = User::from_uid(uid)
-                .map_err(Into::into)
-                .and_then(|user| {
-                    user.ok_or_else(|| {
-                        Error::InputOutput(
-                            io::Error::new(
-                                io::ErrorKind::NotFound,
-                                format!("No user found for UID {}", uid),
+    match std::env::var("HOME") {
+        Ok(home) => Ok(home.into()),
+        Err(_) => {
+            #[cfg(unix)]
+            {
+                let uid = Uid::effective();
+                let user = User::from_uid(uid)
+                    .map_err(Into::into)
+                    .and_then(|user| {
+                        user.ok_or_else(|| {
+                            Error::InputOutput(
+                                io::Error::new(
+                                    io::ErrorKind::NotFound,
+                                    format!("No user found for UID {}", uid),
+                                )
+                                .into(),
                             )
-                            .into(),
-                        )
+                        })
                     })
-                })
-                .map_err(|e| {
-                    Error::Handshake(format!(
-                        "Failed to get user information for UID {}: {}",
-                        uid, e
-                    ))
-                })?;
+                    .map_err(|e| {
+                        Error::Handshake(format!(
+                            "Failed to get user information for UID {}: {}",
+                            uid, e
+                        ))
+                    })?;
 
-            Ok(user.dir)
-        }
+                Ok(user.dir)
+            }
 
-        #[cfg(windows)]
-        {
-            win32::home_dir().map_err(Into::into)
+            #[cfg(windows)]
+            {
+                win32::home_dir().map_err(Into::into)
+            }
         }
     }
 }
