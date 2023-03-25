@@ -1,7 +1,9 @@
 use async_trait::async_trait;
 use futures_util::{future::poll_fn, StreamExt};
 #[cfg(unix)]
-use nix::unistd::Uid;
+use nix::unistd::{Uid, User};
+#[cfg(unix)]
+use std::io;
 use std::{
     collections::VecDeque,
     fmt::{self, Debug},
@@ -255,8 +257,8 @@ struct Cookie {
 
 impl Cookie {
     fn keyring_path() -> Result<PathBuf> {
-        let mut path =
-            home_dir().ok_or_else(|| Error::Handshake("Failed to get home directory".into()))?;
+        let mut path = home_dir()
+            .map_err(|e| Error::Handshake(format!("Failed to get home directory: {}", e)))?;
         path.push(".dbus-keyrings");
         Ok(path)
     }
@@ -328,12 +330,46 @@ impl Cookie {
     }
 }
 
-// See https://github.com/dirs-dev/dirs-rs/issues/45
-fn home_dir() -> Option<PathBuf> {
-    if let Ok(home) = std::env::var("HOME") {
-        Some(home.into())
-    } else {
-        dirs::home_dir()
+// We implement this ourselves because:
+//
+// 1. It helps us avoid a dep on `dirs` (which we don't need for anything else).
+// 2. `dirs::home_dir` doesn't do the full job for us anyway:
+//    https://github.com/dirs-dev/dirs-rs/issues/45
+fn home_dir() -> Result<PathBuf> {
+    match std::env::var("HOME") {
+        Ok(home) => Ok(home.into()),
+        Err(_) => {
+            #[cfg(unix)]
+            {
+                let uid = Uid::effective();
+                let user = User::from_uid(uid)
+                    .map_err(Into::into)
+                    .and_then(|user| {
+                        user.ok_or_else(|| {
+                            Error::InputOutput(
+                                io::Error::new(
+                                    io::ErrorKind::NotFound,
+                                    format!("No user found for UID {}", uid),
+                                )
+                                .into(),
+                            )
+                        })
+                    })
+                    .map_err(|e| {
+                        Error::Handshake(format!(
+                            "Failed to get user information for UID {}: {}",
+                            uid, e
+                        ))
+                    })?;
+
+                Ok(user.dir)
+            }
+
+            #[cfg(windows)]
+            {
+                win32::home_dir().map_err(Into::into)
+            }
+        }
     }
 }
 
