@@ -721,10 +721,10 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                     trace!("Waiting for authentication");
                     let reply = self.common.read_command().await?;
                     match (mech, reply) {
-                        (AuthMechanism::External, Command::Data(data)) => match data {
-                            None => self.auth_ok().await?,
-                            Some(data) => self.check_external_auth(&data).await?,
-                        },
+                        (AuthMechanism::External, Command::Data(None)) => self.auth_ok().await?,
+                        (AuthMechanism::External, Command::Data(Some(data))) => {
+                            self.check_external_auth(&data).await?;
+                        }
                         (AuthMechanism::Anonymous, Command::Data(_)) => self.auth_ok().await?,
                         (_, Command::Data(_)) => self.rejected_error().await?,
                         (_, _) => self.unsupported_command_error().await?,
