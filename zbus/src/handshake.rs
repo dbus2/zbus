@@ -627,12 +627,10 @@ impl<S: Socket> ServerHandshake<S> {
         };
 
         if auth_ok {
-            self.auth_ok().await?;
+            self.auth_ok().await
         } else {
-            self.rejected_error().await?;
+            self.rejected_error().await
         }
-
-        Ok(())
     }
 
     async fn unsupported_command_error(&mut self) -> Result<()> {
