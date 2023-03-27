@@ -22,11 +22,12 @@ use uds_windows::UnixStream;
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
 use vsock::VsockStream;
 
-use zvariant::ObjectPath;
+use zvariant::{ObjectPath, Str};
 
 use crate::{
     address::{self, Address},
     async_lock::RwLock,
+    handshake,
     names::{InterfaceName, UniqueName, WellKnownName},
     raw::Socket,
     AuthMechanism, Authenticated, Connection, Error, Guid, Interface, Result,
@@ -65,6 +66,8 @@ pub struct ConnectionBuilder<'a> {
     names: HashSet<WellKnownName<'a>>,
     auth_mechanisms: Option<VecDeque<AuthMechanism>>,
     unique_name: Option<UniqueName<'a>>,
+    cookie_context: Option<handshake::CookieContext<'a>>,
+    cookie_id: Option<usize>,
 }
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -132,6 +135,37 @@ impl<'a> ConnectionBuilder<'a> {
     /// Specify the mechanisms to use during authentication.
     pub fn auth_mechanisms(mut self, auth_mechanisms: &[AuthMechanism]) -> Self {
         self.auth_mechanisms = Some(VecDeque::from(auth_mechanisms.to_vec()));
+
+        self
+    }
+
+    /// The cookie context to use during authentication.
+    ///
+    /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
+    /// server connection.
+    ///
+    /// If not specified, the default cookie context of `org_freedesktop_general` will be used.
+    ///
+    /// # Errors
+    ///
+    /// If the given string is not a valid cookie context.
+    pub fn cookie_context<C>(mut self, context: C) -> Result<Self>
+    where
+        C: Into<Str<'a>>,
+    {
+        self.cookie_context = Some(context.into().try_into()?);
+
+        Ok(self)
+    }
+
+    /// The ID of the cookie to use during authentication.
+    ///
+    /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
+    /// server connection.
+    ///
+    /// If not specified, the first cookie found in the cookie context file will be used.
+    pub fn cookie_id(mut self, id: usize) -> Self {
+        self.cookie_id = Some(id);
 
         self
     }
@@ -310,6 +344,8 @@ impl<'a> ConnectionBuilder<'a> {
                     #[cfg(windows)]
                     client_sid,
                     self.auth_mechanisms,
+                    self.cookie_id,
+                    self.cookie_context.unwrap_or_default(),
                 )
                 .await?
             }
@@ -376,6 +412,8 @@ impl<'a> ConnectionBuilder<'a> {
             names: HashSet::new(),
             auth_mechanisms: None,
             unique_name: None,
+            cookie_id: None,
+            cookie_context: None,
         }
     }
 }

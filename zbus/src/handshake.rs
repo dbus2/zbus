@@ -79,6 +79,8 @@ where
         #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         auth_mechanisms: Option<VecDeque<AuthMechanism>>,
+        cookie_id: Option<usize>,
+        cookie_context: CookieContext<'_>,
     ) -> Result<Self> {
         ServerHandshake::new(
             socket,
@@ -88,6 +90,8 @@ where
             #[cfg(windows)]
             client_sid,
             auth_mechanisms,
+            cookie_id,
+            cookie_context,
         )?
         .perform()
         .await
@@ -211,7 +215,7 @@ impl<S: Socket> ClientHandshake<S> {
                     .next()
                     .ok_or_else(|| Error::Handshake("Missing cookie challenge".into()))?;
 
-                let cookie = Cookie::lookup(&context, id).await?;
+                let cookie = Cookie::lookup(&context, id).await?.cookie;
                 let client_challenge = random_ascii(16);
                 let sec = format!("{server_challenge}:{client_challenge}:{cookie}");
                 let sha1 = hex::encode(Sha1::digest(sec));
@@ -329,13 +333,20 @@ impl Cookie {
         Ok(cookies)
     }
 
-    async fn lookup(context: &CookieContext<'_>, id: usize) -> Result<String> {
+    async fn lookup(context: &CookieContext<'_>, id: usize) -> Result<Cookie> {
         let keyring = Self::read_keyring(context).await?;
-        let c = keyring
-            .iter()
+        keyring
+            .into_iter()
             .find(|c| c.id == id)
-            .ok_or_else(|| Error::Handshake(format!("DBus cookie ID {id} not found")))?;
-        Ok(c.cookie.to_string())
+            .ok_or_else(|| Error::Handshake(format!("DBus cookie ID {id} not found")))
+    }
+
+    async fn first(context: &CookieContext<'_>) -> Result<Cookie> {
+        let keyring = Self::read_keyring(context).await?;
+        keyring
+            .into_iter()
+            .next()
+            .ok_or_else(|| Error::Handshake("No cookies available".into()))
     }
 }
 
@@ -516,23 +527,27 @@ enum ServerHandshakeStep {
 /// [`Authenticated`]: struct.Authenticated.html
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
-pub struct ServerHandshake<S> {
+pub struct ServerHandshake<'s, S> {
     common: HandshakeCommon<S>,
     step: ServerHandshakeStep,
     #[cfg(unix)]
     client_uid: Option<u32>,
     #[cfg(windows)]
     client_sid: Option<String>,
+    cookie_id: Option<usize>,
+    cookie_context: CookieContext<'s>,
 }
 
-impl<S: Socket> ServerHandshake<S> {
+impl<'s, S: Socket> ServerHandshake<'s, S> {
     pub fn new(
         socket: S,
         guid: Guid,
         #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
-    ) -> Result<ServerHandshake<S>> {
+        cookie_id: Option<usize>,
+        cookie_context: CookieContext<'s>,
+    ) -> Result<ServerHandshake<'s, S>> {
         let mechanisms = match mechanisms {
             Some(mechanisms) => mechanisms,
             None => {
@@ -542,9 +557,6 @@ impl<S: Socket> ServerHandshake<S> {
                 mechanisms
             }
         };
-        if mechanisms.contains(&AuthMechanism::Cookie) {
-            return Err(Error::Unsupported);
-        }
 
         Ok(ServerHandshake {
             common: HandshakeCommon::new(socket, mechanisms, Some(guid)),
@@ -553,6 +565,8 @@ impl<S: Socket> ServerHandshake<S> {
             client_uid,
             #[cfg(windows)]
             client_sid,
+            cookie_id,
+            cookie_context,
         })
     }
 
@@ -589,6 +603,54 @@ impl<S: Socket> ServerHandshake<S> {
         }
     }
 
+    async fn check_cookie_auth(&mut self, sasl_id: &[u8]) -> Result<()> {
+        let cookie = match self.cookie_id {
+            Some(cookie_id) => Cookie::lookup(&self.cookie_context, cookie_id).await?,
+            None => Cookie::first(&self.cookie_context).await?,
+        };
+        let id = std::str::from_utf8(sasl_id)
+            .map_err(|e| Error::Handshake(format!("Invalid ID: {e}")))?;
+        if sasl_auth_id()? != id {
+            // While the spec will make you believe that DBUS_COOKIE_SHA1 can be used to
+            // authenticate any user, it is not even possible (or correct) for the server to manage
+            // contents in random users' home directories.
+            //
+            // The dbus reference implementation also has the same limitation/behavior.
+            self.rejected_error().await?;
+            return Ok(());
+        }
+        let server_challenge = random_ascii(16);
+        let data = format!("{} {} {server_challenge}", self.cookie_context.0, cookie.id);
+        let cmd = Command::Data(Some(data.into_bytes()));
+        trace!("Sending DBUS_COOKIE_SHA1 authentication challenge");
+        self.common.write_command(cmd).await?;
+
+        let auth_data = match self.common.read_command().await? {
+            Command::Data(data) => data,
+            _ => None,
+        };
+        let auth_data = auth_data.ok_or_else(|| {
+            Error::Handshake("Expected DBUS_COOKIE_SHA1 authentication challenge response".into())
+        })?;
+        let client_auth = std::str::from_utf8(&auth_data)
+            .map_err(|e| Error::Handshake(format!("Invalid COOKIE authentication data: {e}")))?;
+        let mut split = client_auth.split_ascii_whitespace();
+        let client_challenge = split
+            .next()
+            .ok_or_else(|| Error::Handshake("Missing cookie challenge".into()))?;
+        let client_sha1 = split
+            .next()
+            .ok_or_else(|| Error::Handshake("Missing client cookie data".into()))?;
+        let sec = format!("{server_challenge}:{client_challenge}:{}", cookie.cookie);
+        let sha1 = hex::encode(Sha1::digest(sec));
+
+        if sha1 == client_sha1 {
+            self.auth_ok().await
+        } else {
+            self.rejected_error().await
+        }
+    }
+
     async fn unsupported_command_error(&mut self) -> Result<()> {
         let cmd = Command::Error("Unsupported command".to_string());
         trace!("Sending authentication error");
@@ -618,7 +680,7 @@ impl<S: Socket> ServerHandshake<S> {
 }
 
 #[async_trait]
-impl<S: Socket> Handshake<S> for ServerHandshake<S> {
+impl<S: Socket> Handshake<S> for ServerHandshake<'_, S> {
     #[instrument(skip(self))]
     async fn perform(mut self) -> Result<Authenticated<S>> {
         loop {
@@ -658,6 +720,9 @@ impl<S: Socket> Handshake<S> for ServerHandshake<S> {
                                 }
                                 (Some(AuthMechanism::External), Some(sasl_id)) => {
                                     self.check_external_auth(sasl_id).await?;
+                                }
+                                (Some(AuthMechanism::Cookie), Some(sasl_id)) => {
+                                    self.check_cookie_auth(sasl_id).await?;
                                 }
                                 _ => self.rejected_error().await?,
                             }
@@ -975,9 +1040,15 @@ mod tests {
         let (p0, p1) = create_async_socket_pair();
 
         let client = ClientHandshake::new(p0, None);
-        let server =
-            ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
-                .unwrap();
+        let server = ServerHandshake::new(
+            p1,
+            Guid::generate(),
+            Some(Uid::effective().into()),
+            None,
+            None,
+            CookieContext::default(),
+        )
+        .unwrap();
 
         // proceed to the handshakes
         let (client, server) = crate::utils::block_on(join(
@@ -993,9 +1064,15 @@ mod tests {
     #[timeout(15000)]
     fn pipelined_handshake() {
         let (mut p0, p1) = create_async_socket_pair();
-        let server =
-            ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
-                .unwrap();
+        let server = ServerHandshake::new(
+            p1,
+            Guid::generate(),
+            Some(Uid::effective().into()),
+            None,
+            None,
+            CookieContext::default(),
+        )
+        .unwrap();
 
         crate::utils::block_on(
             p0.write_all(
@@ -1016,9 +1093,15 @@ mod tests {
     #[timeout(15000)]
     fn separate_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
-        let server =
-            ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
-                .unwrap();
+        let server = ServerHandshake::new(
+            p1,
+            Guid::generate(),
+            Some(Uid::effective().into()),
+            None,
+            None,
+            CookieContext::default(),
+        )
+        .unwrap();
 
         crate::utils::block_on(
             p0.write_all(
@@ -1037,9 +1120,15 @@ mod tests {
     #[timeout(15000)]
     fn missing_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
-        let server =
-            ServerHandshake::new(p1, Guid::generate(), Some(Uid::effective().into()), None)
-                .unwrap();
+        let server = ServerHandshake::new(
+            p1,
+            Guid::generate(),
+            Some(Uid::effective().into()),
+            None,
+            None,
+            CookieContext::default(),
+        )
+        .unwrap();
 
         crate::utils::block_on(p0.write_all(b"\0AUTH EXTERNAL\r\nDATA\r\nBEGIN\r\n")).unwrap();
         crate::utils::block_on(server.perform()).unwrap();
@@ -1054,6 +1143,8 @@ mod tests {
             Guid::generate(),
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
+            None,
+            CookieContext::default(),
         )
         .unwrap();
 
@@ -1070,6 +1161,8 @@ mod tests {
             Guid::generate(),
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
+            None,
+            CookieContext::default(),
         )
         .unwrap();
 
