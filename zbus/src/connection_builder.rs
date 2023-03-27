@@ -22,11 +22,12 @@ use uds_windows::UnixStream;
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
 use vsock::VsockStream;
 
-use zvariant::ObjectPath;
+use zvariant::{ObjectPath, Str};
 
 use crate::{
     address::{self, Address},
     async_lock::RwLock,
+    handshake,
     names::{InterfaceName, UniqueName, WellKnownName},
     raw::Socket,
     AuthMechanism, Authenticated, Connection, Error, Guid, Interface, Result,
@@ -53,6 +54,7 @@ type Interfaces<'a> =
 /// A builder for [`zbus::Connection`].
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
+#[must_use]
 pub struct ConnectionBuilder<'a> {
     target: Target,
     max_queued: Option<usize>,
@@ -64,6 +66,8 @@ pub struct ConnectionBuilder<'a> {
     names: HashSet<WellKnownName<'a>>,
     auth_mechanisms: Option<VecDeque<AuthMechanism>>,
     unique_name: Option<UniqueName<'a>>,
+    cookie_context: Option<handshake::CookieContext<'a>>,
+    cookie_id: Option<usize>,
 }
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -97,7 +101,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// If the default `async-io` feature is disabled, this method will expect
     /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
     /// argument.
-    #[must_use]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self::new(Target::UnixStream(stream))
     }
@@ -107,7 +110,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// If the default `async-io` feature is disabled, this method will expect
     /// [`tokio::net::TcpStream`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html)
     /// argument.
-    #[must_use]
     pub fn tcp_stream(stream: TcpStream) -> Self {
         Self::new(Target::TcpStream(stream))
     }
@@ -121,27 +123,54 @@ impl<'a> ConnectionBuilder<'a> {
         all(feature = "vsock", not(feature = "tokio")),
         feature = "tokio-vsock"
     ))]
-    #[must_use]
     pub fn vsock_stream(stream: VsockStream) -> Self {
         Self::new(Target::VsockStream(stream))
     }
 
     /// Create a builder for connection that will use the given socket.
-    #[must_use]
     pub fn socket<S: Socket + 'static>(socket: S) -> Self {
         Self::new(Target::Socket(Box::new(socket)))
     }
 
     /// Specify the mechanisms to use during authentication.
-    #[must_use]
     pub fn auth_mechanisms(mut self, auth_mechanisms: &[AuthMechanism]) -> Self {
         self.auth_mechanisms = Some(VecDeque::from(auth_mechanisms.to_vec()));
 
         self
     }
 
+    /// The cookie context to use during authentication.
+    ///
+    /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
+    /// server connection.
+    ///
+    /// If not specified, the default cookie context of `org_freedesktop_general` will be used.
+    ///
+    /// # Errors
+    ///
+    /// If the given string is not a valid cookie context.
+    pub fn cookie_context<C>(mut self, context: C) -> Result<Self>
+    where
+        C: Into<Str<'a>>,
+    {
+        self.cookie_context = Some(context.into().try_into()?);
+
+        Ok(self)
+    }
+
+    /// The ID of the cookie to use during authentication.
+    ///
+    /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
+    /// server connection.
+    ///
+    /// If not specified, the first cookie found in the cookie context file will be used.
+    pub fn cookie_id(mut self, id: usize) -> Self {
+        self.cookie_id = Some(id);
+
+        self
+    }
+
     /// The to-be-created connection will be a peer-to-peer connection.
-    #[must_use]
     pub fn p2p(mut self) -> Self {
         self.p2p = true;
 
@@ -152,7 +181,6 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// The to-be-created connection will wait for incoming client authentication handshake and
     /// negotiation messages, for peer-to-peer communications after successful creation.
-    #[must_use]
     pub fn server(mut self, guid: &'a Guid) -> Self {
         self.guid = Some(guid);
 
@@ -183,7 +211,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// // Do something useful with `conn`..
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    #[must_use]
     pub fn max_queued(mut self, max: usize) -> Self {
         self.max_queued = Some(max);
 
@@ -195,7 +222,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// The thread is enabled by default.
     ///
     /// See [Connection::executor] for more details.
-    #[must_use]
     pub fn internal_executor(mut self, enabled: bool) -> Self {
         self.internal_executor = enabled;
 
@@ -318,6 +344,8 @@ impl<'a> ConnectionBuilder<'a> {
                     #[cfg(windows)]
                     client_sid,
                     self.auth_mechanisms,
+                    self.cookie_id,
+                    self.cookie_context.unwrap_or_default(),
                 )
                 .await?
             }
@@ -384,6 +412,8 @@ impl<'a> ConnectionBuilder<'a> {
             names: HashSet::new(),
             auth_mechanisms: None,
             unique_name: None,
+            cookie_id: None,
+            cookie_context: None,
         }
     }
 }

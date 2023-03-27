@@ -11,7 +11,7 @@ use tokio::net::UnixStream;
 #[cfg(windows)]
 use uds_windows::UnixStream;
 
-use zvariant::ObjectPath;
+use zvariant::{ObjectPath, Str};
 
 use crate::{
     address::Address,
@@ -23,6 +23,7 @@ use crate::{
 
 /// A builder for [`zbus::blocking::Connection`].
 #[derive(Debug)]
+#[must_use]
 pub struct ConnectionBuilder<'a>(crate::ConnectionBuilder<'a>);
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -54,7 +55,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// If the default `async-io` feature is disabled, this method will expect
     /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
     /// argument.
-    #[must_use]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self(crate::ConnectionBuilder::unix_stream(stream))
     }
@@ -64,19 +64,43 @@ impl<'a> ConnectionBuilder<'a> {
     /// If the default `async-io` feature is disabled, this method will expect
     /// [`tokio::net::TcpStream`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html)
     /// argument.
-    #[must_use]
     pub fn tcp_stream(stream: TcpStream) -> Self {
         Self(crate::ConnectionBuilder::tcp_stream(stream))
     }
 
     /// Specify the mechanisms to use during authentication.
-    #[must_use]
     pub fn auth_mechanisms(self, auth_mechanisms: &[AuthMechanism]) -> Self {
         Self(self.0.auth_mechanisms(auth_mechanisms))
     }
 
+    /// The cookie context to use during authentication.
+    ///
+    /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
+    /// server connection.
+    ///
+    /// If not specified, the default cookie context of `org_freedesktop_general` will be used.
+    ///
+    /// # Errors
+    ///
+    /// If the given string is not a valid cookie context.
+    pub fn cookie_context<C>(self, context: C) -> Result<Self>
+    where
+        C: Into<Str<'a>>,
+    {
+        self.0.cookie_context(context).map(Self)
+    }
+
+    /// The ID of the cookie to use during authentication.
+    ///
+    /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
+    /// server connection.
+    ///
+    /// If not specified, the first cookie found in the cookie context file will be used.
+    pub fn cookie_id(self, id: usize) -> Self {
+        Self(self.0.cookie_id(id))
+    }
+
     /// The to-be-created connection will be a peer-to-peer connection.
-    #[must_use]
     pub fn p2p(self) -> Self {
         Self(self.0.p2p())
     }
@@ -85,7 +109,6 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// The to-be-created connection will wait for incoming client authentication handshake and
     /// negotiation messages, for peer-to-peer communications after successful creation.
-    #[must_use]
     pub fn server(self, guid: &'a Guid) -> Self {
         Self(self.0.server(guid))
     }
@@ -108,7 +131,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// // Do something useful with `conn`..
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    #[must_use]
     pub fn max_queued(self, max: usize) -> Self {
         Self(self.0.max_queued(max))
     }
