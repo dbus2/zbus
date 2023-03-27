@@ -53,6 +53,7 @@ type Interfaces<'a> =
 /// A builder for [`zbus::Connection`].
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
+#[must_use]
 pub struct ConnectionBuilder<'a> {
     target: Target,
     max_queued: Option<usize>,
@@ -97,7 +98,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// If the default `async-io` feature is disabled, this method will expect
     /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
     /// argument.
-    #[must_use]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self::new(Target::UnixStream(stream))
     }
@@ -107,7 +107,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// If the default `async-io` feature is disabled, this method will expect
     /// [`tokio::net::TcpStream`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html)
     /// argument.
-    #[must_use]
     pub fn tcp_stream(stream: TcpStream) -> Self {
         Self::new(Target::TcpStream(stream))
     }
@@ -121,19 +120,16 @@ impl<'a> ConnectionBuilder<'a> {
         all(feature = "vsock", not(feature = "tokio")),
         feature = "tokio-vsock"
     ))]
-    #[must_use]
     pub fn vsock_stream(stream: VsockStream) -> Self {
         Self::new(Target::VsockStream(stream))
     }
 
     /// Create a builder for connection that will use the given socket.
-    #[must_use]
     pub fn socket<S: Socket + 'static>(socket: S) -> Self {
         Self::new(Target::Socket(Box::new(socket)))
     }
 
     /// Specify the mechanisms to use during authentication.
-    #[must_use]
     pub fn auth_mechanisms(mut self, auth_mechanisms: &[AuthMechanism]) -> Self {
         self.auth_mechanisms = Some(VecDeque::from(auth_mechanisms.to_vec()));
 
@@ -141,7 +137,6 @@ impl<'a> ConnectionBuilder<'a> {
     }
 
     /// The to-be-created connection will be a peer-to-peer connection.
-    #[must_use]
     pub fn p2p(mut self) -> Self {
         self.p2p = true;
 
@@ -152,7 +147,6 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// The to-be-created connection will wait for incoming client authentication handshake and
     /// negotiation messages, for peer-to-peer communications after successful creation.
-    #[must_use]
     pub fn server(mut self, guid: &'a Guid) -> Self {
         self.guid = Some(guid);
 
@@ -183,7 +177,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// // Do something useful with `conn`..
     ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
-    #[must_use]
     pub fn max_queued(mut self, max: usize) -> Self {
         self.max_queued = Some(max);
 
@@ -195,7 +188,6 @@ impl<'a> ConnectionBuilder<'a> {
     /// The thread is enabled by default.
     ///
     /// See [Connection::executor] for more details.
-    #[must_use]
     pub fn internal_executor(mut self, enabled: bool) -> Self {
         self.internal_executor = enabled;
 
