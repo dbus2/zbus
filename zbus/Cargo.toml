@@ -79,7 +79,7 @@ winapi = { version = "0.3", features = [
 uds_windows = "1.0.2"
 
 [target.'cfg(unix)'.dependencies]
-nix = "0.26.0"
+nix = { version = "0.26.0", default-features = false, features = ["socket", "uio"] }
 
 [dev-dependencies]
 doc-comment = "0.3.3"
