@@ -1676,7 +1676,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn unix_p2p_cookie_auth() {
-        use crate::{home_dir, utils::block_on};
+        use crate::utils::block_on;
         use std::{
             fs::{create_dir_all, remove_file, write},
             time::{SystemTime as Time, UNIX_EPOCH},
@@ -1686,6 +1686,7 @@ mod tests {
             fs::{set_permissions, Permissions},
             os::unix::fs::PermissionsExt,
         };
+        use xdg_home::home_dir;
 
         let cookie_context = "zbus-test-cookie-context";
         let cookie_id = 123456789;

@@ -3,7 +3,6 @@ use std::{
     io::{Error, ErrorKind},
     net::SocketAddr,
     os::windows::prelude::OsStrExt,
-    path::PathBuf,
     ptr,
 };
 
@@ -12,18 +11,15 @@ use winapi::{
         minwindef::{DWORD, FALSE},
         sddl::ConvertSidToStringSidA,
         tcpmib::{MIB_TCPTABLE2, MIB_TCP_STATE_ESTAB},
-        winerror::{ERROR_INSUFFICIENT_BUFFER, NO_ERROR, S_OK},
+        winerror::{ERROR_INSUFFICIENT_BUFFER, NO_ERROR},
         ws2def::INADDR_LOOPBACK,
     },
     um::{
-        combaseapi::CoTaskMemFree,
         handleapi::CloseHandle,
         iphlpapi::GetTcpTable2,
-        knownfolders::FOLDERID_Profile,
         memoryapi::{MapViewOfFile, OpenFileMappingW, FILE_MAP_READ},
         processthreadsapi::{GetCurrentProcess, OpenProcess, OpenProcessToken},
         securitybaseapi::{GetTokenInformation, IsValidSid},
-        shlobj::SHGetKnownFolderPath,
         synchapi::{CreateMutexW, ReleaseMutex, WaitForSingleObject},
         winbase::{LocalFree, INFINITE, WAIT_ABANDONED, WAIT_OBJECT_0},
         winnt::{TokenUser, HANDLE, PROCESS_QUERY_LIMITED_INFORMATION, TOKEN_QUERY, TOKEN_USER},
@@ -182,37 +178,6 @@ impl ProcessToken {
     }
 }
 
-/// The home dir of the current user.
-pub fn home_dir() -> Result<PathBuf, Error> {
-    let mut psz_path = ptr::null_mut();
-    let res = unsafe {
-        SHGetKnownFolderPath(
-            &FOLDERID_Profile,
-            0,
-            ptr::null_mut(),
-            &mut psz_path as *mut _,
-        )
-    };
-    if res != S_OK {
-        return Err(Error::new(ErrorKind::Other, "Failed to determine home dir"));
-    }
-
-    // Determine the length of the UTF-16 string.
-    let mut len = 0;
-    // SAFETY: `psz_path` guaranteed to be a valid pointer to a null-terminated UTF-16 string.
-    while unsafe { *(psz_path as *const u16).offset(len) } != 0 {
-        len += 1;
-    }
-    let slice = unsafe { std::slice::from_raw_parts(psz_path, len as usize) };
-    let path =
-        String::from_utf16(slice).map_err(|_| Error::new(ErrorKind::Other, "Invalid path"))?;
-    unsafe {
-        CoTaskMemFree(psz_path as *mut _);
-    }
-
-    Ok(PathBuf::from(path))
-}
-
 // Get the process ID of the local socket address
 // TODO: add ipv6 support
 pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<DWORD, Error> {
@@ -361,12 +326,5 @@ mod tests {
         let process_token = ProcessToken::open(if pid != 0 { Some(pid) } else { None }).unwrap();
         let sid = process_token.sid().unwrap();
         assert!(!sid.is_empty());
-    }
-
-    #[test]
-    fn home_dir() {
-        let home = super::home_dir().unwrap();
-        assert!(home.is_absolute());
-        assert!(home.exists());
     }
 }
