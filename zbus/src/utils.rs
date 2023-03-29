@@ -1,10 +1,4 @@
 #[cfg(unix)]
-use nix::unistd::{Uid, User};
-#[cfg(unix)]
-use std::io;
-use std::path::PathBuf;
-
-#[cfg(unix)]
 pub(crate) const FDS_MAX: usize = 1024; // this is hardcoded in sdbus - nothing in the spec
 
 pub(crate) fn padding_for_8_bytes(value: usize) -> usize {
@@ -83,47 +77,4 @@ where
         .expect("Failed to receive result");
 
     value
-}
-
-// We implement this ourselves because:
-//
-// 1. It helps us avoid a dep on `dirs` (which we don't need for anything else).
-// 2. `dirs::home_dir` doesn't do the full job for us anyway:
-//    https://github.com/dirs-dev/dirs-rs/issues/45
-pub(crate) fn home_dir() -> crate::Result<PathBuf> {
-    match std::env::var("HOME") {
-        Ok(home) => Ok(home.into()),
-        Err(_) => {
-            #[cfg(unix)]
-            {
-                let uid = Uid::effective();
-                let user = User::from_uid(uid)
-                    .map_err(Into::into)
-                    .and_then(|user| {
-                        user.ok_or_else(|| {
-                            crate::Error::InputOutput(
-                                io::Error::new(
-                                    io::ErrorKind::NotFound,
-                                    format!("No user found for UID {}", uid),
-                                )
-                                .into(),
-                            )
-                        })
-                    })
-                    .map_err(|e| {
-                        crate::Error::Handshake(format!(
-                            "Failed to get user information for UID {}: {}",
-                            uid, e
-                        ))
-                    })?;
-
-                Ok(user.dir)
-            }
-
-            #[cfg(windows)]
-            {
-                crate::win32::home_dir().map_err(Into::into)
-            }
-        }
-    }
 }

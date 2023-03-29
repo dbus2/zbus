@@ -14,12 +14,13 @@ use zvariant::Str;
 
 use sha1::{Digest, Sha1};
 
+use xdg_home::home_dir;
+
 #[cfg(windows)]
 use crate::win32;
 use crate::{
     file::FileLines,
     guid::Guid,
-    home_dir,
     raw::{Connection, Socket},
     Error, Result,
 };
@@ -267,7 +268,7 @@ struct Cookie {
 impl Cookie {
     fn keyring_path() -> Result<PathBuf> {
         let mut path = home_dir()
-            .map_err(|e| Error::Handshake(format!("Failed to get home directory: {}", e)))?;
+            .ok_or_else(|| Error::Handshake("Failed to determine home directory".into()))?;
         path.push(".dbus-keyrings");
         Ok(path)
     }
