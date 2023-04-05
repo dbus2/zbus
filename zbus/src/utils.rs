@@ -34,19 +34,16 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
 }
 
 #[cfg(feature = "tokio")]
-lazy_static::lazy_static! {
-    static ref TOKIO_RT: tokio::runtime::Runtime = {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_io()
-            .enable_time()
-            .build()
-            .expect("launch of single-threaded tokio runtime")
-    };
-}
-
-#[cfg(feature = "tokio")]
 #[doc(hidden)]
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    static TOKIO_RT: once_cell::sync::Lazy<tokio::runtime::Runtime> =
+        once_cell::sync::Lazy::new(|| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_io()
+                .enable_time()
+                .build()
+                .expect("launch of single-threaded tokio runtime")
+        });
     TOKIO_RT.block_on(future)
 }
 
