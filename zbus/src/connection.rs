@@ -989,7 +989,7 @@ impl Connection {
                             };
                             match hdr.destination() {
                                 // Unique name is already checked by the match rule.
-                                Ok(Some(BusName::Unique(_))) => (),
+                                Ok(Some(BusName::Unique(_))) | Ok(None) => (),
                                 Ok(Some(BusName::WellKnown(dest))) => {
                                     let names = conn.inner.registered_names.lock().await;
                                     // destination doesn't matter if no name has been registered
@@ -999,11 +999,6 @@ impl Connection {
 
                                         continue;
                                     }
-                                }
-                                Ok(None) => {
-                                    warn!("Got a method call with no destination: {}", msg);
-
-                                    continue;
                                 }
                                 Err(e) => {
                                     warn!("Failed to parse destination: {}", e);
