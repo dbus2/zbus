@@ -302,6 +302,10 @@ where
     }
 
     fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
+        if len == 0 {
+            return StructSerializer::unit(self).map(StructSeqSerializer::Struct);
+        }
+
         match self.0.sig_parser.next_char()? {
             VARIANT_SIGNATURE_CHAR => {
                 StructSerializer::variant(self).map(StructSeqSerializer::Struct)
@@ -453,6 +457,18 @@ where
         Ok(Self {
             ser,
             end_parens: 1,
+            container_depths,
+        })
+    }
+
+    fn unit(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
+        // serialize as a `0u8`
+        serde::Serializer::serialize_u8(&mut *ser, 0)?;
+
+        let container_depths = ser.0.container_depths;
+        Ok(Self {
+            ser,
+            end_parens: 0,
             container_depths,
         })
     }

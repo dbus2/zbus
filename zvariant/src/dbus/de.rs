@@ -295,6 +295,12 @@ where
 
                 visitor.visit_seq(StructureDeserializer { de: self })
             }
+            u8::SIGNATURE_CHAR => {
+                // Empty struct: encoded as a `0u8`.
+                let _: u8 = serde::Deserialize::deserialize(&mut *self)?;
+
+                visitor.visit_seq(StructureDeserializer { de: self })
+            }
             c => Err(de::Error::invalid_type(
                 de::Unexpected::Char(c),
                 &format!(
