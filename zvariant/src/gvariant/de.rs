@@ -10,8 +10,8 @@ use std::os::unix::io::RawFd;
 
 use crate::{
     de::ValueParseStage, framing_offset_size::FramingOffsetSize, framing_offsets::FramingOffsets,
-    signature_parser::SignatureParser, utils::*, EncodingContext, EncodingFormat, Error, Result,
-    Signature,
+    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error,
+    Result, Signature,
 };
 
 /// Our GVariant deserialization implementation.
@@ -317,6 +317,20 @@ where
                 self.0.container_depths = self.0.container_depths.dec_structure();
 
                 v
+            }
+            <u8 as Basic>::SIGNATURE_CHAR => {
+                // Empty struct: encoded as a `0u8`.
+                let _: u8 = serde::Deserialize::deserialize(&mut *self)?;
+
+                let start = self.0.pos;
+                let end = self.0.bytes.len();
+                visitor.visit_seq(StructureDeserializer {
+                    de: self,
+                    start,
+                    end,
+                    offsets_len: 0,
+                    offset_size: FramingOffsetSize::U8,
+                })
             }
             c => Err(de::Error::invalid_type(
                 de::Unexpected::Char(c),

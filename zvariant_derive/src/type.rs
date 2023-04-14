@@ -36,6 +36,9 @@ pub fn expand_derive(ast: DeriveInput) -> Result<TokenStream, Error> {
 
     match ast.data {
         Data::Struct(ds) => match ds.fields {
+            Fields::Named(_) if ds.fields.is_empty() => {
+                impl_empty_struct(ast.ident, ast.generics, &zv)
+            }
             Fields::Named(_) | Fields::Unnamed(_) => {
                 impl_struct(ast.ident, ast.generics, ds.fields, &zv)
             }
@@ -127,6 +130,23 @@ fn impl_unit_struct(
             #[inline]
             fn signature() -> #zv::Signature<'static> {
                 #zv::Signature::from_static_str_unchecked("")
+            }
+        }
+    })
+}
+
+fn impl_empty_struct(
+    name: Ident,
+    generics: Generics,
+    zv: &TokenStream,
+) -> Result<TokenStream, Error> {
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    Ok(quote! {
+        impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
+            #[inline]
+            fn signature() -> #zv::Signature<'static> {
+                #zv::Signature::from_static_str_unchecked("y")
             }
         }
     })

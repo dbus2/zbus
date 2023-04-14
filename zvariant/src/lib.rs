@@ -984,6 +984,29 @@ mod tests {
         let encoded = to_bytes(ctxt, &v).unwrap();
         let decoded: DeserializeValue<'_, Foo> = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(decoded.0, foo);
+
+        // Unit struct should be treated as a 0-sized tuple (the same as unit type)
+        #[derive(Serialize, Deserialize, Type, PartialEq, Debug)]
+        struct Unit;
+
+        assert_eq!(Unit::signature(), "");
+        let encoded = to_bytes(ctxt, &Unit).unwrap();
+        assert_eq!(encoded.len(), 0);
+        let _decoded: Unit = from_slice(&encoded, ctxt).unwrap();
+
+        // Structs w/o fields should be treated as a unit struct.
+        #[derive(Serialize, Deserialize, Type, PartialEq, Debug)]
+        struct NoFields {}
+
+        assert_eq!(NoFields::signature(), "y");
+        let encoded = to_bytes(ctxt, &NoFields {}).unwrap();
+        assert_eq!(encoded.len(), 1);
+        let _decoded: NoFields = from_slice(&encoded, ctxt).unwrap();
+
+        let ctxt = Context::<LE>::new_gvariant(0);
+        let encoded = to_bytes(ctxt, &NoFields {}).unwrap();
+        assert_eq!(encoded.len(), 1);
+        let _decoded: NoFields = from_slice(&encoded, ctxt).unwrap();
     }
 
     #[test]
