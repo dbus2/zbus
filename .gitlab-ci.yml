@@ -53,7 +53,7 @@ fail-if-fork-is-not-public:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: "2023-02-18.1"
+    FDO_DISTRIBUTION_TAG: "2023-04-15.1"
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
