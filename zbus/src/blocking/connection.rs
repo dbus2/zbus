@@ -20,6 +20,7 @@ use crate::{
 /// [`Sink`]: https://docs.rs/futures/0.3.17/futures/sink/trait.Sink.html
 #[derive(derivative::Derivative, Clone)]
 #[derivative(Debug)]
+#[must_use = "Dropping a `Connection` will close the underlying socket."]
 pub struct Connection {
     inner: crate::Connection,
 }

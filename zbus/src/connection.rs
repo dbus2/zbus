@@ -199,6 +199,7 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 ///
 /// [Monitor]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
 #[derive(Clone, Debug)]
+#[must_use = "Dropping a `Connection` will close the underlying socket."]
 pub struct Connection {
     pub(crate) inner: Arc<ConnectionInner>,
 }
