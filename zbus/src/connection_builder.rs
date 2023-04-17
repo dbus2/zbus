@@ -292,6 +292,7 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// Until server-side bus connection is supported, attempting to build such a connection will
     /// result in [`Error::Unsupported`] error.
+    #[must_use]
     pub async fn build(self) -> Result<Connection> {
         let stream = match self.target {
             #[cfg(all(not(feature = "tokio")))]
