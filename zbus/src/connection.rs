@@ -1258,6 +1258,11 @@ impl Connection {
     }
 
     /// Returns the peer process ID, or Ok(None) if it cannot be returned for the associated socket.
+    #[deprecated(
+        since = "3.13.0",
+        note = "Use `peer_credentials` instead, which returns `ConnectionCredentials` which includes
+                the peer PID."
+    )]
     pub fn peer_pid(&self) -> io::Result<Option<u32>> {
         self.peer_credentials().map(|c| c.process_id)
     }
