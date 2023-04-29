@@ -197,11 +197,11 @@ impl<S: Socket> Connection<S> {
 
     /// Access the underlying socket
     ///
-    /// This method is intended to provide access to the socket in order to register it
-    /// to you event loop, for async integration.
+    /// This method is intended to provide access to the socket in order to access certain
+    /// properties (e.g peer credentials).
     ///
-    /// You should not try to read or write from it directly, as it may
-    /// corrupt the internal state of this wrapper.
+    /// You should not try to read or write from it directly, as it may corrupt the internal state
+    /// of this wrapper.
     pub fn socket(&self) -> &S {
         &self.socket
     }
