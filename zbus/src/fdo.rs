@@ -525,28 +525,55 @@ assert_impl_all!(ReleaseNameReply: Send, Sync, Unpin);
 #[derive(Debug, DeserializeDict, PartialEq, Eq, SerializeDict, Type)]
 #[zvariant(signature = "a{sv}")]
 pub struct ConnectionCredentials {
-    /// The numeric Unix user ID, as defined by POSIX
     #[zvariant(rename = "UnixUserID")]
+    #[deprecated(since = "3.13.0", note = "Use `unix_user_id` method")]
     pub unix_user_id: Option<u32>,
+
+    #[zvariant(rename = "UnixGroupIDs")]
+    #[deprecated(since = "3.13.0", note = "Use `unix_group_ids` method")]
+    pub unix_group_ids: Option<Vec<u32>>,
+
+    #[zvariant(rename = "ProcessID")]
+    #[deprecated(since = "3.13.0", note = "Use `process_id` method")]
+    pub process_id: Option<u32>,
+
+    #[zvariant(rename = "WindowsSID")]
+    #[deprecated(since = "3.13.0", note = "Use `windows_sid` method")]
+    pub windows_sid: Option<String>,
+
+    #[zvariant(rename = "LinuxSecurityLabel")]
+    #[deprecated(since = "3.13.0", note = "Use `linux_security_label` method")]
+    pub linux_security_label: Option<Vec<u8>>,
+}
+
+#[allow(deprecated)]
+impl ConnectionCredentials {
+    /// The numeric Unix user ID, as defined by POSIX.
+    pub fn unix_user_id(&self) -> Option<u32> {
+        self.unix_user_id
+    }
 
     /// The numeric Unix group IDs (including both the primary group and the supplementary groups),
     /// as defined by POSIX, in numerically sorted order. This array is either complete or absent:
     /// if the message bus is able to determine some but not all of the caller's groups, or if one
     /// of the groups is not representable in a UINT32, it must not add this credential to the
     /// dictionary.
-    #[zvariant(rename = "UnixGroupIDs")]
-    pub unix_group_ids: Option<Vec<u32>>,
+    pub fn unix_group_ids(&self) -> Option<&Vec<u32>> {
+        self.unix_group_ids.as_ref()
+    }
 
     /// The numeric process ID, on platforms that have this concept. On Unix, this is the process ID
     /// defined by POSIX.
-    #[zvariant(rename = "ProcessID")]
-    pub process_id: Option<u32>,
+    pub fn process_id(&self) -> Option<u32> {
+        self.process_id
+    }
 
     /// The Windows security identifier in its string form, e.g.
     /// `S-1-5-21-3623811015-3361044348-30300820-1013` for a domain or local computer user or
     /// "S-1-5-18` for the LOCAL_SYSTEM user.
-    #[zvariant(rename = "WindowsSID")]
-    pub windows_sid: Option<String>,
+    pub fn windows_sid(&self) -> Option<&String> {
+        self.windows_sid.as_ref()
+    }
 
     /// On Linux systems, the security label that would result from the SO_PEERSEC getsockopt call.
     /// The array contains the non-zero bytes of the security label in an unspecified
@@ -566,8 +593,9 @@ pub struct ConnectionCredentials {
     /// On AppArmor systems, this is the AppArmor context, a composite string encoding the AppArmor
     /// label (one or more profiles) and the enforcement mode. Typical values might include
     /// `unconfined`, `/usr/bin/firefox (enforce)` or `user1 (complain)`.
-    #[zvariant(rename = "LinuxSecurityLabel")]
-    pub linux_security_label: Option<Vec<u8>>,
+    pub fn linux_security_label(&self) -> Option<&Vec<u8>> {
+        self.linux_security_label.as_ref()
+    }
 }
 
 #[rustfmt::skip]
