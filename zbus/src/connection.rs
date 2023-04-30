@@ -1275,6 +1275,7 @@ impl Connection {
     /// # Caveats
     ///
     /// Currently `unix_group_ids` and `linux_security_label` fields are not populated.
+    #[allow(deprecated)]
     pub fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
         let raw_conn = self.inner.raw_conn.lock().expect("poisoned lock");
         let socket = raw_conn.socket();
