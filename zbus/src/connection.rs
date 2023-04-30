@@ -1264,7 +1264,7 @@ impl Connection {
                 the peer PID."
     )]
     pub fn peer_pid(&self) -> io::Result<Option<u32>> {
-        self.peer_credentials().map(|c| c.process_id)
+        self.peer_credentials().map(|c| c.process_id())
     }
 
     /// Returns the peer credentials.
