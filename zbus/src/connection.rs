@@ -28,7 +28,7 @@ use futures_util::{sink::SinkExt, StreamExt};
 use crate::{
     async_lock::Mutex,
     blocking,
-    fdo::{self, RequestNameFlags, RequestNameReply},
+    fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
     raw::{Connection as RawConnection, Socket},
     socket_reader::SocketReader,
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule,
@@ -1258,13 +1258,43 @@ impl Connection {
     }
 
     /// Returns the peer process ID, or Ok(None) if it cannot be returned for the associated socket.
+    #[deprecated(
+        since = "3.13.0",
+        note = "Use `peer_credentials` instead, which returns `ConnectionCredentials` which includes
+                the peer PID."
+    )]
     pub fn peer_pid(&self) -> io::Result<Option<u32>> {
-        self.inner
-            .raw_conn
-            .lock()
-            .expect("poisoned lock")
-            .socket()
-            .peer_pid()
+        self.peer_credentials().map(|c| c.process_id())
+    }
+
+    /// Returns the peer credentials.
+    ///
+    /// The fields are populated on the best effort basis. Some or all fields may not even make
+    /// sense for certain sockets or on certain platforms and hence will be set to `None`.
+    ///
+    /// # Caveats
+    ///
+    /// Currently `unix_group_ids` and `linux_security_label` fields are not populated.
+    #[allow(deprecated)]
+    pub fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        let raw_conn = self.inner.raw_conn.lock().expect("poisoned lock");
+        let socket = raw_conn.socket();
+
+        Ok(ConnectionCredentials {
+            process_id: socket.peer_pid()?,
+            #[cfg(unix)]
+            unix_user_id: socket.uid()?,
+            #[cfg(not(unix))]
+            unix_user_id: None,
+            // Should we beother providing all the groups of user? What's the use case?
+            unix_group_ids: None,
+            #[cfg(windows)]
+            windows_sid: socket.peer_sid(),
+            #[cfg(not(windows))]
+            windows_sid: None,
+            // TODO: Populate this field (see the field docs for pointers).
+            linux_security_label: None,
+        })
     }
 
     pub(crate) fn init_socket_reader(&self) {

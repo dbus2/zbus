@@ -236,6 +236,8 @@ fn gen_reply_for_variant(
                     .unwrap_or_else(|| ::std::string::ToString::to_string(#error_field))
                 }]
             } else {
+                // FIXME: Workaround for https://github.com/rust-lang/rust-clippy/issues/10577
+                #[allow(clippy::redundant_clone)]
                 in_fields.clone()
             };
 
