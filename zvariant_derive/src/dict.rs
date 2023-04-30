@@ -92,6 +92,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
 
     let num_entries = num_entries.to_token_stream();
     Ok(quote! {
+        #[allow(deprecated)]
         impl #impl_generics #zv::export::serde::ser::Serialize for #name #ty_generics
         #where_clause
         {
@@ -188,6 +189,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
     let (impl_generics, _, where_clause) = generics.split_for_impl();
 
     Ok(quote! {
+        #[allow(deprecated)]
         impl #impl_generics #zv::export::serde::de::Deserialize<'de> for #name #ty_generics
         #where_clause
         {

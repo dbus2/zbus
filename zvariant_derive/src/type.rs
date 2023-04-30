@@ -50,6 +50,12 @@ pub fn expand_derive(ast: DeriveInput) -> Result<TokenStream, Error> {
             "only structs and enums supported at the moment",
         )),
     }
+    .map(|implementation| {
+        quote! {
+            #[allow(deprecated)]
+            #implementation
+        }
+    })
 }
 
 fn impl_struct(
