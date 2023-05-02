@@ -522,7 +522,7 @@ assert_impl_all!(ReleaseNameReply: Send, Sync, Unpin);
 ///
 /// **Note**: unknown keys, in particular those with "." that are not from the specification, will
 /// be ignored. Use your own implementation or contribute your keys here, or in the specification.
-#[derive(Debug, DeserializeDict, PartialEq, Eq, SerializeDict, Type)]
+#[derive(Debug, Default, DeserializeDict, PartialEq, Eq, SerializeDict, Type)]
 #[zvariant(signature = "a{sv}")]
 pub struct ConnectionCredentials {
     #[zvariant(rename = "UnixUserID")]
@@ -595,6 +595,49 @@ impl ConnectionCredentials {
     /// `unconfined`, `/usr/bin/firefox (enforce)` or `user1 (complain)`.
     pub fn linux_security_label(&self) -> Option<&Vec<u8>> {
         self.linux_security_label.as_ref()
+    }
+
+    /// Set the numeric Unix user ID, as defined by POSIX.
+    pub fn set_unix_user_id(mut self, unix_user_id: u32) -> Self {
+        self.unix_user_id = Some(unix_user_id);
+
+        self
+    }
+
+    /// Add a numeric Unix group ID.
+    ///
+    /// See [`ConnectionCredentials::unix_group_ids`] for more information.
+    pub fn add_unix_group_id(mut self, unix_group_id: u32) -> Self {
+        self.unix_group_ids
+            .get_or_insert_with(Vec::new)
+            .push(unix_group_id);
+
+        self
+    }
+
+    /// Set the numeric process ID, on platforms that have this concept.
+    ///
+    /// See [`ConnectionCredentials::process_id`] for more information.
+    pub fn set_process_id(mut self, process_id: u32) -> Self {
+        self.process_id = Some(process_id);
+
+        self
+    }
+
+    /// Set the Windows security identifier in its string form.
+    pub fn set_windows_sid(mut self, windows_sid: String) -> Self {
+        self.windows_sid = Some(windows_sid);
+
+        self
+    }
+
+    /// Set the Linux security label.
+    ///
+    /// See [`ConnectionCredentials::linux_security_label`] for more information.
+    pub fn set_linux_security_label(mut self, linux_security_label: Vec<u8>) -> Self {
+        self.linux_security_label = Some(linux_security_label);
+
+        self
     }
 }
 
