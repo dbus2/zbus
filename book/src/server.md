@@ -163,7 +163,7 @@ setting up your interfaces and requesting names, and not have to care about this
 #
 # #[async_std::main]
 # async fn main() -> Result<()> {
-    let _ = ConnectionBuilder::session()?
+    let _connection = ConnectionBuilder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", Greeter)?
         .build()
@@ -262,7 +262,7 @@ async fn main() -> Result<()> {
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    let _ = ConnectionBuilder::session()?
+    let _connection = ConnectionBuilder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()
