@@ -383,7 +383,7 @@ impl Address {
                     Self::from_str("unix:path=/var/run/dbus/system_bus_socket")
                 }
 
-                #[cfg(not(unix))]
+                #[cfg(windows)]
                 {
                     Self::from_str("autolaunch:")
                 }
