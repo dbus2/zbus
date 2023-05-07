@@ -5,7 +5,7 @@ use crate::win32::windows_autolaunch_bus_address;
 use crate::{Error, Result};
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 use nix::unistd::Uid;
 #[cfg(not(feature = "tokio"))]
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
@@ -347,7 +347,7 @@ impl Address {
                     return Self::from_str("autolaunch:scope=*user");
                 }
 
-                #[cfg(unix)]
+                #[cfg(all(unix, not(target_os = "macos")))]
                 {
                     let runtime_dir = env::var("XDG_RUNTIME_DIR")
                         .unwrap_or_else(|_| format!("/run/user/{}", Uid::effective()));
@@ -366,7 +366,7 @@ impl Address {
         match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
             _ => {
-                #[cfg(unix)]
+                #[cfg(all(unix, not(target_os = "macos")))]
                 return Self::from_str("unix:path=/var/run/dbus/system_bus_socket");
 
                 #[cfg(windows)]
