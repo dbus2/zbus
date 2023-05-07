@@ -1654,6 +1654,18 @@ mod tests {
         crate::block_on(async { addr.connect().await }).expect("Unable to connect to session bus");
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn connect_launchd_session_bus() {
+        crate::block_on(async {
+            let addr = crate::address::macos_launchd_bus_address("DBUS_LAUNCHD_SESSION_BUS_SOCKET")
+                .await
+                .expect("Unable to get Launchd session bus address");
+            addr.connect().await
+        })
+        .expect("Unable to connect to session bus");
+    }
+
     #[test]
     #[timeout(15000)]
     fn disconnect_on_drop() {

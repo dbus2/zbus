@@ -82,12 +82,11 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
 
 #[cfg(unix)]
 fn get_unix_pid(fd: &impl AsRawFd) -> io::Result<Option<u32>> {
-    let fd = fd.as_raw_fd();
-
     #[cfg(any(target_os = "android", target_os = "linux"))]
     {
         use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
 
+        let fd = fd.as_raw_fd();
         getsockopt(fd, PeerCredentials)
             .map(|creds| Some(creds.pid() as _))
             .map_err(|e| e.into())
@@ -102,6 +101,7 @@ fn get_unix_pid(fd: &impl AsRawFd) -> io::Result<Option<u32>> {
         target_os = "netbsd"
     ))]
     {
+        let _ = fd;
         // FIXME
         Ok(None)
     }

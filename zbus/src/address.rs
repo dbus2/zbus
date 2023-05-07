@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+use crate::process::run;
 #[cfg(not(feature = "tokio"))]
 use crate::run_in_thread;
 #[cfg(all(windows))]
@@ -5,7 +7,7 @@ use crate::win32::windows_autolaunch_bus_address;
 use crate::{Error, Result};
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 use nix::unistd::Uid;
 #[cfg(not(feature = "tokio"))]
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
@@ -153,6 +155,8 @@ pub enum Address {
     },
     /// Autolaunch address with optional scope
     Autolaunch(Option<String>),
+    /// Launchd address with a required env key
+    Launchd(String),
     #[cfg(any(
         all(feature = "vsock", not(feature = "tokio")),
         feature = "tokio-vsock"
@@ -222,32 +226,30 @@ async fn connect_tcp(addr: TcpAddress) -> Result<TcpStream> {
         .map_err(|e| Error::InputOutput(e.into()))
 }
 
+#[cfg(target_os = "macos")]
+pub(crate) async fn macos_launchd_bus_address(env_key: &str) -> Result<Address> {
+    let output = run("launchctl", ["getenv", env_key])
+        .await
+        .expect("failed to wait on launchctl output");
+
+    if !output.status.success() {
+        return Err(crate::Error::Address(format!(
+            "launchctl terminated with code: {}",
+            output.status
+        )));
+    }
+
+    let addr = String::from_utf8(output.stdout).map_err(|e| {
+        crate::Error::Address(format!("Unable to parse launchctl output as UTF-8: {}", e))
+    })?;
+
+    format!("unix:path={}", addr.trim()).parse()
+}
+
 impl Address {
-    pub(crate) async fn connect(&self) -> Result<Stream> {
-        let addr = if let Self::Autolaunch(scope) = self {
-            #[cfg(not(windows))]
-            {
-                let _ = scope;
-                return Err(Error::Address(
-                    "Autolaunch addresses are only supported on Windows".to_owned(),
-                ));
-            }
-
-            #[cfg(windows)]
-            {
-                if scope.is_some() {
-                    return Err(Error::Address(
-                        "Autolaunch scopes are currently unsupported".to_owned(),
-                    ));
-                } else {
-                    windows_autolaunch_bus_address()?
-                }
-            }
-        } else {
-            self.clone()
-        };
-
-        match addr {
+    #[async_recursion::async_recursion]
+    pub(crate) async fn connect(self) -> Result<Stream> {
+        match self {
             Address::Unix(p) => {
                 #[cfg(not(feature = "tokio"))]
                 {
@@ -335,7 +337,32 @@ impl Address {
                 Ok(Stream::Tcp(stream))
             }
 
-            Address::Autolaunch(_) => unreachable!(),
+            #[cfg(not(windows))]
+            Address::Autolaunch(_) => Err(Error::Address(
+                "Autolaunch addresses are only supported on Windows".to_owned(),
+            )),
+
+            #[cfg(windows)]
+            Address::Autolaunch(Some(_)) => Err(Error::Address(
+                "Autolaunch scopes are currently unsupported".to_owned(),
+            )),
+
+            #[cfg(windows)]
+            Address::Autolaunch(None) => {
+                let addr = windows_autolaunch_bus_address()?;
+                addr.connect().await
+            }
+
+            #[cfg(not(target_os = "macos"))]
+            Address::Launchd(_) => Err(Error::Address(
+                "Launchd addresses are only supported on macOS".to_owned(),
+            )),
+
+            #[cfg(target_os = "macos")]
+            Address::Launchd(env) => {
+                let addr = macos_launchd_bus_address(&env).await?;
+                addr.connect().await
+            }
         }
     }
 
@@ -346,20 +373,16 @@ impl Address {
         match env::var("DBUS_SESSION_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
             _ => {
-                #[cfg(all(windows))]
+                #[cfg(windows)]
                 {
                     #[cfg(feature = "windows-gdbus")]
-                    {
-                        Self::from_str("autolaunch:")
-                    }
+                    return Self::from_str("autolaunch:");
 
                     #[cfg(not(feature = "windows-gdbus"))]
-                    {
-                        Self::from_str("autolaunch:scope=*user")
-                    }
+                    return Self::from_str("autolaunch:scope=*user");
                 }
 
-                #[cfg(unix)]
+                #[cfg(all(unix, not(target_os = "macos")))]
                 {
                     let runtime_dir = env::var("XDG_RUNTIME_DIR")
                         .unwrap_or_else(|_| format!("/run/user/{}", Uid::effective()));
@@ -367,6 +390,9 @@ impl Address {
 
                     Self::from_str(&path)
                 }
+
+                #[cfg(target_os = "macos")]
+                return Self::from_str("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET");
             }
         }
     }
@@ -378,15 +404,14 @@ impl Address {
         match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
             _ => {
-                #[cfg(unix)]
-                {
-                    Self::from_str("unix:path=/var/run/dbus/system_bus_socket")
-                }
+                #[cfg(all(unix, not(target_os = "macos")))]
+                return Self::from_str("unix:path=/var/run/dbus/system_bus_socket");
 
-                #[cfg(not(unix))]
-                {
-                    Self::from_str("autolaunch:")
-                }
+                #[cfg(windows)]
+                return Self::from_str("autolaunch:");
+
+                #[cfg(target_os = "macos")]
+                return Self::from_str("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET");
             }
         }
     }
@@ -575,6 +600,10 @@ impl Display for Address {
                     write!(f, "scope={scope}")?;
                 }
             }
+
+            Self::Launchd(env) => {
+                write!(f, "launchd:env={}", env)?;
+            }
         }
 
         Ok(())
@@ -634,6 +663,12 @@ impl FromStr for Address {
                         })
                     })
                     .transpose()?,
+            )),
+            "launchd" => Ok(Self::Launchd(
+                options
+                    .get("env")
+                    .ok_or_else(|| Error::Address("missing env key".into()))?
+                    .to_string(),
             )),
 
             _ => Err(Error::Address(format!(
@@ -766,6 +801,10 @@ mod tests {
             Address::Autolaunch(Some("*my_cool_scope*".to_owned())),
             Address::from_str("autolaunch:scope=*my_cool_scope*").unwrap()
         );
+        assert_eq!(
+            Address::Launchd("my_cool_env_key".to_owned()),
+            Address::from_str("launchd:env=my_cool_env_key").unwrap()
+        );
 
         #[cfg(all(feature = "vsock", not(feature = "tokio")))]
         assert_eq!(
@@ -830,6 +869,10 @@ mod tests {
         assert_eq!(
             Address::Autolaunch(Some("*my_cool_scope*".to_owned())).to_string(),
             "autolaunch:scope=*my_cool_scope*"
+        );
+        assert_eq!(
+            Address::Launchd("my_cool_key".to_owned()).to_string(),
+            "launchd:env=my_cool_key"
         );
 
         #[cfg(all(feature = "vsock", not(feature = "tokio")))]

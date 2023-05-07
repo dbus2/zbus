@@ -22,6 +22,12 @@ zbus doesn't do that.
 opt-in compatibility to the GDBus session bus discovery mechanism via the `windows-gdbus` feature.
 This mechanism uses a machine-wide mutex however, so only one GDBus session bus can run at a time.
 
+**Note:** on macOS, there is no standard implicit way to connect to a session bus. zbus provides
+opt-in compatibility to the Launchd session bus discovery mechanism via the `launchctl getenv` feature.
+The official dbus installation method via `Homebrew` provides a session bus installation,
+utilizing macOS `LaunchAgents` feature. By default, zbus consumes an address for a bus connection that
+is provided via `launchctl getenv DBUS_LAUNCHD_SESSION_BUS_SOCKET` command output.
+
 ## Using a custom bus address
 
 You may also specify a custom bus with `Connection::new_for_address()` which takes a D-Bus address

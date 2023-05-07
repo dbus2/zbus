@@ -247,7 +247,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     #[timeout(15000)]
     fn fdpass_systemd() {
