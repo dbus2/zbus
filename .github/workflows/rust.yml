@@ -117,3 +117,16 @@ jobs:
           cargo install --force cargo-fuzz
           cargo fuzz run --fuzz-dir zvariant/fuzz dbus -- -max_total_time=30 -max_len=100M
           cargo fuzz run --fuzz-dir zvariant/fuzz gvariant -- -max_total_time=30 -max_len=100M
+
+  doc_build:
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          override: true
+      - name: Check documentation build
+        run: cargo doc
