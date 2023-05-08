@@ -112,6 +112,7 @@ mod tests {
     use std::{
         collections::HashMap,
         convert::{TryFrom, TryInto},
+        ffi::{CStr, CString, OsStr, OsString},
         net::{IpAddr, Ipv4Addr, Ipv6Addr},
     };
 
@@ -1893,5 +1894,26 @@ mod tests {
         //
         // * Test deserializers.
         // * Test gvariant format.
+    }
+
+    #[test]
+    fn serde_os_string() {
+        let os_str = OsStr::new("a");
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, os_str).unwrap();
+        let decoded: OsString = from_slice(&encoded, ctxt).unwrap();
+
+        assert_eq!(decoded, os_str);
+    }
+
+    #[test]
+    fn serde_c_string() {
+        let bytes = vec![97, 0];
+        let c_str = CStr::from_bytes_with_nul(&bytes).unwrap();
+        let ctxt = Context::<LE>::new_dbus(0);
+        let encoded = to_bytes(ctxt, &c_str).unwrap();
+        let decoded: CString = from_slice(&encoded, ctxt).unwrap();
+
+        assert_eq!(decoded.as_ref(), c_str);
     }
 }
