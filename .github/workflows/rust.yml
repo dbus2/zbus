@@ -46,7 +46,7 @@ jobs:
       - name: Catch common mistakes and unwrap calls
         run: cargo clippy -- -D warnings
 
-  build:
+  linux_test:
     runs-on: ubuntu-latest
     needs: lint
     env:
