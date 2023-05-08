@@ -60,8 +60,8 @@ jobs:
       - name: Setup
         run: |
           sudo mkdir -p /run/user/$UID |
-          sed -e s/UID/$UID/ -e s/PATH/path/ gitlab/dbus-session.conf > /tmp/dbus-session.conf
-          sed -e s/UID/$UID/ -e s/PATH/abstract/ gitlab/dbus-session.conf > /tmp/dbus-session-abstract.conf
+          sed -e s/UID/$UID/ -e s/PATH/path/ CI/dbus-session.conf > /tmp/dbus-session.conf
+          sed -e s/UID/$UID/ -e s/PATH/abstract/ CI/dbus-session.conf > /tmp/dbus-session-abstract.conf
           sudo apt-get install -y dbus
       - uses: dtolnay/rust-toolchain@master
         with:
