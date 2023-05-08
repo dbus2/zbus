@@ -7,9 +7,27 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+      RUST_BACKTRACE: full
+      RUST_LOG: trace
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+          override: true
+      - name: Check formatting
+        run: cargo fmt -- --check
+      - name: Catch common mistakes and unwrap calls
+        run: cargo clippy -- -D warnings
+
   build:
     runs-on: ubuntu-latest
-
+    needs: lint
     env:
       RUSTFLAGS: -D warnings
       RUST_BACKTRACE: full
@@ -25,12 +43,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          components: clippy, rustfmt
           override: true
-      - name: Check formatting
-        run: cargo fmt -- --check
-      - name: Catch common mistakes and unwrap calls
-        run: cargo clippy -- -D warnings
       - name: Build and Test
         run: |
           rustc --version
