@@ -107,7 +107,7 @@ jobs:
           toolchain: nightly
       - name: Fuzz zvariant
         run: |
-          cargo install --force cargo-fuzz
+          cargo install cargo-fuzz
           cargo fuzz run --fuzz-dir zvariant/fuzz dbus -- -max_total_time=30 -max_len=100M
           cargo fuzz run --fuzz-dir zvariant/fuzz gvariant -- -max_total_time=30 -max_len=100M
 
