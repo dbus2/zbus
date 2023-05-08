@@ -67,14 +67,29 @@ impl<'i> Display for GenTrait<'i> {
         props.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
         for p in props {
             let name = to_identifier(&to_snakecase(p.name().as_str()));
+            let annotations = p.annotations();
+            let emits_changed_signal = annotations
+                .iter()
+                .find(|a| a.name() == "org.freedesktop.DBus.Property.EmitsChangedSignal");
 
             writeln!(f)?;
             writeln!(f, "    /// {} property", p.name())?;
-            if pascal_case(&name) != p.name().as_str() {
-                writeln!(f, "    #[dbus_proxy(property, name = \"{}\")]", p.name())?;
+
+            let mut prop_macro = String::from("    #[dbus_proxy(property");
+
+            if let Some(emits) = emits_changed_signal {
+                prop_macro.push_str(&format!("(emits_changed_signal = \"{}\"), ", emits.value()));
             } else {
-                writeln!(f, "    #[dbus_proxy(property)]")?;
+                prop_macro.push_str(", ");
             }
+
+            if pascal_case(&name) != p.name().as_str() {
+                prop_macro.push_str(&format!("name = \"{}\")]", p.name()));
+            } else {
+                prop_macro.push_str(")]");
+            }
+
+            writeln!(f, "{}", prop_macro)?;
 
             if p.access().read() {
                 let output = to_rust_type(p.ty(), false, false);
