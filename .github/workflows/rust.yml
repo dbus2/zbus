@@ -82,9 +82,21 @@ jobs:
           # Test tokio support.
           dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --tests -p zbus --no-default-features --features tokio -- --skip fdpass_systemd
           dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
+
+  cross_check:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-gnu, x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd
+          override: true
       - name: Check portability
         run: |
-          rustup target add x86_64-apple-darwin x86_64-unknown-freebsd x86_64-unknown-netbsd
+          cargo check --target x86_64-pc-windows-gnu
           cargo check --target x86_64-apple-darwin
           cargo check --target x86_64-unknown-freebsd
           cargo check --target x86_64-unknown-netbsd
