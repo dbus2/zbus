@@ -71,11 +71,11 @@ fail-if-fork-is-not-public:
       python3-setuptools
       gcc-mingw-w64-x86-64
     FDO_DISTRIBUTION_EXEC: >-
-      gitlab/install-rust.sh stable $MSRV &&
+      CI/install-rust.sh stable $MSRV &&
       pip3 install lcov_cobertura &&
       pip3 install codespell
   before_script:
-    - source ./gitlab/env.sh
+    - source ./CI/env.sh
     - mkdir .cargo && echo -e "[net]\ngit-fetch-with-cli = true" > .cargo/config
     # If cargo exists assume we probably will want to update
     # the lockfile
@@ -96,7 +96,7 @@ windows amd64 docker:
   variables:
     # this file needs to be relative to docker/windows/ subdir
     # as it makes life easier in the powershell script
-    DOCKERFILE: "gitlab/docker/windows/Dockerfile"
+    DOCKERFILE: "CI/docker/windows/Dockerfile"
   timeout: 2h 30m
   tags:
     - windows
@@ -105,7 +105,7 @@ windows amd64 docker:
   script:
     # We need to pass an array and to resolve the env vars, so we can't use a variable:
     - $DOCKER_BUILD_ARGS = @("--build-arg", "DEFAULT_BRANCH=$UPSTREAM_BRANCH")
-    - "& gitlab/docker/windows/container.ps1 $CI_REGISTRY $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD $WINDOWS_IMAGE $WINDOWS_UPSTREAM_IMAGE $DOCKERFILE"
+    - "& CI/docker/windows/container.ps1 $CI_REGISTRY $CI_REGISTRY_USER $CI_REGISTRY_PASSWORD $WINDOWS_IMAGE $WINDOWS_UPSTREAM_IMAGE $DOCKERFILE"
     - |
       if (!($?)) {
         echo "Failed to build the image"
@@ -151,8 +151,8 @@ docs build:
   - rustc --version
   - cargo --version
   - mkdir -p /run/user/$UID
-  - sed -e s/UID/$UID/ -e s/PATH/path/ gitlab/dbus-session.conf > /tmp/dbus-session.conf
-  - sed -e s/UID/$UID/ -e s/PATH/abstract/ gitlab/dbus-session.conf > /tmp/dbus-session-abstract.conf
+  - sed -e s/UID/$UID/ -e s/PATH/path/ CI/dbus-session.conf > /tmp/dbus-session.conf
+  - sed -e s/UID/$UID/ -e s/PATH/abstract/ CI/dbus-session.conf > /tmp/dbus-session-abstract.conf
   - dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo test --verbose -- basic_connection
   - dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
   # check cookie-sha1 auth against dbus-daemon
@@ -199,7 +199,7 @@ msvc:
   timeout: "45min"
   script:
     - $env:PATH += ";C:\bin"
-    - Start-Process dbus-daemon.exe --config-file=gitlab/win32-session.conf
+    - Start-Process dbus-daemon.exe --config-file=CI/win32-session.conf
     - cargo test
 
     - $env:DBUS_SESSION_BUS_ADDRESS = $null
