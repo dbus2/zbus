@@ -109,9 +109,8 @@ right, please [file an issue](https://gitlab.freedesktop.org/dbus/zbus/-/issues/
 
 ## Portability
 
-All crates are currently Unix-only with Linux as the main (and tested) target and will fail to build
-on non-unix. This is hopefully a temporary limitation. Moreover, integration tests of zbus crate
-currently require a session bus running on the build host.
+Supported targets include Unix, Windows and macOS with Linux as the main (and tested) target.
+Integration tests of zbus crate currently require a session bus running on the build host.
 
 ## License
 
