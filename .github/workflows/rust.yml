@@ -100,3 +100,20 @@ jobs:
           cargo check --target x86_64-apple-darwin
           cargo check --target x86_64-unknown-freebsd
           cargo check --target x86_64-unknown-netbsd
+
+  zvariant_fuzz:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+      RUST_BACKTRACE: full
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          override: true
+      - name: Fuzz zvariant
+        run: |
+          cargo install --force cargo-fuzz
+          cargo fuzz run --fuzz-dir zvariant/fuzz dbus -- -max_total_time=30 -max_len=100M
+          cargo fuzz run --fuzz-dir zvariant/fuzz gvariant -- -max_total_time=30 -max_len=100M
