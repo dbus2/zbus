@@ -81,6 +81,82 @@ jobs:
           dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --tests -p zbus --no-default-features --features tokio -- --skip fdpass_systemd
           dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
 
+  windows_test:
+    runs-on: windows-latest
+    needs: lint
+    env:
+      RUSTFLAGS: -D warnings
+      RUST_BACKTRACE: full
+      RUST_LOG: trace
+      ErrorActionPreference: Stop
+      WarningPreference: Stop
+      PKG_CONFIG_PATH: C:/lib/pkgconfig
+      DBUS_SESSION_BUS_ADDRESS: tcp:host=127.0.0.1,port=9876
+      TRYBUILD: overwrite # ignore ui tests
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install pkg-config
+        shell: pwsh
+        run: |
+          # This is needed for some reason: https://github.com/dbus2/zbus/actions/runs/4917893488/jobs/8783555606
+          choco feature enable -n allowEmptyChecksums
+          choco install -y pkgconfiglite
+
+      - name: Install Meson
+        shell: pwsh
+        run: pip3 install meson
+
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Build & Install GLib
+        shell: pwsh
+        run: |
+          (New-Object System.Net.WebClient).DownloadString('https://wrapdb.mesonbuild.com/v2/pcre_8.37-2/get_patch') >$null
+          (New-Object System.Net.WebClient).DownloadString('https://zlib.net/fossils/') >$null
+          git clone --depth 1 --branch 2.74.1 https://gitlab.gnome.org/GNOME/glib.git \glib
+          cd -Path \glib
+          meson setup builddir
+          meson compile -C builddir
+          meson install --no-rebuild -C builddir
+
+      - name: Build & Install libexpat
+        shell: pwsh
+        run: |
+          # Upstream expat doesn't ship devel? let's build it then...
+          git clone --depth 1 --branch R_2_4_2 https://github.com/libexpat/libexpat \libexpat
+          cd -Path \libexpat\expat
+          cmake --install-prefix c:/ -G "Visual Studio 17 2022" -A x64 .
+          cmake --build . --config Release
+          cmake --install . --config Release
+
+      - name: Build & Install dbus daemon
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://gitlab.freedesktop.org/dbus/dbus.git \dbus
+          cd -Path \dbus
+          cmake --install-prefix c:/ -DCMAKE_PREFIX_PATH=C:/ -DDBUS_ENABLE_XML_DOCS=OFF -DDBUS_ENABLE_DOXYGEN_DOCS=OFF -G "NMake Makefiles" .
+          nmake
+          nmake install
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build and Test
+        shell: pwsh
+        run: |
+          $env:PATH += ";C:\bin"
+          Start-Process dbus-daemon.exe --config-file=CI/win32-session.conf
+          cargo test
+
+          $env:DBUS_SESSION_BUS_ADDRESS = $null
+          $env:ZBUS_GDBUS_TEST = "1"
+          # This is an undocumented implementation detail, but easier and faster than calling the gdbus C library
+          Start-Process gdbus.exe _win32_run_session_bus
+          # The gdbus process above will exit when idle for more than three seconds, usually right in the middle
+          # of the doc tests. This process will keep it alive.
+          Start-Process gdbus.exe 'monitor -e -d org.freedesktop.DBus'
+          cargo test --package zbus --features windows-gdbus
+
   cross_check:
     runs-on: ubuntu-latest
     env:
