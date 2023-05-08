@@ -69,8 +69,6 @@ jobs:
           override: true
       - name: Build and Test
         run: |
-          rustc --version
-          cargo --version
           mkdir -p /run/user/$UID
           sed -e s/UID/$UID/ -e s/PATH/path/ CI/dbus-session.conf > /tmp/dbus-session.conf
           sed -e s/UID/$UID/ -e s/PATH/abstract/ CI/dbus-session.conf > /tmp/dbus-session-abstract.conf
