@@ -19,7 +19,7 @@ jobs:
           sed -e s/UID/$UID/ -e s/PATH/abstract/ gitlab/dbus-session.conf > /tmp/dbus-session-abstract.conf
           sudo apt-get --allow-unauthenticated update -yq
           sudo apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y  --allow-unauthenticated dbus
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: clippy, rustfmt
