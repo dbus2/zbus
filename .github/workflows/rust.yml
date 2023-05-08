@@ -1,44 +1,132 @@
-name: Rust
+name: Lint, Build and Test
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  build:
-
+  MSRV:
     runs-on: ubuntu-latest
-
+    env:
+      RUSTFLAGS: -D warnings
+      MSRV: 1.60.0
     steps:
-    - uses: actions/checkout@v2
-    - name: Setup
-      run: |
-        sudo mkdir -p /run/user/$UID |
-        sed -e s/UID/$UID/ -e s/PATH/path/ gitlab/dbus-session.conf > /tmp/dbus-session.conf
-        sed -e s/UID/$UID/ -e s/PATH/abstract/ gitlab/dbus-session.conf > /tmp/dbus-session-abstract.conf
-        sudo apt-get --allow-unauthenticated update -yq
-        sudo apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y  --allow-unauthenticated dbus
-    - uses: actions-rs/toolchain@v1
-      with:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.MSRV }}
+          targets: x86_64-pc-windows-gnu, x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd
+          components: rustfmt
+          override: true
+      - name: Check build with MSRV
+        run: |
+          cargo check
+          cargo check --target x86_64-pc-windows-gnu
+          cargo check --target x86_64-apple-darwin
+          cargo check --target x86_64-unknown-freebsd
+          cargo check --target x86_64-unknown-netbsd
+        # This would be nice but some optional deps (e.g `time`) move very fast wrt to MSRV.
+        # cargo check --all-features
+
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+      RUST_BACKTRACE: full
+      RUST_LOG: trace
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
           toolchain: stable
           components: clippy, rustfmt
           override: true
-    - name: Check formatting
-      run: cargo fmt -- --check
-    - name: Catch common mistakes and unwrap calls
-      run: cargo clippy -- -D warnings
-    - name: Build and Test
-      run: |
-         dbus-run-session --config-file  /tmp/dbus-session-abstract.conf -- cargo test --verbose -- --skip fdpass_systemd
-         dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
-         # Test tokio support.
-         dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --tests -p zbus --no-default-features --features tokio -- --skip fdpass_systemd
-         dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
-    - name: Check portability
-      run: |
-         rustup target add x86_64-apple-darwin x86_64-unknown-freebsd x86_64-unknown-netbsd
-         cargo check --target x86_64-apple-darwin
-         cargo check --target x86_64-unknown-freebsd
-         cargo check --target x86_64-unknown-netbsd
+      - name: Check formatting
+        run: cargo fmt -- --check
+      - name: Catch common mistakes and unwrap calls
+        run: cargo clippy -- -D warnings
+
+  build:
+    runs-on: ubuntu-latest
+    needs: lint
+    env:
+      RUSTFLAGS: -D warnings
+      RUST_BACKTRACE: full
+      RUST_LOG: trace
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup
+        run: |
+          sudo mkdir -p /run/user/$UID |
+          sed -e s/UID/$UID/ -e s/PATH/path/ CI/dbus-session.conf > /tmp/dbus-session.conf
+          sed -e s/UID/$UID/ -e s/PATH/abstract/ CI/dbus-session.conf > /tmp/dbus-session-abstract.conf
+          sudo apt-get install -y dbus
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          override: true
+      - name: Build and Test
+        run: |
+          rustc --version
+          cargo --version
+          mkdir -p /run/user/$UID
+          sed -e s/UID/$UID/ -e s/PATH/path/ CI/dbus-session.conf > /tmp/dbus-session.conf
+          sed -e s/UID/$UID/ -e s/PATH/abstract/ CI/dbus-session.conf > /tmp/dbus-session-abstract.conf
+          dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo test --verbose -- basic_connection
+          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
+          # check cookie-sha1 auth against dbus-daemon
+          sed -i s/EXTERNAL/DBUS_COOKIE_SHA1/g /tmp/dbus-session.conf
+          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- basic_connection
+          # Test tokio support.
+          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --tests -p zbus --no-default-features --features tokio -- --skip fdpass_systemd
+          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
+
+  cross_check:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-gnu, x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd
+          override: true
+      - name: Check portability
+        run: |
+          cargo check --target x86_64-pc-windows-gnu
+          cargo check --target x86_64-apple-darwin
+          cargo check --target x86_64-unknown-freebsd
+          cargo check --target x86_64-unknown-netbsd
+
+  zvariant_fuzz:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+      RUST_BACKTRACE: full
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          override: true
+      - name: Fuzz zvariant
+        run: |
+          cargo install --force cargo-fuzz
+          cargo fuzz run --fuzz-dir zvariant/fuzz dbus -- -max_total_time=30 -max_len=100M
+          cargo fuzz run --fuzz-dir zvariant/fuzz gvariant -- -max_total_time=30 -max_len=100M
+
+  doc_build:
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          override: true
+      - name: Check documentation build
+        run: cargo doc
