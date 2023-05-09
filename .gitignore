@@ -5,3 +5,4 @@ zvariant/target
 Cargo.lock
 *.swp
 *.orig
+settings.json
