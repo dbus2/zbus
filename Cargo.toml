@@ -1,3 +1,0 @@
-[workspace]
-members = ["zbus", "zvariant", "zbus_names", "zvariant_derive", "zvariant_utils", "zbus_macros", "zbus_xmlgen", "zbus_polkit"]
-resolver = "2"
