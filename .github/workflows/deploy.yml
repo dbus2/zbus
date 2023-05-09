@@ -26,19 +26,15 @@ jobs:
           mkdir mdbook
           curl -sSL $url | tar -xz --directory=./mdbook
           echo `pwd`/mdbook >> $GITHUB_PATH
-      - name: Deploy GitHub Pages
+      - name: Build Books
         run: |
           mdbook build book
           mdbook build book-1.0
-          git worktree add gh-pages
-          git config user.name "Deploy from CI"
-          git config user.email ""
-          cd gh-pages
-          # Delete the ref to avoid keeping history.
-          git update-ref -d refs/heads/gh-pages
-          rm -rf *
-          mv ../book/book/* .
-          mkdir -p 1.0
-          git add .
-          git commit -m "Deploy $GITHUB_SHA to gh-pages"
-          git push --force --set-upstream origin gh-pages
+          mkdir -p public/1.0
+          cp -r ./book/book/* ./public
+          cp -r ./book-1.0/book/* ./public/1.0/
+      - name: Deploy 🚀
+        uses: JamesIves/github-pages-deploy-action@4.1.7
+        with:
+          branch: gh-pages # The branch the action should deploy to.
+          folder: public # The folder the action should deploy.
