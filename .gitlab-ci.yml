@@ -21,7 +21,7 @@ variables:
   # If you are hacking on them or need a them to rebuild, its enough
   # to change any part of the string of the image you want.
   ###
-  WINDOWS_TAG: "2022-12-31.1"
+  WINDOWS_TAG: "2023-05-09.1"
 
   WINDOWS_AMD64_SUFFIX: "amd64/windows"
   WINDOWS_IMAGE: "$CI_REGISTRY_IMAGE/$WINDOWS_AMD64_SUFFIX:$WINDOWS_TAG-$UPSTREAM_BRANCH"
@@ -53,7 +53,7 @@ fail-if-fork-is-not-public:
 .debian:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: "2023-04-15.1"
+    FDO_DISTRIBUTION_TAG: "2023-05-09.1"
     # Uncomment if you want to always rebuild the container, useful when hacking on it
     #FDO_FORCE_REBUILD: 1
     FDO_DISTRIBUTION_VERSION: 10
