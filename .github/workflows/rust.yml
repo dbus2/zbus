@@ -19,6 +19,7 @@ jobs:
           toolchain: ${{ env.MSRV }}
           targets: x86_64-pc-windows-gnu, x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd
           components: rustfmt
+      - uses: Swatinem/rust-cache@v2
       - name: Check build with MSRV
         run: |
           cargo check
@@ -41,6 +42,7 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
       - name: Check formatting
         run: cargo fmt -- --check
       - name: Catch common mistakes and unwrap calls
@@ -64,6 +66,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
+      - uses: Swatinem/rust-cache@v2
       - name: Build and Test
         run: |
           mkdir -p /run/user/$UID
@@ -88,6 +91,7 @@ jobs:
         with:
           toolchain: stable
           targets: x86_64-pc-windows-gnu, x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd
+      - uses: Swatinem/rust-cache@v2
       - name: Check portability
         run: |
           cargo check --target x86_64-pc-windows-gnu
@@ -105,6 +109,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
+      - uses: Swatinem/rust-cache@v2
       - name: Fuzz zvariant
         run: |
           cargo install cargo-fuzz
@@ -120,5 +125,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
+      - uses: Swatinem/rust-cache@v2
       - name: Check documentation build
         run: cargo doc
