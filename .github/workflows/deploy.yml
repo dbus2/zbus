@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - zbus-*
+    paths:
+      - book/**/*
+      - book-1.0/**/*
+      - .github/workflows/deploy.yml
 
 jobs:
   book:
