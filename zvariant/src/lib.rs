@@ -425,8 +425,8 @@ mod tests {
             // Check encoding against GLib
             let bytes = Bytes::from_owned(encoded);
             let gv = Variant::from_bytes::<Variant>(&bytes);
-            let variant = gv.get_variant().unwrap();
-            assert_eq!(variant.get_str().unwrap(), "hello world");
+            let variant = gv.as_variant().unwrap();
+            assert_eq!(variant.str().unwrap(), "hello world");
         }
 
         let v: String = v.try_into().unwrap();
@@ -595,8 +595,8 @@ mod tests {
             let bytes = Bytes::from_owned(gv_encoded);
             let variant = Variant::from_bytes::<&[u8]>(&bytes);
             assert_eq!(variant.n_children(), 2);
-            assert_eq!(variant.get_child_value(0).get::<u8>().unwrap(), 77);
-            assert_eq!(variant.get_child_value(1).get::<u8>().unwrap(), 88);
+            assert_eq!(variant.child_value(0).get::<u8>().unwrap(), 77);
+            assert_eq!(variant.child_value(1).get::<u8>().unwrap(), 88);
         }
         let ctxt = Context::<LE>::new_dbus(0);
 
@@ -729,7 +729,7 @@ mod tests {
             let bytes = Bytes::from_owned(gv_encoded);
             let variant = Variant::from_bytes::<Variant>(&bytes);
             assert_eq!(variant.n_children(), 1);
-            let decoded: Vec<String> = variant.get_child_value(0).get().unwrap();
+            let decoded: Vec<String> = variant.child_value(0).get().unwrap();
             assert_eq!(decoded[0], "Hello");
             assert_eq!(decoded[1], "World");
         }
@@ -803,7 +803,7 @@ mod tests {
             >(&bytes);
             assert_eq!(variant.n_children(), 1);
             let r: (u8, u32, (i64, bool, i64, Vec<String>), String) =
-                variant.get_child_value(0).get().unwrap();
+                variant.child_value(0).get().unwrap();
             assert_eq!(r.0, u8::max_value());
             assert_eq!(r.1, u32::max_value());
         }
@@ -890,9 +890,9 @@ mod tests {
             let bytes = Bytes::from_owned(gv_encoded);
             let variant = Variant::from_bytes::<Variant>(&bytes);
             assert_eq!(variant.n_children(), 1);
-            let child: Variant = variant.get_child_value(0);
+            let child: Variant = variant.child_value(0);
             let r: (u8, u32, (i64, bool, i64, Vec<String>), String) =
-                child.get_child_value(0).get().unwrap();
+                child.child_value(0).get().unwrap();
             assert_eq!(r.0, u8::max_value());
             assert_eq!(r.1, u32::max_value());
 
@@ -920,8 +920,8 @@ mod tests {
             let bytes = Bytes::from_owned(gv_encoded.clone());
             let variant = Variant::from_bytes::<Vec<String>>(&bytes);
             assert_eq!(variant.n_children(), 2);
-            assert_eq!(variant.get_child_value(0).get::<String>().unwrap(), as_[0]);
-            assert_eq!(variant.get_child_value(1).get::<String>().unwrap(), as_[1]);
+            assert_eq!(variant.child_value(0).get::<String>().unwrap(), as_[0]);
+            assert_eq!(variant.child_value(1).get::<String>().unwrap(), as_[1]);
             // Also check if our own deserializer does the right thing
             let as2 = from_slice::<LE, Vec<String>>(&gv_encoded, ctxt).unwrap();
             assert_eq!(as2, as_);
@@ -1593,7 +1593,7 @@ mod tests {
         // Check encoding against GLib
         let bytes = Bytes::from_owned(encoded);
         let variant = Variant::from_bytes::<Variant>(&bytes);
-        let decoded = variant.get_child_value(0).get::<Option<i16>>().unwrap();
+        let decoded = variant.child_value(0).get::<Option<i16>>().unwrap();
         assert_eq!(decoded, mn);
 
         // Now a None of the same type
@@ -1637,7 +1637,7 @@ mod tests {
         // Check encoding against GLib
         let bytes = Bytes::from_owned(encoded);
         let variant = Variant::from_bytes::<Variant>(&bytes);
-        let decoded = variant.get_child_value(0).get::<Option<String>>().unwrap();
+        let decoded = variant.child_value(0).get::<Option<String>>().unwrap();
         assert_eq!(decoded.as_deref(), ms);
 
         // Now a None of the same type
@@ -1678,10 +1678,7 @@ mod tests {
         // Check encoding against GLib
         let bytes = Bytes::from_owned(encoded);
         let variant = Variant::from_bytes::<Variant>(&bytes);
-        let decoded = variant
-            .get_child_value(0)
-            .get::<Vec<Option<String>>>()
-            .unwrap();
+        let decoded = variant.child_value(0).get::<Vec<Option<String>>>().unwrap();
         assert_eq!(decoded, ams);
 
         // In a struct
@@ -1711,7 +1708,7 @@ mod tests {
         let bytes = Bytes::from_owned(encoded);
         let variant = Variant::from_bytes::<Variant>(&bytes);
         let decoded = variant
-            .get_child_value(0)
+            .child_value(0)
             .get::<(Option<String>, u64, Option<String>)>()
             .unwrap();
         assert_eq!(decoded, structure);

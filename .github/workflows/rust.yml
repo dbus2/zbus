@@ -95,7 +95,45 @@ jobs:
       TRYBUILD: overwrite # ignore ui tests
     steps:
       - uses: actions/checkout@v3
+
+      - name: Cache Dependencies
+        id: cache-deps
+        uses: actions/cache@v3
+        with:
+          path: |
+            c:/share/*dbus*
+            c:/lib/libexpat.lib
+            c:/bin/libexpat.dll
+            c:/bin/xmlwf.exe
+            c:/bin/*dbus*
+            c:/lib/*dbus*
+            c:/var/lib/*dbus*
+            c:/lib/*glib*
+            c:/lib/*gio*
+            c:/lib/*gobject*
+            c:/lib/*gmodule*
+            c:/lib/*gthread*
+            c:/lib/*gspawn*
+            c:/lib/*gresource*
+            c:/lib/*pcre*
+            c:/lib/*z*
+            c:/lib/*ffi*
+            c:/lib/*intl*
+            c:/bin/*glib*
+            c:/bin/*gio*
+            c:/bin/*gobject*
+            c:/bin/*gmodule*
+            c:/bin/*gthread*
+            c:/bin/*gspawn*
+            c:/bin/*gresource*
+            c:/bin/*pcre*
+            c:/bin/*z*
+            c:/bin/*ffi*
+            c:/bin/*intl*
+          key: ${{ runner.os }}-cache
+
       - name: Install pkg-config
+        if: steps.cache-deps.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           # This is needed for some reason: https://github.com/dbus2/zbus/actions/runs/4917893488/jobs/8783555606
@@ -103,11 +141,16 @@ jobs:
           choco install -y pkgconfiglite
 
       - name: Install Meson
+        if: steps.cache-deps.outputs.cache-hit != 'true'
         shell: pwsh
         run: pip3 install meson
 
-      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Setup MSVC Environment
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build & Install GLib
+        if: steps.cache-deps.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           (New-Object System.Net.WebClient).DownloadString('https://wrapdb.mesonbuild.com/v2/pcre_8.37-2/get_patch') >$null
@@ -119,6 +162,7 @@ jobs:
           meson install --no-rebuild -C builddir
 
       - name: Build & Install libexpat
+        if: steps.cache-deps.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           # Upstream expat doesn't ship devel? let's build it then...
@@ -129,6 +173,7 @@ jobs:
           cmake --install . --config Release
 
       - name: Build & Install dbus daemon
+        if: steps.cache-deps.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           git clone --depth 1 https://gitlab.freedesktop.org/dbus/dbus.git \dbus
