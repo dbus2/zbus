@@ -1,15 +1,15 @@
 # Contributing to zbus
 
-We welcomes contribution from everyone in the form of suggestions, bug reports, merge requests, and
+We welcomes contribution from everyone in the form of suggestions, bug reports, pull requests, and
 feedback. This document gives some guidance if you are thinking of helping us.
 
-Please reach out here in a Gitlab (or Github) issue, or in the
+Please reach out here in a Github issue, or in the
 [#zbus:matrix.org](https://matrix.to/#/#zbus:matrix.org) Matrix room if we can do anything to help
 you contribute.
 
 ## Submitting bug reports and feature requests
 
-You can create issues [here](https://gitlab.freedesktop.org/dbus/zbus/-/issues/new). When
+You can create issues [here](https://github.com/dbus2/zbus/issues/new). When
 reporting a bug or asking for help, please include enough details so that the people helping you
 can reproduce the behavior you are seeing. For some tips on how to approach this, read about how to
 produce a [Minimal, Complete, and Verifiable example](https://stackoverflow.com/help/mcve).
@@ -18,7 +18,7 @@ When making a feature request, please make it clear what problem you intend to s
 feature, any ideas for how the crate in question could support solving that problem, any possible
 alternatives, and any disadvantages.
 
-## Submitting Merge Requests (or Pull Requests on Github)
+## Submitting Pull Requests
 
 Same rules apply here as for bug reports and feature requests. Plus:
 
@@ -44,31 +44,9 @@ When contributing to this project, you **implicitly** declare that you:
 * have the necessary rights to the content.
 * agree to providing the content under the [project's license](LICENSE).
 
-## Github
-
-Although Gitlab is our main and preferred code repository host, the
-[Github mirror](https://github.com/zeenix/zbus) can also be used to submit PRs and issues. Although
-PRs on Github requires us to merge manually, we will gladly do that for you. :-)
-
-### Merging PRs from Github (for maintainers only)
-
-Here is how to manually merge PRs from Github:
-
-```sh
-# If you haven't yet added the remote
-git remote add gh git@github.com:zeenix/zbus.git
-git remote update
-git checkout main # If you aren't on main already
-git fetch gh pull/PULL_ID/head:BRANCH_NAME # You choose the BRANCH_NAME
-git merge --no-ff BRANCH_NAME -m "Merge Github PR PULL_ID"
-git push origin main
-# Only needed until https://gitlab.freedesktop.org/freedesktop/freedesktop/-/issues/286 is resolved
-git push gh main
-```
-
 ## Running the test suite
 
-We encourage you to check that the test suite passes locally before submitting a merge request with
+We encourage you to check that the test suite passes locally before submitting a pull request with
 your changes. If anything does not pass, typically it will be easier to iterate and fix it locally
 than waiting for the CI servers to run tests for you.
 

@@ -392,7 +392,7 @@ pub struct Message {
 
 assert_impl_all!(Message: Send, Sync, Unpin);
 
-// TODO: Handle non-native byte order: https://gitlab.freedesktop.org/dbus/zbus/-/issues/19
+// TODO: Handle non-native byte order: https://github.com/dbus2/zbus/issues/19
 impl Message {
     /// Create a message of type [`MessageType::MethodCall`].
     ///

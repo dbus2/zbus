@@ -8,5 +8,5 @@ need to use this crate directly.
 
 **Status:** Stable.
 
-[zp]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/README.md
+[zp]: https://github.com/dbus2/zbus\#readme
 [`zbus`]: https://crates.io/crates/zbus

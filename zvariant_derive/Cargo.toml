@@ -7,7 +7,7 @@ edition = "2018"
 rust-version = "1.60"
 
 description = "D-Bus & GVariant encoding & decoding"
-repository = "https://gitlab.freedesktop.org/dbus/zbus/"
+repository = "https://github.com/dbus2/zbus/"
 keywords = ["D-Bus", "DBus", "IPC", "GVariant"]
 license = "MIT"
 categories = ["data-structures", "encoding", "parsing"]

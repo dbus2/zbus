@@ -129,7 +129,7 @@ see [the corresponding tokio issue on GitHub][tctiog].
 opt-in compatibility to the GDBus session bus discovery mechanism via the `windows-gdbus` feature.
 This mechanism uses a machine-wide mutex however, so only one GDBus session bus can run at a time.
 
-[zbus]: https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/README.md
+[zbus]: https://github.com/dbus2/zbus\#readme
 [bw]: https://docs.rs/zbus/3.0.0/zbus/blocking/index.html
 [iektc]: https://docs.rs/zbus/3.0.0/zbus/struct.Connection.html#examples-1
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201

@@ -1,7 +1,7 @@
 > **Note**
 >
 > This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
-> [here](https://dbus.pages.freedesktop.org/zbus/).
+> [here](https://dbus2.github.io/zbus/).
 
 # Writing a client proxy
 
@@ -555,8 +555,8 @@ trait Notifications {
 ```
 
 You can learn more from the zbus-ify [binding of
-PolicyKit](https://gitlab.freedesktop.org/zeenix/zbus/-/blob/master/zbus_polkit/src/policykit1.rs),
-for example, which was implemented starting from the *xmlgen* output.
+PolicyKit](https://github.com/dbus2/zbus/tree/main/zbus_polkit#readme), for example, which was
+implemented starting from the *xmlgen* output.
 
 There you have it, a Rust-friendly binding for your D-Bus service!
 

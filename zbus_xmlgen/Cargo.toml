@@ -13,7 +13,7 @@ edition = "2018"
 rust-version = "1.60"
 
 description = "D-Bus XML interface code generator"
-repository = "https://gitlab.freedesktop.org/dbus/zbus/"
+repository = "https://github.com/dbus2/zbus/"
 documentation = "https://dbus.pages.freedesktop.org/zbus/"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"

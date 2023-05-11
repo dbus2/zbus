@@ -51,7 +51,7 @@ use crate::fdo;
 /// At the moment, `Proxy` doesn't prevent [auto-launching][al].
 ///
 /// [`dbus_proxy`]: attr.dbus_proxy.html
-/// [al]: https://gitlab.freedesktop.org/dbus/zbus/-/issues/54
+/// [al]: https://github.com/dbus2/zbus/issues/54
 #[derive(derivative::Derivative)]
 #[derivative(Clone, Debug)]
 pub struct Proxy<'a> {

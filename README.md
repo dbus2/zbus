@@ -1,8 +1,8 @@
-<img src="https://gitlab.freedesktop.org/dbus/zbus/-/raw/main/zbus-pixels.gif" alt="zbus illustration" style="width: 100%;">
+<img src="zbus-pixels.gif" alt="zbus illustration" style="width: 100%;">
 
 # zbus
 
-[![pipeline status](https://gitlab.freedesktop.org/dbus/zbus/badges/main/pipeline.svg)](https://gitlab.freedesktop.org/dbus/zbus/-/commits/main)
+[![CI Pipeline Status](https://github.com/dbus2/zbus/actions/workflows/rust.yml/badge.svg)](https://github.com/dbus2/zbus/actions/workflows/rust.yml)
 
 A Rust API for [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html) communication. The
 goal is to provide a safe and simple high- and low-level API akin to
@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
 If you need help in using these crates, are looking for ways to contribute, or just want to hang out
 with the cool kids, please come chat with us in the
 [`#zbus:matrix.org`](https://matrix.to/#/#zbus:matrix.org) Matrix room. If something doesn't seem
-right, please [file an issue](https://gitlab.freedesktop.org/dbus/zbus/-/issues/new).
+right, please [file an issue](https://github.com/dbus2/zbus/issues/new).
 
 ## Portability
 
