@@ -32,7 +32,7 @@ messages (method calls, signals etc) for you.
 
 zbus crate is currently Unix-specific, with Linux as our main (and tested) target.
 
-[zbus]: https://gitlab.freedesktop.org/dbus/zbus
+[zbus]: https://github.com/dbus2/zbus
 [Rust]: https://www.rust-lang.org/
 [D-Bus]: https://dbus.freedesktop.org/
 [what is D-Bus?]: https://www.freedesktop.org/wiki/Software/dbus/#index1h1

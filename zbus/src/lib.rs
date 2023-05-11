@@ -501,7 +501,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn issue_68() {
-        // Tests the fix for https://gitlab.freedesktop.org/dbus/zbus/-/issues/68
+        // Tests the fix for https://github.com/dbus2/zbus/issues/68
         //
         // While this is not an exact reproduction of the issue 68, the underlying problem it
         // produces is exactly the same: `Connection::call_method` dropping all incoming messages
@@ -540,7 +540,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn issue104() {
-        // Tests the fix for https://gitlab.freedesktop.org/dbus/zbus/-/issues/104
+        // Tests the fix for https://github.com/dbus2/zbus/issues/104
         //
         // The issue is caused by `dbus_proxy` macro adding `()` around the return value of methods
         // with multiple out arguments, ending up with double parenthesis around the signature of
@@ -605,7 +605,7 @@ mod tests {
 
     // This one we just want to see if it builds, no need to run it. For details see:
     //
-    // https://gitlab.freedesktop.org/dbus/zbus/-/issues/121
+    // https://github.com/dbus2/zbus/issues/121
     #[test]
     #[ignore]
     fn issue_121() {
@@ -703,7 +703,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn issue173() {
-        // Tests the fix for https://gitlab.freedesktop.org/dbus/zbus/-/issues/173
+        // Tests the fix for https://github.com/dbus2/zbus/issues/173
         //
         // The issue is caused by proxy not keeping track of its destination's owner changes
         // (service restart) and failing to receive signals as a result.
