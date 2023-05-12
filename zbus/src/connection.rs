@@ -1264,7 +1264,12 @@ impl Connection {
                 the peer PID."
     )]
     pub fn peer_pid(&self) -> io::Result<Option<u32>> {
-        self.peer_credentials().map(|c| c.process_id())
+        self.inner
+            .raw_conn
+            .lock()
+            .expect("poisoned lock")
+            .socket()
+            .peer_pid()
     }
 
     /// Returns the peer credentials.
@@ -1276,7 +1281,7 @@ impl Connection {
     ///
     /// Currently `unix_group_ids` and `linux_security_label` fields are not populated.
     #[allow(deprecated)]
-    pub fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    pub async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
         let raw_conn = self.inner.raw_conn.lock().expect("poisoned lock");
         let socket = raw_conn.socket();
 

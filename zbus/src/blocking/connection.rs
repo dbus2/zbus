@@ -1,13 +1,13 @@
 use enumflags2::BitFlags;
 use event_listener::EventListener;
 use static_assertions::assert_impl_all;
-use std::{convert::TryInto, ops::Deref, sync::Arc};
+use std::{convert::TryInto, io, ops::Deref, sync::Arc};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
 use crate::{
     blocking::ObjectServer,
-    fdo::{RequestNameFlags, RequestNameReply},
+    fdo::{ConnectionCredentials, RequestNameFlags, RequestNameReply},
     utils::block_on,
     DBusError, Error, Message, Result,
 };
@@ -246,6 +246,18 @@ impl Connection {
     /// This function is meant for the caller to implement idle or timeout on inactivity.
     pub fn monitor_activity(&self) -> EventListener {
         self.inner.monitor_activity()
+    }
+
+    /// Returns the peer credentials.
+    ///
+    /// The fields are populated on the best effort basis. Some or all fields may not even make
+    /// sense for certain sockets or on certain platforms and hence will be set to `None`.
+    ///
+    /// # Caveats
+    ///
+    /// Currently `unix_group_ids` and `linux_security_label` fields are not populated.
+    pub fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        block_on(self.inner.peer_credentials())
     }
 }
 
