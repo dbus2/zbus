@@ -1,6 +1,6 @@
 [package]
 name = "zbus_polkit"
-version = "3.0.0"
+version = "3.0.1"
 authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
 edition = "2018"
 rust-version = "1.60"
