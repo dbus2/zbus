@@ -208,16 +208,19 @@ impl<'s> SignatureParser<'s> {
             ));
         }
 
+        let mut bytes = signature.as_bytes().iter();
         // We can't get None here cause we already established there are at least 2 chars above
-        let c = signature
-            .as_bytes()
-            .first()
-            .map(|b| *b as char)
-            .expect("empty signature");
+        let c = bytes.next().map(|b| *b as char).expect("empty signature");
         if c != STRUCT_SIG_START_CHAR {
             return Err(serde::de::Error::invalid_value(
                 serde::de::Unexpected::Char(c),
                 &crate::STRUCT_SIG_START_STR,
+            ));
+        }
+        if bytes.next().map(|b| *b as char).expect("empty signature") == STRUCT_SIG_END_CHAR {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str("()"),
+                &"at least one field signature between `(` and `)`",
             ));
         }
 
