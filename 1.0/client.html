@@ -118,7 +118,7 @@
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://gitlab.freedesktop.org/zeenix/zbus" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/dbus2/zbus" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-gitlab"></i>
                         </a>
 
@@ -150,7 +150,7 @@
                         <blockquote>
 <p><strong>Note</strong></p>
 <p>This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
-<a href="https://dbus.pages.freedesktop.org/zbus/">here</a>.</p>
+<a href="https://dbus2.github.io/zbus/">here</a>.</p>
 </blockquote>
 <h1 id="writing-a-client-proxy"><a class="header" href="#writing-a-client-proxy">Writing a client proxy</a></h1>
 <p>In this chapter, we are going to see how to make low-level D-Bus method calls. Then we are going to
@@ -654,9 +654,9 @@ trait Notifications {
     fn get_server_information(&amp;self) -&gt; zbus::Result&lt;ServerInformation&gt;;
 }
 <span class="boring">}</span></code></pre></pre>
-<p>You can learn more from the zbus-ify <a href="https://gitlab.freedesktop.org/zeenix/zbus/-/blob/master/zbus_polkit/src/policykit1.rs">binding of
-PolicyKit</a>,
-for example, which was implemented starting from the <em>xmlgen</em> output.</p>
+<p>You can learn more from the zbus-ify <a href="https://github.com/dbus2/zbus/tree/main/zbus_polkit#readme">binding of
+PolicyKit</a>, for example, which was
+implemented starting from the <em>xmlgen</em> output.</p>
 <p>There you have it, a Rust-friendly binding for your D-Bus service!</p>
 <div class="footnote-definition" id="busctl"><sup class="footnote-definition-label">1</sup>
 <p><code>busctl</code> is part of <a href="https://www.freedesktop.org/wiki/Software/systemd/"><code>systemd</code></a>.</p>

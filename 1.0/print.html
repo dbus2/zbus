@@ -119,7 +119,7 @@
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://gitlab.freedesktop.org/zeenix/zbus" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/dbus2/zbus" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-gitlab"></i>
                         </a>
 
@@ -155,10 +155,10 @@
 <blockquote>
 <p><strong>Note</strong></p>
 <p>This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
-<a href="https://dbus.pages.freedesktop.org/zbus/">here</a>.</p>
+<a href="https://dbus2.github.io/zbus/">here</a>.</p>
 </blockquote>
 <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
-<p><strong><a href="https://gitlab.freedesktop.org/zeenix/zbus">zbus</a></strong> is a <strong><a href="https://www.rust-lang.org/">Rust</a></strong> crate for <strong><a href="https://dbus.freedesktop.org/">D-Bus</a></strong>. If you are not familiar with D-Bus, you should
+<p><strong><a href="https://github.com/dbus2/zbus">zbus</a></strong> is a <strong><a href="https://www.rust-lang.org/">Rust</a></strong> crate for <strong><a href="https://dbus.freedesktop.org/">D-Bus</a></strong>. If you are not familiar with D-Bus, you should
 read <a href="https://www.freedesktop.org/wiki/Software/dbus/#index1h1">what is D-Bus?</a> first<sup class="footnote-reference"><a href="#outdated">1</a></sup>. In short, zbus allows you to communicate from one program
 to another, using the D-Bus protocol. In other words, it’s an <em>inter-process</em> communication (IPC)
 solution. It is a very popular IPC solution on Linux and many Linux services (e.g systemd,
@@ -200,7 +200,7 @@ too, thanks to Rust 🦀 and WebAssembly 🕸.</p>
 <div style="break-before: page; page-break-before: always;"></div><blockquote>
 <p><strong>Note</strong></p>
 <p>This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
-<a href="https://dbus.pages.freedesktop.org/zbus/">here</a>.</p>
+<a href="https://dbus2.github.io/zbus/">here</a>.</p>
 </blockquote>
 <h1 id="some-d-bus-concepts-to-help-newcomers"><a class="header" href="#some-d-bus-concepts-to-help-newcomers">Some D-Bus concepts to help newcomers</a></h1>
 <h2 id="bus"><a class="header" href="#bus">Bus</a></h2>
@@ -248,7 +248,7 @@ hopefully be added soon. It’s very high on our priority.</p>
 <div style="break-before: page; page-break-before: always;"></div><blockquote>
 <p><strong>Note</strong></p>
 <p>This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
-<a href="https://dbus.pages.freedesktop.org/zbus/">here</a>.</p>
+<a href="https://dbus2.github.io/zbus/">here</a>.</p>
 </blockquote>
 <h1 id="establishing-a-connection"><a class="header" href="#establishing-a-connection">Establishing a connection</a></h1>
 <p>The first thing you will have to do is to connect to a D-Bus bus or to a D-Bus peer. This is the
@@ -273,12 +273,12 @@ once the connection is established (both ends are equal, and can send any messag
 listening socket server, accepting multiple connections), and hand over the socket FDs to
 <code>Connection::new_unix_server</code> and <code>Connection::new_unix_client</code> for each side. After success, you
 can call the <code>Connection</code> methods to send and receive messages on both ends.</p>
-<p>See the <code>unix_p2p</code> test in the <a href="https://gitlab.freedesktop.org/zeenix/zbus/-/blob/master/zbus/src/connection.rs">zbus source code</a> for a simple example.</p>
+<p>See the <code>unix_p2p</code> test in the <a href="https://github.com/dbus2/zbus/blob/main/zbus/src/connection.rs">zbus source code</a> for a simple example.</p>
 <p><sup class="footnote-reference"><a href="#bus-less">1</a></sup> Unless you implemented them, none of the bus methods will exist.</p>
 <div style="break-before: page; page-break-before: always;"></div><blockquote>
 <p><strong>Note</strong></p>
 <p>This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
-<a href="https://dbus.pages.freedesktop.org/zbus/">here</a>.</p>
+<a href="https://dbus2.github.io/zbus/">here</a>.</p>
 </blockquote>
 <h1 id="writing-a-client-proxy"><a class="header" href="#writing-a-client-proxy">Writing a client proxy</a></h1>
 <p>In this chapter, we are going to see how to make low-level D-Bus method calls. Then we are going to
@@ -782,9 +782,9 @@ trait Notifications {
     fn get_server_information(&amp;self) -&gt; zbus::Result&lt;ServerInformation&gt;;
 }
 <span class="boring">}</span></code></pre></pre>
-<p>You can learn more from the zbus-ify <a href="https://gitlab.freedesktop.org/zeenix/zbus/-/blob/master/zbus_polkit/src/policykit1.rs">binding of
-PolicyKit</a>,
-for example, which was implemented starting from the <em>xmlgen</em> output.</p>
+<p>You can learn more from the zbus-ify <a href="https://github.com/dbus2/zbus/tree/main/zbus_polkit#readme">binding of
+PolicyKit</a>, for example, which was
+implemented starting from the <em>xmlgen</em> output.</p>
 <p>There you have it, a Rust-friendly binding for your D-Bus service!</p>
 <div class="footnote-definition" id="busctl"><sup class="footnote-definition-label">1</sup>
 <p><code>busctl</code> is part of <a href="https://www.freedesktop.org/wiki/Software/systemd/"><code>systemd</code></a>.</p>
@@ -792,7 +792,7 @@ for example, which was implemented starting from the <em>xmlgen</em> output.</p>
 <div style="break-before: page; page-break-before: always;"></div><blockquote>
 <p><strong>Note</strong></p>
 <p>This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
-<a href="https://dbus.pages.freedesktop.org/zbus/">here</a>.</p>
+<a href="https://dbus2.github.io/zbus/">here</a>.</p>
 </blockquote>
 <h1 id="writing-a-server-interface"><a class="header" href="#writing-a-server-interface">Writing a server interface</a></h1>
 <p>Let see how to provide a server method “SayHello”, to greet a client.</p>
@@ -922,13 +922,13 @@ easier, especially with <em>async</em> support.</p>
 <div style="break-before: page; page-break-before: always;"></div><blockquote>
 <p><strong>Note</strong></p>
 <p>This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
-<a href="https://dbus.pages.freedesktop.org/zbus/">here</a>.</p>
+<a href="https://dbus2.github.io/zbus/">here</a>.</p>
 </blockquote>
 <h1 id="contributors"><a class="header" href="#contributors">Contributors</a></h1>
 <p>Here is a list of the contributors who have helped improving zbus. Big shout-out to them!</p>
 <ul>
-<li>Zeeshan Ali (<a href="https://gitlab.freedesktop.org/zeenix">@zeenix</a>)</li>
-<li>Marc-André Lureau (<a href="https://gitlab.freedesktop.org/elmarco">@elmarco</a>)</li>
+<li>Zeeshan Ali Khan (<a href="https://github.com/zeenix">@zeenix</a>)</li>
+<li>Marc-André Lureau (<a href="https://github.com/elmarco">@elmarco</a>)</li>
 </ul>
 <p>If you feel you’re missing from this list, feel free to add yourself in a PR.</p>
 

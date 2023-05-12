@@ -118,7 +118,7 @@
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://gitlab.freedesktop.org/dbus/zbus" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/dbus2/zbus" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-gitlab"></i>
                         </a>
 
@@ -633,9 +633,9 @@ trait Notifications {
     /// This message returns the information on the server.
     fn get_server_information(&amp;self) -&gt; zbus::Result&lt;ServerInformation&gt;;
 }</code></pre>
-<p>You can learn more from the zbus-ify <a href="https://gitlab.freedesktop.org/dbus/zbus/-/blob/main/zbus_polkit/src/policykit1.rs">binding of
-PolicyKit</a>,
-for example, which was implemented starting from the <em>xmlgen</em> output.</p>
+<p>You can learn more from the zbus-ify <a href="https://github.com/dbus2/zbus/tree/main/zbus_polkit#readme">binding of
+PolicyKit</a>, for example, which was
+implemented starting from the <em>xmlgen</em> output.</p>
 <p>There you have it, a Rust-friendly binding for your D-Bus service!</p>
 <div class="footnote-definition" id="busctl"><sup class="footnote-definition-label">1</sup>
 <p><code>busctl</code> is part of <a href="https://www.freedesktop.org/wiki/Software/systemd/"><code>systemd</code></a>.</p>

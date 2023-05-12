@@ -118,7 +118,7 @@
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://gitlab.freedesktop.org/zeenix/zbus" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/dbus2/zbus" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-gitlab"></i>
                         </a>
 
@@ -150,7 +150,7 @@
                         <blockquote>
 <p><strong>Note</strong></p>
 <p>This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
-<a href="https://dbus.pages.freedesktop.org/zbus/">here</a>.</p>
+<a href="https://dbus2.github.io/zbus/">here</a>.</p>
 </blockquote>
 <h1 id="establishing-a-connection"><a class="header" href="#establishing-a-connection">Establishing a connection</a></h1>
 <p>The first thing you will have to do is to connect to a D-Bus bus or to a D-Bus peer. This is the
@@ -175,7 +175,7 @@ once the connection is established (both ends are equal, and can send any messag
 listening socket server, accepting multiple connections), and hand over the socket FDs to
 <code>Connection::new_unix_server</code> and <code>Connection::new_unix_client</code> for each side. After success, you
 can call the <code>Connection</code> methods to send and receive messages on both ends.</p>
-<p>See the <code>unix_p2p</code> test in the <a href="https://gitlab.freedesktop.org/zeenix/zbus/-/blob/master/zbus/src/connection.rs">zbus source code</a> for a simple example.</p>
+<p>See the <code>unix_p2p</code> test in the <a href="https://github.com/dbus2/zbus/blob/main/zbus/src/connection.rs">zbus source code</a> for a simple example.</p>
 <p><sup class="footnote-reference"><a href="#bus-less">1</a></sup> Unless you implemented them, none of the bus methods will exist.</p>
 
                     </main>
