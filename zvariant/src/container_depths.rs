@@ -27,8 +27,6 @@ impl ContainerDepths {
         self.check()
     }
 
-    #[cfg(feature = "gvariant")]
-    // This is only used by gvariant code.
     pub fn dec_structure(mut self) -> Self {
         self.structure -= 1;
         self
