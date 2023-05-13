@@ -293,7 +293,11 @@ where
 
                 self.0.sig_parser.skip_char()?;
 
-                visitor.visit_seq(StructureDeserializer { de: self })
+                self.0.container_depths = self.0.container_depths.inc_structure()?;
+                let v = visitor.visit_seq(StructureDeserializer { de: self });
+                self.0.container_depths = self.0.container_depths.dec_structure();
+
+                v
             }
             u8::SIGNATURE_CHAR => {
                 // Empty struct: encoded as a `0u8`.
@@ -379,6 +383,7 @@ where
 {
     fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>) -> Result<Self> {
         de.0.parse_padding(ARRAY_ALIGNMENT_DBUS)?;
+        de.0.container_depths = de.0.container_depths.inc_array()?;
 
         let len = B::read_u32(de.0.next_slice(4)?) as usize;
         let element_signature = de.0.sig_parser.next_signature()?;
@@ -446,6 +451,7 @@ where
                 .0
                 .sig_parser
                 .skip_chars(self.element_signature_len)?;
+            self.de.0.container_depths = self.de.0.container_depths.dec_array();
 
             return Ok(None);
         }
@@ -606,7 +612,7 @@ where
                     bytes: subslice(self.de.0.bytes, value_start..)?,
                     fds: self.de.0.fds,
                     pos: 0,
-                    container_depths: self.de.0.container_depths,
+                    container_depths: self.de.0.container_depths.inc_variant()?,
                     b: PhantomData,
                 });
 

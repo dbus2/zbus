@@ -260,7 +260,6 @@ pub struct MessageHeader<'m> {
     primary: MessagePrimaryHeader,
     #[serde(borrow)]
     fields: MessageFields<'m>,
-    end: ((),), // To ensure header end on 8-byte boundary
 }
 
 assert_impl_all!(MessageHeader<'_>: Send, Sync, Unpin);
@@ -288,11 +287,7 @@ macro_rules! get_field_u32 {
 impl<'m> MessageHeader<'m> {
     /// Create a new `MessageHeader` instance.
     pub fn new(primary: MessagePrimaryHeader, fields: MessageFields<'m>) -> Self {
-        Self {
-            primary,
-            fields,
-            end: ((),),
-        }
+        Self { primary, fields }
     }
 
     /// Get a reference to the primary header.
