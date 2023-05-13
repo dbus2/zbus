@@ -313,7 +313,10 @@ impl<'a> MessageBuilder<'a> {
         }
 
         let hdr_len = zvariant::serialized_size(ctxt, &header)?;
-        let total_len = hdr_len + body_len;
+        // We need to align the body to 8-byte boundary.
+        let body_padding = padding_for_8_bytes(hdr_len);
+        let body_offset = hdr_len + body_padding;
+        let total_len = body_offset + body_len;
         if total_len > MAX_MESSAGE_SIZE {
             return Err(Error::ExcessData);
         }
@@ -321,6 +324,9 @@ impl<'a> MessageBuilder<'a> {
         let mut cursor = Cursor::new(&mut bytes);
 
         zvariant::to_writer(&mut cursor, ctxt, &header)?;
+        for _ in 0..body_padding {
+            cursor.write_all(&[0u8])?;
+        }
         #[cfg(unix)]
         let fds = write_body(&mut cursor)?;
         #[cfg(not(unix))]
@@ -334,7 +340,7 @@ impl<'a> MessageBuilder<'a> {
             primary_header,
             quick_fields,
             bytes,
-            body_offset: hdr_len,
+            body_offset,
             #[cfg(unix)]
             fds: Arc::new(RwLock::new(Fds::Raw(fds))),
             recv_seq: MessageSequence::default(),
