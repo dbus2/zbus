@@ -127,6 +127,7 @@ mod tests {
 
     use crate::{
         from_slice, from_slice_for_signature, to_bytes, to_bytes_for_signature, MaxDepthExceeded,
+        Optional,
     };
     #[cfg(unix)]
     use crate::{from_slice_fds, to_bytes_fds};
@@ -1890,5 +1891,12 @@ mod tests {
         //
         // * Test deserializers.
         // * Test gvariant format.
+    }
+
+    #[test]
+    fn issue_343() {
+        // The Default impl was causing a stack overflow by calling NoneValue::null_value(), which
+        // in turn called Default::default().
+        let _ = Optional::<()>::default();
     }
 }

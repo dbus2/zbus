@@ -121,6 +121,6 @@ impl<T> DerefMut for Optional<T> {
 
 impl<T> Default for Optional<T> {
     fn default() -> Self {
-        Self::null_value()
+        Self(None)
     }
 }
