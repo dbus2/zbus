@@ -7,6 +7,7 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, Mutex, RwLock},
+    time::Duration,
 };
 
 /// Trait implemented by all serializable types.
@@ -312,6 +313,12 @@ macro_rules! map_impl {
 
 map_impl!(BTreeMap<K: Ord, V>);
 map_impl!(HashMap<K: Eq + Hash, V, H: BuildHasher>);
+
+impl Type for Duration {
+    fn signature() -> Signature<'static> {
+        <(u64, u32)>::signature()
+    }
+}
 
 impl Type for SystemTime {
     #[inline]
