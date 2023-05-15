@@ -45,6 +45,30 @@ where
 /// The serialization and deserialization of `Optional` relies on [`NoneValue`] implementation of
 /// the underlying type.
 ///
+/// # Examples
+///
+/// ```
+/// use zvariant::{EncodingContext, Optional, from_slice, to_bytes};
+/// use byteorder::LE;
+///
+/// // `Null` case.
+/// let ctxt = EncodingContext::<LE>::new_dbus(0);
+/// let s = Optional::<&str>::default();
+/// let encoded = to_bytes(ctxt, &s).unwrap();
+/// assert_eq!(encoded, &[0, 0, 0, 0, 0]);
+/// let s: Optional<&str> = from_slice(&encoded, ctxt).unwrap();
+/// assert_eq!(*s, None);
+///
+/// // `Some` case.
+/// let s = Optional::from(Some("hello"));
+/// let encoded = to_bytes(ctxt, &s).unwrap();
+/// assert_eq!(encoded.len(), 10);
+/// // The first byte is the length of the string in Little-Endian format.
+/// assert_eq!(encoded[0], 5);
+/// let s: Optional<&str> = from_slice(&encoded, ctxt).unwrap();
+/// assert_eq!(*s, Some("hello"));
+/// ```
+///
 /// [ts]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-name-owner-changed
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Optional<T>(Option<T>);
