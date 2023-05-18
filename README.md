@@ -91,7 +91,7 @@ trait MyGreeter {
 async fn main() -> Result<()> {
     let connection = Connection::session().await?;
 
-    // `dbus_proxy` macro creates `MyGreaterProxy` based on `Notifications` trait.
+    // `dbus_proxy` macro creates `MyGreeterProxy` based on `Notifications` trait.
     let proxy = MyGreeterProxy::new(&connection).await?;
     let reply = proxy.say_hello("Maria").await?;
     println!("{reply}");
