@@ -3,7 +3,7 @@ name = "zbus_names"
 version = "2.5.1"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = "2018"
-rust-version = "1.60"
+rust-version = "1.64"
 
 description = "A collection of D-Bus bus names types"
 repository = "https://github.com/dbus2/zbus/"

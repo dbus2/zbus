@@ -4,10 +4,11 @@ use static_assertions::assert_impl_all;
 
 /// The encoding format.
 ///
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
 pub enum EncodingFormat {
     /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-marshaling)
     /// format.
+    #[default]
     DBus,
     /// [GVariant](https://developer.gnome.org/glib/stable/glib-GVariant.html) format.
     #[cfg(feature = "gvariant")]
@@ -15,12 +16,6 @@ pub enum EncodingFormat {
 }
 
 assert_impl_all!(EncodingFormat: Send, Sync, Unpin);
-
-impl Default for EncodingFormat {
-    fn default() -> Self {
-        EncodingFormat::DBus
-    }
-}
 
 impl std::fmt::Display for EncodingFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

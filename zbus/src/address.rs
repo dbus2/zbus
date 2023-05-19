@@ -1,7 +1,5 @@
 #[cfg(target_os = "macos")]
 use crate::process::run;
-#[cfg(not(feature = "tokio"))]
-use crate::run_in_thread;
 #[cfg(all(windows))]
 use crate::win32::windows_autolaunch_bus_address;
 use crate::{Error, Result};
@@ -190,20 +188,23 @@ pub(crate) enum Stream {
 
 #[cfg(not(feature = "tokio"))]
 async fn connect_tcp(addr: TcpAddress) -> Result<Async<TcpStream>> {
-    let addrs = run_in_thread(move || -> Result<Vec<SocketAddr>> {
-        let addrs = (addr.host(), addr.port()).to_socket_addrs()?.filter(|a| {
-            if let Some(family) = addr.family() {
-                if family == TcpAddressFamily::Ipv4 {
-                    a.is_ipv4()
+    let addrs = crate::Task::spawn_blocking(
+        move || -> Result<Vec<SocketAddr>> {
+            let addrs = (addr.host(), addr.port()).to_socket_addrs()?.filter(|a| {
+                if let Some(family) = addr.family() {
+                    if family == TcpAddressFamily::Ipv4 {
+                        a.is_ipv4()
+                    } else {
+                        a.is_ipv6()
+                    }
                 } else {
-                    a.is_ipv6()
+                    true
                 }
-            } else {
-                true
-            }
-        });
-        Ok(addrs.collect())
-    })
+            });
+            Ok(addrs.collect())
+        },
+        "connect tcp",
+    )
     .await
     .map_err(|e| Error::Address(format!("Failed to receive TCP addresses: {e}")))?;
 
@@ -255,7 +256,11 @@ impl Address {
                 {
                     #[cfg(windows)]
                     {
-                        let stream = run_in_thread(move || UnixStream::connect(p)).await?;
+                        let stream = crate::Task::spawn_blocking(
+                            move || UnixStream::connect(p),
+                            "unix stream connection",
+                        )
+                        .await?;
                         Async::new(stream)
                             .map(Stream::Unix)
                             .map_err(|e| Error::InputOutput(e.into()))

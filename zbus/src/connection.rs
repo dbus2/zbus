@@ -1145,8 +1145,7 @@ impl Connection {
             .cache_properties(CacheProperties::No)
             .build()
             .await?;
-        let future = dbus_proxy.hello();
-        let name = self.run_future_at_init(future).await?;
+        let name = dbus_proxy.hello().await?;
 
         self.inner
             .unique_name
@@ -1157,20 +1156,10 @@ impl Connection {
         Ok(())
     }
 
-    // With external executor, our executor is only run after the connection construction is
-    // completed and some futures need to run to completion before that is done so we need to tick
-    // the executor ourselves in parallel to making the method call. With the internal executor,
-    /// this is not needed but harmless.
-    pub(crate) async fn run_future_at_init<F, O>(&self, future: F) -> O
-    where
-        F: Future<Output = O>,
-    {
-        self.inner.executor.run(future).await
-    }
-
     pub(crate) async fn new(
         auth: Authenticated<Box<dyn Socket>>,
         bus_connection: bool,
+        executor: Executor<'static>,
     ) -> Result<Self> {
         #[cfg(unix)]
         let cap_unix_fd = auth.cap_unix_fd;
@@ -1205,7 +1194,6 @@ impl Connection {
         let msg_senders = Arc::new(Mutex::new(msg_senders));
         let subscriptions = Mutex::new(HashMap::new());
 
-        let executor = Executor::new();
         let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
 
         let connection = Self {

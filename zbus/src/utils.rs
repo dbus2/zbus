@@ -46,32 +46,3 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
         });
     TOKIO_RT.block_on(future)
 }
-
-#[cfg(not(feature = "tokio"))]
-pub(crate) async fn run_in_thread<F, T>(f: F) -> T
-where
-    F: FnOnce() -> T,
-    F: Send + 'static,
-    T: Send + 'static,
-{
-    let event = event_listener::Event::new();
-    let listener = event.listen();
-    let value = std::sync::Arc::new(std::sync::Mutex::new(None));
-    let value_clone = value.clone();
-
-    std::thread::spawn(move || {
-        let res = f();
-
-        *value_clone.lock().expect("Failed to set result") = Some(res);
-        event.notify(1);
-    });
-    listener.await;
-
-    let value = value
-        .lock()
-        .expect("Failed to receive result")
-        .take()
-        .expect("Failed to receive result");
-
-    value
-}

@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: -D warnings
-      MSRV: 1.60.0
+      MSRV: 1.64.0
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
@@ -211,11 +211,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          targets: x86_64-pc-windows-gnu, x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd
+          targets: x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd
       - uses: Swatinem/rust-cache@v2
       - name: Check portability
         run: |
-          cargo check --target x86_64-pc-windows-gnu
           cargo check --target x86_64-apple-darwin
           cargo check --target x86_64-unknown-freebsd
           cargo check --target x86_64-unknown-netbsd
