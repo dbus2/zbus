@@ -88,7 +88,6 @@ where
 
 macro_rules! serialize_basic {
     ($method:ident, $type:ty) => {
-        #[inline]
         fn $method(self, v: $type) -> Result<()> {
             let ctxt = EncodingContext::new_dbus(self.0.ctxt.position());
             let bytes_written = self.0.bytes_written;

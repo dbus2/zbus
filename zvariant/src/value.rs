@@ -407,7 +407,6 @@ impl<'de> Visitor<'de> for ValueVisitor {
         formatter.write_str("a Value")
     }
 
-    #[inline]
     fn visit_seq<V>(self, mut visitor: V) -> Result<Value<'de>, V::Error>
     where
         V: SeqAccess<'de>,
@@ -449,7 +448,6 @@ pub(crate) struct SignatureSeed<'de> {
 }
 
 impl<'de> SignatureSeed<'de> {
-    #[inline]
     pub(crate) fn visit_array<V>(self, mut visitor: V) -> Result<Array<'de>, V::Error>
     where
         V: SeqAccess<'de>,
@@ -468,7 +466,6 @@ impl<'de> SignatureSeed<'de> {
         Ok(array)
     }
 
-    #[inline]
     pub(crate) fn visit_struct<V>(self, mut visitor: V) -> Result<Structure<'de>, V::Error>
     where
         V: SeqAccess<'de>,
@@ -556,7 +553,6 @@ macro_rules! value_seed_basic_method {
 
 macro_rules! value_seed_str_method {
     ($name:ident, $type:ty, $constructor:ident) => {
-        #[inline]
         fn $name<E>(self, value: $type) -> Result<Value<'de>, E>
         where
             E: serde::de::Error,
@@ -601,7 +597,6 @@ where
     value_seed_basic_method!(visit_u64, u64);
     value_seed_basic_method!(visit_f64, f64);
 
-    #[inline]
     fn visit_i32<E>(self, value: i32) -> Result<Value<'de>, E>
     where
         E: serde::de::Error,
@@ -630,7 +625,6 @@ where
 
     value_seed_str_method!(visit_borrowed_str, &'de str, from_str_unchecked);
 
-    #[inline]
     fn visit_seq<V>(self, visitor: V) -> Result<Value<'de>, V::Error>
     where
         V: SeqAccess<'de>,
@@ -652,7 +646,6 @@ where
         }
     }
 
-    #[inline]
     fn visit_map<V>(self, mut visitor: V) -> Result<Value<'de>, V::Error>
     where
         V: MapAccess<'de>,
@@ -684,7 +677,6 @@ where
         Ok(Value::Dict(dict))
     }
 
-    #[inline]
     #[cfg(feature = "gvariant")]
     fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
