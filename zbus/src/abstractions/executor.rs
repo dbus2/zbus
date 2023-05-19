@@ -156,6 +156,41 @@ impl<T> Task<T> {
     }
 }
 
+impl<T> Task<T>
+where
+    T: Send + 'static,
+{
+    /// Launch the given blocking function in a task.
+    #[allow(unused)]
+    pub(crate) fn spawn_blocking<F>(f: F, #[allow(unused)] name: &str) -> Self
+    where
+        F: FnOnce() -> T + Send + 'static,
+    {
+        #[cfg(not(feature = "tokio"))]
+        {
+            Self(Some(blocking::unblock(f)))
+        }
+
+        #[cfg(feature = "tokio")]
+        {
+            #[cfg(tokio_unstable)]
+            {
+                Self(Some(
+                    tokio::task::Builder::new()
+                        .name(name)
+                        .spawn_blocking(f)
+                        // SAFETY: Looking at the code, this call always returns an `Ok`.
+                        .unwrap(),
+                ))
+            }
+            #[cfg(not(tokio_unstable))]
+            {
+                Self(Some(tokio::task::spawn_blocking(f)))
+            }
+        }
+    }
+}
+
 impl<T> Drop for Task<T> {
     fn drop(&mut self) {
         #[cfg(feature = "tokio")]
