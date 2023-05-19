@@ -644,18 +644,13 @@ fn gen_proxy_method_call(
 /// Standard annotation `org.freedesktop.DBus.Property.EmitsChangedSignal`.
 ///
 /// See <https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format>.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum PropertyEmitsChangedSignal {
+    #[default]
     True,
     Invalidates,
     Const,
     False,
-}
-
-impl Default for PropertyEmitsChangedSignal {
-    fn default() -> Self {
-        PropertyEmitsChangedSignal::True
-    }
 }
 
 impl PropertyEmitsChangedSignal {
