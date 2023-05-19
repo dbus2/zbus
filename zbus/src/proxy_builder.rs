@@ -7,7 +7,7 @@ use zvariant::{ObjectPath, Str};
 use crate::{Connection, Error, Proxy, ProxyInner, Result};
 
 /// The properties caching mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum CacheProperties {
     /// Cache properties. The properties will be cached upfront as part of the proxy
@@ -16,13 +16,8 @@ pub enum CacheProperties {
     /// Don't cache properties.
     No,
     /// Cache properties but only populate the cache on the first read of a property (default).
+    #[default]
     Lazily,
-}
-
-impl Default for CacheProperties {
-    fn default() -> Self {
-        CacheProperties::Lazily
-    }
 }
 
 /// Builder for proxies.
