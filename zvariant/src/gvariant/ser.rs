@@ -264,7 +264,7 @@ where
 
         let key_start = if self.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
             let key_signature = Signature::from_str_unchecked(&element_signature[1..2]);
-            (!crate::utils::is_fixed_sized_signature(&key_signature)?).then(|| 0)
+            (!crate::utils::is_fixed_sized_signature(&key_signature)?).then_some(0)
         } else {
             None
         };
