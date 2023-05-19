@@ -26,8 +26,6 @@ quote = "1.0.21"
 proc-macro-crate = "1.2.1"
 regex = "1.6.0"
 zvariant_utils = { path = "../zvariant_utils", version = "=1.0.1" }
-# Lock it until we can bump MSRV to 1.64.
-winnow = "=0.4.1"
 
 [dev-dependencies]
 zbus = { path = "../zbus" }
