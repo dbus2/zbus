@@ -296,7 +296,8 @@ impl<'a> ConnectionBuilder<'a> {
         let executor = Executor::new();
         #[cfg(not(feature = "tokio"))]
         let internal_executor = self.internal_executor;
-        let conn = executor.run(self.build_(executor.clone())).await?;
+        // Box the future as it's large and can cause stack overflow.
+        let conn = Box::pin(executor.run(self.build_(executor.clone()))).await?;
 
         #[cfg(not(feature = "tokio"))]
         start_internal_executor(&executor, internal_executor)?;
