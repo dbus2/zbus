@@ -51,7 +51,8 @@ impl MessageStream {
     ///
     /// You can optionally also request the capacity of the underlying message queue through
     /// `max_queued`. If specified, the capacity is guaranteed to be at least `max_queued`. If not
-    /// specified, the default of 64 is assumed.
+    /// specified, the default of 64 is assumed. The capacity can also be changed later through
+    /// [`MessageStream::set_max_queued`].
     ///
     /// # Example
     ///
@@ -146,6 +147,21 @@ impl MessageStream {
     /// The associated match rule, if any.
     pub fn match_rule(&self) -> Option<MatchRule<'_>> {
         self.inner.match_rule.as_deref().cloned()
+    }
+
+    /// The maximum number of messages to queue for this stream.
+    pub fn max_queued(&self) -> usize {
+        self.inner.msg_receiver.capacity()
+    }
+
+    /// Set maximum number of messages to queue for this stream.
+    ///
+    /// After this call, the capacity is guaranteed to be at least `max_queued`.
+    pub fn set_max_queued(&mut self, max_queued: usize) {
+        if max_queued <= self.max_queued() {
+            return;
+        }
+        self.inner.msg_receiver.set_capacity(max_queued);
     }
 
     pub(crate) fn for_subscription_channel(
