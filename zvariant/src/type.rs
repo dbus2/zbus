@@ -228,7 +228,6 @@ macro_rules! tuple_impls {
             where
                 $($name: Type,)+
             {
-                #[inline]
                 fn signature() -> Signature<'static> {
                     let mut sig = String::with_capacity(255);
                     sig.push(STRUCT_SIG_START_CHAR);
@@ -272,7 +271,6 @@ impl<T, const N: usize> Type for [T; N]
 where
     T: Type,
 {
-    #[inline]
     #[allow(clippy::reversed_empty_ranges)]
     fn signature() -> Signature<'static> {
         let mut sig = String::with_capacity(255);

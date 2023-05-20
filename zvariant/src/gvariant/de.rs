@@ -53,7 +53,6 @@ where
 
 macro_rules! deserialize_basic {
     ($method:ident) => {
-        #[inline]
         fn $method<V>(self, visitor: V) -> Result<V::Value>
         where
             V: Visitor<'de>,
