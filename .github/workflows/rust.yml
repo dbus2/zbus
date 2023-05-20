@@ -46,7 +46,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
       - name: Catch common mistakes and unwrap calls
-        run: cargo clippy -- -D warnings
+        run: cargo clippy -- -D warnings -D clippy::large_futures
 
   linux_test:
     runs-on: ubuntu-latest
