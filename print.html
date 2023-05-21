@@ -246,9 +246,8 @@ The official dbus installation method via <code>Homebrew</code> provides a sessi
 utilizing macOS <code>LaunchAgents</code> feature. By default, zbus consumes an address for a bus connection that
 is provided via <code>launchctl getenv DBUS_LAUNCHD_SESSION_BUS_SOCKET</code> command output.</p>
 <h2 id="using-a-custom-bus-address"><a class="header" href="#using-a-custom-bus-address">Using a custom bus address</a></h2>
-<p>You may also specify a custom bus with <code>Connection::new_for_address()</code> which takes a D-Bus address
-<a href="https://dbus.freedesktop.org/doc/dbus-specification.html#addresses">as specified in the
-specification</a>.</p>
+<p>You may also specify a custom bus with <a href="https://docs.rs/zbus/3.13.1/zbus/struct.ConnectionBuilder.html#method.address"><code>ConnectionBuilder::address</code></a> which takes a D-Bus address
+<a href="https://dbus.freedesktop.org/doc/dbus-specification.html#addresses">as specified in the specification</a>.</p>
 <h2 id="peer-to-peer-connection"><a class="header" href="#peer-to-peer-connection">Peer to peer connection</a></h2>
 <p>Peer-to-peer connections are bus-less<sup class="footnote-reference"><a href="#bus-less">1</a></sup>, and the initial handshake protocol is a bit
 different. There is the notion of client &amp; server endpoints, but that distinction doesn’t matter
