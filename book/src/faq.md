@@ -88,6 +88,28 @@ involve converting the methods in question to take `&self` argument instead of `
 
 Please consult [`MessageStream`] documentation for details.
 
+## Why aren't property values updating for my service that doesn't notify changes?
+
+A common issue might arise when using a zbus proxy is that your proxy's property values aren't 
+updating. This is due to zbus' default caching policy, which updates the value of a property only
+when a change is signaled, primarily to minimize latency and optimize client request performance.
+By default, if your service does not emit change notifications, the property values will not
+update accordingly. 
+
+However, you can disabling caching for specific properties:
+
+- Add the `#[dbus_proxy(property(emits_changed_signal = "false"))]` annotation to the property
+for which you desire to disable caching on.
+
+- Use `ProxyBuilder` to build your proxy instance and use `ProxyBuilder::uncached_properties` method
+to list all properties you wish to disable caching for.
+
+- In order to disable caching for either type of proxy use the `ProxyBuilder::cache_properites` 
+method.
+
+For more information about all the possible values for `emits_changed_signal` refer
+ to [`dbus_proxy`](https://docs.rs/zbus/3.13.1/zbus/attr.dbus_proxy.html) documentation.
+
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
 [`Type`]: https://docs.rs/zvariant/3.1.0/zvariant/derive.Type.html
 [`SerializeDict`]: https://docs.rs/zvariant/3.0.0/zvariant/derive.SerializeDict.html
