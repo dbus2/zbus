@@ -4,8 +4,7 @@ use byteorder::{ByteOrder, WriteBytesExt, LE};
 // Used internally for GVariant encoding and decoding.
 //
 // GVariant containers keeps framing offsets at the end and size of these offsets is dependent on
-// the size of the container (which includes offsets themselves.
-
+// the size of the container (which includes offsets themselves).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(usize)]
 pub(crate) enum FramingOffsetSize {
