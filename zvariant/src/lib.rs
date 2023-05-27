@@ -281,15 +281,21 @@ mod tests {
         assert!(decoded == v, "invalid decoding using `from_slice`");
     }
 
+    /// Decode with gvariant and compare with expected value (if provided).
     #[cfg(feature = "gvariant")]
-    fn decode_with_gvariant<B, T>(encoded: B) -> T
+    fn decode_with_gvariant<B, T>(encoded: B, expected_value: Option<T>) -> T
     where
         B: AsRef<[u8]> + Send + 'static,
-        T: glib::variant::FromVariant,
+        T: glib::variant::FromVariant + std::fmt::Debug + PartialEq,
     {
         let bytes = Bytes::from_owned(encoded);
         let gv = Variant::from_bytes::<T>(&bytes);
-        gv.get::<T>().unwrap()
+        let v = gv.get::<T>().unwrap();
+        if let Some(expected_value) = expected_value {
+            assert_eq!(v, expected_value);
+        }
+
+        v
     }
 
     // All fixed size types have the same encoding in DBus and GVariant formats.
@@ -302,7 +308,7 @@ mod tests {
         assert_eq!(encoded.len(), 1);
         #[cfg(feature = "gvariant")]
         {
-            assert_eq!(decode_with_gvariant::<_, u8>(encoded), 77u8);
+            decode_with_gvariant::<_, u8>(encoded, Some(77u8));
             basic_type_test!(LE, GVariant, 77_u8, 1, u8, 1, U8, 3);
         }
     }
@@ -328,7 +334,7 @@ mod tests {
         assert_eq!(encoded.len(), 2);
         #[cfg(feature = "gvariant")]
         {
-            assert_eq!(decode_with_gvariant::<_, u16>(encoded), 0xBAAB_u16);
+            decode_with_gvariant::<_, u16>(encoded, Some(0xBAAB_u16));
             basic_type_test!(BE, GVariant, 0xABBA_u16, 2, u16, 2, U16, 4);
         }
     }
@@ -339,7 +345,7 @@ mod tests {
         assert_eq!(LE::read_i16(&encoded), 0x50F5_i16);
         #[cfg(feature = "gvariant")]
         {
-            assert_eq!(decode_with_gvariant::<_, i16>(encoded), 0x50F5_i16);
+            decode_with_gvariant::<_, i16>(encoded, Some(0x50F5_i16));
             basic_type_test!(BE, GVariant, -0xAB0_i16, 2, i16, 2, I16, 4);
         }
     }
@@ -350,7 +356,7 @@ mod tests {
         assert_eq!(encoded.len(), 4);
         #[cfg(feature = "gvariant")]
         {
-            assert_eq!(decode_with_gvariant::<_, u32>(encoded), 0xBAAB_BAAB_u32);
+            decode_with_gvariant::<_, u32>(encoded, Some(0xBAAB_BAAB_u32));
             basic_type_test!(BE, GVariant, 0xABBA_ABBA_u32, 4, u32, 4, U32, 6);
         }
     }
@@ -361,7 +367,7 @@ mod tests {
         assert_eq!(LE::read_i32(&encoded), 0x5055_44F5_i32);
         #[cfg(feature = "gvariant")]
         {
-            assert_eq!(decode_with_gvariant::<_, i32>(encoded), 0x5055_44F5_i32);
+            decode_with_gvariant::<_, i32>(encoded, Some(0x5055_44F5_i32));
             basic_type_test!(BE, GVariant, -0xABBA_AB0_i32, 4, i32, 4, I32, 6);
         }
     }
@@ -374,10 +380,7 @@ mod tests {
         assert_eq!(LE::read_i64(&encoded), 0x5055_4455_4455_44F5_i64);
         #[cfg(feature = "gvariant")]
         {
-            assert_eq!(
-                decode_with_gvariant::<_, i64>(encoded),
-                0x5055_4455_4455_44F5_i64
-            );
+            decode_with_gvariant::<_, i64>(encoded, Some(0x5055_4455_4455_44F5_i64));
             basic_type_test!(BE, GVariant, -0xABBA_ABBA_ABBA_AB0_i64, 8, i64, 8, I64, 10);
         }
     }
@@ -389,7 +392,7 @@ mod tests {
         #[cfg(feature = "gvariant")]
         {
             assert!(
-                (decode_with_gvariant::<_, f64>(encoded) - -5.759340900185448e-128).abs()
+                (decode_with_gvariant::<_, f64>(encoded, None) - -5.759340900185448e-128).abs()
                     < f64::EPSILON
             );
             f64_type_test(EncodingFormat::GVariant, 99999.99999_f64, 8, 10);
@@ -406,7 +409,7 @@ mod tests {
         #[cfg(feature = "gvariant")]
         {
             let encoded = basic_type_test!(LE, GVariant, string, 12, String, 1);
-            assert_eq!(decode_with_gvariant::<_, String>(encoded), "hello world");
+            decode_with_gvariant::<_, String>(encoded, Some(String::from("hello world")));
         }
 
         let string = "hello world";
@@ -479,7 +482,7 @@ mod tests {
         #[cfg(feature = "gvariant")]
         {
             let encoded = basic_type_test!(LE, GVariant, sig, 4, Signature<'_>, 1);
-            assert_eq!(decode_with_gvariant::<_, String>(encoded), "yys");
+            decode_with_gvariant::<_, String>(encoded, Some(String::from("yys")));
         }
 
         // As Value
@@ -508,7 +511,7 @@ mod tests {
         #[cfg(feature = "gvariant")]
         {
             let encoded = basic_type_test!(LE, GVariant, o, 13, ObjectPath<'_>, 1);
-            assert_eq!(decode_with_gvariant::<_, String>(encoded), "/hello/world");
+            decode_with_gvariant::<_, String>(encoded, Some(String::from("/hello/world")));
         }
 
         // As Value
