@@ -117,7 +117,7 @@ mod tests {
 
     #[cfg(feature = "arrayvec")]
     use arrayvec::{ArrayString, ArrayVec};
-    use byteorder::{self, ByteOrder, BE, LE};
+    use byteorder::{self, ByteOrder, NativeEndian, BE, LE};
     #[cfg(feature = "arrayvec")]
     use std::str::FromStr;
 
@@ -232,7 +232,7 @@ mod tests {
         expected_value_len: usize,
     ) -> Vec<u8> {
         // Lie that we're starting at byte 1 in the overall message to test padding
-        let ctxt = Context::<BE>::new(format, 1);
+        let ctxt = Context::<NativeEndian>::new(format, 1);
         let encoded = to_bytes(ctxt, &value).unwrap();
         let padding = crate::padding_for_n_bytes(1, 8);
         assert_eq!(
@@ -248,7 +248,7 @@ mod tests {
         );
 
         // Now encode w/o padding
-        let ctxt = Context::<BE>::new(format, 0);
+        let ctxt = Context::<NativeEndian>::new(format, 0);
         let encoded = to_bytes(ctxt, &value).unwrap();
         assert_eq!(
             encoded.len(),
@@ -298,6 +298,30 @@ mod tests {
         v
     }
 
+    /// Decode a number with gvariant and compare with expected value (if provided).
+    ///
+    /// `expected_value` is a tuple of (little endian value, big endian value).
+    #[cfg(feature = "gvariant")]
+    fn decode_num_with_gvariant<B, T>(encoded: B, expected_value: Option<(T, T)>) -> T
+    where
+        B: AsRef<[u8]> + Send + 'static,
+        T: glib::variant::FromVariant + std::fmt::Debug + PartialEq,
+    {
+        #[allow(unused_variables)]
+        let expected_value = expected_value.map(|(le, be)| {
+            #[cfg(target_endian = "little")]
+            {
+                le
+            }
+
+            #[cfg(target_endian = "big")]
+            {
+                be
+            }
+        });
+        decode_with_gvariant(encoded, expected_value)
+    }
+
     // All fixed size types have the same encoding in DBus and GVariant formats.
     //
     // NB: Value (i-e VARIANT type) isn't a fixed size type.
@@ -308,7 +332,7 @@ mod tests {
         assert_eq!(encoded.len(), 1);
         #[cfg(feature = "gvariant")]
         {
-            decode_with_gvariant::<_, u8>(encoded, Some(77u8));
+            decode_num_with_gvariant::<_, u8>(encoded, Some((77u8, 77u8)));
             basic_type_test!(LE, GVariant, 77_u8, 1, u8, 1, U8, 3);
         }
     }
@@ -334,7 +358,7 @@ mod tests {
         assert_eq!(encoded.len(), 2);
         #[cfg(feature = "gvariant")]
         {
-            decode_with_gvariant::<_, u16>(encoded, Some(0xBAAB_u16));
+            decode_num_with_gvariant::<_, u16>(encoded, Some((0xBAAB_u16, 0xABBA_u16)));
             basic_type_test!(BE, GVariant, 0xABBA_u16, 2, u16, 2, U16, 4);
         }
     }
@@ -345,7 +369,7 @@ mod tests {
         assert_eq!(LE::read_i16(&encoded), 0x50F5_i16);
         #[cfg(feature = "gvariant")]
         {
-            decode_with_gvariant::<_, i16>(encoded, Some(0x50F5_i16));
+            decode_num_with_gvariant::<_, i16>(encoded, Some((0x50F5_i16, -0xAB0_i16)));
             basic_type_test!(BE, GVariant, -0xAB0_i16, 2, i16, 2, I16, 4);
         }
     }
@@ -356,7 +380,7 @@ mod tests {
         assert_eq!(encoded.len(), 4);
         #[cfg(feature = "gvariant")]
         {
-            decode_with_gvariant::<_, u32>(encoded, Some(0xBAAB_BAAB_u32));
+            decode_num_with_gvariant::<_, u32>(encoded, Some((0xBAAB_BAAB_u32, 0xABBA_ABBA_u32)));
             basic_type_test!(BE, GVariant, 0xABBA_ABBA_u32, 4, u32, 4, U32, 6);
         }
     }
@@ -367,7 +391,7 @@ mod tests {
         assert_eq!(LE::read_i32(&encoded), 0x5055_44F5_i32);
         #[cfg(feature = "gvariant")]
         {
-            decode_with_gvariant::<_, i32>(encoded, Some(0x5055_44F5_i32));
+            decode_num_with_gvariant::<_, i32>(encoded, Some((0x5055_44F5_i32, -0xABBA_AB0_i32)));
             basic_type_test!(BE, GVariant, -0xABBA_AB0_i32, 4, i32, 4, I32, 6);
         }
     }
@@ -380,7 +404,10 @@ mod tests {
         assert_eq!(LE::read_i64(&encoded), 0x5055_4455_4455_44F5_i64);
         #[cfg(feature = "gvariant")]
         {
-            decode_with_gvariant::<_, i64>(encoded, Some(0x5055_4455_4455_44F5_i64));
+            decode_num_with_gvariant::<_, i64>(
+                encoded,
+                Some((0x5055_4455_4455_44F5_i64, -0xABBA_ABBA_ABBA_AB0_i64)),
+            );
             basic_type_test!(BE, GVariant, -0xABBA_ABBA_ABBA_AB0_i64, 8, i64, 8, I64, 10);
         }
     }
@@ -388,11 +415,11 @@ mod tests {
     #[test]
     fn f64_value() {
         let encoded = f64_type_test(EncodingFormat::DBus, 99999.99999_f64, 8, 16);
-        assert!((LE::read_f64(&encoded) - -5.759340900185448e-128).abs() < f64::EPSILON);
+        assert!((NativeEndian::read_f64(&encoded) - 99999.99999_f64).abs() < f64::EPSILON);
         #[cfg(feature = "gvariant")]
         {
             assert!(
-                (decode_with_gvariant::<_, f64>(encoded, None) - -5.759340900185448e-128).abs()
+                (decode_with_gvariant::<_, f64>(encoded, None) - 99999.99999_f64).abs()
                     < f64::EPSILON
             );
             f64_type_test(EncodingFormat::GVariant, 99999.99999_f64, 8, 10);
@@ -1035,7 +1062,7 @@ mod tests {
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
-            let ctxt = Context::<LE>::new_gvariant(0);
+            let ctxt = Context::<NativeEndian>::new_gvariant(0);
             let gv_encoded = to_bytes(ctxt, &map).unwrap();
             assert_eq!(gv_encoded.len(), 30);
             let map: HashMap<i64, &str> = from_slice(&gv_encoded, ctxt).unwrap();
@@ -1078,7 +1105,7 @@ mod tests {
             let mut map: HashMap<&str, &str> = HashMap::new();
             map.insert("hi", "1234");
             map.insert("world", "561");
-            let ctxt = Context::<LE>::new_gvariant(0);
+            let ctxt = Context::<NativeEndian>::new_gvariant(0);
             let gv_encoded = to_bytes(ctxt, &map).unwrap();
             assert_eq!(gv_encoded.len(), 22);
             let map: HashMap<&str, &str> = from_slice(&gv_encoded, ctxt).unwrap();
@@ -1568,7 +1595,7 @@ mod tests {
     #[test]
     #[cfg(feature = "gvariant")]
     fn option_value() {
-        let ctxt = Context::<LE>::new_gvariant(0);
+        let ctxt = Context::<NativeEndian>::new_gvariant(0);
 
         // First a Some fixed-sized value
         let mn = Some(16i16);
