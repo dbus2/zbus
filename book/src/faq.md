@@ -89,7 +89,7 @@ involve converting the methods in question to take `&self` argument instead of `
 Please consult [`MessageStream`] documentation for details.
 
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
-[`Type`]: https://docs.rs/zvariant/3.1.0/zvariant/derive.Type.html
-[`SerializeDict`]: https://docs.rs/zvariant/3.0.0/zvariant/derive.SerializeDict.html
-[`DeserializeDict`]: https://docs.rs/zvariant/3.0.0/zvariant/derive.DeserializeDict.html
-[`MessageStream`]: https://docs.rs/zbus/2.3.2/zbus/struct.MessageStream.html
+[`Type`]: https://docs.rs/zvariant/3/zvariant/derive.Type.html
+[`SerializeDict`]: https://docs.rs/zvariant/3/zvariant/derive.SerializeDict.html
+[`DeserializeDict`]: https://docs.rs/zvariant/3/zvariant/derive.DeserializeDict.html
+[`MessageStream`]: https://docs.rs/zbus/3/zbus/struct.MessageStream.html

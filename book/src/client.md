@@ -566,7 +566,7 @@ There you have it, a Rust-friendly binding for your D-Bus service!
 [`pkg-config`]: https://www.freedesktop.org/wiki/Software/pkg-config/
 [cob]: blocking.html
 [`Stream`]: https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html
-[`Value`]: https://docs.rs/zvariant/latest/zvariant/derive.Value.html
-[`OwnedValue`]: https://docs.rs/zvariant/latest/zvariant/derive.OwnedValue.html
+[`Value`]: https://docs.rs/zvariant/3/zvariant/derive.Value.html
+[`OwnedValue`]: https://docs.rs/zvariant/3/zvariant/derive.OwnedValue.html
 
 [^busctl]: `busctl` is part of [`systemd`](https://www.freedesktop.org/wiki/Software/systemd/).

@@ -85,6 +85,34 @@ impl<'a> ConnectionBuilder<'a> {
 
     /// Create a builder for connection that will use the given [D-Bus bus address].
     ///
+    /// # Example
+    ///
+    /// Here is an example of connecting to an IBus service:
+    ///
+    /// ```no_run
+    ///# use std::error::Error;
+    ///# use zbus::ConnectionBuilder;
+    ///# use zbus::block_on;
+    ///#
+    ///# block_on(async {
+    /// let addr = "unix:\
+    ///     path=/home/zeenix/.cache/ibus/dbus-ET0Xzrk9,\
+    ///     guid=fdd08e811a6c7ebe1fef0d9e647230da";
+    /// let conn = ConnectionBuilder::address(addr)?
+    ///     .build()
+    ///     .await?;
+    ///
+    /// // Do something useful with `conn`..
+    ///#     drop(conn);
+    ///#     Ok::<(), zbus::Error>(())
+    ///# }).unwrap();
+    ///#
+    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// ```
+    ///
+    /// **Note:** The IBus address is different for each session. You can find the address for your
+    /// current session using `ibus address` command.
+    ///
     /// [D-Bus bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn address<A>(address: A) -> Result<Self>
     where
