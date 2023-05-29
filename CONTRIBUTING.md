@@ -27,10 +27,10 @@ Same rules apply here as for bug reports and feature requests. Plus:
   more information, including the rationale.
 * Please try your best to follow [these guidelines](https://wiki.gnome.org/Git/CommitMessages) for
   commit messages.
-* Add details to each commit about the changes it contains. MR description is for summarizing the
-  overall changes in the MR, while commit logs are for describing the specific changes of the
+* Add details to each commit about the changes it contains. PR description is for summarizing the
+  overall changes in the PR, while commit logs are for describing the specific changes of the
   commit in question.
-* When addressesing review comments, fix the existing commits in the MR (rather than adding
+* When addressesing review comments, fix the existing commits in the PR (rather than adding
   additional commits) and force push (as in `git push -f`) to your branch. You may find
   [`git-absorb`](https://github.com/tummychow/git-absorb) and
   [`git-revise`](https://github.com/mystor/git-revise) extremely useful, especially if you're not
