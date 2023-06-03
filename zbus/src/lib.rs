@@ -50,6 +50,9 @@ pub use guid::*;
 mod message;
 pub use message::*;
 
+mod message_builder;
+pub use message_builder::*;
+
 mod message_header;
 pub use message_header::*;
 
