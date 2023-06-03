@@ -335,7 +335,7 @@ impl<'a> ConnectionBuilder<'a> {
 
     async fn build_(self, executor: Executor<'static>) -> Result<Connection> {
         let stream = match self.target {
-            #[cfg(all(not(feature = "tokio")))]
+            #[cfg(not(feature = "tokio"))]
             Target::UnixStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
             #[cfg(all(unix, feature = "tokio"))]
             Target::UnixStream(stream) => Box::new(stream) as Box<dyn Socket>,

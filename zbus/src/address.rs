@@ -1,6 +1,6 @@
 #[cfg(target_os = "macos")]
 use crate::process::run;
-#[cfg(all(windows))]
+#[cfg(windows)]
 use crate::win32::windows_autolaunch_bus_address;
 use crate::{Error, Result};
 #[cfg(not(feature = "tokio"))]
@@ -12,7 +12,7 @@ use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 use std::{collections::HashMap, convert::TryFrom, env, str::FromStr};
-#[cfg(all(feature = "tokio"))]
+#[cfg(feature = "tokio")]
 use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
@@ -176,7 +176,7 @@ pub(crate) enum Stream {
     Vsock(Async<VsockStream>),
 }
 
-#[cfg(all(feature = "tokio"))]
+#[cfg(feature = "tokio")]
 #[derive(Debug)]
 pub(crate) enum Stream {
     #[cfg(unix)]
@@ -220,7 +220,7 @@ async fn connect_tcp(addr: TcpAddress) -> Result<Async<TcpStream>> {
     Err(last_err)
 }
 
-#[cfg(all(feature = "tokio"))]
+#[cfg(feature = "tokio")]
 async fn connect_tcp(addr: TcpAddress) -> Result<TcpStream> {
     TcpStream::connect((addr.host(), addr.port()))
         .await
@@ -275,7 +275,7 @@ impl Address {
                     }
                 }
 
-                #[cfg(all(feature = "tokio"))]
+                #[cfg(feature = "tokio")]
                 {
                     #[cfg(unix)]
                     {
@@ -333,7 +333,7 @@ impl Address {
                     }
                 }
 
-                #[cfg(all(feature = "tokio"))]
+                #[cfg(feature = "tokio")]
                 {
                     let nonce = tokio::fs::read(nonce_file).await?;
                     tokio::io::AsyncWriteExt::write_all(&mut stream, &nonce).await?;
