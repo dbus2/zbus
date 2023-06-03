@@ -342,6 +342,12 @@ impl<'a> MessageBuilder<'a> {
     }
 }
 
+impl<'m> From<MessageHeader<'m>> for MessageBuilder<'m> {
+    fn from(header: MessageHeader<'m>) -> Self {
+        Self { header }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::MessageBuilder;
