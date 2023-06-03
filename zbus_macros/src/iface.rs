@@ -105,7 +105,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         };
 
     for method in &mut input.items {
-        let mut method = match method {
+        let method = match method {
             ImplItem::Method(m) => m,
             _ => continue,
         };
