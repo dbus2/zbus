@@ -42,6 +42,7 @@ impl<'m> MessageFields<'m> {
         self.add(field);
         None
     }
+
     /// Returns a slice with all the [`MessageField`] in the message.
     ///
     /// [`MessageField`]: enum.MessageField.html
