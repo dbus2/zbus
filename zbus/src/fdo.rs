@@ -562,6 +562,12 @@ impl ConnectionCredentials {
         self.unix_group_ids.as_ref()
     }
 
+    /// Same as [`ConnectionCredentials::unix_group_ids`], but consumes `self` and returns the group
+    /// IDs Vec.
+    pub fn into_unix_group_ids(self) -> Option<Vec<u32>> {
+        self.unix_group_ids
+    }
+
     /// The numeric process ID, on platforms that have this concept. On Unix, this is the process ID
     /// defined by POSIX.
     pub fn process_id(&self) -> Option<u32> {
@@ -573,6 +579,12 @@ impl ConnectionCredentials {
     /// "S-1-5-18` for the LOCAL_SYSTEM user.
     pub fn windows_sid(&self) -> Option<&String> {
         self.windows_sid.as_ref()
+    }
+
+    /// Same as [`ConnectionCredentials::windows_sid`], but consumes `self` and returns the SID
+    /// string.
+    pub fn into_windows_sid(self) -> Option<String> {
+        self.windows_sid
     }
 
     /// On Linux systems, the security label that would result from the SO_PEERSEC getsockopt call.
@@ -595,6 +607,12 @@ impl ConnectionCredentials {
     /// `unconfined`, `/usr/bin/firefox (enforce)` or `user1 (complain)`.
     pub fn linux_security_label(&self) -> Option<&Vec<u8>> {
         self.linux_security_label.as_ref()
+    }
+
+    /// Same as [`ConnectionCredentials::linux_security_label`], but consumes `self` and returns
+    /// the security label bytes.
+    pub fn into_linux_security_label(self) -> Option<Vec<u8>> {
+        self.linux_security_label
     }
 
     /// Set the numeric Unix user ID, as defined by POSIX.
