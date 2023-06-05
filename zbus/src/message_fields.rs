@@ -67,6 +67,20 @@ impl<'m> MessageFields<'m> {
     pub fn into_field(self, code: MessageFieldCode) -> Option<MessageField<'m>> {
         self.0.into_iter().find(|f| f.code() == code)
     }
+
+    /// Remove the field matching the `code`.
+    ///
+    /// Returns `true` if a field was found and removed, `false` otherwise.
+    pub(crate) fn remove(&mut self, code: MessageFieldCode) -> bool {
+        match self.0.iter().enumerate().find(|(_, f)| f.code() == code) {
+            Some((i, _)) => {
+                self.0.remove(i);
+
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 /// A byte range of a field in a Message, used in [`QuickMessageFields`].
