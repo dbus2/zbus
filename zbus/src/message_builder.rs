@@ -17,8 +17,9 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use crate::{
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature},
-    Error, Message, MessageField, MessageFields, MessageFlags, MessageHeader, MessagePrimaryHeader,
-    MessageSequence, MessageType, QuickMessageFields, Result, MAX_MESSAGE_SIZE,
+    Error, Message, MessageField, MessageFieldCode, MessageFields, MessageFlags, MessageHeader,
+    MessagePrimaryHeader, MessageSequence, MessageType, QuickMessageFields, Result,
+    MAX_MESSAGE_SIZE,
 };
 
 #[cfg(unix)]
@@ -343,7 +344,12 @@ impl<'a> MessageBuilder<'a> {
 }
 
 impl<'m> From<MessageHeader<'m>> for MessageBuilder<'m> {
-    fn from(header: MessageHeader<'m>) -> Self {
+    fn from(mut header: MessageHeader<'m>) -> Self {
+        // Signature and Fds are added by body* methods.
+        let fields = header.fields_mut();
+        fields.remove(MessageFieldCode::Signature);
+        fields.remove(MessageFieldCode::UnixFDs);
+
         Self { header }
     }
 }
