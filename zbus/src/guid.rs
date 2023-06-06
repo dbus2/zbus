@@ -6,7 +6,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use serde::{Deserialize, Serialize};
 use static_assertions::assert_impl_all;
+use zvariant::Type;
 
 /// A D-Bus server GUID.
 ///
@@ -16,7 +18,7 @@ use static_assertions::assert_impl_all;
 ///
 /// [UUIDs chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#uuids
 /// [TryFrom]: #impl-TryFrom%3C%26%27_%20str%3E
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Type, Serialize, Deserialize)]
 pub struct Guid(String);
 
 assert_impl_all!(Guid: Send, Sync, Unpin);
