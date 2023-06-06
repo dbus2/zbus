@@ -18,7 +18,7 @@ use zvariant::Type;
 ///
 /// [UUIDs chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#uuids
 /// [TryFrom]: #impl-TryFrom%3C%26%27_%20str%3E
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Type, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Type, Serialize)]
 pub struct Guid(String);
 
 assert_impl_all!(Guid: Send, Sync, Unpin);
@@ -84,6 +84,16 @@ impl FromStr for Guid {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.try_into()
+    }
+}
+
+impl<'de> Deserialize<'de> for Guid {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        String::deserialize(deserializer)
+            .and_then(|s| s.try_into().map_err(serde::de::Error::custom))
     }
 }
 
