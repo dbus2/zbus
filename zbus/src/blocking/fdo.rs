@@ -17,6 +17,7 @@ use crate::{
         ConnectionCredentials, ManagedObjects, ReleaseNameReply, RequestNameFlags,
         RequestNameReply, Result,
     },
+    Guid,
 };
 
 gen_introspectable_proxy!(false, true);
