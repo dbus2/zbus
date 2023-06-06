@@ -1,7 +1,9 @@
 use std::{
+    borrow::{Borrow, BorrowMut},
     convert::{TryFrom, TryInto},
     fmt,
     iter::repeat_with,
+    ops::{Deref, DerefMut},
     str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -99,6 +101,50 @@ impl<'de> Deserialize<'de> for Guid {
 
 fn valid_guid(value: &str) -> bool {
     value.as_bytes().len() == 32 && value.chars().all(|c| char::is_ascii_hexdigit(&c))
+}
+
+impl From<Guid> for String {
+    fn from(guid: Guid) -> Self {
+        guid.0
+    }
+}
+
+impl Deref for Guid {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl DerefMut for Guid {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl AsRef<str> for Guid {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsMut<str> for Guid {
+    fn as_mut(&mut self) -> &mut str {
+        &mut self.0
+    }
+}
+
+impl Borrow<str> for Guid {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl BorrowMut<str> for Guid {
+    fn borrow_mut(&mut self) -> &mut str {
+        &mut self.0
+    }
 }
 
 #[cfg(test)]
