@@ -59,10 +59,22 @@ impl TryFrom<&str> for Guid {
     ///
     /// [`Error::InvalidGUID`]: enum.Error.html#variant.InvalidGUID
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        if value.as_bytes().len() != 32 || !value.chars().all(|c| char::is_ascii_hexdigit(&c)) {
+        if !valid_guid(value) {
             Err(crate::Error::InvalidGUID)
         } else {
             Ok(Guid(value.to_string()))
+        }
+    }
+}
+
+impl TryFrom<String> for Guid {
+    type Error = crate::Error;
+
+    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
+        if !valid_guid(&value) {
+            Err(crate::Error::InvalidGUID)
+        } else {
+            Ok(Guid(value))
         }
     }
 }
@@ -73,6 +85,10 @@ impl FromStr for Guid {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.try_into()
     }
+}
+
+fn valid_guid(value: &str) -> bool {
+    value.as_bytes().len() == 32 && value.chars().all(|c| char::is_ascii_hexdigit(&c))
 }
 
 #[cfg(test)]
