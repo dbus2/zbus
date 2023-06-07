@@ -1,7 +1,9 @@
 use std::{
+    borrow::{Borrow, BorrowMut},
     convert::{TryFrom, TryInto},
     fmt,
     iter::repeat_with,
+    ops::{Deref, DerefMut},
     str::FromStr,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -18,7 +20,7 @@ use zvariant::Type;
 ///
 /// [UUIDs chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#uuids
 /// [TryFrom]: #impl-TryFrom%3C%26%27_%20str%3E
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Type, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Type, Serialize)]
 pub struct Guid(String);
 
 assert_impl_all!(Guid: Send, Sync, Unpin);
@@ -59,10 +61,22 @@ impl TryFrom<&str> for Guid {
     ///
     /// [`Error::InvalidGUID`]: enum.Error.html#variant.InvalidGUID
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        if value.as_bytes().len() != 32 || !value.chars().all(|c| char::is_ascii_hexdigit(&c)) {
+        if !valid_guid(value) {
             Err(crate::Error::InvalidGUID)
         } else {
             Ok(Guid(value.to_string()))
+        }
+    }
+}
+
+impl TryFrom<String> for Guid {
+    type Error = crate::Error;
+
+    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
+        if !valid_guid(&value) {
+            Err(crate::Error::InvalidGUID)
+        } else {
+            Ok(Guid(value))
         }
     }
 }
@@ -72,6 +86,64 @@ impl FromStr for Guid {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.try_into()
+    }
+}
+
+impl<'de> Deserialize<'de> for Guid {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        String::deserialize(deserializer)
+            .and_then(|s| s.try_into().map_err(serde::de::Error::custom))
+    }
+}
+
+fn valid_guid(value: &str) -> bool {
+    value.as_bytes().len() == 32 && value.chars().all(|c| char::is_ascii_hexdigit(&c))
+}
+
+impl From<Guid> for String {
+    fn from(guid: Guid) -> Self {
+        guid.0
+    }
+}
+
+impl Deref for Guid {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl DerefMut for Guid {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl AsRef<str> for Guid {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsMut<str> for Guid {
+    fn as_mut(&mut self) -> &mut str {
+        &mut self.0
+    }
+}
+
+impl Borrow<str> for Guid {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl BorrowMut<str> for Guid {
+    fn borrow_mut(&mut self) -> &mut str {
+        &mut self.0
     }
 }
 

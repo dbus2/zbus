@@ -16,7 +16,9 @@ use zvariant::{
     DeserializeDict, ObjectPath, Optional, OwnedObjectPath, OwnedValue, SerializeDict, Type, Value,
 };
 
-use crate::{dbus_interface, dbus_proxy, DBusError, MessageHeader, ObjectServer, SignalContext};
+use crate::{
+    dbus_interface, dbus_proxy, DBusError, Guid, MessageHeader, ObjectServer, SignalContext,
+};
 
 #[rustfmt::skip]
 macro_rules! gen_introspectable_proxy {
@@ -702,7 +704,7 @@ macro_rules! gen_dbus_proxy {
             fn get_connection_unix_user(&self, bus_name: BusName<'_>) -> Result<u32>;
 
             /// Gets the unique ID of the bus.
-            fn get_id(&self) -> Result<String>;
+            fn get_id(&self) -> Result<Guid>;
 
             /// Returns the unique connection name of the primary owner of the name given.
             fn get_name_owner(&self, name: BusName<'_>) -> Result<OwnedUniqueName>;
