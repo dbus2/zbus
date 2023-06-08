@@ -1,3 +1,5 @@
+use zbus_names::BusName;
+
 use crate::{zvariant::ObjectPath, Connection, Error, Result};
 use std::convert::TryInto;
 
@@ -11,6 +13,7 @@ use std::convert::TryInto;
 pub struct SignalContext<'s> {
     conn: Connection,
     path: ObjectPath<'s>,
+    destination: Option<BusName<'s>>,
 }
 
 impl<'s> SignalContext<'s> {
@@ -24,13 +27,29 @@ impl<'s> SignalContext<'s> {
             .map(|p| Self {
                 conn: conn.clone(),
                 path: p,
+                destination: None,
             })
             .map_err(Into::into)
     }
 
     /// Create a new signal context for the given connection and object path.
     pub fn from_parts(conn: Connection, path: ObjectPath<'s>) -> Self {
-        Self { conn, path }
+        Self {
+            conn,
+            path,
+            destination: None,
+        }
+    }
+
+    /// Set the destination for the signal emission.
+    ///
+    /// Signals are typically broadcasted and thus don't have a destination. However, there are
+    /// cases where you need to unicast signals to specific peers. This method allows you to set the
+    /// destination for the signals emitted with this context.
+    pub fn set_destination(mut self, destination: BusName<'s>) -> Self {
+        self.destination = Some(destination);
+
+        self
     }
 
     /// Get a reference to the associated connection.
@@ -43,11 +62,17 @@ impl<'s> SignalContext<'s> {
         &self.path
     }
 
+    /// Get a reference to the associated destination (if any).
+    pub fn destination(&self) -> Option<&BusName<'s>> {
+        self.destination.as_ref()
+    }
+
     /// Creates an owned clone of `self`.
     pub fn to_owned(&self) -> SignalContext<'static> {
         SignalContext {
             conn: self.conn.clone(),
             path: self.path.to_owned(),
+            destination: self.destination.as_ref().map(|d| d.to_owned()),
         }
     }
 
@@ -56,6 +81,7 @@ impl<'s> SignalContext<'s> {
         SignalContext {
             conn: self.conn,
             path: self.path.into_owned(),
+            destination: self.destination.map(|d| d.into_owned()),
         }
     }
 }
