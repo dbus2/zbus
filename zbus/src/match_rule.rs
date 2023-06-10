@@ -1,3 +1,4 @@
+use core::panic;
 use std::{convert::TryFrom, ops::Deref};
 
 use serde::{de, Deserialize, Serialize};
@@ -31,6 +32,8 @@ use crate::{
 ///     .interface("org.freedesktop.DBus.Properties")?
 ///     .member("PropertiesChanged")?
 ///     .add_arg("org.zbus")?
+///     // Sometimes it's useful to match empty strings (null check).
+///     .add_arg("")?
 ///     .build();
 /// let rule_str = rule.to_string();
 /// assert_eq!(
@@ -39,7 +42,8 @@ use crate::{
 ///      sender='org.freedesktop.DBus',\
 ///      interface='org.freedesktop.DBus.Properties',\
 ///      member='PropertiesChanged',\
-///      arg0='org.zbus'",
+///      arg0='org.zbus',\
+///      arg1=''",
 /// );
 ///
 /// // Let's parse it back.
@@ -389,7 +393,7 @@ impl<'m> TryFrom<&'m str> for MatchRule<'m> {
         for component in components {
             let (key, value) = component.split_once('=').ok_or(Error::InvalidMatchRule)?;
             if key.is_empty()
-                || value.len() < 3
+                || value.len() < 2
                 || !value.starts_with('\'')
                 || !value.ends_with('\'')
             {
