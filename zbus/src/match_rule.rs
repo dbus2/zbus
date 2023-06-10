@@ -1,3 +1,4 @@
+use core::panic;
 use std::{convert::TryFrom, ops::Deref};
 
 use serde::{de, Deserialize, Serialize};
@@ -392,7 +393,7 @@ impl<'m> TryFrom<&'m str> for MatchRule<'m> {
         for component in components {
             let (key, value) = component.split_once('=').ok_or(Error::InvalidMatchRule)?;
             if key.is_empty()
-                || value.len() < 3
+                || value.len() < 2
                 || !value.starts_with('\'')
                 || !value.ends_with('\'')
             {
