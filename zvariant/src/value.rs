@@ -1,5 +1,9 @@
 use core::str;
-use std::{convert::TryFrom, marker::PhantomData};
+use std::{
+    convert::TryFrom,
+    fmt::{Display, Write},
+    marker::PhantomData,
+};
 
 use serde::{
     de::{
@@ -10,12 +14,13 @@ use serde::{
 };
 use static_assertions::assert_impl_all;
 
-#[cfg(feature = "gvariant")]
-use crate::Maybe;
 use crate::{
-    signature_parser::SignatureParser, utils::*, Array, Basic, Dict, DynamicType, ObjectPath,
-    OwnedValue, Signature, Str, Structure, StructureBuilder, Type,
+    array_display_fmt, dict_display_fmt, signature_parser::SignatureParser, structure_display_fmt,
+    utils::*, Array, Basic, Dict, DynamicType, ObjectPath, OwnedValue, Signature, Str, Structure,
+    StructureBuilder, Type,
 };
+#[cfg(feature = "gvariant")]
+use crate::{maybe_display_fmt, Maybe};
 
 #[cfg(unix)]
 use crate::Fd;
@@ -362,6 +367,110 @@ impl<'a> Value<'a> {
             <&T>::try_from(v).ok()
         } else {
             <&T>::try_from(self).ok()
+        }
+    }
+}
+
+impl Display for Value<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        value_display_fmt(self, f, true)
+    }
+}
+
+/// Implemented based on https://gitlab.gnome.org/GNOME/glib/-/blob/e1d47f0b0d0893ac9171e24cc7bf635495376546/glib/gvariant.c#L2213
+pub(crate) fn value_display_fmt(
+    value: &Value<'_>,
+    f: &mut std::fmt::Formatter<'_>,
+    type_annotate: bool,
+) -> std::fmt::Result {
+    match value {
+        Value::U8(num) => {
+            if type_annotate {
+                f.write_str("byte ")?;
+            }
+            write!(f, "0x{:02x}", num)
+        }
+        Value::Bool(boolean) => {
+            write!(f, "{}", boolean)
+        }
+        Value::I16(num) => {
+            if type_annotate {
+                f.write_str("int16 ")?;
+            }
+            write!(f, "{}", num)
+        }
+        Value::U16(num) => {
+            if type_annotate {
+                f.write_str("uint16 ")?;
+            }
+            write!(f, "{}", num)
+        }
+        Value::I32(num) => {
+            // Never annotate this type because it is the default for numbers
+            write!(f, "{}", num)
+        }
+        Value::U32(num) => {
+            if type_annotate {
+                f.write_str("uint32 ")?;
+            }
+            write!(f, "{}", num)
+        }
+        Value::I64(num) => {
+            if type_annotate {
+                f.write_str("int64 ")?;
+            }
+            write!(f, "{}", num)
+        }
+        Value::U64(num) => {
+            if type_annotate {
+                f.write_str("uint64 ")?;
+            }
+            write!(f, "{}", num)
+        }
+        Value::F64(num) => {
+            if num.fract() == 0. {
+                // Add a dot to make it clear that this is a float
+                write!(f, "{}.", num)
+            } else {
+                write!(f, "{}", num)
+            }
+        }
+        Value::Str(string) => {
+            write!(f, "{:?}", string.as_str())
+        }
+        Value::Signature(val) => {
+            if type_annotate {
+                f.write_str("signature ")?;
+            }
+            write!(f, "{:?}", val.as_str())
+        }
+        Value::ObjectPath(val) => {
+            if type_annotate {
+                f.write_str("objectpath ")?;
+            }
+            write!(f, "{:?}", val.as_str())
+        }
+        Value::Value(child) => {
+            f.write_char('<')?;
+
+            // Always annotate types in nested variants, because they are (by nature) of
+            // variable type.
+            value_display_fmt(child, f, true)?;
+
+            f.write_char('>')?;
+            Ok(())
+        }
+        Value::Array(array) => array_display_fmt(array, f, type_annotate),
+        Value::Dict(dict) => dict_display_fmt(dict, f, type_annotate),
+        Value::Structure(structure) => structure_display_fmt(structure, f, type_annotate),
+        #[cfg(feature = "gvariant")]
+        Value::Maybe(maybe) => maybe_display_fmt(maybe, f, type_annotate),
+        #[cfg(unix)]
+        Value::Fd(handle) => {
+            if type_annotate {
+                f.write_str("handle ")?;
+            }
+            write!(f, "{}", handle)
         }
     }
 }
@@ -736,5 +845,189 @@ where
 impl<'a> Type for Value<'a> {
     fn signature() -> Signature<'static> {
         Signature::from_static_str_unchecked(VARIANT_SIGNATURE_STR)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    #[test]
+    fn value_display() {
+        assert_eq!(
+            Value::new((
+                255_u8,
+                true,
+                -1_i16,
+                65535_u16,
+                -1,
+                1_u32,
+                -9223372036854775808_i64,
+                18446744073709551615_u64,
+                (-1., 1.0, 11000000000., 1.1e-10)
+            ))
+            .to_string(),
+            "(byte 0xff, true, int16 -1, uint16 65535, -1, uint32 1, \
+                int64 -9223372036854775808, uint64 18446744073709551615, \
+                (-1., 1., 11000000000., 0.00000000011))"
+        );
+
+        assert_eq!(
+            Value::new(vec![
+                "", " ", "a", r#"""#, "'", "a'b", "a'\"b", "\\", "\n'\"",
+            ])
+            .to_string(),
+            r#"["", " ", "a", "\"", "'", "a'b", "a'\"b", "\\", "\n'\""]"#
+        );
+        assert_eq!(
+            Value::new(vec![
+                "\x07\x08\x09\x0A\x0B\x0C\x0D",
+                "\x7F",
+                char::from_u32(0xD8000).unwrap().to_string().as_str()
+            ])
+            .to_string(),
+            r#"["\u{7}\u{8}\t\n\u{b}\u{c}\r", "\u{7f}", "\u{d8000}"]"#
+        );
+
+        assert_eq!(
+            Value::new((
+                vec![
+                    Signature::from_static_str("").unwrap(),
+                    Signature::from_static_str("(ysa{sd})").unwrap(),
+                ],
+                vec![
+                    ObjectPath::from_static_str("/").unwrap(),
+                    ObjectPath::from_static_str("/a/very/looooooooooooooooooooooooo0000o0ng/path")
+                        .unwrap(),
+                ],
+                vec![
+                    Value::new(0_u8),
+                    Value::new((Value::new(51), Value::new(Value::new(1_u32)))),
+                ]
+            ))
+            .to_string(),
+            "([signature \"\", \"(ysa{sd})\"], \
+                [objectpath \"/\", \"/a/very/looooooooooooooooooooooooo0000o0ng/path\"], \
+                [<byte 0x00>, <(<51>, <<uint32 1>>)>])"
+        );
+
+        assert_eq!(Value::new(vec![] as Vec<Vec<i64>>).to_string(), "@aax []");
+        assert_eq!(
+            Value::new(vec![
+                vec![0_i16, 1_i16],
+                vec![2_i16, 3_i16],
+                vec![4_i16, 5_i16]
+            ])
+            .to_string(),
+            "[[int16 0, 1], [2, 3], [4, 5]]"
+        );
+        assert_eq!(
+            Value::new(vec![
+                b"Hello".to_vec(),
+                b"Hell\0o".to_vec(),
+                b"H\0ello\0".to_vec(),
+                b"Hello\0".to_vec(),
+                b"\0".to_vec(),
+                b" \0".to_vec(),
+                b"'\0".to_vec(),
+                b"\n'\"\0".to_vec(),
+                b"\\\0".to_vec(),
+            ])
+            .to_string(),
+            "[[byte 0x48, 0x65, 0x6c, 0x6c, 0x6f], \
+                [0x48, 0x65, 0x6c, 0x6c, 0x00, 0x6f], \
+                [0x48, 0x00, 0x65, 0x6c, 0x6c, 0x6f, 0x00], \
+                b\"Hello\", b\"\", b\" \", b\"'\", b\"\\n'\\\"\", b\"\\\\\"]"
+        );
+
+        assert_eq!(
+            Value::new(HashMap::<bool, bool>::new()).to_string(),
+            "@a{bb} {}"
+        );
+        assert_eq!(
+            Value::new(vec![(true, 0_i64)].into_iter().collect::<HashMap<_, _>>()).to_string(),
+            "{true: int64 0}",
+        );
+        // The order of the entries may vary
+        let val = Value::new(
+            vec![(32_u16, 64_i64), (100_u16, 200_i64)]
+                .into_iter()
+                .collect::<HashMap<_, _>>(),
+        )
+        .to_string();
+        assert!(val.starts_with('{'));
+        assert!(val.ends_with('}'));
+        assert_eq!(val.matches("uint16").count(), 1);
+        assert_eq!(val.matches("int64").count(), 1);
+
+        let items_str = val.split(", ").collect::<Vec<_>>();
+        assert_eq!(items_str.len(), 2);
+        assert!(items_str
+            .iter()
+            .any(|str| str.contains("32") && str.contains(": ") && str.contains("64")));
+        assert!(items_str
+            .iter()
+            .any(|str| str.contains("100") && str.contains(": ") && str.contains("200")));
+
+        assert_eq!(Value::new(Structure::default()).to_string(), "()");
+        assert_eq!(
+            Value::new(((true,), (true, false), (true, true, false))).to_string(),
+            "((true,), (true, false), (true, true, false))"
+        );
+
+        assert_eq!(
+            Value::new((
+                (Some(0_i16), Some(Some(0_i16)), Some(Some(Some(0_i16))),),
+                (None::<i16>, Some(None::<i16>), Some(Some(None::<i16>)),),
+                (None::<Option<i16>>, Some(None::<Option<i16>>)),
+            ))
+            .to_string(),
+            "((@mn 0, @mmn 0, @mmmn 0), \
+                (@mn nothing, @mmn just nothing, @mmmn just just nothing), \
+                (@mmn nothing, @mmmn just nothing))"
+        );
+
+        assert_eq!(
+            Value::new(vec![Fd::from(0), Fd::from(-100)]).to_string(),
+            "[handle 0, -100]"
+        );
+
+        assert_eq!(
+            Value::new((
+                None::<bool>,
+                None::<bool>,
+                Some(
+                    vec![("size", Value::new((800, 600)))]
+                        .into_iter()
+                        .collect::<HashMap<_, _>>()
+                ),
+                vec![
+                    Value::new(1),
+                    Value::new(
+                        vec![(
+                            "dimension",
+                            Value::new((
+                                vec![2.4, 1.],
+                                Some(Some(200_i16)),
+                                Value::new((3_u8, "Hello!"))
+                            ))
+                        )]
+                        .into_iter()
+                        .collect::<HashMap<_, _>>()
+                    )
+                ],
+                7777,
+                ObjectPath::from_static_str("/").unwrap(),
+                8888
+            ))
+            .to_string(),
+            "(@mb nothing, @mb nothing, \
+                @ma{sv} {\"size\": <(800, 600)>}, \
+                [<1>, <{\"dimension\": <([2.4, 1.], \
+                @mmn 200, <(byte 0x03, \"Hello!\")>)>}>], \
+                7777, objectpath \"/\", 8888)"
+        );
     }
 }
