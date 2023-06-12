@@ -21,7 +21,7 @@ zbus = { path = "../zbus", version = "3", default-features = false }
 zvariant = { path = "../zvariant", version = "3", default-features = false, features = ["enumflags2"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1.9"
-enumflags2 = { version = "0.7.5", features = ["serde"] }
+enumflags2 = { version = "0.7.7", features = ["serde"] }
 static_assertions = "1.1.0"
 
 [dev-dependencies]
