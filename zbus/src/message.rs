@@ -196,6 +196,29 @@ impl Message {
         b.build(body)
     }
 
+    /// Create a message from bytes.
+    ///
+    /// The `fds` parameter is only available on unix. It specifies the file descriptors that
+    /// accompany the message. On the wire, values of the UNIX_FD types store the index of the
+    /// corresponding file descriptor in this vector. Passing an empty vector on a message that
+    /// has UNIX_FD will result in an error.
+    ///
+    /// **Note:** Since the constructed message is not construct by zbus, the receive sequence,
+    /// which can be acquired from [`Message::recv_position`], is not applicable and hence set
+    /// to `0`.
+    ///
+    /// # Safety
+    ///
+    /// This method is unsafe as bytes may have an invalid encoding.
+    pub unsafe fn from_bytes(bytes: Vec<u8>, #[cfg(unix)] fds: Vec<OwnedFd>) -> Result<Self> {
+        Self::from_raw_parts(
+            bytes,
+            #[cfg(unix)]
+            fds,
+            0,
+        )
+    }
+
     /// Create a message from its full contents
     pub(crate) fn from_raw_parts(
         bytes: Vec<u8>,
