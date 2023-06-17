@@ -96,20 +96,22 @@ when a change is signaled, primarily to minimize latency and optimize client req
 By default, if your service does not emit change notifications, the property values will not
 update accordingly. 
 
+
 However, you can disabling caching for specific properties:
 
 - Add the `#[dbus_proxy(property(emits_changed_signal = "false"))]` annotation to the property
-for which you desire to disable caching on.
+for which you desire to disable caching on. 
 
-- Use `ProxyBuilder` to build your proxy instance and use `ProxyBuilder::uncached_properties` method
+> For more information about all the possible values for `emits_changed_signal` refer
+ to [`dbus_proxy`] documentation.
+
+- Use `ProxyBuilder` to build your proxy instance and use [`ProxyBuilder::uncached_properties`](https://docs.rs/zbus/3/zbus/struct.ProxyBuilder.html#method.uncached_properties) method
 to list all properties you wish to disable caching for.
 
-- In order to disable caching for either type of proxy use the `ProxyBuilder::cache_properites` 
+- In order to disable caching for either type of proxy use the [`ProxyBuilder::cache_properites`](https://docs.rs/zbus/3/zbus/struct.ProxyBuilder.html#method.cache_properties) 
 method.
 
-For more information about all the possible values for `emits_changed_signal` refer
- to [`dbus_proxy`](https://docs.rs/zbus/3.13.1/zbus/attr.dbus_proxy.html) documentation.
-
+[`dbus_proxy`]: https://docs.rs/zbus/3/zbus/attr.dbus_proxy.html
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
 [`Type`]: https://docs.rs/zvariant/3/zvariant/derive.Type.html
 [`SerializeDict`]: https://docs.rs/zvariant/3/zvariant/derive.SerializeDict.html
