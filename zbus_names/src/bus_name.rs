@@ -289,6 +289,15 @@ impl<'s> From<BusName<'s>> for Value<'s> {
     }
 }
 
+impl<'name> From<BusName<'name>> for Str<'name> {
+    fn from(value: BusName<'name>) -> Self {
+        match value {
+            BusName::Unique(name) => name.into(),
+            BusName::WellKnown(name) => name.into(),
+        }
+    }
+}
+
 impl<'name> From<&BusName<'name>> for BusName<'name> {
     fn from(name: &BusName<'name>) -> Self {
         name.clone()
@@ -440,6 +449,15 @@ impl TryFrom<OwnedValue> for OwnedBusName {
 impl From<OwnedBusName> for OwnedValue {
     fn from(name: OwnedBusName) -> Self {
         name.0.into()
+    }
+}
+
+impl From<OwnedBusName> for Str<'static> {
+    fn from(value: OwnedBusName) -> Self {
+        match value.0 {
+            BusName::Unique(name) => name.into(),
+            BusName::WellKnown(name) => name.into(),
+        }
     }
 }
 

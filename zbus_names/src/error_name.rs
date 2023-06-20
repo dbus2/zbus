@@ -261,6 +261,12 @@ impl<'name> From<&ErrorName<'name>> for ErrorName<'name> {
     }
 }
 
+impl<'name> From<ErrorName<'name>> for Str<'name> {
+    fn from(value: ErrorName<'name>) -> Self {
+        value.0
+    }
+}
+
 impl<'name> NoneValue for ErrorName<'name> {
     type NoneType = &'name str;
 
@@ -342,6 +348,12 @@ impl TryFrom<Arc<str>> for OwnedErrorName {
 
     fn try_from(value: Arc<str>) -> Result<Self> {
         Ok(Self::from(ErrorName::try_from(value)?))
+    }
+}
+
+impl From<OwnedErrorName> for Str<'static> {
+    fn from(value: OwnedErrorName) -> Self {
+        value.into_inner().0
     }
 }
 

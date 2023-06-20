@@ -261,6 +261,12 @@ impl<'name> From<&WellKnownName<'name>> for WellKnownName<'name> {
     }
 }
 
+impl<'name> From<WellKnownName<'name>> for Str<'name> {
+    fn from(value: WellKnownName<'name>) -> Self {
+        value.0
+    }
+}
+
 impl<'name> NoneValue for WellKnownName<'name> {
     type NoneType = &'name str;
 
@@ -354,6 +360,12 @@ impl TryFrom<Arc<str>> for OwnedWellKnownName {
 
     fn try_from(value: Arc<str>) -> Result<Self> {
         Ok(Self::from(WellKnownName::try_from(value)?))
+    }
+}
+
+impl From<OwnedWellKnownName> for Str<'static> {
+    fn from(value: OwnedWellKnownName) -> Self {
+        value.into_inner().0
     }
 }
 

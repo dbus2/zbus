@@ -161,6 +161,12 @@ impl TryFrom<String> for MemberName<'_> {
     }
 }
 
+impl<'name> From<MemberName<'name>> for Str<'name> {
+    fn from(value: MemberName<'name>) -> Self {
+        value.0
+    }
+}
+
 impl TryFrom<Arc<str>> for MemberName<'_> {
     type Error = Error;
 
@@ -318,6 +324,12 @@ impl TryFrom<Arc<str>> for OwnedMemberName {
 
     fn try_from(value: Arc<str>) -> Result<Self> {
         Ok(Self::from(MemberName::try_from(value)?))
+    }
+}
+
+impl From<OwnedMemberName> for Str<'static> {
+    fn from(value: OwnedMemberName) -> Self {
+        value.into_inner().0
     }
 }
 

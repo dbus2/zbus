@@ -260,6 +260,12 @@ impl<'name> From<&UniqueName<'name>> for UniqueName<'name> {
     }
 }
 
+impl<'name> From<UniqueName<'name>> for Str<'name> {
+    fn from(value: UniqueName<'name>) -> Self {
+        value.0
+    }
+}
+
 impl<'name> NoneValue for UniqueName<'name> {
     type NoneType = &'name str;
 
@@ -341,6 +347,11 @@ impl TryFrom<Arc<str>> for OwnedUniqueName {
 
     fn try_from(value: Arc<str>) -> Result<Self> {
         Ok(Self::from(UniqueName::try_from(value)?))
+    }
+}
+impl From<OwnedUniqueName> for Str<'static> {
+    fn from(value: OwnedUniqueName) -> Self {
+        value.into_inner().0
     }
 }
 
