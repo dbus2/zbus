@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{utils::impl_try_from, Error, Result};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -140,52 +140,17 @@ impl<'de: 'name, 'name> Deserialize<'de> for MemberName<'name> {
     }
 }
 
-/// Try to create an `MemberName` from a string.
-impl<'s> TryFrom<&'s str> for MemberName<'s> {
-    type Error = Error;
-
-    fn try_from(value: &'s str) -> Result<Self> {
-        ensure_correct_member_name(value)?;
-
-        Ok(Self::from_str_unchecked(value))
-    }
-}
-
-impl TryFrom<String> for MemberName<'_> {
-    type Error = Error;
-
-    fn try_from(value: String) -> Result<Self> {
-        ensure_correct_member_name(&value)?;
-
-        Ok(Self::from_string_unchecked(value))
-    }
-}
-
 impl<'name> From<MemberName<'name>> for Str<'name> {
     fn from(value: MemberName<'name>) -> Self {
         value.0
     }
 }
 
-impl TryFrom<Arc<str>> for MemberName<'_> {
-    type Error = Error;
-
-    fn try_from(value: Arc<str>) -> Result<Self> {
-        ensure_correct_member_name(&value)?;
-
-        Ok(Self(Str::from(value)))
-    }
-}
-
-impl<'name> TryFrom<Cow<'name, str>> for MemberName<'name> {
-    type Error = Error;
-
-    fn try_from(value: Cow<'name, str>) -> Result<Self> {
-        match value {
-            Cow::Borrowed(s) => Self::try_from(s),
-            Cow::Owned(s) => Self::try_from(s),
-        }
-    }
+impl_try_from! {
+    ty: MemberName<'s>,
+    owned_ty: OwnedMemberName,
+    validate_fn: ensure_correct_member_name,
+    try_from: [&'s str, String, Arc<str>, Cow<'s, str>],
 }
 
 fn ensure_correct_member_name(name: &str) -> Result<()> {
@@ -300,30 +265,6 @@ impl<'unowned, 'owned: 'unowned> From<&'owned OwnedMemberName> for MemberName<'u
 impl From<MemberName<'_>> for OwnedMemberName {
     fn from(name: MemberName<'_>) -> Self {
         OwnedMemberName(name.into_owned())
-    }
-}
-
-impl TryFrom<&'_ str> for OwnedMemberName {
-    type Error = Error;
-
-    fn try_from(value: &str) -> Result<Self> {
-        Ok(Self::from(MemberName::try_from(value)?))
-    }
-}
-
-impl TryFrom<String> for OwnedMemberName {
-    type Error = Error;
-
-    fn try_from(value: String) -> Result<Self> {
-        Ok(Self::from(MemberName::try_from(value)?))
-    }
-}
-
-impl TryFrom<Arc<str>> for OwnedMemberName {
-    type Error = Error;
-
-    fn try_from(value: Arc<str>) -> Result<Self> {
-        Ok(Self::from(MemberName::try_from(value)?))
     }
 }
 
