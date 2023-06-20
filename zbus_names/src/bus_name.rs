@@ -402,7 +402,7 @@ impl<'unowned, 'owned: 'unowned> From<&'owned OwnedBusName> for BusName<'unowned
     }
 }
 
-impl std::convert::From<BusName<'_>> for OwnedBusName {
+impl From<BusName<'_>> for OwnedBusName {
     fn from(name: BusName<'_>) -> Self {
         OwnedBusName(name.into_owned())
     }
@@ -420,6 +420,14 @@ impl TryFrom<String> for OwnedBusName {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
+        Ok(Self::from(BusName::try_from(value)?))
+    }
+}
+
+impl TryFrom<Cow<'_, str>> for OwnedBusName {
+    type Error = Error;
+
+    fn try_from(value: Cow<'_, str>) -> Result<Self> {
         Ok(Self::from(BusName::try_from(value)?))
     }
 }
