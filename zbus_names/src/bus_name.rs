@@ -212,7 +212,6 @@ impl<'s> TryFrom<Str<'s>> for BusName<'s> {
     }
 }
 
-/// Try to create an `BusName` from a string.
 impl<'s> TryFrom<&'s str> for BusName<'s> {
     type Error = Error;
 
