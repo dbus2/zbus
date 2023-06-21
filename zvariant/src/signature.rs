@@ -403,9 +403,35 @@ impl<'a> std::ops::Deref for Signature<'a> {
     }
 }
 
+/// Checks whether the string slice has balanced parentheses.
+fn has_balanced_parentheses(signature_str: &str) -> bool {
+    signature_str.chars().fold(0, |count, ch| match ch {
+        '(' => count + 1,
+        ')' if count != 0 => count - 1,
+        _ => count,
+    }) == 0
+}
+
+/// Determines whether the signature has outer parentheses and if so, return the
+/// string slice without those parentheses.
+fn without_outer_parentheses<'a, 'b>(sig: &'a Signature<'b>) -> &'a str
+where
+    'b: 'a,
+{
+    let sig_str = sig.as_str();
+
+    if let Some(subslice) = sig_str.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
+        if has_balanced_parentheses(subslice) {
+            return subslice;
+        }
+    }
+    sig_str
+}
+
+/// Evaluate equality of two signatures, ignoring outer parentheses if needed.
 impl<'a, 'b> PartialEq<Signature<'a>> for Signature<'b> {
     fn eq(&self, other: &Signature<'_>) -> bool {
-        self.as_bytes() == other.as_bytes()
+        without_outer_parentheses(self) == without_outer_parentheses(other)
     }
 }
 
