@@ -146,7 +146,7 @@ impl_try_from! {
     ty:InterfaceName<'s>,
     owned_ty: OwnedInterfaceName,
     validate_fn: ensure_correct_interface_name,
-    try_from: [&'s str, String, Arc<str>, Cow<'s, str>],
+    try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
 impl<'name> From<InterfaceName<'name>> for Str<'name> {

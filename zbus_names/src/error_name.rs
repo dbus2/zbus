@@ -148,7 +148,7 @@ impl_try_from! {
     ty: ErrorName<'s>,
     owned_ty: OwnedErrorName,
     validate_fn: ensure_correct_error_name,
-    try_from: [&'s str, String, Arc<str>, Cow<'s, str>],
+    try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
 fn ensure_correct_error_name(name: &str) -> Result<()> {

@@ -150,7 +150,7 @@ impl_try_from! {
     ty: MemberName<'s>,
     owned_ty: OwnedMemberName,
     validate_fn: ensure_correct_member_name,
-    try_from: [&'s str, String, Arc<str>, Cow<'s, str>],
+    try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
 fn ensure_correct_member_name(name: &str) -> Result<()> {

@@ -301,7 +301,7 @@ impl_try_from! {
     ty: WellKnownName<'s>,
     owned_ty: OwnedWellKnownName,
     validate_fn: ensure_correct_well_known_name,
-    try_from: [&'s str, String, Arc<str>, Cow<'s, str>],
+    try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
 impl From<OwnedWellKnownName> for Str<'static> {

@@ -288,7 +288,7 @@ impl_try_from! {
     ty: UniqueName<'s>,
     owned_ty: OwnedUniqueName,
     validate_fn: ensure_correct_unique_name,
-    try_from: [&'s str, String, Arc<str>, Cow<'s, str>],
+    try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
 impl From<OwnedUniqueName> for Str<'static> {

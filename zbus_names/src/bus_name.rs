@@ -194,6 +194,24 @@ impl<'name> From<WellKnownName<'name>> for BusName<'name> {
     }
 }
 
+impl<'s> TryFrom<Str<'s>> for BusName<'s> {
+    type Error = Error;
+
+    fn try_from(value: Str<'s>) -> Result<Self> {
+        match UniqueName::try_from(value.clone()) {
+            Err(Error::InvalidUniqueName(unique_err)) => match WellKnownName::try_from(value) {
+                Err(Error::InvalidWellKnownName(well_known_err)) => {
+                    Err(Error::InvalidBusName(unique_err, well_known_err))
+                }
+                Err(e) => Err(e),
+                Ok(name) => Ok(BusName::WellKnown(name)),
+            },
+            Err(e) => Err(e),
+            Ok(name) => Ok(BusName::Unique(name)),
+        }
+    }
+}
+
 /// Try to create an `BusName` from a string.
 impl<'s> TryFrom<&'s str> for BusName<'s> {
     type Error = Error;
