@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{utils::impl_try_from, Error, Result};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -140,48 +140,6 @@ impl<'de: 'name, 'name> Deserialize<'de> for WellKnownName<'name> {
     }
 }
 
-/// Try to create an `WellKnownName` from a string.
-impl<'name> TryFrom<&'name str> for WellKnownName<'name> {
-    type Error = Error;
-
-    fn try_from(value: &'name str) -> Result<Self> {
-        ensure_correct_well_known_name(value)?;
-
-        Ok(Self::from_str_unchecked(value))
-    }
-}
-
-impl TryFrom<String> for WellKnownName<'_> {
-    type Error = Error;
-
-    fn try_from(value: String) -> Result<Self> {
-        ensure_correct_well_known_name(&value)?;
-
-        Ok(Self::from_string_unchecked(value))
-    }
-}
-
-impl TryFrom<Arc<str>> for WellKnownName<'_> {
-    type Error = Error;
-
-    fn try_from(value: Arc<str>) -> Result<Self> {
-        ensure_correct_well_known_name(&value)?;
-
-        Ok(Self(Str::from(value)))
-    }
-}
-
-impl<'name> TryFrom<Cow<'name, str>> for WellKnownName<'name> {
-    type Error = Error;
-
-    fn try_from(value: Cow<'name, str>) -> Result<Self> {
-        match value {
-            Cow::Borrowed(s) => Self::try_from(s),
-            Cow::Owned(s) => Self::try_from(s),
-        }
-    }
-}
-
 fn ensure_correct_well_known_name(name: &str) -> Result<()> {
     // Rules
     //
@@ -261,6 +219,12 @@ impl<'name> From<&WellKnownName<'name>> for WellKnownName<'name> {
     }
 }
 
+impl<'name> From<WellKnownName<'name>> for Str<'name> {
+    fn from(value: WellKnownName<'name>) -> Self {
+        value.0
+    }
+}
+
 impl<'name> NoneValue for WellKnownName<'name> {
     type NoneType = &'name str;
 
@@ -333,27 +297,16 @@ impl From<WellKnownName<'_>> for OwnedWellKnownName {
     }
 }
 
-impl TryFrom<&'_ str> for OwnedWellKnownName {
-    type Error = Error;
-
-    fn try_from(value: &str) -> Result<Self> {
-        Ok(Self::from(WellKnownName::try_from(value)?))
-    }
+impl_try_from! {
+    ty: WellKnownName<'s>,
+    owned_ty: OwnedWellKnownName,
+    validate_fn: ensure_correct_well_known_name,
+    try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
-impl TryFrom<String> for OwnedWellKnownName {
-    type Error = Error;
-
-    fn try_from(value: String) -> Result<Self> {
-        Ok(Self::from(WellKnownName::try_from(value)?))
-    }
-}
-
-impl TryFrom<Arc<str>> for OwnedWellKnownName {
-    type Error = Error;
-
-    fn try_from(value: Arc<str>) -> Result<Self> {
-        Ok(Self::from(WellKnownName::try_from(value)?))
+impl From<OwnedWellKnownName> for Str<'static> {
+    fn from(value: OwnedWellKnownName) -> Self {
+        value.into_inner().0
     }
 }
 

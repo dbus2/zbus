@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{utils::impl_try_from, Error, Result};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -139,48 +139,6 @@ impl<'de: 'name, 'name> Deserialize<'de> for UniqueName<'name> {
     }
 }
 
-/// Try to create an `UniqueName` from a string.
-impl<'s> TryFrom<&'s str> for UniqueName<'s> {
-    type Error = Error;
-
-    fn try_from(value: &'s str) -> Result<Self> {
-        ensure_correct_unique_name(value)?;
-
-        Ok(Self::from_str_unchecked(value))
-    }
-}
-
-impl TryFrom<String> for UniqueName<'_> {
-    type Error = Error;
-
-    fn try_from(value: String) -> Result<Self> {
-        ensure_correct_unique_name(&value)?;
-
-        Ok(Self::from_string_unchecked(value))
-    }
-}
-
-impl TryFrom<Arc<str>> for UniqueName<'_> {
-    type Error = Error;
-
-    fn try_from(value: Arc<str>) -> Result<Self> {
-        ensure_correct_unique_name(&value)?;
-
-        Ok(Self(Str::from(value)))
-    }
-}
-
-impl<'name> TryFrom<Cow<'name, str>> for UniqueName<'name> {
-    type Error = Error;
-
-    fn try_from(value: Cow<'name, str>) -> Result<Self> {
-        match value {
-            Cow::Borrowed(s) => Self::try_from(s),
-            Cow::Owned(s) => Self::try_from(s),
-        }
-    }
-}
-
 fn ensure_correct_unique_name(name: &str) -> Result<()> {
     // Rules
     //
@@ -260,6 +218,12 @@ impl<'name> From<&UniqueName<'name>> for UniqueName<'name> {
     }
 }
 
+impl<'name> From<UniqueName<'name>> for Str<'name> {
+    fn from(value: UniqueName<'name>) -> Self {
+        value.0
+    }
+}
+
 impl<'name> NoneValue for UniqueName<'name> {
     type NoneType = &'name str;
 
@@ -320,27 +284,16 @@ impl From<UniqueName<'_>> for OwnedUniqueName {
     }
 }
 
-impl TryFrom<&'_ str> for OwnedUniqueName {
-    type Error = Error;
-
-    fn try_from(value: &str) -> Result<Self> {
-        Ok(Self::from(UniqueName::try_from(value)?))
-    }
+impl_try_from! {
+    ty: UniqueName<'s>,
+    owned_ty: OwnedUniqueName,
+    validate_fn: ensure_correct_unique_name,
+    try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
-impl TryFrom<String> for OwnedUniqueName {
-    type Error = Error;
-
-    fn try_from(value: String) -> Result<Self> {
-        Ok(Self::from(UniqueName::try_from(value)?))
-    }
-}
-
-impl TryFrom<Arc<str>> for OwnedUniqueName {
-    type Error = Error;
-
-    fn try_from(value: Arc<str>) -> Result<Self> {
-        Ok(Self::from(UniqueName::try_from(value)?))
+impl From<OwnedUniqueName> for Str<'static> {
+    fn from(value: OwnedUniqueName) -> Self {
+        value.into_inner().0
     }
 }
 

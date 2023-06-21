@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{utils::impl_try_from, Error, Result};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -142,45 +142,16 @@ impl<'de: 'name, 'name> Deserialize<'de> for InterfaceName<'name> {
     }
 }
 
-/// Try to create an `InterfaceName` from a string.
-impl<'s> TryFrom<&'s str> for InterfaceName<'s> {
-    type Error = Error;
-
-    fn try_from(value: &'s str) -> Result<Self> {
-        ensure_correct_interface_name(value)?;
-
-        Ok(Self::from_str_unchecked(value))
-    }
+impl_try_from! {
+    ty:InterfaceName<'s>,
+    owned_ty: OwnedInterfaceName,
+    validate_fn: ensure_correct_interface_name,
+    try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
-impl TryFrom<String> for InterfaceName<'_> {
-    type Error = Error;
-
-    fn try_from(value: String) -> Result<Self> {
-        ensure_correct_interface_name(&value)?;
-
-        Ok(Self::from_string_unchecked(value))
-    }
-}
-
-impl TryFrom<Arc<str>> for InterfaceName<'_> {
-    type Error = Error;
-
-    fn try_from(value: Arc<str>) -> Result<Self> {
-        ensure_correct_interface_name(&value)?;
-
-        Ok(Self(Str::from(value)))
-    }
-}
-
-impl<'name> TryFrom<Cow<'name, str>> for InterfaceName<'name> {
-    type Error = Error;
-
-    fn try_from(value: Cow<'name, str>) -> Result<Self> {
-        match value {
-            Cow::Borrowed(s) => Self::try_from(s),
-            Cow::Owned(s) => Self::try_from(s),
-        }
+impl<'name> From<InterfaceName<'name>> for Str<'name> {
+    fn from(value: InterfaceName<'name>) -> Self {
+        value.0
     }
 }
 
@@ -319,27 +290,9 @@ impl From<InterfaceName<'_>> for OwnedInterfaceName {
     }
 }
 
-impl TryFrom<&'_ str> for OwnedInterfaceName {
-    type Error = Error;
-
-    fn try_from(value: &str) -> Result<Self> {
-        Ok(Self::from(InterfaceName::try_from(value)?))
-    }
-}
-
-impl TryFrom<String> for OwnedInterfaceName {
-    type Error = Error;
-
-    fn try_from(value: String) -> Result<Self> {
-        Ok(Self::from(InterfaceName::try_from(value)?))
-    }
-}
-
-impl TryFrom<Arc<str>> for OwnedInterfaceName {
-    type Error = Error;
-
-    fn try_from(value: Arc<str>) -> Result<Self> {
-        Ok(Self::from(InterfaceName::try_from(value)?))
+impl From<OwnedInterfaceName> for Str<'static> {
+    fn from(value: OwnedInterfaceName) -> Self {
+        value.into_inner().0
     }
 }
 

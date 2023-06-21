@@ -1,6 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use static_assertions::assert_impl_all;
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     hash::{Hash, Hasher},
     sync::Arc,
@@ -156,6 +157,15 @@ impl<'a> From<String> for Str<'a> {
 impl<'a> From<Arc<str>> for Str<'a> {
     fn from(value: Arc<str>) -> Self {
         Self(Inner::Owned(value))
+    }
+}
+
+impl<'a> From<Cow<'a, str>> for Str<'a> {
+    fn from(value: Cow<'a, str>) -> Self {
+        match value {
+            Cow::Owned(value) => value.into(),
+            Cow::Borrowed(value) => value.into(),
+        }
     }
 }
 

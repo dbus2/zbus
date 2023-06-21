@@ -4,7 +4,7 @@ use core::{
     fmt::{self, Display, Formatter},
     ops::Deref,
 };
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, convert::TryInto, sync::Arc};
 
 use crate::{Error, OwnedUniqueName, OwnedWellKnownName, Result, UniqueName, WellKnownName};
 use serde::{de, Deserialize, Serialize};
@@ -194,43 +194,10 @@ impl<'name> From<WellKnownName<'name>> for BusName<'name> {
     }
 }
 
-/// Try to create an `BusName` from a string.
-impl<'s> TryFrom<&'s str> for BusName<'s> {
+impl<'s> TryFrom<Str<'s>> for BusName<'s> {
     type Error = Error;
 
-    fn try_from(value: &'s str) -> Result<Self> {
-        match UniqueName::try_from(value) {
-            Err(Error::InvalidUniqueName(unique_err)) => match WellKnownName::try_from(value) {
-                Err(Error::InvalidWellKnownName(well_known_err)) => {
-                    Err(Error::InvalidBusName(unique_err, well_known_err))
-                }
-                Err(e) => Err(e),
-                Ok(name) => Ok(BusName::WellKnown(name)),
-            },
-            Err(e) => Err(e),
-            Ok(name) => Ok(BusName::Unique(name)),
-        }
-    }
-}
-
-impl TryFrom<String> for BusName<'_> {
-    type Error = Error;
-
-    fn try_from(value: String) -> Result<Self> {
-        Ok(match BusName::try_from(value.as_str())? {
-            BusName::Unique(_) => BusName::Unique(UniqueName::from_string_unchecked(value)),
-            BusName::WellKnown(_) => {
-                BusName::WellKnown(WellKnownName::from_string_unchecked(value))
-            }
-        })
-    }
-}
-
-impl TryFrom<Arc<str>> for BusName<'_> {
-    type Error = Error;
-
-    fn try_from(value: Arc<str>) -> Result<Self> {
-        // FIXME: Same as `str` impl above. Use a macro to avoid code duplication.
+    fn try_from(value: Str<'s>) -> Result<Self> {
         match UniqueName::try_from(value.clone()) {
             Err(Error::InvalidUniqueName(unique_err)) => match WellKnownName::try_from(value) {
                 Err(Error::InvalidWellKnownName(well_known_err)) => {
@@ -245,17 +212,37 @@ impl TryFrom<Arc<str>> for BusName<'_> {
     }
 }
 
+impl<'s> TryFrom<&'s str> for BusName<'s> {
+    type Error = Error;
+
+    fn try_from(value: &'s str) -> Result<Self> {
+        Str::from(value).try_into()
+    }
+}
+
+impl<'s> TryFrom<String> for BusName<'s> {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Str::from(value).try_into()
+    }
+}
+
+impl<'s> TryFrom<Arc<str>> for BusName<'s> {
+    type Error = Error;
+
+    fn try_from(value: Arc<str>) -> Result<Self> {
+        Str::from(value).try_into()
+    }
+}
+
 impl<'s> TryFrom<Value<'s>> for BusName<'s> {
     type Error = Error;
 
     fn try_from(value: Value<'s>) -> Result<Self> {
-        let value = Str::try_from(value)?;
-        Ok(match BusName::try_from(value.as_str())? {
-            BusName::Unique(_) => BusName::Unique(UniqueName::from_string_unchecked(value.into())),
-            BusName::WellKnown(_) => {
-                BusName::WellKnown(WellKnownName::from_string_unchecked(value.into()))
-            }
-        })
+        Str::try_from(value)
+            .map_err(Into::into)
+            .and_then(TryInto::try_into)
     }
 }
 
@@ -273,16 +260,22 @@ impl<'name> TryFrom<Cow<'name, str>> for BusName<'name> {
     type Error = Error;
 
     fn try_from(value: Cow<'name, str>) -> Result<Self> {
-        match value {
-            Cow::Borrowed(s) => Self::try_from(s),
-            Cow::Owned(s) => Self::try_from(s),
-        }
+        Str::from(value).try_into()
     }
 }
 
 impl<'s> From<BusName<'s>> for Value<'s> {
     fn from(name: BusName<'s>) -> Self {
         match name {
+            BusName::Unique(name) => name.into(),
+            BusName::WellKnown(name) => name.into(),
+        }
+    }
+}
+
+impl<'name> From<BusName<'name>> for Str<'name> {
+    fn from(value: BusName<'name>) -> Self {
+        match value {
             BusName::Unique(name) => name.into(),
             BusName::WellKnown(name) => name.into(),
         }
@@ -299,13 +292,9 @@ impl TryFrom<OwnedValue> for BusName<'static> {
     type Error = Error;
 
     fn try_from(value: OwnedValue) -> Result<Self> {
-        let value = Str::try_from(value)?;
-        Ok(match BusName::try_from(value.as_str())? {
-            BusName::Unique(_) => BusName::Unique(UniqueName::from_string_unchecked(value.into())),
-            BusName::WellKnown(_) => {
-                BusName::WellKnown(WellKnownName::from_string_unchecked(value.into()))
-            }
-        })
+        Str::try_from(value)
+            .map_err(Into::into)
+            .and_then(TryInto::try_into)
     }
 }
 
@@ -393,7 +382,7 @@ impl<'unowned, 'owned: 'unowned> From<&'owned OwnedBusName> for BusName<'unowned
     }
 }
 
-impl std::convert::From<BusName<'_>> for OwnedBusName {
+impl From<BusName<'_>> for OwnedBusName {
     fn from(name: BusName<'_>) -> Self {
         OwnedBusName(name.into_owned())
     }
@@ -403,7 +392,7 @@ impl TryFrom<&'_ str> for OwnedBusName {
     type Error = Error;
 
     fn try_from(value: &str) -> Result<Self> {
-        Ok(Self::from(BusName::try_from(value)?))
+        BusName::try_from(value).map(Self::from)
     }
 }
 
@@ -411,7 +400,15 @@ impl TryFrom<String> for OwnedBusName {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
-        Ok(Self::from(BusName::try_from(value)?))
+        BusName::try_from(value).map(Self::from)
+    }
+}
+
+impl TryFrom<Cow<'_, str>> for OwnedBusName {
+    type Error = Error;
+
+    fn try_from(value: Cow<'_, str>) -> Result<Self> {
+        BusName::try_from(value).map(Self::from)
     }
 }
 
@@ -419,7 +416,7 @@ impl TryFrom<Value<'static>> for OwnedBusName {
     type Error = Error;
 
     fn try_from(value: Value<'static>) -> Result<Self> {
-        Ok(Self::from(BusName::try_from(value)?))
+        BusName::try_from(value).map(Self::from)
     }
 }
 
@@ -433,13 +430,22 @@ impl TryFrom<OwnedValue> for OwnedBusName {
     type Error = Error;
 
     fn try_from(value: OwnedValue) -> Result<Self> {
-        Ok(Self::from(BusName::try_from(value)?))
+        BusName::try_from(value).map(Self::from)
     }
 }
 
 impl From<OwnedBusName> for OwnedValue {
     fn from(name: OwnedBusName) -> Self {
         name.0.into()
+    }
+}
+
+impl From<OwnedBusName> for Str<'static> {
+    fn from(value: OwnedBusName) -> Self {
+        match value.0 {
+            BusName::Unique(name) => name.into(),
+            BusName::WellKnown(name) => name.into(),
+        }
     }
 }
 
