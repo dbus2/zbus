@@ -271,6 +271,29 @@ impl<'a> Signature<'a> {
 
         clone
     }
+
+    /// Associated function to check whether the signature string slice has
+    /// balanced parentheses.   
+    pub fn has_balanced_parentheses(signature_str: &str) -> bool {
+        signature_str.chars().fold(0, |count, ch| match ch {
+            '(' => count + 1,
+            ')' if count != 0 => count - 1,
+            _ => count,
+        }) == 0
+    }
+
+    /// Determines whether the signature has outer parentheses and if so, return a
+    /// string slice without the parentheses.
+    pub(crate) fn without_outer_parentheses(&self) -> &str {
+        let sig_str = self.as_str();
+
+        if let Some(subslice) = sig_str.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
+            if Self::has_balanced_parentheses(subslice) {
+                return subslice;
+            }
+        }
+        sig_str
+    }
 }
 
 impl<'a> Debug for Signature<'a> {
@@ -354,9 +377,10 @@ impl<'a> std::ops::Deref for Signature<'a> {
     }
 }
 
+/// Evaluate equality of two signatures, ignoring outer parentheses if needed.
 impl<'a, 'b> PartialEq<Signature<'a>> for Signature<'b> {
     fn eq(&self, other: &Signature<'_>) -> bool {
-        self.as_bytes() == other.as_bytes()
+        self.without_outer_parentheses() == other.without_outer_parentheses()
     }
 }
 
