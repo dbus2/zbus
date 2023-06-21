@@ -39,6 +39,12 @@ fn fd_recvmsg(fd: RawFd, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)>
     let mut cmsgspace = cmsg_space!([RawFd; FDS_MAX]);
 
     let msg = recvmsg::<UnixAddr>(fd, &mut iov, Some(&mut cmsgspace), MsgFlags::empty())?;
+    if msg.bytes == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::BrokenPipe,
+            "failed to read from socket",
+        ));
+    }
     let mut fds = vec![];
     for cmsg in msg.cmsgs() {
         #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
