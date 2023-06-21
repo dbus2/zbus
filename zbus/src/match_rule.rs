@@ -146,8 +146,8 @@ impl<'m> MatchRule<'m> {
     /// Match messages whose first argument is within the specified namespace.
     ///
     /// Note that while the spec allows this to be any string that's a valid bus or interface name
-    /// except that it can have no `.`, we only allow valid interface names. The reason is not only
-    /// to keep things simple and type safe at the same time but also for the fact that use cases of
+    /// except that it can lack `.`, we only allow valid interface names. The reason is not only to
+    /// keep things simple and type safe at the same time but also for the fact that use cases of
     /// only matching on the first component of a bus or interface name are unheard of.
     pub fn arg0namespace(&self) -> Option<&InterfaceName<'_>> {
         self.arg0namespace.as_ref()
