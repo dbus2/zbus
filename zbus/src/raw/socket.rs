@@ -38,27 +38,29 @@ fn fd_recvmsg(fd: RawFd, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)>
     let mut iov = [IoSliceMut::new(buffer)];
     let mut cmsgspace = cmsg_space!([RawFd; FDS_MAX]);
 
-    match recvmsg::<UnixAddr>(fd, &mut iov, Some(&mut cmsgspace), MsgFlags::empty()) {
-        Ok(msg) => {
-            let mut fds = vec![];
-            for cmsg in msg.cmsgs() {
-                #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-                if let ControlMessageOwned::ScmCreds(_) = cmsg {
-                    continue;
-                }
-                if let ControlMessageOwned::ScmRights(fd) = cmsg {
-                    fds.extend(fd.iter().map(|&f| unsafe { OwnedFd::from_raw_fd(f) }));
-                } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "unexpected CMSG kind",
-                    ));
-                }
-            }
-            Ok((msg.bytes, fds))
-        }
-        Err(e) => Err(e.into()),
+    let msg = recvmsg::<UnixAddr>(fd, &mut iov, Some(&mut cmsgspace), MsgFlags::empty())?;
+    if msg.bytes == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::BrokenPipe,
+            "failed to read from socket",
+        ));
     }
+    let mut fds = vec![];
+    for cmsg in msg.cmsgs() {
+        #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+        if let ControlMessageOwned::ScmCreds(_) = cmsg {
+            continue;
+        }
+        if let ControlMessageOwned::ScmRights(fd) = cmsg {
+            fds.extend(fd.iter().map(|&f| unsafe { OwnedFd::from_raw_fd(f) }));
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "unexpected CMSG kind",
+            ));
+        }
+    }
+    Ok((msg.bytes, fds))
 }
 
 #[cfg(unix)]
