@@ -25,6 +25,8 @@ use std::{
     result::Result,
 };
 
+use zvariant::Signature;
+
 use crate::{
     names::{InterfaceName, MemberName},
     Error,
@@ -67,7 +69,7 @@ pub enum ArgDirection {
 pub struct Arg {
     #[serde(rename = "@name")]
     name: Option<String>,
-    #[serde(rename = "@type")]
+    #[serde(deserialize_with = "de_type_valid", rename = "@type")]
     r#type: String,
     #[serde(rename = "@direction")]
     direction: Option<ArgDirection>,
@@ -187,7 +189,7 @@ pub struct Property<'a> {
     #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
 
-    #[serde(rename = "@type")]
+    #[serde(deserialize_with = "de_type_valid", rename = "@type")]
     r#type: String,
     #[serde(rename = "@access")]
     access: PropertyAccess,
@@ -331,6 +333,20 @@ impl<'a> TryFrom<&'a str> for Node<'a> {
         deserializer.event_buffer_size(Some(1024_usize.try_into().unwrap()));
         Ok(Node::deserialize(&mut deserializer)?)
     }
+}
+
+fn de_type_valid<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    let v = String::deserialize(deserializer)?;
+    let sig = Signature::try_from(v.as_str()).map_err(|e| Error::custom(e.to_string()))?;
+    if sig.n_types() != Ok(1) {
+        return Err(Error::custom(format!("Invalid type: {}", v)));
+    }
+    Ok(v)
 }
 
 #[cfg(test)]
