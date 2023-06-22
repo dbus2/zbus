@@ -27,7 +27,7 @@ use crate::{
 };
 
 /// Annotations are generic key/value pairs of metadata.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Annotation {
     #[serde(rename = "@name")]
     name: String,
@@ -59,7 +59,7 @@ pub enum ArgDirection {
 }
 
 /// An argument
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Arg {
     #[serde(rename = "@name")]
     name: Option<String>,
@@ -96,7 +96,7 @@ impl Arg {
 }
 
 /// A method
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Method<'a> {
     #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
@@ -126,7 +126,7 @@ impl<'a> Method<'a> {
 }
 
 /// A signal
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Signal<'a> {
     #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
@@ -178,7 +178,7 @@ impl PropertyAccess {
 }
 
 /// A property
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Property<'a> {
     #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
@@ -217,7 +217,7 @@ impl<'a> Property<'a> {
 }
 
 /// An interface
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Interface<'a> {
     #[serde(rename = "@name", borrow)]
     name: InterfaceName<'a>,
@@ -262,7 +262,7 @@ impl<'a> Interface<'a> {
 }
 
 /// An introspection tree node (typically the root of the XML document).
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Node<'a> {
     #[serde(rename = "@name")]
     name: Option<String>,
