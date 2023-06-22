@@ -289,51 +289,38 @@ mod tests {
     use super::GenTrait;
     use zbus::xml::Node;
 
-    static EXAMPLE: &str = r##"
-<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
-  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
- <node name="/com/example/sample_object0">
-   <interface name="com.example.SampleInterface0">
-     <method name="Frobate">
-       <arg name="foz" type="i"/>
-       <arg name="foo" type="i" direction="in"/>
-       <arg name="bar" type="s" direction="out"/>
-       <arg name="baz" type="a{us}" direction="out"/>
-       <annotation name="org.freedesktop.DBus.Deprecated" value="true"/>
-     </method>
-     <method name="Bazify">
-       <arg name="bar" type="(iiu)" direction="in"/>
-       <arg name="bar" type="v" direction="out"/>
-     </method>
-     <method name="MogrifyMe">
-       <arg name="bar" type="(iiav)" direction="in"/>
-     </method>
-     <signal name="Changed">
-       <arg name="new_value" type="b"/>
-     </signal>
-     <signal name="Changed2">
-       <arg name="new_value" type="b" direction="out"/>
-       <arg name="new_value2" type="b" direction="out"/>
-     </signal>
-     <property name="Bar" type="y" access="readwrite"/>
-   </interface>
-   <node name="child_of_sample_object"/>
-   <node name="another_child_of_sample_object"/>
-</node>
-"##;
-
     #[test]
     fn gen() -> Result<(), Box<dyn Error>> {
-        let node = Node::from_reader(EXAMPLE.as_bytes())?;
-        let t = format!(
-            "{}",
-            GenTrait {
-                interface: &node.interfaces()[0],
-                path: None,
-                service: None,
-            }
-        );
-        println!("{t}");
+        use pretty_assertions::assert_eq;
+        use std::{io::Write, path::Path};
+
+        let input = include_str!("sample_object0.xml");
+        let expected = include_str!("sample_object0.rs");
+        #[cfg(windows)]
+        let expected = expected.replace("\r\n", "\n");
+
+        let node = Node::from_reader(input.as_bytes())?;
+        let gen = GenTrait {
+            interface: &node.interfaces()[0],
+            path: None,
+            service: None,
+        }
+        .to_string();
+
+        if std::env::var("TEST_OVERWRITE").is_ok() {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src")
+                .join("sample_object0.rs");
+            let mut f = std::fs::OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(path)?;
+            f.write_all(gen.as_bytes())?;
+            f.flush()?;
+            return Ok(());
+        }
+
+        assert_eq!(gen, expected);
         Ok(())
     }
 }
