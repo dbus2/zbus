@@ -1,5 +1,3 @@
-#![cfg(feature = "xml")]
-
 //! Introspection XML support (`xml` feature)
 //!
 //! Thanks to the [`org.freedesktop.DBus.Introspectable`] interface, objects may be introspected at
