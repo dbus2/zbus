@@ -331,7 +331,10 @@ impl<'a> TryFrom<&'a str> for Node<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::{convert::TryInto, error::Error};
+    use std::{
+        convert::{TryFrom, TryInto},
+        error::Error,
+    };
     use test_log::test;
 
     use super::{ArgDirection, Node};
@@ -367,7 +370,9 @@ mod tests {
 
     #[test]
     fn serde() -> Result<(), Box<dyn Error>> {
-        let node = Node::from_reader(EXAMPLE.as_bytes())?;
+        let node_r = Node::from_reader(EXAMPLE.as_bytes())?;
+        let node = Node::try_from(EXAMPLE)?;
+        assert_eq!(node, node_r);
         assert_eq!(node.interfaces().len(), 1);
         assert_eq!(node.interfaces()[0].methods().len(), 3);
         assert_eq!(
