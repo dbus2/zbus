@@ -68,14 +68,19 @@ impl<'b> std::ops::Deref for Bytes<'b> {
 /// // Valid signatures
 /// let s = Signature::try_from("").unwrap();
 /// assert_eq!(s, "");
+/// # assert_eq!(s.n_complete_types(), Ok(0));
 /// let s = Signature::try_from("y").unwrap();
 /// assert_eq!(s, "y");
+/// # assert_eq!(s.n_complete_types(), Ok(1));
 /// let s = Signature::try_from("xs").unwrap();
 /// assert_eq!(s, "xs");
+/// # assert_eq!(s.n_complete_types(), Ok(2));
 /// let s = Signature::try_from("(ysa{sd})").unwrap();
 /// assert_eq!(s, "(ysa{sd})");
+/// # assert_eq!(s.n_complete_types(), Ok(1));
 /// let s = Signature::try_from("a{sd}").unwrap();
 /// assert_eq!(s, "a{sd}");
+/// # assert_eq!(s.n_complete_types(), Ok(1));
 ///
 /// // Invalid signatures
 /// Signature::try_from("z").unwrap_err();
@@ -287,6 +292,21 @@ impl<'a> Signature<'a> {
         clone.end = self.pos + end;
 
         clone
+    }
+
+    /// The number of complete types for the signature.
+    ///
+    /// # Errors
+    ///
+    /// If the signature is invalid, returns the first error.
+    pub fn n_complete_types(&self) -> Result<usize> {
+        let mut count = 0;
+        // SAFETY: the parser is only used to do counting
+        for s in unsafe { SignatureParser::from_bytes_unchecked(self.as_bytes())? } {
+            s?;
+            count += 1;
+        }
+        Ok(count)
     }
 }
 
