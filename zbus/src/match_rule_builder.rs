@@ -201,6 +201,9 @@ impl<'m> MatchRuleBuilder<'m> {
     }
 
     /// Set 0th argument's namespace.
+    ///
+    /// This function is deprecated because the choice of `InterfaceName` was too restrictive.
+    #[deprecated = "use arg0ns instead"]
     pub fn arg0namespace<I>(mut self, namespace: I) -> Result<Self>
     where
         I: TryInto<InterfaceName<'m>>,
