@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 
 use static_assertions::assert_impl_all;
 
@@ -206,7 +206,70 @@ impl<'m> MatchRuleBuilder<'m> {
         I: TryInto<InterfaceName<'m>>,
         I::Error: Into<Error>,
     {
-        self.0.arg0namespace = Some(namespace.try_into().map_err(Into::into)?);
+        let namespace = namespace.try_into().map_err(Into::into)?;
+        self.0.arg0namespace = Some(namespace.clone());
+        self.0.arg0ns = Some(namespace.into());
+
+        Ok(self)
+    }
+
+    /// Set 0th argument's namespace.
+    ///
+    /// The namespace be a valid bus name or a valid element of a bus name. For more information,
+    /// see [the spec](https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use zbus::MatchRule;
+    /// // Valid namespaces
+    /// MatchRule::builder().arg0ns("org.mpris.MediaPlayer2").unwrap();
+    /// MatchRule::builder().arg0ns("org").unwrap();
+    /// MatchRule::builder().arg0ns(":org").unwrap();
+    /// MatchRule::builder().arg0ns(":1org").unwrap();
+    ///
+    /// // Invalid namespaces
+    /// MatchRule::builder().arg0ns("org.").unwrap_err();
+    /// MatchRule::builder().arg0ns(".org").unwrap_err();
+    /// MatchRule::builder().arg0ns("1org").unwrap_err();
+    /// MatchRule::builder().arg0ns(".").unwrap_err();
+    /// MatchRule::builder().arg0ns("org..freedesktop").unwrap_err();
+    /// ````
+    pub fn arg0ns<S>(mut self, namespace: S) -> Result<Self>
+    where
+        S: Into<Str<'m>>,
+    {
+        let namespace: Str<'m> = namespace.into();
+
+        // Rules: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
+        // minus the requirement to have more than one element.
+
+        if namespace.is_empty() || namespace.len() > 255 {
+            return Err(Error::InvalidMatchRule);
+        }
+
+        let (is_unique, namespace_str) = match namespace.strip_prefix(':') {
+            Some(s) => (true, s),
+            None => (false, namespace.as_str()),
+        };
+
+        let valid_first_char = |s: &str| match s.chars().next() {
+            None | Some('.') => false,
+            Some('0'..='9') if !is_unique => false,
+            _ => true,
+        };
+
+        if !valid_first_char(namespace_str)
+            || !namespace_str.split('.').all(valid_first_char)
+            || !namespace_str
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+        {
+            return Err(Error::InvalidMatchRule);
+        }
+
+        self.0.arg0ns = Some(namespace.clone());
+        self.0.arg0namespace = InterfaceName::try_from(namespace).ok();
 
         Ok(self)
     }
@@ -223,6 +286,7 @@ impl<'m> MatchRuleBuilder<'m> {
             args: Vec::with_capacity(MAX_ARGS as usize),
             arg_paths: Vec::with_capacity(MAX_ARGS as usize),
             arg0namespace: None,
+            arg0ns: None,
         })
     }
 }
