@@ -187,7 +187,7 @@ impl<'a> Signature<'a> {
     /// [`Signature::into_owned`] do not clone the underlying bytes.
     pub fn from_static_str(signature: &'static str) -> Result<Self> {
         let bytes = signature.as_bytes();
-        ensure_correct_signature_str(bytes)?;
+        SignatureParser::validate(bytes)?;
 
         Ok(Self {
             bytes: Bytes::Static(bytes),
@@ -202,7 +202,7 @@ impl<'a> Signature<'a> {
     /// `&'static [u8]`. The former will ensure that [`Signature::to_owned`] and
     /// [`Signature::into_owned`] do not clone the underlying bytes.
     pub fn from_static_bytes(bytes: &'static [u8]) -> Result<Self> {
-        ensure_correct_signature_str(bytes)?;
+        SignatureParser::validate(bytes)?;
 
         Ok(Self {
             bytes: Bytes::Static(bytes),
@@ -325,9 +325,9 @@ impl<'a> TryFrom<&'a [u8]> for Signature<'a> {
     type Error = Error;
 
     fn try_from(value: &'a [u8]) -> Result<Self> {
-        ensure_correct_signature_str(value)?;
+        SignatureParser::validate(value)?;
 
-        // SAFETY: ensure_correct_signature_str checks UTF8
+        // SAFETY: validate checks UTF8
         unsafe { Ok(Self::from_bytes_unchecked(value)) }
     }
 }
@@ -345,7 +345,7 @@ impl<'a> TryFrom<String> for Signature<'a> {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
-        ensure_correct_signature_str(value.as_bytes())?;
+        SignatureParser::validate(value.as_bytes())?;
 
         Ok(Self::from_string_unchecked(value))
     }
@@ -431,28 +431,6 @@ impl<'de> Visitor<'de> for SignatureVisitor {
     {
         Signature::try_from(value).map_err(serde::de::Error::custom)
     }
-}
-
-fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
-    if signature.len() > 255 {
-        return Err(serde::de::Error::invalid_length(
-            signature.len(),
-            &"<= 255 characters",
-        ));
-    }
-
-    if signature.is_empty() {
-        return Ok(());
-    }
-
-    // SAFETY: SignatureParser never calls as_str
-    let signature = unsafe { Signature::from_bytes_unchecked(signature) };
-    let mut parser = SignatureParser::new(signature);
-    while !parser.done() {
-        let _ = parser.parse_next_signature()?;
-    }
-
-    Ok(())
 }
 
 /// Owned [`Signature`](struct.Signature.html)

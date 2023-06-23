@@ -30,6 +30,26 @@ impl<'s> SignatureParser<'s> {
         }
     }
 
+    pub(crate) unsafe fn from_bytes_unchecked(signature: &'s [u8]) -> Result<Self> {
+        if signature.len() > 255 {
+            return Err(serde::de::Error::invalid_length(
+                signature.len(),
+                &"<= 255 characters",
+            ));
+        }
+
+        let signature = Signature::from_bytes_unchecked(signature);
+        Ok(Self::new(signature))
+    }
+
+    pub fn validate(signature: &'s [u8]) -> Result<()> {
+        // SAFETY: the parser is only used to validate the signature
+        for s in unsafe { Self::from_bytes_unchecked(signature)? } {
+            s?;
+        }
+        Ok(())
+    }
+
     pub fn signature(&self) -> Signature<'_> {
         self.signature.slice(self.pos..self.end)
     }
@@ -295,5 +315,17 @@ impl<'s> SignatureParser<'s> {
 
     fn signature_slice(&self, idx: usize, end: usize) -> Signature<'_> {
         self.signature.slice(self.pos + idx..self.pos + end)
+    }
+}
+
+impl<'a> Iterator for SignatureParser<'a> {
+    type Item = Result<Signature<'a>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done() {
+            None
+        } else {
+            Some(self.parse_next_signature())
+        }
     }
 }
