@@ -13,6 +13,7 @@ const MAX_ARGS: u8 = 64;
 /// Builder for [`MatchRule`].
 ///
 /// This is created by [`MatchRule::builder`].
+#[derive(Debug)]
 pub struct MatchRuleBuilder<'m>(MatchRule<'m>);
 
 assert_impl_all!(MatchRuleBuilder<'_>: Send, Sync, Unpin);
