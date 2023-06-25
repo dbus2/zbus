@@ -83,7 +83,7 @@ impl<'b> std::ops::Deref for Bytes<'b> {
 ///
 /// [identifies]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
 /// [`slice`]: #method.slice
-#[derive(Eq, Hash, Clone)]
+#[derive(Hash, Clone)]
 pub struct Signature<'a> {
     bytes: Bytes<'a>,
     pos: usize,
@@ -395,6 +395,9 @@ impl<'a> PartialEq<&str> for Signature<'a> {
         self.as_bytes() == other.as_bytes()
     }
 }
+
+// Do not derive `Eq` if not all fields are `Eq`.
+impl Eq for Signature<'_> {}
 
 impl<'a> Display for Signature<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
