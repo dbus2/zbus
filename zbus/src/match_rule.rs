@@ -93,6 +93,7 @@ pub struct MatchRule<'m> {
     pub(crate) args: Vec<(u8, Str<'m>)>,
     pub(crate) arg_paths: Vec<(u8, ObjectPath<'m>)>,
     pub(crate) arg0namespace: Option<InterfaceName<'m>>,
+    pub(crate) arg0ns: Option<Str<'m>>,
 }
 
 assert_impl_all!(MatchRule<'_>: Send, Sync, Unpin);
@@ -145,12 +146,15 @@ impl<'m> MatchRule<'m> {
 
     /// Match messages whose first argument is within the specified namespace.
     ///
-    /// Note that while the spec allows this to be any string that's a valid bus or interface name
-    /// except that it can lack `.`, we only allow valid interface names. The reason is not only to
-    /// keep things simple and type safe at the same time but also for the fact that use cases of
-    /// only matching on the first component of a bus or interface name are unheard of.
+    /// This function is deprecated because the choice of `InterfaceName` was too restrictive.
+    #[deprecated = "use arg0ns instead"]
     pub fn arg0namespace(&self) -> Option<&InterfaceName<'_>> {
         self.arg0namespace.as_ref()
+    }
+
+    /// Match messages whose first argument is within the specified namespace.
+    pub fn arg0ns(&self) -> Option<&Str<'m>> {
+        self.arg0ns.as_ref()
     }
 
     /// Creates an owned clone of `self`.
@@ -169,6 +173,7 @@ impl<'m> MatchRule<'m> {
                 .map(|(i, p)| (*i, p.to_owned()))
                 .collect(),
             arg0namespace: self.arg0namespace.as_ref().map(|a| a.to_owned()),
+            arg0ns: self.arg0ns.as_ref().map(|a| a.to_owned()),
         }
     }
 
@@ -192,6 +197,7 @@ impl<'m> MatchRule<'m> {
                 .map(|(i, p)| (i, p.into_owned()))
                 .collect(),
             arg0namespace: self.arg0namespace.map(|a| a.into_owned()),
+            arg0ns: self.arg0ns.map(|a| a.into_owned()),
         }
     }
 
@@ -276,10 +282,12 @@ impl<'m> MatchRule<'m> {
         }
 
         // The arg0 namespace.
-        if let Some(arg0_ns) = self.arg0namespace() {
-            if let Ok(arg0) = msg.body_unchecked::<InterfaceName<'_>>() {
-                if !arg0.starts_with(arg0_ns.as_str()) {
-                    return Ok(false);
+        if let Some(arg0_ns) = self.arg0ns() {
+            if let Ok(arg0) = msg.body_unchecked::<BusName<'_>>() {
+                match arg0.strip_prefix(arg0_ns.as_str()) {
+                    None => return Ok(false),
+                    Some(s) if !s.is_empty() && !s.starts_with('.') => return Ok(false),
+                    _ => (),
                 }
             } else {
                 return Ok(false);
@@ -362,7 +370,7 @@ impl ToString for MatchRule<'_> {
         for (i, arg_path) in self.arg_paths() {
             add_match_rule_string_component(&mut s, &format!("arg{i}path"), arg_path);
         }
-        if let Some(arg0namespace) = self.arg0namespace() {
+        if let Some(arg0namespace) = self.arg0ns() {
             add_match_rule_string_component(&mut s, "arg0namespace", arg0namespace)
         }
 
@@ -417,7 +425,7 @@ impl<'m> TryFrom<&'m str> for MatchRule<'m> {
                 "path" => builder.path(value)?,
                 "path_namespace" => builder.path_namespace(value)?,
                 "destination" => builder.destination(value)?,
-                "arg0namespace" => builder.arg0namespace(value)?,
+                "arg0namespace" => builder.arg0ns(value)?,
                 key if key.starts_with("arg") => {
                     if let Some(trailing_idx) = key.find("path") {
                         let idx = key[3..trailing_idx]
