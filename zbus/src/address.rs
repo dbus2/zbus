@@ -596,8 +596,14 @@ impl Display for Address {
                 #[cfg(unix)]
                 {
                     use std::os::unix::ffi::OsStrExt;
-                    f.write_str("unix:path=")?;
-                    encode_percents(f, path.as_bytes())?;
+
+                    if path.as_bytes().first() == Some(&b'\0') {
+                        f.write_str("unix:abstract=")?;
+                        encode_percents(f, &path.as_bytes()[1..])?;
+                    } else {
+                        f.write_str("unix:path=")?;
+                        encode_percents(f, path.as_bytes())?;
+                    }
                 }
 
                 #[cfg(windows)]
@@ -756,6 +762,10 @@ mod tests {
             Address::from_str("unix:path=/tmp/dbus-foo").unwrap()
         );
         assert_eq!(
+            Address::Unix("\0/tmp/dbus-foo".into()),
+            Address::from_str("unix:abstract=/tmp/dbus-foo").unwrap()
+        );
+        assert_eq!(
             Address::Unix("/tmp/dbus-foo".into()),
             Address::from_str("unix:path=/tmp/dbus-foo,guid=123").unwrap()
         );
@@ -839,6 +849,12 @@ mod tests {
         assert_eq!(
             Address::Unix("/tmp/dbus-foo".into()).to_string(),
             "unix:path=/tmp/dbus-foo"
+        );
+        // FIXME: figure out how to handle abstract on Windows
+        #[cfg(unix)]
+        assert_eq!(
+            Address::Unix("\0/tmp/dbus-foo".into()).to_string(),
+            "unix:abstract=/tmp/dbus-foo"
         );
         assert_eq!(
             Address::Tcp(TcpAddress {
