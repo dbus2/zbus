@@ -556,4 +556,19 @@ mod tests {
         assert_eq!(slice, "t");
         assert_eq!(slice.slice(1..), "");
     }
+
+    #[test]
+    fn signature_equality() {
+        let sig_a = Signature::from_str_unchecked("(asta{sv})");
+        let sig_b = Signature::from_str_unchecked("asta{sv}");
+        assert_eq!(sig_a, sig_b);
+
+        let sig_a = Signature::from_str_unchecked("((so)ii(uu))");
+        let sig_b = Signature::from_str_unchecked("(so)ii(uu)");
+        assert_eq!(sig_a, sig_b);
+
+        let sig_a = Signature::from_str_unchecked("(so)i");
+        let sig_b = Signature::from_str_unchecked("(so)u");
+        assert_ne!(sig_a, sig_b);
+    }
 }
