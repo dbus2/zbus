@@ -184,6 +184,12 @@ pub enum Address {
     ///
     /// [UNIX domain socket address]: https://dbus.freedesktop.org/doc/dbus-specification.html#transports-unix-domain-sockets-addresses
     UnixDir(OsString),
+    /// The same as UnixDir, except that on platforms with abstract sockets, the server may attempt
+    /// to create an abstract socket whose name starts with this directory instead of a path-based
+    /// socket.
+    ///
+    /// This address is mostly relevant to server (typically bus broker) implementations.
+    UnixTmpDir(OsString),
 }
 
 #[cfg(not(feature = "tokio"))]
@@ -387,7 +393,7 @@ impl Address {
                 let addr = macos_launchd_bus_address(&env).await?;
                 addr.connect().await
             }
-            Address::UnixDir(_) => {
+            Address::UnixDir(_) | Address::UnixTmpDir(_) => {
                 // you can't connect to a unix:dir
                 Err(Error::Unsupported)
             }
@@ -450,14 +456,16 @@ impl Address {
         let path = opts.get("path");
         let abs = opts.get("abstract");
         let dir = opts.get("dir");
-        let addr = match (path, abs, dir) {
-            (Some(p), None, None) => Address::Unix(OsString::from(p)),
-            (None, Some(p), None) => {
+        let tmpdir = opts.get("tmpdir");
+        let addr = match (path, abs, dir, tmpdir) {
+            (Some(p), None, None, None) => Address::Unix(OsString::from(p)),
+            (None, Some(p), None, None) => {
                 let mut s = OsString::from("\0");
                 s.push(p);
                 Address::Unix(s)
             }
-            (None, None, Some(p)) => Address::UnixDir(OsString::from(p)),
+            (None, None, Some(p), None) => Address::UnixDir(OsString::from(p)),
+            (None, None, None, Some(p)) => Address::UnixTmpDir(OsString::from(p)),
             _ => {
                 return Err(Error::Address("unix: address is invalid".to_owned()));
             }
@@ -649,6 +657,11 @@ impl Display for Address {
 
             Self::UnixDir(path) => {
                 f.write_str("unix:dir=")?;
+                fmt_unix_path(f, path, false)?;
+            }
+
+            Self::UnixTmpDir(path) => {
+                f.write_str("unix:tmpdir=")?;
                 fmt_unix_path(f, path, false)?;
             }
 
@@ -888,6 +901,10 @@ mod tests {
             Address::UnixDir("/some/dir".into()),
             Address::from_str("unix:dir=/some/dir").unwrap()
         );
+        assert_eq!(
+            Address::UnixTmpDir("/some/dir".into()),
+            Address::from_str("unix:tmpdir=/some/dir").unwrap()
+        );
     }
 
     #[test]
@@ -899,6 +916,10 @@ mod tests {
         assert_eq!(
             Address::UnixDir("/tmp/dbus-foo".into()).to_string(),
             "unix:dir=/tmp/dbus-foo"
+        );
+        assert_eq!(
+            Address::UnixTmpDir("/tmp/dbus-foo".into()).to_string(),
+            "unix:tmpdir=/tmp/dbus-foo"
         );
         // FIXME: figure out how to handle abstract on Windows
         #[cfg(unix)]
