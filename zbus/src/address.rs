@@ -1,3 +1,14 @@
+//! D-Bus address handling.
+//!
+//! Server addresses consist of a transport name followed by a colon, and then an optional,
+//! comma-separated list of keys and values in the form key=value.
+//!
+//! See also:
+//!
+//! * [Server addresses] in the D-Bus specification.
+//!
+//! [Server addresses]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
+
 #[cfg(target_os = "macos")]
 use crate::process::run;
 #[cfg(windows)]
@@ -695,8 +706,8 @@ impl TryFrom<&str> for Address {
 
 #[cfg(test)]
 mod tests {
-    use super::Address;
-    use crate::{Error, TcpAddress, TcpAddressFamily};
+    use super::{Address, TcpAddress, TcpAddressFamily};
+    use crate::Error;
     use std::str::FromStr;
     use test_log::test;
 
