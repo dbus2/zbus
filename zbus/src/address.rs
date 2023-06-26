@@ -795,9 +795,9 @@ impl TryFrom<&str> for Address {
 
 #[cfg(test)]
 mod tests {
-    use super::Address;
-    use crate::{Error, TcpAddress, TcpAddressFamily};
-    use std::str::FromStr;
+    use super::{Address, Parsed};
+    use crate::{Error, Guid, TcpAddress, TcpAddressFamily};
+    use std::{convert::TryFrom, str::FromStr};
     use test_log::test;
 
     #[test]
@@ -851,6 +851,15 @@ mod tests {
         assert_eq!(
             Address::Unix("/tmp/dbus-foo".into()),
             Address::from_str("unix:path=/tmp/dbus-foo,guid=123").unwrap()
+        );
+        let parsed =
+            Parsed::try_from("unix:path=/tmp/dbus-foo,guid=b8db84150f3af59c37bac8fe649936c8")
+                .unwrap();
+        assert_eq!(
+            parsed.guid(),
+            Some(Ok(
+                Guid::try_from("b8db84150f3af59c37bac8fe649936c8").unwrap()
+            ))
         );
         assert_eq!(
             Address::Tcp(TcpAddress {
