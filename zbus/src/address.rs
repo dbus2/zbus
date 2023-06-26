@@ -720,6 +720,11 @@ impl<'a> TryFrom<&'a str> for Parsed<'a> {
 }
 
 impl<'a> Parsed<'a> {
+    /// Return the address, if it has a valid form.
+    pub fn address(&self) -> Result<Address> {
+        Address::try_from(self)
+    }
+
     /// The parsed guid= value, if any.
     pub fn guid(&self) -> Option<Result<Guid>> {
         self.options.get("guid").map(|g| (*g).try_into())
