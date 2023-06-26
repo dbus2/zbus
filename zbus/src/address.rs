@@ -987,7 +987,7 @@ mod tests {
                 port: 2934
             })
             .to_string(),
-            "vsock:cid=98,port=2934,guid=123",
+            "vsock:cid=98,port=2934", // no support for guid= yet..
         );
     }
 
