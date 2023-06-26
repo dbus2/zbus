@@ -1,3 +1,8 @@
+//! D-Bus address handling.
+//!
+//! Server addresses consist of a transport name followed by a colon, and then an optional,
+//! comma-separated list of keys and values in the form key=value.
+
 #[cfg(target_os = "macos")]
 use crate::process::run;
 #[cfg(windows)]

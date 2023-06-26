@@ -41,8 +41,14 @@ pub use dbus_error::*;
 mod error;
 pub use error::*;
 
-mod address;
-pub use address::*;
+pub mod address;
+// re-export mostly for compatibility reasons
+#[cfg(any(
+    all(feature = "vsock", not(feature = "tokio")),
+    feature = "tokio-vsock"
+))]
+pub use address::VsockAddress;
+pub use address::{Address, TcpAddress, TcpAddressFamily};
 
 mod guid;
 pub use guid::*;
