@@ -73,7 +73,7 @@ impl TcpAddress {
     }
 
     // Helper for FromStr
-    fn from_tcp(opts: HashMap<&str, &str>) -> Result<Self> {
+    fn from_tcp(opts: &HashMap<&str, &str>) -> Result<Self> {
         let bind = None;
         if opts.contains_key("bind") {
             return Err(Error::Address("`bind` isn't yet supported".into()));
@@ -443,7 +443,7 @@ impl Address {
 
     // Helper for FromStr
     #[cfg(any(unix, not(feature = "tokio")))]
-    fn from_unix(opts: HashMap<&str, &str>) -> Result<Self> {
+    fn from_unix(opts: &HashMap<&str, &str>) -> Result<Self> {
         let path = opts.get("path");
         let abs = opts.get("abstract");
         let dir = opts.get("dir");
@@ -466,7 +466,7 @@ impl Address {
     }
 
     #[cfg(all(feature = "vsock", not(feature = "tokio")))]
-    fn from_vsock(opts: HashMap<&str, &str>) -> Result<Self> {
+    fn from_vsock(opts: &HashMap<&str, &str>) -> Result<Self> {
         let cid = opts
             .get("cid")
             .ok_or_else(|| Error::Address("VSOCK address is missing cid=".into()))?;
@@ -726,14 +726,12 @@ impl<'a> Parsed<'a> {
     }
 }
 
-impl FromStr for Address {
-    type Err = Error;
+impl TryFrom<&Parsed<'_>> for Address {
+    type Error = Error;
 
-    /// Parse a D-BUS address and return its path if we recognize it
-    fn from_str(address: &str) -> Result<Self> {
-        let Parsed { transport, options } = address.try_into()?;
-
-        match transport {
+    fn try_from(parsed: &Parsed<'_>) -> Result<Self> {
+        let Parsed { transport, options } = parsed;
+        match *transport {
             #[cfg(any(unix, not(feature = "tokio")))]
             "unix" => Self::from_unix(options),
             "tcp" => TcpAddress::from_tcp(options).map(Self::Tcp),
@@ -769,6 +767,16 @@ impl FromStr for Address {
                 "unsupported transport '{transport}'"
             ))),
         }
+    }
+}
+
+impl FromStr for Address {
+    type Err = Error;
+
+    /// Parse a D-BUS address and return its path if we recognize it
+    fn from_str(address: &str) -> Result<Self> {
+        let parsed = Parsed::try_from(address)?;
+        Self::try_from(&parsed)
     }
 }
 
