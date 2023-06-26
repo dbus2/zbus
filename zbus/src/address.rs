@@ -29,6 +29,7 @@ use uds_windows::UnixStream;
 use vsock::VsockStream;
 
 use std::{
+    convert::TryInto,
     ffi::OsString,
     fmt::{Display, Formatter},
     str::from_utf8_unchecked,
@@ -677,11 +678,19 @@ impl Display for Address {
     }
 }
 
-impl FromStr for Address {
-    type Err = Error;
+/// A parsed bus address
+#[derive(Debug, PartialEq, Eq)]
+pub struct Parsed<'a> {
+    /// The part before the first `:`
+    transport: &'a str,
+    /// The address `key=value` options
+    options: HashMap<&'a str, &'a str>,
+}
 
-    /// Parse a D-BUS address and return its path if we recognize it
-    fn from_str(address: &str) -> Result<Self> {
+impl<'a> TryFrom<&'a str> for Parsed<'a> {
+    type Error = Error;
+
+    fn try_from(address: &'a str) -> Result<Self> {
         let col = address
             .find(':')
             .ok_or_else(|| Error::Address("address has no colon".to_owned()))?;
@@ -705,6 +714,17 @@ impl FromStr for Address {
                 }
             }
         }
+
+        Ok(Self { transport, options })
+    }
+}
+
+impl FromStr for Address {
+    type Err = Error;
+
+    /// Parse a D-BUS address and return its path if we recognize it
+    fn from_str(address: &str) -> Result<Self> {
+        let Parsed { transport, options } = address.try_into()?;
 
         match transport {
             #[cfg(any(unix, not(feature = "tokio")))]
