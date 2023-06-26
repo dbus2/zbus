@@ -7,7 +7,7 @@
 use crate::process::run;
 #[cfg(windows)]
 use crate::win32::windows_autolaunch_bus_address;
-use crate::{Error, Result};
+use crate::{Error, Guid, Result};
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -716,6 +716,13 @@ impl<'a> TryFrom<&'a str> for Parsed<'a> {
         }
 
         Ok(Self { transport, options })
+    }
+}
+
+impl<'a> Parsed<'a> {
+    /// The parsed guid= value, if any.
+    pub fn guid(&self) -> Option<Result<Guid>> {
+        self.options.get("guid").map(|g| (*g).try_into())
     }
 }
 
