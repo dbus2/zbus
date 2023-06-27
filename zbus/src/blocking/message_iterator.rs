@@ -13,8 +13,9 @@ use crate::{blocking::Connection, utils::block_on, MatchRule, Message, OwnedMatc
 pub struct MessageIterator {
     // Wrap it in an `Option` to ensure the stream is dropped in a `block_on` call. This is needed
     // for tokio because the proxy spawns a task in its `Drop` impl and that needs a runtime
-    // context in case of tokio. Moreover, we want to use `AsyncDrop::async_drop` to drop the stream
-    // to ensure any associated match rule is deregistered before the iterator is dropped.
+    // context in case of tokio. Moreover, we want to use `AsyncDrop::async_drop` to drop the
+    // stream to ensure any associated match rule is deregistered before the iterator is
+    // dropped.
     pub(crate) azync: Option<crate::MessageStream>,
 }
 
@@ -41,7 +42,7 @@ impl MessageIterator {
     /// ```
     /// use zbus::{blocking::{Connection, MessageIterator}, MatchRule, fdo::NameOwnerChanged};
     ///
-    ///# fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let conn = Connection::session()?;
     /// let rule = MatchRule::builder()
     ///     .msg_type(zbus::MessageType::Signal)
@@ -78,8 +79,8 @@ impl MessageIterator {
     /// let signal = NameOwnerChanged::from_message(msg).unwrap();
     /// assert_eq!(signal.args()?.name(), "org.freedesktop.zbus.MatchRuleIteratorTest42");
     ///
-    ///# Ok(())
-    ///# }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Caveats

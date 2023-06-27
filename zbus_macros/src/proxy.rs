@@ -482,7 +482,8 @@ fn gen_proxy_method_call(
 
     let proxy_object = attrs.object.as_ref().map(|o| {
         if *blocking {
-            // FIXME: for some reason Rust doesn't let us move `blocking_proxy_object` so we've to clone.
+            // FIXME: for some reason Rust doesn't let us move `blocking_proxy_object` so we've to
+            // clone.
             attrs
                 .blocking_object
                 .as_ref()

@@ -99,7 +99,8 @@ impl<S: Socket> Connection<S> {
     /// read or an error is encountered.
     ///
     /// If the socket is in non-blocking mode, it may read a partial message. In such case it
-    /// will buffer it internally and try to complete it the next time you call `try_receive_message`.
+    /// will buffer it internally and try to complete it the next time you call
+    /// `try_receive_message`.
     pub fn try_receive_message(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<Message>> {
         self.event.notify(usize::MAX);
         if self.raw_in_pos < MIN_MESSAGE_SIZE {
@@ -212,7 +213,8 @@ impl<S: Socket> Connection<S> {
 }
 
 impl Connection<Box<dyn Socket>> {
-    /// Same as `try_flush` above, except it wraps the method for use in [`std::future::Future`] impls.
+    /// Same as `try_flush` above, except it wraps the method for use in [`std::future::Future`]
+    /// impls.
     pub(crate) fn flush(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
         self.try_flush(cx).map_err(Into::into)
     }

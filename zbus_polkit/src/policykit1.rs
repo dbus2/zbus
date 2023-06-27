@@ -34,7 +34,8 @@ pub enum ImplicitAuthorization {
     AdministratorAuthenticationRequired = 2,
     /// Authentication is required. If the authorization is obtained, it is retained.
     AuthenticationRequiredRetained = 3,
-    /// Authentication as an administrator is required. If the authorization is obtained, it is retained.
+    /// Authentication as an administrator is required. If the authorization is obtained, it is
+    /// retained.
     AdministratorAuthenticationRequiredRetained = 4,
     /// The subject is authorized.
     Authorized = 5,
@@ -47,7 +48,8 @@ assert_impl_all!(ImplicitAuthorization: Send, Sync, Unpin);
 #[repr(u32)]
 #[derive(Type, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum AuthorityFeatures {
-    /// The authority supports temporary authorizations that can be obtained through authentication.
+    /// The authority supports temporary authorizations that can be obtained through
+    /// authentication.
     TemporaryAuthorization = 0x01,
 }
 
@@ -62,7 +64,8 @@ impl TryFrom<OwnedValue> for AuthorityFeatures {
     }
 }
 
-/// Details of a temporary authorization as provided by the /org/freedesktop/PolicyKit1/Authority object in the system bus.
+/// Details of a temporary authorization as provided by the /org/freedesktop/PolicyKit1/Authority
+/// object in the system bus.
 #[derive(Debug, Type, Deserialize)]
 pub struct TemporaryAuthorization {
     /// An opaque identifier for the temporary authorization.
@@ -75,8 +78,8 @@ pub struct TemporaryAuthorization {
     pub subject: Subject,
 
     /// When the temporary authorization was obtained, in seconds since the Epoch Jan 1, 1970 0:00
-    /// UTC. Note that the PolicyKit daemon is using monotonic time internally so the returned value
-    /// may change if system time changes.
+    /// UTC. Note that the PolicyKit daemon is using monotonic time internally so the returned
+    /// value may change if system time changes.
     pub time_obtained: u64,
 
     /// When the temporary authorization is set to expire, in seconds since the Epoch Jan 1, 1970
@@ -200,7 +203,8 @@ impl Subject {
     ///
     /// # Arguments
     ///
-    /// * `message_header` - The header of the message which caused an authentication to be necessary.
+    /// * `message_header` - The header of the message which caused an authentication to be
+    ///   necessary.
     pub fn new_for_message_header(message_header: &zbus::MessageHeader<'_>) -> Result<Self, Error> {
         let mut subject_details = HashMap::new();
         match message_header.sender() {
@@ -349,7 +353,8 @@ trait Authority {
     /// The key `polkit.icon_name` is used to override the icon shown in the authentication dialog.
     ///
     /// If non-empty, then the request will fail with `org.freedesktop.PolicyKit1.Error.Failed`
-    /// unless the process doing the check itself is sufficiently authorized (e.g. running as uid 0).
+    /// unless the process doing the check itself is sufficiently authorized (e.g. running as uid
+    /// 0).
     ///
     /// * `flags` - A set of `CheckAuthorizationFlags`.
     ///

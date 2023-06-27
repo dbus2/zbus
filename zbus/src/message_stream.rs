@@ -61,7 +61,7 @@ impl MessageStream {
     /// use zbus::{AsyncDrop, Connection, MatchRule, MessageStream, fdo::NameOwnerChanged};
     /// use futures_util::{TryStreamExt, future::select, future::Either::{Left, Right}, pin_mut};
     ///
-    ///# zbus::block_on(async {
+    /// # zbus::block_on(async {
     /// let conn = Connection::session().await?;
     /// let rule = MatchRule::builder()
     ///     .msg_type(zbus::MessageType::Signal)
@@ -118,8 +118,8 @@ impl MessageStream {
     ///    Right((_, _)) => (),
     /// }
     ///
-    ///# Ok::<(), zbus::Error>(())
-    ///# }).unwrap();
+    /// # Ok::<(), zbus::Error>(())
+    /// # }).unwrap();
     /// ```
     ///
     /// # Caveats

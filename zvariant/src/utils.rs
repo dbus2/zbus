@@ -16,18 +16,22 @@ pub(crate) const ARRAY_ALIGNMENT_DBUS: usize = 4;
 pub const STRUCT_SIG_START_CHAR: char = '(';
 /// The closing character of STRUCT type signature. Provided for manual signature creation.
 pub const STRUCT_SIG_END_CHAR: char = ')';
-/// The opening character of STRUCT type signature, as a string. Provided for manual signature creation.
+/// The opening character of STRUCT type signature, as a string. Provided for manual signature
+/// creation.
 pub const STRUCT_SIG_START_STR: &str = "(";
-/// The closing character of STRUCT type signature, as a string. Provided for manual signature creation.
+/// The closing character of STRUCT type signature, as a string. Provided for manual signature
+/// creation.
 pub const STRUCT_SIG_END_STR: &str = ")";
 pub(crate) const STRUCT_ALIGNMENT_DBUS: usize = 8;
 /// The opening character of DICT_ENTRY type signature. Provided for manual signature creation.
 pub const DICT_ENTRY_SIG_START_CHAR: char = '{';
 /// The closing character of DICT_ENTRY type signature. Provided for manual signature creation.
 pub const DICT_ENTRY_SIG_END_CHAR: char = '}';
-/// The opening character of DICT_ENTRY type signature, as a string. Provided for manual signature creation.
+/// The opening character of DICT_ENTRY type signature, as a string. Provided for manual signature
+/// creation.
 pub const DICT_ENTRY_SIG_START_STR: &str = "{";
-/// The closing character of DICT_ENTRY type signature, as a string. Provided for manual signature creation.
+/// The closing character of DICT_ENTRY type signature, as a string. Provided for manual signature
+/// creation.
 pub const DICT_ENTRY_SIG_END_STR: &str = "}";
 pub(crate) const DICT_ENTRY_ALIGNMENT_DBUS: usize = 8;
 /// The VARIANT type signature. Provided for manual signature creation.

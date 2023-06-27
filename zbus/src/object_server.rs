@@ -81,7 +81,6 @@ where
     /// `ObjectServer` will not be able to access the interface in question until all references
     /// of this method are dropped, it is highly recommended that the scope of the interface
     /// returned is restricted.
-    ///
     pub async fn get(&self) -> InterfaceDeref<'_, I> {
         let iface = self.lock.read().await;
 
@@ -109,9 +108,9 @@ where
     /// # Examples
     ///
     /// ```no_run
-    ///# use std::error::Error;
-    ///# use async_io::block_on;
-    ///# use zbus::{Connection, dbus_interface};
+    /// # use std::error::Error;
+    /// # use async_io::block_on;
+    /// # use zbus::{Connection, dbus_interface};
     ///
     /// struct MyIface(u32);
     ///
@@ -123,21 +122,21 @@ where
     ///    }
     /// }
     ///
-    ///# block_on(async {
+    /// # block_on(async {
     /// // Setup connection and object_server etc here and then in another part of the code:
-    ///# let connection = Connection::session().await?;
-    ///#
-    ///# let path = "/org/zbus/path";
-    ///# connection.object_server().at(path, MyIface(22)).await?;
+    /// # let connection = Connection::session().await?;
+    /// #
+    /// # let path = "/org/zbus/path";
+    /// # connection.object_server().at(path, MyIface(22)).await?;
     /// let object_server = connection.object_server();
     /// let iface_ref = object_server.interface::<_, MyIface>(path).await?;
     /// let mut iface = iface_ref.get_mut().await;
     /// iface.0 = 42;
     /// iface.count_changed(iface_ref.signal_context()).await?;
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
-    ///# })?;
-    ///#
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// # })?;
+    /// #
+    /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub async fn get_mut(&self) -> InterfaceDerefMut<'_, I> {
         let mut iface = self.lock.write().await;
@@ -380,10 +379,10 @@ impl Node {
 /// path.
 ///
 /// ```no_run
-///# use std::error::Error;
+/// # use std::error::Error;
 /// use zbus::{Connection, dbus_interface};
 /// use event_listener::Event;
-///# use async_io::block_on;
+/// # use async_io::block_on;
 ///
 /// struct Example {
 ///     // Interfaces are owned by the ObjectServer. They can have
@@ -408,7 +407,7 @@ impl Node {
 ///     // how to expose properties & signals as well.
 /// }
 ///
-///# block_on(async {
+/// # block_on(async {
 /// let connection = Connection::session().await?;
 ///
 /// let quit_event = Event::new();
@@ -420,9 +419,9 @@ impl Node {
 ///     .await?;
 ///
 /// quit_listener.await;
-///# Ok::<_, Box<dyn Error + Send + Sync>>(())
-///# })?;
-///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+/// # Ok::<_, Box<dyn Error + Send + Sync>>(())
+/// # })?;
+/// # Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
 #[derive(Debug)]
 pub struct ObjectServer {
@@ -568,10 +567,10 @@ impl ObjectServer {
     /// The typical use of this is property changes outside of a dispatched handler:
     ///
     /// ```no_run
-    ///# use std::error::Error;
-    ///# use zbus::{Connection, dbus_interface};
-    ///# use async_io::block_on;
-    ///#
+    /// # use std::error::Error;
+    /// # use zbus::{Connection, dbus_interface};
+    /// # use async_io::block_on;
+    /// #
     /// struct MyIface(u32);
     ///
     /// #[dbus_interface(name = "org.myiface.MyIface")]
@@ -582,21 +581,21 @@ impl ObjectServer {
     ///      }
     /// }
     ///
-    ///# block_on(async {
-    ///# let connection = Connection::session().await?;
-    ///#
-    ///# let path = "/org/zbus/path";
-    ///# connection.object_server().at(path, MyIface(0)).await?;
+    /// # block_on(async {
+    /// # let connection = Connection::session().await?;
+    /// #
+    /// # let path = "/org/zbus/path";
+    /// # connection.object_server().at(path, MyIface(0)).await?;
     /// let iface_ref = connection
     ///     .object_server()
     ///     .interface::<_, MyIface>(path).await?;
     /// let mut iface = iface_ref.get_mut().await;
     /// iface.0 = 42;
     /// iface.count_changed(iface_ref.signal_context()).await?;
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
-    ///# })?;
-    ///#
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// # })?;
+    /// #
+    /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub async fn interface<'p, P, I>(&self, path: P) -> Result<InterfaceRef<I>>
     where
@@ -641,10 +640,11 @@ impl ObjectServer {
             .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
         let iface_name = msg
             .interface()
-            // TODO: In the absence of an INTERFACE field, if two or more interfaces on the same object
-            // have a method with the same name, it is undefined which of those methods will be
-            // invoked. Implementations may choose to either return an error, or deliver the message
-            // as though it had an arbitrary one of those interfaces.
+            // TODO: In the absence of an INTERFACE field, if two or more interfaces on the same
+            // object have a method with the same name, it is undefined which of those
+            // methods will be invoked. Implementations may choose to either return an
+            // error, or deliver the message as though it had an arbitrary one of those
+            // interfaces.
             .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
         let member = msg
             .member()

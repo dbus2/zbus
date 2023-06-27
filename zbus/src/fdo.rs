@@ -449,12 +449,13 @@ pub enum RequestNameFlags {
     ///
     /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
     ReplaceExisting = 0x02,
-    ///  Without this flag, if an application requests a name that is already owned, the application
-    ///  will be placed in a queue to own the name when the current owner gives it up. If this flag
-    ///  is given, the application will not be placed in the queue, the request for the name will
-    ///  simply fail. This flag also affects behavior when an application is replaced as name owner;
-    ///  by default the application moves back into the waiting queue, unless this flag was provided
-    ///  when the application became the name owner.
+    ///  Without this flag, if an application requests a name that is already owned, the
+    /// application  will be placed in a queue to own the name when the current owner gives it
+    /// up. If this flag  is given, the application will not be placed in the queue, the
+    /// request for the name will  simply fail. This flag also affects behavior when an
+    /// application is replaced as name owner;  by default the application moves back into the
+    /// waiting queue, unless this flag was provided  when the application became the name
+    /// owner.
     DoNotQueue = 0x04,
 }
 
@@ -481,9 +482,9 @@ pub enum RequestNameReply {
     /// [`ReplaceExisting`]: enum.RequestNameFlags.html#variant.ReplaceExisting
     /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
     InQueue = 0x02,
-    /// The name already has an owner, [`DoNotQueue`] was specified, and either [`AllowReplacement`]
-    /// was not specified by the current owner, or [`ReplaceExisting`] was not specified by the
-    /// requesting application.
+    /// The name already has an owner, [`DoNotQueue`] was specified, and either
+    /// [`AllowReplacement`] was not specified by the current owner, or [`ReplaceExisting`] was
+    /// not specified by the requesting application.
     ///
     /// [`DoNotQueue`]: enum.RequestNameFlags.html#variant.DoNotQueue
     /// [`ReplaceExisting`]: enum.RequestNameFlags.html#variant.ReplaceExisting
@@ -596,8 +597,8 @@ impl ConnectionCredentials {
     /// For example, the SELinux context `system_u:system_r:init_t:s0` (a string of length 27) would
     /// be encoded as 28 bytes ending with `':', 's', '0', '\x00'`
     ///
-    /// On SELinux systems this is the SELinux context, as output by `ps -Z` or `ls -Z`. Typical values
-    /// might include `system_u:system_r:init_t:s0`,
+    /// On SELinux systems this is the SELinux context, as output by `ps -Z` or `ls -Z`. Typical
+    /// values might include `system_u:system_r:init_t:s0`,
     /// `unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023`, or
     /// `unconfined_u:unconfined_r:chrome_sandbox_t:s0-s0:c0.c1023`.
     ///

@@ -38,8 +38,8 @@ pub enum Error {
     /// Unexpected or incorrect reply.
     InvalidReply,
     /// A D-Bus method error reply.
-    // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds anything more than a
-    // string description.
+    // According to the spec, there can be all kinds of details in D-Bus errors but nobody adds
+    // anything more than a string description.
     MethodError(OwnedErrorName, Option<String>, Arc<Message>),
     /// A required field is missing in the message headers.
     MissingField,

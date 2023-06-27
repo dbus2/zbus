@@ -170,7 +170,8 @@ where
     )
 }
 
-/// Deserialize `T` from a given slice of bytes containing file descriptor indices, with the given signature.
+/// Deserialize `T` from a given slice of bytes containing file descriptor indices, with the given
+/// signature.
 ///
 /// Please note that actual file descriptors are not part of the encoding and need to be transferred
 /// via an out-of-band platform specific mechanism. The encoding only contain the indices of the

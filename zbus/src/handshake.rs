@@ -35,8 +35,8 @@ pub enum AuthMechanism {
     /// over the `unix:` transport.
     External,
 
-    /// This mechanism is designed to establish that a client has the ability to read a private file
-    /// owned by the user being authenticated.
+    /// This mechanism is designed to establish that a client has the ability to read a private
+    /// file owned by the user being authenticated.
     Cookie,
 
     /// Does not perform any authentication at all, and should not be accepted by message buses.
@@ -134,11 +134,12 @@ enum Command {
 
 /// A representation of an in-progress handshake, client-side
 ///
-/// This struct is an async-compatible representation of the initial handshake that must be performed before
-/// a D-Bus connection can be used. To use it, you should call the [`advance_handshake`] method whenever the
-/// underlying socket becomes ready (tracking the readiness itself is not managed by this abstraction) until
-/// it returns `Ok(())`, at which point you can invoke the [`try_finish`] method to get an [`Authenticated`],
-/// which can be given to [`Connection::new_authenticated`].
+/// This struct is an async-compatible representation of the initial handshake that must be
+/// performed before a D-Bus connection can be used. To use it, you should call the
+/// [`advance_handshake`] method whenever the underlying socket becomes ready (tracking the
+/// readiness itself is not managed by this abstraction) until it returns `Ok(())`, at which point
+/// you can invoke the [`try_finish`] method to get an [`Authenticated`], which can be given to
+/// [`Connection::new_authenticated`].
 ///
 /// [`advance_handshake`]: struct.ClientHandshake.html#method.advance_handshake
 /// [`try_finish`]: struct.ClientHandshake.html#method.try_finish
@@ -387,7 +388,8 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     trace!("Initializing");
                     #[allow(clippy::let_and_return)]
                     let ret = self.mechanism_init()?;
-                    // The dbus daemon on some platforms requires sending the zero byte as a separate message with SCM_CREDS.
+                    // The dbus daemon on some platforms requires sending the zero byte as a
+                    // separate message with SCM_CREDS.
                     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
                     let written = self
                         .common
@@ -517,11 +519,12 @@ enum ServerHandshakeStep {
 ///
 /// This would typically be used to implement a D-Bus broker, or in the context of a P2P connection.
 ///
-/// This struct is an async-compatible representation of the initial handshake that must be performed before
-/// a D-Bus connection can be used. To use it, you should call the [`advance_handshake`] method whenever the
-/// underlying socket becomes ready (tracking the readiness itself is not managed by this abstraction) until
-/// it returns `Ok(())`, at which point you can invoke the [`try_finish`] method to get an [`Authenticated`],
-/// which can be given to [`Connection::new_authenticated`].
+/// This struct is an async-compatible representation of the initial handshake that must be
+/// performed before a D-Bus connection can be used. To use it, you should call the
+/// [`advance_handshake`] method whenever the underlying socket becomes ready (tracking the
+/// readiness itself is not managed by this abstraction) until it returns `Ok(())`, at which point
+/// you can invoke the [`try_finish`] method to get an [`Authenticated`], which can be given to
+/// [`Connection::new_authenticated`].
 ///
 /// [`advance_handshake`]: struct.ServerHandshake.html#method.advance_handshake
 /// [`try_finish`]: struct.ServerHandshake.html#method.try_finish
@@ -777,7 +780,8 @@ impl<S: Socket> Handshake<S> for ServerHandshake<'_, S> {
                     trace!("Handshake done");
                     return Ok(Authenticated {
                         conn: Connection::new(self.common.socket, self.common.recv_buffer),
-                        // SAFETY: We know that the server GUID is set because we set it in the constructor.
+                        // SAFETY: We know that the server GUID is set because we set it in the
+                        // constructor.
                         server_guid: self.common.server_guid.expect("Server GUID not set"),
                         #[cfg(unix)]
                         cap_unix_fd: self.common.cap_unix_fd,

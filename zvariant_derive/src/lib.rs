@@ -268,7 +268,7 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// #[derive(DeserializeDict, Type)]
 /// #[zvariant(signature = "a{sv}")]
-///##[allow(unused)]
+/// ##[allow(unused)]
 /// struct Struct {
 ///     field1: u16,
 ///     #[zvariant(rename = "another-name")]
@@ -353,10 +353,10 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// Now for the more exciting case of unowned structures:
 ///
 /// ```
-///# use std::convert::TryFrom;
+/// # use std::convert::TryFrom;
 /// use zvariant::{ObjectPath, Str};
-///# use zvariant::{OwnedValue, Value};
-///#
+/// # use zvariant::{OwnedValue, Value};
+/// #
 /// #[derive(Clone, Value, OwnedValue)]
 /// struct UnownedStruct<'a> {
 ///     s: Str<'a>,
@@ -380,9 +380,9 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// Generic structures also supported:
 ///
 /// ```
-///# use std::convert::TryFrom;
-///# use zvariant::{OwnedObjectPath, OwnedValue, Value};
-///#
+/// # use std::convert::TryFrom;
+/// # use zvariant::{OwnedObjectPath, OwnedValue, Value};
+/// #
 /// #[derive(Clone, Value, OwnedValue)]
 /// struct GenericStruct<S, O> {
 ///     field1: S,
@@ -404,9 +404,9 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// Enums also supported but currently only simple ones w/ an integer representation:
 ///
 /// ```
-///# use std::convert::TryFrom;
-///# use zvariant::{OwnedValue, Value};
-///#
+/// # use std::convert::TryFrom;
+/// # use zvariant::{OwnedValue, Value};
+/// #
 /// #[derive(Debug, PartialEq, Value, OwnedValue)]
 /// #[repr(u8)]
 /// enum Enum {
