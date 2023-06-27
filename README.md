@@ -20,8 +20,8 @@ The project is divided into the following subcrates:
 
 ## Getting Started
 
-The best way to get started with zbus is the [book](https://dbus.pages.freedesktop.org/zbus/),
-where we start with basic D-Bus concepts and explain with code samples, how zbus makes D-Bus easy.
+The best way to get started with zbus is the [book](https://dbus2.github.io/zbus/), where we start
+with basic D-Bus concepts and explain with code samples, how zbus makes D-Bus easy.
 
 ## Example code
 
