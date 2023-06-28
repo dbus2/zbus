@@ -302,7 +302,7 @@ fn ensure_correct_object_path_str(path: &[u8]) -> Result<()> {
 }
 
 /// Owned [`ObjectPath`](struct.ObjectPath.html)
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, serde::Serialize, Type)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, serde::Serialize, Type)]
 pub struct OwnedObjectPath(ObjectPath<'static>);
 
 assert_impl_all!(OwnedObjectPath: Send, Sync, Unpin);
@@ -375,6 +375,12 @@ impl<'de> Deserialize<'de> for OwnedObjectPath {
 impl std::fmt::Display for OwnedObjectPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(&self.as_str(), f)
+    }
+}
+
+impl Debug for OwnedObjectPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(self.as_str(), f)
     }
 }
 
