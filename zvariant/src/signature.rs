@@ -4,7 +4,7 @@ use core::{
     panic, str,
 };
 use serde::{
-    de::{Deserialize, Deserializer, Visitor},
+    de::{Deserialize, Deserializer, Unexpected, Visitor},
     ser::{Serialize, Serializer},
 };
 use static_assertions::assert_impl_all;
@@ -457,9 +457,18 @@ fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
 
     // SAFETY: SignatureParser never calls as_str
     let signature = unsafe { Signature::from_bytes_unchecked(signature) };
-    let mut parser = SignatureParser::new(signature);
+    let mut parser = SignatureParser::new(signature.clone());
     while !parser.done() {
         let _ = parser.parse_next_signature()?;
+    }
+
+    // Assure that the signatures' parentheses are in balance.
+    let signature_str = signature.as_str();
+    if !Signature::has_balanced_parentheses(signature_str) {
+        return Err(serde::de::Error::invalid_value(
+            Unexpected::Str(signature_str),
+            &"signature requires balanced parentheses",
+        ));
     }
 
     Ok(())
