@@ -152,8 +152,8 @@
 <p>Since the use of a dictionary, specifically one with strings as keys and variants as value (i-e
 <code>a{sv}</code>) is very common in the D-Bus world and use of HashMaps isn’t as convenient and type-safe as
 a struct, you might find yourself wanting to use a struct as a dictionary.</p>
-<p><code>zvariant</code> provides convenient macros for making this possible: <a href="https://docs.rs/zvariant/3.0.0/zvariant/derive.SerializeDict.html"><code>SerializeDict</code></a> and
-<a href="https://docs.rs/zvariant/3.0.0/zvariant/derive.DeserializeDict.html"><code>DeserializeDict</code></a>. You’ll also need to tell <a href="https://docs.rs/zvariant/3.1.0/zvariant/derive.Type.html"><code>Type</code></a> macro to treat the type as a dictionary using
+<p><code>zvariant</code> provides convenient macros for making this possible: <a href="https://docs.rs/zvariant/3/zvariant/derive.SerializeDict.html"><code>SerializeDict</code></a> and
+<a href="https://docs.rs/zvariant/3/zvariant/derive.DeserializeDict.html"><code>DeserializeDict</code></a>. You’ll also need to tell <a href="https://docs.rs/zvariant/3/zvariant/derive.Type.html"><code>Type</code></a> macro to treat the type as a dictionary using
 the <code>signature</code> attribute. Here is a simple example:</p>
 <pre><code class="language-rust noplayground">use zbus::{
     dbus_proxy, dbus_interface, fdo::Result,
@@ -216,7 +216,30 @@ have to wait in line.</p>
 combined with signals to report the progress of the work to clients. Both of these solutions
 involve converting the methods in question to take <code>&amp;self</code> argument instead of <code>&amp;mut self</code>.</p>
 <h3 id="2-a-stream-eg-signalstream-is-not-being-continuously-polled"><a class="header" href="#2-a-stream-eg-signalstream-is-not-being-continuously-polled">2. A stream (e.g <code>SignalStream</code>) is not being continuously polled</a></h3>
-<p>Please consult <a href="https://docs.rs/zbus/2.3.2/zbus/struct.MessageStream.html"><code>MessageStream</code></a> documentation for details.</p>
+<p>Please consult <a href="https://docs.rs/zbus/3/zbus/struct.MessageStream.html"><code>MessageStream</code></a> documentation for details.</p>
+<h2 id="why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes"><a class="header" href="#why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes">Why aren’t property values updating for my service that doesn’t notify changes?</a></h2>
+<p>A common issue might arise when using a zbus proxy is that your proxy’s property values aren’t 
+updating. This is due to zbus’ default caching policy, which updates the value of a property only
+when a change is signaled, primarily to minimize latency and optimize client request performance.
+By default, if your service does not emit change notifications, the property values will not
+update accordingly. </p>
+<p>However, you can disabling caching for specific properties:</p>
+<ul>
+<li>
+<p>Add the <code>#[dbus_proxy(property(emits_changed_signal = &quot;false&quot;))]</code> annotation to the property
+for which you desire to disable caching on.</p>
+</li>
+<li>
+<p>Use <code>ProxyBuilder</code> to build your proxy instance and use <code>ProxyBuilder::uncached_properties</code> method
+to list all properties you wish to disable caching for.</p>
+</li>
+<li>
+<p>In order to disable caching for either type of proxy use the <code>ProxyBuilder::cache_properites</code> 
+method.</p>
+</li>
+</ul>
+<p>For more information about all the possible values for <code>emits_changed_signal</code> refer
+to <a href="https://docs.rs/zbus/3.13.1/zbus/attr.dbus_proxy.html"><code>dbus_proxy</code></a> documentation.</p>
 
                     </main>
 

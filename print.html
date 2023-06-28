@@ -231,7 +231,7 @@ entry point of the zbus API.</p>
 returns an instance of the connection (if all went well). Similarly, to connect to the system bus
 (to communicate with services such as <a href="https://developer.gnome.org/NetworkManager/stable/spec.html">NetworkManager</a>, <a href="https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc">BlueZ</a> or <a href="https://www.freedesktop.org/wiki/Software/systemd/dbus/">PID1</a>), use
 <code>Connection::system()</code>.</p>
-<p>Moreover, it also implements <a href="https://docs.rs/futures/latest/futures/sink/trait.Sink.html"><code>futures::sink::Sink</code></a> and can be converted to a <a href="https://docs.rs/zbus/2.0.0/zbus/struct.MessageStream.html"><code>MessageStream</code></a>
+<p>Moreover, it also implements <a href="https://docs.rs/futures/latest/futures/sink/trait.Sink.html"><code>futures::sink::Sink</code></a> and can be converted to a <a href="https://docs.rs/zbus/3/zbus/struct.MessageStream.html"><code>MessageStream</code></a>
 that implements <a href="https://docs.rs/futures/latest/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>, which can be used to conveniently send and receive
 messages, for the times when low-level API is more appropriate for your use case.</p>
 <p><strong>Note:</strong> it is common for a D-Bus library to provide a “shared” connection to a bus for a process:
@@ -246,7 +246,7 @@ The official dbus installation method via <code>Homebrew</code> provides a sessi
 utilizing macOS <code>LaunchAgents</code> feature. By default, zbus consumes an address for a bus connection that
 is provided via <code>launchctl getenv DBUS_LAUNCHD_SESSION_BUS_SOCKET</code> command output.</p>
 <h2 id="using-a-custom-bus-address"><a class="header" href="#using-a-custom-bus-address">Using a custom bus address</a></h2>
-<p>You may also specify a custom bus with <a href="https://docs.rs/zbus/3.13.1/zbus/struct.ConnectionBuilder.html#method.address"><code>ConnectionBuilder::address</code></a> which takes a D-Bus address
+<p>You may also specify a custom bus with <a href="https://docs.rs/zbus/3/zbus/struct.ConnectionBuilder.html#method.address"><code>ConnectionBuilder::address</code></a> which takes a D-Bus address
 <a href="https://dbus.freedesktop.org/doc/dbus-specification.html#addresses">as specified in the specification</a>.</p>
 <h2 id="peer-to-peer-connection"><a class="header" href="#peer-to-peer-connection">Peer to peer connection</a></h2>
 <p>Peer-to-peer connections are bus-less<sup class="footnote-reference"><a href="#bus-less">1</a></sup>, and the initial handshake protocol is a bit
@@ -575,7 +575,7 @@ Environment variables:
 <code>From&lt;zvariant::Value&lt;'_&gt;&gt;</code> and/or <code>From&lt;OwnedValue&gt;</code> implementations. This is because properties
 are always sent as Variants on the bus, so you need to implement these conversions for your custom
 types.</p>
-<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/latest/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/latest/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
+<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/3/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/3/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
 implement these conversions for you.</p>
 <h4 id="watching-for-changes"><a class="header" href="#watching-for-changes">Watching for changes</a></h4>
 <p>By default, the proxy will cache the properties and watch for changes.</p>
@@ -1027,7 +1027,7 @@ but a <code>SignalContext</code> reference. This allows to emit signals whether 
 <code>dbus_interface</code> methods’ context. To make things simpler, <code>dbus_interface</code> methods can receive a
 <code>SignalContext</code> passed to them using the special <code>zbus(signal_context)</code> attribute, as demonstrated
 in the previous example.</p>
-<p>Please refer to <a href="https://docs.rs/zbus/2.0.0/zbus/attr.dbus_interface.html"><code>dbus_interface</code> documentation</a> for more examples and list of other special
+<p>Please refer to <a href="https://docs.rs/zbus/3/zbus/attr.dbus_interface.html"><code>dbus_interface</code> documentation</a> for more examples and list of other special
 attributes you can make use of.</p>
 <h3 id="notifying-property-changes"><a class="header" href="#notifying-property-changes">Notifying property changes</a></h3>
 <p>For each property declared through the <code>dbus_interface</code> macro, a <code>&lt;property_name&gt;_changed</code> method is
@@ -1066,14 +1066,14 @@ iface.greeter_name_changed(iface_ref.signal_context()).await?;
 <div style="break-before: page; page-break-before: always;"></div><h1 id="blocking-api"><a class="header" href="#blocking-api">Blocking API</a></h1>
 <p>While zbus API being primarily asynchronous (since 2.0) is a great thing, it could easily feel
 daunting for simple use cases. Not to worry! In the spirit of “ease” being a primary goal of zbus,
-it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/2.0.0/zbus/blocking/index.html">blocking module</a>.</p>
+it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/3/zbus/blocking/index.html">blocking module</a>.</p>
 <p><strong>Note:</strong> Use of the blocking API presented in this chapter in an async context will likely result
 in panics and hangs. This is not a limitation of zbus but rather a
 <a href="https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich">well-known general problem</a> in the Rust async/await world. The <a href="https://docs.rs/blocking/"><code>blocking</code> crate</a>,
 <a href="https://docs.rs/async-std/latest/async_std/task/fn.spawn_blocking.html"><code>async-std</code></a> and <a href="https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html"><code>tokio</code></a> crates provide a easy way around this problem.</p>
 <h2 id="establishing-a-connection-1"><a class="header" href="#establishing-a-connection-1">Establishing a connection</a></h2>
-<p>The only difference to that of <a href="https://docs.rs/zbus/2.0.0/zbus/struct.Connection.html">asynchronous <code>Connection</code> API</a> is that you use
-<a href="https://docs.rs/zbus/2.0.0/zbus/blocking/struct.Connection.html"><code>blocking::Connection</code></a> type instead. This type’s API is almost identical to that of <code>Connection</code>,
+<p>The only difference to that of <a href="https://docs.rs/zbus/3/zbus/struct.Connection.html">asynchronous <code>Connection</code> API</a> is that you use
+<a href="https://docs.rs/zbus/3/zbus/blocking/struct.Connection.html"><code>blocking::Connection</code></a> type instead. This type’s API is almost identical to that of <code>Connection</code>,
 except all its methods are blocking. One notable difference is that there is no equivalent of
 <a href="https://docs.rs/futures/latest/futures/sink/trait.Sink.html"><code>futures::sink::Sink</code></a> implementation provided. There is however [<code>blocking::MessageIterator</code>]
 type, that implements <a href="https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html"><code>std::iter::Iterator</code></a>.</p>
@@ -1176,7 +1176,7 @@ fn main() -&gt; Result&lt;()&gt; {
 }</code></pre></pre>
 <h2 id="server"><a class="header" href="#server">Server</a></h2>
 <p>Similarly here, you’d use [<code>blocking::ObjectServer</code>] that is associated with every
-<a href="https://docs.rs/zbus/2.0.0/zbus/blocking/struct.Connection.html"><code>blocking::Connection</code></a> instance. While there is no blocking version of <code>Interface</code>,
+<a href="https://docs.rs/zbus/3/zbus/blocking/struct.Connection.html"><code>blocking::Connection</code></a> instance. While there is no blocking version of <code>Interface</code>,
 <code>dbus_interface</code> allows you to write non-async methods.</p>
 <p><strong>Note:</strong> Even though you can write non-async methods, these methods are still called from an async
 context. Therefore, you can not use blocking API in the method implementation directly. See note at
@@ -1250,8 +1250,8 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
 <p>Since the use of a dictionary, specifically one with strings as keys and variants as value (i-e
 <code>a{sv}</code>) is very common in the D-Bus world and use of HashMaps isn’t as convenient and type-safe as
 a struct, you might find yourself wanting to use a struct as a dictionary.</p>
-<p><code>zvariant</code> provides convenient macros for making this possible: <a href="https://docs.rs/zvariant/3.0.0/zvariant/derive.SerializeDict.html"><code>SerializeDict</code></a> and
-<a href="https://docs.rs/zvariant/3.0.0/zvariant/derive.DeserializeDict.html"><code>DeserializeDict</code></a>. You’ll also need to tell <a href="https://docs.rs/zvariant/3.1.0/zvariant/derive.Type.html"><code>Type</code></a> macro to treat the type as a dictionary using
+<p><code>zvariant</code> provides convenient macros for making this possible: <a href="https://docs.rs/zvariant/3/zvariant/derive.SerializeDict.html"><code>SerializeDict</code></a> and
+<a href="https://docs.rs/zvariant/3/zvariant/derive.DeserializeDict.html"><code>DeserializeDict</code></a>. You’ll also need to tell <a href="https://docs.rs/zvariant/3/zvariant/derive.Type.html"><code>Type</code></a> macro to treat the type as a dictionary using
 the <code>signature</code> attribute. Here is a simple example:</p>
 <pre><code class="language-rust noplayground">use zbus::{
     dbus_proxy, dbus_interface, fdo::Result,
@@ -1314,7 +1314,30 @@ have to wait in line.</p>
 combined with signals to report the progress of the work to clients. Both of these solutions
 involve converting the methods in question to take <code>&amp;self</code> argument instead of <code>&amp;mut self</code>.</p>
 <h3 id="2-a-stream-eg-signalstream-is-not-being-continuously-polled"><a class="header" href="#2-a-stream-eg-signalstream-is-not-being-continuously-polled">2. A stream (e.g <code>SignalStream</code>) is not being continuously polled</a></h3>
-<p>Please consult <a href="https://docs.rs/zbus/2.3.2/zbus/struct.MessageStream.html"><code>MessageStream</code></a> documentation for details.</p>
+<p>Please consult <a href="https://docs.rs/zbus/3/zbus/struct.MessageStream.html"><code>MessageStream</code></a> documentation for details.</p>
+<h2 id="why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes"><a class="header" href="#why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes">Why aren’t property values updating for my service that doesn’t notify changes?</a></h2>
+<p>A common issue might arise when using a zbus proxy is that your proxy’s property values aren’t 
+updating. This is due to zbus’ default caching policy, which updates the value of a property only
+when a change is signaled, primarily to minimize latency and optimize client request performance.
+By default, if your service does not emit change notifications, the property values will not
+update accordingly. </p>
+<p>However, you can disabling caching for specific properties:</p>
+<ul>
+<li>
+<p>Add the <code>#[dbus_proxy(property(emits_changed_signal = &quot;false&quot;))]</code> annotation to the property
+for which you desire to disable caching on.</p>
+</li>
+<li>
+<p>Use <code>ProxyBuilder</code> to build your proxy instance and use <code>ProxyBuilder::uncached_properties</code> method
+to list all properties you wish to disable caching for.</p>
+</li>
+<li>
+<p>In order to disable caching for either type of proxy use the <code>ProxyBuilder::cache_properites</code> 
+method.</p>
+</li>
+</ul>
+<p>For more information about all the possible values for <code>emits_changed_signal</code> refer
+to <a href="https://docs.rs/zbus/3.13.1/zbus/attr.dbus_proxy.html"><code>dbus_proxy</code></a> documentation.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="contributors"><a class="header" href="#contributors">Contributors</a></h1>
 <p>Here is a list of the contributors who have helped improving zbus. Big shout-out to them!</p>
 <ul>
