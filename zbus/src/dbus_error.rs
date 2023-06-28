@@ -7,7 +7,7 @@ use crate::{names::ErrorName, Message, MessageHeader, Result};
 /// implement this trait for your error type. The easiest way to achieve that is to make use of the
 /// [`DBusError` macro][dm].
 ///
-/// [dm]: macro.DBusError.html
+/// [dm]: derive.DBusError.html
 pub trait DBusError {
     /// Generate an error reply message for the given method call.
     fn create_reply(&self, msg: &MessageHeader<'_>) -> Result<Message>;
