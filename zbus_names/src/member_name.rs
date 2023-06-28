@@ -4,7 +4,7 @@ use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
     convert::TryFrom,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
     sync::Arc,
 };
@@ -35,9 +35,7 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [in]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-member
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct MemberName<'name>(Str<'name>);
 
 assert_impl_all!(MemberName<'_>: Send, Sync, Unpin);
@@ -108,6 +106,12 @@ impl Borrow<str> for MemberName<'_> {
 impl Display for MemberName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.as_str(), f)
+    }
+}
+
+impl Debug for MemberName<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(&self.as_str(), f)
     }
 }
 
@@ -217,9 +221,7 @@ impl<'name> NoneValue for MemberName<'name> {
 }
 
 /// Owned sibling of [`MemberName`].
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedMemberName(#[serde(borrow)] MemberName<'static>);
 
 assert_impl_all!(OwnedMemberName: Send, Sync, Unpin);
@@ -299,7 +301,13 @@ impl PartialEq<MemberName<'_>> for OwnedMemberName {
 
 impl Display for OwnedMemberName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        MemberName::from(self).fmt(f)
+        Display::fmt(self.as_str(), f)
+    }
+}
+
+impl Debug for OwnedMemberName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self.as_str(), f)
     }
 }
 

@@ -1,7 +1,7 @@
 use core::{
     borrow::Borrow,
     convert::TryFrom,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
 };
 use std::{borrow::Cow, convert::TryInto, sync::Arc};
@@ -45,7 +45,7 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [bus name]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(untagged)]
 pub enum BusName<'name> {
     #[serde(borrow)]
@@ -117,6 +117,12 @@ impl Borrow<str> for BusName<'_> {
 impl Display for BusName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.as_str(), f)
+    }
+}
+
+impl Debug for BusName<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(&self.as_str(), f)
     }
 }
 
@@ -332,7 +338,7 @@ impl<'a> From<&'a OwnedWellKnownName> for BusName<'a> {
 }
 
 /// Owned sibling of [`BusName`].
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord, Type)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord, Type)]
 pub struct OwnedBusName(#[serde(borrow)] BusName<'static>);
 
 impl OwnedBusName {
@@ -363,7 +369,13 @@ impl Borrow<str> for OwnedBusName {
 
 impl Display for OwnedBusName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        BusName::from(self).fmt(f)
+        Display::fmt(self.as_str(), f)
+    }
+}
+
+impl Debug for OwnedBusName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self.as_str(), f)
     }
 }
 

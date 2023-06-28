@@ -4,7 +4,7 @@ use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
     convert::TryFrom,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
     sync::Arc,
 };
@@ -35,9 +35,7 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [wbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct WellKnownName<'name>(Str<'name>);
 
 assert_impl_all!(WellKnownName<'_>: Send, Sync, Unpin);
@@ -108,6 +106,12 @@ impl Borrow<str> for WellKnownName<'_> {
 impl Display for WellKnownName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.as_str(), f)
+    }
+}
+
+impl Debug for WellKnownName<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(&self.as_str(), f)
     }
 }
 
@@ -234,9 +238,7 @@ impl<'name> NoneValue for WellKnownName<'name> {
 }
 
 /// Owned sibling of [`WellKnownName`].
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedWellKnownName(#[serde(borrow)] WellKnownName<'static>);
 
 assert_impl_all!(OwnedWellKnownName: Send, Sync, Unpin);
@@ -275,7 +277,13 @@ impl AsRef<str> for OwnedWellKnownName {
 
 impl Display for OwnedWellKnownName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        WellKnownName::from(self).fmt(f)
+        Display::fmt(self.as_str(), f)
+    }
+}
+
+impl Debug for OwnedWellKnownName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self.as_str(), f)
     }
 }
 
