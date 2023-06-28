@@ -4,7 +4,7 @@ use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
     convert::TryFrom,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
     sync::Arc,
 };
@@ -39,9 +39,7 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [en]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct ErrorName<'name>(Str<'name>);
 
 assert_impl_all!(ErrorName<'_>: Send, Sync, Unpin);
@@ -112,6 +110,12 @@ impl Borrow<str> for ErrorName<'_> {
 impl Display for ErrorName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.as_str(), f)
+    }
+}
+
+impl Debug for ErrorName<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(&self.as_str(), f)
     }
 }
 
@@ -241,9 +245,7 @@ impl<'name> NoneValue for ErrorName<'name> {
 }
 
 /// Owned sibling of [`ErrorName`].
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedErrorName(#[serde(borrow)] ErrorName<'static>);
 
 assert_impl_all!(OwnedErrorName: Send, Sync, Unpin);
@@ -323,7 +325,13 @@ impl PartialEq<ErrorName<'_>> for OwnedErrorName {
 
 impl Display for OwnedErrorName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        ErrorName::from(self).fmt(f)
+        Display::fmt(self.as_str(), f)
+    }
+}
+
+impl Debug for OwnedErrorName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self.as_str(), f)
     }
 }
 

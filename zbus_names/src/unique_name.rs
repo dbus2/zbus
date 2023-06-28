@@ -4,7 +4,7 @@ use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
     convert::TryFrom,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
     sync::Arc,
 };
@@ -34,9 +34,7 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [ubn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct UniqueName<'name>(Str<'name>);
 
 assert_impl_all!(UniqueName<'_>: Send, Sync, Unpin);
@@ -107,6 +105,12 @@ impl Borrow<str> for UniqueName<'_> {
 impl Display for UniqueName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.as_str(), f)
+    }
+}
+
+impl Debug for UniqueName<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(&self.as_str(), f)
     }
 }
 
@@ -233,9 +237,7 @@ impl<'name> NoneValue for UniqueName<'name> {
 }
 
 /// Owned sibling of [`UniqueName`].
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedUniqueName(#[serde(borrow)] UniqueName<'static>);
 
 assert_impl_all!(OwnedUniqueName: Send, Sync, Unpin);
@@ -330,6 +332,12 @@ impl NoneValue for OwnedUniqueName {
 
 impl Display for OwnedUniqueName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        UniqueName::from(self).fmt(f)
+        Display::fmt(self.as_str(), f)
+    }
+}
+
+impl Debug for OwnedUniqueName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self.as_str(), f)
     }
 }
