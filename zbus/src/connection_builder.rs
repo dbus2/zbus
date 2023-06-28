@@ -90,11 +90,11 @@ impl<'a> ConnectionBuilder<'a> {
     /// Here is an example of connecting to an IBus service:
     ///
     /// ```no_run
-    ///# use std::error::Error;
-    ///# use zbus::ConnectionBuilder;
-    ///# use zbus::block_on;
-    ///#
-    ///# block_on(async {
+    /// # use std::error::Error;
+    /// # use zbus::ConnectionBuilder;
+    /// # use zbus::block_on;
+    /// #
+    /// # block_on(async {
     /// let addr = "unix:\
     ///     path=/home/zeenix/.cache/ibus/dbus-ET0Xzrk9,\
     ///     guid=fdd08e811a6c7ebe1fef0d9e647230da";
@@ -103,11 +103,11 @@ impl<'a> ConnectionBuilder<'a> {
     ///     .await?;
     ///
     /// // Do something useful with `conn`..
-    ///#     drop(conn);
-    ///#     Ok::<(), zbus::Error>(())
-    ///# }).unwrap();
-    ///#
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// #     drop(conn);
+    /// #     Ok::<(), zbus::Error>(())
+    /// # }).unwrap();
+    /// #
+    /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     ///
     /// **Note:** The IBus address is different for each session. You can find the address for your
@@ -217,27 +217,28 @@ impl<'a> ConnectionBuilder<'a> {
 
     /// Set the capacity of the main (unfiltered) queue.
     ///
-    /// Since typically you'd want to set this at instantiation time, you can set it through the builder.
+    /// Since typically you'd want to set this at instantiation time, you can set it through the
+    /// builder.
     ///
     /// # Example
     ///
     /// ```
-    ///# use std::error::Error;
-    ///# use zbus::ConnectionBuilder;
-    ///# use zbus::block_on;
-    ///#
-    ///# block_on(async {
+    /// # use std::error::Error;
+    /// # use zbus::ConnectionBuilder;
+    /// # use zbus::block_on;
+    /// #
+    /// # block_on(async {
     /// let conn = ConnectionBuilder::session()?
     ///     .max_queued(30)
     ///     .build()
     ///     .await?;
     /// assert_eq!(conn.max_queued(), 30);
     ///
-    ///#     Ok::<(), zbus::Error>(())
-    ///# }).unwrap();
-    ///#
+    /// #     Ok::<(), zbus::Error>(())
+    /// # }).unwrap();
+    /// #
     /// // Do something useful with `conn`..
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn max_queued(mut self, max: usize) -> Self {
         self.max_queued = Some(max);

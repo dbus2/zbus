@@ -20,10 +20,15 @@ The project is divided into the following subcrates:
 
 ## Getting Started
 
-The best way to get started with zbus is the [book](https://dbus.pages.freedesktop.org/zbus/),
-where we start with basic D-Bus concepts and explain with code samples, how zbus makes D-Bus easy.
+The best way to get started with zbus is the [book](https://dbus2.github.io/zbus/), where we start
+with basic D-Bus concepts and explain with code samples, how zbus makes D-Bus easy.
 
 ## Example code
+
+We'll create a simple D-Bus service and client to demonstrate the usage of zbus. Note that these
+examples assume that a D-Bus broker is setup on your machine and you've a session bus running
+(`DBUS_SESSION_BUS_ADDRESS` environment variable must be set). This is guaranteed to be the case on
+a typical Linux desktop session.
 
 ### Server
 

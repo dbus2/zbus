@@ -200,8 +200,8 @@ mod tests {
                 e
             })
             .unwrap();
-        // Hello method is already called during connection creation so subsequent calls are expected to fail but only
-        // with a D-Bus error.
+        // Hello method is already called during connection creation so subsequent calls are
+        // expected to fail but only with a D-Bus error.
         match connection.call_method(
             Some("org.freedesktop.DBus"),
             "/org/freedesktop/DBus",
@@ -760,7 +760,8 @@ mod tests {
 
             rx.recv().unwrap();
 
-            // Now we release the name ownership to use a different connection (i-e new unique name).
+            // Now we release the name ownership to use a different connection (i-e new unique
+            // name).
             conn.release_name("org.freedesktop.zbus.ComeAndGo").unwrap();
         }
 

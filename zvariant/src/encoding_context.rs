@@ -3,7 +3,6 @@ use std::marker::PhantomData;
 use static_assertions::assert_impl_all;
 
 /// The encoding format.
-///
 #[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
 pub enum EncodingFormat {
     /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-marshaling)

@@ -84,8 +84,8 @@ impl From<u8> for MessageType {
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Type)]
 pub enum MessageFlags {
-    /// This message does not expect method return replies or error replies, even if it is of a type
-    /// that can have a reply; the reply should be omitted.
+    /// This message does not expect method return replies or error replies, even if it is of a
+    /// type that can have a reply; the reply should be omitted.
     ///
     /// Note that `MessageType::MethodCall` is the only message type currently defined in the
     /// specification that can expect a reply, so the presence or absence of this flag in the other
@@ -114,7 +114,8 @@ impl zvariant::Type for SerialNum {
     }
 }
 
-// Unfortunately Serde doesn't provide a blanket impl. for `Cell<T>` so we have to implement manually.
+// Unfortunately Serde doesn't provide a blanket impl. for `Cell<T>` so we have to implement
+// manually.
 //
 // https://github.com/serde-rs/serde/issues/1952
 impl Serialize for SerialNum {

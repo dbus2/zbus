@@ -236,7 +236,8 @@ where
     }
 }
 
-/// Serialize `T` that (potentially) contains FDs and has the given signature, to the given `writer`.
+/// Serialize `T` that (potentially) contains FDs and has the given signature, to the given
+/// `writer`.
 ///
 /// Use this function instead of [`to_writer_fds`] if the value being serialized does not implement
 /// [`Type`].

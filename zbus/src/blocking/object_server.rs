@@ -37,9 +37,9 @@ where
     /// # Examples
     ///
     /// ```no_run
-    ///# use std::error::Error;
-    ///# use async_io::block_on;
-    ///# use zbus::{blocking::Connection, dbus_interface};
+    /// # use std::error::Error;
+    /// # use async_io::block_on;
+    /// # use zbus::{blocking::Connection, dbus_interface};
     ///
     /// struct MyIface(u32);
     ///
@@ -51,18 +51,18 @@ where
     ///    }
     /// }
     /// // Setup connection and object_server etc here and then in another part of the code:
-    ///#
-    ///# let connection = Connection::session()?;
-    ///#
-    ///# let path = "/org/zbus/path";
-    ///# connection.object_server().at(path, MyIface(22))?;
+    /// #
+    /// # let connection = Connection::session()?;
+    /// #
+    /// # let path = "/org/zbus/path";
+    /// # connection.object_server().at(path, MyIface(22))?;
     /// let object_server = connection.object_server();
     /// let iface_ref = object_server.interface::<_, MyIface>(path)?;
     /// let mut iface = iface_ref.get_mut();
     /// iface.0 = 42;
     /// block_on(iface.count_changed(iface_ref.signal_context()))?;
-    ///#
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// #
+    /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn get_mut(&self) -> InterfaceDerefMut<'_, I> {
         block_on(self.azync.get_mut())
@@ -81,7 +81,7 @@ where
 /// path.
 ///
 /// ```no_run
-///# use std::error::Error;
+/// # use std::error::Error;
 /// use zbus::{blocking::Connection, dbus_interface};
 /// use event_listener::Event;
 ///
@@ -118,7 +118,7 @@ where
 ///     .at("/org/zbus/path", interface)?;
 ///
 /// quit_listener.wait();
-///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+/// # Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
 #[derive(Debug)]
 pub struct ObjectServer {
@@ -181,14 +181,14 @@ impl ObjectServer {
     /// The typical use of this is to emit signals outside of a dispatched handler:
     ///
     /// ```no_run
-    ///# use std::error::Error;
-    ///# use zbus::block_on;
-    ///# use zbus::{
-    ///#    SignalContext,
-    ///#    blocking::Connection,
-    ///#    dbus_interface,
-    ///# };
-    ///#
+    /// # use std::error::Error;
+    /// # use zbus::block_on;
+    /// # use zbus::{
+    /// #    SignalContext,
+    /// #    blocking::Connection,
+    /// #    dbus_interface,
+    /// # };
+    /// #
     /// struct MyIface;
     /// #[dbus_interface(name = "org.myiface.MyIface")]
     /// impl MyIface {
@@ -196,17 +196,17 @@ impl ObjectServer {
     ///     async fn emit_signal(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
     /// }
     ///
-    ///# let connection = Connection::session()?;
-    ///#
-    ///# let path = "/org/zbus/path";
-    ///# connection.object_server().at(path, MyIface)?;
+    /// # let connection = Connection::session()?;
+    /// #
+    /// # let path = "/org/zbus/path";
+    /// # connection.object_server().at(path, MyIface)?;
     /// let iface_ref = connection
     ///     .object_server()
     ///     .interface::<_, MyIface>(path)?;
     /// block_on(MyIface::emit_signal(iface_ref.signal_context()))?;
-    ///#
-    ///#
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// #
+    /// #
+    /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn interface<'p, P, I>(&self, path: P) -> Result<InterfaceRef<I>>
     where

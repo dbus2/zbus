@@ -927,8 +927,8 @@ mod tests {
             assert_eq!(r.1, u32::max_value());
 
             let mut rng = thread_rng();
-            // Let's test GVariant ser/de of a 254 byte array with variable-width elements as to ensure
-            // no problems with non-normal BS of GVariant.
+            // Let's test GVariant ser/de of a 254 byte array with variable-width elements as to
+            // ensure no problems with non-normal BS of GVariant.
             let as_ = vec![
                 (&mut rng)
                     .sample_iter(Alphanumeric)
@@ -942,8 +942,8 @@ mod tests {
                     .collect::<String>(),
             ];
             let gv_encoded = to_bytes(ctxt, &as_).unwrap();
-            // 252 chars + 2 null terminator bytes doesn't leave room for 2 framing offset bytes so a
-            // 2-byte offset is chosen by the serializer.
+            // 252 chars + 2 null terminator bytes doesn't leave room for 2 framing offset bytes so
+            // a 2-byte offset is chosen by the serializer.
             assert_eq!(gv_encoded.len(), 258);
 
             // Check encoding against GLib
@@ -1100,8 +1100,8 @@ mod tests {
 
         #[cfg(feature = "gvariant")]
         {
-            // GVariant-format requires framing offsets for dict entries with variable-length keys so
-            // let's test that.
+            // GVariant-format requires framing offsets for dict entries with variable-length keys
+            // so let's test that.
             let mut map: HashMap<&str, &str> = HashMap::new();
             map.insert("hi", "1234");
             map.insert("world", "561");
@@ -1823,7 +1823,8 @@ mod tests {
         let encoded = std::fs::read("../test-data/flatpak-summary.dump").unwrap();
         let ctxt = Context::<LE>::new_gvariant(0);
         let _: Summary<'_> = from_slice(&encoded, ctxt).unwrap();
-        // If we're able to deserialize all the data successfully, don't bother checking the summary data.
+        // If we're able to deserialize all the data successfully, don't bother checking the summary
+        // data.
     }
 
     #[test]

@@ -134,7 +134,7 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 /// #### Get the session bus ID
 ///
 /// ```
-///# zbus::block_on(async {
+/// # zbus::block_on(async {
 /// use zbus::Connection;
 ///
 /// let connection = Connection::session().await?;
@@ -151,8 +151,8 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 ///
 /// let id: &str = reply.body()?;
 /// println!("Unique ID of the bus: {}", id);
-///# Ok::<(), zbus::Error>(())
-///# }).unwrap();
+/// # Ok::<(), zbus::Error>(())
+/// # }).unwrap();
 /// ```
 ///
 /// #### Monitoring all messages
@@ -160,7 +160,7 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 /// Let's eavesdrop on the session bus 😈 using the [Monitor] interface:
 ///
 /// ```rust,no_run
-///# zbus::block_on(async {
+/// # zbus::block_on(async {
 /// use futures_util::stream::TryStreamExt;
 /// use zbus::{Connection, MessageStream};
 ///
@@ -181,8 +181,8 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 ///     println!("Got message: {}", msg);
 /// }
 ///
-///# Ok::<(), zbus::Error>(())
-///# }).unwrap();
+/// # Ok::<(), zbus::Error>(())
+/// # }).unwrap();
 /// ```
 ///
 /// This should print something like:
@@ -537,8 +537,8 @@ impl Connection {
     /// # Example
     ///
     /// ```
-    ///#
-    ///# zbus::block_on(async {
+    /// #
+    /// # zbus::block_on(async {
     /// use zbus::{Connection, fdo::{DBusProxy, RequestNameFlags, RequestNameReply}};
     /// use enumflags2::BitFlags;
     /// use futures_util::stream::StreamExt;
@@ -583,8 +583,8 @@ impl Connection {
     /// let lost = lost_stream.next().await.unwrap();
     /// assert_eq!(lost.args().unwrap().name, name);
     ///
-    ///# Ok::<(), zbus::Error>(())
-    ///# }).unwrap();
+    /// # Ok::<(), zbus::Error>(())
+    /// # }).unwrap();
     /// ```
     ///
     /// # Caveats
@@ -647,7 +647,8 @@ impl Connection {
                                 Ok(args) if args.name == well_known_name => {
                                     tracing::info!(
                                         "Connection `{}` lost name `{}`",
-                                        // SAFETY: This is bus connection so unique name can't be None.
+                                        // SAFETY: This is bus connection so unique name can't be
+                                        // None.
                                         inner.unique_name.get().unwrap(),
                                         well_known_name
                                     );
@@ -660,8 +661,9 @@ impl Connection {
                             },
                             None => {
                                 trace!("`NameLost` signal stream closed");
-                                // This is a very strange state we end up in. Now the name is question
-                                // remains in the queue forever. Maybe we can do better here but I
+                                // This is a very strange state we end up in. Now the name is
+                                // question remains in the queue
+                                // forever. Maybe we can do better here but I
                                 // think it's a very unlikely scenario anyway.
                                 //
                                 // Can happen if the connection is lost/dropped but then the whole
@@ -709,7 +711,8 @@ impl Connection {
                                 },
                                 None => {
                                     trace!("`NameAcquired` signal stream closed");
-                                    // See comment above for similar state in case of `NameLost` stream.
+                                    // See comment above for similar state in case of `NameLost`
+                                    // stream.
                                     break;
                                 }
                             }
@@ -844,26 +847,26 @@ impl Connection {
     /// scheduler:
     ///
     /// ```
-    ///# // Disable on windows because somehow it triggers a stack overflow there:
-    ///# // https://gitlab.freedesktop.org/zeenix/zbus/-/jobs/34023494
-    ///# #[cfg(all(not(feature = "tokio"), not(target_os = "windows")))]
-    ///# {
+    /// # // Disable on windows because somehow it triggers a stack overflow there:
+    /// # // https://gitlab.freedesktop.org/zeenix/zbus/-/jobs/34023494
+    /// # #[cfg(all(not(feature = "tokio"), not(target_os = "windows")))]
+    /// # {
     /// use zbus::ConnectionBuilder;
     /// use async_std::task::{block_on, spawn};
     ///
-    ///# struct SomeIface;
-    ///#
-    ///# #[zbus::dbus_interface]
-    ///# impl SomeIface {
-    ///# }
-    ///#
+    /// # struct SomeIface;
+    /// #
+    /// # #[zbus::dbus_interface]
+    /// # impl SomeIface {
+    /// # }
+    /// #
     /// block_on(async {
     ///     let conn = ConnectionBuilder::session()
     ///         .unwrap()
     ///         .internal_executor(false)
-    ///#         // This is only for testing a deadlock that used to happen with this combo.
-    ///#         .serve_at("/some/iface", SomeIface)
-    ///#         .unwrap()
+    /// #         // This is only for testing a deadlock that used to happen with this combo.
+    /// #         .serve_at("/some/iface", SomeIface)
+    /// #         .unwrap()
     ///         .build()
     ///         .await
     ///         .unwrap();
@@ -878,7 +881,7 @@ impl Connection {
     ///
     ///     // All your other async code goes here.
     /// });
-    ///# }
+    /// # }
     /// ```
     ///
     /// **Note**: zbus 2.1 added support for tight integration with tokio. This means, if you use

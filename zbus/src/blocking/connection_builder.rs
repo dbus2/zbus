@@ -115,21 +115,22 @@ impl<'a> ConnectionBuilder<'a> {
 
     /// Set the capacity of the main (unfiltered) queue.
     ///
-    /// Since typically you'd want to set this at instantiation time, you can set it through the builder.
+    /// Since typically you'd want to set this at instantiation time, you can set it through the
+    /// builder.
     ///
     /// # Example
     ///
     /// ```
-    ///# use std::error::Error;
-    ///# use zbus::blocking::ConnectionBuilder;
-    ///#
+    /// # use std::error::Error;
+    /// # use zbus::blocking::ConnectionBuilder;
+    /// #
     /// let conn = ConnectionBuilder::session()?
     ///     .max_queued(30)
     ///     .build()?;
     /// assert_eq!(conn.max_queued(), 30);
     ///
     /// // Do something useful with `conn`..
-    ///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
     pub fn max_queued(self, max: usize) -> Self {
         Self(self.0.max_queued(max))
@@ -139,8 +140,8 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// This is similar to [`zbus::blocking::ObjectServer::at`], except that it allows you to have
     /// your interfaces available immediately after the connection is established. Typically, this
-    /// is exactly what you'd want. Also in contrast to [`zbus::blocking::ObjectServer::at`], this method will
-    /// replace any previously added interface with the same name at the same path.
+    /// is exactly what you'd want. Also in contrast to [`zbus::blocking::ObjectServer::at`], this
+    /// method will replace any previously added interface with the same name at the same path.
     pub fn serve_at<P, I>(self, path: P, iface: I) -> Result<Self>
     where
         I: Interface,

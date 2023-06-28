@@ -162,8 +162,8 @@ pub enum Address {
     /// VSOCK address
     ///
     /// This variant is only available when either `vsock` or `tokio-vsock` feature is enabled. The
-    /// type of `stream` is `vsock::VsockStream` with `vsock` feature and `tokio_vsock::VsockStream`
-    /// with `tokio-vsock` feature.
+    /// type of `stream` is `vsock::VsockStream` with `vsock` feature and
+    /// `tokio_vsock::VsockStream` with `tokio-vsock` feature.
     Vsock(VsockAddress),
 }
 
@@ -548,7 +548,8 @@ fn encode_percents(f: &mut Formatter<'_>, mut value: &[u8]) -> std::fmt::Result 
         );
 
         if let Some(pos) = pos {
-            // SAFETY: The above `position()` call made sure that only ASCII chars are in the string up to `pos`
+            // SAFETY: The above `position()` call made sure that only ASCII chars are in the string
+            // up to `pos`
             f.write_str(unsafe { from_utf8_unchecked(&value[..pos]) })?;
 
             let c = value[pos];
@@ -557,7 +558,8 @@ fn encode_percents(f: &mut Formatter<'_>, mut value: &[u8]) -> std::fmt::Result 
             let pos = c as usize * 3;
             f.write_str(&LOOKUP[pos..pos + 3])?;
         } else {
-            // SAFETY: The above `position()` call made sure that only ASCII chars are in the rest of the string
+            // SAFETY: The above `position()` call made sure that only ASCII chars are in the rest
+            // of the string
             f.write_str(unsafe { from_utf8_unchecked(value) })?;
             return Ok(());
         }

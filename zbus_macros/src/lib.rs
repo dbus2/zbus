@@ -18,13 +18,14 @@ mod iface;
 mod proxy;
 mod utils;
 
-/// Attribute macro for defining D-Bus proxies (using [`zbus::Proxy`] and [`zbus::blocking::Proxy`]).
+/// Attribute macro for defining D-Bus proxies (using [`zbus::Proxy`] and
+/// [`zbus::blocking::Proxy`]).
 ///
-/// The macro must be applied on a `trait T`. Two matching `impl T` will provide an asynchronous Proxy
-/// implementation, named `TraitNameProxy` and a blocking one, named `TraitNameProxyBlocking`. The
-/// proxy instances can be created with the associated `new()` or `builder()` methods. The former
-/// doesn't take any argument and uses the default service name and path. The later allows you to
-/// specify non-default proxy arguments.
+/// The macro must be applied on a `trait T`. Two matching `impl T` will provide an asynchronous
+/// Proxy implementation, named `TraitNameProxy` and a blocking one, named `TraitNameProxyBlocking`.
+/// The proxy instances can be created with the associated `new()` or `builder()` methods. The
+/// former doesn't take any argument and uses the default service name and path. The later allows
+/// you to specify non-default proxy arguments.
 ///
 /// The following attributes are supported:
 ///
@@ -57,32 +58,32 @@ mod utils;
 /// * `name` - override the D-Bus name (pascal case form by default)
 ///
 /// * `property` - expose the method as a property. If the method takes an argument, it must be a
-///   setter, with a `set_` prefix. Otherwise, it's a getter.
-///   Additional sub-attributes exists to control specific property behaviors:
-///   * `emits_changed_signal` - specifies how property changes are signaled. Valid values are
-///     those documented in [DBus specifications][dbus_emits_changed_signal]:
-///     * `"true"` - (default) change signal is always emitted with the value included.
-///       This uses the default caching behavior of the proxy, and generates a listener method for
-///       the change signal.
+///   setter, with a `set_` prefix. Otherwise, it's a getter. Additional sub-attributes exists to
+///   control specific property behaviors:
+///   * `emits_changed_signal` - specifies how property changes are signaled. Valid values are those
+///     documented in [DBus specifications][dbus_emits_changed_signal]:
+///     * `"true"` - (default) change signal is always emitted with the value included. This uses
+///       the default caching behavior of the proxy, and generates a listener method for the change
+///       signal.
 ///     * `"invalidates"` - change signal is emitted, but the value is not included in the signal.
 ///       This has the same behavior as `"true"`.
-///     * `"const"` - property never changes, thus no signal is ever emitted for it.
-///       This uses the default caching behavior of the proxy, but does not generate a listener
-///       method for the change signal.
-///     * `"false"` - change signal is not (guaranteed to be) emitted if the property changes.
-///       This disables property value caching, and does not generate a listener method for the
+///     * `"const"` - property never changes, thus no signal is ever emitted for it. This uses the
+///       default caching behavior of the proxy, but does not generate a listener method for the
 ///       change signal.
+///     * `"false"` - change signal is not (guaranteed to be) emitted if the property changes. This
+///       disables property value caching, and does not generate a listener method for the change
+///       signal.
 ///
 /// * `signal` - declare a signal just like a D-Bus method. Read the [Signals](#signals) section
-///    below for details.
+///   below for details.
 ///
 /// * `no_reply` - declare a method call that does not wait for a reply.
 ///
 /// * `no_autostart` - declare a method call that will not trigger the bus to automatically launch
-///    the destination service if it is not already running.
+///   the destination service if it is not already running.
 ///
 /// * `allow_interactive_auth` - declare a method call that is allowed to trigger an interactive
-///    prompt for authorization or confirmation from the receiver.
+///   prompt for authorization or confirmation from the receiver.
 ///
 /// * `object` - methods that returns an [`ObjectPath`] can be annotated with the `object` attribute
 ///   to specify the proxy object to be constructed from the returned [`ObjectPath`].
@@ -90,8 +91,8 @@ mod utils;
 /// * `async_object` - if the assumptions made by `object` attribute about naming of the
 ///   asynchronous proxy type, don't fit your bill, you can use this to specify its exact name.
 ///
-/// * `blocking_object` - if the assumptions made by `object` attribute about naming of the
-///   blocking proxy type, don't fit your bill, you can use this to specify its exact name.
+/// * `blocking_object` - if the assumptions made by `object` attribute about naming of the blocking
+///   proxy type, don't fit your bill, you can use this to specify its exact name.
 ///
 ///   NB: Any doc comments provided shall be appended to the ones added by the macro.
 ///
@@ -107,7 +108,7 @@ mod utils;
 /// # Example
 ///
 /// ```no_run
-///# use std::error::Error;
+/// # use std::error::Error;
 /// use zbus_macros::dbus_proxy;
 /// use zbus::{blocking::Connection, Result, fdo, zvariant::Value};
 /// use futures_util::stream::StreamExt;
@@ -177,7 +178,7 @@ mod utils;
 ///     Ok::<(), zbus::Error>(())
 /// })?;
 ///
-///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+/// # Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
 ///
 /// [`zbus_polkit`] is a good example of how to bind a real D-Bus API.
@@ -247,17 +248,17 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// * `object_server` - This marks the method argument to receive a reference to the
 ///   [`ObjectServer`] this method was called by.
-/// * `connection` - This marks the method argument to receive a reference to the
-///   [`Connection`] on which the method call was received.
+/// * `connection` - This marks the method argument to receive a reference to the [`Connection`] on
+///   which the method call was received.
 /// * `header` - This marks the method argument to receive the message header associated with the
 ///   D-Bus method call being handled.
-/// * `signal_context` - This marks the method argument to receive a [`SignalContext`]
-///   instance, which is needed for emitting signals the easy way.
+/// * `signal_context` - This marks the method argument to receive a [`SignalContext`] instance,
+///   which is needed for emitting signals the easy way.
 ///
 /// # Example
 ///
 /// ```
-///# use std::error::Error;
+/// # use std::error::Error;
 /// use zbus_macros::dbus_interface;
 /// use zbus::{ObjectServer, SignalContext, MessageHeader};
 ///
@@ -312,7 +313,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     }
 /// }
 ///
-///# Ok::<_, Box<dyn Error + Send + Sync>>(())
+/// # Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
 ///
 /// See also [`ObjectServer`] documentation to learn how to export an interface over a `Connection`.

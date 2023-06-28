@@ -3,8 +3,8 @@ use crate::{Error, MaxDepthExceeded, Result};
 // We take the limits from the D-Bus specification for gvariant as well.
 //
 // The GVariant specification removed all the limits, from the D-Bus specification but that turned
-// out to be a [mistake]. Although glib went for a higher limit (128) but we'll stick to the D-Bus limits
-// and expand if/when needed.
+// out to be a [mistake]. Although glib went for a higher limit (128) but we'll stick to the D-Bus
+// limits and expand if/when needed.
 //
 // [mistake]: https://gitlab.gnome.org/GNOME/glib/-/commit/7c4e6e9fbe473de0401c778c6b0c4aad27d5145a
 const MAX_STRUCT_DEPTH: u8 = 32;
