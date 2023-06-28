@@ -209,7 +209,7 @@ impl<'a> PartialEq<&str> for ObjectPath<'a> {
 
 impl<'a> Debug for ObjectPath<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("ObjectPath").field(&self.as_str()).finish()
+        Debug::fmt(self.as_str(), f)
     }
 }
 
