@@ -1,4 +1,4 @@
-<sup>[1](#myfootnote1)</sup><a name="myfootnote1">1</a>: zbus
+# zbus
 
 [![](https://docs.rs/zbus/badge.svg)](https://docs.rs/zbus/) [![](https://img.shields.io/crates/v/zbus)](https://crates.io/crates/zbus)
 
