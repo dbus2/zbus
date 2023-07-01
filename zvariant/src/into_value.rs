@@ -5,7 +5,7 @@ use crate::Maybe;
 use crate::{Array, Dict, ObjectPath, Signature, Str, Structure, Type, Value};
 
 #[cfg(unix)]
-use crate::BorrowedFd;
+use crate::{BorrowedFd, OwnedFd};
 
 //
 // Conversions from encodable types to `Value`
@@ -38,7 +38,9 @@ into_value!(i64, I64);
 into_value!(f32, F64);
 into_value!(f64, F64);
 #[cfg(unix)]
-into_value!(BorrowedFd<'a>, Fd);
+into_value!(BorrowedFd<'a>, BorrowedFd);
+#[cfg(unix)]
+into_value!(OwnedFd, OwnedFd);
 
 into_value!(&'a str, Str);
 into_value!(Str<'a>, Str);

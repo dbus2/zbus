@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[cfg(unix)]
-use crate::BorrowedFd;
+use crate::{BorrowedFd, OwnedFd};
 
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
@@ -78,6 +78,8 @@ ov_try_from!(Str<'static>);
 ov_try_from!(Structure<'static>);
 #[cfg(unix)]
 ov_try_from!(BorrowedFd<'static>);
+#[cfg(unix)]
+ov_try_from!(OwnedFd);
 
 ov_try_from_ref!(u8);
 ov_try_from_ref!(bool);

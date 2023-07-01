@@ -25,7 +25,7 @@ use crate::{
 use crate::{maybe_display_fmt, Maybe};
 
 #[cfg(unix)]
-use crate::BorrowedFd;
+use crate::{BorrowedFd, OwnedFd};
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
@@ -102,7 +102,9 @@ pub enum Value<'a> {
     Maybe(Maybe<'a>),
 
     #[cfg(unix)]
-    Fd(BorrowedFd<'a>),
+    BorrowedFd(BorrowedFd<'a>),
+    #[cfg(unix)]
+    OwnedFd(OwnedFd),
 }
 
 assert_impl_all!(Value<'_>: Send, Sync, Unpin);
@@ -132,7 +134,13 @@ macro_rules! serialize_value {
             Value::Maybe(value) => $serializer.$method($($first_arg,)* value),
 
             #[cfg(unix)]
-            Value::Fd(value) => $serializer.$method($($first_arg,)* value),
+            Value::BorrowedFd(value) => $serializer.$method($($first_arg,)* value),
+            #[cfg(unix)]
+            Value::OwnedFd(value) => {
+                // FIXME Make sure this is calling the serialize method of
+                // OwnedFd which will properly call into_raw_fd().
+                $serializer.$method($($first_arg,)* value)
+            },
         }
     }
 }
@@ -198,18 +206,16 @@ impl<'a> Value<'a> {
             #[cfg(feature = "gvariant")]
             Value::Maybe(v) => Value::Maybe(v.to_owned()),
             #[cfg(unix)]
-            Value::Fd(v) => unsafe {
-                // NOTE We could do this safely via duplicating the descriptor,
-                // the problem is that now we are left with a new owned fd which is
-                // not going to be closed on Drop. Is this an issue?
-                //
-                // FIXME This is intrinsically unsafe as we are extending the
-                // lifetime of a descriptor.
-                let raw_fd = v.as_raw_fd();
-                let borrowed_fd = BorrowedFd::borrow_raw(raw_fd);
+            // FIXME Do something else if the cloning fails.
+            #[cfg(unix)]
+            Value::BorrowedFd(v) => {
+                let cloned_fd = v.try_clone_to_owned().unwrap();
 
-                Value::Fd(borrowed_fd)
-            },
+                Value::OwnedFd(cloned_fd)
+            }
+            // FIXME Do something else if the cloning fails.
+            #[cfg(unix)]
+            Value::OwnedFd(v) => Value::OwnedFd(v.try_clone().unwrap()),
         })
     }
 
@@ -238,7 +244,9 @@ impl<'a> Value<'a> {
             Value::Maybe(value) => value.full_signature().clone(),
 
             #[cfg(unix)]
-            Value::Fd(_) => BorrowedFd::signature(),
+            Value::BorrowedFd(_) => BorrowedFd::signature(),
+            #[cfg(unix)]
+            Value::OwnedFd(_) => OwnedFd::signature(),
         }
     }
 
@@ -479,7 +487,14 @@ pub(crate) fn value_display_fmt(
         #[cfg(feature = "gvariant")]
         Value::Maybe(maybe) => maybe_display_fmt(maybe, f, type_annotate),
         #[cfg(unix)]
-        Value::Fd(handle) => {
+        Value::BorrowedFd(handle) => {
+            if type_annotate {
+                f.write_str("handle ")?;
+            }
+            write!(f, "{}", handle.as_raw_fd())
+        }
+        #[cfg(unix)]
+        Value::OwnedFd(handle) => {
             if type_annotate {
                 f.write_str("handle ")?;
             }
@@ -733,7 +748,7 @@ where
             b'h' => unsafe {
                 let borrowed_fd = BorrowedFd::borrow_raw(value);
 
-                Value::Fd(borrowed_fd)
+                Value::BorrowedFd(borrowed_fd)
             },
             _ => value.into(),
         };

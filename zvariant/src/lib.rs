@@ -349,9 +349,9 @@ mod tests {
     fn fd_value() {
         let file = std::fs::File::create("foo.txt").unwrap();
         let fd = BorrowedFd::from(&file);
-        basic_type_test!(LE, DBus, fd, 4, BorrowedFd<'_>, 4, Fd, 8);
+        basic_type_test!(LE, DBus, fd, 4, BorrowedFd<'_>, 4, BorrowedFd, 8);
         #[cfg(feature = "gvariant")]
-        basic_type_test!(LE, GVariant, fd, 4, BorrowedFd<'_>, 4, Fd, 6);
+        basic_type_test!(LE, GVariant, fd, 4, BorrowedFd<'_>, 4, BorrowedFd, 6);
     }
 
     #[test]
