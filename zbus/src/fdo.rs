@@ -391,7 +391,7 @@ macro_rules! gen_monitoring_proxy {
             /// Converts the connection into a monitor connection which can be used as a
             /// debugging/monitoring tool.
             fn become_monitor(
-                &self,
+                self,
                 match_rules: &[crate::MatchRule<'_>],
                 flags: u32,
             ) -> Result<()>;
