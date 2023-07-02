@@ -158,6 +158,17 @@ macro_rules! array_type {
 array_type!([T]);
 array_type!(Vec<T>);
 
+impl<T, S> Type for std::collections::HashSet<T, S>
+where
+    T: Type + Eq + Hash,
+    S: BuildHasher,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <[T]>::signature()
+    }
+}
+
 #[cfg(feature = "arrayvec")]
 impl<T, const CAP: usize> Type for arrayvec::ArrayVec<T, CAP>
 where
