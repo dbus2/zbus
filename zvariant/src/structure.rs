@@ -4,11 +4,14 @@ use serde::{
     ser::{Serialize, SerializeTupleStruct, Serializer},
 };
 use static_assertions::assert_impl_all;
-use std::convert::TryInto;
+use std::{
+    convert::TryInto,
+    fmt::{Display, Write},
+};
 
 use crate::{
-    signature_parser::SignatureParser, value::SignatureSeed, DynamicDeserialize, DynamicType,
-    OwnedValue, Signature, Value,
+    signature_parser::SignatureParser, value::SignatureSeed, value_display_fmt, DynamicDeserialize,
+    DynamicType, OwnedValue, Signature, Value,
 };
 
 /// Use this to efficiently build a [`Structure`].
@@ -195,6 +198,41 @@ impl<'a> Structure<'a> {
             signature: self.signature.to_owned(),
         }
     }
+}
+
+impl Display for Structure<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        structure_display_fmt(self, f, true)
+    }
+}
+
+pub(crate) fn structure_display_fmt(
+    structure: &Structure<'_>,
+    f: &mut std::fmt::Formatter<'_>,
+    type_annotate: bool,
+) -> std::fmt::Result {
+    f.write_char('(')?;
+
+    let fields = structure.fields();
+
+    match fields.len() {
+        0 => {}
+        1 => {
+            value_display_fmt(&fields[0], f, type_annotate)?;
+            f.write_char(',')?;
+        }
+        _ => {
+            for (i, field) in fields.iter().enumerate() {
+                value_display_fmt(field, f, type_annotate)?;
+
+                if i + 1 < fields.len() {
+                    f.write_str(", ")?;
+                }
+            }
+        }
+    }
+
+    f.write_char(')')
 }
 
 impl<'a> Default for Structure<'a> {

@@ -1,8 +1,8 @@
 use serde::ser::{Serialize, Serializer};
 use static_assertions::assert_impl_all;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, fmt::Display};
 
-use crate::{Error, Signature, Type, Value};
+use crate::{value_display_fmt, Error, Signature, Type, Value};
 
 /// A helper type to wrap `Option<T>` (GVariant's Maybe type) in [`Value`].
 ///
@@ -101,6 +101,47 @@ impl<'a> Maybe<'a> {
             signature: self.signature.to_owned(),
         }
     }
+}
+
+impl Display for Maybe<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        maybe_display_fmt(self, f, true)
+    }
+}
+
+pub(crate) fn maybe_display_fmt(
+    maybe: &Maybe<'_>,
+    f: &mut std::fmt::Formatter<'_>,
+    type_annotate: bool,
+) -> std::fmt::Result {
+    if type_annotate {
+        write!(f, "@{} ", maybe.full_signature())?;
+    }
+
+    let (last_inner, depth) = {
+        let mut curr = maybe.inner();
+        let mut depth = 0;
+
+        while let Some(Value::Maybe(child_maybe)) = curr {
+            curr = child_maybe.inner();
+            depth += 1;
+        }
+
+        (curr, depth)
+    };
+
+    if let Some(last_inner) = last_inner {
+        // There are no Nothings, so print out the inner value with no prefixes.
+        value_display_fmt(last_inner, f, false)?;
+    } else {
+        // One of the maybes was Nothing, so print out the right number of justs.
+        for _ in 0..depth {
+            f.write_str("just ")?;
+        }
+        f.write_str("nothing")?;
+    }
+
+    Ok(())
 }
 
 impl<'a, T> From<Option<T>> for Maybe<'a>

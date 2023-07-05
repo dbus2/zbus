@@ -4,10 +4,14 @@ use serde::{
     ser::{Serialize, SerializeSeq, Serializer},
 };
 use static_assertions::assert_impl_all;
-use std::convert::{TryFrom, TryInto};
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt::{Display, Write},
+};
 
 use crate::{
-    value::SignatureSeed, DynamicDeserialize, DynamicType, Error, Result, Signature, Type, Value,
+    value::{value_display_fmt, SignatureSeed},
+    DynamicDeserialize, DynamicType, Error, Result, Signature, Type, Value,
 };
 
 /// A helper type to wrap arrays in a [`Value`].
@@ -99,6 +103,61 @@ impl<'a> Array<'a> {
             signature: self.signature.to_owned(),
         }
     }
+}
+
+impl Display for Array<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        array_display_fmt(self, f, true)
+    }
+}
+
+pub(crate) fn array_display_fmt(
+    array: &Array<'_>,
+    f: &mut std::fmt::Formatter<'_>,
+    type_annotate: bool,
+) -> std::fmt::Result {
+    // Print as string if it is a bytestring (i.e., first nul character is the last byte)
+    if let [leading @ .., Value::U8(b'\0')] = array.as_ref() {
+        if !leading.contains(&Value::U8(b'\0')) {
+            let bytes = leading
+                .iter()
+                .map(|v| {
+                    *v.downcast_ref::<u8>()
+                        .expect("item must have a signature of a byte")
+                })
+                .collect::<Vec<_>>();
+
+            let string = String::from_utf8_lossy(&bytes);
+            write!(f, "b{:?}", string.as_ref())?;
+
+            return Ok(());
+        }
+    }
+
+    if array.is_empty() {
+        if type_annotate {
+            write!(f, "@{} ", array.full_signature())?;
+        }
+        f.write_str("[]")?;
+    } else {
+        f.write_char('[')?;
+
+        // Annotate only the first item as the rest will be of the same type.
+        let mut type_annotate = type_annotate;
+
+        for (i, item) in array.iter().enumerate() {
+            value_display_fmt(item, f, type_annotate)?;
+            type_annotate = false;
+
+            if i + 1 < array.len() {
+                f.write_str(", ")?;
+            }
+        }
+
+        f.write_char(']')?;
+    }
+
+    Ok(())
 }
 
 /// Use this to deserialize an [Array].

@@ -1,9 +1,14 @@
-use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
+use std::{
+    collections::HashMap,
+    convert::TryFrom,
+    fmt::{Display, Write},
+    hash::BuildHasher,
+};
 
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 use static_assertions::assert_impl_all;
 
-use crate::{Basic, DynamicType, Error, Signature, Type, Value};
+use crate::{value_display_fmt, Basic, DynamicType, Error, Signature, Type, Value};
 
 /// A helper type to wrap dictionaries in a [`Value`].
 ///
@@ -135,6 +140,45 @@ impl<'k, 'v> Dict<'k, 'v> {
     }
 
     // TODO: Provide more API like https://docs.rs/toml/0.5.5/toml/map/struct.Map.html
+}
+
+impl Display for Dict<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        dict_display_fmt(self, f, true)
+    }
+}
+
+pub(crate) fn dict_display_fmt(
+    dict: &Dict<'_, '_>,
+    f: &mut std::fmt::Formatter<'_>,
+    type_annotate: bool,
+) -> std::fmt::Result {
+    if dict.entries.is_empty() {
+        if type_annotate {
+            write!(f, "@{} ", dict.full_signature())?;
+        }
+        f.write_str("{}")?;
+    } else {
+        f.write_char('{')?;
+
+        // Annotate only the first entry as the rest will be of the same type.
+        let mut type_annotate = type_annotate;
+
+        for (i, entry) in dict.entries.iter().enumerate() {
+            value_display_fmt(&entry.key, f, type_annotate)?;
+            f.write_str(": ")?;
+            value_display_fmt(&entry.value, f, type_annotate)?;
+            type_annotate = false;
+
+            if i + 1 < dict.entries.len() {
+                f.write_str(", ")?;
+            }
+        }
+
+        f.write_char('}')?;
+    }
+
+    Ok(())
 }
 
 impl<'k, 'v> Serialize for Dict<'k, 'v> {
