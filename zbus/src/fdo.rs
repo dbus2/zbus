@@ -384,6 +384,7 @@ macro_rules! gen_monitoring_proxy {
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.Monitoring",
             default_service = "org.freedesktop.DBus",
+            default_path = "/org/freedesktop/DBus",
             assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
@@ -428,6 +429,7 @@ macro_rules! gen_stats_proxy {
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.Debug.Stats",
             default_service = "org.freedesktop.DBus",
+            default_path = "/org/freedesktop/DBus",
             assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
