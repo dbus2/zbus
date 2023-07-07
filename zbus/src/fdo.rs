@@ -437,10 +437,18 @@ macro_rules! gen_stats_proxy {
             fn get_stats(&self) -> Result<Vec<HashMap<String, OwnedValue>>>;
 
             /// GetConnectionStats (undocumented)
-            fn get_connection_stats(&self, n1: &str) -> Result<Vec<HashMap<String, OwnedValue>>>;
+            fn get_connection_stats(&self, name: BusName<'_>) -> Result<Vec<HashMap<String, OwnedValue>>>;
 
             /// GetAllMatchRules (undocumented)
-            fn get_all_match_rules(&self) -> Result<Vec<HashMap<String, Vec<String>>>>;
+            fn get_all_match_rules(&self) -> 
+                Result<
+                    Vec<
+                        HashMap<
+                            crate::names::OwnedUniqueName,
+                            Vec<crate::OwnedMatchRule>,
+                        >
+                    >
+                >;
         }
     };
 }
