@@ -424,7 +424,7 @@ assert_impl_all!(MonitoringProxy<'_>: Send, Sync, Unpin);
 #[rustfmt::skip]
 macro_rules! gen_stats_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
-        /// Proxy for the `org.freedesktop.DBus.Stats` interface.
+        /// Proxy for the `org.freedesktop.DBus.Debug.Stats` interface.
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.Debug.Stats",
             default_service = "org.freedesktop.DBus",
