@@ -383,6 +383,7 @@ macro_rules! gen_monitoring_proxy {
         /// Proxy for the `org.freedesktop.DBus.Monitoring` interface.
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.Monitoring",
+            default_service = "org.freedesktop.DBus",
             assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
@@ -423,9 +424,10 @@ assert_impl_all!(MonitoringProxy<'_>: Send, Sync, Unpin);
 #[rustfmt::skip]
 macro_rules! gen_stats_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
-        /// Proxy for the `org.freedesktop.DBus.Stats` interface.
+        /// Proxy for the `org.freedesktop.DBus.Debug.Stats` interface.
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.Debug.Stats",
+            default_service = "org.freedesktop.DBus",
             assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
@@ -435,10 +437,18 @@ macro_rules! gen_stats_proxy {
             fn get_stats(&self) -> Result<Vec<HashMap<String, OwnedValue>>>;
 
             /// GetConnectionStats (undocumented)
-            fn get_connection_stats(&self, n1: &str) -> Result<Vec<HashMap<String, OwnedValue>>>;
+            fn get_connection_stats(&self, name: BusName<'_>) -> Result<Vec<HashMap<String, OwnedValue>>>;
 
             /// GetAllMatchRules (undocumented)
-            fn get_all_match_rules(&self) -> Result<Vec<HashMap<String, Vec<String>>>>;
+            fn get_all_match_rules(&self) -> 
+                Result<
+                    Vec<
+                        HashMap<
+                            crate::names::OwnedUniqueName,
+                            Vec<crate::OwnedMatchRule>,
+                        >
+                    >
+                >;
         }
     };
 }
