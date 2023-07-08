@@ -3,6 +3,7 @@ use static_assertions::assert_impl_all;
 use std::{
     borrow::Cow,
     cmp::Ordering,
+    fmt,
     hash::{Hash, Hasher},
     sync::Arc,
 };
@@ -17,7 +18,7 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 /// [`Value`]: enum.Value.html#variant.Str
 /// [`&str`]: https://doc.rust-lang.org/std/str/index.html
 /// [`String`]: https://doc.rust-lang.org/std/string/struct.String.html
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize)]
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize)]
 #[serde(rename(serialize = "zvariant::Str", deserialize = "zvariant::Str"))]
 pub struct Str<'a>(#[serde(borrow)] Inner<'a>);
 
@@ -205,8 +206,14 @@ impl<'a> PartialEq<&str> for Str<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for Str<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Str<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.as_str().fmt(f)
+    }
+}
+
+impl fmt::Debug for Str<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.as_str().fmt(f)
     }
 }

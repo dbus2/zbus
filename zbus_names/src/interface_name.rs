@@ -4,7 +4,7 @@ use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
     convert::TryFrom,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
     sync::Arc,
 };
@@ -37,9 +37,7 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [in]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct InterfaceName<'name>(Str<'name>);
 
 assert_impl_all!(InterfaceName<'_>: Send, Sync, Unpin);
@@ -110,6 +108,12 @@ impl Borrow<str> for InterfaceName<'_> {
 impl Display for InterfaceName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.as_str(), f)
+    }
+}
+
+impl Debug for InterfaceName<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(&self.as_str(), f)
     }
 }
 
@@ -239,9 +243,7 @@ impl<'name> NoneValue for InterfaceName<'name> {
 }
 
 /// Owned sibling of [`InterfaceName`].
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedInterfaceName(#[serde(borrow)] InterfaceName<'static>);
 
 assert_impl_all!(OwnedInterfaceName: Send, Sync, Unpin);
@@ -321,7 +323,13 @@ impl PartialEq<InterfaceName<'_>> for OwnedInterfaceName {
 
 impl Display for OwnedInterfaceName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        InterfaceName::from(self).fmt(f)
+        Display::fmt(self.as_str(), f)
+    }
+}
+
+impl Debug for OwnedInterfaceName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Debug::fmt(self.as_str(), f)
     }
 }
 
