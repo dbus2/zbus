@@ -149,6 +149,22 @@ impl<'de> Deserialize<'de> for OwnedFd {
     }
 }
 
+// FIXME Having this trait is very much not ideal, but it is needed to implement
+// PartialEq for crate::Value.
+impl PartialEq for OwnedFd {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.as_raw_fd() == other.0.as_raw_fd()
+    }
+}
+
+/// Panics: If std::os::fd::OwnedFd::try_clone fails to clone the underlying
+/// file descriptor.
+impl Clone for OwnedFd {
+    fn clone(&self) -> Self {
+        self.try_clone().unwrap()
+    }
+}
+
 impl AsFd for OwnedFd {
     fn as_fd(&self) -> fd::BorrowedFd<'_> {
         self.0.as_fd()
