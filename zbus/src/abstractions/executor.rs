@@ -143,7 +143,8 @@ pub struct Task<T>(Option<JoinHandle<T>>);
 impl<T> Task<T> {
     /// Detaches the task to let it keep running in the background.
     #[allow(unused_mut)]
-    pub(crate) fn detach(mut self) {
+    #[allow(unused)]
+    pub fn detach(mut self) {
         #[cfg(not(feature = "tokio"))]
         {
             self.0.take().expect("async_task::Task is none").detach()

@@ -6,7 +6,7 @@ use std::{collections::HashMap, convert::TryInto};
 use tokio::net::UnixStream;
 
 use event_listener::Event;
-use futures_util::StreamExt;
+use futures_util::{StreamExt, TryStreamExt};
 use ntest::timeout;
 use serde::{Deserialize, Serialize};
 use test_log::test;
@@ -15,7 +15,7 @@ use tracing::{debug, instrument};
 use zbus::{
     block_on,
     fdo::{ObjectManager, ObjectManagerProxy},
-    DBusError,
+    DBusError, MessageBuilder, MessageStream, ResponseDispatchNotifier,
 };
 use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Str, Type, Value};
 
@@ -61,6 +61,8 @@ trait MyIface {
     fn test_single_struct_ret(&self) -> zbus::Result<ArgStructTest>;
 
     fn test_multi_ret(&self) -> zbus::Result<(i32, String)>;
+
+    fn test_response_notify(&self) -> zbus::Result<String>;
 
     fn test_hashmap_return(&self) -> zbus::Result<HashMap<String, String>>;
 
@@ -209,6 +211,32 @@ impl MyIfaceImpl {
         debug!("`TestMultiRet` called.");
         Ok((42, String::from("Meaning of life")))
     }
+
+    #[instrument]
+    fn test_response_notify(
+        &self,
+        #[zbus(connection)] conn: &Connection,
+        #[zbus(signal_context)] ctxt: SignalContext<'_>,
+    ) -> zbus::fdo::Result<ResponseDispatchNotifier<String>> {
+        debug!("`TestResponseNotify` called.");
+        let (response, listener) = ResponseDispatchNotifier::new(String::from("Meaning of life"));
+        let ctxt = ctxt.to_owned();
+        conn.executor()
+            .spawn(
+                async move {
+                    listener.await;
+
+                    Self::test_response_notified(ctxt).await.unwrap();
+                },
+                "TestResponseNotify",
+            )
+            .detach();
+
+        Ok(response)
+    }
+
+    #[dbus_interface(signal)]
+    async fn test_response_notified(ctxt: SignalContext<'_>) -> zbus::Result<()>;
 
     #[instrument]
     async fn test_hashmap_return(&self) -> zbus::fdo::Result<HashMap<String, String>> {
@@ -400,6 +428,33 @@ fn check_ipv4_address(address: IP4Adress) {
 #[instrument]
 async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     debug!("client side starting..");
+    // Use low-level API for `TestResponseNotify` because we need to ensure that the signal is
+    // always received after the response.
+    let mut stream = MessageStream::from(&conn);
+    let method = MessageBuilder::method_call("/org/freedesktop/MyService", "TestResponseNotify")?
+        .interface("org.freedesktop.MyIface")?
+        .destination("org.freedesktop.MyService")?
+        .build(&())?;
+    let serial = conn.send_message(method).await?;
+    let mut method_returned = false;
+    let mut signal_received = false;
+    while !method_returned && !signal_received {
+        let msg = stream.try_next().await?.unwrap();
+
+        let hdr = msg.header()?;
+        if hdr.message_type()? == MessageType::MethodReturn && hdr.reply_serial()? == Some(serial) {
+            assert!(!signal_received);
+            method_returned = true;
+        } else if hdr.message_type()? == MessageType::Signal
+            && hdr.interface()?.unwrap() == "org.freedesktop.MyService"
+            && hdr.member()?.unwrap() == "TestResponseNotified"
+        {
+            assert!(method_returned);
+            signal_received = true;
+        }
+    }
+    drop(stream);
+
     let proxy = MyIfaceProxy::builder(&conn)
         .destination("org.freedesktop.MyService")?
         .path("/org/freedesktop/MyService")?

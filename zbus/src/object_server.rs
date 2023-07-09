@@ -1,3 +1,5 @@
+use event_listener::{Event, EventListener};
+use serde::Serialize;
 use std::{
     collections::{hash_map::Entry, HashMap},
     convert::TryInto,
@@ -10,7 +12,7 @@ use tracing::{debug, instrument, trace};
 
 use static_assertions::assert_impl_all;
 use zbus_names::InterfaceName;
-use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
+use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Signature, Type, Value};
 
 use crate::{
     async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard},
@@ -738,5 +740,72 @@ impl ObjectServer {
 impl From<crate::blocking::ObjectServer> for ObjectServer {
     fn from(server: crate::blocking::ObjectServer) -> Self {
         server.into_inner()
+    }
+}
+
+/// A response wrapper that notifies after response has been sent.
+///
+/// Sometimes in [`dbus_interface`] method implemenations we need to do some other work after the
+/// response has been sent off. This wrapper type allows us to do that. Instead of returning your
+/// intended response type directly, wrap it in this type and return it from your method. The
+/// returned `EventListener` from `new` method will be notified when the response has been sent.
+///
+/// A typical use case is sending off signals after the response has been sent. The easiest way to
+/// do that is to spawn a task from the method that sends the signal but only after being notified
+/// of the response dispatch.
+///
+/// # Caveats
+///
+/// The notification indicates that the response has been sent off, not that destination peer has
+/// received it. That can only be guaranteed for a peer-to-peer connection.
+///
+/// [`dbus_interface`]: crate::dbus_interface
+#[derive(Debug)]
+pub struct ResponseDispatchNotifier<R> {
+    response: R,
+    event: Option<Event>,
+}
+
+impl<R> ResponseDispatchNotifier<R> {
+    /// Create a new `NotifyResponse`.
+    pub fn new(response: R) -> (Self, EventListener) {
+        let event = Event::new();
+        let listener = event.listen();
+        (
+            Self {
+                response,
+                event: Some(event),
+            },
+            listener,
+        )
+    }
+}
+
+impl<R> Serialize for ResponseDispatchNotifier<R>
+where
+    R: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.response.serialize(serializer)
+    }
+}
+
+impl<R> Type for ResponseDispatchNotifier<R>
+where
+    R: Type,
+{
+    fn signature() -> Signature<'static> {
+        R::signature()
+    }
+}
+
+impl<T> Drop for ResponseDispatchNotifier<T> {
+    fn drop(&mut self) {
+        if let Some(event) = self.event.take() {
+            event.notify(usize::MAX);
+        }
     }
 }
