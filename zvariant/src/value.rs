@@ -1,4 +1,6 @@
 use core::str;
+#[cfg(unix)]
+use std::os::unix::io::AsRawFd;
 use std::{
     convert::TryFrom,
     fmt::{Display, Write},
@@ -23,7 +25,7 @@ use crate::{
 use crate::{maybe_display_fmt, Maybe};
 
 #[cfg(unix)]
-use crate::Fd;
+use crate::{BorrowedFd, OwnedFd};
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
@@ -100,7 +102,9 @@ pub enum Value<'a> {
     Maybe(Maybe<'a>),
 
     #[cfg(unix)]
-    Fd(Fd),
+    BorrowedFd(BorrowedFd<'a>),
+    #[cfg(unix)]
+    OwnedFd(OwnedFd),
 }
 
 assert_impl_all!(Value<'_>: Send, Sync, Unpin);
@@ -130,7 +134,13 @@ macro_rules! serialize_value {
             Value::Maybe(value) => $serializer.$method($($first_arg,)* value),
 
             #[cfg(unix)]
-            Value::Fd(value) => $serializer.$method($($first_arg,)* value),
+            Value::BorrowedFd(value) => $serializer.$method($($first_arg,)* value),
+            #[cfg(unix)]
+            Value::OwnedFd(value) => {
+                // FIXME Make sure this is calling the serialize method of
+                // OwnedFd which will properly call into_raw_fd().
+                $serializer.$method($($first_arg,)* value)
+            },
         }
     }
 }
@@ -196,7 +206,16 @@ impl<'a> Value<'a> {
             #[cfg(feature = "gvariant")]
             Value::Maybe(v) => Value::Maybe(v.to_owned()),
             #[cfg(unix)]
-            Value::Fd(v) => Value::Fd(*v),
+            // FIXME Do something else if the cloning fails.
+            #[cfg(unix)]
+            Value::BorrowedFd(v) => {
+                let cloned_fd = v.try_clone_to_owned().unwrap();
+
+                Value::OwnedFd(cloned_fd)
+            }
+            // FIXME Do something else if the cloning fails.
+            #[cfg(unix)]
+            Value::OwnedFd(v) => Value::OwnedFd(v.try_clone().unwrap()),
         })
     }
 
@@ -225,7 +244,9 @@ impl<'a> Value<'a> {
             Value::Maybe(value) => value.full_signature().clone(),
 
             #[cfg(unix)]
-            Value::Fd(_) => Fd::signature(),
+            Value::BorrowedFd(_) => BorrowedFd::signature(),
+            #[cfg(unix)]
+            Value::OwnedFd(_) => OwnedFd::signature(),
         }
     }
 
@@ -466,11 +487,18 @@ pub(crate) fn value_display_fmt(
         #[cfg(feature = "gvariant")]
         Value::Maybe(maybe) => maybe_display_fmt(maybe, f, type_annotate),
         #[cfg(unix)]
-        Value::Fd(handle) => {
+        Value::BorrowedFd(handle) => {
             if type_annotate {
                 f.write_str("handle ")?;
             }
-            write!(f, "{}", handle)
+            write!(f, "{}", handle.as_raw_fd())
+        }
+        #[cfg(unix)]
+        Value::OwnedFd(handle) => {
+            if type_annotate {
+                f.write_str("handle ")?;
+            }
+            write!(f, "{}", handle.as_raw_fd())
         }
     }
 }
@@ -717,7 +745,11 @@ where
             )
         })? {
             #[cfg(unix)]
-            b'h' => Fd::from(value).into(),
+            b'h' => unsafe {
+                let borrowed_fd = BorrowedFd::borrow_raw(value);
+
+                Value::BorrowedFd(borrowed_fd)
+            },
             _ => value.into(),
         };
 
@@ -989,10 +1021,16 @@ mod tests {
                 (@mmn nothing, @mmmn just nothing))"
         );
 
-        assert_eq!(
-            Value::new(vec![Fd::from(0), Fd::from(-100)]).to_string(),
-            "[handle 0, -100]"
-        );
+        unsafe {
+            assert_eq!(
+                Value::new(vec![
+                    BorrowedFd::borrow_raw(0),
+                    BorrowedFd::borrow_raw(-100)
+                ])
+                .to_string(),
+                "[handle 0, -100]"
+            );
+        }
 
         assert_eq!(
             Value::new((

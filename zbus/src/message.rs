@@ -33,7 +33,7 @@ macro_rules! dbus_context {
 }
 
 #[cfg(unix)]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub(crate) enum Fds {
     Owned(Vec<OwnedFd>),
     Raw(Vec<RawFd>),
@@ -549,7 +549,8 @@ mod tests {
     use std::os::unix::io::AsRawFd;
     use test_log::test;
     #[cfg(unix)]
-    use zvariant::Fd;
+    use zvariant::BorrowedFd;
+    #[cfg(unix)]
 
     #[cfg(unix)]
     use super::Fds;
@@ -568,7 +569,8 @@ mod tests {
             "do",
             &(
                 #[cfg(unix)]
-                Fd::from(&stdout),
+                BorrowedFd::from(&stdout),
+                #[cfg(unix)]
                 "foo",
             ),
         )
@@ -578,7 +580,11 @@ mod tests {
             if cfg!(unix) { "hs" } else { "s" }
         );
         #[cfg(unix)]
-        assert_eq!(*m.fds.read().unwrap(), Fds::Raw(vec![stdout.as_raw_fd()]));
+        if let Fds::Raw(raw_fds) = &*m.fds.read().unwrap() {
+            assert_eq!(raw_fds, &vec![stdout.as_raw_fd()]);
+        } else {
+            panic!();
+        }
 
         let body: Result<u32, Error> = m.body();
         assert!(matches!(
