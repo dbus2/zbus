@@ -4,7 +4,7 @@ use core::{
     panic, str,
 };
 use serde::{
-    de::{Deserialize, Deserializer, Visitor},
+    de::{Deserialize, Deserializer, Unexpected, Visitor},
     ser::{Serialize, Serializer},
 };
 use static_assertions::assert_impl_all;
@@ -83,7 +83,7 @@ impl<'b> std::ops::Deref for Bytes<'b> {
 ///
 /// [identifies]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
 /// [`slice`]: #method.slice
-#[derive(Eq, Hash, Clone)]
+#[derive(Hash, Clone)]
 pub struct Signature<'a> {
     bytes: Bytes<'a>,
     pos: usize,
@@ -271,6 +271,29 @@ impl<'a> Signature<'a> {
 
         clone
     }
+
+    /// Associated function to check whether the signature string slice has
+    /// balanced parentheses.   
+    pub fn has_balanced_parentheses(signature_str: &str) -> bool {
+        signature_str.chars().fold(0, |count, ch| match ch {
+            '(' => count + 1,
+            ')' if count != 0 => count - 1,
+            _ => count,
+        }) == 0
+    }
+
+    /// Determines whether the signature has outer parentheses and if so, return a
+    /// string slice without the parentheses.
+    pub(crate) fn without_outer_parentheses(&self) -> &str {
+        let sig_str = self.as_str();
+
+        if let Some(subslice) = sig_str.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
+            if Self::has_balanced_parentheses(subslice) {
+                return subslice;
+            }
+        }
+        sig_str
+    }
 }
 
 impl<'a> Debug for Signature<'a> {
@@ -354,9 +377,10 @@ impl<'a> std::ops::Deref for Signature<'a> {
     }
 }
 
+/// Evaluate equality of two signatures, ignoring outer parentheses if needed.
 impl<'a, 'b> PartialEq<Signature<'a>> for Signature<'b> {
     fn eq(&self, other: &Signature<'_>) -> bool {
-        self.as_bytes() == other.as_bytes()
+        self.without_outer_parentheses() == other.without_outer_parentheses()
     }
 }
 
@@ -371,6 +395,9 @@ impl<'a> PartialEq<&str> for Signature<'a> {
         self.as_bytes() == other.as_bytes()
     }
 }
+
+// Do not derive `Eq` if not all fields are `Eq`.
+impl Eq for Signature<'_> {}
 
 impl<'a> Display for Signature<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -430,9 +457,18 @@ fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
 
     // SAFETY: SignatureParser never calls as_str
     let signature = unsafe { Signature::from_bytes_unchecked(signature) };
-    let mut parser = SignatureParser::new(signature);
+    let mut parser = SignatureParser::new(signature.clone());
     while !parser.done() {
         let _ = parser.parse_next_signature()?;
+    }
+
+    // Assure that the signatures' parentheses are in balance.
+    let signature_str = signature.as_str();
+    if !Signature::has_balanced_parentheses(signature_str) {
+        return Err(serde::de::Error::invalid_value(
+            Unexpected::Str(signature_str),
+            &"signature requires balanced parentheses",
+        ));
     }
 
     Ok(())
@@ -514,5 +550,20 @@ mod tests {
         assert_eq!(slice.len(), 1);
         assert_eq!(slice, "t");
         assert_eq!(slice.slice(1..), "");
+    }
+
+    #[test]
+    fn signature_equality() {
+        let sig_a = Signature::from_str_unchecked("(asta{sv})");
+        let sig_b = Signature::from_str_unchecked("asta{sv}");
+        assert_eq!(sig_a, sig_b);
+
+        let sig_a = Signature::from_str_unchecked("((so)ii(uu))");
+        let sig_b = Signature::from_str_unchecked("(so)ii(uu)");
+        assert_eq!(sig_a, sig_b);
+
+        let sig_a = Signature::from_str_unchecked("(so)i");
+        let sig_b = Signature::from_str_unchecked("(so)u");
+        assert_ne!(sig_a, sig_b);
     }
 }

@@ -218,6 +218,14 @@ impl<'a> MessageBuilder<'a> {
 
         let signature = body.dynamic_signature();
 
+        let signature_str = signature.as_str();
+        if !Signature::has_balanced_parentheses(signature_str) {
+            return Err(zbus::fdo::Error::InvalidSignature(format!(
+                "unbalanced parentheses in signature: {signature_str}"
+            ))
+            .into());
+        }
+
         self.build_generic(
             signature,
             body_len,
