@@ -25,13 +25,15 @@ use std::{
     result::Result,
 };
 
+use zvariant::Signature;
+
 use crate::{
     names::{InterfaceName, MemberName},
     Error,
 };
 
 /// Annotations are generic key/value pairs of metadata.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Annotation {
     #[serde(rename = "@name")]
     name: String,
@@ -63,11 +65,11 @@ pub enum ArgDirection {
 }
 
 /// An argument
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Arg {
     #[serde(rename = "@name")]
     name: Option<String>,
-    #[serde(rename = "@type")]
+    #[serde(deserialize_with = "de_type_valid", rename = "@type")]
     r#type: String,
     #[serde(rename = "@direction")]
     direction: Option<ArgDirection>,
@@ -100,7 +102,7 @@ impl Arg {
 }
 
 /// A method
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Method<'a> {
     #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
@@ -130,7 +132,7 @@ impl<'a> Method<'a> {
 }
 
 /// A signal
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Signal<'a> {
     #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
@@ -182,12 +184,12 @@ impl PropertyAccess {
 }
 
 /// A property
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Property<'a> {
     #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
 
-    #[serde(rename = "@type")]
+    #[serde(deserialize_with = "de_type_valid", rename = "@type")]
     r#type: String,
     #[serde(rename = "@access")]
     access: PropertyAccess,
@@ -221,7 +223,7 @@ impl<'a> Property<'a> {
 }
 
 /// An interface
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Interface<'a> {
     #[serde(rename = "@name", borrow)]
     name: InterfaceName<'a>,
@@ -266,7 +268,7 @@ impl<'a> Interface<'a> {
 }
 
 /// An introspection tree node (typically the root of the XML document).
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Node<'a> {
     #[serde(rename = "@name")]
     name: Option<String>,
@@ -333,61 +335,16 @@ impl<'a> TryFrom<&'a str> for Node<'a> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::{convert::TryInto, error::Error};
-    use test_log::test;
+fn de_type_valid<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
 
-    use super::{ArgDirection, Node};
-
-    static EXAMPLE: &str = r##"
-<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
-  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
- <node name="/com/example/sample_object0">
-   <node name="first"/>
-   <interface name="com.example.SampleInterface0">
-     <method name="Frobate">
-       <arg name="foo" type="i" direction="in"/>
-       <arg name="bar" type="s" direction="out"/>
-       <arg name="baz" type="a{us}" direction="out"/>
-       <annotation name="org.freedesktop.DBus.Deprecated" value="true"/>
-     </method>
-     <method name="Bazify">
-       <arg name="bar" type="(iiu)" direction="in"/>
-       <arg name="bar" type="v" direction="out"/>
-     </method>
-     <method name="Mogrify">
-       <arg name="bar" type="(iiav)" direction="in"/>
-     </method>
-     <signal name="Changed">
-       <arg name="new_value" type="b"/>
-     </signal>
-     <property name="Bar" type="y" access="readwrite"/>
-   </interface>
-   <node name="child_of_sample_object"/>
-   <node name="another_child_of_sample_object"/>
-</node>
-"##;
-
-    #[test]
-    fn serde() -> Result<(), Box<dyn Error>> {
-        let node = Node::from_reader(EXAMPLE.as_bytes())?;
-        assert_eq!(node.interfaces().len(), 1);
-        assert_eq!(node.interfaces()[0].methods().len(), 3);
-        assert_eq!(
-            node.interfaces()[0].methods()[0].args()[0]
-                .direction()
-                .unwrap(),
-            ArgDirection::In
-        );
-        assert_eq!(node.nodes().len(), 3);
-
-        let node_str: Node<'_> = EXAMPLE.try_into()?;
-        assert_eq!(node_str.interfaces().len(), 1);
-        assert_eq!(node_str.nodes().len(), 3);
-
-        let mut writer = Vec::with_capacity(128);
-        node.to_writer(&mut writer).unwrap();
-        Ok(())
+    let v = String::deserialize(deserializer)?;
+    let sig = Signature::try_from(v.as_str()).map_err(|e| Error::custom(e.to_string()))?;
+    if sig.n_types() != Ok(1) {
+        return Err(Error::custom(format!("Invalid type: {}", v)));
     }
+    Ok(v)
 }

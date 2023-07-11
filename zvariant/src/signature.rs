@@ -60,14 +60,19 @@ impl<'b> std::ops::Deref for Bytes<'b> {
 /// // Valid signatures
 /// let s = Signature::try_from("").unwrap();
 /// assert_eq!(s, "");
+/// # assert_eq!(s.n_types(), Ok(0));
 /// let s = Signature::try_from("y").unwrap();
 /// assert_eq!(s, "y");
+/// # assert_eq!(s.n_types(), Ok(1));
 /// let s = Signature::try_from("xs").unwrap();
 /// assert_eq!(s, "xs");
+/// # assert_eq!(s.n_types(), Ok(2));
 /// let s = Signature::try_from("(ysa{sd})").unwrap();
 /// assert_eq!(s, "(ysa{sd})");
+/// # assert_eq!(s.n_types(), Ok(1));
 /// let s = Signature::try_from("a{sd}").unwrap();
 /// assert_eq!(s, "a{sd}");
+/// # assert_eq!(s.n_types(), Ok(1));
 ///
 /// // Invalid signatures
 /// Signature::try_from("z").unwrap_err();
@@ -170,7 +175,7 @@ impl<'a> Signature<'a> {
     /// [`Signature::into_owned`] do not clone the underlying bytes.
     pub fn from_static_str(signature: &'static str) -> Result<Self> {
         let bytes = signature.as_bytes();
-        ensure_correct_signature_str(bytes)?;
+        validate_signature_str(bytes)?;
 
         Ok(Self {
             bytes: Bytes::Static(bytes),
@@ -185,7 +190,7 @@ impl<'a> Signature<'a> {
     /// `&'static [u8]`. The former will ensure that [`Signature::to_owned`] and
     /// [`Signature::into_owned`] do not clone the underlying bytes.
     pub fn from_static_bytes(bytes: &'static [u8]) -> Result<Self> {
-        ensure_correct_signature_str(bytes)?;
+        validate_signature_str(bytes)?;
 
         Ok(Self {
             bytes: Bytes::Static(bytes),
@@ -271,6 +276,18 @@ impl<'a> Signature<'a> {
 
         clone
     }
+
+    /// Returns the number of complete types for the signature.
+    ///
+    /// **Note**: if the signature is invalid, returns the first error.
+    pub fn n_types(&self) -> Result<usize> {
+        let mut count = 0;
+        for s in SignatureIter::new(self.as_bytes())? {
+            s?;
+            count += 1;
+        }
+        Ok(count)
+    }
 }
 
 impl<'a> Debug for Signature<'a> {
@@ -308,9 +325,9 @@ impl<'a> TryFrom<&'a [u8]> for Signature<'a> {
     type Error = Error;
 
     fn try_from(value: &'a [u8]) -> Result<Self> {
-        ensure_correct_signature_str(value)?;
+        validate_signature_str(value)?;
 
-        // SAFETY: ensure_correct_signature_str checks UTF8
+        // SAFETY: validate_signature_str checks UTF8
         unsafe { Ok(Self::from_bytes_unchecked(value)) }
     }
 }
@@ -328,7 +345,7 @@ impl<'a> TryFrom<String> for Signature<'a> {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
-        ensure_correct_signature_str(value.as_bytes())?;
+        validate_signature_str(value.as_bytes())?;
 
         Ok(Self::from_string_unchecked(value))
     }
@@ -416,25 +433,41 @@ impl<'de> Visitor<'de> for SignatureVisitor {
     }
 }
 
-fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
-    if signature.len() > 255 {
-        return Err(serde::de::Error::invalid_length(
-            signature.len(),
-            &"<= 255 characters",
-        ));
-    }
+struct SignatureIter<'a> {
+    parser: SignatureParser<'a>,
+}
 
-    if signature.is_empty() {
-        return Ok(());
-    }
+impl<'a> SignatureIter<'a> {
+    fn new(signature: &'a [u8]) -> Result<Self> {
+        if signature.len() > 255 {
+            return Err(serde::de::Error::invalid_length(
+                signature.len(),
+                &"<= 255 characters",
+            ));
+        }
 
-    // SAFETY: SignatureParser never calls as_str
-    let signature = unsafe { Signature::from_bytes_unchecked(signature) };
-    let mut parser = SignatureParser::new(signature);
-    while !parser.done() {
-        let _ = parser.parse_next_signature()?;
+        let signature = unsafe { Signature::from_bytes_unchecked(signature) };
+        let parser = SignatureParser::new(signature);
+        Ok(Self { parser })
     }
+}
 
+impl<'a> Iterator for SignatureIter<'a> {
+    type Item = Result<Signature<'a>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.parser.done() {
+            None
+        } else {
+            Some(self.parser.parse_next_signature())
+        }
+    }
+}
+
+fn validate_signature_str(signature: &[u8]) -> Result<()> {
+    for s in SignatureIter::new(signature)? {
+        s?;
+    }
     Ok(())
 }
 

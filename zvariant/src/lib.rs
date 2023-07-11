@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 #![allow(clippy::unusual_byte_groupings)]
 #![deny(rust_2018_idioms)]
 #![doc(
