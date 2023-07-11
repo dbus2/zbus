@@ -1,14 +1,17 @@
 use syn::{
-    spanned::Spanned, Attribute, Lit, LitBool, LitStr, Meta, MetaList, NestedMeta, Result, Type,
-    TypePath,
+    punctuated::Punctuated, spanned::Spanned, Attribute, Expr, ExprLit, Lit, LitBool, LitStr, Meta,
+    MetaList, Result, Token, Type, TypePath,
 };
 
 // find the #[@attr_name] attribute in @attrs
-fn find_attribute_meta(attrs: &[Attribute], attr_name: &str) -> Result<Option<MetaList>> {
-    let meta = match attrs.iter().find(|a| a.path.is_ident(attr_name)) {
-        Some(a) => a.parse_meta(),
+fn find_attribute_meta<'a>(
+    attrs: &'a [Attribute],
+    attr_name: &str,
+) -> Result<Option<&'a MetaList>> {
+    let meta = match attrs.iter().find(|a| a.path().is_ident(attr_name)) {
+        Some(a) => &a.meta,
         _ => return Ok(None),
-    }?;
+    };
     match meta {
         Meta::List(n) => Ok(Some(n)),
         _ => Err(syn::Error::new(
@@ -18,9 +21,9 @@ fn find_attribute_meta(attrs: &[Attribute], attr_name: &str) -> Result<Option<Me
     }
 }
 
-fn get_meta_value<'a>(meta: &'a Meta, attr: &str) -> Result<&'a Lit> {
+fn get_meta_value<'a>(meta: &'a Meta, attr: &str) -> Result<&'a Expr> {
     match meta {
-        Meta::NameValue(meta) => Ok(&meta.lit),
+        Meta::NameValue(meta) => Ok(&meta.value),
         Meta::Path(_) => Err(syn::Error::new(
             meta.span(),
             format!("attribute `{attr}` must have a value"),
@@ -45,7 +48,10 @@ pub fn match_attribute_with_str_value<'a>(
 ) -> Result<Option<&'a LitStr>> {
     if meta.path().is_ident(attr) {
         match get_meta_value(meta, attr)? {
-            Lit::Str(value) => Ok(Some(value)),
+            Expr::Lit(ExprLit {
+                lit: Lit::Str(value),
+                ..
+            }) => Ok(Some(value)),
             _ => Err(syn::Error::new(
                 meta.span(),
                 format!("value of the `{attr}` attribute must be a string literal"),
@@ -69,7 +75,10 @@ pub fn match_attribute_with_bool_value<'a>(
 ) -> Result<Option<&'a LitBool>> {
     if meta.path().is_ident(attr) {
         match get_meta_value(meta, attr)? {
-            Lit::Bool(value) => Ok(Some(value)),
+            Expr::Lit(ExprLit {
+                lit: Lit::Bool(value),
+                ..
+            }) => Ok(Some(value)),
             other => Err(syn::Error::new(
                 other.span(),
                 format!("value of the `{attr}` attribute must be a boolean literal"),
@@ -84,23 +93,11 @@ pub fn match_attribute_with_str_list_value(meta: &Meta, attr: &str) -> Result<Op
     if meta.path().is_ident(attr) {
         match meta {
             Meta::List(list) => {
-                let mut values = Vec::with_capacity(list.nested.len());
-
-                for meta in &list.nested {
-                    values.push(match meta {
-                        NestedMeta::Lit(Lit::Str(lit)) => Ok(lit.value()),
-                        NestedMeta::Lit(lit) => Err(syn::Error::new(
-                            lit.span(),
-                            format!("invalid literal type for `{attr}` attribute"),
-                        )),
-                        NestedMeta::Meta(meta) => Err(syn::Error::new(
-                            meta.span(),
-                            format!("`{attr}` attribute must be a list of string literals"),
-                        )),
-                    }?)
-                }
-
-                Ok(Some(values))
+                let punctuated =
+                    list.parse_args_with(Punctuated::<LitStr, Token![,]>::parse_terminated)?;
+                Ok(Some(
+                    punctuated.into_iter().map(|lit| lit.value()).collect(),
+                ))
             }
             _ => Err(syn::Error::new(
                 meta.span(),
@@ -136,7 +133,7 @@ pub fn match_attribute_without_value(meta: &Meta, attr: &str) -> Result<bool> {
     }
 }
 
-/// Returns an iterator over the contents of all [`MetaList`]s with the specified identifier in an
+/* /// Returns an iterator over the contents of all [`MetaList`]s with the specified identifier in an
 /// array of [`Attribute`]s.
 pub fn iter_meta_lists(
     attrs: &[Attribute],
@@ -145,7 +142,7 @@ pub fn iter_meta_lists(
     let meta = find_attribute_meta(attrs, list_name)?;
 
     Ok(meta.into_iter().flat_map(|meta| meta.nested.into_iter()))
-}
+} */
 
 /// Generates one or more structures used for parsing attributes in proc macros.
 ///

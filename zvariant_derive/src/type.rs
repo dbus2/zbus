@@ -198,7 +198,7 @@ fn signature_for_variant(
     attrs: &[Attribute],
     zv: &TokenStream,
 ) -> Result<TokenStream, Error> {
-    let repr = attrs.iter().find(|attr| attr.path.is_ident("repr"));
+    let repr = attrs.iter().find(|attr| attr.path().is_ident("repr"));
     match &variant.fields {
         Fields::Unit => {
             let repr = match repr {
