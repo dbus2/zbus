@@ -344,14 +344,14 @@ impl Type for SystemTime {
 impl Type for Ipv4Addr {
     #[inline]
     fn signature() -> Signature<'static> {
-        <(u32, &[u8])>::signature()
+        <[u8; 4]>::signature()
     }
 }
 
 impl Type for Ipv6Addr {
     #[inline]
     fn signature() -> Signature<'static> {
-        <(u32, &[u8])>::signature()
+        <[u8; 16]>::signature()
     }
 }
 

@@ -1795,9 +1795,21 @@ mod tests {
 
     #[test]
     fn ip_addr() {
-        let localhost_v4 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-
         let ctxt = Context::<LE>::new_dbus(0);
+
+        // First the bare specific types.
+        let localhost_v4 = Ipv4Addr::new(127, 0, 0, 1);
+        let encoded = to_bytes(ctxt, &localhost_v4).unwrap();
+        let decoded: Ipv4Addr = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(localhost_v4, decoded);
+
+        let localhost_v6 = Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1);
+        let encoded = to_bytes(ctxt, &localhost_v6).unwrap();
+        let decoded: Ipv6Addr = from_slice(&encoded, ctxt).unwrap();
+        assert_eq!(localhost_v6, decoded);
+
+        // Now wrapper under the generic IpAddr.
+        let localhost_v4 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
         let encoded = to_bytes(ctxt, &localhost_v4).unwrap();
         let decoded: IpAddr = from_slice(&encoded, ctxt).unwrap();
         assert_eq!(localhost_v4, decoded);
