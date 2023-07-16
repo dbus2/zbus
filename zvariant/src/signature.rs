@@ -35,6 +35,15 @@ impl<'b> Bytes<'b> {
     fn owned(bytes: Vec<u8>) -> Self {
         Self::Owned(bytes.into())
     }
+
+    /// A borrowed clone (this never allocates, unlike clone).
+    fn as_ref(&self) -> Bytes<'_> {
+        match &self {
+            Bytes::Static(s) => Bytes::Static(s),
+            Bytes::Borrowed(s) => Bytes::Borrowed(s),
+            Bytes::Owned(s) => Bytes::Borrowed(s),
+        }
+    }
 }
 
 impl<'b> std::ops::Deref for Bytes<'b> {
@@ -102,6 +111,15 @@ impl<'a> Signature<'a> {
     /// The signature bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes[self.pos..self.end]
+    }
+
+    /// A borrowed clone (this never allocates, unlike clone).
+    pub fn as_ref(&self) -> Signature<'_> {
+        Signature {
+            bytes: self.bytes.as_ref(),
+            pos: self.pos,
+            end: self.end,
+        }
     }
 
     /// Create a new Signature from given bytes.

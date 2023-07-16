@@ -114,7 +114,7 @@ where
             return Ok(PhantomData);
         }
 
-        let mut signature = original.clone();
+        let mut signature = original.as_ref();
         while expected.len() < signature.len()
             && signature.starts_with(STRUCT_SIG_START_CHAR)
             && signature.ends_with(STRUCT_SIG_END_CHAR)

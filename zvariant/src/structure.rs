@@ -248,13 +248,13 @@ impl<'a> Default for Structure<'a> {
 
 impl<'a> DynamicType for Structure<'a> {
     fn dynamic_signature(&self) -> Signature<'_> {
-        self.signature.clone()
+        self.signature.as_ref()
     }
 }
 
 impl<'a> DynamicType for StructureSeed<'a> {
     fn dynamic_signature(&self) -> Signature<'_> {
-        self.0.clone()
+        self.0.as_ref()
     }
 }
 
@@ -274,7 +274,7 @@ impl<'a> DynamicDeserialize<'a> for Structure<'a> {
         }
 
         // The signature might be something like "(i)u(i)" - we need to parse it to check.
-        let mut parser = SignatureParser::new(signature.clone());
+        let mut parser = SignatureParser::new(signature.as_ref());
         parser.parse_next_signature()?;
         if !parser.done() {
             // more than one element - we must wrap it
