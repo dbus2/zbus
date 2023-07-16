@@ -89,7 +89,14 @@ value_try_from_all!(Maybe, Maybe<'a>);
 
 value_try_from!(Str, String);
 value_try_from_ref!(Str, str);
-value_try_from_ref_clone!(Str, String);
+
+impl<'a> TryFrom<&'a Value<'a>> for String {
+    type Error = Error;
+
+    fn try_from(value: &'a Value<'_>) -> Result<Self, Self::Error> {
+        Ok(<&str>::try_from(value)?.into())
+    }
+}
 
 impl<'a, T> TryFrom<Value<'a>> for Vec<T>
 where

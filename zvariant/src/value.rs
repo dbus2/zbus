@@ -218,11 +218,11 @@ impl<'a> Value<'a> {
             Value::Value(_) => Signature::from_static_str_unchecked("v"),
 
             // Container types
-            Value::Array(value) => value.full_signature().clone(),
-            Value::Dict(value) => value.full_signature().clone(),
-            Value::Structure(value) => value.full_signature().clone(),
+            Value::Array(value) => value.full_signature().as_ref(),
+            Value::Dict(value) => value.full_signature().as_ref(),
+            Value::Structure(value) => value.full_signature().as_ref(),
             #[cfg(feature = "gvariant")]
-            Value::Maybe(value) => value.full_signature().clone(),
+            Value::Maybe(value) => value.full_signature().as_ref(),
 
             #[cfg(unix)]
             Value::Fd(_) => Fd::signature(),
@@ -584,7 +584,7 @@ impl<'de> SignatureSeed<'de> {
         let mut builder = StructureBuilder::new();
         while i < signature_end {
             let fields_signature = self.signature.slice(i..signature_end);
-            let parser = SignatureParser::new(fields_signature.clone());
+            let parser = SignatureParser::new(fields_signature.as_ref());
             let len = parser.next_signature().map_err(Error::custom)?.len();
             let field_signature = fields_signature.slice(0..len);
             i += field_signature.len();
