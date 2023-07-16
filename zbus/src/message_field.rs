@@ -130,7 +130,7 @@ impl<'f> Serialize for MessageField<'f> {
         S: Serializer,
     {
         let tuple: (MessageFieldCode, Value<'_>) = match self {
-            MessageField::Path(value) => (MessageFieldCode::Path, value.clone().into()),
+            MessageField::Path(value) => (MessageFieldCode::Path, value.as_ref().into()),
             MessageField::Interface(value) => (MessageFieldCode::Interface, value.as_str().into()),
             MessageField::Member(value) => (MessageFieldCode::Member, value.as_str().into()),
             MessageField::ErrorName(value) => (MessageFieldCode::ErrorName, value.as_str().into()),
@@ -139,7 +139,7 @@ impl<'f> Serialize for MessageField<'f> {
                 (MessageFieldCode::Destination, value.as_str().into())
             }
             MessageField::Sender(value) => (MessageFieldCode::Sender, value.as_str().into()),
-            MessageField::Signature(value) => (MessageFieldCode::Signature, value.clone().into()),
+            MessageField::Signature(value) => (MessageFieldCode::Signature, value.as_ref().into()),
             MessageField::UnixFDs(value) => (MessageFieldCode::UnixFDs, (*value).into()),
             // This is a programmer error
             MessageField::Invalid => panic!("Attempt to serialize invalid MessageField"),
