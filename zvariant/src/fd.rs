@@ -47,7 +47,7 @@ impl Serialize for Fd {
     where
         S: Serializer,
     {
-        serializer.serialize_i32(self.0)
+        self.as_raw_fd().serialize(serializer)
     }
 }
 
@@ -56,7 +56,7 @@ impl<'de> Deserialize<'de> for Fd {
     where
         D: Deserializer<'de>,
     {
-        Ok(Fd(i32::deserialize(deserializer)?))
+        Ok(Fd(io::RawFd::deserialize(deserializer)?))
     }
 }
 
@@ -120,7 +120,7 @@ impl Serialize for OwnedFd {
     where
         S: Serializer,
     {
-        serializer.serialize_i32(self.as_raw_fd())
+        self.as_raw_fd().serialize(serializer)
     }
 }
 
@@ -129,7 +129,7 @@ impl<'de> Deserialize<'de> for OwnedFd {
     where
         D: Deserializer<'de>,
     {
-        let fd = i32::deserialize(deserializer)?;
+        let fd = io::RawFd::deserialize(deserializer)?;
         let fd = unsafe { io::BorrowedFd::borrow_raw(fd) };
         let fd = fd.try_clone_to_owned().map_err(D::Error::custom)?;
         Ok(OwnedFd { inner: fd })
