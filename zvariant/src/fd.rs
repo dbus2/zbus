@@ -1,6 +1,6 @@
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use static_assertions::assert_impl_all;
-use std::os::unix::io;
+use std::os::unix::io::{self, AsRawFd};
 
 use crate::{Basic, EncodingFormat, Signature, Type};
 
@@ -91,16 +91,25 @@ impl std::fmt::Display for Fd {
 ///
 /// See also [`Fd`]. This type owns the file and will close it on drop. On deserialize, it will
 /// duplicate the file descriptor.
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub struct OwnedFd {
-    inner: io::RawFd,
+    inner: io::OwnedFd,
 }
 
-impl Drop for OwnedFd {
-    fn drop(&mut self) {
-        unsafe {
-            libc::close(self.inner);
-        }
+impl std::cmp::PartialEq for OwnedFd {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_raw_fd() == other.as_raw_fd()
+    }
+}
+
+impl std::cmp::Eq for OwnedFd {}
+
+impl std::hash::Hash for OwnedFd {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.as_raw_fd().hash(state);
     }
 }
 
@@ -111,7 +120,7 @@ impl Serialize for OwnedFd {
     where
         S: Serializer,
     {
-        serializer.serialize_i32(self.inner)
+        serializer.serialize_i32(self.as_raw_fd())
     }
 }
 
@@ -120,36 +129,35 @@ impl<'de> Deserialize<'de> for OwnedFd {
     where
         D: Deserializer<'de>,
     {
-        let fd = unsafe { libc::dup(i32::deserialize(deserializer)?) };
-        if fd < 0 {
-            return Err(D::Error::custom(std::io::Error::last_os_error()));
-        }
+        let fd = i32::deserialize(deserializer)?;
+        let fd = unsafe { io::BorrowedFd::borrow_raw(fd) };
+        let fd = fd.try_clone_to_owned().map_err(D::Error::custom)?;
         Ok(OwnedFd { inner: fd })
     }
 }
 
 impl io::FromRawFd for OwnedFd {
     unsafe fn from_raw_fd(fd: io::RawFd) -> Self {
-        Self { inner: fd }
+        Self {
+            inner: io::OwnedFd::from_raw_fd(fd),
+        }
     }
 }
 
 impl io::AsRawFd for OwnedFd {
     fn as_raw_fd(&self) -> io::RawFd {
-        self.inner
+        self.inner.as_raw_fd()
     }
 }
 
 impl io::IntoRawFd for OwnedFd {
     fn into_raw_fd(self) -> io::RawFd {
-        let fd = self.inner;
-        std::mem::forget(self);
-        fd
+        self.inner.into_raw_fd()
     }
 }
 
 impl std::fmt::Display for OwnedFd {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.inner.fmt(f)
+        self.as_raw_fd().fmt(f)
     }
 }
