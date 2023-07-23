@@ -1,7 +1,7 @@
 use event_listener::{Event, EventListener};
 use serde::Serialize;
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, VecDeque},
     convert::TryInto,
     fmt::Write,
     marker::PhantomData,
@@ -288,55 +288,56 @@ impl Node {
         true
     }
 
-    #[async_recursion::async_recursion]
-    async fn introspect_to_writer<W: Write + Send>(&self, writer: &mut W, level: usize) {
-        if level == 0 {
-            writeln!(
-                writer,
-                r#"
+    async fn introspect_to_writer<W: Write + Send>(&self, writer: &mut W) {
+        let mut node_list = VecDeque::new();
+        node_list.push_back((self, "", 0));
+        while let Some((node, path, level)) = node_list.pop_front() {
+            if level == 0 {
+                writeln!(
+                    writer,
+                    r#"
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <node>"#
-            )
-            .unwrap();
-        }
+                )
+                .unwrap();
+            } else {
+                writeln!(
+                    writer,
+                    "{:indent$}<node name=\"{}\">",
+                    "",
+                    path,
+                    indent = level
+                )
+                .unwrap();
+            }
 
-        for iface in self.interfaces.values() {
-            iface.read().await.introspect_to_writer(writer, level + 2);
-        }
+            for iface in node.interfaces.values() {
+                iface.read().await.introspect_to_writer(writer, level + 2);
+            }
 
-        for (path, node) in &self.children {
-            let level = level + 2;
-            writeln!(
-                writer,
-                "{:indent$}<node name=\"{}\">",
-                "",
-                path,
-                indent = level
-            )
-            .unwrap();
-            node.introspect_to_writer(writer, level).await;
+            for (path, node) in &node.children {
+                node_list.push_front((node, path, level + 2));
+            }
+
             writeln!(writer, "{:indent$}</node>", "", indent = level).unwrap();
-        }
-
-        if level == 0 {
-            writeln!(writer, "</node>").unwrap();
         }
     }
 
     pub(crate) async fn introspect(&self) -> String {
         let mut xml = String::with_capacity(1024);
 
-        self.introspect_to_writer(&mut xml, 0).await;
+        self.introspect_to_writer(&mut xml).await;
 
         xml
     }
 
-    #[async_recursion::async_recursion]
     pub(crate) async fn get_managed_objects(&self) -> ManagedObjects {
-        // Recursively get all properties of all interfaces of descendants.
         let mut managed_objects = ManagedObjects::new();
-        for node in self.children.values() {
+
+        // Recursively get all properties of all interfaces of descendants.
+        let mut node_list: Vec<_> = self.children.values().collect();
+        while let Some(node) = node_list.pop() {
             let mut interfaces = HashMap::new();
             for iface_name in node.interfaces.keys().filter(|n| {
                 // Filter standard interfaces.
@@ -349,7 +350,7 @@ impl Node {
                 interfaces.insert(iface_name.clone().into(), props);
             }
             managed_objects.insert(node.path.clone(), interfaces);
-            managed_objects.extend(node.get_managed_objects().await);
+            node_list.extend(node.children.values());
         }
 
         managed_objects
