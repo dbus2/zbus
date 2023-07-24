@@ -1,3 +1,5 @@
+//! The object server API.
+
 use std::{convert::TryInto, ops::Deref};
 
 use static_assertions::assert_impl_all;

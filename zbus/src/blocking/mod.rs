@@ -22,7 +22,7 @@ mod connection_builder;
 pub use connection_builder::*;
 mod message_iterator;
 pub use message_iterator::*;
-mod object_server;
+pub mod object_server;
 pub use object_server::*;
 pub mod proxy;
 pub use proxy::Proxy;
