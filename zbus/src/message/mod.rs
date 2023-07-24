@@ -1,3 +1,4 @@
+//! D-Bus Message.
 use std::{
     convert::{Into, TryFrom, TryInto},
     fmt,

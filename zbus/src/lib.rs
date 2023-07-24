@@ -61,7 +61,7 @@ pub use address::VsockAddress;
 mod guid;
 pub use guid::*;
 
-mod message;
+pub mod message;
 pub use message::*;
 
 mod handshake;
