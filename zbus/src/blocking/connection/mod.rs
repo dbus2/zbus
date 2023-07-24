@@ -13,6 +13,9 @@ use crate::{
     DBusError, Error, Result,
 };
 
+mod builder;
+pub use builder::ConnectionBuilder;
+
 /// A blocking wrapper of [`zbus::Connection`].
 ///
 /// Most of the API is very similar to [`zbus::Connection`], except it's blocking. One

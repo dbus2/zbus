@@ -18,8 +18,6 @@
 
 mod connection;
 pub use connection::*;
-mod connection_builder;
-pub use connection_builder::*;
 mod message_iterator;
 pub use message_iterator::*;
 pub mod object_server;
