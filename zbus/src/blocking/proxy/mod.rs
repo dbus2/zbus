@@ -13,6 +13,9 @@ use crate::{blocking::Connection, message::Message, utils::block_on, Error, Meth
 
 use crate::fdo;
 
+mod builder;
+pub use builder::ProxyBuilder;
+
 /// A blocking wrapper of [`crate::Proxy`].
 ///
 /// This API is mostly the same as [`crate::Proxy`], except that all its methods block to

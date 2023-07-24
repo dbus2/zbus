@@ -26,6 +26,4 @@ mod object_server;
 pub use object_server::*;
 mod proxy;
 pub use proxy::*;
-mod proxy_builder;
-pub use proxy_builder::*;
 pub mod fdo;
