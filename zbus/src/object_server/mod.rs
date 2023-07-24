@@ -19,8 +19,14 @@ use crate::{
     fdo,
     fdo::{Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
     message::Message,
-    Connection, DispatchResult, Error, Interface, Result, SignalContext, WeakConnection,
+    Connection, Error, Result, WeakConnection,
 };
+
+mod interface;
+pub use interface::{DispatchResult, Interface};
+
+mod signal_context;
+pub use signal_context::SignalContext;
 
 /// Opaque structure that derefs to an `Interface` type.
 pub struct InterfaceDeref<'d, I> {

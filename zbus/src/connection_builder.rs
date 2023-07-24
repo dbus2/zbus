@@ -29,8 +29,9 @@ use crate::{
     async_lock::RwLock,
     handshake,
     names::{InterfaceName, UniqueName, WellKnownName},
+    object_server::Interface,
     raw::Socket,
-    AuthMechanism, Authenticated, Connection, Error, Executor, Guid, Interface, Result,
+    AuthMechanism, Authenticated, Connection, Error, Executor, Guid, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
