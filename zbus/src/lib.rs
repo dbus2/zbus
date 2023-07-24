@@ -64,18 +64,6 @@ pub use guid::*;
 mod message;
 pub use message::*;
 
-mod message_builder;
-pub use message_builder::*;
-
-mod message_header;
-pub use message_header::*;
-
-mod message_field;
-pub use message_field::*;
-
-mod message_fields;
-pub use message_fields::*;
-
 mod handshake;
 pub use handshake::AuthMechanism;
 pub(crate) use handshake::*;

@@ -18,9 +18,10 @@ use crate::{
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature},
     Error, Message, MessageField, MessageFieldCode, MessageFields, MessageFlags, MessageHeader,
-    MessagePrimaryHeader, MessageSequence, MessageType, QuickMessageFields, Result,
-    MAX_MESSAGE_SIZE,
+    MessagePrimaryHeader, MessageSequence, MessageType, Result,
 };
+
+use crate::message::{fields::QuickMessageFields, header::MAX_MESSAGE_SIZE};
 
 #[cfg(unix)]
 type BuildGenericResult = Vec<RawFd>;

@@ -18,9 +18,23 @@ use crate::OwnedFd;
 use crate::{
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type},
-    EndianSig, Error, MessageBuilder, MessageField, MessageFieldCode, MessageFields, MessageHeader,
-    MessagePrimaryHeader, MessageType, QuickMessageFields, Result, MIN_MESSAGE_SIZE,
-    NATIVE_ENDIAN_SIG,
+    Error, Result,
+};
+
+mod builder;
+pub use builder::MessageBuilder;
+
+mod field;
+pub use field::{MessageField, MessageFieldCode};
+
+mod fields;
+pub use fields::MessageFields;
+use fields::QuickMessageFields;
+
+pub(crate) mod header;
+use header::MIN_MESSAGE_SIZE;
+pub use header::{
+    EndianSig, MessageFlags, MessageHeader, MessagePrimaryHeader, MessageType, NATIVE_ENDIAN_SIG,
 };
 
 #[cfg(unix)]
@@ -317,8 +331,8 @@ impl Message {
     ///
     /// Note: prefer using the direct access methods if possible; they are more efficient.
     pub fn fields(&self) -> Result<MessageFields<'_>> {
-        let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
-        zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
+        let ctxt = dbus_context!(header::PRIMARY_HEADER_SIZE);
+        zvariant::from_slice(&self.bytes[header::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
     }
 
     /// The message type.

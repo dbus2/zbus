@@ -10,7 +10,7 @@ use event_listener::{Event, EventListener};
 #[cfg(unix)]
 use crate::OwnedFd;
 use crate::{
-    message_header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
+    message::header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
     raw::Socket,
     utils::padding_for_8_bytes,
     Message, MessagePrimaryHeader,
