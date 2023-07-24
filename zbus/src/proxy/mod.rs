@@ -22,9 +22,11 @@ use zvariant::{ObjectPath, OwnedValue, Str, Value};
 use crate::{
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesChangedStream, PropertiesProxy},
     message::{Flags, Message, Sequence, Type},
-    AsyncDrop, CacheProperties, Connection, Error, Executor, MatchRule, MessageStream,
-    OwnedMatchRule, ProxyBuilder, Result, Task,
+    AsyncDrop, Connection, Error, Executor, MatchRule, MessageStream, OwnedMatchRule, Result, Task,
 };
+
+mod builder;
+pub use builder::{CacheProperties, ProxyBuilder, ProxyDefault};
 
 /// A client-side interface proxy.
 ///

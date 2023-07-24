@@ -110,10 +110,6 @@ mod message_stream;
 pub use message_stream::*;
 mod object_server;
 pub use object_server::*;
-mod proxy;
-pub use proxy::*;
-mod proxy_builder;
-pub use proxy_builder::*;
 mod signal_context;
 pub use signal_context::*;
 mod interface;
@@ -132,6 +128,9 @@ pub use match_rule::Builder as MatchRuleBuilder;
 pub use match_rule::PathSpec as MatchRulePathSpec;
 
 mod socket_reader;
+
+mod proxy;
+pub use proxy::*;
 
 mod utils;
 pub use utils::*;

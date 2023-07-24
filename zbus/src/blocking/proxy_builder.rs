@@ -6,7 +6,7 @@ use zvariant::ObjectPath;
 
 use crate::{blocking::Connection, utils::block_on, CacheProperties, Error, Result};
 
-pub use crate::ProxyDefault;
+pub use crate::proxy::ProxyDefault;
 
 /// Builder for proxies.
 #[derive(Debug, Clone)]
