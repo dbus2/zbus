@@ -121,7 +121,7 @@ pub use interface::*;
 mod abstractions;
 pub use abstractions::*;
 
-mod match_rule;
+pub mod match_rule;
 pub use match_rule::*;
 
 mod socket_reader;

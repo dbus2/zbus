@@ -1,3 +1,5 @@
+//! Bus match rule API.
+
 use core::panic;
 use std::{convert::TryFrom, ops::Deref};
 
