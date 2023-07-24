@@ -248,7 +248,7 @@ pub(crate) async fn macos_launchd_bus_address(env_key: &str) -> Result<Address> 
 }
 
 impl Address {
-    #[async_recursion::async_recursion]
+    #[cfg_attr(any(target_os = "macos", windows), async_recursion::async_recursion)]
     pub(crate) async fn connect(self) -> Result<Stream> {
         match self {
             Address::Unix(p) => {
