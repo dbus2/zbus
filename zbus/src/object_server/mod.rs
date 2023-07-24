@@ -1,3 +1,5 @@
+//! The object server API.
+
 use event_listener::{Event, EventListener};
 use serde::Serialize;
 use std::{

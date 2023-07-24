@@ -108,8 +108,6 @@ mod connection_builder;
 pub use connection_builder::*;
 mod message_stream;
 pub use message_stream::*;
-mod object_server;
-pub use object_server::*;
 mod abstractions;
 pub use abstractions::*;
 
@@ -149,6 +147,9 @@ pub use proxy::PropertyStream;
 #[deprecated(note = "Use `proxy::ProxyDefault` instead")]
 #[doc(hidden)]
 pub use proxy::ProxyDefault;
+
+pub mod object_server;
+pub use object_server::*;
 
 mod utils;
 pub use utils::*;
