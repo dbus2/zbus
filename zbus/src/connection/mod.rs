@@ -1,3 +1,4 @@
+//! Connection API.
 use async_broadcast::{broadcast, InactiveReceiver, Receiver, Sender as Broadcaster};
 use enumflags2::BitFlags;
 use event_listener::{Event, EventListener};

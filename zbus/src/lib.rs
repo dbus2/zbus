@@ -102,7 +102,7 @@ mod handshake;
 pub use handshake::AuthMechanism;
 pub(crate) use handshake::*;
 
-mod connection;
+pub mod connection;
 pub use connection::*;
 mod message_stream;
 pub use message_stream::*;
