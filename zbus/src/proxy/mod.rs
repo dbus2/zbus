@@ -1,3 +1,5 @@
+//! The client-side proxy API.
+
 use enumflags2::{bitflags, BitFlags};
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};

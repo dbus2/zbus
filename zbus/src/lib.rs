@@ -129,7 +129,7 @@ pub use match_rule::PathSpec as MatchRulePathSpec;
 
 mod socket_reader;
 
-mod proxy;
+pub mod proxy;
 pub use proxy::*;
 
 mod utils;
