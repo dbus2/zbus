@@ -1,3 +1,5 @@
+//! Blocking connection API.
+
 use enumflags2::BitFlags;
 use event_listener::EventListener;
 use static_assertions::assert_impl_all;

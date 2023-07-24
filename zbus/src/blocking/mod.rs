@@ -16,7 +16,7 @@
 //! [asf]: https://rust-lang.github.io/wg-async/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
 //! [`blocking` crate]: https://docs.rs/blocking/
 
-mod connection;
+pub mod connection;
 pub use connection::*;
 mod message_iterator;
 pub use message_iterator::*;
