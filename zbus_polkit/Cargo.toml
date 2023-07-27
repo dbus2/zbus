@@ -17,7 +17,7 @@ default = ["zbus/async-io"]
 tokio = ["zbus/tokio"]
 
 [dependencies]
-zbus = { path = "../zbus", version = "3", default-features = false }
+zbus = { path = "../zbus", version = "4", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1.9"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
