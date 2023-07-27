@@ -1288,12 +1288,11 @@ mod tests {
                 (Context::<BE>::new_gvariant(4), 4),
             ],
         ];
-        let signature = "u".try_into().unwrap();
         for ctxts_n_expected_len in ctxts_n_expected_lens {
             for (ctxt, expected_len) in ctxts_n_expected_len {
-                let encoded = to_bytes_for_signature(ctxt, &signature, &Unit::Variant2).unwrap();
+                let encoded = to_bytes_for_signature(ctxt, "u", &Unit::Variant2).unwrap();
                 assert_eq!(encoded.len(), expected_len);
-                let decoded: Unit = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+                let decoded: Unit = from_slice_for_signature(&encoded, ctxt, "u").unwrap();
                 assert_eq!(decoded, Unit::Variant2);
             }
         }
@@ -1322,14 +1321,13 @@ mod tests {
                 (Context::<BE>::new_gvariant(4), 10),
             ],
         ];
-        let signature = "(us)".try_into().unwrap();
         for ctxts_n_expected_len in ctxts_n_expected_lens {
             for (ctxt, expected_len) in ctxts_n_expected_len {
                 let encoded =
-                    to_bytes_for_signature(ctxt, &signature, &NewType::Variant2("hello")).unwrap();
+                    to_bytes_for_signature(ctxt, "(us)", &NewType::Variant2("hello")).unwrap();
                 assert_eq!(encoded.len(), expected_len);
                 let decoded: NewType<'_> =
-                    from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+                    from_slice_for_signature(&encoded, ctxt, "(us)").unwrap();
                 assert_eq!(decoded, NewType::Variant2("hello"));
             }
         }
@@ -1358,21 +1356,19 @@ mod tests {
             ],
         ];
         // TODO: Provide convenience API to create complex signatures
-        let signature = "(u(yu))".try_into().unwrap();
+        let signature = "(u(yu))";
         for ctxts_n_expected_len in ctxts_n_expected_lens {
             for (ctxt, expected_len) in ctxts_n_expected_len {
                 let encoded =
-                    to_bytes_for_signature(ctxt, &signature, &Structs::Tuple(42, 42)).unwrap();
+                    to_bytes_for_signature(ctxt, signature, &Structs::Tuple(42, 42)).unwrap();
                 assert_eq!(encoded.len(), expected_len);
-                let decoded: Structs =
-                    from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+                let decoded: Structs = from_slice_for_signature(&encoded, ctxt, signature).unwrap();
                 assert_eq!(decoded, Structs::Tuple(42, 42));
 
                 let s = Structs::Struct { y: 42, t: 42 };
-                let encoded = to_bytes_for_signature(ctxt, &signature, &s).unwrap();
+                let encoded = to_bytes_for_signature(ctxt, signature, &s).unwrap();
                 assert_eq!(encoded.len(), expected_len);
-                let decoded: Structs =
-                    from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+                let decoded: Structs = from_slice_for_signature(&encoded, ctxt, signature).unwrap();
                 assert_eq!(decoded, Structs::Struct { y: 42, t: 42 });
             }
         }

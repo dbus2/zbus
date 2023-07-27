@@ -107,10 +107,9 @@ where
 ///     Variant3,
 /// }
 ///
-/// let signature = "u".try_into().unwrap();
-/// let encoded = to_bytes_for_signature(ctxt, &signature, &Unit::Variant2).unwrap();
+/// let encoded = to_bytes_for_signature(ctxt, "u", &Unit::Variant2).unwrap();
 /// assert_eq!(encoded.len(), 4);
-/// let decoded: Unit = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// let decoded: Unit = from_slice_for_signature(&encoded, ctxt, "u").unwrap();
 /// assert_eq!(decoded, Unit::Variant2);
 ///
 /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -120,11 +119,11 @@ where
 ///     Variant3(&'s str),
 /// }
 ///
-/// let signature = "(us)".try_into().unwrap();
+/// let signature = "(us)";
 /// let encoded =
-///     to_bytes_for_signature(ctxt, &signature, &NewType::Variant2("hello")).unwrap();
+///     to_bytes_for_signature(ctxt, signature, &NewType::Variant2("hello")).unwrap();
 /// assert_eq!(encoded.len(), 14);
-/// let decoded: NewType<'_> = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// let decoded: NewType<'_> = from_slice_for_signature(&encoded, ctxt, signature).unwrap();
 /// assert_eq!(decoded, NewType::Variant2("hello"));
 ///
 /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -134,16 +133,16 @@ where
 /// }
 ///
 /// // TODO: Provide convenience API to create complex signatures
-/// let signature = "(u(yt))".try_into().unwrap();
-/// let encoded = to_bytes_for_signature(ctxt, &signature, &Structs::Tuple(42, 42)).unwrap();
+/// let signature = "(u(yt))";
+/// let encoded = to_bytes_for_signature(ctxt, signature, &Structs::Tuple(42, 42)).unwrap();
 /// assert_eq!(encoded.len(), 24);
-/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, signature).unwrap();
 /// assert_eq!(decoded, Structs::Tuple(42, 42));
 ///
 /// let s = Structs::Struct { y: 42, t: 42 };
-/// let encoded = to_bytes_for_signature(ctxt, &signature, &s).unwrap();
+/// let encoded = to_bytes_for_signature(ctxt, signature, &s).unwrap();
 /// assert_eq!(encoded.len(), 24);
-/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, &signature).unwrap();
+/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, signature).unwrap();
 /// assert_eq!(decoded, Structs::Struct { y: 42, t: 42 });
 /// ```
 ///
@@ -151,14 +150,16 @@ where
 /// [`Fd`]: struct.Fd.html
 /// [`from_slice_fds_for_signature`]: fn.from_slice_fds_for_signature.html
 // TODO: Return number of bytes parsed?
-pub fn from_slice_for_signature<'d, 'r: 'd, B, T: ?Sized>(
+pub fn from_slice_for_signature<'d, 'r: 'd, B, S, T: ?Sized>(
     bytes: &'r [u8],
     ctxt: EncodingContext<B>,
-    signature: &Signature<'_>,
+    signature: S,
 ) -> Result<T>
 where
     B: byteorder::ByteOrder,
     T: Deserialize<'d>,
+    S: TryInto<Signature<'d>>,
+    S::Error: Into<Error>,
 {
     _from_slice_fds_for_signature(
         bytes,
@@ -182,45 +183,53 @@ where
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html
 // TODO: Return number of bytes parsed?
 #[cfg(unix)]
-pub fn from_slice_fds_for_signature<'d, 'r: 'd, B, T: ?Sized>(
+pub fn from_slice_fds_for_signature<'d, 'r: 'd, B, S, T: ?Sized>(
     bytes: &'r [u8],
     fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
-    signature: &Signature<'_>,
+    signature: S,
 ) -> Result<T>
 where
     B: byteorder::ByteOrder,
     T: Deserialize<'d>,
+    S: TryInto<Signature<'d>>,
+    S::Error: Into<Error>,
 {
     _from_slice_fds_for_signature(bytes, fds, ctxt, signature)
 }
 
-fn _from_slice_fds_for_signature<'d, 'r: 'd, B, T: ?Sized>(
+fn _from_slice_fds_for_signature<'d, 'r: 'd, B, S, T: ?Sized>(
     bytes: &'r [u8],
     #[cfg(unix)] fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
-    signature: &Signature<'_>,
+    signature: S,
 ) -> Result<T>
 where
     B: byteorder::ByteOrder,
     T: Deserialize<'d>,
+    S: TryInto<Signature<'d>>,
+    S::Error: Into<Error>,
 {
+    let signature = signature.try_into().map_err(Into::into)?;
+
     let mut de = match ctxt.format() {
         #[cfg(feature = "gvariant")]
-        EncodingFormat::GVariant => Deserializer::GVariant(GVDeserializer::new(
+        EncodingFormat::GVariant => GVDeserializer::new(
             bytes,
             #[cfg(unix)]
             fds,
             signature,
             ctxt,
-        )),
-        EncodingFormat::DBus => Deserializer::DBus(DBusDeserializer::new(
+        )
+        .map(Deserializer::GVariant)?,
+        EncodingFormat::DBus => DBusDeserializer::new(
             bytes,
             #[cfg(unix)]
             fds,
             signature,
             ctxt,
-        )),
+        )
+        .map(Deserializer::DBus)?,
     };
 
     T::deserialize(&mut de)
@@ -232,14 +241,16 @@ where
 /// Please note that actual file descriptors are not part of the encoding and need to be transferred
 /// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
 /// file descriptors and hence the reason, caller must pass a slice of file descriptors.
-pub fn from_slice_for_dynamic_signature<'d, B, T>(
+pub fn from_slice_for_dynamic_signature<'d, B, S, T>(
     bytes: &'d [u8],
     ctxt: EncodingContext<B>,
-    signature: &Signature<'d>,
+    signature: S,
 ) -> Result<T>
 where
     B: byteorder::ByteOrder,
     T: DynamicDeserialize<'d>,
+    S: TryInto<Signature<'d>>,
+    S::Error: Into<Error>,
 {
     let seed = T::deserializer_for_signature(signature)?;
 
@@ -255,15 +266,17 @@ where
 ///
 /// This function is not available on Windows.
 #[cfg(unix)]
-pub fn from_slice_fds_for_dynamic_signature<'d, B, T>(
+pub fn from_slice_fds_for_dynamic_signature<'d, B, S, T>(
     bytes: &'d [u8],
     fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
-    signature: &Signature<'d>,
+    signature: S,
 ) -> Result<T>
 where
     B: byteorder::ByteOrder,
     T: DynamicDeserialize<'d>,
+    S: TryInto<Signature<'d>>,
+    S::Error: Into<Error>,
 {
     let seed = T::deserializer_for_signature(signature)?;
 
@@ -330,20 +343,22 @@ where
 
     let mut de = match ctxt.format() {
         #[cfg(feature = "gvariant")]
-        EncodingFormat::GVariant => Deserializer::GVariant(GVDeserializer::new(
+        EncodingFormat::GVariant => GVDeserializer::new(
             bytes,
             #[cfg(unix)]
             fds,
-            &signature,
+            signature,
             ctxt,
-        )),
-        EncodingFormat::DBus => Deserializer::DBus(DBusDeserializer::new(
+        )
+        .map(Deserializer::GVariant)?,
+        EncodingFormat::DBus => DBusDeserializer::new(
             bytes,
             #[cfg(unix)]
             fds,
-            &signature,
+            signature,
             ctxt,
-        )),
+        )
+        .map(Deserializer::DBus)?,
     };
 
     seed.deserialize(&mut de)
@@ -389,28 +404,34 @@ where
     /// Create a Deserializer struct instance.
     ///
     /// On Windows, there is no `fds` argument.
-    pub fn new<'r: 'de>(
+    pub fn new<'r: 'de, S>(
         bytes: &'r [u8],
         #[cfg(unix)] fds: Option<&'f [RawFd]>,
-        signature: &Signature<'sig>,
+        signature: S,
         ctxt: EncodingContext<B>,
-    ) -> Self {
+    ) -> Result<Self>
+    where
+        S: TryInto<Signature<'sig>>,
+        S::Error: Into<Error>,
+    {
         match ctxt.format() {
             #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => Self::GVariant(GVDeserializer::new(
+            EncodingFormat::GVariant => GVDeserializer::new(
                 bytes,
                 #[cfg(unix)]
                 fds,
                 signature,
                 ctxt,
-            )),
-            EncodingFormat::DBus => Self::DBus(DBusDeserializer::new(
+            )
+            .map(Deserializer::GVariant),
+            EncodingFormat::DBus => DBusDeserializer::new(
                 bytes,
                 #[cfg(unix)]
                 fds,
                 signature,
                 ctxt,
-            )),
+            )
+            .map(Deserializer::DBus),
         }
     }
 }
