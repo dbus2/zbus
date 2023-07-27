@@ -38,7 +38,7 @@ tokio-vsock = ["dep:tokio-vsock", "tokio"]
 byteorder = "1.4.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_repr = "0.1.9"
-zvariant = { path = "../zvariant", version = "3.15.0", default-features = false, features = [
+zvariant = { path = "../zvariant", version = "4.0.0", default-features = false, features = [
   "enumflags2",
 ] }
 zbus_names = { path = "../zbus_names", version = "2.6" }
