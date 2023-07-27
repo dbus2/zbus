@@ -4,8 +4,10 @@ use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
-use zbus::{dbus_proxy, fdo};
-use zvariant::{OwnedValue, Type, Value};
+use zbus::{
+    dbus_proxy, fdo,
+    zvariant::{OwnedValue, Type, Value},
+};
 
 use crate::Error;
 
@@ -413,7 +415,7 @@ trait Authority {
         subject: &Subject,
         locale: &str,
         object_path: &str,
-        options: &std::collections::HashMap<&str, zvariant::Value<'_>>,
+        options: &std::collections::HashMap<&str, Value<'_>>,
     ) -> zbus::Result<()>;
 
     /// Revokes all temporary authorizations that applies to `id`.
