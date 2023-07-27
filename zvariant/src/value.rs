@@ -34,7 +34,6 @@ use crate::Fd;
 /// # Examples
 ///
 /// ```
-/// use std::convert::TryFrom;
 /// use zvariant::{from_slice, to_bytes, EncodingContext, Value};
 ///
 /// // Create a Value from an i16
@@ -54,7 +53,6 @@ use crate::Fd;
 /// Now let's try a more complicated example:
 ///
 /// ```
-/// use std::convert::TryFrom;
 /// use zvariant::{from_slice, to_bytes, EncodingContext};
 /// use zvariant::{Structure, Value, Str};
 ///
@@ -279,7 +277,6 @@ impl<'a> Value<'a> {
     /// # Examples
     ///
     /// ```
-    /// use std::convert::TryFrom;
     /// use zvariant::{Result, Value};
     ///
     /// fn value_vec_to_type_vec<'a, T>(values: Vec<Value<'a>>) -> Result<Vec<T>>
@@ -329,7 +326,6 @@ impl<'a> Value<'a> {
     /// # Examples
     ///
     /// ```
-    /// use std::convert::TryFrom;
     /// use zvariant::{Result, Value};
     ///
     /// fn value_vec_to_type_vec<'a, T>(values: &'a Vec<Value<'a>>) -> Result<Vec<&'a T>>

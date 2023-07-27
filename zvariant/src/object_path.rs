@@ -15,7 +15,6 @@ use crate::{Basic, EncodingFormat, Error, Result, Signature, Str, Type};
 /// # Examples
 ///
 /// ```
-/// use core::convert::TryFrom;
 /// use zvariant::ObjectPath;
 ///
 /// // Valid object paths

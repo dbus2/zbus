@@ -94,7 +94,6 @@ where
 /// want to manually implement `Type` trait either:
 ///
 /// ```
-/// use std::convert::TryInto;
 /// use serde::{Deserialize, Serialize};
 ///
 /// use zvariant::{to_bytes_for_signature, from_slice_for_signature};

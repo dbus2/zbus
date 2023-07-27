@@ -1,7 +1,7 @@
 use core::{
     convert::TryFrom,
     fmt::{self, Debug, Display, Formatter},
-    panic, str,
+    str,
 };
 use serde::{
     de::{Deserialize, Deserializer, Visitor},
@@ -63,7 +63,6 @@ impl<'b> std::ops::Deref for Bytes<'b> {
 /// # Examples
 ///
 /// ```
-/// use core::convert::TryFrom;
 /// use zvariant::Signature;
 ///
 /// // Valid signatures

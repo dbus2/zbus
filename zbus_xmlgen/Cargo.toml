@@ -9,7 +9,7 @@ authors = [
     "Tim Small <tim@seoss.co.uk>",
     "Zeeshan Ali Khan <zeeshanak@gnome.org>",
 ]
-edition = "2018"
+edition = "2021"
 rust-version = "1.64"
 
 description = "D-Bus XML interface code generator"
