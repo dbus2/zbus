@@ -62,7 +62,41 @@ mod guid;
 pub use guid::*;
 
 pub mod message;
-pub use message::*;
+pub use message::Message;
+
+#[deprecated(note = "Use `message::EndianSig` instead")]
+#[doc(hidden)]
+pub use message::EndianSig;
+#[deprecated(note = "Use `message::MessageBuilder` instead")]
+#[doc(hidden)]
+pub use message::MessageBuilder;
+#[deprecated(note = "Use `message::MessageField` instead")]
+#[doc(hidden)]
+pub use message::MessageField;
+#[deprecated(note = "Use `message::MessageFieldCode` instead")]
+#[doc(hidden)]
+pub use message::MessageFieldCode;
+#[deprecated(note = "Use `message::MessageFields` instead")]
+#[doc(hidden)]
+pub use message::MessageFields;
+#[deprecated(note = "Use `message::MessageFlags` instead")]
+#[doc(hidden)]
+pub use message::MessageFlags;
+#[deprecated(note = "Use `message::MessageHeader` instead")]
+#[doc(hidden)]
+pub use message::MessageHeader;
+#[deprecated(note = "Use `message::MessagePrimaryHeader` instead")]
+#[doc(hidden)]
+pub use message::MessagePrimaryHeader;
+#[deprecated(note = "Use `message::MessageSequence` instead")]
+#[doc(hidden)]
+pub use message::MessageSequence;
+#[deprecated(note = "Use `message::MessageType` instead")]
+#[doc(hidden)]
+pub use message::MessageType;
+#[deprecated(note = "Use `message::NATIVE_ENDIAN_SIG` instead")]
+#[doc(hidden)]
+pub use message::NATIVE_ENDIAN_SIG;
 
 mod handshake;
 pub use handshake::AuthMechanism;
