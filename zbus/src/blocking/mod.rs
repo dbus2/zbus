@@ -17,7 +17,8 @@
 //! [`blocking` crate]: https://docs.rs/blocking/
 
 pub mod connection;
-pub use connection::*;
+pub use connection::Connection;
+
 mod message_iterator;
 pub use message_iterator::*;
 pub mod object_server;
@@ -44,5 +45,9 @@ pub use proxy::SignalIterator;
 #[deprecated(note = "Use `object_server::InterfaceRef` instead")]
 #[doc(hidden)]
 pub use object_server::InterfaceRef;
+
+#[deprecated(note = "Use `connection::ConnectionBuilder` instead")]
+#[doc(hidden)]
+pub use connection::ConnectionBuilder;
 
 pub mod fdo;
