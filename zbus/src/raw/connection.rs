@@ -12,7 +12,7 @@ use crate::OwnedFd;
 use crate::{
     message::{
         header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
-        Message, MessagePrimaryHeader,
+        Message, PrimaryHeader,
     },
     raw::Socket,
     utils::padding_for_8_bytes,
@@ -142,7 +142,7 @@ impl<S: Socket> Connection<S> {
             }
         }
 
-        let (primary_header, fields_len) = MessagePrimaryHeader::read(&self.raw_in_buffer)?;
+        let (primary_header, fields_len) = PrimaryHeader::read(&self.raw_in_buffer)?;
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_padding = padding_for_8_bytes(header_len);
         let body_len = primary_header.body_len() as usize;

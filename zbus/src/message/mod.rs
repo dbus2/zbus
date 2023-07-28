@@ -34,9 +34,7 @@ use fields::QuickFields;
 
 pub(crate) mod header;
 use header::MIN_MESSAGE_SIZE;
-pub use header::{
-    EndianSig, Header, MessageFlags, MessagePrimaryHeader, MessageType, NATIVE_ENDIAN_SIG,
-};
+pub use header::{EndianSig, Header, MessageFlags, MessageType, PrimaryHeader, NATIVE_ENDIAN_SIG};
 
 #[cfg(unix)]
 const LOCK_PANIC_MSG: &str = "lock poisoned";
@@ -86,7 +84,7 @@ impl MessageSequence {
 /// [`Connection`]: struct.Connection#method.call_method
 #[derive(Clone)]
 pub struct Message {
-    pub(crate) primary_header: MessagePrimaryHeader,
+    pub(crate) primary_header: PrimaryHeader,
     pub(crate) quick_fields: QuickFields,
     pub(crate) bytes: Vec<u8>,
     pub(crate) body_offset: usize,
@@ -244,7 +242,7 @@ impl Message {
             return Err(Error::IncorrectEndian);
         }
 
-        let (primary_header, fields_len) = MessagePrimaryHeader::read(&bytes)?;
+        let (primary_header, fields_len) = PrimaryHeader::read(&bytes)?;
         let header = zvariant::from_slice(&bytes, dbus_context!(0))?;
         #[cfg(unix)]
         let fds = Arc::new(RwLock::new(Fds::Owned(fds)));
@@ -305,13 +303,13 @@ impl Message {
         }
     }
 
-    pub fn primary_header(&self) -> &MessagePrimaryHeader {
+    pub fn primary_header(&self) -> &PrimaryHeader {
         &self.primary_header
     }
 
     pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<()>
     where
-        F: FnMut(&mut MessagePrimaryHeader) -> Result<()>,
+        F: FnMut(&mut PrimaryHeader) -> Result<()>,
     {
         modifier(&mut self.primary_header)?;
 

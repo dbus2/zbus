@@ -16,8 +16,8 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 use crate::{
     message::{
-        Fields, Header, Message, MessageField, MessageFieldCode, MessageFlags,
-        MessagePrimaryHeader, MessageSequence, MessageType,
+        Fields, Header, Message, MessageField, MessageFieldCode, MessageFlags, MessageSequence,
+        MessageType, PrimaryHeader,
     },
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature},
@@ -46,7 +46,7 @@ pub struct Builder<'a> {
 
 impl<'a> Builder<'a> {
     fn new(msg_type: MessageType) -> Self {
-        let primary = MessagePrimaryHeader::new(msg_type, 0);
+        let primary = PrimaryHeader::new(msg_type, 0);
         let fields = Fields::new();
         let header = Header::new(primary, fields);
         Self { header }

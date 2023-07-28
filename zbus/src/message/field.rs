@@ -90,7 +90,7 @@ impl<'f> MessageField<'f> {
 /// Please consult the [Message Format] section of the D-Bus spec for more details.
 ///
 /// [headers]: struct.Header.html
-/// [are fixed]: struct.MessagePrimaryHeader.html
+/// [are fixed]: struct.PrimaryHeader.html
 /// [Message Format]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-messages
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MessageField<'f> {

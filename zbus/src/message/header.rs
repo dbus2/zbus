@@ -150,7 +150,7 @@ impl<'de> Deserialize<'de> for SerialNum {
 ///
 /// This header contains all the essential information about a message, regardless of its type.
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
-pub struct MessagePrimaryHeader {
+pub struct PrimaryHeader {
     endian_sig: EndianSig,
     msg_type: MessageType,
     flags: BitFlags<MessageFlags>,
@@ -159,10 +159,10 @@ pub struct MessagePrimaryHeader {
     serial_num: SerialNum,
 }
 
-assert_impl_all!(MessagePrimaryHeader: Send, Sync, Unpin);
+assert_impl_all!(PrimaryHeader: Send, Sync, Unpin);
 
-impl MessagePrimaryHeader {
-    /// Create a new `MessagePrimaryHeader` instance.
+impl PrimaryHeader {
+    /// Create a new `PrimaryHeader` instance.
     pub fn new(msg_type: MessageType, body_len: u32) -> Self {
         Self {
             endian_sig: NATIVE_ENDIAN_SIG,
@@ -174,7 +174,7 @@ impl MessagePrimaryHeader {
         }
     }
 
-    pub(crate) fn read(buf: &[u8]) -> Result<(MessagePrimaryHeader, u32), Error> {
+    pub(crate) fn read(buf: &[u8]) -> Result<(PrimaryHeader, u32), Error> {
         let ctx = EncodingContext::<byteorder::NativeEndian>::new_dbus(0);
         let primary_header = zvariant::from_slice(buf, ctx)?;
         let fields_len = zvariant::from_slice(&buf[PRIMARY_HEADER_SIZE..], ctx)?;
@@ -255,13 +255,13 @@ impl MessagePrimaryHeader {
 
 /// The message header, containing all the metadata about the message.
 ///
-/// This includes both the [`MessagePrimaryHeader`] and [`Fields`].
+/// This includes both the [`PrimaryHeader`] and [`Fields`].
 ///
-/// [`MessagePrimaryHeader`]: struct.MessagePrimaryHeader.html
+/// [`PrimaryHeader`]: struct.PrimaryHeader.html
 /// [`Fields`]: struct.Fields.html
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct Header<'m> {
-    primary: MessagePrimaryHeader,
+    primary: PrimaryHeader,
     #[serde(borrow)]
     fields: Fields<'m>,
 }
@@ -290,22 +290,22 @@ macro_rules! get_field_u32 {
 
 impl<'m> Header<'m> {
     /// Create a new `Header` instance.
-    pub fn new(primary: MessagePrimaryHeader, fields: Fields<'m>) -> Self {
+    pub fn new(primary: PrimaryHeader, fields: Fields<'m>) -> Self {
         Self { primary, fields }
     }
 
     /// Get a reference to the primary header.
-    pub fn primary(&self) -> &MessagePrimaryHeader {
+    pub fn primary(&self) -> &PrimaryHeader {
         &self.primary
     }
 
     /// Get a mutable reference to the primary header.
-    pub fn primary_mut(&mut self) -> &mut MessagePrimaryHeader {
+    pub fn primary_mut(&mut self) -> &mut PrimaryHeader {
         &mut self.primary
     }
 
     /// Get the primary header, consuming `self`.
-    pub fn into_primary(self) -> MessagePrimaryHeader {
+    pub fn into_primary(self) -> PrimaryHeader {
         self.primary
     }
 
@@ -377,7 +377,7 @@ impl<'m> Header<'m> {
 
 #[cfg(test)]
 mod tests {
-    use crate::message::{Fields, Header, MessageField, MessagePrimaryHeader, MessageType};
+    use crate::message::{Fields, Header, MessageField, MessageType, PrimaryHeader};
 
     use std::{
         convert::{TryFrom, TryInto},
@@ -398,7 +398,7 @@ mod tests {
         f.add(MessageField::Interface(iface.clone()));
         f.add(MessageField::Member(member.clone()));
         f.add(MessageField::Sender(":1.84".try_into()?));
-        let h = Header::new(MessagePrimaryHeader::new(MessageType::Signal, 77), f);
+        let h = Header::new(PrimaryHeader::new(MessageType::Signal, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::Signal);
         assert_eq!(h.path()?, Some(&path));
@@ -419,7 +419,7 @@ mod tests {
             "say",
         )));
         f.add(MessageField::UnixFDs(12));
-        let h = Header::new(MessagePrimaryHeader::new(MessageType::MethodReturn, 77), f);
+        let h = Header::new(PrimaryHeader::new(MessageType::MethodReturn, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::MethodReturn);
         assert_eq!(h.path()?, None);
