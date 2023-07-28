@@ -9,7 +9,10 @@ use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{EncodingContext, ObjectPath, Signature, Type};
 
-use crate::{Error, MessageField, MessageFieldCode, MessageFields};
+use crate::{
+    message::{MessageField, MessageFieldCode, MessageFields},
+    Error,
+};
 
 pub(crate) const PRIMARY_HEADER_SIZE: usize = 12;
 pub(crate) const MIN_MESSAGE_SIZE: usize = PRIMARY_HEADER_SIZE + 4;
@@ -374,7 +377,9 @@ impl<'m> MessageHeader<'m> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{MessageField, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType};
+    use crate::message::{
+        MessageField, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType,
+    };
 
     use std::{
         convert::{TryFrom, TryInto},

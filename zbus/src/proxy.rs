@@ -21,8 +21,9 @@ use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesChangedStream, PropertiesProxy},
-    AsyncDrop, CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageFlags,
-    MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
+    message::{Message, MessageFlags, MessageSequence, MessageType},
+    AsyncDrop, CacheProperties, Connection, Error, Executor, MatchRule, MessageStream,
+    OwnedMatchRule, ProxyBuilder, Result, Task,
 };
 
 /// A client-side interface proxy.

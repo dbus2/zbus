@@ -4,7 +4,10 @@ use std::convert::{TryFrom, TryInto};
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{ObjectPath, Type};
 
-use crate::{Message, MessageField, MessageFieldCode, MessageHeader, Result};
+use crate::{
+    message::{Message, MessageField, MessageFieldCode, MessageHeader},
+    Result,
+};
 
 // It's actually 10 (and even not that) but let's round it to next 8-byte alignment
 const MAX_FIELDS_IN_MESSAGE: usize = 16;

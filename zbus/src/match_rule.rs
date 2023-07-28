@@ -6,9 +6,10 @@ use static_assertions::assert_impl_all;
 use zvariant::Structure;
 
 use crate::{
+    message::MessageType,
     names::{BusName, InterfaceName, MemberName, UniqueName},
     zvariant::{ObjectPath, Str, Type},
-    Error, MatchRuleBuilder, MessageType, Result,
+    Error, MatchRuleBuilder, Result,
 };
 
 /// A bus match rule for subscribing to specific messages.
@@ -27,7 +28,7 @@ use crate::{
 ///
 /// // Let's take the most typical example of match rule to subscribe to properties' changes:
 /// let rule = MatchRule::builder()
-///     .msg_type(zbus::MessageType::Signal)
+///     .msg_type(zbus::message::MessageType::Signal)
 ///     .sender("org.freedesktop.DBus")?
 ///     .interface("org.freedesktop.DBus.Properties")?
 ///     .member("PropertiesChanged")?
@@ -52,7 +53,7 @@ use crate::{
 ///
 /// // Now for `ObjectManager::InterfacesAdded` signal.
 /// let rule = MatchRule::builder()
-///     .msg_type(zbus::MessageType::Signal)
+///     .msg_type(zbus::message::MessageType::Signal)
 ///     .sender("org.zbus")?
 ///     .interface("org.freedesktop.DBus.ObjectManager")?
 ///     .member("InterfacesAdded")?
@@ -212,7 +213,7 @@ impl<'m> MatchRule<'m> {
     ///   always a unique name.
     /// * `destination` in the rule when `destination` on the `msg` is a well-known name. The
     ///   `destination` on match rule is always a unique name.
-    pub fn matches(&self, msg: &zbus::Message) -> Result<bool> {
+    pub fn matches(&self, msg: &zbus::message::Message) -> Result<bool> {
         let hdr = msg.header()?;
 
         // Start with message type.

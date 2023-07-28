@@ -10,10 +10,12 @@ use event_listener::{Event, EventListener};
 #[cfg(unix)]
 use crate::OwnedFd;
 use crate::{
-    message::header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
+    message::{
+        header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
+        Message, MessagePrimaryHeader,
+    },
     raw::Socket,
     utils::padding_for_8_bytes,
-    Message, MessagePrimaryHeader,
 };
 
 use futures_core::ready;

@@ -18,7 +18,8 @@ use crate::{
     async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard},
     fdo,
     fdo::{Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
-    Connection, DispatchResult, Error, Interface, Message, Result, SignalContext, WeakConnection,
+    message::Message,
+    Connection, DispatchResult, Error, Interface, Result, SignalContext, WeakConnection,
 };
 
 /// Opaque structure that derefs to an `Interface` type.

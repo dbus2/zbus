@@ -8,8 +8,9 @@ use zvariant::ObjectPath;
 use crate::{
     blocking::ObjectServer,
     fdo::{ConnectionCredentials, RequestNameFlags, RequestNameReply},
+    message::Message,
     utils::block_on,
-    DBusError, Error, Message, Result,
+    DBusError, Error, Result,
 };
 
 /// A blocking wrapper of [`zbus::Connection`].
@@ -167,7 +168,7 @@ impl Connection {
     /// Returns the message serial number.
     pub fn reply_dbus_error(
         &self,
-        call: &zbus::MessageHeader<'_>,
+        call: &zbus::message::MessageHeader<'_>,
         err: impl DBusError,
     ) -> Result<u32> {
         block_on(self.inner.reply_dbus_error(call, err))

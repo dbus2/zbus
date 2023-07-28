@@ -4,7 +4,7 @@ use std::{
 };
 
 #[cfg(unix)]
-use crate::Fds;
+use crate::message::Fds;
 #[cfg(unix)]
 use std::{
     os::unix::io::RawFd,
@@ -15,10 +15,13 @@ use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 use crate::{
+    message::{
+        Message, MessageField, MessageFieldCode, MessageFields, MessageFlags, MessageHeader,
+        MessagePrimaryHeader, MessageSequence, MessageType,
+    },
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature},
-    Error, Message, MessageField, MessageFieldCode, MessageFields, MessageFlags, MessageHeader,
-    MessagePrimaryHeader, MessageSequence, MessageType, Result,
+    Error, Result,
 };
 
 use crate::message::{fields::QuickMessageFields, header::MAX_MESSAGE_SIZE};

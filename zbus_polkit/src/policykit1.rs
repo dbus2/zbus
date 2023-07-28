@@ -207,7 +207,9 @@ impl Subject {
     ///
     /// * `message_header` - The header of the message which caused an authentication to be
     ///   necessary.
-    pub fn new_for_message_header(message_header: &zbus::MessageHeader<'_>) -> Result<Self, Error> {
+    pub fn new_for_message_header(
+        message_header: &zbus::message::MessageHeader<'_>,
+    ) -> Result<Self, Error> {
         let mut subject_details = HashMap::new();
         match message_header.sender() {
             Ok(Some(sender)) => {

@@ -238,9 +238,15 @@ fn test_interface() {
             // check compilation
             let c = zbus::Connection::session().await.unwrap();
             let s = c.object_server();
-            let m =
-                zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
-                    .unwrap();
+            let m = zbus::message::Message::method(
+                None::<()>,
+                None::<()>,
+                "/",
+                None::<()>,
+                "StrU32",
+                &(42,),
+            )
+            .unwrap();
             let _ = t.call(&s, &c, &m, "StrU32".try_into().unwrap());
             let ctxt = SignalContext::new(&c, "/does/not/matter").unwrap();
             block_on(Test::<u32>::signal(&ctxt, 23, "ergo sum")).unwrap();
@@ -251,7 +257,7 @@ fn test_interface() {
 mod signal_from_message {
     use super::*;
     use std::sync::Arc;
-    use zbus::MessageBuilder;
+    use zbus::message::MessageBuilder;
 
     #[dbus_proxy(
         interface = "org.freedesktop.zbus_macros.Test",

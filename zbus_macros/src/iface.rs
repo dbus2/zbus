@@ -522,7 +522,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &'call self,
                 s: &'call #zbus::ObjectServer,
                 c: &'call #zbus::Connection,
-                m: &'call #zbus::Message,
+                m: &'call #zbus::message::Message,
                 name: #zbus::names::MemberName<'call>,
             ) -> #zbus::DispatchResult<'call> {
                 match name.as_str() {
@@ -535,7 +535,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &'call mut self,
                 s: &'call #zbus::ObjectServer,
                 c: &'call #zbus::Connection,
-                m: &'call #zbus::Message,
+                m: &'call #zbus::message::Message,
                 name: #zbus::names::MemberName<'call>,
             ) -> #zbus::DispatchResult<'call> {
                 match name.as_str() {

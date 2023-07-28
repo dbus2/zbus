@@ -13,8 +13,8 @@ use static_assertions::assert_impl_all;
 use tracing::warn;
 
 use crate::{
-    AsyncDrop, Connection, ConnectionInner, MatchRule, Message, MessageSequence, OwnedMatchRule,
-    Result,
+    message::{Message, MessageSequence},
+    AsyncDrop, Connection, ConnectionInner, MatchRule, OwnedMatchRule, Result,
 };
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.
@@ -64,7 +64,7 @@ impl MessageStream {
     /// # zbus::block_on(async {
     /// let conn = Connection::session().await?;
     /// let rule = MatchRule::builder()
-    ///     .msg_type(zbus::MessageType::Signal)
+    ///     .msg_type(zbus::message::MessageType::Signal)
     ///     .sender("org.freedesktop.DBus")?
     ///     .interface("org.freedesktop.DBus")?
     ///     .member("NameOwnerChanged")?

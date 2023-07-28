@@ -5,7 +5,10 @@ use std::{convert::Infallible, error, fmt, io, sync::Arc};
 use zbus_names::{Error as NamesError, OwnedErrorName};
 use zvariant::Error as VariantError;
 
-use crate::{fdo, Message, MessageType};
+use crate::{
+    fdo,
+    message::{Message, MessageType},
+};
 
 /// The error type for `zbus`.
 ///

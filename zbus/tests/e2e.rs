@@ -15,13 +15,15 @@ use tracing::{debug, instrument};
 use zbus::{
     block_on,
     fdo::{ObjectManager, ObjectManagerProxy},
-    DBusError, MessageBuilder, MessageStream, ResponseDispatchNotifier,
+    message::MessageBuilder,
+    DBusError, MessageStream, ResponseDispatchNotifier,
 };
 use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Str, Type, Value};
 
 use zbus::{
-    dbus_interface, dbus_proxy, CacheProperties, Connection, ConnectionBuilder, InterfaceRef,
-    MessageHeader, MessageType, ObjectServer, SignalContext,
+    dbus_interface, dbus_proxy,
+    message::{MessageHeader, MessageType},
+    CacheProperties, Connection, ConnectionBuilder, InterfaceRef, ObjectServer, SignalContext,
 };
 
 #[derive(Debug, Deserialize, Serialize, Type)]
@@ -372,12 +374,12 @@ impl MyIfaceImpl {
         debug!("`TestNoReply` called");
         assert_eq!(
             header.message_type().unwrap(),
-            zbus::MessageType::MethodCall
+            zbus::message::MessageType::MethodCall
         );
         assert!(header
             .primary()
             .flags()
-            .contains(zbus::MessageFlags::NoReplyExpected));
+            .contains(zbus::message::MessageFlags::NoReplyExpected));
     }
 
     #[instrument]
@@ -385,12 +387,12 @@ impl MyIfaceImpl {
         debug!("`TestNoAutostart` called");
         assert_eq!(
             header.message_type().unwrap(),
-            zbus::MessageType::MethodCall
+            zbus::message::MessageType::MethodCall
         );
         assert!(header
             .primary()
             .flags()
-            .contains(zbus::MessageFlags::NoAutoStart));
+            .contains(zbus::message::MessageFlags::NoAutoStart));
     }
 
     #[instrument]
@@ -398,12 +400,12 @@ impl MyIfaceImpl {
         debug!("`TestInteractiveAuth` called");
         assert_eq!(
             header.message_type().unwrap(),
-            zbus::MessageType::MethodCall
+            zbus::message::MessageType::MethodCall
         );
         assert!(header
             .primary()
             .flags()
-            .contains(zbus::MessageFlags::AllowInteractiveAuth));
+            .contains(zbus::message::MessageFlags::AllowInteractiveAuth));
     }
 
     #[dbus_interface(signal)]

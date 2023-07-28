@@ -101,9 +101,9 @@ mod utils;
 /// For each signal method declared, this macro will provide a method, named `receive_<method_name>`
 /// to create a [`zbus::SignalStream`] ([`zbus::blocking::SignalIterator`] for the blocking proxy)
 /// wrapper, named `<SignalName>Stream` (`<SignalName>Iterator` for the blocking proxy) that yield
-/// a [`zbus::Message`] wrapper, named `<SignalName>`. This wrapper provides type safe access to the
-/// signal arguments. It also implements `Deref<Target = Message>` to allow easy access to the
-/// underlying [`zbus::Message`].
+/// a [`zbus::message::Message`] wrapper, named `<SignalName>`. This wrapper provides type safe
+/// access to the signal arguments. It also implements `Deref<Target = Message>` to allow easy
+/// access to the underlying [`zbus::message::Message`].
 ///
 /// # Example
 ///
@@ -185,7 +185,7 @@ mod utils;
 ///
 /// [`zbus_polkit`]: https://docs.rs/zbus_polkit/1.0.0/zbus_polkit/policykit1/index.html
 /// [`zbus::Proxy`]: https://docs.rs/zbus/3.0.0/zbus/struct.Proxy.html
-/// [`zbus::Message`]: https://docs.rs/zbus/3.0.0/zbus/struct.Message.html
+/// [`zbus::message::Message`]: https://docs.rs/zbus/3.0.0/zbus/struct.Message.html
 /// [`zbus::blocking::Proxy`]: https://docs.rs/zbus/3.0.0/zbus/blocking/struct.Proxy.html
 /// [`zbus::SignalStream`]: https://docs.rs/zbus/3.0.0/zbus/struct.SignalStream.html
 /// [`zbus::blocking::SignalIterator`]: https://docs.rs/zbus/3.0.0/zbus/blocking/struct.SignalIterator.html
@@ -260,7 +260,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 /// # use std::error::Error;
 /// use zbus_macros::dbus_interface;
-/// use zbus::{ObjectServer, SignalContext, MessageHeader};
+/// use zbus::{ObjectServer, SignalContext, message::MessageHeader};
 ///
 /// struct Example {
 ///     _some_data: String,

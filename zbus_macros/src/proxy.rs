@@ -941,24 +941,24 @@ fn gen_proxy_signal(
         quote! {
             #[doc = #args_struct_gen_doc]
             #[derive(Debug, Clone)]
-            pub struct #signal_name_ident(::std::sync::Arc<#zbus::Message>);
+            pub struct #signal_name_ident(::std::sync::Arc<#zbus::message::Message>);
 
             impl ::std::ops::Deref for #signal_name_ident {
-                type Target = #zbus::Message;
+                type Target = #zbus::message::Message;
 
-                fn deref(&self) -> &#zbus::Message {
+                fn deref(&self) -> &#zbus::message::Message {
                     &self.0
                 }
             }
 
-            impl ::std::convert::AsRef<::std::sync::Arc<#zbus::Message>> for #signal_name_ident {
-                fn as_ref(&self) -> &::std::sync::Arc<#zbus::Message> {
+            impl ::std::convert::AsRef<::std::sync::Arc<#zbus::message::Message>> for #signal_name_ident {
+                fn as_ref(&self) -> &::std::sync::Arc<#zbus::message::Message> {
                     &self.0
                 }
             }
 
-            impl ::std::convert::AsRef<#zbus::Message> for #signal_name_ident {
-                fn as_ref(&self) -> &#zbus::Message {
+            impl ::std::convert::AsRef<#zbus::message::Message> for #signal_name_ident {
+                fn as_ref(&self) -> &#zbus::message::Message {
                     &self.0
                 }
             }
@@ -966,10 +966,10 @@ fn gen_proxy_signal(
             impl #signal_name_ident {
                 #[doc = "Try to construct a "]
                 #[doc = #signal_name]
-                #[doc = " from a [::zbus::Message]."]
+                #[doc = " from a [::zbus::message::Message]."]
                 pub fn from_message<M>(msg: M) -> ::std::option::Option<Self>
                 where
-                    M: ::std::convert::Into<::std::sync::Arc<#zbus::Message>>,
+                    M: ::std::convert::Into<::std::sync::Arc<#zbus::message::Message>>,
                 {
                     let msg = msg.into();
                     let message_type = msg.message_type();
@@ -979,7 +979,7 @@ fn gen_proxy_signal(
                     let member = member.as_ref().map(|m| m.as_str());
 
                     match (message_type, interface, member) {
-                        (#zbus::MessageType::Signal, Some(#iface_name), Some(#signal_name)) => Some(Self(msg)),
+                        (#zbus::message::MessageType::Signal, Some(#iface_name), Some(#signal_name)) => Some(Self(msg)),
                         _ => None,
                     }
                 }
@@ -1037,12 +1037,12 @@ fn gen_proxy_signal(
                 }
             }
 
-            impl #impl_generics ::std::convert::TryFrom<&'s #zbus::Message> for #signal_args #ty_generics
+            impl #impl_generics ::std::convert::TryFrom<&'s #zbus::message::Message> for #signal_args #ty_generics
                 #where_clause
             {
                 type Error = #zbus::Error;
 
-                fn try_from(message: &'s #zbus::Message) -> #zbus::Result<Self> {
+                fn try_from(message: &'s #zbus::message::Message) -> #zbus::Result<Self> {
                     message.body::<(#(#input_types),*)>()
                         .map_err(::std::convert::Into::into)
                         .map(|args| {
@@ -1085,7 +1085,7 @@ fn gen_proxy_signal(
 
             impl #zbus::export::ordered_stream::OrderedStream for #stream_name<'_> {
                 type Data = #signal_name_ident;
-                type Ordering = #zbus::MessageSequence;
+                type Ordering = #zbus::message::MessageSequence;
 
                 fn poll_next_before(
                     self: ::std::pin::Pin<&mut Self>,

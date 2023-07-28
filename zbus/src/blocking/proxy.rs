@@ -9,7 +9,7 @@ use std::{
 use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
-use crate::{blocking::Connection, utils::block_on, Error, Message, MethodFlags, Result};
+use crate::{blocking::Connection, message::Message, utils::block_on, Error, MethodFlags, Result};
 
 use crate::fdo;
 

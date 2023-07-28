@@ -17,7 +17,8 @@ use zvariant::{
 };
 
 use crate::{
-    dbus_interface, dbus_proxy, DBusError, Guid, MessageHeader, ObjectServer, SignalContext,
+    dbus_interface, dbus_proxy, message::MessageHeader, DBusError, Guid, ObjectServer,
+    SignalContext,
 };
 
 #[rustfmt::skip]
@@ -1011,7 +1012,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod tests {
-    use crate::{fdo, DBusError, Error, Message};
+    use crate::{fdo, message::Message, DBusError, Error};
     use futures_util::StreamExt;
     use ntest::timeout;
     use std::convert::TryInto;

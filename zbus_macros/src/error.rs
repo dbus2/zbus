@@ -188,7 +188,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
                 }
             }
 
-            fn create_reply(&self, call: &#zbus::MessageHeader) -> #zbus::Result<#zbus::Message> {
+            fn create_reply(&self, call: &#zbus::message::MessageHeader) -> #zbus::Result<#zbus::message::Message> {
                 let name = self.name();
                 match self {
                     #replies
@@ -212,7 +212,7 @@ fn gen_reply_for_variant(
     let ident = &variant.ident;
     match &variant.fields {
         Fields::Unit => Ok(quote! {
-            Self::#ident => #zbus::MessageBuilder::error(call, name)?.build(&()),
+            Self::#ident => #zbus::message::MessageBuilder::error(call, name)?.build(&()),
         }),
         Fields::Unnamed(f) => {
             // Name the unnamed fields as the number of the field with an 'f' in front.
@@ -242,13 +242,13 @@ fn gen_reply_for_variant(
             };
 
             Ok(quote! {
-                Self::#ident(#(#in_fields),*) => #zbus::MessageBuilder::error(call, name)?.build(&(#(#out_fields),*)),
+                Self::#ident(#(#in_fields),*) => #zbus::message::MessageBuilder::error(call, name)?.build(&(#(#out_fields),*)),
             })
         }
         Fields::Named(f) => {
             let fields = f.named.iter().map(|v| v.ident.as_ref()).collect::<Vec<_>>();
             Ok(quote! {
-                Self::#ident { #(#fields),* } => #zbus::MessageBuilder::error(call, name)?.build(&(#(#fields),*)),
+                Self::#ident { #(#fields),* } => #zbus::message::MessageBuilder::error(call, name)?.build(&(#(#fields),*)),
             })
         }
     }

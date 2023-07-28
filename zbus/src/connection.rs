@@ -29,11 +29,11 @@ use crate::{
     async_lock::Mutex,
     blocking,
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
+    message::{Message, MessageBuilder, MessageFlags, MessageType},
     raw::{Connection as RawConnection, Socket},
     socket_reader::SocketReader,
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule,
-    Message, MessageBuilder, MessageFlags, MessageStream, MessageType, ObjectServer,
-    OwnedMatchRule, Result, Task,
+    MessageStream, ObjectServer, OwnedMatchRule, Result, Task,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -233,7 +233,7 @@ impl Future for PendingMethodCall {
 
 impl OrderedFuture for PendingMethodCall {
     type Output = Result<Arc<Message>>;
-    type Ordering = zbus::MessageSequence;
+    type Ordering = zbus::message::MessageSequence;
 
     fn poll_before(
         self: Pin<&mut Self>,
@@ -472,7 +472,7 @@ impl Connection {
     /// Returns the message serial number.
     pub async fn reply_dbus_error(
         &self,
-        call: &zbus::MessageHeader<'_>,
+        call: &zbus::message::MessageHeader<'_>,
         err: impl DBusError,
     ) -> Result<u32> {
         let m = err.create_reply(call);

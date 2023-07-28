@@ -388,7 +388,7 @@ impl Message {
     /// # Example
     ///
     /// ```
-    /// # use zbus::Message;
+    /// # use zbus::message::Message;
     /// # (|| -> zbus::Result<()> {
     /// let send_body = (7i32, (2i32, "foo"), vec!["bar"]);
     /// let message = Message::method(None::<&str>, Some("zbus.test"), "/", Some("zbus.test"), "ping", &send_body)?;

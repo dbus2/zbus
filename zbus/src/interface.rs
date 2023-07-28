@@ -7,11 +7,11 @@ use std::{
 };
 
 use async_trait::async_trait;
-use zbus::MessageFlags;
+use zbus::message::MessageFlags;
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{DynamicType, OwnedValue, Value};
 
-use crate::{fdo, Connection, Message, ObjectServer, Result, SignalContext};
+use crate::{fdo, message::Message, Connection, ObjectServer, Result, SignalContext};
 use tracing::trace;
 
 /// A helper type returned by [`Interface`] callbacks.

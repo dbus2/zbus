@@ -158,7 +158,8 @@ mod tests {
     use crate::{
         blocking::{self, MessageIterator},
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, Message, MessageFlags, Result, SignalContext,
+        message::{Message, MessageFlags},
+        Connection, Result, SignalContext,
     };
 
     fn is_gdbus_test() -> bool {
@@ -268,10 +269,14 @@ mod tests {
             )
             .unwrap();
 
-        assert!(reply
+        if reply
             .body_signature()
             .map(|s| s == <Fd>::signature())
-            .unwrap());
+            .is_err()
+        {
+            // may throw org.freedesktop.DBus.Error.InteractiveAuthorizationRequired
+            return;
+        }
 
         let fd: Fd = reply.body().unwrap();
         let _fds = reply.take_fds();
@@ -881,7 +886,7 @@ mod tests {
             let msg_header = msg.header()?;
 
             match msg_header.message_type()? {
-                zbus::MessageType::MethodCall => {
+                zbus::message::MessageType::MethodCall => {
                     connection.reply(&msg, &()).await?;
 
                     break;
