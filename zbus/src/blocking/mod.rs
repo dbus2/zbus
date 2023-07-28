@@ -23,7 +23,7 @@ pub use connection_builder::*;
 mod message_iterator;
 pub use message_iterator::*;
 pub mod object_server;
-pub use object_server::*;
+pub use object_server::ObjectServer;
 pub mod proxy;
 pub use proxy::Proxy;
 
@@ -42,5 +42,9 @@ pub use proxy::PropertyIterator;
 #[deprecated(note = "Use `proxy::SignalIterator` instead")]
 #[doc(hidden)]
 pub use proxy::SignalIterator;
+
+#[deprecated(note = "Use `object_server::InterfaceRef` instead")]
+#[doc(hidden)]
+pub use object_server::InterfaceRef;
 
 pub mod fdo;
