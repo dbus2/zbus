@@ -25,5 +25,22 @@ pub use message_iterator::*;
 mod object_server;
 pub use object_server::*;
 pub mod proxy;
-pub use proxy::*;
+pub use proxy::Proxy;
+
+#[deprecated(note = "Use `proxy::OwnerChangedIterator` instead")]
+#[doc(hidden)]
+pub use proxy::OwnerChangedIterator;
+#[deprecated(note = "Use `proxy::PropertyChanged` instead")]
+#[doc(hidden)]
+pub use proxy::PropertyChanged;
+#[deprecated(note = "Use `proxy::PropertyIterator` instead")]
+#[doc(hidden)]
+pub use proxy::PropertyIterator;
+#[deprecated(note = "Use `proxy::ProxyBuilder` instead")]
+#[doc(hidden)]
+pub use proxy::ProxyBuilder;
+#[deprecated(note = "Use `proxy::SignalIterator` instead")]
+#[doc(hidden)]
+pub use proxy::SignalIterator;
+
 pub mod fdo;
