@@ -7,8 +7,8 @@ use futures_util::future::poll_fn;
 use tracing::{debug, instrument, trace};
 
 use crate::{
-    async_lock::Mutex, raw::Connection as RawConnection, Executor, MsgBroadcaster, OwnedMatchRule,
-    Socket, Task,
+    async_lock::Mutex, connection::MsgBroadcaster, raw::Connection as RawConnection, Executor,
+    OwnedMatchRule, Socket, Task,
 };
 
 #[derive(Debug)]

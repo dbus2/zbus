@@ -25,19 +25,19 @@ use crate::{
 /// A builder for [`zbus::blocking::Connection`].
 #[derive(Debug)]
 #[must_use]
-pub struct ConnectionBuilder<'a>(crate::ConnectionBuilder<'a>);
+pub struct ConnectionBuilder<'a>(crate::connection::ConnectionBuilder<'a>);
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
 
 impl<'a> ConnectionBuilder<'a> {
     /// Create a builder for the session/user message bus connection.
     pub fn session() -> Result<Self> {
-        crate::ConnectionBuilder::session().map(Self)
+        crate::connection::ConnectionBuilder::session().map(Self)
     }
 
     /// Create a builder for the system-wide message bus connection.
     pub fn system() -> Result<Self> {
-        crate::ConnectionBuilder::system().map(Self)
+        crate::connection::ConnectionBuilder::system().map(Self)
     }
 
     /// Create a builder for connection that will use the given [D-Bus bus address].
@@ -48,7 +48,7 @@ impl<'a> ConnectionBuilder<'a> {
         A: TryInto<Address>,
         A::Error: Into<Error>,
     {
-        crate::ConnectionBuilder::address(address).map(Self)
+        crate::connection::ConnectionBuilder::address(address).map(Self)
     }
 
     /// Create a builder for connection that will use the given unix stream.
@@ -57,7 +57,7 @@ impl<'a> ConnectionBuilder<'a> {
     /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
     /// argument.
     pub fn unix_stream(stream: UnixStream) -> Self {
-        Self(crate::ConnectionBuilder::unix_stream(stream))
+        Self(crate::connection::ConnectionBuilder::unix_stream(stream))
     }
 
     /// Create a builder for connection that will use the given TCP stream.
@@ -66,7 +66,7 @@ impl<'a> ConnectionBuilder<'a> {
     /// [`tokio::net::TcpStream`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html)
     /// argument.
     pub fn tcp_stream(stream: TcpStream) -> Self {
-        Self(crate::ConnectionBuilder::tcp_stream(stream))
+        Self(crate::connection::ConnectionBuilder::tcp_stream(stream))
     }
 
     /// Specify the mechanisms to use during authentication.

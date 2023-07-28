@@ -22,11 +22,11 @@ use zbus::{
 use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Str, Type, Value};
 
 use zbus::{
-    dbus_interface, dbus_proxy,
+    connection, dbus_interface, dbus_proxy,
     message::Header,
     object_server::{InterfaceRef, SignalContext},
     proxy::CacheProperties,
-    Connection, ConnectionBuilder, ObjectServer,
+    Connection, ObjectServer,
 };
 
 #[derive(Debug, Deserialize, Serialize, Type)]
@@ -686,8 +686,10 @@ async fn iface_and_proxy_(p2p: bool) {
             let (p0, p1) = UnixStream::pair().unwrap();
 
             (
-                ConnectionBuilder::unix_stream(p0).server(&guid).p2p(),
-                ConnectionBuilder::unix_stream(p1).p2p(),
+                connection::ConnectionBuilder::unix_stream(p0)
+                    .server(&guid)
+                    .p2p(),
+                connection::ConnectionBuilder::unix_stream(p1).p2p(),
             )
         }
 
@@ -701,8 +703,10 @@ async fn iface_and_proxy_(p2p: bool) {
                 let p0 = listener.incoming().next().unwrap().unwrap();
 
                 (
-                    ConnectionBuilder::tcp_stream(p0).server(&guid).p2p(),
-                    ConnectionBuilder::tcp_stream(p1).p2p(),
+                    connection::ConnectionBuilder::tcp_stream(p0)
+                        .server(&guid)
+                        .p2p(),
+                    connection::ConnectionBuilder::tcp_stream(p1).p2p(),
                 )
             }
 
@@ -714,13 +718,15 @@ async fn iface_and_proxy_(p2p: bool) {
                 let p0 = listener.accept().await.unwrap().0;
 
                 (
-                    ConnectionBuilder::tcp_stream(p0).server(&guid).p2p(),
-                    ConnectionBuilder::tcp_stream(p1).p2p(),
+                    connection::ConnectionBuilder::tcp_stream(p0)
+                        .server(&guid)
+                        .p2p(),
+                    connection::ConnectionBuilder::tcp_stream(p1).p2p(),
                 )
             }
         }
     } else {
-        let service_conn_builder = ConnectionBuilder::session()
+        let service_conn_builder = connection::ConnectionBuilder::session()
             .unwrap()
             .name("org.freedesktop.MyService")
             .unwrap()
@@ -728,7 +734,7 @@ async fn iface_and_proxy_(p2p: bool) {
             .unwrap()
             .name("org.freedesktop.MyService.bar")
             .unwrap();
-        let client_conn_builder = ConnectionBuilder::session().unwrap();
+        let client_conn_builder = connection::ConnectionBuilder::session().unwrap();
 
         (service_conn_builder, client_conn_builder)
     };

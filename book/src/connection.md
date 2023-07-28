@@ -50,7 +50,7 @@ For example to create a bus-less peer-to-peer connection on Unix, you can do:
 use std::os::unix::net::UnixStream;
 #[cfg(feature = "tokio")]
 use tokio::net::UnixStream;
-use zbus::{ConnectionBuilder as Builder, Guid};
+use zbus::{connection::ConnectionBuilder as Builder, Guid};
 
 let guid = Guid::generate();
 let (p0, p1) = UnixStream::pair().unwrap();

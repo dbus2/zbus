@@ -1321,8 +1321,8 @@ impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
 mod tests {
     use super::*;
     use crate::{
-        dbus_interface, dbus_proxy, object_server::SignalContext, utils::block_on, AsyncDrop,
-        ConnectionBuilder,
+        connection, dbus_interface, dbus_proxy, object_server::SignalContext, utils::block_on,
+        AsyncDrop,
     };
     use futures_util::StreamExt;
     use ntest::timeout;
@@ -1426,13 +1426,16 @@ mod tests {
         }
 
         let test_iface = TestIface;
-        let server_conn = ConnectionBuilder::session()?
+        let server_conn = connection::ConnectionBuilder::session()?
             .name("org.zbus.Test.MR501")?
             .serve_at("/org/zbus/Test", test_iface)?
             .build()
             .await?;
 
-        let client_conn = ConnectionBuilder::session()?.max_queued(1).build().await?;
+        let client_conn = connection::ConnectionBuilder::session()?
+            .max_queued(1)
+            .build()
+            .await?;
 
         let test_proxy = TestProxy::new(&client_conn).await?;
         let test_prop_proxy = PropertiesProxy::builder(&client_conn)

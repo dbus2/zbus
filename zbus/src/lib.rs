@@ -898,7 +898,7 @@ mod tests {
             fn set_inner_to_true(&self) -> zbus::Result<()>;
         }
 
-        let service = crate::ConnectionBuilder::session()
+        let service = crate::connection::ConnectionBuilder::session()
             .unwrap()
             .serve_at(
                 "/org/freedesktop/zbus/UncachedPropertyTest",
@@ -1000,7 +1000,7 @@ mod tests {
         // side and since the underlying tokio API doesn't provide a `close` method on the sender,
         // the async-channel abstraction was achieving this through calling `close` on receiver,
         // which is behind an async mutex and we end up with a deadlock.
-        use crate::{ConnectionBuilder, MessageStream};
+        use crate::{connection::ConnectionBuilder, MessageStream};
         use futures_util::{stream::TryStreamExt, try_join};
         use tokio::net::UnixStream;
 
@@ -1031,7 +1031,7 @@ mod tests {
         // a write lock. Thanks to connman for being weird and invalidating the property just before
         // updating it, so this issue could be exposed.
         use futures_util::StreamExt;
-        use zbus::ConnectionBuilder;
+        use zbus::connection::ConnectionBuilder;
 
         struct Station(u64);
 

@@ -18,10 +18,11 @@ use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Signature, Type, Value};
 
 use crate::{
     async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard},
+    connection::WeakConnection,
     fdo,
     fdo::{Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
     message::Message,
-    Connection, Error, Result, WeakConnection,
+    Connection, Error, Result,
 };
 
 mod interface;

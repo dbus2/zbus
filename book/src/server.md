@@ -149,7 +149,7 @@ after taking their name. This is why it's typically better to make use of `Conne
 setting up your interfaces and requesting names, and not have to care about this:
 
 ```rust,no_run
-# use zbus::{ConnectionBuilder, dbus_interface, Result};
+# use zbus::{connection, dbus_interface, Result};
 #
 #
 # struct Greeter;
@@ -163,7 +163,7 @@ setting up your interfaces and requesting names, and not have to care about this
 #
 # #[async_std::main]
 # async fn main() -> Result<()> {
-    let _connection = ConnectionBuilder::session()?
+    let _connection = connection::ConnectionBuilder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", Greeter)?
         .build()
@@ -206,7 +206,7 @@ synchronize with the interface handlers from outside, thanks to the `event_liste
 (this is just one of the many ways).
 
 ```rust,no_run
-# use zbus::{object_server::SignalContext, ConnectionBuilder, dbus_interface, fdo, Result};
+# use zbus::{object_server::SignalContext, connection::ConnectionBuilder, dbus_interface, fdo, Result};
 #
 use event_listener::Event;
 

@@ -92,7 +92,7 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// ```no_run
     /// # use std::error::Error;
-    /// # use zbus::ConnectionBuilder;
+    /// # use zbus::connection::ConnectionBuilder;
     /// # use zbus::block_on;
     /// #
     /// # block_on(async {
@@ -225,7 +225,7 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// ```
     /// # use std::error::Error;
-    /// # use zbus::ConnectionBuilder;
+    /// # use zbus::connection::ConnectionBuilder;
     /// # use zbus::block_on;
     /// #
     /// # block_on(async {
