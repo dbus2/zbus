@@ -130,7 +130,29 @@ pub use match_rule::PathSpec as MatchRulePathSpec;
 mod socket_reader;
 
 pub mod proxy;
-pub type Proxy<'a> = proxy::Proxy<'a>;
+pub use proxy::Proxy;
+
+#[deprecated(note = "Use `proxy::CacheProperties` instead")]
+#[doc(hidden)]
+pub use proxy::CacheProperties;
+#[deprecated(note = "Use `proxy::MethodFlags` instead")]
+#[doc(hidden)]
+pub use proxy::MethodFlags;
+#[deprecated(note = "Use `proxy::OwnerChangedStream` instead")]
+#[doc(hidden)]
+pub use proxy::OwnerChangedStream;
+#[deprecated(note = "Use `proxy::PropertyChanged` instead")]
+#[doc(hidden)]
+pub use proxy::PropertyChanged;
+#[deprecated(note = "Use `proxy::PropertyStream` instead")]
+#[doc(hidden)]
+pub use proxy::PropertyStream;
+#[deprecated(note = "Use `proxy::ProxyBuilder` instead")]
+#[doc(hidden)]
+pub use proxy::ProxyBuilder;
+#[deprecated(note = "Use `proxy::ProxyDefault` instead")]
+#[doc(hidden)]
+pub use proxy::ProxyDefault;
 
 mod utils;
 pub use utils::*;
