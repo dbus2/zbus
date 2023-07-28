@@ -16,8 +16,8 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 use crate::{
     message::{
-        Fields, Header, Message, MessageField, MessageFieldCode, MessageFlags, MessageSequence,
-        MessageType, PrimaryHeader,
+        Fields, Header, Message, MessageField, MessageFieldCode, MessageFlags, MessageType,
+        PrimaryHeader, Sequence,
     },
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature},
@@ -342,7 +342,7 @@ impl<'a> Builder<'a> {
             body_offset,
             #[cfg(unix)]
             fds: Arc::new(RwLock::new(Fds::Raw(fds))),
-            recv_seq: MessageSequence::default(),
+            recv_seq: Sequence::default(),
         })
     }
 }

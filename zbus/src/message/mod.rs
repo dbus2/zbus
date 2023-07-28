@@ -57,11 +57,11 @@ pub(crate) enum Fds {
 /// Note: the relative ordering of values obtained from distinct [`zbus::Connection`] objects is
 /// not specified; only sequence numbers originating from the same connection should be compared.
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct MessageSequence {
+pub struct Sequence {
     recv_seq: u64,
 }
 
-impl MessageSequence {
+impl Sequence {
     /// A sequence number that is higher than any other; used by errors that terminate a stream.
     pub(crate) const LAST: Self = Self { recv_seq: u64::MAX };
 }
@@ -90,7 +90,7 @@ pub struct Message {
     pub(crate) body_offset: usize,
     #[cfg(unix)]
     pub(crate) fds: Arc<RwLock<Fds>>,
-    pub(crate) recv_seq: MessageSequence,
+    pub(crate) recv_seq: Sequence,
 }
 
 assert_impl_all!(Message: Send, Sync, Unpin);
@@ -258,7 +258,7 @@ impl Message {
             body_offset,
             #[cfg(unix)]
             fds,
-            recv_seq: MessageSequence { recv_seq },
+            recv_seq: Sequence { recv_seq },
         })
     }
 
@@ -460,7 +460,7 @@ impl Message {
     ///
     /// This is completely unrelated to the serial number on the message, which is set by the peer
     /// and might not be ordered at all.
-    pub fn recv_position(&self) -> MessageSequence {
+    pub fn recv_position(&self) -> Sequence {
         self.recv_seq
     }
 }

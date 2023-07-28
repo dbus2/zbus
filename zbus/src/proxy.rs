@@ -21,7 +21,7 @@ use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesChangedStream, PropertiesProxy},
-    message::{Message, MessageFlags, MessageSequence, MessageType},
+    message::{Message, MessageFlags, MessageType, Sequence},
     AsyncDrop, CacheProperties, Connection, Error, Executor, MatchRule, MessageStream,
     OwnedMatchRule, ProxyBuilder, Result, Task,
 };
@@ -1262,7 +1262,7 @@ impl<'a> stream::Stream for SignalStream<'a> {
 
 impl<'a> OrderedStream for SignalStream<'a> {
     type Data = Arc<Message>;
-    type Ordering = MessageSequence;
+    type Ordering = Sequence;
 
     fn poll_next_before(
         self: Pin<&mut Self>,

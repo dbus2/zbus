@@ -85,15 +85,15 @@ pub use message::MessageFieldCode;
 #[deprecated(note = "Use `message::MessageFlags` instead")]
 #[doc(hidden)]
 pub use message::MessageFlags;
-#[deprecated(note = "Use `message::MessageSequence` instead")]
-#[doc(hidden)]
-pub use message::MessageSequence;
 #[deprecated(note = "Use `message::MessageType` instead")]
 #[doc(hidden)]
 pub use message::MessageType;
 #[deprecated(note = "Use `message::PrimaryHeader` instead")]
 #[doc(hidden)]
 pub use message::PrimaryHeader as MessagePrimaryHeader;
+#[deprecated(note = "Use `message::Sequence` instead")]
+#[doc(hidden)]
+pub use message::Sequence as MessageSequence;
 #[deprecated(note = "Use `message::NATIVE_ENDIAN_SIG` instead")]
 #[doc(hidden)]
 pub use message::NATIVE_ENDIAN_SIG;

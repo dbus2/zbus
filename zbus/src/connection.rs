@@ -233,7 +233,7 @@ impl Future for PendingMethodCall {
 
 impl OrderedFuture for PendingMethodCall {
     type Output = Result<Arc<Message>>;
-    type Ordering = zbus::message::MessageSequence;
+    type Ordering = zbus::message::Sequence;
 
     fn poll_before(
         self: Pin<&mut Self>,

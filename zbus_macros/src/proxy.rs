@@ -1085,7 +1085,7 @@ fn gen_proxy_signal(
 
             impl #zbus::export::ordered_stream::OrderedStream for #stream_name<'_> {
                 type Data = #signal_name_ident;
-                type Ordering = #zbus::message::MessageSequence;
+                type Ordering = #zbus::message::Sequence;
 
                 fn poll_next_before(
                     self: ::std::pin::Pin<&mut Self>,
