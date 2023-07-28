@@ -9,8 +9,11 @@ use crate::{
     message::Type,
     names::{BusName, InterfaceName, MemberName, UniqueName},
     zvariant::{ObjectPath, Str, Type as VariantType},
-    Error, MatchRuleBuilder, Result,
+    Error, Result,
 };
+
+mod builder;
+pub use builder::MatchRuleBuilder;
 
 /// A bus match rule for subscribing to specific messages.
 ///
