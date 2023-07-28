@@ -103,7 +103,12 @@ pub use handshake::AuthMechanism;
 pub(crate) use handshake::*;
 
 pub mod connection;
-pub use connection::*;
+pub use connection::Connection;
+
+#[deprecated(note = "Use `connection::ConnectionBuilder` instead")]
+#[doc(hidden)]
+pub use connection::ConnectionBuilder;
+
 mod message_stream;
 pub use message_stream::*;
 mod abstractions;
