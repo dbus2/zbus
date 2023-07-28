@@ -3,10 +3,11 @@ use std::convert::{TryFrom, TryInto};
 use static_assertions::assert_impl_all;
 
 use crate::{
+    match_rule::MatchRulePathSpec,
     message::Type,
     names::{BusName, InterfaceName, MemberName, UniqueName},
     zvariant::{ObjectPath, Str},
-    Error, MatchRule, MatchRulePathSpec, Result,
+    Error, MatchRule, Result,
 };
 
 const MAX_ARGS: u8 = 64;
