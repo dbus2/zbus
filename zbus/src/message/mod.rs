@@ -34,7 +34,7 @@ use fields::QuickFields;
 
 pub(crate) mod header;
 use header::MIN_MESSAGE_SIZE;
-pub use header::{EndianSig, Header, MessageFlags, MessageType, PrimaryHeader, NATIVE_ENDIAN_SIG};
+pub use header::{EndianSig, Flags, Header, MessageType, PrimaryHeader, NATIVE_ENDIAN_SIG};
 
 #[cfg(unix)]
 const LOCK_PANIC_MSG: &str = "lock poisoned";

@@ -29,7 +29,7 @@ use crate::{
     async_lock::Mutex,
     blocking,
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
-    message::{Builder, Message, MessageFlags, MessageType},
+    message::{Builder, Flags, Message, MessageType},
     raw::{Connection as RawConnection, Socket},
     socket_reader::SocketReader,
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule,
@@ -351,7 +351,7 @@ impl Connection {
         path: P,
         interface: Option<I>,
         method_name: M,
-        flags: BitFlags<MessageFlags>,
+        flags: BitFlags<Flags>,
         body: &B,
     ) -> Result<Option<PendingMethodCall>>
     where
@@ -388,7 +388,7 @@ impl Connection {
             self,
         ));
         let serial = self.send_message(msg).await?;
-        if flags.contains(MessageFlags::NoReplyExpected) {
+        if flags.contains(Flags::NoReplyExpected) {
             Ok(None)
         } else {
             Ok(Some(PendingMethodCall { stream, serial }))

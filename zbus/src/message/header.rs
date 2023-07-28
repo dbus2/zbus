@@ -86,7 +86,7 @@ impl From<u8> for MessageType {
 #[bitflags]
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Type)]
-pub enum MessageFlags {
+pub enum Flags {
     /// This message does not expect method return replies or error replies, even if it is of a
     /// type that can have a reply; the reply should be omitted.
     ///
@@ -104,7 +104,7 @@ pub enum MessageFlags {
     AllowInteractiveAuth = 0x4,
 }
 
-assert_impl_all!(MessageFlags: Send, Sync, Unpin);
+assert_impl_all!(Flags: Send, Sync, Unpin);
 
 #[derive(Clone, Debug)]
 struct SerialNum(OnceCell<u32>);
@@ -153,7 +153,7 @@ impl<'de> Deserialize<'de> for SerialNum {
 pub struct PrimaryHeader {
     endian_sig: EndianSig,
     msg_type: MessageType,
-    flags: BitFlags<MessageFlags>,
+    flags: BitFlags<Flags>,
     protocol_version: u8,
     body_len: u32,
     serial_num: SerialNum,
@@ -202,12 +202,12 @@ impl PrimaryHeader {
     }
 
     /// The message flags.
-    pub fn flags(&self) -> BitFlags<MessageFlags> {
+    pub fn flags(&self) -> BitFlags<Flags> {
         self.flags
     }
 
     /// Set the message flags.
-    pub fn set_flags(&mut self, flags: BitFlags<MessageFlags>) {
+    pub fn set_flags(&mut self, flags: BitFlags<Flags>) {
         self.flags = flags;
     }
 

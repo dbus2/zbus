@@ -7,7 +7,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use zbus::message::MessageFlags;
+use zbus::message::Flags;
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{DynamicType, OwnedValue, Value};
 
@@ -39,11 +39,7 @@ impl<'a> DispatchResult<'a> {
         DispatchResult::Async(Box::pin(async move {
             let hdr = msg.header()?;
             let ret = f.await;
-            if !hdr
-                .primary()
-                .flags()
-                .contains(MessageFlags::NoReplyExpected)
-            {
+            if !hdr.primary().flags().contains(Flags::NoReplyExpected) {
                 match ret {
                     Ok(r) => conn.reply(msg, &r).await,
                     Err(e) => conn.reply_dbus_error(&hdr, e).await,

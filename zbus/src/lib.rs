@@ -79,12 +79,12 @@ pub use message::FieldCode as MessageFieldCode;
 #[deprecated(note = "Use `message::Fields` instead")]
 #[doc(hidden)]
 pub use message::Fields as MessageFields;
+#[deprecated(note = "Use `message::Flags` instead")]
+#[doc(hidden)]
+pub use message::Flags as MessageFlags;
 #[deprecated(note = "Use `message::Header` instead")]
 #[doc(hidden)]
 pub use message::Header as MessageHeader;
-#[deprecated(note = "Use `message::MessageFlags` instead")]
-#[doc(hidden)]
-pub use message::MessageFlags;
 #[deprecated(note = "Use `message::MessageType` instead")]
 #[doc(hidden)]
 pub use message::MessageType;
@@ -192,7 +192,7 @@ mod tests {
     use crate::{
         blocking::{self, MessageIterator},
         fdo::{RequestNameFlags, RequestNameReply},
-        message::{Message, MessageFlags},
+        message::{Flags, Message},
         Connection, Result, SignalContext,
     };
 
@@ -215,7 +215,7 @@ mod tests {
         assert_eq!(m.interface().unwrap(), "org.freedesktop.DBus.Peer");
         assert_eq!(m.member().unwrap(), "GetMachineId");
         m.modify_primary_header(|primary| {
-            primary.set_flags(BitFlags::from(MessageFlags::NoAutoStart));
+            primary.set_flags(BitFlags::from(Flags::NoAutoStart));
             primary.serial_num_or_init(|| 11);
 
             Ok(())
@@ -223,7 +223,7 @@ mod tests {
         .unwrap();
         let primary = m.primary_header();
         assert!(*primary.serial_num().unwrap() == 11);
-        assert!(primary.flags() == MessageFlags::NoAutoStart);
+        assert!(primary.flags() == Flags::NoAutoStart);
     }
 
     #[test]

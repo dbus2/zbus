@@ -21,7 +21,7 @@ use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesChangedStream, PropertiesProxy},
-    message::{Message, MessageFlags, MessageType, Sequence},
+    message::{Flags, Message, MessageType, Sequence},
     AsyncDrop, CacheProperties, Connection, Error, Executor, MatchRule, MessageStream,
     OwnedMatchRule, ProxyBuilder, Result, Task,
 };
@@ -857,10 +857,7 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::DynamicType,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
-        let flags = flags
-            .iter()
-            .map(MessageFlags::from)
-            .collect::<BitFlags<_>>();
+        let flags = flags.iter().map(Flags::from).collect::<BitFlags<_>>();
         match self
             .inner
             .inner_without_borrows
@@ -1040,7 +1037,7 @@ pub enum MethodFlags {
 
 assert_impl_all!(MethodFlags: Send, Sync, Unpin);
 
-impl From<MethodFlags> for MessageFlags {
+impl From<MethodFlags> for Flags {
     fn from(method_flag: MethodFlags) -> Self {
         match method_flag {
             MethodFlags::NoReplyExpected => Self::NoReplyExpected,

@@ -379,7 +379,7 @@ impl MyIfaceImpl {
         assert!(header
             .primary()
             .flags()
-            .contains(zbus::message::MessageFlags::NoReplyExpected));
+            .contains(zbus::message::Flags::NoReplyExpected));
     }
 
     #[instrument]
@@ -392,7 +392,7 @@ impl MyIfaceImpl {
         assert!(header
             .primary()
             .flags()
-            .contains(zbus::message::MessageFlags::NoAutoStart));
+            .contains(zbus::message::Flags::NoAutoStart));
     }
 
     #[instrument]
@@ -405,7 +405,7 @@ impl MyIfaceImpl {
         assert!(header
             .primary()
             .flags()
-            .contains(zbus::message::MessageFlags::AllowInteractiveAuth));
+            .contains(zbus::message::Flags::AllowInteractiveAuth));
     }
 
     #[dbus_interface(signal)]

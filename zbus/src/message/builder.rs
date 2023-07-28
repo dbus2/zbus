@@ -16,8 +16,7 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 use crate::{
     message::{
-        Field, FieldCode, Fields, Header, Message, MessageFlags, MessageType, PrimaryHeader,
-        Sequence,
+        Field, FieldCode, Fields, Flags, Header, Message, MessageType, PrimaryHeader, Sequence,
     },
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature},
@@ -99,12 +98,12 @@ impl<'a> Builder<'a> {
 
     /// Add flags to the message.
     ///
-    /// See [`MessageFlags`] documentation for the meaning of the flags.
+    /// See [`Flags`] documentation for the meaning of the flags.
     ///
     /// The function will return an error if invalid flags are given for the message type.
-    pub fn with_flags(mut self, flag: MessageFlags) -> Result<Self> {
+    pub fn with_flags(mut self, flag: Flags) -> Result<Self> {
         if self.header.message_type()? != MessageType::MethodCall
-            && BitFlags::from_flag(flag).contains(MessageFlags::NoReplyExpected)
+            && BitFlags::from_flag(flag).contains(Flags::NoReplyExpected)
         {
             return Err(Error::InvalidField);
         }
