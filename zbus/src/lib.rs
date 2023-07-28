@@ -149,7 +149,29 @@ pub use proxy::PropertyStream;
 pub use proxy::ProxyDefault;
 
 pub mod object_server;
-pub use object_server::*;
+pub use object_server::ObjectServer;
+
+#[deprecated(note = "Use `object_server::DispatchResult` instead")]
+#[doc(hidden)]
+pub use object_server::DispatchResult;
+#[deprecated(note = "Use `object_server::Interface` instead")]
+#[doc(hidden)]
+pub use object_server::Interface;
+#[deprecated(note = "Use `object_server::InterfaceDeref` instead")]
+#[doc(hidden)]
+pub use object_server::InterfaceDeref;
+#[deprecated(note = "Use `object_server::InterfaceDerefMut` instead")]
+#[doc(hidden)]
+pub use object_server::InterfaceDerefMut;
+#[deprecated(note = "Use `object_server::InterfaceRef` instead")]
+#[doc(hidden)]
+pub use object_server::InterfaceRef;
+#[deprecated(note = "Use `object_server::ResponseDispatchNotifier` instead")]
+#[doc(hidden)]
+pub use object_server::ResponseDispatchNotifier;
+#[deprecated(note = "Use `object_server::SignalContext` instead")]
+#[doc(hidden)]
+pub use object_server::SignalContext;
 
 mod utils;
 pub use utils::*;
