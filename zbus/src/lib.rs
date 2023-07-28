@@ -127,9 +127,9 @@ pub use match_rule::{MatchRule, OwnedMatchRule};
 #[deprecated(note = "Use `match_rule::Builder` instead")]
 #[doc(hidden)]
 pub use match_rule::Builder as MatchRuleBuilder;
-#[deprecated(note = "Use `match_rule::MatchRulePathSpec` instead")]
+#[deprecated(note = "Use `match_rule::PathSpec` instead")]
 #[doc(hidden)]
-pub use match_rule::MatchRulePathSpec;
+pub use match_rule::PathSpec as MatchRulePathSpec;
 
 mod socket_reader;
 

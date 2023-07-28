@@ -3,7 +3,7 @@ use std::convert::{TryFrom, TryInto};
 use static_assertions::assert_impl_all;
 
 use crate::{
-    match_rule::MatchRulePathSpec,
+    match_rule::PathSpec,
     message::Type,
     names::{BusName, InterfaceName, MemberName, UniqueName},
     zvariant::{ObjectPath, Str},
@@ -77,7 +77,7 @@ impl<'m> Builder<'m> {
     {
         self.0.path_spec = path
             .try_into()
-            .map(MatchRulePathSpec::Path)
+            .map(PathSpec::Path)
             .map(Some)
             .map_err(Into::into)?;
 
@@ -95,7 +95,7 @@ impl<'m> Builder<'m> {
     {
         self.0.path_spec = path_namespace
             .try_into()
-            .map(MatchRulePathSpec::PathNamespace)
+            .map(PathSpec::PathNamespace)
             .map(Some)
             .map_err(Into::into)?;
 
