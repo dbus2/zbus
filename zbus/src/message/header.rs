@@ -7,7 +7,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{EncodingContext, ObjectPath, Signature, Type};
+use zvariant::{EncodingContext, ObjectPath, Signature, Type as VariantType};
 
 use crate::{
     message::{Field, FieldCode, Fields},
@@ -20,7 +20,7 @@ pub(crate) const MAX_MESSAGE_SIZE: usize = 128 * 1024 * 1024; // 128 MiB
 
 /// D-Bus code for endianness.
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Eq, Serialize_repr, Type)]
+#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Eq, Serialize_repr, VariantType)]
 pub enum EndianSig {
     /// The D-Bus message is in big-endian (network) byte order.
     Big = b'B',
@@ -53,8 +53,10 @@ pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Little;
 
 /// Message header representing the D-Bus type of the message.
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Deserialize_repr, PartialEq, Eq, Hash, Serialize_repr, Type)]
-pub enum MessageType {
+#[derive(
+    Debug, Copy, Clone, Deserialize_repr, PartialEq, Eq, Hash, Serialize_repr, VariantType,
+)]
+pub enum Type {
     /// Invalid message type. All unknown types on received messages are treated as invalid.
     Invalid = 0,
     /// Method call. This message type may prompt a reply (and typically does).
@@ -67,17 +69,17 @@ pub enum MessageType {
     Signal = 4,
 }
 
-assert_impl_all!(MessageType: Send, Sync, Unpin);
+assert_impl_all!(Type: Send, Sync, Unpin);
 
 // Such a shame I've to do this manually
-impl From<u8> for MessageType {
-    fn from(val: u8) -> MessageType {
+impl From<u8> for Type {
+    fn from(val: u8) -> Type {
         match val {
-            1 => MessageType::MethodCall,
-            2 => MessageType::MethodReturn,
-            3 => MessageType::Error,
-            4 => MessageType::Signal,
-            _ => MessageType::Invalid,
+            1 => Type::MethodCall,
+            2 => Type::MethodReturn,
+            3 => Type::Error,
+            4 => Type::Signal,
+            _ => Type::Invalid,
         }
     }
 }
@@ -85,12 +87,12 @@ impl From<u8> for MessageType {
 /// Pre-defined flags that can be passed in Message header.
 #[bitflags]
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Type)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, VariantType)]
 pub enum Flags {
     /// This message does not expect method return replies or error replies, even if it is of a
     /// type that can have a reply; the reply should be omitted.
     ///
-    /// Note that `MessageType::MethodCall` is the only message type currently defined in the
+    /// Note that `Type::MethodCall` is the only message type currently defined in the
     /// specification that can expect a reply, so the presence or absence of this flag in the other
     /// three message types that are currently documented is meaningless: replies to those message
     /// types should not be sent, whether this flag is present or not.
@@ -149,10 +151,10 @@ impl<'de> Deserialize<'de> for SerialNum {
 /// The primary message header, which is present in all D-Bus messages.
 ///
 /// This header contains all the essential information about a message, regardless of its type.
-#[derive(Clone, Debug, Serialize, Deserialize, Type)]
+#[derive(Clone, Debug, Serialize, Deserialize, VariantType)]
 pub struct PrimaryHeader {
     endian_sig: EndianSig,
-    msg_type: MessageType,
+    msg_type: Type,
     flags: BitFlags<Flags>,
     protocol_version: u8,
     body_len: u32,
@@ -163,7 +165,7 @@ assert_impl_all!(PrimaryHeader: Send, Sync, Unpin);
 
 impl PrimaryHeader {
     /// Create a new `PrimaryHeader` instance.
-    pub fn new(msg_type: MessageType, body_len: u32) -> Self {
+    pub fn new(msg_type: Type, body_len: u32) -> Self {
         Self {
             endian_sig: NATIVE_ENDIAN_SIG,
             msg_type,
@@ -192,12 +194,12 @@ impl PrimaryHeader {
     }
 
     /// The message type.
-    pub fn msg_type(&self) -> MessageType {
+    pub fn msg_type(&self) -> Type {
         self.msg_type
     }
 
     /// Set the message type.
-    pub fn set_msg_type(&mut self, msg_type: MessageType) {
+    pub fn set_msg_type(&mut self, msg_type: Type) {
         self.msg_type = msg_type;
     }
 
@@ -259,7 +261,7 @@ impl PrimaryHeader {
 ///
 /// [`PrimaryHeader`]: struct.PrimaryHeader.html
 /// [`Fields`]: struct.Fields.html
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, VariantType)]
 pub struct Header<'m> {
     primary: PrimaryHeader,
     #[serde(borrow)]
@@ -325,7 +327,7 @@ impl<'m> Header<'m> {
     }
 
     /// The message type
-    pub fn message_type(&self) -> Result<MessageType, Error> {
+    pub fn message_type(&self) -> Result<Type, Error> {
         Ok(self.primary().msg_type())
     }
 
@@ -377,7 +379,7 @@ impl<'m> Header<'m> {
 
 #[cfg(test)]
 mod tests {
-    use crate::message::{Field, Fields, Header, MessageType, PrimaryHeader};
+    use crate::message::{Field, Fields, Header, PrimaryHeader, Type};
 
     use std::{
         convert::{TryFrom, TryInto},
@@ -398,9 +400,9 @@ mod tests {
         f.add(Field::Interface(iface.clone()));
         f.add(Field::Member(member.clone()));
         f.add(Field::Sender(":1.84".try_into()?));
-        let h = Header::new(PrimaryHeader::new(MessageType::Signal, 77), f);
+        let h = Header::new(PrimaryHeader::new(Type::Signal, 77), f);
 
-        assert_eq!(h.message_type()?, MessageType::Signal);
+        assert_eq!(h.message_type()?, Type::Signal);
         assert_eq!(h.path()?, Some(&path));
         assert_eq!(h.interface()?, Some(&iface));
         assert_eq!(h.member()?, Some(&member));
@@ -417,9 +419,9 @@ mod tests {
         f.add(Field::ReplySerial(88));
         f.add(Field::Signature(Signature::from_str_unchecked("say")));
         f.add(Field::UnixFDs(12));
-        let h = Header::new(PrimaryHeader::new(MessageType::MethodReturn, 77), f);
+        let h = Header::new(PrimaryHeader::new(Type::MethodReturn, 77), f);
 
-        assert_eq!(h.message_type()?, MessageType::MethodReturn);
+        assert_eq!(h.message_type()?, Type::MethodReturn);
         assert_eq!(h.path()?, None);
         assert_eq!(h.interface()?, None);
         assert_eq!(h.member()?, None);

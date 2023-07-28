@@ -21,7 +21,7 @@ use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesChangedStream, PropertiesProxy},
-    message::{Flags, Message, MessageType, Sequence},
+    message::{Flags, Message, Sequence, Type},
     AsyncDrop, CacheProperties, Connection, Error, Executor, MatchRule, MessageStream,
     OwnedMatchRule, ProxyBuilder, Result, Task,
 };
@@ -519,7 +519,7 @@ impl<'a> ProxyInner<'a> {
 
         let conn = &self.inner_without_borrows.conn;
         let signal_rule: OwnedMatchRule = MatchRule::builder()
-            .msg_type(MessageType::Signal)
+            .msg_type(Type::Signal)
             .sender("org.freedesktop.DBus")?
             .path("/org/freedesktop/DBus")?
             .interface("org.freedesktop.DBus")?
@@ -1103,7 +1103,7 @@ impl<'a> SignalStream<'a> {
         args: &[(u8, &str)],
     ) -> Result<SignalStream<'a>> {
         let mut rule_builder = MatchRule::builder()
-            .msg_type(MessageType::Signal)
+            .msg_type(Type::Signal)
             .sender(proxy.destination())?
             .path(proxy.path())?
             .interface(proxy.interface())?;
@@ -1128,7 +1128,7 @@ impl<'a> SignalStream<'a> {
                 use ordered_stream::OrderedStreamExt;
 
                 let name_owner_changed_rule = MatchRule::builder()
-                    .msg_type(MessageType::Signal)
+                    .msg_type(Type::Signal)
                     .sender("org.freedesktop.DBus")?
                     .path("/org/freedesktop/DBus")?
                     .interface("org.freedesktop.DBus")?

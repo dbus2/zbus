@@ -18,7 +18,7 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use crate::OwnedFd;
 use crate::{
     utils::padding_for_8_bytes,
-    zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type},
+    zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type as VariantType},
     Error, Result,
 };
 
@@ -34,7 +34,7 @@ use fields::QuickFields;
 
 pub(crate) mod header;
 use header::MIN_MESSAGE_SIZE;
-pub use header::{EndianSig, Flags, Header, MessageType, PrimaryHeader, NATIVE_ENDIAN_SIG};
+pub use header::{EndianSig, Flags, Header, PrimaryHeader, Type, NATIVE_ENDIAN_SIG};
 
 #[cfg(unix)]
 const LOCK_PANIC_MSG: &str = "lock poisoned";
@@ -97,9 +97,9 @@ assert_impl_all!(Message: Send, Sync, Unpin);
 
 // TODO: Handle non-native byte order: https://github.com/dbus2/zbus/issues/19
 impl Message {
-    /// Create a message of type [`MessageType::MethodCall`].
+    /// Create a message of type [`Type::MethodCall`].
     ///
-    /// [`MessageType::MethodCall`]: enum.MessageType.html#variant.MethodCall
+    /// [`Type::MethodCall`]: enum.Type.html#variant.MethodCall
     pub fn method<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
         sender: Option<S>,
         destination: Option<D>,
@@ -135,9 +135,9 @@ impl Message {
         b.build(body)
     }
 
-    /// Create a message of type [`MessageType::Signal`].
+    /// Create a message of type [`Type::Signal`].
     ///
-    /// [`MessageType::Signal`]: enum.MessageType.html#variant.Signal
+    /// [`Type::Signal`]: enum.Type.html#variant.Signal
     pub fn signal<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
         sender: Option<S>,
         destination: Option<D>,
@@ -170,9 +170,9 @@ impl Message {
         b.build(body)
     }
 
-    /// Create a message of type [`MessageType::MethodReturn`].
+    /// Create a message of type [`Type::MethodReturn`].
     ///
-    /// [`MessageType::MethodReturn`]: enum.MessageType.html#variant.MethodReturn
+    /// [`Type::MethodReturn`]: enum.Type.html#variant.MethodReturn
     pub fn method_reply<'s, S, B>(sender: Option<S>, call: &Self, body: &B) -> Result<Self>
     where
         S: TryInto<UniqueName<'s>>,
@@ -186,9 +186,9 @@ impl Message {
         b.build(body)
     }
 
-    /// Create a message of type [`MessageType::MethodError`].
+    /// Create a message of type [`Type::MethodError`].
     ///
-    /// [`MessageType::MethodError`]: enum.MessageType.html#variant.MethodError
+    /// [`Type::MethodError`]: enum.Type.html#variant.MethodError
     pub fn method_error<'s, 'e, S, E, B>(
         sender: Option<S>,
         call: &Self,
@@ -335,7 +335,7 @@ impl Message {
     }
 
     /// The message type.
-    pub fn message_type(&self) -> MessageType {
+    pub fn message_type(&self) -> Type {
         self.primary_header.msg_type()
     }
 
@@ -362,7 +362,7 @@ impl Message {
     /// Deserialize the body (without checking signature matching).
     pub fn body_unchecked<'d, 'm: 'd, B>(&'m self) -> Result<B>
     where
-        B: serde::de::Deserialize<'d> + Type,
+        B: serde::de::Deserialize<'d> + VariantType,
     {
         {
             #[cfg(unix)]
@@ -517,16 +517,16 @@ impl fmt::Display for Message {
         };
 
         match ty {
-            Some(MessageType::MethodCall) => {
+            Some(Type::MethodCall) => {
                 write!(f, "Method call")?;
                 if let Some(m) = member {
                     write!(f, " {m}")?;
                 }
             }
-            Some(MessageType::MethodReturn) => {
+            Some(Type::MethodReturn) => {
                 write!(f, "Method return")?;
             }
-            Some(MessageType::Error) => {
+            Some(Type::Error) => {
                 write!(f, "Error")?;
                 if let Some(e) = error_name {
                     write!(f, " {e}")?;
@@ -537,7 +537,7 @@ impl fmt::Display for Message {
                     write!(f, ": {msg}")?;
                 }
             }
-            Some(MessageType::Signal) => {
+            Some(Type::Signal) => {
                 write!(f, "Signal")?;
                 if let Some(m) = member {
                     write!(f, " {m}")?;

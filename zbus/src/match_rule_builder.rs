@@ -3,7 +3,7 @@ use std::convert::{TryFrom, TryInto};
 use static_assertions::assert_impl_all;
 
 use crate::{
-    message::MessageType,
+    message::Type,
     names::{BusName, InterfaceName, MemberName, UniqueName},
     zvariant::{ObjectPath, Str},
     Error, MatchRule, MatchRulePathSpec, Result,
@@ -37,7 +37,7 @@ impl<'m> MatchRuleBuilder<'m> {
     }
 
     /// Set the message type.
-    pub fn msg_type(mut self, msg_type: MessageType) -> Self {
+    pub fn msg_type(mut self, msg_type: Type) -> Self {
         self.0.msg_type = Some(msg_type);
 
         self

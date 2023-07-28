@@ -7,7 +7,7 @@ use zvariant::Error as VariantError;
 
 use crate::{
     fdo,
-    message::{Message, MessageType},
+    message::{Message, Type},
 };
 
 /// The error type for `zbus`.
@@ -289,7 +289,7 @@ impl From<Arc<Message>> for Error {
                 return e;
             }
         };
-        if header.primary().msg_type() != MessageType::Error {
+        if header.primary().msg_type() != Type::Error {
             return Error::InvalidReply;
         }
 

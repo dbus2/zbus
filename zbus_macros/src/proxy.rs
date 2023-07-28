@@ -979,7 +979,7 @@ fn gen_proxy_signal(
                     let member = member.as_ref().map(|m| m.as_str());
 
                     match (message_type, interface, member) {
-                        (#zbus::message::MessageType::Signal, Some(#iface_name), Some(#signal_name)) => Some(Self(msg)),
+                        (#zbus::message::Type::Signal, Some(#iface_name), Some(#signal_name)) => Some(Self(msg)),
                         _ => None,
                     }
                 }

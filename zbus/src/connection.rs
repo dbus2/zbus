@@ -29,7 +29,7 @@ use crate::{
     async_lock::Mutex,
     blocking,
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
-    message::{Builder, Flags, Message, MessageType},
+    message::{Builder, Flags, Message, Type},
     raw::{Connection as RawConnection, Socket},
     socket_reader::SocketReader,
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule,
@@ -252,8 +252,8 @@ impl OrderedFuture for PendingMethodCall {
                             continue;
                         }
                         let res = match msg.message_type() {
-                            MessageType::Error => Err(msg.into()),
-                            MessageType::MethodReturn => Ok(msg),
+                            Type::Error => Err(msg.into()),
+                            Type::MethodReturn => Ok(msg),
                             _ => continue,
                         };
                         this.stream = None;
@@ -950,7 +950,7 @@ impl Connection {
                 async move {
                     let mut stream = match weak_conn.upgrade() {
                         Some(conn) => {
-                            let mut builder = MatchRule::builder().msg_type(MessageType::MethodCall);
+                            let mut builder = MatchRule::builder().msg_type(Type::MethodCall);
                             if let Some(unique_name) = conn.unique_name() {
                                 builder = builder.destination(&**unique_name).expect("unique name");
                             }
@@ -1066,13 +1066,13 @@ impl Connection {
         }
 
         let mut subscriptions = self.inner.subscriptions.lock().await;
-        let msg_type = rule.msg_type().unwrap_or(MessageType::Signal);
+        let msg_type = rule.msg_type().unwrap_or(Type::Signal);
         match subscriptions.entry(rule.clone()) {
             Entry::Vacant(e) => {
                 let max_queued = max_queued.unwrap_or(DEFAULT_MAX_QUEUED);
                 let (sender, mut receiver) = broadcast(max_queued);
                 receiver.set_await_active(false);
-                if self.is_bus() && msg_type == MessageType::Signal {
+                if self.is_bus() && msg_type == Type::Signal {
                     fdo::DBusProxy::builder(self)
                         .cache_properties(CacheProperties::No)
                         .build()
@@ -1108,14 +1108,14 @@ impl Connection {
         let mut subscriptions = self.inner.subscriptions.lock().await;
         // TODO when it becomes stable, use HashMap::raw_entry and only require expr: &str
         // (both here and in add_match)
-        let msg_type = rule.msg_type().unwrap_or(MessageType::Signal);
+        let msg_type = rule.msg_type().unwrap_or(Type::Signal);
         match subscriptions.entry(rule) {
             Entry::Vacant(_) => Ok(false),
             Entry::Occupied(mut e) => {
                 let rule = e.key().inner().clone();
                 e.get_mut().0 -= 1;
                 if e.get().0 == 0 {
-                    if self.is_bus() && msg_type == MessageType::Signal {
+                    if self.is_bus() && msg_type == Type::Signal {
                         fdo::DBusProxy::builder(self)
                             .cache_properties(CacheProperties::No)
                             .build()
@@ -1185,14 +1185,11 @@ impl Connection {
         let (method_return_sender, method_return_receiver) =
             create_msg_broadcast_channel!(DEFAULT_MAX_METHOD_RETURN_QUEUED);
         let rule = MatchRule::builder()
-            .msg_type(MessageType::MethodReturn)
+            .msg_type(Type::MethodReturn)
             .build()
             .into();
         msg_senders.insert(Some(rule), method_return_sender.clone());
-        let rule = MatchRule::builder()
-            .msg_type(MessageType::Error)
-            .build()
-            .into();
+        let rule = MatchRule::builder().msg_type(Type::Error).build().into();
         msg_senders.insert(Some(rule), method_return_sender);
         let msg_senders = Arc::new(Mutex::new(msg_senders));
         let subscriptions = Mutex::new(HashMap::new());

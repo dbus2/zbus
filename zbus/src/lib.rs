@@ -85,15 +85,15 @@ pub use message::Flags as MessageFlags;
 #[deprecated(note = "Use `message::Header` instead")]
 #[doc(hidden)]
 pub use message::Header as MessageHeader;
-#[deprecated(note = "Use `message::MessageType` instead")]
-#[doc(hidden)]
-pub use message::MessageType;
 #[deprecated(note = "Use `message::PrimaryHeader` instead")]
 #[doc(hidden)]
 pub use message::PrimaryHeader as MessagePrimaryHeader;
 #[deprecated(note = "Use `message::Sequence` instead")]
 #[doc(hidden)]
 pub use message::Sequence as MessageSequence;
+#[deprecated(note = "Use `message::Type` instead")]
+#[doc(hidden)]
+pub use message::Type as MessageType;
 #[deprecated(note = "Use `message::NATIVE_ENDIAN_SIG` instead")]
 #[doc(hidden)]
 pub use message::NATIVE_ENDIAN_SIG;
@@ -920,7 +920,7 @@ mod tests {
             let msg_header = msg.header()?;
 
             match msg_header.message_type()? {
-                zbus::message::MessageType::MethodCall => {
+                zbus::message::Type::MethodCall => {
                     connection.reply(&msg, &()).await?;
 
                     break;

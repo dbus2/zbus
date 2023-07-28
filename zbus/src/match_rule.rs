@@ -6,9 +6,9 @@ use static_assertions::assert_impl_all;
 use zvariant::Structure;
 
 use crate::{
-    message::MessageType,
+    message::Type,
     names::{BusName, InterfaceName, MemberName, UniqueName},
-    zvariant::{ObjectPath, Str, Type},
+    zvariant::{ObjectPath, Str, Type as VariantType},
     Error, MatchRuleBuilder, Result,
 };
 
@@ -28,7 +28,7 @@ use crate::{
 ///
 /// // Let's take the most typical example of match rule to subscribe to properties' changes:
 /// let rule = MatchRule::builder()
-///     .msg_type(zbus::message::MessageType::Signal)
+///     .msg_type(zbus::message::Type::Signal)
 ///     .sender("org.freedesktop.DBus")?
 ///     .interface("org.freedesktop.DBus.Properties")?
 ///     .member("PropertiesChanged")?
@@ -53,7 +53,7 @@ use crate::{
 ///
 /// // Now for `ObjectManager::InterfacesAdded` signal.
 /// let rule = MatchRule::builder()
-///     .msg_type(zbus::message::MessageType::Signal)
+///     .msg_type(zbus::message::Type::Signal)
 ///     .sender("org.zbus")?
 ///     .interface("org.freedesktop.DBus.ObjectManager")?
 ///     .member("InterfacesAdded")?
@@ -82,10 +82,10 @@ use crate::{
 /// The `PartialEq` implementation assumes arguments in both rules are in the same order.
 ///
 /// [mrs]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-bus-routing-match-rules
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Type)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, VariantType)]
 #[zvariant(signature = "s")]
 pub struct MatchRule<'m> {
-    pub(crate) msg_type: Option<MessageType>,
+    pub(crate) msg_type: Option<Type>,
     pub(crate) sender: Option<BusName<'m>>,
     pub(crate) interface: Option<InterfaceName<'m>>,
     pub(crate) member: Option<MemberName<'m>>,
@@ -111,7 +111,7 @@ impl<'m> MatchRule<'m> {
     }
 
     /// The message type, if set.
-    pub fn msg_type(&self) -> Option<MessageType> {
+    pub fn msg_type(&self) -> Option<Type> {
         self.msg_type
     }
 
@@ -338,11 +338,11 @@ impl ToString for MatchRule<'_> {
 
         if let Some(msg_type) = self.msg_type() {
             let type_str = match msg_type {
-                MessageType::Error => "error",
-                MessageType::Invalid => panic!("invalid message type"),
-                MessageType::MethodCall => "method_call",
-                MessageType::MethodReturn => "method_return",
-                MessageType::Signal => "signal",
+                Type::Error => "error",
+                Type::Invalid => panic!("invalid message type"),
+                Type::MethodCall => "method_call",
+                Type::MethodReturn => "method_return",
+                Type::Signal => "signal",
             };
             add_match_rule_string_component(&mut s, "type", type_str);
         }
@@ -412,10 +412,10 @@ impl<'m> TryFrom<&'m str> for MatchRule<'m> {
             builder = match key {
                 "type" => {
                     let msg_type = match value {
-                        "error" => MessageType::Error,
-                        "method_call" => MessageType::MethodCall,
-                        "method_return" => MessageType::MethodReturn,
-                        "signal" => MessageType::Signal,
+                        "error" => Type::Error,
+                        "method_call" => Type::MethodCall,
+                        "method_return" => Type::MethodReturn,
+                        "signal" => Type::Signal,
                         _ => return Err(Error::InvalidMatchRule),
                     };
                     builder.msg_type(msg_type)
@@ -498,7 +498,7 @@ impl<'m> MatchRulePathSpec<'m> {
 }
 
 /// Owned sibling of [`MatchRule`].
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, VariantType)]
 pub struct OwnedMatchRule(#[serde(borrow)] MatchRule<'static>);
 
 assert_impl_all!(OwnedMatchRule: Send, Sync, Unpin);

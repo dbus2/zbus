@@ -15,9 +15,7 @@ use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 use crate::{
-    message::{
-        Field, FieldCode, Fields, Flags, Header, Message, MessageType, PrimaryHeader, Sequence,
-    },
+    message::{Field, FieldCode, Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature},
     Error, Result,
@@ -44,14 +42,14 @@ pub struct Builder<'a> {
 }
 
 impl<'a> Builder<'a> {
-    fn new(msg_type: MessageType) -> Self {
+    fn new(msg_type: Type) -> Self {
         let primary = PrimaryHeader::new(msg_type, 0);
         let fields = Fields::new();
         let header = Header::new(primary, fields);
         Self { header }
     }
 
-    /// Create a message of type [`MessageType::MethodCall`].
+    /// Create a message of type [`Type::MethodCall`].
     pub fn method_call<'p: 'a, 'm: 'a, P, M>(path: P, method_name: M) -> Result<Self>
     where
         P: TryInto<ObjectPath<'p>>,
@@ -59,12 +57,10 @@ impl<'a> Builder<'a> {
         P::Error: Into<Error>,
         M::Error: Into<Error>,
     {
-        Self::new(MessageType::MethodCall)
-            .path(path)?
-            .member(method_name)
+        Self::new(Type::MethodCall).path(path)?.member(method_name)
     }
 
-    /// Create a message of type [`MessageType::Signal`].
+    /// Create a message of type [`Type::Signal`].
     pub fn signal<'p: 'a, 'i: 'a, 'm: 'a, P, I, M>(path: P, interface: I, name: M) -> Result<Self>
     where
         P: TryInto<ObjectPath<'p>>,
@@ -74,26 +70,24 @@ impl<'a> Builder<'a> {
         I::Error: Into<Error>,
         M::Error: Into<Error>,
     {
-        Self::new(MessageType::Signal)
+        Self::new(Type::Signal)
             .path(path)?
             .interface(interface)?
             .member(name)
     }
 
-    /// Create a message of type [`MessageType::MethodReturn`].
+    /// Create a message of type [`Type::MethodReturn`].
     pub fn method_return(reply_to: &Header<'_>) -> Result<Self> {
-        Self::new(MessageType::MethodReturn).reply_to(reply_to)
+        Self::new(Type::MethodReturn).reply_to(reply_to)
     }
 
-    /// Create a message of type [`MessageType::Error`].
+    /// Create a message of type [`Type::Error`].
     pub fn error<'e: 'a, E>(reply_to: &Header<'_>, name: E) -> Result<Self>
     where
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
-        Self::new(MessageType::Error)
-            .error_name(name)?
-            .reply_to(reply_to)
+        Self::new(Type::Error).error_name(name)?.reply_to(reply_to)
     }
 
     /// Add flags to the message.
@@ -102,7 +96,7 @@ impl<'a> Builder<'a> {
     ///
     /// The function will return an error if invalid flags are given for the message type.
     pub fn with_flags(mut self, flag: Flags) -> Result<Self> {
-        if self.header.message_type()? != MessageType::MethodCall
+        if self.header.message_type()? != Type::MethodCall
             && BitFlags::from_flag(flag).contains(Flags::NoReplyExpected)
         {
             return Err(Error::InvalidField);

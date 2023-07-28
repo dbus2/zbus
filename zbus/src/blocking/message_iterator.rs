@@ -47,7 +47,7 @@ impl MessageIterator {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let conn = Connection::session()?;
     /// let rule = MatchRule::builder()
-    ///     .msg_type(zbus::message::MessageType::Signal)
+    ///     .msg_type(zbus::message::Type::Signal)
     ///     .sender("org.freedesktop.DBus")?
     ///     .interface("org.freedesktop.DBus")?
     ///     .member("NameOwnerChanged")?
