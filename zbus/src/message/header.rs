@@ -10,7 +10,7 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
-    message::{MessageField, MessageFieldCode, MessageFields},
+    message::{Fields, MessageField, MessageFieldCode},
     Error,
 };
 
@@ -255,15 +255,15 @@ impl MessagePrimaryHeader {
 
 /// The message header, containing all the metadata about the message.
 ///
-/// This includes both the [`MessagePrimaryHeader`] and [`MessageFields`].
+/// This includes both the [`MessagePrimaryHeader`] and [`Fields`].
 ///
 /// [`MessagePrimaryHeader`]: struct.MessagePrimaryHeader.html
-/// [`MessageFields`]: struct.MessageFields.html
+/// [`Fields`]: struct.Fields.html
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct MessageHeader<'m> {
     primary: MessagePrimaryHeader,
     #[serde(borrow)]
-    fields: MessageFields<'m>,
+    fields: Fields<'m>,
 }
 
 assert_impl_all!(MessageHeader<'_>: Send, Sync, Unpin);
@@ -290,7 +290,7 @@ macro_rules! get_field_u32 {
 
 impl<'m> MessageHeader<'m> {
     /// Create a new `MessageHeader` instance.
-    pub fn new(primary: MessagePrimaryHeader, fields: MessageFields<'m>) -> Self {
+    pub fn new(primary: MessagePrimaryHeader, fields: Fields<'m>) -> Self {
         Self { primary, fields }
     }
 
@@ -310,17 +310,17 @@ impl<'m> MessageHeader<'m> {
     }
 
     /// Get a reference to the message fields.
-    pub fn fields<'s>(&'s self) -> &'s MessageFields<'m> {
+    pub fn fields<'s>(&'s self) -> &'s Fields<'m> {
         &self.fields
     }
 
     /// Get a mutable reference to the message fields.
-    pub fn fields_mut<'s>(&'s mut self) -> &'s mut MessageFields<'m> {
+    pub fn fields_mut<'s>(&'s mut self) -> &'s mut Fields<'m> {
         &mut self.fields
     }
 
     /// Get the message fields, consuming `self`.
-    pub fn into_fields(self) -> MessageFields<'m> {
+    pub fn into_fields(self) -> Fields<'m> {
         self.fields
     }
 
@@ -377,9 +377,7 @@ impl<'m> MessageHeader<'m> {
 
 #[cfg(test)]
 mod tests {
-    use crate::message::{
-        MessageField, MessageFields, MessageHeader, MessagePrimaryHeader, MessageType,
-    };
+    use crate::message::{Fields, MessageField, MessageHeader, MessagePrimaryHeader, MessageType};
 
     use std::{
         convert::{TryFrom, TryInto},
@@ -395,7 +393,7 @@ mod tests {
         let path = ObjectPath::try_from("/some/path")?;
         let iface = InterfaceName::try_from("some.interface")?;
         let member = MemberName::try_from("Member")?;
-        let mut f = MessageFields::new();
+        let mut f = Fields::new();
         f.add(MessageField::Path(path.clone()));
         f.add(MessageField::Interface(iface.clone()));
         f.add(MessageField::Member(member.clone()));
@@ -413,7 +411,7 @@ mod tests {
         assert_eq!(h.signature()?, None);
         assert_eq!(h.unix_fds()?, None);
 
-        let mut f = MessageFields::new();
+        let mut f = Fields::new();
         f.add(MessageField::ErrorName("org.zbus.Error".try_into()?));
         f.add(MessageField::Destination(":1.11".try_into()?));
         f.add(MessageField::ReplySerial(88));

@@ -14,11 +14,11 @@ use zvariant::{ObjectPath, Signature, Type, Value};
 ///
 /// Every [`MessageField`] has an associated code. This is mostly an internal D-Bus protocol detail
 /// that you would not need to ever care about when using the high-level API. When using the
-/// low-level API, this is how you can [retrieve a specific field] from [`MessageFields`].
+/// low-level API, this is how you can [retrieve a specific field] from [`Fields`].
 ///
 /// [`MessageField`]: enum.MessageField.html
-/// [retrieve a specific field]: struct.MessageFields.html#method.get_field
-/// [`MessageFields`]: struct.MessageFields.html
+/// [retrieve a specific field]: struct.Fields.html#method.get_field
+/// [`Fields`]: struct.Fields.html
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Eq, Serialize_repr, Type)]
 pub enum MessageFieldCode {

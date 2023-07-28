@@ -16,7 +16,7 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 use crate::{
     message::{
-        Message, MessageField, MessageFieldCode, MessageFields, MessageFlags, MessageHeader,
+        Fields, Message, MessageField, MessageFieldCode, MessageFlags, MessageHeader,
         MessagePrimaryHeader, MessageSequence, MessageType,
     },
     utils::padding_for_8_bytes,
@@ -24,7 +24,7 @@ use crate::{
     Error, Result,
 };
 
-use crate::message::{fields::QuickMessageFields, header::MAX_MESSAGE_SIZE};
+use crate::message::{fields::QuickFields, header::MAX_MESSAGE_SIZE};
 
 #[cfg(unix)]
 type BuildGenericResult = Vec<RawFd>;
@@ -47,7 +47,7 @@ pub struct Builder<'a> {
 impl<'a> Builder<'a> {
     fn new(msg_type: MessageType) -> Self {
         let primary = MessagePrimaryHeader::new(msg_type, 0);
-        let fields = MessageFields::new();
+        let fields = Fields::new();
         let header = MessageHeader::new(primary, fields);
         Self { header }
     }
@@ -333,7 +333,7 @@ impl<'a> Builder<'a> {
 
         let primary_header = header.into_primary();
         let header: MessageHeader<'_> = zvariant::from_slice(&bytes, ctxt)?;
-        let quick_fields = QuickMessageFields::new(&bytes, &header)?;
+        let quick_fields = QuickFields::new(&bytes, &header)?;
 
         Ok(Message {
             primary_header,

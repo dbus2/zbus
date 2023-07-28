@@ -16,11 +16,11 @@ const MAX_FIELDS_IN_MESSAGE: usize = 16;
 ///
 /// [`MessageField`]: enum.MessageField.html
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct MessageFields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
+pub struct Fields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
 
-assert_impl_all!(MessageFields<'_>: Send, Sync, Unpin);
+assert_impl_all!(Fields<'_>: Send, Sync, Unpin);
 
-impl<'m> MessageFields<'m> {
+impl<'m> Fields<'m> {
     /// Creates an empty collection of fields.
     pub fn new() -> Self {
         Self::default()
@@ -62,7 +62,7 @@ impl<'m> MessageFields<'m> {
         self.0.iter().find(|f| f.code() == code)
     }
 
-    /// Consumes the `MessageFields` and returns a specific [`MessageField`] by its code.
+    /// Consumes the `Fields` and returns a specific [`MessageField`] by its code.
     ///
     /// Returns `None` if the message has no such field.
     ///
@@ -86,7 +86,7 @@ impl<'m> MessageFields<'m> {
     }
 }
 
-/// A byte range of a field in a Message, used in [`QuickMessageFields`].
+/// A byte range of a field in a Message, used in [`QuickFields`].
 ///
 /// Some invalid encodings (end = 0) are used to indicate "not cached" and "not present".
 #[derive(Debug, Default, Clone, Copy)]
@@ -151,14 +151,14 @@ impl FieldPos {
 
 /// A cache of some commonly-used fields of the header of a Message.
 #[derive(Debug, Default, Copy, Clone)]
-pub(crate) struct QuickMessageFields {
+pub(crate) struct QuickFields {
     path: FieldPos,
     interface: FieldPos,
     member: FieldPos,
     reply_serial: Option<u32>,
 }
 
-impl QuickMessageFields {
+impl QuickFields {
     pub fn new(buf: &[u8], header: &MessageHeader<'_>) -> Result<Self> {
         Ok(Self {
             path: FieldPos::new(buf, header.path()?),
@@ -185,13 +185,13 @@ impl QuickMessageFields {
     }
 }
 
-impl<'m> Default for MessageFields<'m> {
+impl<'m> Default for Fields<'m> {
     fn default() -> Self {
         Self(Vec::with_capacity(MAX_FIELDS_IN_MESSAGE))
     }
 }
 
-impl<'m> std::ops::Deref for MessageFields<'m> {
+impl<'m> std::ops::Deref for Fields<'m> {
     type Target = [MessageField<'m>];
 
     fn deref(&self) -> &Self::Target {
@@ -201,18 +201,18 @@ impl<'m> std::ops::Deref for MessageFields<'m> {
 
 #[cfg(test)]
 mod tests {
-    use super::{MessageField, MessageFields};
+    use super::{Fields, MessageField};
 
     #[test]
     fn test() {
-        let mut mf = MessageFields::new();
+        let mut mf = Fields::new();
         assert_eq!(mf.len(), 0);
         mf.add(MessageField::ReplySerial(42));
         assert_eq!(mf.len(), 1);
         mf.add(MessageField::ReplySerial(43));
         assert_eq!(mf.len(), 2);
 
-        let mut mf = MessageFields::new();
+        let mut mf = Fields::new();
         assert_eq!(mf.len(), 0);
         mf.replace(MessageField::ReplySerial(42));
         assert_eq!(mf.len(), 1);

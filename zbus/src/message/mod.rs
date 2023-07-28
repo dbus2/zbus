@@ -29,8 +29,8 @@ mod field;
 pub use field::{MessageField, MessageFieldCode};
 
 mod fields;
-pub use fields::MessageFields;
-use fields::QuickMessageFields;
+pub use fields::Fields;
+use fields::QuickFields;
 
 pub(crate) mod header;
 use header::MIN_MESSAGE_SIZE;
@@ -87,7 +87,7 @@ impl MessageSequence {
 #[derive(Clone)]
 pub struct Message {
     pub(crate) primary_header: MessagePrimaryHeader,
-    pub(crate) quick_fields: QuickMessageFields,
+    pub(crate) quick_fields: QuickFields,
     pub(crate) bytes: Vec<u8>,
     pub(crate) body_offset: usize,
     #[cfg(unix)]
@@ -251,7 +251,7 @@ impl Message {
 
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_offset = header_len + padding_for_8_bytes(header_len);
-        let quick_fields = QuickMessageFields::new(&bytes, &header)?;
+        let quick_fields = QuickFields::new(&bytes, &header)?;
 
         Ok(Self {
             primary_header,
@@ -331,7 +331,7 @@ impl Message {
     /// Deserialize the fields.
     ///
     /// Note: prefer using the direct access methods if possible; they are more efficient.
-    pub fn fields(&self) -> Result<MessageFields<'_>> {
+    pub fn fields(&self) -> Result<Fields<'_>> {
         let ctxt = dbus_context!(header::PRIMARY_HEADER_SIZE);
         zvariant::from_slice(&self.bytes[header::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
     }
