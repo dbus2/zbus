@@ -16,8 +16,8 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 use crate::{
     message::{
-        Fields, Header, Message, MessageField, MessageFieldCode, MessageFlags, MessageType,
-        PrimaryHeader, Sequence,
+        Field, FieldCode, Fields, Header, Message, MessageFlags, MessageType, PrimaryHeader,
+        Sequence,
     },
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature},
@@ -121,7 +121,7 @@ impl<'a> Builder<'a> {
     {
         self.header
             .fields_mut()
-            .replace(MessageField::Sender(sender.try_into().map_err(Into::into)?));
+            .replace(Field::Sender(sender.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -133,7 +133,7 @@ impl<'a> Builder<'a> {
     {
         self.header
             .fields_mut()
-            .replace(MessageField::Path(path.try_into().map_err(Into::into)?));
+            .replace(Field::Path(path.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -143,9 +143,9 @@ impl<'a> Builder<'a> {
         I: TryInto<InterfaceName<'i>>,
         I::Error: Into<Error>,
     {
-        self.header.fields_mut().replace(MessageField::Interface(
-            interface.try_into().map_err(Into::into)?,
-        ));
+        self.header
+            .fields_mut()
+            .replace(Field::Interface(interface.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -157,7 +157,7 @@ impl<'a> Builder<'a> {
     {
         self.header
             .fields_mut()
-            .replace(MessageField::Member(member.try_into().map_err(Into::into)?));
+            .replace(Field::Member(member.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -166,9 +166,9 @@ impl<'a> Builder<'a> {
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
-        self.header.fields_mut().replace(MessageField::ErrorName(
-            error.try_into().map_err(Into::into)?,
-        ));
+        self.header
+            .fields_mut()
+            .replace(Field::ErrorName(error.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -178,7 +178,7 @@ impl<'a> Builder<'a> {
         D: TryInto<BusName<'d>>,
         D::Error: Into<Error>,
     {
-        self.header.fields_mut().replace(MessageField::Destination(
+        self.header.fields_mut().replace(Field::Destination(
             destination.try_into().map_err(Into::into)?,
         ));
         Ok(self)
@@ -188,7 +188,7 @@ impl<'a> Builder<'a> {
         let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
         self.header
             .fields_mut()
-            .replace(MessageField::ReplySerial(*serial));
+            .replace(Field::ReplySerial(*serial));
 
         if let Some(sender) = reply_to.sender()? {
             self.destination(sender.to_owned())
@@ -297,7 +297,7 @@ impl<'a> Builder<'a> {
                 // Remove leading and trailing STRUCT delimiters
                 signature = signature.slice(1..signature.len() - 1);
             }
-            header.fields_mut().add(MessageField::Signature(signature));
+            header.fields_mut().add(Field::Signature(signature));
         }
 
         let body_len_u32 = body_len.try_into().map_err(|_| Error::ExcessData)?;
@@ -307,7 +307,7 @@ impl<'a> Builder<'a> {
         {
             let fds_len_u32 = fds_len.try_into().map_err(|_| Error::ExcessData)?;
             if fds_len != 0 {
-                header.fields_mut().add(MessageField::UnixFDs(fds_len_u32));
+                header.fields_mut().add(Field::UnixFDs(fds_len_u32));
             }
         }
 
@@ -351,8 +351,8 @@ impl<'m> From<Header<'m>> for Builder<'m> {
     fn from(mut header: Header<'m>) -> Self {
         // Signature and Fds are added by body* methods.
         let fields = header.fields_mut();
-        fields.remove(MessageFieldCode::Signature);
-        fields.remove(MessageFieldCode::UnixFDs);
+        fields.remove(FieldCode::Signature);
+        fields.remove(FieldCode::UnixFDs);
 
         Self { header }
     }

@@ -26,7 +26,7 @@ mod builder;
 pub use builder::Builder;
 
 mod field;
-pub use field::{MessageField, MessageFieldCode};
+pub use field::{Field, FieldCode};
 
 mod fields;
 pub use fields::Fields;
@@ -295,10 +295,10 @@ impl Message {
         match self
             .header()?
             .into_fields()
-            .into_field(MessageFieldCode::Signature)
+            .into_field(FieldCode::Signature)
             .ok_or(Error::NoBodySignature)?
         {
-            MessageField::Signature(signature) => Ok(signature),
+            Field::Signature(signature) => Ok(signature),
             _ => Err(Error::InvalidField),
         }
     }

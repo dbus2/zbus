@@ -10,7 +10,7 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{EncodingContext, ObjectPath, Signature, Type};
 
 use crate::{
-    message::{Fields, MessageField, MessageFieldCode},
+    message::{Field, FieldCode, Fields},
     Error,
 };
 
@@ -274,8 +274,8 @@ macro_rules! get_field {
     };
     ($self:ident, $kind:ident, $closure:tt) => {
         #[allow(clippy::redundant_closure_call)]
-        match $self.fields().get_field(MessageFieldCode::$kind) {
-            Some(MessageField::$kind(value)) => Ok(Some($closure(value))),
+        match $self.fields().get_field(FieldCode::$kind) {
+            Some(Field::$kind(value)) => Ok(Some($closure(value))),
             Some(_) => Err(Error::InvalidField),
             None => Ok(None),
         }
@@ -377,7 +377,7 @@ impl<'m> Header<'m> {
 
 #[cfg(test)]
 mod tests {
-    use crate::message::{Fields, Header, MessageField, MessageType, PrimaryHeader};
+    use crate::message::{Field, Fields, Header, MessageType, PrimaryHeader};
 
     use std::{
         convert::{TryFrom, TryInto},
@@ -394,10 +394,10 @@ mod tests {
         let iface = InterfaceName::try_from("some.interface")?;
         let member = MemberName::try_from("Member")?;
         let mut f = Fields::new();
-        f.add(MessageField::Path(path.clone()));
-        f.add(MessageField::Interface(iface.clone()));
-        f.add(MessageField::Member(member.clone()));
-        f.add(MessageField::Sender(":1.84".try_into()?));
+        f.add(Field::Path(path.clone()));
+        f.add(Field::Interface(iface.clone()));
+        f.add(Field::Member(member.clone()));
+        f.add(Field::Sender(":1.84".try_into()?));
         let h = Header::new(PrimaryHeader::new(MessageType::Signal, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::Signal);
@@ -412,13 +412,11 @@ mod tests {
         assert_eq!(h.unix_fds()?, None);
 
         let mut f = Fields::new();
-        f.add(MessageField::ErrorName("org.zbus.Error".try_into()?));
-        f.add(MessageField::Destination(":1.11".try_into()?));
-        f.add(MessageField::ReplySerial(88));
-        f.add(MessageField::Signature(Signature::from_str_unchecked(
-            "say",
-        )));
-        f.add(MessageField::UnixFDs(12));
+        f.add(Field::ErrorName("org.zbus.Error".try_into()?));
+        f.add(Field::Destination(":1.11".try_into()?));
+        f.add(Field::ReplySerial(88));
+        f.add(Field::Signature(Signature::from_str_unchecked("say")));
+        f.add(Field::UnixFDs(12));
         let h = Header::new(PrimaryHeader::new(MessageType::MethodReturn, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::MethodReturn);
