@@ -124,9 +124,9 @@ pub use abstractions::*;
 pub mod match_rule;
 pub use match_rule::{MatchRule, OwnedMatchRule};
 
-#[deprecated(note = "Use `match_rule::MatchRuleBuilder` instead")]
+#[deprecated(note = "Use `match_rule::Builder` instead")]
 #[doc(hidden)]
-pub use match_rule::MatchRuleBuilder;
+pub use match_rule::Builder as MatchRuleBuilder;
 #[deprecated(note = "Use `match_rule::MatchRulePathSpec` instead")]
 #[doc(hidden)]
 pub use match_rule::MatchRulePathSpec;

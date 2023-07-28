@@ -15,7 +15,7 @@ use crate::{
 };
 
 mod builder;
-pub use builder::MatchRuleBuilder;
+pub use builder::Builder;
 
 /// A bus match rule for subscribing to specific messages.
 ///
@@ -105,9 +105,9 @@ pub struct MatchRule<'m> {
 assert_impl_all!(MatchRule<'_>: Send, Sync, Unpin);
 
 impl<'m> MatchRule<'m> {
-    /// Create a builder for `MatchRuleBuilder`.
-    pub fn builder() -> MatchRuleBuilder<'m> {
-        MatchRuleBuilder::new()
+    /// Create a builder for `MatchRule`.
+    pub fn builder() -> Builder<'m> {
+        Builder::new()
     }
 
     /// The sender, if set.

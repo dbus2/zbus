@@ -16,11 +16,11 @@ const MAX_ARGS: u8 = 64;
 ///
 /// This is created by [`MatchRule::builder`].
 #[derive(Debug)]
-pub struct MatchRuleBuilder<'m>(MatchRule<'m>);
+pub struct Builder<'m>(MatchRule<'m>);
 
-assert_impl_all!(MatchRuleBuilder<'_>: Send, Sync, Unpin);
+assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
-impl<'m> MatchRuleBuilder<'m> {
+impl<'m> Builder<'m> {
     /// Build the `MatchRule`.
     pub fn build(self) -> MatchRule<'m> {
         self.0
@@ -115,7 +115,7 @@ impl<'m> MatchRuleBuilder<'m> {
 
     /// Append an arguments.
     ///
-    /// Use this in instead of [`MatchRuleBuilder::arg`] if you want to sequentially add args.
+    /// Use this in instead of [`Builder::arg`] if you want to sequentially add args.
     ///
     /// # Errors
     ///
@@ -158,7 +158,7 @@ impl<'m> MatchRuleBuilder<'m> {
 
     /// Append a path argument.
     ///
-    /// Use this in instead of [`MatchRuleBuilder::arg_path`] if you want to sequentially add args.
+    /// Use this in instead of [`Builder::arg_path`] if you want to sequentially add args.
     ///
     /// # Errors
     ///
@@ -279,7 +279,7 @@ impl<'m> MatchRuleBuilder<'m> {
         Ok(self)
     }
 
-    /// Create a builder for `MatchRuleBuilder`.
+    /// Create a builder for `MatchRule`.
     pub(crate) fn new() -> Self {
         Self(MatchRule {
             msg_type: None,
