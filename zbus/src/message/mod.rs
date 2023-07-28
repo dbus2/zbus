@@ -23,7 +23,7 @@ use crate::{
 };
 
 mod builder;
-pub use builder::MessageBuilder;
+pub use builder::Builder;
 
 mod field;
 pub use field::{MessageField, MessageFieldCode};
@@ -123,7 +123,7 @@ impl Message {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = MessageBuilder::method_call(path, method_name)?;
+        let mut b = Builder::method_call(path, method_name)?;
 
         if let Some(sender) = sender {
             b = b.sender(sender)?;
@@ -161,7 +161,7 @@ impl Message {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = MessageBuilder::signal(path, iface, signal_name)?;
+        let mut b = Builder::signal(path, iface, signal_name)?;
 
         if let Some(sender) = sender {
             b = b.sender(sender)?;
@@ -181,7 +181,7 @@ impl Message {
         S::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = MessageBuilder::method_return(&call.header()?)?;
+        let mut b = Builder::method_return(&call.header()?)?;
         if let Some(sender) = sender {
             b = b.sender(sender)?;
         }
@@ -204,7 +204,7 @@ impl Message {
         E::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = MessageBuilder::error(&call.header()?, name)?;
+        let mut b = Builder::error(&call.header()?, name)?;
         if let Some(sender) = sender {
             b = b.sender(sender)?;
         }

@@ -29,7 +29,7 @@ use crate::{
     async_lock::Mutex,
     blocking,
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
-    message::{Message, MessageBuilder, MessageFlags, MessageType},
+    message::{Builder, Message, MessageFlags, MessageType},
     raw::{Connection as RawConnection, Socket},
     socket_reader::SocketReader,
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule,
@@ -365,7 +365,7 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let mut builder = MessageBuilder::method_call(path, method_name)?;
+        let mut builder = Builder::method_call(path, method_name)?;
         if let Some(sender) = self.unique_name() {
             builder = builder.sender(sender)?
         }

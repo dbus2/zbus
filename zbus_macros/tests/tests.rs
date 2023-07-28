@@ -257,7 +257,7 @@ fn test_interface() {
 mod signal_from_message {
     use super::*;
     use std::sync::Arc;
-    use zbus::message::MessageBuilder;
+    use zbus::message::Builder;
 
     #[dbus_proxy(
         interface = "org.freedesktop.zbus_macros.Test",
@@ -275,7 +275,7 @@ mod signal_from_message {
     #[test]
     fn signal_u8() {
         let message = Arc::new(
-            MessageBuilder::signal(
+            Builder::signal(
                 "/org/freedesktop/zbus_macros/test",
                 "org.freedesktop.zbus_macros.Test",
                 "SignalU8",
@@ -298,7 +298,7 @@ mod signal_from_message {
     #[test]
     fn signal_string() {
         let message = Arc::new(
-            MessageBuilder::signal(
+            Builder::signal(
                 "/org/freedesktop/zbus_macros/test",
                 "org.freedesktop.zbus_macros.Test",
                 "SignalString",
@@ -321,7 +321,7 @@ mod signal_from_message {
     #[test]
     fn wrong_data() {
         let message = Arc::new(
-            MessageBuilder::signal(
+            Builder::signal(
                 "/org/freedesktop/zbus_macros/test",
                 "org.freedesktop.zbus_macros.Test",
                 "SignalU8",

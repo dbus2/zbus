@@ -40,11 +40,11 @@ macro_rules! dbus_context {
 
 /// A builder for [`Message`]
 #[derive(Debug, Clone)]
-pub struct MessageBuilder<'a> {
+pub struct Builder<'a> {
     header: MessageHeader<'a>,
 }
 
-impl<'a> MessageBuilder<'a> {
+impl<'a> Builder<'a> {
     fn new(msg_type: MessageType) -> Self {
         let primary = MessagePrimaryHeader::new(msg_type, 0);
         let fields = MessageFields::new();
@@ -347,7 +347,7 @@ impl<'a> MessageBuilder<'a> {
     }
 }
 
-impl<'m> From<MessageHeader<'m>> for MessageBuilder<'m> {
+impl<'m> From<MessageHeader<'m>> for Builder<'m> {
     fn from(mut header: MessageHeader<'m>) -> Self {
         // Signature and Fds are added by body* methods.
         let fields = header.fields_mut();
@@ -360,14 +360,14 @@ impl<'m> From<MessageHeader<'m>> for MessageBuilder<'m> {
 
 #[cfg(test)]
 mod tests {
-    use super::MessageBuilder;
+    use super::Builder;
     use crate::Error;
     use test_log::test;
 
     #[test]
     fn test_raw() -> Result<(), Error> {
         let raw_body: &[u8] = &[16, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0];
-        let message_builder = MessageBuilder::signal("/", "test.test", "test")?;
+        let message_builder = Builder::signal("/", "test.test", "test")?;
         let message = unsafe {
             message_builder.build_raw_body(
                 raw_body,

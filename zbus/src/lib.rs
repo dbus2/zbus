@@ -64,12 +64,12 @@ pub use guid::*;
 pub mod message;
 pub use message::Message;
 
+#[deprecated(note = "Use `message::Builder` instead")]
+#[doc(hidden)]
+pub use message::Builder as MessageBuilder;
 #[deprecated(note = "Use `message::EndianSig` instead")]
 #[doc(hidden)]
 pub use message::EndianSig;
-#[deprecated(note = "Use `message::MessageBuilder` instead")]
-#[doc(hidden)]
-pub use message::MessageBuilder;
 #[deprecated(note = "Use `message::MessageField` instead")]
 #[doc(hidden)]
 pub use message::MessageField;

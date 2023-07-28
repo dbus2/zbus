@@ -15,7 +15,7 @@ use tracing::{debug, instrument};
 use zbus::{
     block_on,
     fdo::{ObjectManager, ObjectManagerProxy},
-    message::MessageBuilder,
+    message::Builder,
     DBusError, MessageStream, ResponseDispatchNotifier,
 };
 use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Str, Type, Value};
@@ -433,7 +433,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     // Use low-level API for `TestResponseNotify` because we need to ensure that the signal is
     // always received after the response.
     let mut stream = MessageStream::from(&conn);
-    let method = MessageBuilder::method_call("/org/freedesktop/MyService", "TestResponseNotify")?
+    let method = Builder::method_call("/org/freedesktop/MyService", "TestResponseNotify")?
         .interface("org.freedesktop.MyIface")?
         .destination("org.freedesktop.MyService")?
         .build(&())?;
