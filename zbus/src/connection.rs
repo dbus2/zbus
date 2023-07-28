@@ -472,7 +472,7 @@ impl Connection {
     /// Returns the message serial number.
     pub async fn reply_dbus_error(
         &self,
-        call: &zbus::message::MessageHeader<'_>,
+        call: &zbus::message::Header<'_>,
         err: impl DBusError,
     ) -> Result<u32> {
         let m = err.create_reply(call);

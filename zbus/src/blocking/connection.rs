@@ -168,7 +168,7 @@ impl Connection {
     /// Returns the message serial number.
     pub fn reply_dbus_error(
         &self,
-        call: &zbus::message::MessageHeader<'_>,
+        call: &zbus::message::Header<'_>,
         err: impl DBusError,
     ) -> Result<u32> {
         block_on(self.inner.reply_dbus_error(call, err))

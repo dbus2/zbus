@@ -188,7 +188,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
                 }
             }
 
-            fn create_reply(&self, call: &#zbus::message::MessageHeader) -> #zbus::Result<#zbus::message::Message> {
+            fn create_reply(&self, call: &#zbus::message::Header) -> #zbus::Result<#zbus::message::Message> {
                 let name = self.name();
                 match self {
                     #replies

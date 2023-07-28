@@ -22,7 +22,7 @@ use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Str, Type, Value};
 
 use zbus::{
     dbus_interface, dbus_proxy,
-    message::{MessageHeader, MessageType},
+    message::{Header, MessageType},
     CacheProperties, Connection, ConnectionBuilder, InterfaceRef, ObjectServer, SignalContext,
 };
 
@@ -166,7 +166,7 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    fn test_header(&self, #[zbus(header)] header: MessageHeader<'_>) {
+    fn test_header(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestHeader` called.");
         assert_eq!(header.message_type().unwrap(), MessageType::MethodCall);
         assert_eq!(header.member().unwrap().unwrap(), "TestHeader");
@@ -188,7 +188,7 @@ impl MyIfaceImpl {
     fn test_single_struct_arg(
         &self,
         arg: ArgStructTest,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
     ) -> zbus::fdo::Result<()> {
         debug!("`TestSingleStructArg` called.");
         assert_eq!(header.signature()?.unwrap(), "(is)");
@@ -370,7 +370,7 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    fn test_no_reply(&self, #[zbus(header)] header: MessageHeader<'_>) {
+    fn test_no_reply(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestNoReply` called");
         assert_eq!(
             header.message_type().unwrap(),
@@ -383,7 +383,7 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    fn test_no_autostart(&self, #[zbus(header)] header: MessageHeader<'_>) {
+    fn test_no_autostart(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestNoAutostart` called");
         assert_eq!(
             header.message_type().unwrap(),
@@ -396,7 +396,7 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    fn test_interactive_auth(&self, #[zbus(header)] header: MessageHeader<'_>) {
+    fn test_interactive_auth(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestInteractiveAuth` called");
         assert_eq!(
             header.message_type().unwrap(),

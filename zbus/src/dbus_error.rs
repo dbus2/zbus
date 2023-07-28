@@ -1,5 +1,5 @@
 use crate::{
-    message::{Message, MessageHeader},
+    message::{Header, Message},
     names::ErrorName,
     Result,
 };
@@ -14,7 +14,7 @@ use crate::{
 /// [dm]: derive.DBusError.html
 pub trait DBusError {
     /// Generate an error reply message for the given method call.
-    fn create_reply(&self, msg: &MessageHeader<'_>) -> Result<Message>;
+    fn create_reply(&self, msg: &Header<'_>) -> Result<Message>;
 
     // The name of the error.
     //

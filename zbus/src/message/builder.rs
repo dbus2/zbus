@@ -16,7 +16,7 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 use crate::{
     message::{
-        Fields, Message, MessageField, MessageFieldCode, MessageFlags, MessageHeader,
+        Fields, Header, Message, MessageField, MessageFieldCode, MessageFlags,
         MessagePrimaryHeader, MessageSequence, MessageType,
     },
     utils::padding_for_8_bytes,
@@ -41,14 +41,14 @@ macro_rules! dbus_context {
 /// A builder for [`Message`]
 #[derive(Debug, Clone)]
 pub struct Builder<'a> {
-    header: MessageHeader<'a>,
+    header: Header<'a>,
 }
 
 impl<'a> Builder<'a> {
     fn new(msg_type: MessageType) -> Self {
         let primary = MessagePrimaryHeader::new(msg_type, 0);
         let fields = Fields::new();
-        let header = MessageHeader::new(primary, fields);
+        let header = Header::new(primary, fields);
         Self { header }
     }
 
@@ -82,12 +82,12 @@ impl<'a> Builder<'a> {
     }
 
     /// Create a message of type [`MessageType::MethodReturn`].
-    pub fn method_return(reply_to: &MessageHeader<'_>) -> Result<Self> {
+    pub fn method_return(reply_to: &Header<'_>) -> Result<Self> {
         Self::new(MessageType::MethodReturn).reply_to(reply_to)
     }
 
     /// Create a message of type [`MessageType::Error`].
-    pub fn error<'e: 'a, E>(reply_to: &MessageHeader<'_>, name: E) -> Result<Self>
+    pub fn error<'e: 'a, E>(reply_to: &Header<'_>, name: E) -> Result<Self>
     where
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
@@ -184,7 +184,7 @@ impl<'a> Builder<'a> {
         Ok(self)
     }
 
-    fn reply_to(mut self, reply_to: &MessageHeader<'_>) -> Result<Self> {
+    fn reply_to(mut self, reply_to: &Header<'_>) -> Result<Self> {
         let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
         self.header
             .fields_mut()
@@ -332,7 +332,7 @@ impl<'a> Builder<'a> {
         write_body(&mut cursor)?;
 
         let primary_header = header.into_primary();
-        let header: MessageHeader<'_> = zvariant::from_slice(&bytes, ctxt)?;
+        let header: Header<'_> = zvariant::from_slice(&bytes, ctxt)?;
         let quick_fields = QuickFields::new(&bytes, &header)?;
 
         Ok(Message {
@@ -347,8 +347,8 @@ impl<'a> Builder<'a> {
     }
 }
 
-impl<'m> From<MessageHeader<'m>> for Builder<'m> {
-    fn from(mut header: MessageHeader<'m>) -> Self {
+impl<'m> From<Header<'m>> for Builder<'m> {
+    fn from(mut header: Header<'m>) -> Self {
         // Signature and Fds are added by body* methods.
         let fields = header.fields_mut();
         fields.remove(MessageFieldCode::Signature);

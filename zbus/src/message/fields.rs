@@ -5,7 +5,7 @@ use zbus_names::{InterfaceName, MemberName};
 use zvariant::{ObjectPath, Type};
 
 use crate::{
-    message::{Message, MessageField, MessageFieldCode, MessageHeader},
+    message::{Header, Message, MessageField, MessageFieldCode},
     Result,
 };
 
@@ -159,7 +159,7 @@ pub(crate) struct QuickFields {
 }
 
 impl QuickFields {
-    pub fn new(buf: &[u8], header: &MessageHeader<'_>) -> Result<Self> {
+    pub fn new(buf: &[u8], header: &Header<'_>) -> Result<Self> {
         Ok(Self {
             path: FieldPos::new(buf, header.path()?),
             interface: FieldPos::new(buf, header.interface()?),

@@ -17,8 +17,7 @@ use zvariant::{
 };
 
 use crate::{
-    dbus_interface, dbus_proxy, message::MessageHeader, DBusError, Guid, ObjectServer,
-    SignalContext,
+    dbus_interface, dbus_proxy, message::Header, DBusError, Guid, ObjectServer, SignalContext,
 };
 
 #[rustfmt::skip]
@@ -52,7 +51,7 @@ impl Introspectable {
     async fn introspect(
         &self,
         #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
     ) -> Result<String> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
@@ -124,7 +123,7 @@ impl Properties {
         interface_name: InterfaceName<'_>,
         property_name: &str,
         #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
     ) -> Result<OwnedValue> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
@@ -149,7 +148,7 @@ impl Properties {
         property_name: &str,
         value: Value<'_>,
         #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
         #[zbus(signal_context)] ctxt: SignalContext<'_>,
     ) -> Result<()> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
@@ -188,7 +187,7 @@ impl Properties {
         &self,
         interface_name: InterfaceName<'_>,
         #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
     ) -> Result<HashMap<String, OwnedValue>> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
@@ -290,7 +289,7 @@ impl ObjectManager {
     async fn get_managed_objects(
         &self,
         #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
     ) -> Result<ManagedObjects> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;

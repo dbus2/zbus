@@ -35,7 +35,7 @@ use fields::QuickFields;
 pub(crate) mod header;
 use header::MIN_MESSAGE_SIZE;
 pub use header::{
-    EndianSig, MessageFlags, MessageHeader, MessagePrimaryHeader, MessageType, NATIVE_ENDIAN_SIG,
+    EndianSig, Header, MessageFlags, MessagePrimaryHeader, MessageType, NATIVE_ENDIAN_SIG,
 };
 
 #[cfg(unix)]
@@ -324,7 +324,7 @@ impl Message {
     /// Deserialize the header.
     ///
     /// Note: prefer using the direct access methods if possible; they are more efficient.
-    pub fn header(&self) -> Result<MessageHeader<'_>> {
+    pub fn header(&self) -> Result<Header<'_>> {
         zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(Error::from)
     }
 

@@ -73,6 +73,9 @@ pub use message::EndianSig;
 #[deprecated(note = "Use `message::Fields` instead")]
 #[doc(hidden)]
 pub use message::Fields as MessageFields;
+#[deprecated(note = "Use `message::Header` instead")]
+#[doc(hidden)]
+pub use message::Header as MessageHeader;
 #[deprecated(note = "Use `message::MessageField` instead")]
 #[doc(hidden)]
 pub use message::MessageField;
@@ -82,9 +85,6 @@ pub use message::MessageFieldCode;
 #[deprecated(note = "Use `message::MessageFlags` instead")]
 #[doc(hidden)]
 pub use message::MessageFlags;
-#[deprecated(note = "Use `message::MessageHeader` instead")]
-#[doc(hidden)]
-pub use message::MessageHeader;
 #[deprecated(note = "Use `message::MessagePrimaryHeader` instead")]
 #[doc(hidden)]
 pub use message::MessagePrimaryHeader;

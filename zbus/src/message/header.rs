@@ -260,13 +260,13 @@ impl MessagePrimaryHeader {
 /// [`MessagePrimaryHeader`]: struct.MessagePrimaryHeader.html
 /// [`Fields`]: struct.Fields.html
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct MessageHeader<'m> {
+pub struct Header<'m> {
     primary: MessagePrimaryHeader,
     #[serde(borrow)]
     fields: Fields<'m>,
 }
 
-assert_impl_all!(MessageHeader<'_>: Send, Sync, Unpin);
+assert_impl_all!(Header<'_>: Send, Sync, Unpin);
 
 macro_rules! get_field {
     ($self:ident, $kind:ident) => {
@@ -288,8 +288,8 @@ macro_rules! get_field_u32 {
     };
 }
 
-impl<'m> MessageHeader<'m> {
-    /// Create a new `MessageHeader` instance.
+impl<'m> Header<'m> {
+    /// Create a new `Header` instance.
     pub fn new(primary: MessagePrimaryHeader, fields: Fields<'m>) -> Self {
         Self { primary, fields }
     }
@@ -377,7 +377,7 @@ impl<'m> MessageHeader<'m> {
 
 #[cfg(test)]
 mod tests {
-    use crate::message::{Fields, MessageField, MessageHeader, MessagePrimaryHeader, MessageType};
+    use crate::message::{Fields, Header, MessageField, MessagePrimaryHeader, MessageType};
 
     use std::{
         convert::{TryFrom, TryInto},
@@ -398,7 +398,7 @@ mod tests {
         f.add(MessageField::Interface(iface.clone()));
         f.add(MessageField::Member(member.clone()));
         f.add(MessageField::Sender(":1.84".try_into()?));
-        let h = MessageHeader::new(MessagePrimaryHeader::new(MessageType::Signal, 77), f);
+        let h = Header::new(MessagePrimaryHeader::new(MessageType::Signal, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::Signal);
         assert_eq!(h.path()?, Some(&path));
@@ -419,7 +419,7 @@ mod tests {
             "say",
         )));
         f.add(MessageField::UnixFDs(12));
-        let h = MessageHeader::new(MessagePrimaryHeader::new(MessageType::MethodReturn, 77), f);
+        let h = Header::new(MessagePrimaryHeader::new(MessageType::MethodReturn, 77), f);
 
         assert_eq!(h.message_type()?, MessageType::MethodReturn);
         assert_eq!(h.path()?, None);
