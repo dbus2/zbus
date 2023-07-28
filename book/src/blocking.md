@@ -134,7 +134,7 @@ the beginning of this chapter for details on why and a possible workaround.
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{blocking::ConnectionBuilder, dbus_interface, fdo, SignalContext};
+# use zbus::{blocking::connection, dbus_interface, fdo, SignalContext};
 #
 use event_listener::Event;
 
@@ -188,7 +188,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    let _handle = ConnectionBuilder::session()?
+    let _handle = connection::ConnectionBuilder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()?;

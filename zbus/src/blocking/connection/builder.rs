@@ -123,9 +123,9 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// ```
     /// # use std::error::Error;
-    /// # use zbus::blocking::ConnectionBuilder;
+    /// # use zbus::blocking::connection;
     /// #
-    /// let conn = ConnectionBuilder::session()?
+    /// let conn = connection::ConnectionBuilder::session()?
     ///     .max_queued(30)
     ///     .build()?;
     /// assert_eq!(conn.max_queued(), 30);

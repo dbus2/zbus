@@ -661,7 +661,7 @@ mod tests {
         }
 
         let secret = Secret;
-        let conn = blocking::ConnectionBuilder::session()
+        let conn = blocking::connection::ConnectionBuilder::session()
             .unwrap()
             .serve_at("/org/freedesktop/secrets", secret)
             .unwrap()
@@ -835,7 +835,7 @@ mod tests {
 
         rx.recv().unwrap();
         for _ in 0..2 {
-            let conn = blocking::ConnectionBuilder::session()
+            let conn = blocking::connection::ConnectionBuilder::session()
                 .unwrap()
                 .serve_at("/org/freedesktop/zbus/ComeAndGo", ComeAndGo)
                 .unwrap()

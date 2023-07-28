@@ -17,7 +17,7 @@
 //! [`blocking` crate]: https://docs.rs/blocking/
 
 pub mod connection;
-pub use connection::Connection;
+pub use connection::*;
 mod message_iterator;
 pub use message_iterator::*;
 pub mod object_server;

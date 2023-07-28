@@ -12,7 +12,7 @@ use std::{
 };
 
 use zbus::{
-    blocking::{proxy::Builder as ProxyBuilder, Connection, ConnectionBuilder},
+    blocking::{connection, proxy::Builder as ProxyBuilder, Connection},
     names::BusName,
     quick_xml::{Interface, Node},
 };
@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .expect("Missing param for object path")
                 .try_into()?;
 
-            let connection = ConnectionBuilder::address(&*address)?.build()?;
+            let connection = connection::ConnectionBuilder::address(&*address)?.build()?;
 
             input_src = format!("Interface '{path}' from service '{service}'");
 

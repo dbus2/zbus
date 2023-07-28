@@ -286,7 +286,7 @@ mod tests {
     use uds_windows::UnixStream;
 
     use crate::{
-        blocking::{ConnectionBuilder, MessageIterator},
+        blocking::{connection::ConnectionBuilder, MessageIterator},
         Guid,
     };
 
