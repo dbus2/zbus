@@ -1,4 +1,4 @@
-#[cfg(feature = "quick-xml")]
+#[cfg(feature = "xml")]
 use quick_xml::de::DeError;
 use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, sync::Arc};
@@ -52,7 +52,7 @@ pub enum Error {
     Unsupported,
     /// A [`fdo::Error`] transformed into [`Error`].
     FDO(Box<fdo::Error>),
-    #[cfg(feature = "quick-xml")]
+    #[cfg(feature = "xml")]
     /// An XML error from quick_xml
     QuickXml(DeError),
     NoBodySignature,
@@ -93,7 +93,7 @@ impl PartialEq for Error {
             #[allow(deprecated)]
             (Error::Io(_), Self::Io(_)) => false,
             (Error::InputOutput(_), Self::InputOutput(_)) => false,
-            #[cfg(feature = "quick-xml")]
+            #[cfg(feature = "xml")]
             (Self::QuickXml(_), Self::QuickXml(_)) => false,
             (Self::Failure(s1), Self::Failure(s2)) => s1 == s2,
             (_, _) => false,
@@ -119,7 +119,7 @@ impl error::Error for Error {
             Error::InvalidGUID => None,
             Error::Unsupported => None,
             Error::FDO(e) => Some(e),
-            #[cfg(feature = "quick-xml")]
+            #[cfg(feature = "xml")]
             Error::QuickXml(e) => Some(e),
             Error::NoBodySignature => None,
             Error::InvalidField => None,
@@ -157,7 +157,7 @@ impl fmt::Display for Error {
             Error::InvalidGUID => write!(f, "Invalid GUID"),
             Error::Unsupported => write!(f, "Connection support is lacking"),
             Error::FDO(e) => write!(f, "{e}"),
-            #[cfg(feature = "quick-xml")]
+            #[cfg(feature = "xml")]
             Error::QuickXml(e) => write!(f, "XML error: {e}"),
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
             Error::NameTaken => write!(f, "name already taken on the bus"),
@@ -192,7 +192,7 @@ impl Clone for Error {
             Error::InvalidGUID => Error::InvalidGUID,
             Error::Unsupported => Error::Unsupported,
             Error::FDO(e) => Error::FDO(e.clone()),
-            #[cfg(feature = "quick-xml")]
+            #[cfg(feature = "xml")]
             // Until https://github.com/tafia/quick-xml/pull/521 is merged and released.
             Error::QuickXml(e) => Error::QuickXml(e.clone()),
             Error::NoBodySignature => Error::NoBodySignature,
@@ -241,7 +241,7 @@ impl From<fdo::Error> for Error {
     }
 }
 
-#[cfg(feature = "quick-xml")]
+#[cfg(feature = "xml")]
 impl From<DeError> for Error {
     fn from(val: DeError) -> Self {
         Error::QuickXml(val)

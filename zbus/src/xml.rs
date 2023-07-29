@@ -1,14 +1,10 @@
-//! Introspection XML support (`quick-xml` feature)
+//! Introspection XML support (`xml` feature)
 //!
 //! Thanks to the [`org.freedesktop.DBus.Introspectable`] interface, objects may be introspected at
 //! runtime, returning an XML string that describes the object.
 //!
-//! This optional `quick_xml` module provides facilities to parse the XML data into more convenient
+//! This optional `xml` module provides facilities to parse the XML data into more convenient
 //! Rust structures. The XML string may be parsed to a tree with [`Node.from_reader()`].
-//!
-//! This module has a more type-safe API and uses a maintained XML parser.
-//! It will eventually replace the [xml](xml/index.html) module.
-//! See also:
 //!
 //! * [Introspection format] in the DBus specification
 //!

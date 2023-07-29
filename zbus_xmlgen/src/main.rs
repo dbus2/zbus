@@ -14,7 +14,7 @@ use std::{
 use zbus::{
     blocking::{proxy::Builder as ProxyBuilder, Connection, ConnectionBuilder},
     names::BusName,
-    quick_xml::{Interface, Node},
+    xml::{Interface, Node},
 };
 
 mod gen;

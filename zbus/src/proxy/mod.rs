@@ -625,7 +625,7 @@ impl<'a> Proxy<'a> {
 
     /// Introspect the associated object, and return the XML description.
     ///
-    /// See the [xml](xml/index.html) or [quick_xml](quick_xml/index.html) module for parsing the
+    /// See the [xml](xml/index.html) module for parsing the
     /// result.
     pub async fn introspect(&self) -> fdo::Result<String> {
         let proxy = IntrospectableProxy::builder(&self.inner.inner_without_borrows.conn)
