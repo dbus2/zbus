@@ -1,3 +1,5 @@
+//! The object server API.
+
 use event_listener::{Event, EventListener};
 use serde::Serialize;
 use std::{
@@ -18,8 +20,15 @@ use crate::{
     async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard},
     fdo,
     fdo::{Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
-    Connection, DispatchResult, Error, Interface, Message, Result, SignalContext, WeakConnection,
+    message::Message,
+    Connection, Error, Result, WeakConnection,
 };
+
+mod interface;
+pub use interface::{DispatchResult, Interface};
+
+mod signal_context;
+pub use signal_context::SignalContext;
 
 /// Opaque structure that derefs to an `Interface` type.
 pub struct InterfaceDeref<'d, I> {

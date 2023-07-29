@@ -17,7 +17,8 @@ use zvariant::{
 };
 
 use crate::{
-    dbus_interface, dbus_proxy, DBusError, Guid, MessageHeader, ObjectServer, SignalContext,
+    dbus_interface, dbus_proxy, message::Header, object_server::SignalContext, DBusError, Guid,
+    ObjectServer,
 };
 
 #[rustfmt::skip]
@@ -51,7 +52,7 @@ impl Introspectable {
     async fn introspect(
         &self,
         #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
     ) -> Result<String> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
@@ -123,7 +124,7 @@ impl Properties {
         interface_name: InterfaceName<'_>,
         property_name: &str,
         #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
     ) -> Result<OwnedValue> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
@@ -148,7 +149,7 @@ impl Properties {
         property_name: &str,
         value: Value<'_>,
         #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
         #[zbus(signal_context)] ctxt: SignalContext<'_>,
     ) -> Result<()> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
@@ -161,13 +162,13 @@ impl Properties {
             })?;
 
         match iface.read().await.set(property_name, &value, &ctxt) {
-            zbus::DispatchResult::RequiresMut => {}
-            zbus::DispatchResult::NotFound => {
+            zbus::object_server::DispatchResult::RequiresMut => {}
+            zbus::object_server::DispatchResult::NotFound => {
                 return Err(Error::UnknownProperty(format!(
                     "Unknown property '{property_name}'"
                 )));
             }
-            zbus::DispatchResult::Async(f) => {
+            zbus::object_server::DispatchResult::Async(f) => {
                 return f.await.map_err(Into::into);
             }
         }
@@ -187,7 +188,7 @@ impl Properties {
         &self,
         interface_name: InterfaceName<'_>,
         #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
     ) -> Result<HashMap<String, OwnedValue>> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
@@ -289,7 +290,7 @@ impl ObjectManager {
     async fn get_managed_objects(
         &self,
         #[zbus(object_server)] server: &ObjectServer,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
     ) -> Result<ManagedObjects> {
         let path = header.path()?.ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
@@ -1011,7 +1012,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod tests {
-    use crate::{fdo, DBusError, Error, Message};
+    use crate::{fdo, message::Message, DBusError, Error};
     use futures_util::StreamExt;
     use ntest::timeout;
     use std::convert::TryInto;

@@ -3,9 +3,11 @@ use std::convert::{TryFrom, TryInto};
 use static_assertions::assert_impl_all;
 
 use crate::{
+    match_rule::PathSpec,
+    message::Type,
     names::{BusName, InterfaceName, MemberName, UniqueName},
     zvariant::{ObjectPath, Str},
-    Error, MatchRule, MatchRulePathSpec, MessageType, Result,
+    Error, MatchRule, Result,
 };
 
 const MAX_ARGS: u8 = 64;
@@ -14,11 +16,11 @@ const MAX_ARGS: u8 = 64;
 ///
 /// This is created by [`MatchRule::builder`].
 #[derive(Debug)]
-pub struct MatchRuleBuilder<'m>(MatchRule<'m>);
+pub struct Builder<'m>(MatchRule<'m>);
 
-assert_impl_all!(MatchRuleBuilder<'_>: Send, Sync, Unpin);
+assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
-impl<'m> MatchRuleBuilder<'m> {
+impl<'m> Builder<'m> {
     /// Build the `MatchRule`.
     pub fn build(self) -> MatchRule<'m> {
         self.0
@@ -36,7 +38,7 @@ impl<'m> MatchRuleBuilder<'m> {
     }
 
     /// Set the message type.
-    pub fn msg_type(mut self, msg_type: MessageType) -> Self {
+    pub fn msg_type(mut self, msg_type: Type) -> Self {
         self.0.msg_type = Some(msg_type);
 
         self
@@ -75,7 +77,7 @@ impl<'m> MatchRuleBuilder<'m> {
     {
         self.0.path_spec = path
             .try_into()
-            .map(MatchRulePathSpec::Path)
+            .map(PathSpec::Path)
             .map(Some)
             .map_err(Into::into)?;
 
@@ -93,7 +95,7 @@ impl<'m> MatchRuleBuilder<'m> {
     {
         self.0.path_spec = path_namespace
             .try_into()
-            .map(MatchRulePathSpec::PathNamespace)
+            .map(PathSpec::PathNamespace)
             .map(Some)
             .map_err(Into::into)?;
 
@@ -113,7 +115,7 @@ impl<'m> MatchRuleBuilder<'m> {
 
     /// Append an arguments.
     ///
-    /// Use this in instead of [`MatchRuleBuilder::arg`] if you want to sequentially add args.
+    /// Use this in instead of [`Builder::arg`] if you want to sequentially add args.
     ///
     /// # Errors
     ///
@@ -156,7 +158,7 @@ impl<'m> MatchRuleBuilder<'m> {
 
     /// Append a path argument.
     ///
-    /// Use this in instead of [`MatchRuleBuilder::arg_path`] if you want to sequentially add args.
+    /// Use this in instead of [`Builder::arg_path`] if you want to sequentially add args.
     ///
     /// # Errors
     ///
@@ -277,7 +279,7 @@ impl<'m> MatchRuleBuilder<'m> {
         Ok(self)
     }
 
-    /// Create a builder for `MatchRuleBuilder`.
+    /// Create a builder for `MatchRule`.
     pub(crate) fn new() -> Self {
         Self(MatchRule {
             msg_type: None,

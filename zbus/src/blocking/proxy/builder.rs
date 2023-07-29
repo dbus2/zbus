@@ -4,32 +4,32 @@ use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::ObjectPath;
 
-use crate::{blocking::Connection, utils::block_on, CacheProperties, Error, Result};
+use crate::{blocking::Connection, proxy::CacheProperties, utils::block_on, Error, Result};
 
-pub use crate::ProxyDefault;
+pub use crate::proxy::ProxyDefault;
 
 /// Builder for proxies.
 #[derive(Debug, Clone)]
-pub struct ProxyBuilder<'a, T = ()>(crate::ProxyBuilder<'a, T>);
+pub struct Builder<'a, T = ()>(crate::proxy::Builder<'a, T>);
 
-assert_impl_all!(ProxyBuilder<'_>: Send, Sync, Unpin);
+assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
-impl<'a, T> ProxyBuilder<'a, T> {
-    /// Create a new [`ProxyBuilder`] for the given connection.
+impl<'a, T> Builder<'a, T> {
+    /// Create a new [`Builder`] for the given connection.
     #[must_use]
     pub fn new_bare(conn: &Connection) -> Self {
-        Self(crate::ProxyBuilder::new_bare(&conn.clone().into()))
+        Self(crate::proxy::Builder::new_bare(&conn.clone().into()))
     }
 }
 
-impl<'a, T> ProxyBuilder<'a, T> {
+impl<'a, T> Builder<'a, T> {
     /// Set the proxy destination address.
     pub fn destination<D>(self, destination: D) -> Result<Self>
     where
         D: TryInto<BusName<'a>>,
         D::Error: Into<Error>,
     {
-        crate::ProxyBuilder::destination(self.0, destination).map(Self)
+        crate::proxy::Builder::destination(self.0, destination).map(Self)
     }
 
     /// Set the proxy path.
@@ -38,7 +38,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
         P: TryInto<ObjectPath<'a>>,
         P::Error: Into<Error>,
     {
-        crate::ProxyBuilder::path(self.0, path).map(Self)
+        crate::proxy::Builder::path(self.0, path).map(Self)
     }
 
     /// Set the proxy interface.
@@ -47,7 +47,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
         I: TryInto<InterfaceName<'a>>,
         I::Error: Into<Error>,
     {
-        crate::ProxyBuilder::interface(self.0, interface).map(Self)
+        crate::proxy::Builder::interface(self.0, interface).map(Self)
     }
 
     /// Set whether to cache properties.
@@ -75,13 +75,13 @@ impl<'a, T> ProxyBuilder<'a, T> {
     }
 }
 
-impl<'a, T> ProxyBuilder<'a, T>
+impl<'a, T> Builder<'a, T>
 where
     T: ProxyDefault,
 {
-    /// Create a new [`ProxyBuilder`] for the given connection.
+    /// Create a new [`Builder`] for the given connection.
     #[must_use]
     pub fn new(conn: &Connection) -> Self {
-        Self(crate::ProxyBuilder::new(&conn.clone().into()))
+        Self(crate::proxy::Builder::new(&conn.clone().into()))
     }
 }

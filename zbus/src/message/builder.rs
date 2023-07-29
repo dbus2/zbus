@@ -4,7 +4,7 @@ use std::{
 };
 
 #[cfg(unix)]
-use crate::Fds;
+use crate::message::Fds;
 #[cfg(unix)]
 use std::{
     os::unix::io::RawFd,
@@ -15,12 +15,13 @@ use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 
 use crate::{
+    message::{Field, FieldCode, Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
     utils::padding_for_8_bytes,
     zvariant::{DynamicType, EncodingContext, ObjectPath, Signature},
-    Error, Message, MessageField, MessageFieldCode, MessageFields, MessageFlags, MessageHeader,
-    MessagePrimaryHeader, MessageSequence, MessageType, QuickMessageFields, Result,
-    MAX_MESSAGE_SIZE,
+    Error, Result,
 };
+
+use crate::message::{fields::QuickFields, header::MAX_MESSAGE_SIZE};
 
 #[cfg(unix)]
 type BuildGenericResult = Vec<RawFd>;
@@ -36,19 +37,19 @@ macro_rules! dbus_context {
 
 /// A builder for [`Message`]
 #[derive(Debug, Clone)]
-pub struct MessageBuilder<'a> {
-    header: MessageHeader<'a>,
+pub struct Builder<'a> {
+    header: Header<'a>,
 }
 
-impl<'a> MessageBuilder<'a> {
-    fn new(msg_type: MessageType) -> Self {
-        let primary = MessagePrimaryHeader::new(msg_type, 0);
-        let fields = MessageFields::new();
-        let header = MessageHeader::new(primary, fields);
+impl<'a> Builder<'a> {
+    fn new(msg_type: Type) -> Self {
+        let primary = PrimaryHeader::new(msg_type, 0);
+        let fields = Fields::new();
+        let header = Header::new(primary, fields);
         Self { header }
     }
 
-    /// Create a message of type [`MessageType::MethodCall`].
+    /// Create a message of type [`Type::MethodCall`].
     pub fn method_call<'p: 'a, 'm: 'a, P, M>(path: P, method_name: M) -> Result<Self>
     where
         P: TryInto<ObjectPath<'p>>,
@@ -56,12 +57,10 @@ impl<'a> MessageBuilder<'a> {
         P::Error: Into<Error>,
         M::Error: Into<Error>,
     {
-        Self::new(MessageType::MethodCall)
-            .path(path)?
-            .member(method_name)
+        Self::new(Type::MethodCall).path(path)?.member(method_name)
     }
 
-    /// Create a message of type [`MessageType::Signal`].
+    /// Create a message of type [`Type::Signal`].
     pub fn signal<'p: 'a, 'i: 'a, 'm: 'a, P, I, M>(path: P, interface: I, name: M) -> Result<Self>
     where
         P: TryInto<ObjectPath<'p>>,
@@ -71,36 +70,34 @@ impl<'a> MessageBuilder<'a> {
         I::Error: Into<Error>,
         M::Error: Into<Error>,
     {
-        Self::new(MessageType::Signal)
+        Self::new(Type::Signal)
             .path(path)?
             .interface(interface)?
             .member(name)
     }
 
-    /// Create a message of type [`MessageType::MethodReturn`].
-    pub fn method_return(reply_to: &MessageHeader<'_>) -> Result<Self> {
-        Self::new(MessageType::MethodReturn).reply_to(reply_to)
+    /// Create a message of type [`Type::MethodReturn`].
+    pub fn method_return(reply_to: &Header<'_>) -> Result<Self> {
+        Self::new(Type::MethodReturn).reply_to(reply_to)
     }
 
-    /// Create a message of type [`MessageType::Error`].
-    pub fn error<'e: 'a, E>(reply_to: &MessageHeader<'_>, name: E) -> Result<Self>
+    /// Create a message of type [`Type::Error`].
+    pub fn error<'e: 'a, E>(reply_to: &Header<'_>, name: E) -> Result<Self>
     where
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
-        Self::new(MessageType::Error)
-            .error_name(name)?
-            .reply_to(reply_to)
+        Self::new(Type::Error).error_name(name)?.reply_to(reply_to)
     }
 
     /// Add flags to the message.
     ///
-    /// See [`MessageFlags`] documentation for the meaning of the flags.
+    /// See [`Flags`] documentation for the meaning of the flags.
     ///
     /// The function will return an error if invalid flags are given for the message type.
-    pub fn with_flags(mut self, flag: MessageFlags) -> Result<Self> {
-        if self.header.message_type()? != MessageType::MethodCall
-            && BitFlags::from_flag(flag).contains(MessageFlags::NoReplyExpected)
+    pub fn with_flags(mut self, flag: Flags) -> Result<Self> {
+        if self.header.message_type()? != Type::MethodCall
+            && BitFlags::from_flag(flag).contains(Flags::NoReplyExpected)
         {
             return Err(Error::InvalidField);
         }
@@ -117,7 +114,7 @@ impl<'a> MessageBuilder<'a> {
     {
         self.header
             .fields_mut()
-            .replace(MessageField::Sender(sender.try_into().map_err(Into::into)?));
+            .replace(Field::Sender(sender.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -129,7 +126,7 @@ impl<'a> MessageBuilder<'a> {
     {
         self.header
             .fields_mut()
-            .replace(MessageField::Path(path.try_into().map_err(Into::into)?));
+            .replace(Field::Path(path.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -139,9 +136,9 @@ impl<'a> MessageBuilder<'a> {
         I: TryInto<InterfaceName<'i>>,
         I::Error: Into<Error>,
     {
-        self.header.fields_mut().replace(MessageField::Interface(
-            interface.try_into().map_err(Into::into)?,
-        ));
+        self.header
+            .fields_mut()
+            .replace(Field::Interface(interface.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -153,7 +150,7 @@ impl<'a> MessageBuilder<'a> {
     {
         self.header
             .fields_mut()
-            .replace(MessageField::Member(member.try_into().map_err(Into::into)?));
+            .replace(Field::Member(member.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -162,9 +159,9 @@ impl<'a> MessageBuilder<'a> {
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
-        self.header.fields_mut().replace(MessageField::ErrorName(
-            error.try_into().map_err(Into::into)?,
-        ));
+        self.header
+            .fields_mut()
+            .replace(Field::ErrorName(error.try_into().map_err(Into::into)?));
         Ok(self)
     }
 
@@ -174,17 +171,17 @@ impl<'a> MessageBuilder<'a> {
         D: TryInto<BusName<'d>>,
         D::Error: Into<Error>,
     {
-        self.header.fields_mut().replace(MessageField::Destination(
+        self.header.fields_mut().replace(Field::Destination(
             destination.try_into().map_err(Into::into)?,
         ));
         Ok(self)
     }
 
-    fn reply_to(mut self, reply_to: &MessageHeader<'_>) -> Result<Self> {
+    fn reply_to(mut self, reply_to: &Header<'_>) -> Result<Self> {
         let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
         self.header
             .fields_mut()
-            .replace(MessageField::ReplySerial(*serial));
+            .replace(Field::ReplySerial(*serial));
 
         if let Some(sender) = reply_to.sender()? {
             self.destination(sender.to_owned())
@@ -293,7 +290,7 @@ impl<'a> MessageBuilder<'a> {
                 // Remove leading and trailing STRUCT delimiters
                 signature = signature.slice(1..signature.len() - 1);
             }
-            header.fields_mut().add(MessageField::Signature(signature));
+            header.fields_mut().add(Field::Signature(signature));
         }
 
         let body_len_u32 = body_len.try_into().map_err(|_| Error::ExcessData)?;
@@ -303,7 +300,7 @@ impl<'a> MessageBuilder<'a> {
         {
             let fds_len_u32 = fds_len.try_into().map_err(|_| Error::ExcessData)?;
             if fds_len != 0 {
-                header.fields_mut().add(MessageField::UnixFDs(fds_len_u32));
+                header.fields_mut().add(Field::UnixFDs(fds_len_u32));
             }
         }
 
@@ -328,8 +325,8 @@ impl<'a> MessageBuilder<'a> {
         write_body(&mut cursor)?;
 
         let primary_header = header.into_primary();
-        let header: MessageHeader<'_> = zvariant::from_slice(&bytes, ctxt)?;
-        let quick_fields = QuickMessageFields::new(&bytes, &header)?;
+        let header: Header<'_> = zvariant::from_slice(&bytes, ctxt)?;
+        let quick_fields = QuickFields::new(&bytes, &header)?;
 
         Ok(Message {
             primary_header,
@@ -338,17 +335,17 @@ impl<'a> MessageBuilder<'a> {
             body_offset,
             #[cfg(unix)]
             fds: Arc::new(RwLock::new(Fds::Raw(fds))),
-            recv_seq: MessageSequence::default(),
+            recv_seq: Sequence::default(),
         })
     }
 }
 
-impl<'m> From<MessageHeader<'m>> for MessageBuilder<'m> {
-    fn from(mut header: MessageHeader<'m>) -> Self {
+impl<'m> From<Header<'m>> for Builder<'m> {
+    fn from(mut header: Header<'m>) -> Self {
         // Signature and Fds are added by body* methods.
         let fields = header.fields_mut();
-        fields.remove(MessageFieldCode::Signature);
-        fields.remove(MessageFieldCode::UnixFDs);
+        fields.remove(FieldCode::Signature);
+        fields.remove(FieldCode::UnixFDs);
 
         Self { header }
     }
@@ -356,14 +353,14 @@ impl<'m> From<MessageHeader<'m>> for MessageBuilder<'m> {
 
 #[cfg(test)]
 mod tests {
-    use super::MessageBuilder;
+    use super::Builder;
     use crate::Error;
     use test_log::test;
 
     #[test]
     fn test_raw() -> Result<(), Error> {
         let raw_body: &[u8] = &[16, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0];
-        let message_builder = MessageBuilder::signal("/", "test.test", "test")?;
+        let message_builder = Builder::signal("/", "test.test", "test")?;
         let message = unsafe {
             message_builder.build_raw_body(
                 raw_body,

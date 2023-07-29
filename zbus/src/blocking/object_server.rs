@@ -1,17 +1,21 @@
+//! The object server API.
+
 use std::{convert::TryInto, ops::Deref};
 
 use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
 use crate::{
-    utils::block_on, Error, Interface, InterfaceDeref, InterfaceDerefMut, Result, SignalContext,
+    object_server::{Interface, InterfaceDeref, InterfaceDerefMut, SignalContext},
+    utils::block_on,
+    Error, Result,
 };
 
 /// Wrapper over an interface, along with its corresponding `SignalContext`
 /// instance. A reference to the underlying interface may be obtained via
 /// [`InterfaceRef::get`] and [`InterfaceRef::get_mut`].
 pub struct InterfaceRef<I> {
-    azync: crate::InterfaceRef<I>,
+    azync: crate::object_server::InterfaceRef<I>,
 }
 
 impl<I> InterfaceRef<I>

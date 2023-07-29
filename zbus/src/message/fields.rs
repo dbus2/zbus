@@ -4,37 +4,40 @@ use std::convert::{TryFrom, TryInto};
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{ObjectPath, Type};
 
-use crate::{Message, MessageField, MessageFieldCode, MessageHeader, Result};
+use crate::{
+    message::{Field, FieldCode, Header, Message},
+    Result,
+};
 
 // It's actually 10 (and even not that) but let's round it to next 8-byte alignment
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
 
-/// A collection of [`MessageField`] instances.
+/// A collection of [`Field`] instances.
 ///
-/// [`MessageField`]: enum.MessageField.html
+/// [`Field`]: enum.Field.html
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct MessageFields<'m>(#[serde(borrow)] Vec<MessageField<'m>>);
+pub struct Fields<'m>(#[serde(borrow)] Vec<Field<'m>>);
 
-assert_impl_all!(MessageFields<'_>: Send, Sync, Unpin);
+assert_impl_all!(Fields<'_>: Send, Sync, Unpin);
 
-impl<'m> MessageFields<'m> {
+impl<'m> Fields<'m> {
     /// Creates an empty collection of fields.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Appends a [`MessageField`] to the collection of fields in the message.
+    /// Appends a [`Field`] to the collection of fields in the message.
     ///
-    /// [`MessageField`]: enum.MessageField.html
-    pub fn add<'f: 'm>(&mut self, field: MessageField<'f>) {
+    /// [`Field`]: enum.Field.html
+    pub fn add<'f: 'm>(&mut self, field: Field<'f>) {
         self.0.push(field);
     }
 
-    /// Replaces a [`MessageField`] from the collection of fields with one with the same code,
+    /// Replaces a [`Field`] from the collection of fields with one with the same code,
     /// returning the old value if present.
     ///
-    /// [`MessageField`]: enum.MessageField.html
-    pub fn replace<'f: 'm>(&mut self, field: MessageField<'f>) -> Option<MessageField<'m>> {
+    /// [`Field`]: enum.Field.html
+    pub fn replace<'f: 'm>(&mut self, field: Field<'f>) -> Option<Field<'m>> {
         let code = field.code();
         if let Some(found) = self.0.iter_mut().find(|f| f.code() == code) {
             return Some(std::mem::replace(found, field));
@@ -43,35 +46,35 @@ impl<'m> MessageFields<'m> {
         None
     }
 
-    /// Returns a slice with all the [`MessageField`] in the message.
+    /// Returns a slice with all the [`Field`] in the message.
     ///
-    /// [`MessageField`]: enum.MessageField.html
-    pub fn get(&self) -> &[MessageField<'m>] {
+    /// [`Field`]: enum.Field.html
+    pub fn get(&self) -> &[Field<'m>] {
         &self.0
     }
 
-    /// Gets a reference to a specific [`MessageField`] by its code.
+    /// Gets a reference to a specific [`Field`] by its code.
     ///
     /// Returns `None` if the message has no such field.
     ///
-    /// [`MessageField`]: enum.MessageField.html
-    pub fn get_field(&self, code: MessageFieldCode) -> Option<&MessageField<'m>> {
+    /// [`Field`]: enum.Field.html
+    pub fn get_field(&self, code: FieldCode) -> Option<&Field<'m>> {
         self.0.iter().find(|f| f.code() == code)
     }
 
-    /// Consumes the `MessageFields` and returns a specific [`MessageField`] by its code.
+    /// Consumes the `Fields` and returns a specific [`Field`] by its code.
     ///
     /// Returns `None` if the message has no such field.
     ///
-    /// [`MessageField`]: enum.MessageField.html
-    pub fn into_field(self, code: MessageFieldCode) -> Option<MessageField<'m>> {
+    /// [`Field`]: enum.Field.html
+    pub fn into_field(self, code: FieldCode) -> Option<Field<'m>> {
         self.0.into_iter().find(|f| f.code() == code)
     }
 
     /// Remove the field matching the `code`.
     ///
     /// Returns `true` if a field was found and removed, `false` otherwise.
-    pub(crate) fn remove(&mut self, code: MessageFieldCode) -> bool {
+    pub(crate) fn remove(&mut self, code: FieldCode) -> bool {
         match self.0.iter().enumerate().find(|(_, f)| f.code() == code) {
             Some((i, _)) => {
                 self.0.remove(i);
@@ -83,7 +86,7 @@ impl<'m> MessageFields<'m> {
     }
 }
 
-/// A byte range of a field in a Message, used in [`QuickMessageFields`].
+/// A byte range of a field in a Message, used in [`QuickFields`].
 ///
 /// Some invalid encodings (end = 0) are used to indicate "not cached" and "not present".
 #[derive(Debug, Default, Clone, Copy)]
@@ -148,15 +151,15 @@ impl FieldPos {
 
 /// A cache of some commonly-used fields of the header of a Message.
 #[derive(Debug, Default, Copy, Clone)]
-pub(crate) struct QuickMessageFields {
+pub(crate) struct QuickFields {
     path: FieldPos,
     interface: FieldPos,
     member: FieldPos,
     reply_serial: Option<u32>,
 }
 
-impl QuickMessageFields {
-    pub fn new(buf: &[u8], header: &MessageHeader<'_>) -> Result<Self> {
+impl QuickFields {
+    pub fn new(buf: &[u8], header: &Header<'_>) -> Result<Self> {
         Ok(Self {
             path: FieldPos::new(buf, header.path()?),
             interface: FieldPos::new(buf, header.interface()?),
@@ -182,14 +185,14 @@ impl QuickMessageFields {
     }
 }
 
-impl<'m> Default for MessageFields<'m> {
+impl<'m> Default for Fields<'m> {
     fn default() -> Self {
         Self(Vec::with_capacity(MAX_FIELDS_IN_MESSAGE))
     }
 }
 
-impl<'m> std::ops::Deref for MessageFields<'m> {
-    type Target = [MessageField<'m>];
+impl<'m> std::ops::Deref for Fields<'m> {
+    type Target = [Field<'m>];
 
     fn deref(&self) -> &Self::Target {
         self.get()
@@ -198,22 +201,22 @@ impl<'m> std::ops::Deref for MessageFields<'m> {
 
 #[cfg(test)]
 mod tests {
-    use super::{MessageField, MessageFields};
+    use super::{Field, Fields};
 
     #[test]
     fn test() {
-        let mut mf = MessageFields::new();
+        let mut mf = Fields::new();
         assert_eq!(mf.len(), 0);
-        mf.add(MessageField::ReplySerial(42));
+        mf.add(Field::ReplySerial(42));
         assert_eq!(mf.len(), 1);
-        mf.add(MessageField::ReplySerial(43));
+        mf.add(Field::ReplySerial(43));
         assert_eq!(mf.len(), 2);
 
-        let mut mf = MessageFields::new();
+        let mut mf = Fields::new();
         assert_eq!(mf.len(), 0);
-        mf.replace(MessageField::ReplySerial(42));
+        mf.replace(Field::ReplySerial(42));
         assert_eq!(mf.len(), 1);
-        mf.replace(MessageField::ReplySerial(43));
+        mf.replace(Field::ReplySerial(43));
         assert_eq!(mf.len(), 1);
     }
 }

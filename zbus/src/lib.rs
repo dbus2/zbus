@@ -41,26 +41,62 @@ pub use dbus_error::*;
 mod error;
 pub use error::*;
 
-mod address;
-pub use address::*;
+pub mod address;
+pub use address::Address;
+
+#[deprecated(note = "Use `address::TcpAddress` instead")]
+#[doc(hidden)]
+pub use address::TcpAddress;
+#[deprecated(note = "Use `address::TcpAddressFamily` instead")]
+#[doc(hidden)]
+pub use address::TcpAddressFamily;
+#[cfg(any(
+    all(feature = "vsock", not(feature = "tokio")),
+    feature = "tokio-vsock"
+))]
+#[deprecated(note = "Use `address::VsockAddress` instead")]
+#[doc(hidden)]
+pub use address::VsockAddress;
 
 mod guid;
 pub use guid::*;
 
-mod message;
-pub use message::*;
+pub mod message;
+pub use message::Message;
 
-mod message_builder;
-pub use message_builder::*;
-
-mod message_header;
-pub use message_header::*;
-
-mod message_field;
-pub use message_field::*;
-
-mod message_fields;
-pub use message_fields::*;
+#[deprecated(note = "Use `message::Builder` instead")]
+#[doc(hidden)]
+pub use message::Builder as MessageBuilder;
+#[deprecated(note = "Use `message::EndianSig` instead")]
+#[doc(hidden)]
+pub use message::EndianSig;
+#[deprecated(note = "Use `message::Field` instead")]
+#[doc(hidden)]
+pub use message::Field as MessageField;
+#[deprecated(note = "Use `message::FieldCode` instead")]
+#[doc(hidden)]
+pub use message::FieldCode as MessageFieldCode;
+#[deprecated(note = "Use `message::Fields` instead")]
+#[doc(hidden)]
+pub use message::Fields as MessageFields;
+#[deprecated(note = "Use `message::Flags` instead")]
+#[doc(hidden)]
+pub use message::Flags as MessageFlags;
+#[deprecated(note = "Use `message::Header` instead")]
+#[doc(hidden)]
+pub use message::Header as MessageHeader;
+#[deprecated(note = "Use `message::PrimaryHeader` instead")]
+#[doc(hidden)]
+pub use message::PrimaryHeader as MessagePrimaryHeader;
+#[deprecated(note = "Use `message::Sequence` instead")]
+#[doc(hidden)]
+pub use message::Sequence as MessageSequence;
+#[deprecated(note = "Use `message::Type` instead")]
+#[doc(hidden)]
+pub use message::Type as MessageType;
+#[deprecated(note = "Use `message::NATIVE_ENDIAN_SIG` instead")]
+#[doc(hidden)]
+pub use message::NATIVE_ENDIAN_SIG;
 
 mod handshake;
 pub use handshake::AuthMechanism;
@@ -72,23 +108,70 @@ mod connection_builder;
 pub use connection_builder::*;
 mod message_stream;
 pub use message_stream::*;
-mod object_server;
-pub use object_server::*;
-mod proxy;
-pub use proxy::*;
-mod proxy_builder;
-pub use proxy_builder::*;
-mod signal_context;
-pub use signal_context::*;
-mod interface;
-pub use interface::*;
 mod abstractions;
 pub use abstractions::*;
-mod match_rule;
-pub use match_rule::*;
-mod match_rule_builder;
-pub use match_rule_builder::*;
+
+pub mod match_rule;
+pub use match_rule::{MatchRule, OwnedMatchRule};
+
+#[deprecated(note = "Use `match_rule::Builder` instead")]
+#[doc(hidden)]
+pub use match_rule::Builder as MatchRuleBuilder;
+#[deprecated(note = "Use `match_rule::PathSpec` instead")]
+#[doc(hidden)]
+pub use match_rule::PathSpec as MatchRulePathSpec;
+
 mod socket_reader;
+
+pub mod proxy;
+pub use proxy::Proxy;
+
+#[deprecated(note = "Use `proxy::Builder` instead")]
+#[doc(hidden)]
+pub use proxy::Builder as ProxyBuilder;
+#[deprecated(note = "Use `proxy::CacheProperties` instead")]
+#[doc(hidden)]
+pub use proxy::CacheProperties;
+#[deprecated(note = "Use `proxy::MethodFlags` instead")]
+#[doc(hidden)]
+pub use proxy::MethodFlags;
+#[deprecated(note = "Use `proxy::OwnerChangedStream` instead")]
+#[doc(hidden)]
+pub use proxy::OwnerChangedStream;
+#[deprecated(note = "Use `proxy::PropertyChanged` instead")]
+#[doc(hidden)]
+pub use proxy::PropertyChanged;
+#[deprecated(note = "Use `proxy::PropertyStream` instead")]
+#[doc(hidden)]
+pub use proxy::PropertyStream;
+#[deprecated(note = "Use `proxy::ProxyDefault` instead")]
+#[doc(hidden)]
+pub use proxy::ProxyDefault;
+
+pub mod object_server;
+pub use object_server::ObjectServer;
+
+#[deprecated(note = "Use `object_server::DispatchResult` instead")]
+#[doc(hidden)]
+pub use object_server::DispatchResult;
+#[deprecated(note = "Use `object_server::Interface` instead")]
+#[doc(hidden)]
+pub use object_server::Interface;
+#[deprecated(note = "Use `object_server::InterfaceDeref` instead")]
+#[doc(hidden)]
+pub use object_server::InterfaceDeref;
+#[deprecated(note = "Use `object_server::InterfaceDerefMut` instead")]
+#[doc(hidden)]
+pub use object_server::InterfaceDerefMut;
+#[deprecated(note = "Use `object_server::InterfaceRef` instead")]
+#[doc(hidden)]
+pub use object_server::InterfaceRef;
+#[deprecated(note = "Use `object_server::ResponseDispatchNotifier` instead")]
+#[doc(hidden)]
+pub use object_server::ResponseDispatchNotifier;
+#[deprecated(note = "Use `object_server::SignalContext` instead")]
+#[doc(hidden)]
+pub use object_server::SignalContext;
 
 mod utils;
 pub use utils::*;
@@ -156,7 +239,9 @@ mod tests {
     use crate::{
         blocking::{self, MessageIterator},
         fdo::{RequestNameFlags, RequestNameReply},
-        Connection, Message, MessageFlags, Result, SignalContext,
+        message::{Flags, Message},
+        object_server::SignalContext,
+        Connection, Result,
     };
 
     fn is_gdbus_test() -> bool {
@@ -178,7 +263,7 @@ mod tests {
         assert_eq!(m.interface().unwrap(), "org.freedesktop.DBus.Peer");
         assert_eq!(m.member().unwrap(), "GetMachineId");
         m.modify_primary_header(|primary| {
-            primary.set_flags(BitFlags::from(MessageFlags::NoAutoStart));
+            primary.set_flags(BitFlags::from(Flags::NoAutoStart));
             primary.serial_num_or_init(|| 11);
 
             Ok(())
@@ -186,7 +271,7 @@ mod tests {
         .unwrap();
         let primary = m.primary_header();
         assert!(*primary.serial_num().unwrap() == 11);
-        assert!(primary.flags() == MessageFlags::NoAutoStart);
+        assert!(primary.flags() == Flags::NoAutoStart);
     }
 
     #[test]
@@ -266,10 +351,14 @@ mod tests {
             )
             .unwrap();
 
-        assert!(reply
+        if reply
             .body_signature()
             .map(|s| s == <Fd>::signature())
-            .unwrap());
+            .is_err()
+        {
+            // may throw org.freedesktop.DBus.Error.InteractiveAuthorizationRequired
+            return;
+        }
 
         let fd: Fd = reply.body().unwrap();
         let _fds = reply.take_fds();
@@ -879,7 +968,7 @@ mod tests {
             let msg_header = msg.header()?;
 
             match msg_header.message_type()? {
-                zbus::MessageType::MethodCall => {
+                zbus::message::Type::MethodCall => {
                     connection.reply(&msg, &()).await?;
 
                     break;

@@ -15,13 +15,18 @@ use tracing::{debug, instrument};
 use zbus::{
     block_on,
     fdo::{ObjectManager, ObjectManagerProxy},
-    DBusError, MessageBuilder, MessageStream, ResponseDispatchNotifier,
+    message::{self, Builder},
+    object_server::ResponseDispatchNotifier,
+    DBusError, MessageStream,
 };
 use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Str, Type, Value};
 
 use zbus::{
-    dbus_interface, dbus_proxy, CacheProperties, Connection, ConnectionBuilder, InterfaceRef,
-    MessageHeader, MessageType, ObjectServer, SignalContext,
+    dbus_interface, dbus_proxy,
+    message::Header,
+    object_server::{InterfaceRef, SignalContext},
+    proxy::CacheProperties,
+    Connection, ConnectionBuilder, ObjectServer,
 };
 
 #[derive(Debug, Deserialize, Serialize, Type)]
@@ -164,9 +169,9 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    fn test_header(&self, #[zbus(header)] header: MessageHeader<'_>) {
+    fn test_header(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestHeader` called.");
-        assert_eq!(header.message_type().unwrap(), MessageType::MethodCall);
+        assert_eq!(header.message_type().unwrap(), message::Type::MethodCall);
         assert_eq!(header.member().unwrap().unwrap(), "TestHeader");
     }
 
@@ -186,7 +191,7 @@ impl MyIfaceImpl {
     fn test_single_struct_arg(
         &self,
         arg: ArgStructTest,
-        #[zbus(header)] header: MessageHeader<'_>,
+        #[zbus(header)] header: Header<'_>,
     ) -> zbus::fdo::Result<()> {
         debug!("`TestSingleStructArg` called.");
         assert_eq!(header.signature()?.unwrap(), "(is)");
@@ -368,42 +373,42 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    fn test_no_reply(&self, #[zbus(header)] header: MessageHeader<'_>) {
+    fn test_no_reply(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestNoReply` called");
         assert_eq!(
             header.message_type().unwrap(),
-            zbus::MessageType::MethodCall
+            zbus::message::Type::MethodCall
         );
         assert!(header
             .primary()
             .flags()
-            .contains(zbus::MessageFlags::NoReplyExpected));
+            .contains(zbus::message::Flags::NoReplyExpected));
     }
 
     #[instrument]
-    fn test_no_autostart(&self, #[zbus(header)] header: MessageHeader<'_>) {
+    fn test_no_autostart(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestNoAutostart` called");
         assert_eq!(
             header.message_type().unwrap(),
-            zbus::MessageType::MethodCall
+            zbus::message::Type::MethodCall
         );
         assert!(header
             .primary()
             .flags()
-            .contains(zbus::MessageFlags::NoAutoStart));
+            .contains(zbus::message::Flags::NoAutoStart));
     }
 
     #[instrument]
-    fn test_interactive_auth(&self, #[zbus(header)] header: MessageHeader<'_>) {
+    fn test_interactive_auth(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestInteractiveAuth` called");
         assert_eq!(
             header.message_type().unwrap(),
-            zbus::MessageType::MethodCall
+            zbus::message::Type::MethodCall
         );
         assert!(header
             .primary()
             .flags()
-            .contains(zbus::MessageFlags::AllowInteractiveAuth));
+            .contains(zbus::message::Flags::AllowInteractiveAuth));
     }
 
     #[dbus_interface(signal)]
@@ -431,7 +436,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     // Use low-level API for `TestResponseNotify` because we need to ensure that the signal is
     // always received after the response.
     let mut stream = MessageStream::from(&conn);
-    let method = MessageBuilder::method_call("/org/freedesktop/MyService", "TestResponseNotify")?
+    let method = Builder::method_call("/org/freedesktop/MyService", "TestResponseNotify")?
         .interface("org.freedesktop.MyIface")?
         .destination("org.freedesktop.MyService")?
         .build(&())?;
@@ -442,10 +447,11 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         let msg = stream.try_next().await?.unwrap();
 
         let hdr = msg.header()?;
-        if hdr.message_type()? == MessageType::MethodReturn && hdr.reply_serial()? == Some(serial) {
+        if hdr.message_type()? == message::Type::MethodReturn && hdr.reply_serial()? == Some(serial)
+        {
             assert!(!signal_received);
             method_returned = true;
-        } else if hdr.message_type()? == MessageType::Signal
+        } else if hdr.message_type()? == message::Type::Signal
             && hdr.interface()?.unwrap() == "org.freedesktop.MyService"
             && hdr.member()?.unwrap() == "TestResponseNotified"
         {

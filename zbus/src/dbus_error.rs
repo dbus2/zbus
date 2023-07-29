@@ -1,4 +1,8 @@
-use crate::{names::ErrorName, Message, MessageHeader, Result};
+use crate::{
+    message::{Header, Message},
+    names::ErrorName,
+    Result,
+};
 
 /// A trait that needs to be implemented by error types to be returned from D-Bus methods.
 ///
@@ -10,7 +14,7 @@ use crate::{names::ErrorName, Message, MessageHeader, Result};
 /// [dm]: derive.DBusError.html
 pub trait DBusError {
     /// Generate an error reply message for the given method call.
-    fn create_reply(&self, msg: &MessageHeader<'_>) -> Result<Message>;
+    fn create_reply(&self, msg: &Header<'_>) -> Result<Message>;
 
     // The name of the error.
     //

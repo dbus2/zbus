@@ -29,11 +29,12 @@ use crate::{
     async_lock::Mutex,
     blocking,
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
+    message::{Builder, Flags, Message, Type},
+    proxy::CacheProperties,
     raw::{Connection as RawConnection, Socket},
     socket_reader::SocketReader,
-    Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule,
-    Message, MessageBuilder, MessageFlags, MessageStream, MessageType, ObjectServer,
-    OwnedMatchRule, Result, Task,
+    Authenticated, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule, MessageStream,
+    ObjectServer, OwnedMatchRule, Result, Task,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -233,7 +234,7 @@ impl Future for PendingMethodCall {
 
 impl OrderedFuture for PendingMethodCall {
     type Output = Result<Arc<Message>>;
-    type Ordering = zbus::MessageSequence;
+    type Ordering = zbus::message::Sequence;
 
     fn poll_before(
         self: Pin<&mut Self>,
@@ -252,8 +253,8 @@ impl OrderedFuture for PendingMethodCall {
                             continue;
                         }
                         let res = match msg.message_type() {
-                            MessageType::Error => Err(msg.into()),
-                            MessageType::MethodReturn => Ok(msg),
+                            Type::Error => Err(msg.into()),
+                            Type::MethodReturn => Ok(msg),
                             _ => continue,
                         };
                         this.stream = None;
@@ -351,7 +352,7 @@ impl Connection {
         path: P,
         interface: Option<I>,
         method_name: M,
-        flags: BitFlags<MessageFlags>,
+        flags: BitFlags<Flags>,
         body: &B,
     ) -> Result<Option<PendingMethodCall>>
     where
@@ -365,7 +366,7 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let mut builder = MessageBuilder::method_call(path, method_name)?;
+        let mut builder = Builder::method_call(path, method_name)?;
         if let Some(sender) = self.unique_name() {
             builder = builder.sender(sender)?
         }
@@ -388,7 +389,7 @@ impl Connection {
             self,
         ));
         let serial = self.send_message(msg).await?;
-        if flags.contains(MessageFlags::NoReplyExpected) {
+        if flags.contains(Flags::NoReplyExpected) {
             Ok(None)
         } else {
             Ok(Some(PendingMethodCall { stream, serial }))
@@ -472,7 +473,7 @@ impl Connection {
     /// Returns the message serial number.
     pub async fn reply_dbus_error(
         &self,
-        call: &zbus::MessageHeader<'_>,
+        call: &zbus::message::Header<'_>,
         err: impl DBusError,
     ) -> Result<u32> {
         let m = err.create_reply(call);
@@ -950,7 +951,7 @@ impl Connection {
                 async move {
                     let mut stream = match weak_conn.upgrade() {
                         Some(conn) => {
-                            let mut builder = MatchRule::builder().msg_type(MessageType::MethodCall);
+                            let mut builder = MatchRule::builder().msg_type(Type::MethodCall);
                             if let Some(unique_name) = conn.unique_name() {
                                 builder = builder.destination(&**unique_name).expect("unique name");
                             }
@@ -1066,13 +1067,13 @@ impl Connection {
         }
 
         let mut subscriptions = self.inner.subscriptions.lock().await;
-        let msg_type = rule.msg_type().unwrap_or(MessageType::Signal);
+        let msg_type = rule.msg_type().unwrap_or(Type::Signal);
         match subscriptions.entry(rule.clone()) {
             Entry::Vacant(e) => {
                 let max_queued = max_queued.unwrap_or(DEFAULT_MAX_QUEUED);
                 let (sender, mut receiver) = broadcast(max_queued);
                 receiver.set_await_active(false);
-                if self.is_bus() && msg_type == MessageType::Signal {
+                if self.is_bus() && msg_type == Type::Signal {
                     fdo::DBusProxy::builder(self)
                         .cache_properties(CacheProperties::No)
                         .build()
@@ -1108,14 +1109,14 @@ impl Connection {
         let mut subscriptions = self.inner.subscriptions.lock().await;
         // TODO when it becomes stable, use HashMap::raw_entry and only require expr: &str
         // (both here and in add_match)
-        let msg_type = rule.msg_type().unwrap_or(MessageType::Signal);
+        let msg_type = rule.msg_type().unwrap_or(Type::Signal);
         match subscriptions.entry(rule) {
             Entry::Vacant(_) => Ok(false),
             Entry::Occupied(mut e) => {
                 let rule = e.key().inner().clone();
                 e.get_mut().0 -= 1;
                 if e.get().0 == 0 {
-                    if self.is_bus() && msg_type == MessageType::Signal {
+                    if self.is_bus() && msg_type == Type::Signal {
                         fdo::DBusProxy::builder(self)
                             .cache_properties(CacheProperties::No)
                             .build()
@@ -1185,14 +1186,11 @@ impl Connection {
         let (method_return_sender, method_return_receiver) =
             create_msg_broadcast_channel!(DEFAULT_MAX_METHOD_RETURN_QUEUED);
         let rule = MatchRule::builder()
-            .msg_type(MessageType::MethodReturn)
+            .msg_type(Type::MethodReturn)
             .build()
             .into();
         msg_senders.insert(Some(rule), method_return_sender.clone());
-        let rule = MatchRule::builder()
-            .msg_type(MessageType::Error)
-            .build()
-            .into();
+        let rule = MatchRule::builder().msg_type(Type::Error).build().into();
         msg_senders.insert(Some(rule), method_return_sender);
         let msg_senders = Arc::new(Mutex::new(msg_senders));
         let subscriptions = Mutex::new(HashMap::new());

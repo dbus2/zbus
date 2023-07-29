@@ -1,3 +1,5 @@
+//! The client-side proxy API.
+
 use enumflags2::{bitflags, BitFlags};
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
@@ -21,9 +23,12 @@ use zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 use crate::{
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesChangedStream, PropertiesProxy},
-    AsyncDrop, CacheProperties, Connection, Error, Executor, MatchRule, Message, MessageFlags,
-    MessageSequence, MessageStream, MessageType, OwnedMatchRule, ProxyBuilder, Result, Task,
+    message::{Flags, Message, Sequence, Type},
+    AsyncDrop, Connection, Error, Executor, MatchRule, MessageStream, OwnedMatchRule, Result, Task,
 };
+
+mod builder;
+pub use builder::{Builder, CacheProperties, ProxyDefault};
 
 /// A client-side interface proxy.
 ///
@@ -518,7 +523,7 @@ impl<'a> ProxyInner<'a> {
 
         let conn = &self.inner_without_borrows.conn;
         let signal_rule: OwnedMatchRule = MatchRule::builder()
-            .msg_type(MessageType::Signal)
+            .msg_type(Type::Signal)
             .sender("org.freedesktop.DBus")?
             .path("/org/freedesktop/DBus")?
             .interface("org.freedesktop.DBus")?
@@ -566,7 +571,7 @@ impl<'a> Proxy<'a> {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
     {
-        ProxyBuilder::new_bare(conn)
+        Builder::new_bare(conn)
             .destination(destination)?
             .path(path)?
             .interface(interface)?
@@ -590,7 +595,7 @@ impl<'a> Proxy<'a> {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
     {
-        ProxyBuilder::new_bare(&conn)
+        Builder::new_bare(&conn)
             .destination(destination)?
             .path(path)?
             .interface(interface)?
@@ -856,10 +861,7 @@ impl<'a> Proxy<'a> {
         B: serde::ser::Serialize + zvariant::DynamicType,
         R: serde::de::DeserializeOwned + zvariant::Type,
     {
-        let flags = flags
-            .iter()
-            .map(MessageFlags::from)
-            .collect::<BitFlags<_>>();
+        let flags = flags.iter().map(Flags::from).collect::<BitFlags<_>>();
         match self
             .inner
             .inner_without_borrows
@@ -1039,7 +1041,7 @@ pub enum MethodFlags {
 
 assert_impl_all!(MethodFlags: Send, Sync, Unpin);
 
-impl From<MethodFlags> for MessageFlags {
+impl From<MethodFlags> for Flags {
     fn from(method_flag: MethodFlags) -> Self {
         match method_flag {
             MethodFlags::NoReplyExpected => Self::NoReplyExpected,
@@ -1105,7 +1107,7 @@ impl<'a> SignalStream<'a> {
         args: &[(u8, &str)],
     ) -> Result<SignalStream<'a>> {
         let mut rule_builder = MatchRule::builder()
-            .msg_type(MessageType::Signal)
+            .msg_type(Type::Signal)
             .sender(proxy.destination())?
             .path(proxy.path())?
             .interface(proxy.interface())?;
@@ -1130,7 +1132,7 @@ impl<'a> SignalStream<'a> {
                 use ordered_stream::OrderedStreamExt;
 
                 let name_owner_changed_rule = MatchRule::builder()
-                    .msg_type(MessageType::Signal)
+                    .msg_type(Type::Signal)
                     .sender("org.freedesktop.DBus")?
                     .path("/org/freedesktop/DBus")?
                     .interface("org.freedesktop.DBus")?
@@ -1261,7 +1263,7 @@ impl<'a> stream::Stream for SignalStream<'a> {
 
 impl<'a> OrderedStream for SignalStream<'a> {
     type Data = Arc<Message>;
-    type Ordering = MessageSequence;
+    type Ordering = Sequence;
 
     fn poll_next_before(
         self: Pin<&mut Self>,
@@ -1319,7 +1321,8 @@ impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
 mod tests {
     use super::*;
     use crate::{
-        dbus_interface, dbus_proxy, utils::block_on, AsyncDrop, ConnectionBuilder, SignalContext,
+        dbus_interface, dbus_proxy, object_server::SignalContext, utils::block_on, AsyncDrop,
+        ConnectionBuilder,
     };
     use futures_util::StreamExt;
     use ntest::timeout;
@@ -1339,7 +1342,7 @@ mod tests {
         let unique_name = dest_conn.unique_name().unwrap().clone();
 
         let well_known = "org.freedesktop.zbus.async.ProxySignalStreamTest";
-        let proxy: Proxy<'_> = ProxyBuilder::new_bare(&conn)
+        let proxy: Proxy<'_> = Builder::new_bare(&conn)
             .destination(well_known)?
             .path("/does/not/matter")?
             .interface("does.not.matter")?

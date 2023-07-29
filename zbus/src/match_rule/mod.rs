@@ -1,3 +1,5 @@
+//! Bus match rule API.
+
 use core::panic;
 use std::{convert::TryFrom, ops::Deref};
 
@@ -6,10 +8,14 @@ use static_assertions::assert_impl_all;
 use zvariant::Structure;
 
 use crate::{
+    message::Type,
     names::{BusName, InterfaceName, MemberName, UniqueName},
-    zvariant::{ObjectPath, Str, Type},
-    Error, MatchRuleBuilder, MessageType, Result,
+    zvariant::{ObjectPath, Str, Type as VariantType},
+    Error, Result,
 };
+
+mod builder;
+pub use builder::Builder;
 
 /// A bus match rule for subscribing to specific messages.
 ///
@@ -27,7 +33,7 @@ use crate::{
 ///
 /// // Let's take the most typical example of match rule to subscribe to properties' changes:
 /// let rule = MatchRule::builder()
-///     .msg_type(zbus::MessageType::Signal)
+///     .msg_type(zbus::message::Type::Signal)
 ///     .sender("org.freedesktop.DBus")?
 ///     .interface("org.freedesktop.DBus.Properties")?
 ///     .member("PropertiesChanged")?
@@ -52,7 +58,7 @@ use crate::{
 ///
 /// // Now for `ObjectManager::InterfacesAdded` signal.
 /// let rule = MatchRule::builder()
-///     .msg_type(zbus::MessageType::Signal)
+///     .msg_type(zbus::message::Type::Signal)
 ///     .sender("org.zbus")?
 ///     .interface("org.freedesktop.DBus.ObjectManager")?
 ///     .member("InterfacesAdded")?
@@ -81,14 +87,14 @@ use crate::{
 /// The `PartialEq` implementation assumes arguments in both rules are in the same order.
 ///
 /// [mrs]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-bus-routing-match-rules
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Type)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, VariantType)]
 #[zvariant(signature = "s")]
 pub struct MatchRule<'m> {
-    pub(crate) msg_type: Option<MessageType>,
+    pub(crate) msg_type: Option<Type>,
     pub(crate) sender: Option<BusName<'m>>,
     pub(crate) interface: Option<InterfaceName<'m>>,
     pub(crate) member: Option<MemberName<'m>>,
-    pub(crate) path_spec: Option<MatchRulePathSpec<'m>>,
+    pub(crate) path_spec: Option<PathSpec<'m>>,
     pub(crate) destination: Option<UniqueName<'m>>,
     pub(crate) args: Vec<(u8, Str<'m>)>,
     pub(crate) arg_paths: Vec<(u8, ObjectPath<'m>)>,
@@ -99,9 +105,9 @@ pub struct MatchRule<'m> {
 assert_impl_all!(MatchRule<'_>: Send, Sync, Unpin);
 
 impl<'m> MatchRule<'m> {
-    /// Create a builder for `MatchRuleBuilder`.
-    pub fn builder() -> MatchRuleBuilder<'m> {
-        MatchRuleBuilder::new()
+    /// Create a builder for `MatchRule`.
+    pub fn builder() -> Builder<'m> {
+        Builder::new()
     }
 
     /// The sender, if set.
@@ -110,7 +116,7 @@ impl<'m> MatchRule<'m> {
     }
 
     /// The message type, if set.
-    pub fn msg_type(&self) -> Option<MessageType> {
+    pub fn msg_type(&self) -> Option<Type> {
         self.msg_type
     }
 
@@ -125,7 +131,7 @@ impl<'m> MatchRule<'m> {
     }
 
     /// The path or path namespace, if set.
-    pub fn path_spec(&self) -> Option<&MatchRulePathSpec<'_>> {
+    pub fn path_spec(&self) -> Option<&PathSpec<'_>> {
         self.path_spec.as_ref()
     }
 
@@ -212,7 +218,7 @@ impl<'m> MatchRule<'m> {
     ///   always a unique name.
     /// * `destination` in the rule when `destination` on the `msg` is a well-known name. The
     ///   `destination` on match rule is always a unique name.
-    pub fn matches(&self, msg: &zbus::Message) -> Result<bool> {
+    pub fn matches(&self, msg: &zbus::message::Message) -> Result<bool> {
         let hdr = msg.header()?;
 
         // Start with message type.
@@ -271,13 +277,11 @@ impl<'m> MatchRule<'m> {
                 None => return Ok(false),
             };
             match path_spec {
-                MatchRulePathSpec::Path(path) if path != &msg_path => return Ok(false),
-                MatchRulePathSpec::PathNamespace(path_ns)
-                    if !msg_path.starts_with(path_ns.as_str()) =>
-                {
+                PathSpec::Path(path) if path != &msg_path => return Ok(false),
+                PathSpec::PathNamespace(path_ns) if !msg_path.starts_with(path_ns.as_str()) => {
                     return Ok(false);
                 }
-                MatchRulePathSpec::Path(_) | MatchRulePathSpec::PathNamespace(_) => (),
+                PathSpec::Path(_) | PathSpec::PathNamespace(_) => (),
             }
         }
 
@@ -337,11 +341,11 @@ impl ToString for MatchRule<'_> {
 
         if let Some(msg_type) = self.msg_type() {
             let type_str = match msg_type {
-                MessageType::Error => "error",
-                MessageType::Invalid => panic!("invalid message type"),
-                MessageType::MethodCall => "method_call",
-                MessageType::MethodReturn => "method_return",
-                MessageType::Signal => "signal",
+                Type::Error => "error",
+                Type::Invalid => panic!("invalid message type"),
+                Type::MethodCall => "method_call",
+                Type::MethodReturn => "method_return",
+                Type::Signal => "signal",
             };
             add_match_rule_string_component(&mut s, "type", type_str);
         }
@@ -359,8 +363,8 @@ impl ToString for MatchRule<'_> {
         }
         if let Some(path_spec) = self.path_spec() {
             let (key, value) = match path_spec {
-                MatchRulePathSpec::Path(path) => ("path", path),
-                MatchRulePathSpec::PathNamespace(ns) => ("path_namespace", ns),
+                PathSpec::Path(path) => ("path", path),
+                PathSpec::PathNamespace(ns) => ("path_namespace", ns),
             };
             add_match_rule_string_component(&mut s, key, value);
         }
@@ -411,10 +415,10 @@ impl<'m> TryFrom<&'m str> for MatchRule<'m> {
             builder = match key {
                 "type" => {
                     let msg_type = match value {
-                        "error" => MessageType::Error,
-                        "method_call" => MessageType::MethodCall,
-                        "method_return" => MessageType::MethodReturn,
-                        "signal" => MessageType::Signal,
+                        "error" => Type::Error,
+                        "method_call" => Type::MethodCall,
+                        "method_return" => Type::MethodReturn,
+                        "signal" => Type::Signal,
                         _ => return Err(Error::InvalidMatchRule),
                     };
                     builder.msg_type(msg_type)
@@ -469,35 +473,33 @@ impl Serialize for MatchRule<'_> {
 
 /// The path or path namespace.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum MatchRulePathSpec<'m> {
+pub enum PathSpec<'m> {
     Path(ObjectPath<'m>),
     PathNamespace(ObjectPath<'m>),
 }
 
-assert_impl_all!(MatchRulePathSpec<'_>: Send, Sync, Unpin);
+assert_impl_all!(PathSpec<'_>: Send, Sync, Unpin);
 
-impl<'m> MatchRulePathSpec<'m> {
+impl<'m> PathSpec<'m> {
     /// Creates an owned clone of `self`.
-    fn to_owned(&self) -> MatchRulePathSpec<'static> {
+    fn to_owned(&self) -> PathSpec<'static> {
         match self {
-            MatchRulePathSpec::Path(path) => MatchRulePathSpec::Path(path.to_owned()),
-            MatchRulePathSpec::PathNamespace(ns) => MatchRulePathSpec::PathNamespace(ns.to_owned()),
+            PathSpec::Path(path) => PathSpec::Path(path.to_owned()),
+            PathSpec::PathNamespace(ns) => PathSpec::PathNamespace(ns.to_owned()),
         }
     }
 
     /// Creates an owned clone of `self`.
-    pub fn into_owned(self) -> MatchRulePathSpec<'static> {
+    pub fn into_owned(self) -> PathSpec<'static> {
         match self {
-            MatchRulePathSpec::Path(path) => MatchRulePathSpec::Path(path.into_owned()),
-            MatchRulePathSpec::PathNamespace(ns) => {
-                MatchRulePathSpec::PathNamespace(ns.into_owned())
-            }
+            PathSpec::Path(path) => PathSpec::Path(path.into_owned()),
+            PathSpec::PathNamespace(ns) => PathSpec::PathNamespace(ns.into_owned()),
         }
     }
 }
 
 /// Owned sibling of [`MatchRule`].
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Type)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, VariantType)]
 pub struct OwnedMatchRule(#[serde(borrow)] MatchRule<'static>);
 
 assert_impl_all!(OwnedMatchRule: Send, Sync, Unpin);

@@ -3,7 +3,7 @@ use futures_util::{
     stream::StreamExt,
 };
 use std::{convert::TryInto, future::ready};
-use zbus::{block_on, fdo, CacheProperties, SignalContext};
+use zbus::{block_on, fdo, object_server::SignalContext, proxy::CacheProperties};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]
@@ -112,8 +112,8 @@ fn test_derive_error() {
 fn test_interface() {
     use serde::{Deserialize, Serialize};
     use zbus::{
+        object_server::Interface,
         zvariant::{Type, Value},
-        Interface,
     };
 
     struct Test<T> {
@@ -238,9 +238,15 @@ fn test_interface() {
             // check compilation
             let c = zbus::Connection::session().await.unwrap();
             let s = c.object_server();
-            let m =
-                zbus::Message::method(None::<()>, None::<()>, "/", None::<()>, "StrU32", &(42,))
-                    .unwrap();
+            let m = zbus::message::Message::method(
+                None::<()>,
+                None::<()>,
+                "/",
+                None::<()>,
+                "StrU32",
+                &(42,),
+            )
+            .unwrap();
             let _ = t.call(&s, &c, &m, "StrU32".try_into().unwrap());
             let ctxt = SignalContext::new(&c, "/does/not/matter").unwrap();
             block_on(Test::<u32>::signal(&ctxt, 23, "ergo sum")).unwrap();
@@ -251,7 +257,7 @@ fn test_interface() {
 mod signal_from_message {
     use super::*;
     use std::sync::Arc;
-    use zbus::MessageBuilder;
+    use zbus::message::Builder;
 
     #[dbus_proxy(
         interface = "org.freedesktop.zbus_macros.Test",
@@ -269,7 +275,7 @@ mod signal_from_message {
     #[test]
     fn signal_u8() {
         let message = Arc::new(
-            MessageBuilder::signal(
+            Builder::signal(
                 "/org/freedesktop/zbus_macros/test",
                 "org.freedesktop.zbus_macros.Test",
                 "SignalU8",
@@ -292,7 +298,7 @@ mod signal_from_message {
     #[test]
     fn signal_string() {
         let message = Arc::new(
-            MessageBuilder::signal(
+            Builder::signal(
                 "/org/freedesktop/zbus_macros/test",
                 "org.freedesktop.zbus_macros.Test",
                 "SignalString",
@@ -315,7 +321,7 @@ mod signal_from_message {
     #[test]
     fn wrong_data() {
         let message = Arc::new(
-            MessageBuilder::signal(
+            Builder::signal(
                 "/org/freedesktop/zbus_macros/test",
                 "org.freedesktop.zbus_macros.Test",
                 "SignalU8",

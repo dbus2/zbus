@@ -2,7 +2,9 @@ use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
 use std::{convert::TryInto, sync::Arc};
 
-use crate::{blocking::Connection, utils::block_on, MatchRule, Message, OwnedMatchRule, Result};
+use crate::{
+    blocking::Connection, message::Message, utils::block_on, MatchRule, OwnedMatchRule, Result,
+};
 
 /// A blocking wrapper of [`crate::MessageStream`].
 ///
@@ -45,7 +47,7 @@ impl MessageIterator {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let conn = Connection::session()?;
     /// let rule = MatchRule::builder()
-    ///     .msg_type(zbus::MessageType::Signal)
+    ///     .msg_type(zbus::message::Type::Signal)
     ///     .sender("org.freedesktop.DBus")?
     ///     .interface("org.freedesktop.DBus")?
     ///     .member("NameOwnerChanged")?

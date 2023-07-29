@@ -262,13 +262,13 @@ pub fn create_proxy(
     let (proxy_struct, connection, builder) = if blocking {
         let connection = quote! { #zbus::blocking::Connection };
         let proxy = quote! { #zbus::blocking::Proxy };
-        let builder = quote! { #zbus::blocking::ProxyBuilder };
+        let builder = quote! { #zbus::blocking::proxy::Builder };
 
         (proxy, connection, builder)
     } else {
         let connection = quote! { #zbus::Connection };
         let proxy = quote! { #zbus::Proxy };
-        let builder = quote! { #zbus::ProxyBuilder };
+        let builder = quote! { #zbus::proxy::Builder };
 
         (proxy, connection, builder)
     };
@@ -349,7 +349,7 @@ pub fn create_proxy(
         (Some(path), Some(svc)) => {
             let builder_new = quote! { #builder::new(conn) };
             let proxydefault_impl = quote! {
-                impl<'a> #zbus::ProxyDefault for #proxy_name<'a> {
+                impl<'a> #zbus::proxy::ProxyDefault for #proxy_name<'a> {
                     const INTERFACE: &'static str = #iface_name;
                     const DESTINATION: &'static str = #svc;
                     const PATH: &'static str = #path;
@@ -380,10 +380,10 @@ pub fn create_proxy(
                 let mut builder = #builder_new;
                 if #has_properties {
                     let uncached = vec![#(#uncached_properties),*];
-                    builder.cache_properties(#zbus::CacheProperties::default())
+                    builder.cache_properties(#zbus::proxy::CacheProperties::default())
                            .uncached_properties(&uncached)
                 } else {
-                    builder.cache_properties(#zbus::CacheProperties::No)
+                    builder.cache_properties(#zbus::proxy::CacheProperties::No)
                 }
             }
 
@@ -503,29 +503,30 @@ fn gen_proxy_method_call(
 
     let method_flags = match (no_reply, no_autostart, allow_interactive_auth) {
         (true, false, false) => Some(quote!(::std::convert::Into::into(
-            zbus::MethodFlags::NoReplyExpected
+            zbus::proxy::MethodFlags::NoReplyExpected
         ))),
         (false, true, false) => Some(quote!(::std::convert::Into::into(
-            zbus::MethodFlags::NoAutoStart
+            zbus::proxy::MethodFlags::NoAutoStart
         ))),
         (false, false, true) => Some(quote!(::std::convert::Into::into(
-            zbus::MethodFlags::AllowInteractiveAuth
+            zbus::proxy::MethodFlags::AllowInteractiveAuth
         ))),
 
         (true, true, false) => Some(quote!(
-            zbus::MethodFlags::NoReplyExpected | zbus::MethodFlags::NoAutoStart
+            zbus::proxy::MethodFlags::NoReplyExpected | zbus::proxy::MethodFlags::NoAutoStart
         )),
         (true, false, true) => Some(quote!(
-            zbus::MethodFlags::NoReplyExpected | zbus::MethodFlags::AllowInteractiveAuth
+            zbus::proxy::MethodFlags::NoReplyExpected
+                | zbus::proxy::MethodFlags::AllowInteractiveAuth
         )),
         (false, true, true) => Some(quote!(
-            zbus::MethodFlags::NoAutoStart | zbus::MethodFlags::AllowInteractiveAuth
+            zbus::proxy::MethodFlags::NoAutoStart | zbus::proxy::MethodFlags::AllowInteractiveAuth
         )),
 
         (true, true, true) => Some(quote!(
-            zbus::MethodFlags::NoReplyExpected
-                | zbus::MethodFlags::NoAutoStart
-                | zbus::MethodFlags::AllowInteractiveAuth
+            zbus::proxy::MethodFlags::NoReplyExpected
+                | zbus::proxy::MethodFlags::NoAutoStart
+                | zbus::proxy::MethodFlags::AllowInteractiveAuth
         )),
         _ => None,
     };
@@ -719,10 +720,10 @@ fn gen_proxy_property(
         let (proxy_name, prop_stream) = if *blocking {
             (
                 "zbus::blocking::Proxy",
-                quote! { #zbus::blocking::PropertyIterator },
+                quote! { #zbus::blocking::proxy::PropertyIterator },
             )
         } else {
-            ("zbus::Proxy", quote! { #zbus::PropertyStream })
+            ("zbus::Proxy", quote! { #zbus::proxy::PropertyStream })
         };
 
         let receive_method = match emits_changed_signal {
@@ -877,7 +878,7 @@ fn gen_proxy_signal(
             "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.receive_signal_with_args",
             "Iterator",
             "https://doc.rust-lang.org/std/iter/trait.Iterator.html",
-            quote! { blocking::SignalIterator },
+            quote! { blocking::proxy::SignalIterator },
         )
     } else {
         (
@@ -886,7 +887,7 @@ fn gen_proxy_signal(
             "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.receive_signal_with_args",
             "Stream",
             "https://docs.rs/futures/0.3.15/futures/stream/trait.Stream.html",
-            quote! { SignalStream },
+            quote! { proxy::SignalStream },
         )
     };
     let receiver_name = format_ident!("receive_{snake_case_name}");
@@ -941,24 +942,24 @@ fn gen_proxy_signal(
         quote! {
             #[doc = #args_struct_gen_doc]
             #[derive(Debug, Clone)]
-            pub struct #signal_name_ident(::std::sync::Arc<#zbus::Message>);
+            pub struct #signal_name_ident(::std::sync::Arc<#zbus::message::Message>);
 
             impl ::std::ops::Deref for #signal_name_ident {
-                type Target = #zbus::Message;
+                type Target = #zbus::message::Message;
 
-                fn deref(&self) -> &#zbus::Message {
+                fn deref(&self) -> &#zbus::message::Message {
                     &self.0
                 }
             }
 
-            impl ::std::convert::AsRef<::std::sync::Arc<#zbus::Message>> for #signal_name_ident {
-                fn as_ref(&self) -> &::std::sync::Arc<#zbus::Message> {
+            impl ::std::convert::AsRef<::std::sync::Arc<#zbus::message::Message>> for #signal_name_ident {
+                fn as_ref(&self) -> &::std::sync::Arc<#zbus::message::Message> {
                     &self.0
                 }
             }
 
-            impl ::std::convert::AsRef<#zbus::Message> for #signal_name_ident {
-                fn as_ref(&self) -> &#zbus::Message {
+            impl ::std::convert::AsRef<#zbus::message::Message> for #signal_name_ident {
+                fn as_ref(&self) -> &#zbus::message::Message {
                     &self.0
                 }
             }
@@ -966,10 +967,10 @@ fn gen_proxy_signal(
             impl #signal_name_ident {
                 #[doc = "Try to construct a "]
                 #[doc = #signal_name]
-                #[doc = " from a [::zbus::Message]."]
+                #[doc = " from a [::zbus::message::Message]."]
                 pub fn from_message<M>(msg: M) -> ::std::option::Option<Self>
                 where
-                    M: ::std::convert::Into<::std::sync::Arc<#zbus::Message>>,
+                    M: ::std::convert::Into<::std::sync::Arc<#zbus::message::Message>>,
                 {
                     let msg = msg.into();
                     let message_type = msg.message_type();
@@ -979,7 +980,7 @@ fn gen_proxy_signal(
                     let member = member.as_ref().map(|m| m.as_str());
 
                     match (message_type, interface, member) {
-                        (#zbus::MessageType::Signal, Some(#iface_name), Some(#signal_name)) => Some(Self(msg)),
+                        (#zbus::message::Type::Signal, Some(#iface_name), Some(#signal_name)) => Some(Self(msg)),
                         _ => None,
                     }
                 }
@@ -1037,12 +1038,12 @@ fn gen_proxy_signal(
                 }
             }
 
-            impl #impl_generics ::std::convert::TryFrom<&'s #zbus::Message> for #signal_args #ty_generics
+            impl #impl_generics ::std::convert::TryFrom<&'s #zbus::message::Message> for #signal_args #ty_generics
                 #where_clause
             {
                 type Error = #zbus::Error;
 
-                fn try_from(message: &'s #zbus::Message) -> #zbus::Result<Self> {
+                fn try_from(message: &'s #zbus::message::Message) -> #zbus::Result<Self> {
                     message.body::<(#(#input_types),*)>()
                         .map_err(::std::convert::Into::into)
                         .map(|args| {
@@ -1085,7 +1086,7 @@ fn gen_proxy_signal(
 
             impl #zbus::export::ordered_stream::OrderedStream for #stream_name<'_> {
                 type Data = #signal_name_ident;
-                type Ordering = #zbus::MessageSequence;
+                type Ordering = #zbus::message::Sequence;
 
                 fn poll_next_before(
                     self: ::std::pin::Pin<&mut Self>,

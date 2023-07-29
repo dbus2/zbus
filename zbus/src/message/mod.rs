@@ -1,3 +1,4 @@
+//! D-Bus Message.
 use std::{
     convert::{Into, TryFrom, TryInto},
     fmt,
@@ -17,11 +18,23 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use crate::OwnedFd;
 use crate::{
     utils::padding_for_8_bytes,
-    zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type},
-    EndianSig, Error, MessageBuilder, MessageField, MessageFieldCode, MessageFields, MessageHeader,
-    MessagePrimaryHeader, MessageType, QuickMessageFields, Result, MIN_MESSAGE_SIZE,
-    NATIVE_ENDIAN_SIG,
+    zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type as VariantType},
+    Error, Result,
 };
+
+mod builder;
+pub use builder::Builder;
+
+mod field;
+pub use field::{Field, FieldCode};
+
+mod fields;
+pub use fields::Fields;
+use fields::QuickFields;
+
+pub(crate) mod header;
+use header::MIN_MESSAGE_SIZE;
+pub use header::{EndianSig, Flags, Header, PrimaryHeader, Type, NATIVE_ENDIAN_SIG};
 
 #[cfg(unix)]
 const LOCK_PANIC_MSG: &str = "lock poisoned";
@@ -44,11 +57,11 @@ pub(crate) enum Fds {
 /// Note: the relative ordering of values obtained from distinct [`zbus::Connection`] objects is
 /// not specified; only sequence numbers originating from the same connection should be compared.
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct MessageSequence {
+pub struct Sequence {
     recv_seq: u64,
 }
 
-impl MessageSequence {
+impl Sequence {
     /// A sequence number that is higher than any other; used by errors that terminate a stream.
     pub(crate) const LAST: Self = Self { recv_seq: u64::MAX };
 }
@@ -71,22 +84,22 @@ impl MessageSequence {
 /// [`Connection`]: struct.Connection#method.call_method
 #[derive(Clone)]
 pub struct Message {
-    pub(crate) primary_header: MessagePrimaryHeader,
-    pub(crate) quick_fields: QuickMessageFields,
+    pub(crate) primary_header: PrimaryHeader,
+    pub(crate) quick_fields: QuickFields,
     pub(crate) bytes: Vec<u8>,
     pub(crate) body_offset: usize,
     #[cfg(unix)]
     pub(crate) fds: Arc<RwLock<Fds>>,
-    pub(crate) recv_seq: MessageSequence,
+    pub(crate) recv_seq: Sequence,
 }
 
 assert_impl_all!(Message: Send, Sync, Unpin);
 
 // TODO: Handle non-native byte order: https://github.com/dbus2/zbus/issues/19
 impl Message {
-    /// Create a message of type [`MessageType::MethodCall`].
+    /// Create a message of type [`Type::MethodCall`].
     ///
-    /// [`MessageType::MethodCall`]: enum.MessageType.html#variant.MethodCall
+    /// [`Type::MethodCall`]: enum.Type.html#variant.MethodCall
     pub fn method<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
         sender: Option<S>,
         destination: Option<D>,
@@ -108,7 +121,7 @@ impl Message {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = MessageBuilder::method_call(path, method_name)?;
+        let mut b = Builder::method_call(path, method_name)?;
 
         if let Some(sender) = sender {
             b = b.sender(sender)?;
@@ -122,9 +135,9 @@ impl Message {
         b.build(body)
     }
 
-    /// Create a message of type [`MessageType::Signal`].
+    /// Create a message of type [`Type::Signal`].
     ///
-    /// [`MessageType::Signal`]: enum.MessageType.html#variant.Signal
+    /// [`Type::Signal`]: enum.Type.html#variant.Signal
     pub fn signal<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
         sender: Option<S>,
         destination: Option<D>,
@@ -146,7 +159,7 @@ impl Message {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = MessageBuilder::signal(path, iface, signal_name)?;
+        let mut b = Builder::signal(path, iface, signal_name)?;
 
         if let Some(sender) = sender {
             b = b.sender(sender)?;
@@ -157,25 +170,25 @@ impl Message {
         b.build(body)
     }
 
-    /// Create a message of type [`MessageType::MethodReturn`].
+    /// Create a message of type [`Type::MethodReturn`].
     ///
-    /// [`MessageType::MethodReturn`]: enum.MessageType.html#variant.MethodReturn
+    /// [`Type::MethodReturn`]: enum.Type.html#variant.MethodReturn
     pub fn method_reply<'s, S, B>(sender: Option<S>, call: &Self, body: &B) -> Result<Self>
     where
         S: TryInto<UniqueName<'s>>,
         S::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = MessageBuilder::method_return(&call.header()?)?;
+        let mut b = Builder::method_return(&call.header()?)?;
         if let Some(sender) = sender {
             b = b.sender(sender)?;
         }
         b.build(body)
     }
 
-    /// Create a message of type [`MessageType::MethodError`].
+    /// Create a message of type [`Type::MethodError`].
     ///
-    /// [`MessageType::MethodError`]: enum.MessageType.html#variant.MethodError
+    /// [`Type::MethodError`]: enum.Type.html#variant.MethodError
     pub fn method_error<'s, 'e, S, E, B>(
         sender: Option<S>,
         call: &Self,
@@ -189,7 +202,7 @@ impl Message {
         E::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = MessageBuilder::error(&call.header()?, name)?;
+        let mut b = Builder::error(&call.header()?, name)?;
         if let Some(sender) = sender {
             b = b.sender(sender)?;
         }
@@ -229,14 +242,14 @@ impl Message {
             return Err(Error::IncorrectEndian);
         }
 
-        let (primary_header, fields_len) = MessagePrimaryHeader::read(&bytes)?;
+        let (primary_header, fields_len) = PrimaryHeader::read(&bytes)?;
         let header = zvariant::from_slice(&bytes, dbus_context!(0))?;
         #[cfg(unix)]
         let fds = Arc::new(RwLock::new(Fds::Owned(fds)));
 
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_offset = header_len + padding_for_8_bytes(header_len);
-        let quick_fields = QuickMessageFields::new(&bytes, &header)?;
+        let quick_fields = QuickFields::new(&bytes, &header)?;
 
         Ok(Self {
             primary_header,
@@ -245,7 +258,7 @@ impl Message {
             body_offset,
             #[cfg(unix)]
             fds,
-            recv_seq: MessageSequence { recv_seq },
+            recv_seq: Sequence { recv_seq },
         })
     }
 
@@ -282,21 +295,21 @@ impl Message {
         match self
             .header()?
             .into_fields()
-            .into_field(MessageFieldCode::Signature)
+            .into_field(FieldCode::Signature)
             .ok_or(Error::NoBodySignature)?
         {
-            MessageField::Signature(signature) => Ok(signature),
+            Field::Signature(signature) => Ok(signature),
             _ => Err(Error::InvalidField),
         }
     }
 
-    pub fn primary_header(&self) -> &MessagePrimaryHeader {
+    pub fn primary_header(&self) -> &PrimaryHeader {
         &self.primary_header
     }
 
     pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<()>
     where
-        F: FnMut(&mut MessagePrimaryHeader) -> Result<()>,
+        F: FnMut(&mut PrimaryHeader) -> Result<()>,
     {
         modifier(&mut self.primary_header)?;
 
@@ -309,20 +322,20 @@ impl Message {
     /// Deserialize the header.
     ///
     /// Note: prefer using the direct access methods if possible; they are more efficient.
-    pub fn header(&self) -> Result<MessageHeader<'_>> {
+    pub fn header(&self) -> Result<Header<'_>> {
         zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(Error::from)
     }
 
     /// Deserialize the fields.
     ///
     /// Note: prefer using the direct access methods if possible; they are more efficient.
-    pub fn fields(&self) -> Result<MessageFields<'_>> {
-        let ctxt = dbus_context!(crate::PRIMARY_HEADER_SIZE);
-        zvariant::from_slice(&self.bytes[crate::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
+    pub fn fields(&self) -> Result<Fields<'_>> {
+        let ctxt = dbus_context!(header::PRIMARY_HEADER_SIZE);
+        zvariant::from_slice(&self.bytes[header::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
     }
 
     /// The message type.
-    pub fn message_type(&self) -> MessageType {
+    pub fn message_type(&self) -> Type {
         self.primary_header.msg_type()
     }
 
@@ -349,7 +362,7 @@ impl Message {
     /// Deserialize the body (without checking signature matching).
     pub fn body_unchecked<'d, 'm: 'd, B>(&'m self) -> Result<B>
     where
-        B: serde::de::Deserialize<'d> + Type,
+        B: serde::de::Deserialize<'d> + VariantType,
     {
         {
             #[cfg(unix)]
@@ -373,7 +386,7 @@ impl Message {
     /// # Example
     ///
     /// ```
-    /// # use zbus::Message;
+    /// # use zbus::message::Message;
     /// # (|| -> zbus::Result<()> {
     /// let send_body = (7i32, (2i32, "foo"), vec!["bar"]);
     /// let message = Message::method(None::<&str>, Some("zbus.test"), "/", Some("zbus.test"), "ping", &send_body)?;
@@ -447,7 +460,7 @@ impl Message {
     ///
     /// This is completely unrelated to the serial number on the message, which is set by the peer
     /// and might not be ordered at all.
-    pub fn recv_position(&self) -> MessageSequence {
+    pub fn recv_position(&self) -> Sequence {
         self.recv_seq
     }
 }
@@ -504,16 +517,16 @@ impl fmt::Display for Message {
         };
 
         match ty {
-            Some(MessageType::MethodCall) => {
+            Some(Type::MethodCall) => {
                 write!(f, "Method call")?;
                 if let Some(m) = member {
                     write!(f, " {m}")?;
                 }
             }
-            Some(MessageType::MethodReturn) => {
+            Some(Type::MethodReturn) => {
                 write!(f, "Method return")?;
             }
-            Some(MessageType::Error) => {
+            Some(Type::Error) => {
                 write!(f, "Error")?;
                 if let Some(e) = error_name {
                     write!(f, " {e}")?;
@@ -524,7 +537,7 @@ impl fmt::Display for Message {
                     write!(f, ": {msg}")?;
                 }
             }
-            Some(MessageType::Signal) => {
+            Some(Type::Signal) => {
                 write!(f, "Signal")?;
                 if let Some(m) = member {
                     write!(f, " {m}")?;
