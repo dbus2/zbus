@@ -54,7 +54,7 @@ impl Greeter {
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let greeter = Greeter { count: 0 };
-    let _conn = connection::ConnectionBuilder::session()?
+    let _conn = connection::Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()

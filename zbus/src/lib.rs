@@ -105,9 +105,9 @@ pub(crate) use handshake::*;
 pub mod connection;
 pub use connection::Connection;
 
-#[deprecated(note = "Use `connection::ConnectionBuilder` instead")]
+#[deprecated(note = "Use `connection::Builder` instead")]
 #[doc(hidden)]
-pub use connection::ConnectionBuilder;
+pub use connection::Builder as ConnectionBuilder;
 
 mod message_stream;
 pub use message_stream::*;
@@ -661,7 +661,7 @@ mod tests {
         }
 
         let secret = Secret;
-        let conn = blocking::connection::ConnectionBuilder::session()
+        let conn = blocking::connection::Builder::session()
             .unwrap()
             .serve_at("/org/freedesktop/secrets", secret)
             .unwrap()
@@ -835,7 +835,7 @@ mod tests {
 
         rx.recv().unwrap();
         for _ in 0..2 {
-            let conn = blocking::connection::ConnectionBuilder::session()
+            let conn = blocking::connection::Builder::session()
                 .unwrap()
                 .serve_at("/org/freedesktop/zbus/ComeAndGo", ComeAndGo)
                 .unwrap()
@@ -903,7 +903,7 @@ mod tests {
             fn set_inner_to_true(&self) -> zbus::Result<()>;
         }
 
-        let service = crate::connection::ConnectionBuilder::session()
+        let service = crate::connection::Builder::session()
             .unwrap()
             .serve_at(
                 "/org/freedesktop/zbus/UncachedPropertyTest",
@@ -1005,18 +1005,15 @@ mod tests {
         // side and since the underlying tokio API doesn't provide a `close` method on the sender,
         // the async-channel abstraction was achieving this through calling `close` on receiver,
         // which is behind an async mutex and we end up with a deadlock.
-        use crate::{connection::ConnectionBuilder, MessageStream};
+        use crate::{connection::Builder, MessageStream};
         use futures_util::{stream::TryStreamExt, try_join};
         use tokio::net::UnixStream;
 
         let guid = crate::Guid::generate();
         let (p0, p1) = UnixStream::pair().unwrap();
 
-        let server = ConnectionBuilder::unix_stream(p0)
-            .server(&guid)
-            .p2p()
-            .build();
-        let client = ConnectionBuilder::unix_stream(p1).p2p().build();
+        let server = Builder::unix_stream(p0).server(&guid).p2p().build();
+        let client = Builder::unix_stream(p1).p2p().build();
         let (client, server) = try_join!(client, server).unwrap();
         let mut stream = MessageStream::from(client);
         let next_msg_fut = stream.try_next();
@@ -1036,7 +1033,7 @@ mod tests {
         // a write lock. Thanks to connman for being weird and invalidating the property just before
         // updating it, so this issue could be exposed.
         use futures_util::StreamExt;
-        use zbus::connection::ConnectionBuilder;
+        use zbus::connection::Builder;
 
         struct Station(u64);
 
@@ -1058,7 +1055,7 @@ mod tests {
             #[dbus_proxy(property)]
             fn connected_network(&self) -> zbus::Result<OwnedObjectPath>;
         }
-        let connection = ConnectionBuilder::session()
+        let connection = Builder::session()
             .unwrap()
             .serve_at("/net/connman/iwd/0/33", Station(0))
             .unwrap()

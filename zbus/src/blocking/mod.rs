@@ -46,8 +46,8 @@ pub use proxy::SignalIterator;
 #[doc(hidden)]
 pub use object_server::InterfaceRef;
 
-#[deprecated(note = "Use `connection::ConnectionBuilder` instead")]
+#[deprecated(note = "Use `connection::Builder` instead")]
 #[doc(hidden)]
-pub use connection::ConnectionBuilder;
+pub use connection::Builder;
 
 pub mod fdo;

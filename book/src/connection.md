@@ -30,7 +30,7 @@ is provided via `launchctl getenv DBUS_LAUNCHD_SESSION_BUS_SOCKET` command outpu
 
 ## Using a custom bus address
 
-You may also specify a custom bus with [`ConnectionBuilder::address`] which takes a D-Bus address
+You may also specify a custom bus with [`connection::Builder::address`] which takes a D-Bus address
 [as specified in the specification][dspec].
 
 ## Peer to peer connection
@@ -50,7 +50,7 @@ For example to create a bus-less peer-to-peer connection on Unix, you can do:
 use std::os::unix::net::UnixStream;
 #[cfg(feature = "tokio")]
 use tokio::net::UnixStream;
-use zbus::{connection::ConnectionBuilder as Builder, Guid};
+use zbus::{connection::Builder, Guid};
 
 let guid = Guid::generate();
 let (p0, p1) = UnixStream::pair().unwrap();
@@ -73,7 +73,7 @@ let (client_conn, server_conn) = futures_util::try_join!(
 [`futures::stream::Stream`]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
 [`futures::sink::Sink`]: https://docs.rs/futures/latest/futures/sink/trait.Sink.html
 [`MessageStream`]: https://docs.rs/zbus/3/zbus/struct.MessageStream.html
-[`ConnectionBuilder::address`]: https://docs.rs/zbus/3/zbus/struct.ConnectionBuilder.html#method.address 
+[`Builder::address`]: https://docs.rs/zbus/3/zbus/struct.ConnectionBuilder.html#method.address 
 [dspec]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
 
 [^bus-less] Unless you implemented them, none of the bus methods will exist.

@@ -56,7 +56,7 @@ type Interfaces<'a> =
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 #[must_use]
-pub struct ConnectionBuilder<'a> {
+pub struct Builder<'a> {
     target: Target,
     max_queued: Option<usize>,
     guid: Option<&'a Guid>,
@@ -71,9 +71,9 @@ pub struct ConnectionBuilder<'a> {
     cookie_id: Option<usize>,
 }
 
-assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
+assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
-impl<'a> ConnectionBuilder<'a> {
+impl<'a> Builder<'a> {
     /// Create a builder for the session/user message bus connection.
     pub fn session() -> Result<Self> {
         Ok(Self::new(Target::Address(Address::session()?)))
@@ -92,14 +92,14 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// ```no_run
     /// # use std::error::Error;
-    /// # use zbus::connection::ConnectionBuilder;
+    /// # use zbus::connection::Builder;
     /// # use zbus::block_on;
     /// #
     /// # block_on(async {
     /// let addr = "unix:\
     ///     path=/home/zeenix/.cache/ibus/dbus-ET0Xzrk9,\
     ///     guid=fdd08e811a6c7ebe1fef0d9e647230da";
-    /// let conn = ConnectionBuilder::address(addr)?
+    /// let conn = Builder::address(addr)?
     ///     .build()
     ///     .await?;
     ///
@@ -225,11 +225,11 @@ impl<'a> ConnectionBuilder<'a> {
     ///
     /// ```
     /// # use std::error::Error;
-    /// # use zbus::connection::ConnectionBuilder;
+    /// # use zbus::connection::Builder;
     /// # use zbus::block_on;
     /// #
     /// # block_on(async {
-    /// let conn = ConnectionBuilder::session()?
+    /// let conn = Builder::session()?
     ///     .max_queued(30)
     ///     .build()
     ///     .await?;
@@ -280,8 +280,8 @@ impl<'a> ConnectionBuilder<'a> {
     /// Register a well-known name for this connection on the bus.
     ///
     /// This is similar to [`zbus::Connection::request_name`], except the name is requested as part
-    /// of the connection setup ([`ConnectionBuilder::build`]), immediately after interfaces
-    /// registered (through [`ConnectionBuilder::serve_at`]) are advertised. Typically this is
+    /// of the connection setup ([`Builder::build`]), immediately after interfaces
+    /// registered (through [`Builder::serve_at`]) are advertised. Typically this is
     /// exactly what you want.
     pub fn name<W>(mut self, well_known_name: W) -> Result<Self>
     where

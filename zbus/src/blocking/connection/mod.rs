@@ -16,7 +16,7 @@ use crate::{
 };
 
 mod builder;
-pub use builder::ConnectionBuilder;
+pub use builder::Builder;
 
 /// A blocking wrapper of [`zbus::Connection`].
 ///
@@ -286,7 +286,7 @@ mod tests {
     use uds_windows::UnixStream;
 
     use crate::{
-        blocking::{connection::ConnectionBuilder, MessageIterator},
+        blocking::{connection::Builder, MessageIterator},
         Guid,
     };
 
@@ -300,7 +300,7 @@ mod tests {
 
         let (tx, rx) = std::sync::mpsc::channel();
         let server_thread = thread::spawn(move || {
-            let c = ConnectionBuilder::unix_stream(p0)
+            let c = Builder::unix_stream(p0)
                 .server(&guid)
                 .p2p()
                 .build()
@@ -314,7 +314,7 @@ mod tests {
             val
         });
 
-        let c = ConnectionBuilder::unix_stream(p1).p2p().build().unwrap();
+        let c = Builder::unix_stream(p1).p2p().build().unwrap();
         let listener = c.monitor_activity();
         let mut s = MessageIterator::from(&c);
         tx.send(()).unwrap();

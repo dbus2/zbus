@@ -686,10 +686,8 @@ async fn iface_and_proxy_(p2p: bool) {
             let (p0, p1) = UnixStream::pair().unwrap();
 
             (
-                connection::ConnectionBuilder::unix_stream(p0)
-                    .server(&guid)
-                    .p2p(),
-                connection::ConnectionBuilder::unix_stream(p1).p2p(),
+                connection::Builder::unix_stream(p0).server(&guid).p2p(),
+                connection::Builder::unix_stream(p1).p2p(),
             )
         }
 
@@ -703,10 +701,8 @@ async fn iface_and_proxy_(p2p: bool) {
                 let p0 = listener.incoming().next().unwrap().unwrap();
 
                 (
-                    connection::ConnectionBuilder::tcp_stream(p0)
-                        .server(&guid)
-                        .p2p(),
-                    connection::ConnectionBuilder::tcp_stream(p1).p2p(),
+                    connection::Builder::tcp_stream(p0).server(&guid).p2p(),
+                    connection::Builder::tcp_stream(p1).p2p(),
                 )
             }
 
@@ -718,15 +714,13 @@ async fn iface_and_proxy_(p2p: bool) {
                 let p0 = listener.accept().await.unwrap().0;
 
                 (
-                    connection::ConnectionBuilder::tcp_stream(p0)
-                        .server(&guid)
-                        .p2p(),
-                    connection::ConnectionBuilder::tcp_stream(p1).p2p(),
+                    connection::Builder::tcp_stream(p0).server(&guid).p2p(),
+                    connection::Builder::tcp_stream(p1).p2p(),
                 )
             }
         }
     } else {
-        let service_conn_builder = connection::ConnectionBuilder::session()
+        let service_conn_builder = connection::Builder::session()
             .unwrap()
             .name("org.freedesktop.MyService")
             .unwrap()
@@ -734,7 +728,7 @@ async fn iface_and_proxy_(p2p: bool) {
             .unwrap()
             .name("org.freedesktop.MyService.bar")
             .unwrap();
-        let client_conn_builder = connection::ConnectionBuilder::session().unwrap();
+        let client_conn_builder = connection::Builder::session().unwrap();
 
         (service_conn_builder, client_conn_builder)
     };

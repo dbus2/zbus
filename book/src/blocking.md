@@ -188,7 +188,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    let _handle = connection::ConnectionBuilder::session()?
+    let _handle = connection::Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()?;

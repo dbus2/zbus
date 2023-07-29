@@ -145,7 +145,7 @@ async fn main() -> Result<()> {
 
 A possible footgun here is that you must request the service name **after** you setup the handlers,
 otherwise incoming messages may be lost. Activated services may receive calls (or messages) right
-after taking their name. This is why it's typically better to make use of `ConnectionBuilder` for
+after taking their name. This is why it's typically better to make use of `connection::Builder` for
 setting up your interfaces and requesting names, and not have to care about this:
 
 ```rust,no_run
@@ -163,7 +163,7 @@ setting up your interfaces and requesting names, and not have to care about this
 #
 # #[async_std::main]
 # async fn main() -> Result<()> {
-    let _connection = connection::ConnectionBuilder::session()?
+    let _connection = connection::Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", Greeter)?
         .build()
@@ -206,7 +206,7 @@ synchronize with the interface handlers from outside, thanks to the `event_liste
 (this is just one of the many ways).
 
 ```rust,no_run
-# use zbus::{object_server::SignalContext, connection::ConnectionBuilder, dbus_interface, fdo, Result};
+# use zbus::{object_server::SignalContext, connection::Builder, dbus_interface, fdo, Result};
 #
 use event_listener::Event;
 
@@ -262,7 +262,7 @@ async fn main() -> Result<()> {
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    let _connection = ConnectionBuilder::session()?
+    let _connection = Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()

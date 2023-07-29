@@ -30,7 +30,7 @@ use crate::{
     async_lock::Mutex,
     blocking,
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
-    message::{Builder, Flags, Message, Type},
+    message::{self, Flags, Message, Type},
     proxy::CacheProperties,
     raw::{Connection as RawConnection, Socket},
     socket_reader::SocketReader,
@@ -39,7 +39,7 @@ use crate::{
 };
 
 mod builder;
-pub use builder::ConnectionBuilder;
+pub use builder::Builder;
 
 const DEFAULT_MAX_QUEUED: usize = 64;
 const DEFAULT_MAX_METHOD_RETURN_QUEUED: usize = 8;
@@ -370,7 +370,7 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let mut builder = Builder::method_call(path, method_name)?;
+        let mut builder = message::Builder::method_call(path, method_name)?;
         if let Some(sender) = self.unique_name() {
             builder = builder.sender(sender)?
         }
@@ -504,7 +504,7 @@ impl Connection {
     /// this connection or any of the registered well-known names. If no well-known name is
     /// registered, the method calls destined to all well-known names will be handled.
     ///
-    /// Since names registered through any other means than `Connection` or [`ConnectionBuilder`]
+    /// Since names registered through any other means than `Connection` or [`Builder`]
     /// API are not known to the connection, method calls destined to those names will only be
     /// handled by the associated `ObjectServer` if none of the names are registered through
     /// `Connection*` API. Simply put, either register all the names through `Connection*` API or
@@ -856,7 +856,7 @@ impl Connection {
     /// # // https://gitlab.freedesktop.org/zeenix/zbus/-/jobs/34023494
     /// # #[cfg(all(not(feature = "tokio"), not(target_os = "windows")))]
     /// # {
-    /// use zbus::connection::ConnectionBuilder;
+    /// use zbus::connection::Builder;
     /// use async_std::task::{block_on, spawn};
     ///
     /// # struct SomeIface;
@@ -866,7 +866,7 @@ impl Connection {
     /// # }
     /// #
     /// block_on(async {
-    ///     let conn = ConnectionBuilder::session()
+    ///     let conn = Builder::session()
     ///         .unwrap()
     ///         .internal_executor(false)
     /// #         // This is only for testing a deadlock that used to happen with this combo.
@@ -1231,12 +1231,12 @@ impl Connection {
 
     /// Create a `Connection` to the session/user message bus.
     pub async fn session() -> Result<Self> {
-        ConnectionBuilder::session()?.build().await
+        Builder::session()?.build().await
     }
 
     /// Create a `Connection` to the system-wide message bus.
     pub async fn system() -> Result<Self> {
-        ConnectionBuilder::system()?.build().await
+        Builder::system()?.build().await
     }
 
     /// Returns a listener, notified on various connection activity.
@@ -1504,11 +1504,11 @@ mod tests {
             let p0 = listener.incoming().next().unwrap().unwrap();
 
             (
-                ConnectionBuilder::tcp_stream(p0)
+                Builder::tcp_stream(p0)
                     .server(&guid)
                     .p2p()
                     .auth_mechanisms(&[AuthMechanism::Anonymous]),
-                ConnectionBuilder::tcp_stream(p1).p2p(),
+                Builder::tcp_stream(p1).p2p(),
             )
         };
 
@@ -1520,11 +1520,11 @@ mod tests {
             let p0 = listener.accept().await.unwrap().0;
 
             (
-                ConnectionBuilder::tcp_stream(p0)
+                Builder::tcp_stream(p0)
                     .server(&guid)
                     .p2p()
                     .auth_mechanisms(&[AuthMechanism::Anonymous]),
-                ConnectionBuilder::tcp_stream(p1).p2p(),
+                Builder::tcp_stream(p1).p2p(),
             )
         };
 
@@ -1560,11 +1560,8 @@ mod tests {
         let (p0, p1) = UnixStream::pair().unwrap();
 
         futures_util::try_join!(
-            ConnectionBuilder::unix_stream(p1).p2p().build(),
-            ConnectionBuilder::unix_stream(p0)
-                .server(&guid)
-                .p2p()
-                .build(),
+            Builder::unix_stream(p1).p2p().build(),
+            Builder::unix_stream(p0).server(&guid).p2p().build(),
         )
     }
 
@@ -1601,12 +1598,12 @@ mod tests {
         let server = listener.incoming().next().unwrap().unwrap();
 
         futures_util::try_join!(
-            ConnectionBuilder::vsock_stream(server)
+            Builder::vsock_stream(server)
                 .server(&guid)
                 .p2p()
                 .auth_mechanisms(&[AuthMechanism::Anonymous])
                 .build(),
-            ConnectionBuilder::vsock_stream(client).p2p().build(),
+            Builder::vsock_stream(client).p2p().build(),
         )
     }
 
@@ -1619,12 +1616,12 @@ mod tests {
         let server = listener.incoming().next().await.unwrap().unwrap();
 
         futures_util::try_join!(
-            ConnectionBuilder::vsock_stream(server)
+            Builder::vsock_stream(server)
                 .server(&guid)
                 .p2p()
                 .auth_mechanisms(&[AuthMechanism::Anonymous])
                 .build(),
-            ConnectionBuilder::vsock_stream(client).p2p().build(),
+            Builder::vsock_stream(client).p2p().build(),
         )
     }
 
@@ -1681,7 +1678,7 @@ mod tests {
             fn do_thing(&self) {}
         }
         let name = "dev.peelz.foobar";
-        let connection = ConnectionBuilder::session()
+        let connection = Builder::session()
             .unwrap()
             .name(name)
             .unwrap()
@@ -1767,7 +1764,7 @@ mod tests {
         let guid = Guid::generate();
 
         let (p0, p1) = UnixStream::pair().unwrap();
-        let mut server_builder = ConnectionBuilder::unix_stream(p0)
+        let mut server_builder = Builder::unix_stream(p0)
             .server(&guid)
             .p2p()
             .auth_mechanisms(&[AuthMechanism::Cookie])
@@ -1778,7 +1775,7 @@ mod tests {
         }
 
         futures_util::try_join!(
-            ConnectionBuilder::unix_stream(p1).p2p().build(),
+            Builder::unix_stream(p1).p2p().build(),
             server_builder.build(),
         )
         .map(|_| ())

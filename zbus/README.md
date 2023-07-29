@@ -45,7 +45,7 @@ impl Greeter {
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let greeter = Greeter { count: 0 };
-    let _conn = connection::ConnectionBuilder::session()?
+    let _conn = connection::Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()
@@ -106,7 +106,7 @@ zbus is runtime-agnostic and should work out of the box with different Rust asyn
 in order to achieve that, zbus spawns a thread per connection to handle various internal tasks. If
 that is something you would like to avoid, you need to:
 
-* Use [`connection::ConnectionBuilder`] and disable the `internal_executor` flag.
+* Use [`connection::Builder`] and disable the `internal_executor` flag.
 * Ensure the [internal executor keeps ticking continuously][iektc].
 
 Moreover, by default zbus makes use of [`async-io`] for all I/O, which also launches its own thread
@@ -138,6 +138,6 @@ This mechanism uses a machine-wide mutex however, so only one GDBus session bus 
 [bw]: https://docs.rs/zbus/3.0.0/zbus/blocking/index.html
 [iektc]: https://docs.rs/zbus/3.0.0/zbus/struct.Connection.html#examples-1
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
-[`connection::ConnectionBuilder`]: https://docs.rs/zbus/3.0.0/zbus/struct.ConnectionBuilder.html
+[`connection::Builder`]: https://docs.rs/zbus/3.0.0/zbus/struct.ConnectionBuilder.html
 [`tokio`]: https://crates.io/crates/tokio
 [`async-io`]: https://crates.io/crates/async-io

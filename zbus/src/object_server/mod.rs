@@ -460,7 +460,7 @@ impl ObjectServer {
     /// Register a D-Bus [`Interface`] at a given path. (see the example above)
     ///
     /// Typically you'd want your interfaces to be registered immediately after the associated
-    /// connection is established and therefore use [`zbus::ConnectionBuilder::serve_at`] instead.
+    /// connection is established and therefore use [`zbus::connection::Builder::serve_at`] instead.
     /// However, there are situations where you'd need to register interfaces dynamically and that's
     /// where this method becomes useful.
     ///

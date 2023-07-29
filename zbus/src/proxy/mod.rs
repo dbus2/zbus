@@ -1426,13 +1426,13 @@ mod tests {
         }
 
         let test_iface = TestIface;
-        let server_conn = connection::ConnectionBuilder::session()?
+        let server_conn = connection::Builder::session()?
             .name("org.zbus.Test.MR501")?
             .serve_at("/org/zbus/Test", test_iface)?
             .build()
             .await?;
 
-        let client_conn = connection::ConnectionBuilder::session()?
+        let client_conn = connection::Builder::session()?
             .max_queued(1)
             .build()
             .await?;

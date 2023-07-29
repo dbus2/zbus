@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .expect("Missing param for object path")
                 .try_into()?;
 
-            let connection = connection::ConnectionBuilder::address(&*address)?.build()?;
+            let connection = connection::Builder::address(&*address)?.build()?;
 
             input_src = format!("Interface '{path}' from service '{service}'");
 
