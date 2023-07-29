@@ -7,6 +7,5 @@ members = [
     "zvariant_utils",
     "zbus_macros",
     "zbus_xmlgen",
-    "zbus_polkit",
 ]
 resolver = "2"
