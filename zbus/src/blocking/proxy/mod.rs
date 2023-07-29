@@ -18,7 +18,7 @@ use crate::{
 use crate::fdo;
 
 mod builder;
-pub use builder::ProxyBuilder;
+pub use builder::Builder;
 
 /// A blocking wrapper of [`crate::Proxy`].
 ///

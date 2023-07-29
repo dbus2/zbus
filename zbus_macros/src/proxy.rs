@@ -262,13 +262,13 @@ pub fn create_proxy(
     let (proxy_struct, connection, builder) = if blocking {
         let connection = quote! { #zbus::blocking::Connection };
         let proxy = quote! { #zbus::blocking::Proxy };
-        let builder = quote! { #zbus::blocking::proxy::ProxyBuilder };
+        let builder = quote! { #zbus::blocking::proxy::Builder };
 
         (proxy, connection, builder)
     } else {
         let connection = quote! { #zbus::Connection };
         let proxy = quote! { #zbus::Proxy };
-        let builder = quote! { #zbus::proxy::ProxyBuilder };
+        let builder = quote! { #zbus::proxy::Builder };
 
         (proxy, connection, builder)
     };

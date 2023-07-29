@@ -22,7 +22,7 @@ pub enum CacheProperties {
 
 /// Builder for proxies.
 #[derive(Debug)]
-pub struct ProxyBuilder<'a, T = ()> {
+pub struct Builder<'a, T = ()> {
     conn: Connection,
     destination: Option<BusName<'a>>,
     path: Option<ObjectPath<'a>>,
@@ -32,7 +32,7 @@ pub struct ProxyBuilder<'a, T = ()> {
     uncached_properties: Option<HashSet<Str<'a>>>,
 }
 
-impl<'a, T> Clone for ProxyBuilder<'a, T> {
+impl<'a, T> Clone for Builder<'a, T> {
     fn clone(&self) -> Self {
         Self {
             conn: self.conn.clone(),
@@ -46,10 +46,10 @@ impl<'a, T> Clone for ProxyBuilder<'a, T> {
     }
 }
 
-assert_impl_all!(ProxyBuilder<'_>: Send, Sync, Unpin);
+assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
-impl<'a, T> ProxyBuilder<'a, T> {
-    /// Create a new [`ProxyBuilder`] for the given connection.
+impl<'a, T> Builder<'a, T> {
+    /// Create a new [`Builder`] for the given connection.
     #[must_use]
     pub fn new_bare(conn: &Connection) -> Self {
         Self {
@@ -64,7 +64,7 @@ impl<'a, T> ProxyBuilder<'a, T> {
     }
 }
 
-impl<'a, T> ProxyBuilder<'a, T> {
+impl<'a, T> Builder<'a, T> {
     /// Set the proxy destination address.
     pub fn destination<D>(mut self, destination: D) -> Result<Self>
     where
@@ -158,11 +158,11 @@ impl<'a, T> ProxyBuilder<'a, T> {
     }
 }
 
-impl<'a, T> ProxyBuilder<'a, T>
+impl<'a, T> Builder<'a, T>
 where
     T: ProxyDefault,
 {
-    /// Create a new [`ProxyBuilder`] for the given connection.
+    /// Create a new [`Builder`] for the given connection.
     #[must_use]
     pub fn new(conn: &Connection) -> Self {
         Self {
@@ -205,7 +205,7 @@ mod tests {
     async fn builder_async() {
         let conn = Connection::session().await.unwrap();
 
-        let builder = ProxyBuilder::<Proxy<'_>>::new_bare(&conn)
+        let builder = Builder::<Proxy<'_>>::new_bare(&conn)
             .destination("org.freedesktop.DBus")
             .unwrap()
             .path("/some/path")

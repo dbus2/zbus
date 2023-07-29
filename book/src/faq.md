@@ -101,10 +101,10 @@ However, you can disabling caching for specific properties:
 - Add the `#[dbus_proxy(property(emits_changed_signal = "false"))]` annotation to the property
 for which you desire to disable caching on.
 
-- Use `ProxyBuilder` to build your proxy instance and use `ProxyBuilder::uncached_properties` method
+- Use `proxy::Builder` to build your proxy instance and use `proxy::Builder::uncached_properties` method
 to list all properties you wish to disable caching for.
 
-- In order to disable caching for either type of proxy use the `ProxyBuilder::cache_properites` 
+- In order to disable caching for either type of proxy use the `proxy::Builder::cache_properites` 
 method.
 
 For more information about all the possible values for `emits_changed_signal` refer

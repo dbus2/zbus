@@ -132,6 +132,9 @@ mod socket_reader;
 pub mod proxy;
 pub use proxy::Proxy;
 
+#[deprecated(note = "Use `proxy::Builder` instead")]
+#[doc(hidden)]
+pub use proxy::Builder as ProxyBuilder;
 #[deprecated(note = "Use `proxy::CacheProperties` instead")]
 #[doc(hidden)]
 pub use proxy::CacheProperties;
@@ -147,9 +150,6 @@ pub use proxy::PropertyChanged;
 #[deprecated(note = "Use `proxy::PropertyStream` instead")]
 #[doc(hidden)]
 pub use proxy::PropertyStream;
-#[deprecated(note = "Use `proxy::ProxyBuilder` instead")]
-#[doc(hidden)]
-pub use proxy::ProxyBuilder;
 #[deprecated(note = "Use `proxy::ProxyDefault` instead")]
 #[doc(hidden)]
 pub use proxy::ProxyDefault;
