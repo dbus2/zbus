@@ -193,7 +193,6 @@ impl Clone for Error {
             Error::Unsupported => Error::Unsupported,
             Error::FDO(e) => Error::FDO(e.clone()),
             #[cfg(feature = "xml")]
-            // Until https://github.com/tafia/quick-xml/pull/521 is merged and released.
             Error::QuickXml(e) => Error::QuickXml(e.clone()),
             Error::NoBodySignature => Error::NoBodySignature,
             Error::NameTaken => Error::NameTaken,
