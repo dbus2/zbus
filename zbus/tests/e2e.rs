@@ -21,8 +21,8 @@ use zbus::{
 use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Str, Type, Value};
 
 use zbus::{
-    dbus_interface, dbus_proxy, message::Header, CacheProperties, Connection, ConnectionBuilder,
-    InterfaceRef, ObjectServer, SignalContext,
+    dbus_interface, dbus_proxy, message::Header, proxy::CacheProperties, Connection,
+    ConnectionBuilder, InterfaceRef, ObjectServer, SignalContext,
 };
 
 #[derive(Debug, Deserialize, Serialize, Type)]

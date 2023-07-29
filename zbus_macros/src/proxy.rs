@@ -268,7 +268,7 @@ pub fn create_proxy(
     } else {
         let connection = quote! { #zbus::Connection };
         let proxy = quote! { #zbus::Proxy };
-        let builder = quote! { #zbus::ProxyBuilder };
+        let builder = quote! { #zbus::proxy::ProxyBuilder };
 
         (proxy, connection, builder)
     };
@@ -349,7 +349,7 @@ pub fn create_proxy(
         (Some(path), Some(svc)) => {
             let builder_new = quote! { #builder::new(conn) };
             let proxydefault_impl = quote! {
-                impl<'a> #zbus::ProxyDefault for #proxy_name<'a> {
+                impl<'a> #zbus::proxy::ProxyDefault for #proxy_name<'a> {
                     const INTERFACE: &'static str = #iface_name;
                     const DESTINATION: &'static str = #svc;
                     const PATH: &'static str = #path;
@@ -380,10 +380,10 @@ pub fn create_proxy(
                 let mut builder = #builder_new;
                 if #has_properties {
                     let uncached = vec![#(#uncached_properties),*];
-                    builder.cache_properties(#zbus::CacheProperties::default())
+                    builder.cache_properties(#zbus::proxy::CacheProperties::default())
                            .uncached_properties(&uncached)
                 } else {
-                    builder.cache_properties(#zbus::CacheProperties::No)
+                    builder.cache_properties(#zbus::proxy::CacheProperties::No)
                 }
             }
 
@@ -503,29 +503,30 @@ fn gen_proxy_method_call(
 
     let method_flags = match (no_reply, no_autostart, allow_interactive_auth) {
         (true, false, false) => Some(quote!(::std::convert::Into::into(
-            zbus::MethodFlags::NoReplyExpected
+            zbus::proxy::MethodFlags::NoReplyExpected
         ))),
         (false, true, false) => Some(quote!(::std::convert::Into::into(
-            zbus::MethodFlags::NoAutoStart
+            zbus::proxy::MethodFlags::NoAutoStart
         ))),
         (false, false, true) => Some(quote!(::std::convert::Into::into(
-            zbus::MethodFlags::AllowInteractiveAuth
+            zbus::proxy::MethodFlags::AllowInteractiveAuth
         ))),
 
         (true, true, false) => Some(quote!(
-            zbus::MethodFlags::NoReplyExpected | zbus::MethodFlags::NoAutoStart
+            zbus::proxy::MethodFlags::NoReplyExpected | zbus::proxy::MethodFlags::NoAutoStart
         )),
         (true, false, true) => Some(quote!(
-            zbus::MethodFlags::NoReplyExpected | zbus::MethodFlags::AllowInteractiveAuth
+            zbus::proxy::MethodFlags::NoReplyExpected
+                | zbus::proxy::MethodFlags::AllowInteractiveAuth
         )),
         (false, true, true) => Some(quote!(
-            zbus::MethodFlags::NoAutoStart | zbus::MethodFlags::AllowInteractiveAuth
+            zbus::proxy::MethodFlags::NoAutoStart | zbus::proxy::MethodFlags::AllowInteractiveAuth
         )),
 
         (true, true, true) => Some(quote!(
-            zbus::MethodFlags::NoReplyExpected
-                | zbus::MethodFlags::NoAutoStart
-                | zbus::MethodFlags::AllowInteractiveAuth
+            zbus::proxy::MethodFlags::NoReplyExpected
+                | zbus::proxy::MethodFlags::NoAutoStart
+                | zbus::proxy::MethodFlags::AllowInteractiveAuth
         )),
         _ => None,
     };
@@ -722,7 +723,7 @@ fn gen_proxy_property(
                 quote! { #zbus::blocking::PropertyIterator },
             )
         } else {
-            ("zbus::Proxy", quote! { #zbus::PropertyStream })
+            ("zbus::Proxy", quote! { #zbus::proxy::PropertyStream })
         };
 
         let receive_method = match emits_changed_signal {
@@ -886,7 +887,7 @@ fn gen_proxy_signal(
             "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.receive_signal_with_args",
             "Stream",
             "https://docs.rs/futures/0.3.15/futures/stream/trait.Stream.html",
-            quote! { SignalStream },
+            quote! { proxy::SignalStream },
         )
     };
     let receiver_name = format_ident!("receive_{snake_case_name}");

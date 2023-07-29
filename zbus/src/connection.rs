@@ -30,10 +30,11 @@ use crate::{
     blocking,
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
     message::{Builder, Flags, Message, Type},
+    proxy::CacheProperties,
     raw::{Connection as RawConnection, Socket},
     socket_reader::SocketReader,
-    Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule,
-    MessageStream, ObjectServer, OwnedMatchRule, Result, Task,
+    Authenticated, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule, MessageStream,
+    ObjectServer, OwnedMatchRule, Result, Task,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;

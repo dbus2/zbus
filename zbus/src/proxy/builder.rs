@@ -4,7 +4,7 @@ use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::{ObjectPath, Str};
 
-use crate::{Connection, Error, Proxy, ProxyInner, Result};
+use crate::{proxy::ProxyInner, Connection, Error, Proxy, Result};
 
 /// The properties caching mode.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
