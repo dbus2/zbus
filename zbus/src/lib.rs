@@ -218,7 +218,8 @@ mod tests {
         blocking::{self, MessageIterator},
         fdo::{RequestNameFlags, RequestNameReply},
         message::{Flags, Message},
-        Connection, Result, SignalContext,
+        object_server::SignalContext,
+        Connection, Result,
     };
 
     fn is_gdbus_test() -> bool {

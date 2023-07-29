@@ -17,8 +17,9 @@ use crate::{
     address::Address,
     blocking::Connection,
     names::{UniqueName, WellKnownName},
+    object_server::Interface,
     utils::block_on,
-    AuthMechanism, Error, Guid, Interface, Result,
+    AuthMechanism, Error, Guid, Result,
 };
 
 /// A builder for [`zbus::blocking::Connection`].

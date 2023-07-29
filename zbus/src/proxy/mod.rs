@@ -1321,7 +1321,8 @@ impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
 mod tests {
     use super::*;
     use crate::{
-        dbus_interface, dbus_proxy, utils::block_on, AsyncDrop, ConnectionBuilder, SignalContext,
+        dbus_interface, dbus_proxy, object_server::SignalContext, utils::block_on, AsyncDrop,
+        ConnectionBuilder,
     };
     use futures_util::StreamExt;
     use ntest::timeout;

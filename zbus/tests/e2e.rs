@@ -16,13 +16,17 @@ use zbus::{
     block_on,
     fdo::{ObjectManager, ObjectManagerProxy},
     message::{self, Builder},
-    DBusError, MessageStream, ResponseDispatchNotifier,
+    object_server::ResponseDispatchNotifier,
+    DBusError, MessageStream,
 };
 use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Str, Type, Value};
 
 use zbus::{
-    dbus_interface, dbus_proxy, message::Header, proxy::CacheProperties, Connection,
-    ConnectionBuilder, InterfaceRef, ObjectServer, SignalContext,
+    dbus_interface, dbus_proxy,
+    message::Header,
+    object_server::{InterfaceRef, SignalContext},
+    proxy::CacheProperties,
+    Connection, ConnectionBuilder, ObjectServer,
 };
 
 #[derive(Debug, Deserialize, Serialize, Type)]

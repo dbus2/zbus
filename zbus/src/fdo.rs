@@ -17,7 +17,8 @@ use zvariant::{
 };
 
 use crate::{
-    dbus_interface, dbus_proxy, message::Header, DBusError, Guid, ObjectServer, SignalContext,
+    dbus_interface, dbus_proxy, message::Header, object_server::SignalContext, DBusError, Guid,
+    ObjectServer,
 };
 
 #[rustfmt::skip]
@@ -161,13 +162,13 @@ impl Properties {
             })?;
 
         match iface.read().await.set(property_name, &value, &ctxt) {
-            zbus::DispatchResult::RequiresMut => {}
-            zbus::DispatchResult::NotFound => {
+            zbus::object_server::DispatchResult::RequiresMut => {}
+            zbus::object_server::DispatchResult::NotFound => {
                 return Err(Error::UnknownProperty(format!(
                     "Unknown property '{property_name}'"
                 )));
             }
-            zbus::DispatchResult::Async(f) => {
+            zbus::object_server::DispatchResult::Async(f) => {
                 return f.await.map_err(Into::into);
             }
         }

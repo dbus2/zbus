@@ -260,7 +260,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 /// # use std::error::Error;
 /// use zbus_macros::dbus_interface;
-/// use zbus::{ObjectServer, SignalContext, message::Header};
+/// use zbus::{ObjectServer, object_server::SignalContext, message::Header};
 ///
 /// struct Example {
 ///     _some_data: String,

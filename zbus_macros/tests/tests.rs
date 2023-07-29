@@ -3,7 +3,7 @@ use futures_util::{
     stream::StreamExt,
 };
 use std::{convert::TryInto, future::ready};
-use zbus::{block_on, fdo, proxy::CacheProperties, SignalContext};
+use zbus::{block_on, fdo, object_server::SignalContext, proxy::CacheProperties};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 #[test]
@@ -112,8 +112,8 @@ fn test_derive_error() {
 fn test_interface() {
     use serde::{Deserialize, Serialize};
     use zbus::{
+        object_server::Interface,
         zvariant::{Type, Value},
-        Interface,
     };
 
     struct Test<T> {

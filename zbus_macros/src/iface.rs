@@ -175,7 +175,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             if typed_inputs.is_empty() {
                 return Err(Error::new_spanned(
                     &inputs,
-                    "Expected a `&zbus::SignalContext<'_> argument",
+                    "Expected a `&zbus::object_server::SignalContext<'_> argument",
                 ));
             }
             Some(typed_inputs.remove(0))
@@ -223,7 +223,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 #signal_context.connection().emit_signal(
                     #signal_context.destination(),
                     #signal_context.path(),
-                    <#self_ty as #zbus::Interface>::name(),
+                    <#self_ty as #zbus::object_server::Interface>::name(),
                     #member_name,
                     &(#args_names),
                 )
@@ -320,13 +320,13 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     set_mut_dispatch.extend(q);
 
                     let q = quote!(
-                        #member_name => #zbus::DispatchResult::RequiresMut,
+                        #member_name => #zbus::object_server::DispatchResult::RequiresMut,
                     );
                     set_dispatch.extend(q);
                 } else {
                     let q = quote!(
                         #member_name => {
-                            #zbus::DispatchResult::Async(::std::boxed::Box::pin(async move {
+                            #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {
                                 #do_set
                             }))
                         }
@@ -390,7 +390,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 let prop_changed_method = quote!(
                     pub async fn #prop_changed_method_name(
                         &self,
-                        signal_context: &#zbus::SignalContext<'_>,
+                        signal_context: &#zbus::object_server::SignalContext<'_>,
                     ) -> #zbus::Result<()> {
                         let mut changed = ::std::collections::HashMap::new();
                         let value = <#zbus::zvariant::Value as ::std::convert::From<_>>::from(#prop_value_handled);
@@ -408,7 +408,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 let prop_invalidate_method = quote!(
                     pub async fn #prop_invalidate_method_name(
                         &self,
-                        signal_context: &#zbus::SignalContext<'_>,
+                        signal_context: &#zbus::object_server::SignalContext<'_>,
                     ) -> #zbus::Result<()> {
                         #zbus::fdo::Properties::properties_changed(
                             signal_context,
@@ -431,7 +431,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         let reply = self.#ident(#args_names)#method_await;
                         #reply
                     };
-                    #zbus::DispatchResult::Async(::std::boxed::Box::pin(async move {
+                    #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {
                         future.await.map(|_seq: u32| ())
                     }))
                 },
@@ -439,7 +439,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             if is_mut {
                 call_dispatch.extend(quote! {
-                    #member_name => #zbus::DispatchResult::RequiresMut,
+                    #member_name => #zbus::object_server::DispatchResult::RequiresMut,
                 });
                 call_mut_dispatch.extend(m);
             } else {
@@ -463,7 +463,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         }
 
         #[#zbus::export::async_trait::async_trait]
-        impl #generics #zbus::Interface for #self_ty
+        impl #generics #zbus::object_server::Interface for #self_ty
         #where_clause
         {
             fn name() -> #zbus::names::InterfaceName<'static> {
@@ -498,11 +498,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &'call self,
                 property_name: &'call str,
                 value: &'call #zbus::zvariant::Value<'_>,
-                signal_context: &'call #zbus::SignalContext<'_>,
-            ) -> #zbus::DispatchResult<'call> {
+                signal_context: &'call #zbus::object_server::SignalContext<'_>,
+            ) -> #zbus::object_server::DispatchResult<'call> {
                 match property_name {
                     #set_dispatch
-                    _ => #zbus::DispatchResult::NotFound,
+                    _ => #zbus::object_server::DispatchResult::NotFound,
                 }
             }
 
@@ -510,7 +510,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 &mut self,
                 property_name: &str,
                 value: &#zbus::zvariant::Value<'_>,
-                signal_context: &#zbus::SignalContext<'_>,
+                signal_context: &#zbus::object_server::SignalContext<'_>,
             ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
                 match property_name {
                     #set_mut_dispatch
@@ -524,10 +524,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 c: &'call #zbus::Connection,
                 m: &'call #zbus::message::Message,
                 name: #zbus::names::MemberName<'call>,
-            ) -> #zbus::DispatchResult<'call> {
+            ) -> #zbus::object_server::DispatchResult<'call> {
                 match name.as_str() {
                     #call_dispatch
-                    _ => #zbus::DispatchResult::NotFound,
+                    _ => #zbus::object_server::DispatchResult::NotFound,
                 }
             }
 
@@ -537,10 +537,10 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 c: &'call #zbus::Connection,
                 m: &'call #zbus::message::Message,
                 name: #zbus::names::MemberName<'call>,
-            ) -> #zbus::DispatchResult<'call> {
+            ) -> #zbus::object_server::DispatchResult<'call> {
                 match name.as_str() {
                     #call_mut_dispatch
-                    _ => #zbus::DispatchResult::NotFound,
+                    _ => #zbus::object_server::DispatchResult::NotFound,
                 }
             }
 
@@ -549,7 +549,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     writer,
                     r#"{:indent$}<interface name="{}">"#,
                     "",
-                    <Self as #zbus::Interface>::name(),
+                    <Self as #zbus::object_server::Interface>::name(),
                     indent = level
                 ).unwrap();
                 {
@@ -627,7 +627,7 @@ fn get_args_from_inputs(
                 signal_context_arg_decl = Some(quote! {
                     let #signal_context_arg = match m.path() {
                         ::std::option::Option::Some(p) => {
-                            #zbus::SignalContext::new(c, p).expect("Infallible conversion failed")
+                            #zbus::object_server::SignalContext::new(c, p).expect("Infallible conversion failed")
                         }
                         ::std::option::Option::None => {
                             let hdr = m.header()?;

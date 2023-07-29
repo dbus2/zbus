@@ -206,7 +206,7 @@ synchronize with the interface handlers from outside, thanks to the `event_liste
 (this is just one of the many ways).
 
 ```rust,no_run
-# use zbus::{SignalContext, ConnectionBuilder, dbus_interface, fdo, Result};
+# use zbus::{object_server::SignalContext, ConnectionBuilder, dbus_interface, fdo, Result};
 #
 use event_listener::Event;
 
