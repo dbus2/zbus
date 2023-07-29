@@ -6,7 +6,7 @@ authors = [
     "Marc-André Lureau <marcandre.lureau@redhat.com>",
     "Zeeshan Ali Khan <zeeshanak@gnome.org>",
 ]
-edition = "2018"
+edition = "2021"
 rust-version = "1.64"
 
 description = "proc-macros for zbus"

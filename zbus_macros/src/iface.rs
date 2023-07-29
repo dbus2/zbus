@@ -339,7 +339,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 p.ty = Some(get_property_type(output)?);
                 p.read = true;
                 let inner = if is_fallible_property {
-                    quote!(self.#ident()#method_await#handle_fallible_property)
+                    quote!(self.#ident() #method_await #handle_fallible_property)
                 } else {
                     quote!(::std::result::Result::Ok(
                         ::std::convert::Into::into(

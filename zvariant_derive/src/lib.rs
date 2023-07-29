@@ -329,7 +329,6 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// Simple owned strutures:
 ///
 /// ```
-/// use std::convert::TryFrom;
 /// use zvariant::{OwnedObjectPath, OwnedValue, Value};
 ///
 /// #[derive(Clone, Value, OwnedValue)]
@@ -353,7 +352,6 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// Now for the more exciting case of unowned structures:
 ///
 /// ```
-/// # use std::convert::TryFrom;
 /// use zvariant::{ObjectPath, Str};
 /// # use zvariant::{OwnedValue, Value};
 /// #
@@ -380,7 +378,6 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// Generic structures also supported:
 ///
 /// ```
-/// # use std::convert::TryFrom;
 /// # use zvariant::{OwnedObjectPath, OwnedValue, Value};
 /// #
 /// #[derive(Clone, Value, OwnedValue)]
@@ -404,7 +401,6 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// Enums also supported but currently only simple ones w/ an integer representation:
 ///
 /// ```
-/// # use std::convert::TryFrom;
 /// # use zvariant::{OwnedValue, Value};
 /// #
 /// #[derive(Debug, PartialEq, Value, OwnedValue)]

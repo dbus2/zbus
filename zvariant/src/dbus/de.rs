@@ -29,16 +29,21 @@ where
     /// Create a Deserializer struct instance.
     ///
     /// On Windows, there is no `fds` argument.
-    pub fn new<'r: 'de>(
+    pub fn new<'r: 'de, S>(
         bytes: &'r [u8],
         #[cfg(unix)] fds: Option<&'f [RawFd]>,
-        signature: &Signature<'sig>,
+        signature: S,
         ctxt: EncodingContext<B>,
-    ) -> Self {
+    ) -> Result<Self>
+    where
+        S: TryInto<Signature<'sig>>,
+        S::Error: Into<Error>,
+    {
         assert_eq!(ctxt.format(), EncodingFormat::DBus);
 
-        let sig_parser = SignatureParser::new(signature.clone());
-        Self(crate::DeserializerCommon {
+        let signature = signature.try_into().map_err(Into::into)?;
+        let sig_parser = SignatureParser::new(signature);
+        Ok(Self(crate::DeserializerCommon {
             ctxt,
             sig_parser,
             bytes,
@@ -49,7 +54,7 @@ where
             pos: 0,
             container_depths: Default::default(),
             b: PhantomData,
-        })
+        }))
     }
 }
 

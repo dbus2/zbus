@@ -198,15 +198,17 @@ where
 ///
 /// [`to_writer`]: fn.to_writer.html
 /// [`Type`]: trait.Type.html
-pub fn to_writer_for_signature<B, W, T: ?Sized>(
+pub fn to_writer_for_signature<'s, B, W, S, T: ?Sized>(
     writer: &mut W,
     ctxt: EncodingContext<B>,
-    signature: &Signature<'_>,
+    signature: S,
     value: &T,
 ) -> Result<usize>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
+    S: TryInto<Signature<'s>>,
+    S::Error: Into<Error>,
     T: Serialize,
 {
     #[cfg(unix)]
@@ -222,13 +224,13 @@ where
     {
         match ctxt.format() {
             EncodingFormat::DBus => {
-                let mut ser = DBusSerializer::<B, W>::new(signature, writer, ctxt);
+                let mut ser = DBusSerializer::<B, W>::new(signature, writer, ctxt)?;
                 value.serialize(&mut ser)?;
                 Ok(ser.0.bytes_written)
             }
             #[cfg(feature = "gvariant")]
             EncodingFormat::GVariant => {
-                let mut ser = GVSerializer::<B, W>::new(signature, writer, ctxt);
+                let mut ser = GVSerializer::<B, W>::new(signature, writer, ctxt)?;
                 value.serialize(&mut ser)?;
                 Ok(ser.0.bytes_written)
             }
@@ -250,27 +252,29 @@ where
 /// [`to_writer_fds`]: fn.to_writer_fds.html
 /// [`Type`]: trait.Type.html
 #[cfg(unix)]
-pub fn to_writer_fds_for_signature<B, W, T: ?Sized>(
+pub fn to_writer_fds_for_signature<'s, B, W, S, T: ?Sized>(
     writer: &mut W,
     ctxt: EncodingContext<B>,
-    signature: &Signature<'_>,
+    signature: S,
     value: &T,
 ) -> Result<(usize, Vec<RawFd>)>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
+    S: TryInto<Signature<'s>>,
+    S::Error: Into<Error>,
     T: Serialize,
 {
     let mut fds = vec![];
     match ctxt.format() {
         EncodingFormat::DBus => {
-            let mut ser = DBusSerializer::<B, W>::new(signature, writer, &mut fds, ctxt);
+            let mut ser = DBusSerializer::<B, W>::new(signature, writer, &mut fds, ctxt)?;
             value.serialize(&mut ser)?;
             Ok((ser.0.bytes_written, fds))
         }
         #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
-            let mut ser = GVSerializer::<B, W>::new(signature, writer, &mut fds, ctxt);
+            let mut ser = GVSerializer::<B, W>::new(signature, writer, &mut fds, ctxt)?;
             value.serialize(&mut ser)?;
             Ok((ser.0.bytes_written, fds))
         }
@@ -291,13 +295,15 @@ where
 /// [`to_bytes`]: fn.to_bytes.html
 /// [`Type`]: trait.Type.html
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html#examples
-pub fn to_bytes_for_signature<B, T: ?Sized>(
+pub fn to_bytes_for_signature<'s, B, S, T: ?Sized>(
     ctxt: EncodingContext<B>,
-    signature: &Signature<'_>,
+    signature: S,
     value: &T,
 ) -> Result<Vec<u8>>
 where
     B: byteorder::ByteOrder,
+    S: TryInto<Signature<'s>>,
+    S::Error: Into<Error>,
     T: Serialize,
 {
     #[cfg(unix)]
@@ -331,13 +337,15 @@ where
 /// [`to_bytes_fds`]: fn.to_bytes_fds.html
 /// [`Type`]: trait.Type.html
 #[cfg(unix)]
-pub fn to_bytes_fds_for_signature<B, T: ?Sized>(
+pub fn to_bytes_fds_for_signature<'s, B, S, T: ?Sized>(
     ctxt: EncodingContext<B>,
-    signature: &Signature<'_>,
+    signature: S,
     value: &T,
 ) -> Result<(Vec<u8>, Vec<RawFd>)>
 where
     B: byteorder::ByteOrder,
+    S: TryInto<Signature<'s>>,
+    S::Error: Into<Error>,
     T: Serialize,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
@@ -381,28 +389,34 @@ where
     W: Write + Seek,
 {
     /// Create a Serializer struct instance.
-    pub fn new<'w: 'ser, 'f: 'ser>(
-        signature: &Signature<'sig>,
+    pub fn new<'w: 'ser, 'f: 'ser, S>(
+        signature: S,
         writer: &'w mut W,
         #[cfg(unix)] fds: &'f mut Vec<RawFd>,
         ctxt: EncodingContext<B>,
-    ) -> Self {
+    ) -> Result<Self>
+    where
+        S: TryInto<Signature<'sig>>,
+        S::Error: Into<Error>,
+    {
         match ctxt.format() {
             #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => Self::GVariant(GVSerializer::new(
+            EncodingFormat::GVariant => GVSerializer::new(
                 signature,
                 writer,
                 #[cfg(unix)]
                 fds,
                 ctxt,
-            )),
-            EncodingFormat::DBus => Self::DBus(DBusSerializer::new(
+            )
+            .map(Self::GVariant),
+            EncodingFormat::DBus => DBusSerializer::new(
                 signature,
                 writer,
                 #[cfg(unix)]
                 fds,
                 ctxt,
-            )),
+            )
+            .map(Self::DBus),
         }
     }
 

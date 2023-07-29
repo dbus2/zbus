@@ -2,7 +2,7 @@
 name = "zbus_polkit"
 version = "3.0.1"
 authors = ["Marc-André Lureau <marcandre.lureau@redhat.com>"]
-edition = "2018"
+edition = "2021"
 rust-version = "1.64"
 
 description = "PolicyKit binding"

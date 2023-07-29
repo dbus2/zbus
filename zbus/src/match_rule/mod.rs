@@ -29,7 +29,6 @@ pub use builder::Builder;
 /// ```
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # use zbus::MatchRule;
-/// use std::convert::TryFrom;
 ///
 /// // Let's take the most typical example of match rule to subscribe to properties' changes:
 /// let rule = MatchRule::builder()

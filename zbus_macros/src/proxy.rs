@@ -567,7 +567,7 @@ fn gen_proxy_method_call(
     if let Some(proxy_name) = proxy_object {
         let proxy = Ident::new(&proxy_name, Span::call_site());
         let signature = quote! {
-            fn #method#ty_generics(#inputs) -> #zbus::Result<#proxy<'c>>
+            fn #method #ty_generics(#inputs) -> #zbus::Result<#proxy<'c>>
             #where_clause
         };
 
@@ -602,7 +602,7 @@ fn gen_proxy_method_call(
 
         let output = &m.sig.output;
         let signature = quote! {
-            fn #method#ty_generics(#inputs) #output
+            fn #method #ty_generics(#inputs) #output
             #where_clause
         };
 
@@ -736,7 +736,7 @@ fn gen_proxy_property(
                 );
                 quote! {
                     #[doc = #gen_doc]
-                    pub #usage fn #receive#ty_generics(
+                    pub #usage fn #receive #ty_generics(
                         &self
                     ) -> #prop_stream<'c, <#ret_type as #zbus::ResultAdapter>::Ok>
                     #where_clause
@@ -1001,7 +1001,7 @@ fn gen_proxy_signal(
         quote! {
             impl #signal_name_ident {
                 /// Retrieve the signal arguments.
-                pub fn args#ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
+                pub fn args #ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
                 #where_clause
                 {
                     ::std::convert::TryFrom::try_from(&**self)

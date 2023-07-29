@@ -28,16 +28,21 @@ where
     /// Create a GVariant Serializer struct instance.
     ///
     /// On Windows, the method doesn't have `fds` argument.
-    pub fn new<'w: 'ser, 'f: 'ser>(
-        signature: &Signature<'sig>,
+    pub fn new<'w: 'ser, 'f: 'ser, S>(
+        signature: S,
         writer: &'w mut W,
         #[cfg(unix)] fds: &'f mut Vec<RawFd>,
         ctxt: EncodingContext<B>,
-    ) -> Self {
+    ) -> Result<Self>
+    where
+        S: TryInto<Signature<'sig>>,
+        S::Error: Into<Error>,
+    {
         assert_eq!(ctxt.format(), EncodingFormat::GVariant);
 
-        let sig_parser = SignatureParser::new(signature.clone());
-        Self(crate::SerializerCommon {
+        let signature = signature.try_into().map_err(Into::into)?;
+        let sig_parser = SignatureParser::new(signature);
+        Ok(Self(crate::SerializerCommon {
             ctxt,
             sig_parser,
             writer,
@@ -47,7 +52,7 @@ where
             value_sign: None,
             container_depths: Default::default(),
             b: PhantomData,
-        })
+        }))
     }
 
     fn serialize_maybe<T>(&mut self, value: Option<&T>) -> Result<()>
