@@ -12,7 +12,7 @@ use std::{
 };
 
 use zbus::{
-    blocking::{Connection, ConnectionBuilder, ProxyBuilder},
+    blocking::{proxy::ProxyBuilder, Connection, ConnectionBuilder},
     names::BusName,
     quick_xml::{Interface, Node},
 };

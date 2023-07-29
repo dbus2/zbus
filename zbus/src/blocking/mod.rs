@@ -24,6 +24,6 @@ mod message_iterator;
 pub use message_iterator::*;
 mod object_server;
 pub use object_server::*;
-mod proxy;
+pub mod proxy;
 pub use proxy::*;
 pub mod fdo;

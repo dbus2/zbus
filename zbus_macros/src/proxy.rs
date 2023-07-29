@@ -262,7 +262,7 @@ pub fn create_proxy(
     let (proxy_struct, connection, builder) = if blocking {
         let connection = quote! { #zbus::blocking::Connection };
         let proxy = quote! { #zbus::blocking::Proxy };
-        let builder = quote! { #zbus::blocking::ProxyBuilder };
+        let builder = quote! { #zbus::blocking::proxy::ProxyBuilder };
 
         (proxy, connection, builder)
     } else {
@@ -720,7 +720,7 @@ fn gen_proxy_property(
         let (proxy_name, prop_stream) = if *blocking {
             (
                 "zbus::blocking::Proxy",
-                quote! { #zbus::blocking::PropertyIterator },
+                quote! { #zbus::blocking::proxy::PropertyIterator },
             )
         } else {
             ("zbus::Proxy", quote! { #zbus::proxy::PropertyStream })
@@ -878,7 +878,7 @@ fn gen_proxy_signal(
             "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.receive_signal_with_args",
             "Iterator",
             "https://doc.rust-lang.org/std/iter/trait.Iterator.html",
-            quote! { blocking::SignalIterator },
+            quote! { blocking::proxy::SignalIterator },
         )
     } else {
         (

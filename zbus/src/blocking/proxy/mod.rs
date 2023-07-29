@@ -1,3 +1,5 @@
+//! The client-side proxy API.
+
 use enumflags2::BitFlags;
 use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
