@@ -527,12 +527,10 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         )))
     );
 
-    #[cfg(any(feature = "xml", feature = "quick-xml"))]
+    #[cfg(feature = "quick-xml")]
     {
         let xml = proxy.introspect().await?;
         debug!("Introspection: {}", xml);
-        #[cfg(all(feature = "xml", not(feature = "quick-xml")))]
-        let node = zbus::xml::Node::from_reader(xml.as_bytes())?;
         #[cfg(feature = "quick-xml")]
         let node = zbus::quick_xml::Node::from_reader(xml.as_bytes())?;
         let ifaces = node.interfaces();
@@ -546,8 +544,6 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
                 continue;
             }
             let args = method.args();
-            #[cfg(all(feature = "xml", not(feature = "quick-xml")))]
-            let mut out_args = args.iter().filter(|a| a.direction().unwrap() == "out");
             #[cfg(feature = "quick-xml")]
             let mut out_args = args
                 .iter()

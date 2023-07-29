@@ -52,9 +52,6 @@ pub enum Error {
     Unsupported,
     /// A [`fdo::Error`] transformed into [`Error`].
     FDO(Box<fdo::Error>),
-    #[cfg(feature = "xml")]
-    /// An XML error
-    SerdeXml(serde_xml_rs::Error),
     #[cfg(feature = "quick-xml")]
     /// An XML error from quick_xml
     QuickXml(DeError),
@@ -96,8 +93,6 @@ impl PartialEq for Error {
             #[allow(deprecated)]
             (Error::Io(_), Self::Io(_)) => false,
             (Error::InputOutput(_), Self::InputOutput(_)) => false,
-            #[cfg(feature = "xml")]
-            (Self::SerdeXml(_), Self::SerdeXml(_)) => false,
             #[cfg(feature = "quick-xml")]
             (Self::QuickXml(_), Self::QuickXml(_)) => false,
             (Self::Failure(s1), Self::Failure(s2)) => s1 == s2,
@@ -124,8 +119,6 @@ impl error::Error for Error {
             Error::InvalidGUID => None,
             Error::Unsupported => None,
             Error::FDO(e) => Some(e),
-            #[cfg(feature = "xml")]
-            Error::SerdeXml(e) => Some(e),
             #[cfg(feature = "quick-xml")]
             Error::QuickXml(e) => Some(e),
             Error::NoBodySignature => None,
@@ -164,8 +157,6 @@ impl fmt::Display for Error {
             Error::InvalidGUID => write!(f, "Invalid GUID"),
             Error::Unsupported => write!(f, "Connection support is lacking"),
             Error::FDO(e) => write!(f, "{e}"),
-            #[cfg(feature = "xml")]
-            Error::SerdeXml(e) => write!(f, "XML error: {}", e),
             #[cfg(feature = "quick-xml")]
             Error::QuickXml(e) => write!(f, "XML error: {e}"),
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
@@ -201,8 +192,6 @@ impl Clone for Error {
             Error::InvalidGUID => Error::InvalidGUID,
             Error::Unsupported => Error::Unsupported,
             Error::FDO(e) => Error::FDO(e.clone()),
-            #[cfg(feature = "xml")]
-            Error::SerdeXml(e) => Error::Failure(e.to_string()),
             #[cfg(feature = "quick-xml")]
             // Until https://github.com/tafia/quick-xml/pull/521 is merged and released.
             Error::QuickXml(e) => Error::QuickXml(e.clone()),
@@ -249,13 +238,6 @@ impl From<fdo::Error> for Error {
             fdo::Error::ZBus(e) => e,
             e => Error::FDO(Box::new(e)),
         }
-    }
-}
-
-#[cfg(feature = "xml")]
-impl From<serde_xml_rs::Error> for Error {
-    fn from(val: serde_xml_rs::Error) -> Self {
-        Error::SerdeXml(val)
     }
 }
 

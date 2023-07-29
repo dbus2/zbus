@@ -184,9 +184,6 @@ pub use raw::Socket;
 
 pub mod blocking;
 
-#[cfg(feature = "xml")]
-pub mod xml;
-
 #[cfg(feature = "quick-xml")]
 pub mod quick_xml;
 
