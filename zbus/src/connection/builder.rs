@@ -29,11 +29,13 @@ use crate::{
     async_lock::RwLock,
     names::{InterfaceName, UniqueName, WellKnownName},
     object_server::Interface,
-    raw::Socket,
     Connection, Error, Executor, Guid, Result,
 };
 
-use super::handshake::{AuthMechanism, Authenticated};
+use super::{
+    handshake::{AuthMechanism, Authenticated},
+    raw::Socket,
+};
 
 const DEFAULT_MAX_QUEUED: usize = 64;
 

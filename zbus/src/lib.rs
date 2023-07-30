@@ -176,8 +176,9 @@ pub use utils::*;
 #[macro_use]
 pub mod fdo;
 
-mod raw;
-pub use raw::Socket;
+#[deprecated(note = "Use `connection::Socket` instead")]
+#[doc(hidden)]
+pub use connection::Socket;
 
 pub mod blocking;
 

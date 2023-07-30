@@ -32,13 +32,16 @@ use crate::{
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
     message::{self, Flags, Message, Type},
     proxy::CacheProperties,
-    raw::{Connection as RawConnection, Socket},
     DBusError, Error, Executor, Guid, MatchRule, MessageStream, ObjectServer, OwnedMatchRule,
     Result, Task,
 };
 
 mod builder;
 pub use builder::Builder;
+
+mod raw;
+use raw::Connection as RawConnection;
+pub use raw::Socket;
 
 mod socket_reader;
 use socket_reader::SocketReader;
