@@ -33,8 +33,8 @@ use crate::{
     message::{self, Flags, Message, Type},
     proxy::CacheProperties,
     raw::{Connection as RawConnection, Socket},
-    Authenticated, DBusError, Error, Executor, Guid, MatchRule, MessageStream, ObjectServer,
-    OwnedMatchRule, Result, Task,
+    DBusError, Error, Executor, Guid, MatchRule, MessageStream, ObjectServer, OwnedMatchRule,
+    Result, Task,
 };
 
 mod builder;
@@ -42,6 +42,9 @@ pub use builder::Builder;
 
 mod socket_reader;
 use socket_reader::SocketReader;
+
+pub(crate) mod handshake;
+use handshake::Authenticated;
 
 const DEFAULT_MAX_QUEUED: usize = 64;
 const DEFAULT_MAX_METHOD_RETURN_QUEUED: usize = 8;
