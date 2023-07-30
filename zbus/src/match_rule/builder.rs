@@ -204,22 +204,6 @@ impl<'m> Builder<'m> {
 
     /// Set 0th argument's namespace.
     ///
-    /// This function is deprecated because the choice of `InterfaceName` was too restrictive.
-    #[deprecated = "use arg0ns instead"]
-    pub fn arg0namespace<I>(mut self, namespace: I) -> Result<Self>
-    where
-        I: TryInto<InterfaceName<'m>>,
-        I::Error: Into<Error>,
-    {
-        let namespace = namespace.try_into().map_err(Into::into)?;
-        self.0.arg0namespace = Some(namespace.clone());
-        self.0.arg0ns = Some(namespace.into());
-
-        Ok(self)
-    }
-
-    /// Set 0th argument's namespace.
-    ///
     /// The namespace be a valid bus name or a valid element of a bus name. For more information,
     /// see [the spec](https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus).
     ///

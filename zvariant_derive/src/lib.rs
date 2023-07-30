@@ -170,21 +170,6 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Derive macro to add [`Type`] implementation to structs serialized as `a{sv}` type.
-///
-/// [`Type`]: ../zvariant/trait.Type.html
-#[proc_macro_derive(TypeDict)]
-#[deprecated(
-    since = "3.1.0",
-    note = "Please use `Type` macro with `#[zvariant(signature = \"dict\")]` attribute instead."
-)]
-pub fn type_dict_macro_derive(input: TokenStream) -> TokenStream {
-    let ast: DeriveInput = syn::parse(input).unwrap();
-    dict::expand_type_derive(ast)
-        .unwrap_or_else(|err| err.to_compile_error())
-        .into()
-}
-
 /// Adds [`Serialize`] implementation to structs to be serialized as `a{sv}` type.
 ///
 /// This macro serializes the deriving struct as a D-Bus dictionary type, where keys are strings and

@@ -150,14 +150,6 @@ impl<'m> MatchRule<'m> {
     }
 
     /// Match messages whose first argument is within the specified namespace.
-    ///
-    /// This function is deprecated because the choice of `InterfaceName` was too restrictive.
-    #[deprecated = "use arg0ns instead"]
-    pub fn arg0namespace(&self) -> Option<&InterfaceName<'_>> {
-        self.arg0namespace.as_ref()
-    }
-
-    /// Match messages whose first argument is within the specified namespace.
     pub fn arg0ns(&self) -> Option<&Str<'m>> {
         self.arg0ns.as_ref()
     }
