@@ -564,27 +564,21 @@ assert_impl_all!(ReleaseNameReply: Send, Sync, Unpin);
 #[zvariant(signature = "a{sv}")]
 pub struct ConnectionCredentials {
     #[zvariant(rename = "UnixUserID")]
-    #[deprecated(since = "3.13.0", note = "Use `unix_user_id` method")]
-    pub unix_user_id: Option<u32>,
+    pub(crate) unix_user_id: Option<u32>,
 
     #[zvariant(rename = "UnixGroupIDs")]
-    #[deprecated(since = "3.13.0", note = "Use `unix_group_ids` method")]
-    pub unix_group_ids: Option<Vec<u32>>,
+    pub(crate) unix_group_ids: Option<Vec<u32>>,
 
     #[zvariant(rename = "ProcessID")]
-    #[deprecated(since = "3.13.0", note = "Use `process_id` method")]
-    pub process_id: Option<u32>,
+    pub(crate) process_id: Option<u32>,
 
     #[zvariant(rename = "WindowsSID")]
-    #[deprecated(since = "3.13.0", note = "Use `windows_sid` method")]
-    pub windows_sid: Option<String>,
+    pub(crate) windows_sid: Option<String>,
 
     #[zvariant(rename = "LinuxSecurityLabel")]
-    #[deprecated(since = "3.13.0", note = "Use `linux_security_label` method")]
-    pub linux_security_label: Option<Vec<u8>>,
+    pub(crate) linux_security_label: Option<Vec<u8>>,
 }
 
-#[allow(deprecated)]
 impl ConnectionCredentials {
     /// The numeric Unix user ID, as defined by POSIX.
     pub fn unix_user_id(&self) -> Option<u32> {
