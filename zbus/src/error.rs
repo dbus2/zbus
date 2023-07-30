@@ -22,9 +22,6 @@ pub enum Error {
     /// Invalid D-Bus address.
     Address(String),
     /// An I/O error.
-    #[deprecated(note = "Use `Error::InputOutput` instead")]
-    Io(io::Error),
-    /// An I/O error.
     InputOutput(Arc<io::Error>),
     /// Invalid message field.
     InvalidField,
@@ -90,8 +87,6 @@ impl PartialEq for Error {
             (Self::Variant(s), Self::Variant(o)) => s == o,
             (Self::Names(s), Self::Names(o)) => s == o,
             (Self::NameTaken, Self::NameTaken) => true,
-            #[allow(deprecated)]
-            (Error::Io(_), Self::Io(_)) => false,
             (Error::InputOutput(_), Self::InputOutput(_)) => false,
             #[cfg(feature = "xml")]
             (Self::QuickXml(_), Self::QuickXml(_)) => false,
@@ -106,8 +101,6 @@ impl error::Error for Error {
         match self {
             Error::InterfaceNotFound => None,
             Error::Address(_) => None,
-            #[allow(deprecated)]
-            Error::Io(e) => Some(e),
             Error::InputOutput(e) => Some(e),
             Error::ExcessData => None,
             Error::Handshake(_) => None,
@@ -138,8 +131,6 @@ impl fmt::Display for Error {
             Error::InterfaceNotFound => write!(f, "Interface not found"),
             Error::Address(e) => write!(f, "address error: {e}"),
             Error::ExcessData => write!(f, "excess data"),
-            #[allow(deprecated)]
-            Error::Io(e) => write!(f, "I/O error: {e}"),
             Error::InputOutput(e) => write!(f, "I/O error: {e}"),
             Error::Handshake(e) => write!(f, "D-Bus handshake failed: {e}"),
             Error::IncorrectEndian => write!(f, "incorrect endian"),
@@ -176,8 +167,6 @@ impl Clone for Error {
             Error::InterfaceNotFound => Error::InterfaceNotFound,
             Error::Address(e) => Error::Address(e.clone()),
             Error::ExcessData => Error::ExcessData,
-            #[allow(deprecated)]
-            Error::Io(e) => Error::Io(io::Error::new(e.kind(), e.to_string())),
             Error::InputOutput(e) => Error::InputOutput(e.clone()),
             Error::Handshake(e) => Error::Handshake(e.clone()),
             Error::IncorrectEndian => Error::IncorrectEndian,
