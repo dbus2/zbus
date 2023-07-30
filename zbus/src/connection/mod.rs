@@ -1250,21 +1250,6 @@ impl Connection {
             .monitor_activity()
     }
 
-    /// Returns the peer process ID, or Ok(None) if it cannot be returned for the associated socket.
-    #[deprecated(
-        since = "3.13.0",
-        note = "Use `peer_credentials` instead, which returns `ConnectionCredentials` which includes
-                the peer PID."
-    )]
-    pub fn peer_pid(&self) -> io::Result<Option<u32>> {
-        self.inner
-            .raw_conn
-            .lock()
-            .expect("poisoned lock")
-            .socket()
-            .peer_pid()
-    }
-
     /// Returns the peer credentials.
     ///
     /// The fields are populated on the best effort basis. Some or all fields may not even make
