@@ -703,10 +703,6 @@ macro_rules! gen_dbus_proxy {
         )]
         trait DBus {
             /// Adds a match rule to match messages going through the message bus
-            #[deprecated(since = "3.5.0", note = "Use `add_match_rule` instead")]
-            fn add_match(&self, rule: &str) -> Result<()>;
-
-            /// Adds a match rule to match messages going through the message bus
             #[dbus_proxy(name = "AddMatch")]
             fn add_match_rule(&self, rule: crate::MatchRule<'_>) -> Result<()>;
 
@@ -759,10 +755,6 @@ macro_rules! gen_dbus_proxy {
 
             /// Reload server configuration.
             fn reload_config(&self) -> Result<()>;
-
-            /// Removes the first rule that matches.
-            #[deprecated(since = "3.5.0", note = "Use `remove_match_rule` instead")]
-            fn remove_match(&self, rule: &str) -> Result<()>;
 
             /// Removes the first rule that matches.
             #[dbus_proxy(name = "RemoveMatch")]
