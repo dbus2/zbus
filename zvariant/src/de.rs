@@ -143,7 +143,6 @@ where
 ///     Struct { y: u8, t: u64 },
 /// }
 ///
-/// // TODO: Provide convenience API to create complex signatures
 /// let signature = "(u(yt))";
 /// let encoded = to_bytes_for_signature(ctxt, signature, &Structs::Tuple(42, 42)).unwrap();
 /// assert_eq!(encoded.len(), 24);
