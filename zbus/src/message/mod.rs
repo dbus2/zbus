@@ -243,7 +243,7 @@ impl Message {
         }
 
         let (primary_header, fields_len) = PrimaryHeader::read(&bytes)?;
-        let header = zvariant::from_slice(&bytes, dbus_context!(0))?;
+        let (header, _) = zvariant::from_slice(&bytes, dbus_context!(0))?;
         #[cfg(unix)]
         let fds = Arc::new(RwLock::new(Fds::Owned(fds)));
 
@@ -323,7 +323,9 @@ impl Message {
     ///
     /// Note: prefer using the direct access methods if possible; they are more efficient.
     pub fn header(&self) -> Result<Header<'_>> {
-        zvariant::from_slice(&self.bytes, dbus_context!(0)).map_err(Error::from)
+        zvariant::from_slice(&self.bytes, dbus_context!(0))
+            .map_err(Error::from)
+            .map(|h| h.0)
     }
 
     /// Deserialize the fields.
@@ -331,7 +333,9 @@ impl Message {
     /// Note: prefer using the direct access methods if possible; they are more efficient.
     pub fn fields(&self) -> Result<Fields<'_>> {
         let ctxt = dbus_context!(header::PRIMARY_HEADER_SIZE);
-        zvariant::from_slice(&self.bytes[header::PRIMARY_HEADER_SIZE..], ctxt).map_err(Error::from)
+        zvariant::from_slice(&self.bytes[header::PRIMARY_HEADER_SIZE..], ctxt)
+            .map_err(Error::from)
+            .map(|f| f.0)
     }
 
     /// The message type.
@@ -379,6 +383,7 @@ impl Message {
             }
         }
         .map_err(Error::from)
+        .map(|b| b.0)
     }
 
     /// Deserialize the body using the contained signature.
@@ -433,6 +438,7 @@ impl Message {
             }
         }
         .map_err(Error::from)
+        .map(|b| b.0)
     }
 
     #[cfg(unix)]

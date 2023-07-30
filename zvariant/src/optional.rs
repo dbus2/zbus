@@ -56,7 +56,7 @@ where
 /// let s = Optional::<&str>::default();
 /// let encoded = to_bytes(ctxt, &s).unwrap();
 /// assert_eq!(encoded, &[0, 0, 0, 0, 0]);
-/// let s: Optional<&str> = from_slice(&encoded, ctxt).unwrap();
+/// let s: Optional<&str> = from_slice(&encoded, ctxt).unwrap().0;
 /// assert_eq!(*s, None);
 ///
 /// // `Some` case.
@@ -65,7 +65,7 @@ where
 /// assert_eq!(encoded.len(), 10);
 /// // The first byte is the length of the string in Little-Endian format.
 /// assert_eq!(encoded[0], 5);
-/// let s: Optional<&str> = from_slice(&encoded, ctxt).unwrap();
+/// let s: Optional<&str> = from_slice(&encoded, ctxt).unwrap().0;
 /// assert_eq!(*s, Some("hello"));
 /// ```
 ///

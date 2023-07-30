@@ -44,7 +44,7 @@ mod value;
 /// };
 /// let ctxt = EncodingContext::<LE>::new_dbus(0);
 /// let encoded = to_bytes(ctxt, &s).unwrap();
-/// let decoded: Struct = from_slice(&encoded, ctxt).unwrap();
+/// let decoded: Struct = from_slice(&encoded, ctxt).unwrap().0;
 /// assert_eq!(decoded, s);
 /// ```
 ///
@@ -67,7 +67,7 @@ mod value;
 /// assert_eq!(Enum::signature(), u8::signature());
 /// let ctxt = EncodingContext::<LE>::new_dbus(0);
 /// let encoded = to_bytes(ctxt, &Enum::Variant2).unwrap();
-/// let decoded: Enum = from_slice(&encoded, ctxt).unwrap();
+/// let decoded: Enum = from_slice(&encoded, ctxt).unwrap().0;
 /// assert_eq!(decoded, Enum::Variant2);
 ///
 /// #[repr(i64)]
@@ -131,7 +131,7 @@ mod value;
 /// };
 /// let ctxt = EncodingContext::<LE>::new_dbus(0);
 /// let encoded = to_bytes(ctxt, &s).unwrap();
-/// let decoded: Struct = from_slice(&encoded, ctxt).unwrap();
+/// let decoded: Struct = from_slice(&encoded, ctxt).unwrap().0;
 /// assert_eq!(decoded, s);
 /// ```
 ///
@@ -154,7 +154,7 @@ mod value;
 /// let ctxt = EncodingContext::<LE>::new_dbus(0);
 /// let encoded = to_bytes(ctxt, &StrEnum::Variant2).unwrap();
 /// assert_eq!(encoded.len(), 13);
-/// let decoded: StrEnum = from_slice(&encoded, ctxt).unwrap();
+/// let decoded: StrEnum = from_slice(&encoded, ctxt).unwrap().0;
 /// assert_eq!(decoded, StrEnum::Variant2);
 /// ```
 ///

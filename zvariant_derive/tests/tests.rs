@@ -59,14 +59,14 @@ fn derive_dict() {
     let ctxt = EncodingContext::<LE>::new(EncodingFormat::DBus, 0);
     let serialized = zvariant::to_bytes(ctxt, &test).unwrap();
     let deserialized: HashMap<String, OwnedValue> =
-        zvariant::from_slice(&serialized, ctxt).unwrap();
+        zvariant::from_slice(&serialized, ctxt).unwrap().0;
 
     assert_eq!(deserialized["fieldA"], Value::from(1u32).into());
     assert_eq!(deserialized["field-b"], Value::from("foo").into());
     assert_eq!(deserialized["fieldC"], Value::from(&[1u8, 2, 3][..]).into());
 
     let serialized = zvariant::to_bytes(ctxt, &deserialized).unwrap();
-    let deserialized: Test = zvariant::from_slice(&serialized, ctxt).unwrap();
+    let deserialized: Test = zvariant::from_slice(&serialized, ctxt).unwrap().0;
 
     assert_eq!(deserialized.field_a, Some(1u32));
     assert_eq!(deserialized.field_b.as_str(), "foo");

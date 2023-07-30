@@ -270,8 +270,9 @@ mod tests {
         let ec = EncodingContext::<LE>::new_dbus(0);
         let ov: OwnedValue = Value::from("hi!").into();
         let ser = to_bytes(ec, &ov)?;
-        let de: Value<'_> = from_slice(&ser, ec)?;
+        let (de, parsed): (Value<'_>, _) = from_slice(&ser, ec)?;
         assert_eq!(<&str>::try_from(&de)?, "hi!");
+        assert_eq!(parsed, ser.len());
         Ok(())
     }
 

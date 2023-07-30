@@ -48,7 +48,7 @@ impl std::fmt::Display for EncodingFormat {
 ///
 /// // Let's decode the 2nd element of the array only
 /// let ctxt = Context::<LE>::new_dbus(14);
-/// let decoded: &str = from_slice(&encoded[14..], ctxt).unwrap();
+/// let decoded: &str = from_slice(&encoded[14..], ctxt).unwrap().0;
 /// assert_eq!(decoded, "World");
 /// ```
 ///

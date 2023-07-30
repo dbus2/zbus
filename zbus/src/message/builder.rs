@@ -325,7 +325,8 @@ impl<'a> Builder<'a> {
         write_body(&mut cursor)?;
 
         let primary_header = header.into_primary();
-        let header: Header<'_> = zvariant::from_slice(&bytes, ctxt)?;
+        let (header, actual_hdr_len): (Header<'_>, _) = zvariant::from_slice(&bytes, ctxt)?;
+        assert_eq!(hdr_len, actual_hdr_len);
         let quick_fields = QuickFields::new(&bytes, &header)?;
 
         Ok(Message {

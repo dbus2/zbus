@@ -36,9 +36,13 @@ use crate::Fd;
 ///
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// let (encoded, fds) = to_bytes_fds(ctxt, &Fd::from(42)).unwrap();
-/// let decoded: Fd = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
+/// let decoded: Fd = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap().0;
 /// assert_eq!(decoded, Fd::from(42));
 /// ```
+///
+/// # Return value
+///
+/// A tuple containing the deserialized value and numbe number of bytes parsed from the `bytes`.
 ///
 /// [`from_slice`]: fn.from_slice.html
 #[cfg(unix)]
@@ -46,7 +50,7 @@ pub fn from_slice_fds<'d, 'r: 'd, B, T: ?Sized>(
     bytes: &'r [u8],
     fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
-) -> Result<T>
+) -> Result<(T, usize)>
 where
     B: byteorder::ByteOrder,
     T: Deserialize<'d> + Type,
@@ -67,13 +71,20 @@ where
 ///
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// let encoded = to_bytes(ctxt, "hello world").unwrap();
-/// let decoded: &str = from_slice(&encoded, ctxt).unwrap();
+/// let decoded: &str = from_slice(&encoded, ctxt).unwrap().0;
 /// assert_eq!(decoded, "hello world");
 /// ```
 ///
+/// # Return value
+///
+/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
+///
 /// [`Fd`]: struct.Fd.html
 /// [`from_slice_fds`]: fn.from_slice_fds.html
-pub fn from_slice<'d, 'r: 'd, B, T: ?Sized>(bytes: &'r [u8], ctxt: EncodingContext<B>) -> Result<T>
+pub fn from_slice<'d, 'r: 'd, B, T: ?Sized>(
+    bytes: &'r [u8],
+    ctxt: EncodingContext<B>,
+) -> Result<(T, usize)>
 where
     B: byteorder::ByteOrder,
     T: Deserialize<'d> + Type,
@@ -109,7 +120,7 @@ where
 ///
 /// let encoded = to_bytes_for_signature(ctxt, "u", &Unit::Variant2).unwrap();
 /// assert_eq!(encoded.len(), 4);
-/// let decoded: Unit = from_slice_for_signature(&encoded, ctxt, "u").unwrap();
+/// let decoded: Unit = from_slice_for_signature(&encoded, ctxt, "u").unwrap().0;
 /// assert_eq!(decoded, Unit::Variant2);
 ///
 /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,7 +134,7 @@ where
 /// let encoded =
 ///     to_bytes_for_signature(ctxt, signature, &NewType::Variant2("hello")).unwrap();
 /// assert_eq!(encoded.len(), 14);
-/// let decoded: NewType<'_> = from_slice_for_signature(&encoded, ctxt, signature).unwrap();
+/// let decoded: NewType<'_> = from_slice_for_signature(&encoded, ctxt, signature).unwrap().0;
 /// assert_eq!(decoded, NewType::Variant2("hello"));
 ///
 /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -132,29 +143,31 @@ where
 ///     Struct { y: u8, t: u64 },
 /// }
 ///
-/// // TODO: Provide convenience API to create complex signatures
 /// let signature = "(u(yt))";
 /// let encoded = to_bytes_for_signature(ctxt, signature, &Structs::Tuple(42, 42)).unwrap();
 /// assert_eq!(encoded.len(), 24);
-/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, signature).unwrap();
+/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, signature).unwrap().0;
 /// assert_eq!(decoded, Structs::Tuple(42, 42));
 ///
 /// let s = Structs::Struct { y: 42, t: 42 };
 /// let encoded = to_bytes_for_signature(ctxt, signature, &s).unwrap();
 /// assert_eq!(encoded.len(), 24);
-/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, signature).unwrap();
+/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, signature).unwrap().0;
 /// assert_eq!(decoded, Structs::Struct { y: 42, t: 42 });
 /// ```
+///
+/// # Return value
+///
+/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
 ///
 /// [`Type`]: trait.Type.html
 /// [`Fd`]: struct.Fd.html
 /// [`from_slice_fds_for_signature`]: fn.from_slice_fds_for_signature.html
-// TODO: Return number of bytes parsed?
 pub fn from_slice_for_signature<'d, 'r: 'd, B, S, T: ?Sized>(
     bytes: &'r [u8],
     ctxt: EncodingContext<B>,
     signature: S,
-) -> Result<T>
+) -> Result<(T, usize)>
 where
     B: byteorder::ByteOrder,
     T: Deserialize<'d>,
@@ -179,16 +192,19 @@ where
 ///
 /// This function is not available on Windows.
 ///
+/// # Return value
+///
+/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
+///
 /// [`from_slice`]: fn.from_slice.html
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html
-// TODO: Return number of bytes parsed?
 #[cfg(unix)]
 pub fn from_slice_fds_for_signature<'d, 'r: 'd, B, S, T: ?Sized>(
     bytes: &'r [u8],
     fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
     signature: S,
-) -> Result<T>
+) -> Result<(T, usize)>
 where
     B: byteorder::ByteOrder,
     T: Deserialize<'d>,
@@ -203,7 +219,7 @@ fn _from_slice_fds_for_signature<'d, 'r: 'd, B, S, T: ?Sized>(
     #[cfg(unix)] fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
     signature: S,
-) -> Result<T>
+) -> Result<(T, usize)>
 where
     B: byteorder::ByteOrder,
     T: Deserialize<'d>,
@@ -232,7 +248,11 @@ where
         .map(Deserializer::DBus)?,
     };
 
-    T::deserialize(&mut de)
+    T::deserialize(&mut de).map(|t| match de {
+        #[cfg(feature = "gvariant")]
+        Deserializer::GVariant(de) => (t, de.0.pos),
+        Deserializer::DBus(de) => (t, de.0.pos),
+    })
 }
 
 /// Deserialize `T` from a given slice of bytes containing file descriptor indices, with the given
@@ -241,11 +261,15 @@ where
 /// Please note that actual file descriptors are not part of the encoding and need to be transferred
 /// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
 /// file descriptors and hence the reason, caller must pass a slice of file descriptors.
+///
+/// # Return value
+///
+/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
 pub fn from_slice_for_dynamic_signature<'d, B, S, T>(
     bytes: &'d [u8],
     ctxt: EncodingContext<B>,
     signature: S,
-) -> Result<T>
+) -> Result<(T, usize)>
 where
     B: byteorder::ByteOrder,
     T: DynamicDeserialize<'d>,
@@ -265,13 +289,17 @@ where
 /// file descriptors and hence the reason, caller must pass a slice of file descriptors.
 ///
 /// This function is not available on Windows.
+///
+/// # Return value
+///
+/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
 #[cfg(unix)]
 pub fn from_slice_fds_for_dynamic_signature<'d, B, S, T>(
     bytes: &'d [u8],
     fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
     signature: S,
-) -> Result<T>
+) -> Result<(T, usize)>
 where
     B: byteorder::ByteOrder,
     T: DynamicDeserialize<'d>,
@@ -289,11 +317,15 @@ where
 /// Please note that actual file descriptors are not part of the encoding and need to be transferred
 /// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
 /// file descriptors and hence the reason, caller must pass a slice of file descriptors.
+///
+/// # Return value
+///
+/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
 pub fn from_slice_with_seed<'d, B, S>(
     bytes: &'d [u8],
     ctxt: EncodingContext<B>,
     seed: S,
-) -> Result<S::Value>
+) -> Result<(S::Value, usize)>
 where
     B: byteorder::ByteOrder,
     S: DeserializeSeed<'d> + DynamicType,
@@ -315,13 +347,17 @@ where
 /// file descriptors and hence the reason, caller must pass a slice of file descriptors.
 ///
 /// This function is not available on Windows.
+///
+/// # Return value
+///
+/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
 #[cfg(unix)]
 pub fn from_slice_fds_with_seed<'d, B, S>(
     bytes: &'d [u8],
     fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
     seed: S,
-) -> Result<S::Value>
+) -> Result<(S::Value, usize)>
 where
     B: byteorder::ByteOrder,
     S: DeserializeSeed<'d> + DynamicType,
@@ -334,7 +370,7 @@ fn _from_slice_fds_with_seed<'d, B, S>(
     #[cfg(unix)] fds: Option<&[RawFd]>,
     ctxt: EncodingContext<B>,
     seed: S,
-) -> Result<S::Value>
+) -> Result<(S::Value, usize)>
 where
     B: byteorder::ByteOrder,
     S: DeserializeSeed<'d> + DynamicType,
@@ -361,7 +397,11 @@ where
         .map(Deserializer::DBus)?,
     };
 
-    seed.deserialize(&mut de)
+    seed.deserialize(&mut de).map(|t| match de {
+        #[cfg(feature = "gvariant")]
+        Deserializer::GVariant(de) => (t, de.0.pos),
+        Deserializer::DBus(de) => (t, de.0.pos),
+    })
 }
 
 /// Our deserialization implementation.

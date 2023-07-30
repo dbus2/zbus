@@ -29,7 +29,7 @@ let s = Struct {
 };
 let ctxt = EncodingContext::<LE>::new_dbus(0);
 let encoded = to_bytes(ctxt, &s).unwrap();
-let decoded: Struct = from_slice(&encoded, ctxt).unwrap();
+let decoded: Struct = from_slice(&encoded, ctxt).unwrap().0;
 assert_eq!(decoded, s);
 ```
 
