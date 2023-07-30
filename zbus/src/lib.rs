@@ -124,8 +124,6 @@ pub use match_rule::Builder as MatchRuleBuilder;
 #[doc(hidden)]
 pub use match_rule::PathSpec as MatchRulePathSpec;
 
-mod socket_reader;
-
 pub mod proxy;
 pub use proxy::Proxy;
 
