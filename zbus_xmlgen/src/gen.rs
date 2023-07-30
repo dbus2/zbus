@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 
 use zbus::{
     names::BusName,
-    quick_xml::{Arg, ArgDirection, Interface},
+    xml::{Arg, ArgDirection, Interface},
 };
 use zvariant::{
     Basic, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
@@ -287,7 +287,7 @@ mod tests {
     use std::{error::Error, result::Result};
 
     use super::GenTrait;
-    use zbus::quick_xml::Node;
+    use zbus::xml::Node;
 
     static EXAMPLE: &str = r##"
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"

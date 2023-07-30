@@ -1,14 +1,10 @@
-#![cfg(feature = "xml")]
-
 //! Introspection XML support (`xml` feature)
 //!
 //! Thanks to the [`org.freedesktop.DBus.Introspectable`] interface, objects may be introspected at
 //! runtime, returning an XML string that describes the object.
 //!
-//! This optional `xml` module provides facilities to parse the XML data into more convenient Rust
-//! structures. The XML string may be parsed to a tree with [`Node.from_reader()`].
-//!
-//! See also:
+//! This optional `xml` module provides facilities to parse the XML data into more convenient
+//! Rust structures. The XML string may be parsed to a tree with [`Node.from_reader()`].
 //!
 //! * [Introspection format] in the DBus specification
 //!
@@ -16,31 +12,26 @@
 //! [Introspection format]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
 //! [`org.freedesktop.DBus.Introspectable`]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-introspectable
 
+use quick_xml::{de::Deserializer, se::to_writer};
 use serde::{Deserialize, Serialize};
-use serde_xml_rs::{from_reader, from_str, to_writer};
 use static_assertions::assert_impl_all;
 use std::{
-    io::{Read, Write},
+    convert::{TryFrom, TryInto},
+    io::{BufReader, Read, Write},
     result::Result,
 };
 
-use crate::Error;
-
-// note: serde-xml-rs doesn't handle nicely interleaved elements, so we have to use enums:
-// https://github.com/RReverser/serde-xml-rs/issues/55
-
-macro_rules! get_vec {
-    ($vec:expr, $kind:path) => {
-        $vec.iter()
-            .filter_map(|e| if let $kind(m) = e { Some(m) } else { None })
-            .collect()
-    };
-}
+use crate::{
+    names::{InterfaceName, MemberName},
+    Error,
+};
 
 /// Annotations are generic key/value pairs of metadata.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Annotation {
+    #[serde(rename = "@name")]
     name: String,
+    #[serde(rename = "@value")]
     value: String,
 }
 
@@ -58,12 +49,24 @@ impl Annotation {
     }
 }
 
+/// A direction of an argument
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ArgDirection {
+    #[serde(rename = "in")]
+    In,
+    #[serde(rename = "out")]
+    Out,
+}
+
 /// An argument
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Arg {
+    #[serde(rename = "@name")]
     name: Option<String>,
+    #[serde(rename = "@type")]
     r#type: String,
-    direction: Option<String>,
+    #[serde(rename = "@direction")]
+    direction: Option<ArgDirection>,
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
@@ -81,104 +84,120 @@ impl Arg {
         &self.r#type
     }
 
-    /// Return the argument direction (should be "in" or "out"), if any.
-    pub fn direction(&self) -> Option<&str> {
-        self.direction.as_deref()
+    /// Return the argument direction, if any.
+    pub fn direction(&self) -> Option<ArgDirection> {
+        self.direction
     }
 
     /// Return the associated annotations.
-    pub fn annotations(&self) -> Vec<&Annotation> {
-        self.annotations.iter().collect()
+    pub fn annotations(&self) -> &[Annotation] {
+        &self.annotations
     }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "lowercase")]
-enum MethodElement {
-    Arg(Arg),
-    Annotation(Annotation),
 }
 
 /// A method
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Method {
-    name: String,
-
-    #[serde(rename = "$value", default)]
-    elems: Vec<MethodElement>,
+pub struct Method<'a> {
+    #[serde(rename = "@name", borrow)]
+    name: MemberName<'a>,
+    #[serde(rename = "arg", default)]
+    args: Vec<Arg>,
+    #[serde(rename = "annotation", default)]
+    annotations: Vec<Annotation>,
 }
 
-assert_impl_all!(Method: Send, Sync, Unpin);
+assert_impl_all!(Method<'_>: Send, Sync, Unpin);
 
-impl Method {
+impl<'a> Method<'a> {
     /// Return the method name.
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> MemberName<'_> {
+        self.name.as_ref()
     }
 
     /// Return the method arguments.
-    pub fn args(&self) -> Vec<&Arg> {
-        get_vec!(self.elems, MethodElement::Arg)
+    pub fn args(&self) -> &[Arg] {
+        &self.args
     }
 
     /// Return the method annotations.
-    pub fn annotations(&self) -> Vec<&Annotation> {
-        get_vec!(self.elems, MethodElement::Annotation)
+    pub fn annotations(&self) -> &[Annotation] {
+        &self.annotations
     }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "lowercase")]
-enum SignalElement {
-    Arg(Arg),
-    Annotation(Annotation),
 }
 
 /// A signal
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Signal {
-    name: String,
+pub struct Signal<'a> {
+    #[serde(rename = "@name", borrow)]
+    name: MemberName<'a>,
 
-    #[serde(rename = "$value", default)]
-    elems: Vec<SignalElement>,
+    #[serde(rename = "arg", default)]
+    args: Vec<Arg>,
+    #[serde(rename = "annotation", default)]
+    annotations: Vec<Annotation>,
 }
 
-assert_impl_all!(Signal: Send, Sync, Unpin);
+assert_impl_all!(Signal<'_>: Send, Sync, Unpin);
 
-impl Signal {
+impl<'a> Signal<'a> {
     /// Return the signal name.
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> MemberName<'_> {
+        self.name.as_ref()
     }
 
     /// Return the signal arguments.
-    pub fn args(&self) -> Vec<&Arg> {
-        get_vec!(self.elems, SignalElement::Arg)
+    pub fn args(&self) -> &[Arg] {
+        &self.args
     }
 
     /// Return the signal annotations.
-    pub fn annotations(&self) -> Vec<&Annotation> {
-        get_vec!(self.elems, SignalElement::Annotation)
+    pub fn annotations(&self) -> &[Annotation] {
+        &self.annotations
+    }
+}
+
+/// The possible property access types
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PropertyAccess {
+    #[serde(rename = "read")]
+    Read,
+    #[serde(rename = "write")]
+    Write,
+    #[serde(rename = "readwrite")]
+    ReadWrite,
+}
+
+impl PropertyAccess {
+    pub fn read(&self) -> bool {
+        matches!(self, PropertyAccess::Read | PropertyAccess::ReadWrite)
+    }
+
+    pub fn write(&self) -> bool {
+        matches!(self, PropertyAccess::Write | PropertyAccess::ReadWrite)
     }
 }
 
 /// A property
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Property {
-    name: String,
+pub struct Property<'a> {
+    #[serde(rename = "@name", borrow)]
+    name: MemberName<'a>,
+
+    #[serde(rename = "@type")]
     r#type: String,
-    access: String,
+    #[serde(rename = "@access")]
+    access: PropertyAccess,
 
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
 
-assert_impl_all!(Property: Send, Sync, Unpin);
+assert_impl_all!(Property<'_>: Send, Sync, Unpin);
 
-impl Property {
+impl<'a> Property<'a> {
     /// Returns the property name.
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> MemberName<'_> {
+        self.name.as_ref()
     }
 
     /// Returns the property type.
@@ -187,90 +206,100 @@ impl Property {
     }
 
     /// Returns the property access flags (should be "read", "write" or "readwrite").
-    pub fn access(&self) -> &str {
-        &self.access
+    pub fn access(&self) -> PropertyAccess {
+        self.access
     }
 
     /// Return the associated annotations.
-    pub fn annotations(&self) -> Vec<&Annotation> {
-        self.annotations.iter().collect()
+    pub fn annotations(&self) -> &[Annotation] {
+        &self.annotations
     }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "lowercase")]
-enum InterfaceElement {
-    Method(Method),
-    Signal(Signal),
-    Property(Property),
-    Annotation(Annotation),
 }
 
 /// An interface
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Interface {
-    name: String,
+pub struct Interface<'a> {
+    #[serde(rename = "@name", borrow)]
+    name: InterfaceName<'a>,
 
-    #[serde(rename = "$value", default)]
-    elems: Vec<InterfaceElement>,
+    #[serde(rename = "method", default)]
+    methods: Vec<Method<'a>>,
+    #[serde(rename = "property", default)]
+    properties: Vec<Property<'a>>,
+    #[serde(rename = "signal", default)]
+    signals: Vec<Signal<'a>>,
+    #[serde(rename = "annotation", default)]
+    annotations: Vec<Annotation>,
 }
 
-assert_impl_all!(Interface: Send, Sync, Unpin);
+assert_impl_all!(Interface<'_>: Send, Sync, Unpin);
 
-impl Interface {
+impl<'a> Interface<'a> {
     /// Returns the interface name.
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> InterfaceName<'_> {
+        self.name.as_ref()
     }
 
     /// Returns the interface methods.
-    pub fn methods(&self) -> Vec<&Method> {
-        get_vec!(self.elems, InterfaceElement::Method)
+    pub fn methods(&self) -> &[Method<'a>] {
+        &self.methods
     }
 
     /// Returns the interface signals.
-    pub fn signals(&self) -> Vec<&Signal> {
-        get_vec!(self.elems, InterfaceElement::Signal)
+    pub fn signals(&self) -> &[Signal<'a>] {
+        &self.signals
     }
 
     /// Returns the interface properties.
-    pub fn properties(&self) -> Vec<&Property> {
-        get_vec!(self.elems, InterfaceElement::Property)
+    pub fn properties(&self) -> &[Property<'_>] {
+        &self.properties
     }
 
     /// Return the associated annotations.
-    pub fn annotations(&self) -> Vec<&Annotation> {
-        get_vec!(self.elems, InterfaceElement::Annotation)
+    pub fn annotations(&self) -> &[Annotation] {
+        &self.annotations
     }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "lowercase")]
-enum NodeElement {
-    Node(Node),
-    Interface(Interface),
 }
 
 /// An introspection tree node (typically the root of the XML document).
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Node {
+pub struct Node<'a> {
+    #[serde(rename = "@name")]
     name: Option<String>,
 
-    #[serde(rename = "$value", default)]
-    elems: Vec<NodeElement>,
+    #[serde(rename = "interface", default, borrow)]
+    interfaces: Vec<Interface<'a>>,
+    #[serde(rename = "node", default, borrow)]
+    nodes: Vec<Node<'a>>,
 }
 
-assert_impl_all!(Node: Send, Sync, Unpin);
+assert_impl_all!(Node<'_>: Send, Sync, Unpin);
 
-impl Node {
+impl<'a> Node<'a> {
     /// Parse the introspection XML document from reader.
-    pub fn from_reader<R: Read>(reader: R) -> Result<Node, Error> {
-        Ok(from_reader(reader)?)
+    pub fn from_reader<R: Read>(reader: R) -> Result<Node<'a>, Error> {
+        let mut deserializer = Deserializer::from_reader(BufReader::new(reader));
+        deserializer.event_buffer_size(Some(1024_usize.try_into().unwrap()));
+        Ok(Node::deserialize(&mut deserializer)?)
     }
 
     /// Write the XML document to writer.
     pub fn to_writer<W: Write>(&self, writer: W) -> Result<(), Error> {
-        Ok(to_writer(writer, &self)?)
+        // Need this wrapper until this is resolved: https://github.com/tafia/quick-xml/issues/499
+        struct Writer<T>(T);
+
+        impl<T> std::fmt::Write for Writer<T>
+        where
+            T: Write,
+        {
+            fn write_str(&mut self, s: &str) -> std::fmt::Result {
+                self.0.write_all(s.as_bytes()).map_err(|_| std::fmt::Error)
+            }
+        }
+
+        to_writer(Writer(writer), &self)?;
+
+        Ok(())
     }
 
     /// Returns the node name, if any.
@@ -279,31 +308,33 @@ impl Node {
     }
 
     /// Returns the children nodes.
-    pub fn nodes(&self) -> Vec<&Node> {
-        get_vec!(self.elems, NodeElement::Node)
+    pub fn nodes(&self) -> &[Node<'a>] {
+        &self.nodes
     }
 
     /// Returns the interfaces on this node.
-    pub fn interfaces(&self) -> Vec<&Interface> {
-        get_vec!(self.elems, NodeElement::Interface)
+    pub fn interfaces(&self) -> &[Interface<'a>] {
+        &self.interfaces
     }
 }
 
-impl std::str::FromStr for Node {
-    type Err = Error;
+impl<'a> TryFrom<&'a str> for Node<'a> {
+    type Error = Error;
 
     /// Parse the introspection XML document from `s`.
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(from_str(s)?)
+    fn try_from(s: &'a str) -> Result<Node<'a>, Error> {
+        let mut deserializer = Deserializer::from_str(s);
+        deserializer.event_buffer_size(Some(1024_usize.try_into().unwrap()));
+        Ok(Node::deserialize(&mut deserializer)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{error::Error, str::FromStr};
+    use std::{convert::TryInto, error::Error};
     use test_log::test;
 
-    use super::Node;
+    use super::{ArgDirection, Node};
 
     static EXAMPLE: &str = r##"
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
@@ -338,16 +369,21 @@ mod tests {
     fn serde() -> Result<(), Box<dyn Error>> {
         let node = Node::from_reader(EXAMPLE.as_bytes())?;
         assert_eq!(node.interfaces().len(), 1);
+        assert_eq!(node.interfaces()[0].methods().len(), 3);
+        assert_eq!(
+            node.interfaces()[0].methods()[0].args()[0]
+                .direction()
+                .unwrap(),
+            ArgDirection::In
+        );
         assert_eq!(node.nodes().len(), 3);
 
-        let node_str = Node::from_str(EXAMPLE)?;
+        let node_str: Node<'_> = EXAMPLE.try_into()?;
         assert_eq!(node_str.interfaces().len(), 1);
         assert_eq!(node_str.nodes().len(), 3);
 
-        // TODO: Fails at the moment, this seems fresh & related:
-        // https://github.com/RReverser/serde-xml-rs/pull/129
-        //let mut writer = Vec::with_capacity(128);
-        //node.to_writer(&mut writer).unwrap();
+        let mut writer = Vec::with_capacity(128);
+        node.to_writer(&mut writer).unwrap();
         Ok(())
     }
 }
