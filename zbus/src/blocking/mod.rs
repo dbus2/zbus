@@ -16,10 +16,9 @@
 //! [asf]: https://rust-lang.github.io/wg-async/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
 //! [`blocking` crate]: https://docs.rs/blocking/
 
-mod connection;
-pub use connection::*;
-mod connection_builder;
-pub use connection_builder::*;
+pub mod connection;
+pub use connection::Connection;
+
 mod message_iterator;
 pub use message_iterator::*;
 pub mod object_server;
@@ -46,5 +45,9 @@ pub use proxy::SignalIterator;
 #[deprecated(note = "Use `object_server::InterfaceRef` instead")]
 #[doc(hidden)]
 pub use object_server::InterfaceRef;
+
+#[deprecated(note = "Use `connection::Builder` instead")]
+#[doc(hidden)]
+pub use connection::Builder;
 
 pub mod fdo;

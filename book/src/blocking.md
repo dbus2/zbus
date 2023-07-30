@@ -134,7 +134,7 @@ the beginning of this chapter for details on why and a possible workaround.
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{blocking::ConnectionBuilder, dbus_interface, fdo, SignalContext};
+# use zbus::{blocking::connection, dbus_interface, fdo, SignalContext};
 #
 use event_listener::Event;
 
@@ -188,7 +188,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    let _handle = ConnectionBuilder::session()?
+    let _handle = connection::Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()?;
@@ -199,11 +199,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-[asynchronous `Connection` API]: https://docs.rs/zbus/3/zbus/struct.Connection.html
-[`blocking::Connection`]: https://docs.rs/zbus/3/zbus/blocking/struct.Connection.html
+[asynchronous `Connection` API]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html
+[`blocking::Connection`]: https://docs.rs/zbus/latest/zbus/blocking/connection/struct.Connection.html
 [`futures::sink::Sink`]: https://docs.rs/futures/latest/futures/sink/trait.Sink.html
 [`std::iter::Iterator`]: https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html
-[blocking module]: https://docs.rs/zbus/3/zbus/blocking/index.html
+[blocking module]: https://docs.rs/zbus/latest/zbus/blocking/index.html
 [wkgp]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
 [`blocking` crate]: https://docs.rs/blocking/
 [assb]: https://docs.rs/async-std/latest/async_std/task/fn.spawn_blocking.html

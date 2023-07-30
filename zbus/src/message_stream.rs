@@ -13,8 +13,9 @@ use static_assertions::assert_impl_all;
 use tracing::warn;
 
 use crate::{
+    connection::ConnectionInner,
     message::{Message, Sequence},
-    AsyncDrop, Connection, ConnectionInner, MatchRule, OwnedMatchRule, Result,
+    AsyncDrop, Connection, MatchRule, OwnedMatchRule, Result,
 };
 
 /// A [`stream::Stream`] implementation that yields [`Message`] items.

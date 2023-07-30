@@ -74,4 +74,4 @@ Onwards to implementation details & examples!
 [Basic types chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
 [unique name]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface
 [introspection interface]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-introspectable
-[low-level asynchronous API]: https://docs.rs/zbus/1.9.2/zbus/azync/connection/struct.Connection.html
+[low-level asynchronous API]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html

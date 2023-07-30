@@ -184,14 +184,12 @@ mod utils;
 /// [`zbus_polkit`] is a good example of how to bind a real D-Bus API.
 ///
 /// [`zbus_polkit`]: https://docs.rs/zbus_polkit/1.0.0/zbus_polkit/policykit1/index.html
-/// [`zbus::Proxy`]: https://docs.rs/zbus/3.0.0/zbus/struct.Proxy.html
-/// [`zbus::message::Message`]: https://docs.rs/zbus/3.0.0/zbus/struct.Message.html
-/// [`zbus::blocking::Proxy`]: https://docs.rs/zbus/3.0.0/zbus/blocking/struct.Proxy.html
-/// [`zbus::SignalStream`]: https://docs.rs/zbus/3.0.0/zbus/struct.SignalStream.html
-/// [`zbus::blocking::SignalIterator`]: https://docs.rs/zbus/3.0.0/zbus/blocking/struct.SignalIterator.html
-/// [`zbus::SignalReceiver::receive_for`]:
-/// https://docs.rs/zbus/3.0.0/zbus/struct.SignalReceiver.html#method.receive_for
-/// [`ObjectPath`]: https://docs.rs/zvariant/2.10.0/zvariant/struct.ObjectPath.html
+/// [`zbus::Proxy`]: https://docs.rs/zbus/latest/zbus/proxy/struct.Proxy.html
+/// [`zbus::message::Message`]: https://docs.rs/zbus/latest/zbus/message/struct.Message.html
+/// [`zbus::blocking::Proxy`]: https://docs.rs/zbus/latest/zbus/blocking/proxy/struct.Proxy.html
+/// [`zbus::SignalStream`]: https://docs.rs/zbus/latest/zbus/proxy/struct.SignalStream.html
+/// [`zbus::blocking::SignalIterator`]: https://docs.rs/zbus/latest/zbus/blocking/proxy/struct.SignalIterator.html
+/// [`ObjectPath`]: https://docs.rs/zvariant/latest/zvariant/struct.ObjectPath.html
 /// [dbus_emits_changed_signal]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
 #[proc_macro_attribute]
 pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -318,12 +316,12 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// See also [`ObjectServer`] documentation to learn how to export an interface over a `Connection`.
 ///
-/// [`ObjectServer`]: https://docs.rs/zbus/3.0.0/zbus/struct.ObjectServer.html
-/// [`ObjectServer::with`]: https://docs.rs/zbus/3.0.0/zbus/struct.ObjectServer.html#method.with
-/// [`Connection`]: https://docs.rs/zbus/3.0.0/zbus/struct.Connection.html
-/// [`Connection::emit_signal()`]: https://docs.rs/zbus/3.0.0/zbus/struct.Connection.html#method.emit_signal
-/// [`SignalContext`]: https://docs.rs/zbus/3.0.0/zbus/struct.SignalContext.html
-/// [`Interface`]: https://docs.rs/zbus/3.0.0/zbus/trait.Interface.html
+/// [`ObjectServer`]: https://docs.rs/zbus/latest/zbus/object_server/struct.ObjectServer.html
+/// [`ObjectServer::with`]: https://docs.rs/zbus/latest/zbus/object_server/struct.ObjectServer.html#method.with
+/// [`Connection`]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html
+/// [`Connection::emit_signal()`]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html#method.emit_signal
+/// [`SignalContext`]: https://docs.rs/zbus/latest/zbus/object_server/struct.SignalContext.html
+/// [`Interface`]: https://docs.rs/zbus/latest/zbus/object_server/trait.Interface.html
 #[proc_macro_attribute]
 pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
@@ -361,9 +359,9 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 /// ```
 ///
-/// [`zbus::DBusError`]: https://docs.rs/zbus/3.0.0/zbus/trait.DBusError.html
-/// [`zbus::Error`]: https://docs.rs/zbus/3.0.0/zbus/enum.Error.html
-/// [`zvariant::Type`]: https://docs.rs/zvariant/3.0.0/zvariant/trait.Type.html
+/// [`zbus::DBusError`]: https://docs.rs/zbus/latest/zbus/trait.DBusError.html
+/// [`zbus::Error`]: https://docs.rs/zbus/latest/zbus/enum.Error.html
+/// [`zvariant::Type`]: https://docs.rs/zvariant/latest/zvariant/trait.Type.html
 /// [`serde::Serialize`]: https://docs.rs/serde/1.0.132/serde/trait.Serialize.html
 #[proc_macro_derive(DBusError, attributes(dbus_error))]
 pub fn derive_dbus_error(input: TokenStream) -> TokenStream {
