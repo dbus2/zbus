@@ -98,12 +98,8 @@ pub use message::Type as MessageType;
 #[doc(hidden)]
 pub use message::NATIVE_ENDIAN_SIG;
 
-mod handshake;
-pub use handshake::AuthMechanism;
-pub(crate) use handshake::*;
-
 pub mod connection;
-pub use connection::Connection;
+pub use connection::{handshake::AuthMechanism, Connection};
 
 #[deprecated(note = "Use `connection::Builder` instead")]
 #[doc(hidden)]
@@ -123,8 +119,6 @@ pub use match_rule::Builder as MatchRuleBuilder;
 #[deprecated(note = "Use `match_rule::PathSpec` instead")]
 #[doc(hidden)]
 pub use match_rule::PathSpec as MatchRulePathSpec;
-
-mod socket_reader;
 
 pub mod proxy;
 pub use proxy::Proxy;

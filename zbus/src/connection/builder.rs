@@ -27,12 +27,13 @@ use zvariant::{ObjectPath, Str};
 use crate::{
     address::{self, Address},
     async_lock::RwLock,
-    handshake,
     names::{InterfaceName, UniqueName, WellKnownName},
     object_server::Interface,
     raw::Socket,
-    AuthMechanism, Authenticated, Connection, Error, Executor, Guid, Result,
+    Connection, Error, Executor, Guid, Result,
 };
+
+use super::handshake::{AuthMechanism, Authenticated};
 
 const DEFAULT_MAX_QUEUED: usize = 64;
 
@@ -67,7 +68,7 @@ pub struct Builder<'a> {
     names: HashSet<WellKnownName<'a>>,
     auth_mechanisms: Option<VecDeque<AuthMechanism>>,
     unique_name: Option<UniqueName<'a>>,
-    cookie_context: Option<handshake::CookieContext<'a>>,
+    cookie_context: Option<super::handshake::CookieContext<'a>>,
     cookie_id: Option<usize>,
 }
 
