@@ -5,27 +5,6 @@ use zvariant_utils::{case, macros};
 
 use crate::utils::*;
 
-pub fn expand_type_derive(input: DeriveInput) -> Result<TokenStream, Error> {
-    let name = match input.data {
-        Data::Struct(_) => input.ident,
-        _ => return Err(Error::new(input.span(), "only structs supported")),
-    };
-
-    let zv = zvariant_path();
-    let generics = input.generics;
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    Ok(quote! {
-        impl #impl_generics #zv::Type for #name #ty_generics
-        #where_clause
-        {
-            fn signature() -> #zv::Signature<'static> {
-                #zv::Signature::from_static_str_unchecked("a{sv}")
-            }
-        }
-    })
-}
-
 fn dict_name_for_field(
     f: &Field,
     rename_attr: Option<String>,
