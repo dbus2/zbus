@@ -178,8 +178,9 @@ impl PrimaryHeader {
 
     pub(crate) fn read(buf: &[u8]) -> Result<(PrimaryHeader, u32), Error> {
         let ctx = EncodingContext::<byteorder::NativeEndian>::new_dbus(0);
-        let primary_header = zvariant::from_slice(buf, ctx)?;
-        let fields_len = zvariant::from_slice(&buf[PRIMARY_HEADER_SIZE..], ctx)?;
+        let (primary_header, size) = zvariant::from_slice(buf, ctx)?;
+        assert_eq!(size, PRIMARY_HEADER_SIZE);
+        let (fields_len, _) = zvariant::from_slice(&buf[PRIMARY_HEADER_SIZE..], ctx)?;
         Ok((primary_header, fields_len))
     }
 

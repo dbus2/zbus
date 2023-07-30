@@ -30,24 +30,24 @@ let ctxt = Context::<LE>::new_dbus(0);
 
 // i16
 let encoded = to_bytes(ctxt, &42i16).unwrap();
-let decoded: i16 = from_slice(&encoded, ctxt).unwrap();
+let decoded: i16 = from_slice(&encoded, ctxt).unwrap().0;
 assert_eq!(decoded, 42);
 
 // strings
 let encoded = to_bytes(ctxt, &"hello").unwrap();
-let decoded: &str = from_slice(&encoded, ctxt).unwrap();
+let decoded: &str = from_slice(&encoded, ctxt).unwrap().0;
 assert_eq!(decoded, "hello");
 
 // tuples
 let t = ("hello", 42i32, true);
 let encoded = to_bytes(ctxt, &t).unwrap();
-let decoded: (&str, i32, bool) = from_slice(&encoded, ctxt).unwrap();
+let decoded: (&str, i32, bool) = from_slice(&encoded, ctxt).unwrap().0;
 assert_eq!(decoded, t);
 
 // Vec
 let v = vec!["hello", "world!"];
 let encoded = to_bytes(ctxt, &v).unwrap();
-let decoded: Vec<&str> = from_slice(&encoded, ctxt).unwrap();
+let decoded: Vec<&str> = from_slice(&encoded, ctxt).unwrap().0;
 assert_eq!(decoded, v);
 
 // Dictionary
@@ -55,7 +55,7 @@ let mut map: HashMap<i64, &str> = HashMap::new();
 map.insert(1, "123");
 map.insert(2, "456");
 let encoded = to_bytes(ctxt, &map).unwrap();
-let decoded: HashMap<i64, &str> = from_slice(&encoded, ctxt).unwrap();
+let decoded: HashMap<i64, &str> = from_slice(&encoded, ctxt).unwrap().0;
 assert_eq!(decoded[&1], "123");
 assert_eq!(decoded[&2], "456");
 
@@ -75,7 +75,7 @@ let s = Struct {
 };
 let ctxt = Context::<LE>::new_dbus(0);
 let encoded = to_bytes(ctxt, &s).unwrap();
-let decoded: Struct = from_slice(&encoded, ctxt).unwrap();
+let decoded: Struct = from_slice(&encoded, ctxt).unwrap().0;
 assert_eq!(decoded, s);
 
 // It can handle enums too, just that all variants must have the same number and types of fields.
@@ -98,7 +98,7 @@ let e = Enum::Variant3 {
     f3: "hello",
 };
 let encoded = to_bytes(ctxt, &e).unwrap();
-let decoded: Enum = from_slice(&encoded, ctxt).unwrap();
+let decoded: Enum = from_slice(&encoded, ctxt).unwrap().0;
 assert_eq!(decoded, e);
 
 #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
@@ -112,7 +112,7 @@ enum UnitEnum {
 
 assert_eq!(UnitEnum::signature(), "y");
 let encoded = to_bytes(ctxt, &UnitEnum::Variant2).unwrap();
-let e: UnitEnum = from_slice(&encoded, ctxt).unwrap();
+let e: UnitEnum = from_slice(&encoded, ctxt).unwrap().0;
 assert_eq!(e, UnitEnum::Variant2);
 
 // Unit enums can also be (de)serialized as strings.

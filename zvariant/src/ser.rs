@@ -106,7 +106,7 @@ where
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// let mut cursor = std::io::Cursor::new(vec![]);
 /// to_writer(&mut cursor, ctxt, &42u32).unwrap();
-/// let value: u32 = from_slice(cursor.get_ref(), ctxt).unwrap();
+/// let value: u32 = from_slice(cursor.get_ref(), ctxt).unwrap().0;
 /// assert_eq!(value, 42);
 /// ```
 ///

@@ -44,7 +44,7 @@ use crate::Fd;
 /// let encoding = to_bytes(ctxt, &v).unwrap();
 ///
 /// // Decode it back
-/// let v: Value = from_slice(&encoding, ctxt).unwrap();
+/// let v: Value = from_slice(&encoding, ctxt).unwrap().0;
 ///
 /// // Check everything is as expected
 /// assert_eq!(i16::try_from(&v).unwrap(), i16::max_value());
@@ -62,7 +62,7 @@ use crate::Fd;
 /// // Same drill as previous example
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// let encoding = to_bytes(ctxt, &v).unwrap();
-/// let v: Value = from_slice(&encoding, ctxt).unwrap();
+/// let v: Value = from_slice(&encoding, ctxt).unwrap().0;
 ///
 /// // Check everything is as expected
 /// let s = Structure::try_from(v).unwrap();

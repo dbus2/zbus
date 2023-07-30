@@ -18,7 +18,7 @@ use crate::{Signature, Type, Value};
 /// # let array = [0, 1, 2];
 /// # let v = SerializeValue(&array);
 /// # let encoded = to_bytes(ctxt, &v).unwrap();
-/// let decoded: DeserializeValue<[u8; 3]> = from_slice(&encoded, ctxt).unwrap();
+/// let decoded: DeserializeValue<[u8; 3]> = from_slice(&encoded, ctxt).unwrap().0;
 /// # assert_eq!(decoded.0, array);
 /// ```
 ///
