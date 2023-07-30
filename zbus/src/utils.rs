@@ -17,6 +17,7 @@ pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
 /// type alias.  This is currently required because the macros for properties expect a Result
 /// return value, but the macro-generated `receive_` functions need to refer to the actual
 /// type without the associated error.
+#[doc(hidden)]
 pub trait ResultAdapter {
     type Ok;
     type Err;

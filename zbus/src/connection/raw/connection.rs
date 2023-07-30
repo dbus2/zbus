@@ -14,9 +14,10 @@ use crate::{
         header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
         Message, PrimaryHeader,
     },
-    raw::Socket,
     utils::padding_for_8_bytes,
 };
+
+use super::Socket;
 
 use futures_core::ready;
 

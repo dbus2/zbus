@@ -6,10 +6,9 @@ use std::{
 use futures_util::future::poll_fn;
 use tracing::{debug, instrument, trace};
 
-use crate::{
-    async_lock::Mutex, connection::MsgBroadcaster, raw::Connection as RawConnection, Executor,
-    OwnedMatchRule, Socket, Task,
-};
+use crate::{async_lock::Mutex, connection::MsgBroadcaster, Executor, OwnedMatchRule, Task};
+
+use super::raw::{Connection as RawConnection, Socket};
 
 #[derive(Debug)]
 pub(crate) struct SocketReader {

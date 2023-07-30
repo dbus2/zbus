@@ -18,12 +18,9 @@ use xdg_home::home_dir;
 
 #[cfg(windows)]
 use crate::win32;
-use crate::{
-    file::FileLines,
-    guid::Guid,
-    raw::{Connection, Socket},
-    Error, Result,
-};
+use crate::{file::FileLines, guid::Guid, Error, Result};
+
+use super::raw::{Connection, Socket};
 
 /// Authentication mechanisms
 ///
