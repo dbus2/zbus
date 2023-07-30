@@ -409,8 +409,8 @@ macro_rules! gen_monitoring_proxy {
             /// * `flags` - This argument is currently unused by the bus. Just pass a `0`.
             ///
             /// [the spec]: https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-become-monitor
-            /// [`Connection`]: https://docs.rs/zbus/3/zbus/struct.Connection.html
-            /// [`MessageStream`]: https://docs.rs/zbus/3/zbus/struct.MessageStream.html
+            /// [`Connection`]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html
+            /// [`MessageStream`]: https://docs.rs/zbus/latest/zbus/struct.MessageStream.html
             fn become_monitor(
                 self,
                 match_rules: &[crate::MatchRule<'_>],

@@ -108,10 +108,10 @@ to list all properties you wish to disable caching for.
 method.
 
 For more information about all the possible values for `emits_changed_signal` refer
- to [`dbus_proxy`](https://docs.rs/zbus/3.13.1/zbus/attr.dbus_proxy.html) documentation.
+ to [`dbus_proxy`](https://docs.rs/zbus/latest/zbus/attr.dbus_proxy.html) documentation.
 
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
-[`Type`]: https://docs.rs/zvariant/3/zvariant/derive.Type.html
-[`SerializeDict`]: https://docs.rs/zvariant/3/zvariant/derive.SerializeDict.html
-[`DeserializeDict`]: https://docs.rs/zvariant/3/zvariant/derive.DeserializeDict.html
-[`MessageStream`]: https://docs.rs/zbus/3/zbus/struct.MessageStream.html
+[`Type`]: https://docs.rs/zvariant/latest/zvariant/derive.Type.html
+[`SerializeDict`]: https://docs.rs/zvariant/latest/zvariant/derive.SerializeDict.html
+[`DeserializeDict`]: https://docs.rs/zvariant/latest/zvariant/derive.DeserializeDict.html
+[`MessageStream`]: https://docs.rs/zbus/latest/zbus/struct.MessageStream.html

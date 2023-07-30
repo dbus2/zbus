@@ -158,7 +158,7 @@ mod value;
 /// assert_eq!(decoded, StrEnum::Variant2);
 /// ```
 ///
-/// [`Type`]: https://docs.rs/zvariant/2.10.0/zvariant/trait.Type.html
+/// [`Type`]: https://docs.rs/zvariant/latest/zvariant/trait.Type.html
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
 /// [serde_repr]: https://crates.io/crates/serde_repr
@@ -424,7 +424,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// [`Type`] for more details and an example use. Please note that this macro can only handle
 /// `dict` or `a{sv}` values. All other values will be ignored.
 ///
-/// [`Value`]: https://docs.rs/zvariant/2.10.0/zvariant/enum.Value.html
+/// [`Value`]: https://docs.rs/zvariant/latest/zvariant/enum.Value.html
 /// [`Type`]: derive.Type.html#custom-types
 #[proc_macro_derive(Value)]
 pub fn value_macro_derive(input: TokenStream) -> TokenStream {
@@ -440,7 +440,7 @@ pub fn value_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// See [`Value`] documentation for examples.
 ///
-/// [`OwnedValue`]: https://docs.rs/zvariant/2.10.0/zvariant/struct.OwnedValue.html
+/// [`OwnedValue`]: https://docs.rs/zvariant/latest/zvariant/struct.OwnedValue.html
 #[proc_macro_derive(OwnedValue)]
 pub fn owned_value_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();

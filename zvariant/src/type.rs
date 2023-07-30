@@ -31,7 +31,7 @@ use std::{
 /// [basic types]: trait.Basic.html
 /// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 /// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
-/// [zvariant_derive]: https://docs.rs/zvariant_derive/2.10.0/zvariant_derive/
+/// [zvariant_derive]: https://docs.rs/zvariant_derive/latest/zvariant_derive/
 pub trait Type {
     /// Get the signature for the implementing type.
     ///
