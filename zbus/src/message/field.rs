@@ -76,7 +76,6 @@ impl<'f> Field<'f> {
             Field::Sender(_) => FieldCode::Sender,
             Field::Signature(_) => FieldCode::Signature,
             Field::UnixFDs(_) => FieldCode::UnixFDs,
-            Field::Invalid => FieldCode::Invalid,
         }
     }
 }
@@ -94,8 +93,6 @@ impl<'f> Field<'f> {
 /// [Message Format]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-messages
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Field<'f> {
-    /// Not a valid field.
-    Invalid,
     /// The object to send a call to, or the object a signal is emitted from.
     Path(ObjectPath<'f>),
     /// The interface to invoke a method call on, or that a signal is emitted from.
@@ -139,8 +136,6 @@ impl<'f> Serialize for Field<'f> {
             Field::Sender(value) => (FieldCode::Sender, value.as_str().into()),
             Field::Signature(value) => (FieldCode::Signature, value.as_ref().into()),
             Field::UnixFDs(value) => (FieldCode::UnixFDs, (*value).into()),
-            // This is a programmer error
-            Field::Invalid => panic!("Attempt to serialize invalid Field"),
         };
 
         tuple.serialize(serializer)
