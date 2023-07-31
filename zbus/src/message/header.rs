@@ -269,12 +269,12 @@ impl<'m> Header<'m> {
     }
 
     /// Get a reference to the message fields.
-    pub fn fields<'s>(&'s self) -> &'s Fields<'m> {
+    pub fn fields(&self) -> &Fields<'m> {
         &self.fields
     }
 
     /// Get a mutable reference to the message fields.
-    pub fn fields_mut<'s>(&'s mut self) -> &'s mut Fields<'m> {
+    pub fn fields_mut(&mut self) -> &mut Fields<'m> {
         &mut self.fields
     }
 
@@ -289,22 +289,22 @@ impl<'m> Header<'m> {
     }
 
     /// The object to send a call to, or the object a signal is emitted from.
-    pub fn path<'s>(&'s self) -> Result<Option<&ObjectPath<'m>>, Error> {
+    pub fn path(&self) -> Result<Option<&ObjectPath<'m>>, Error> {
         get_field!(self, Path)
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
-    pub fn interface<'s>(&'s self) -> Result<Option<&InterfaceName<'m>>, Error> {
+    pub fn interface(&self) -> Result<Option<&InterfaceName<'m>>, Error> {
         get_field!(self, Interface)
     }
 
     /// The member, either the method name or signal name.
-    pub fn member<'s>(&'s self) -> Result<Option<&MemberName<'m>>, Error> {
+    pub fn member(&self) -> Result<Option<&MemberName<'m>>, Error> {
         get_field!(self, Member)
     }
 
     /// The name of the error that occurred, for errors.
-    pub fn error_name<'s>(&'s self) -> Result<Option<&ErrorName<'m>>, Error> {
+    pub fn error_name(&self) -> Result<Option<&ErrorName<'m>>, Error> {
         get_field!(self, ErrorName)
     }
 
@@ -318,12 +318,12 @@ impl<'m> Header<'m> {
     }
 
     /// The name of the connection this message is intended for.
-    pub fn destination<'s>(&'s self) -> Result<Option<&BusName<'m>>, Error> {
+    pub fn destination(&self) -> Result<Option<&BusName<'m>>, Error> {
         get_field!(self, Destination)
     }
 
     /// Unique name of the sending connection.
-    pub fn sender<'s>(&'s self) -> Result<Option<&UniqueName<'m>>, Error> {
+    pub fn sender(&self) -> Result<Option<&UniqueName<'m>>, Error> {
         get_field!(self, Sender)
     }
 
