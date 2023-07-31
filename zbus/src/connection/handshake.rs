@@ -988,6 +988,7 @@ impl<S: Socket> HandshakeCommon<S> {
         let line = std::str::from_utf8(line_bytes.as_slice())
             .map_err(|e| Error::Handshake(e.to_string()))?;
 
+        trace!("Reading {line}");
         line.parse()
     }
 
