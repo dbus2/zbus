@@ -51,7 +51,7 @@ pub enum Error {
     FDO(Box<fdo::Error>),
     #[cfg(feature = "xml")]
     /// An XML error from quick_xml
-    QuickXml(DeError),
+    Xml(DeError),
     NoBodySignature,
     /// The requested name was already claimed by another peer.
     NameTaken,
@@ -89,7 +89,7 @@ impl PartialEq for Error {
             (Self::NameTaken, Self::NameTaken) => true,
             (Error::InputOutput(_), Self::InputOutput(_)) => false,
             #[cfg(feature = "xml")]
-            (Self::QuickXml(_), Self::QuickXml(_)) => false,
+            (Self::Xml(_), Self::Xml(_)) => false,
             (Self::Failure(s1), Self::Failure(s2)) => s1 == s2,
             (_, _) => false,
         }
@@ -113,7 +113,7 @@ impl error::Error for Error {
             Error::Unsupported => None,
             Error::FDO(e) => Some(e),
             #[cfg(feature = "xml")]
-            Error::QuickXml(e) => Some(e),
+            Error::Xml(e) => Some(e),
             Error::NoBodySignature => None,
             Error::InvalidField => None,
             Error::MissingField => None,
@@ -149,7 +149,7 @@ impl fmt::Display for Error {
             Error::Unsupported => write!(f, "Connection support is lacking"),
             Error::FDO(e) => write!(f, "{e}"),
             #[cfg(feature = "xml")]
-            Error::QuickXml(e) => write!(f, "XML error: {e}"),
+            Error::Xml(e) => write!(f, "XML error: {e}"),
             Error::NoBodySignature => write!(f, "missing body signature in the message"),
             Error::NameTaken => write!(f, "name already taken on the bus"),
             Error::InvalidMatchRule => write!(f, "Invalid match rule string"),
@@ -182,7 +182,7 @@ impl Clone for Error {
             Error::Unsupported => Error::Unsupported,
             Error::FDO(e) => Error::FDO(e.clone()),
             #[cfg(feature = "xml")]
-            Error::QuickXml(e) => Error::QuickXml(e.clone()),
+            Error::Xml(e) => Error::Xml(e.clone()),
             Error::NoBodySignature => Error::NoBodySignature,
             Error::NameTaken => Error::NameTaken,
             Error::InvalidMatchRule => Error::InvalidMatchRule,
@@ -232,7 +232,7 @@ impl From<fdo::Error> for Error {
 #[cfg(feature = "xml")]
 impl From<DeError> for Error {
     fn from(val: DeError) -> Self {
-        Error::QuickXml(val)
+        Error::Xml(val)
     }
 }
 
