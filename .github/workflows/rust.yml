@@ -106,6 +106,7 @@ jobs:
             c:/lib/
             c:/bin/
             c:/var/
+          key: ${{ runner.os }}-cache-2023-08-02.4
 
       - name: Install pkg-config
         if: steps.cache-deps.outputs.cache-hit != 'true'
