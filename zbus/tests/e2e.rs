@@ -551,14 +551,14 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
 
             if method.name() == "TestSingleStructRet" {
                 assert_eq!(args.len(), 1);
-                assert_eq!(out_args.next().unwrap().ty(), "(is)");
+                assert_eq!(out_args.next().unwrap().ty().signature(), "(is)");
                 assert!(out_args.next().is_none());
             } else {
                 assert_eq!(args.len(), 2);
                 let foo = out_args.find(|a| a.name() == Some("foo")).unwrap();
-                assert_eq!(foo.ty(), "i");
+                assert_eq!(foo.ty().signature(), "i");
                 let bar = out_args.find(|a| a.name() == Some("bar")).unwrap();
-                assert_eq!(bar.ty(), "s");
+                assert_eq!(bar.ty().signature(), "s");
             }
         }
     }

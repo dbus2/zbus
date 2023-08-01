@@ -6,7 +6,7 @@ use zbus::{
     xml::{Arg, ArgDirection, Interface},
 };
 use zvariant::{
-    Basic, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
+    Basic, CompleteType, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
     DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_CHAR, STRUCT_SIG_START_CHAR, VARIANT_SIGNATURE_CHAR,
 };
 
@@ -150,7 +150,7 @@ fn parse_signal_args(args: &[Arg]) -> String {
     inputs.join(", ")
 }
 
-fn to_rust_type(ty: &str, input: bool, as_ref: bool) -> String {
+fn to_rust_type(ty: &CompleteType, input: bool, as_ref: bool) -> String {
     // can't haz recursive closure, yet
     fn iter_to_rust_type(
         it: &mut std::iter::Peekable<std::slice::Iter<'_, u8>>,
@@ -245,7 +245,7 @@ fn to_rust_type(ty: &str, input: bool, as_ref: bool) -> String {
         }
     }
 
-    let mut it = ty.as_bytes().iter().peekable();
+    let mut it = ty.signature().as_bytes().iter().peekable();
     iter_to_rust_type(&mut it, input, as_ref)
 }
 

@@ -23,6 +23,7 @@ use std::{
 
 use crate::{
     names::{InterfaceName, MemberName},
+    zvariant::CompleteType,
     Error,
 };
 
@@ -60,28 +61,28 @@ pub enum ArgDirection {
 
 /// An argument
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub struct Arg {
+pub struct Arg<'a> {
     #[serde(rename = "@name")]
     name: Option<String>,
-    #[serde(rename = "@type")]
-    r#type: String,
+    #[serde(rename = "@type", borrow)]
+    ty: CompleteType<'a>,
     #[serde(rename = "@direction")]
     direction: Option<ArgDirection>,
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
 
-assert_impl_all!(Arg: Send, Sync, Unpin);
+assert_impl_all!(Arg<'_>: Send, Sync, Unpin);
 
-impl Arg {
+impl<'a> Arg<'a> {
     /// Return the argument name, if any.
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }
 
     /// Return the argument type.
-    pub fn ty(&self) -> &str {
-        &self.r#type
+    pub fn ty(&self) -> &CompleteType<'a> {
+        &self.ty
     }
 
     /// Return the argument direction, if any.
@@ -100,8 +101,8 @@ impl Arg {
 pub struct Method<'a> {
     #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
-    #[serde(rename = "arg", default)]
-    args: Vec<Arg>,
+    #[serde(rename = "arg", default, borrow)]
+    args: Vec<Arg<'a>>,
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
@@ -115,7 +116,7 @@ impl<'a> Method<'a> {
     }
 
     /// Return the method arguments.
-    pub fn args(&self) -> &[Arg] {
+    pub fn args(&self) -> &[Arg<'a>] {
         &self.args
     }
 
@@ -132,7 +133,7 @@ pub struct Signal<'a> {
     name: MemberName<'a>,
 
     #[serde(rename = "arg", default)]
-    args: Vec<Arg>,
+    args: Vec<Arg<'a>>,
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
@@ -146,7 +147,7 @@ impl<'a> Signal<'a> {
     }
 
     /// Return the signal arguments.
-    pub fn args(&self) -> &[Arg] {
+    pub fn args(&self) -> &[Arg<'a>] {
         &self.args
     }
 
@@ -184,7 +185,7 @@ pub struct Property<'a> {
     name: MemberName<'a>,
 
     #[serde(rename = "@type")]
-    r#type: String,
+    ty: CompleteType<'a>,
     #[serde(rename = "@access")]
     access: PropertyAccess,
 
@@ -201,8 +202,8 @@ impl<'a> Property<'a> {
     }
 
     /// Returns the property type.
-    pub fn ty(&self) -> &str {
-        &self.r#type
+    pub fn ty(&self) -> &CompleteType<'a> {
+        &self.ty
     }
 
     /// Returns the property access flags (should be "read", "write" or "readwrite").
