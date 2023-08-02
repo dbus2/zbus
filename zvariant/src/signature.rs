@@ -504,6 +504,14 @@ impl std::convert::From<OwnedSignature> for crate::Value<'static> {
     }
 }
 
+impl TryFrom<String> for OwnedSignature {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Ok(Self(Signature::try_from(value)?))
+    }
+}
+
 impl<'de> Deserialize<'de> for OwnedSignature {
     fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
