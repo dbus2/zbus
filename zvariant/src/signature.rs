@@ -442,9 +442,9 @@ impl<'de: 'a, 'a> Deserialize<'de> for Signature<'a> {
     where
         D: Deserializer<'de>,
     {
-        let visitor = SignatureVisitor;
+        let val = <std::borrow::Cow<'a, str>>::deserialize(deserializer)?;
 
-        deserializer.deserialize_str(visitor)
+        Self::try_from(val).map_err(serde::de::Error::custom)
     }
 }
 
