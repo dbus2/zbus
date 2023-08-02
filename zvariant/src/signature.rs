@@ -4,7 +4,7 @@ use core::{
     str,
 };
 use serde::{
-    de::{Deserialize, Deserializer, Visitor},
+    de::{Deserialize, Deserializer},
     ser::{Serialize, Serializer},
 };
 use static_assertions::assert_impl_all;
@@ -445,24 +445,6 @@ impl<'de: 'a, 'a> Deserialize<'de> for Signature<'a> {
         let val = <std::borrow::Cow<'a, str>>::deserialize(deserializer)?;
 
         Self::try_from(val).map_err(serde::de::Error::custom)
-    }
-}
-
-struct SignatureVisitor;
-
-impl<'de> Visitor<'de> for SignatureVisitor {
-    type Value = Signature<'de>;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("a Signature")
-    }
-
-    #[inline]
-    fn visit_borrowed_str<E>(self, value: &'de str) -> core::result::Result<Signature<'de>, E>
-    where
-        E: serde::de::Error,
-    {
-        Signature::try_from(value).map_err(serde::de::Error::custom)
     }
 }
 
