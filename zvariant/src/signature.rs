@@ -517,11 +517,9 @@ impl<'de> Deserialize<'de> for OwnedSignature {
     where
         D: Deserializer<'de>,
     {
-        let visitor = SignatureVisitor;
+        let val = String::deserialize(deserializer)?;
 
-        deserializer
-            .deserialize_str(visitor)
-            .map(|v| OwnedSignature(v.to_owned()))
+        OwnedSignature::try_from(val).map_err(serde::de::Error::custom)
     }
 }
 
