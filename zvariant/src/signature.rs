@@ -9,6 +9,7 @@ use serde::{
 };
 use static_assertions::assert_impl_all;
 use std::{
+    borrow::Cow,
     ops::{Bound, RangeBounds},
     sync::Arc,
 };
@@ -358,6 +359,18 @@ impl<'a> TryFrom<&'a str> for Signature<'a> {
 
     fn try_from(value: &'a str) -> Result<Self> {
         Self::try_from(value.as_bytes())
+    }
+}
+
+/// Try to create a Signature from a `Cow<str>.`
+impl<'a> TryFrom<Cow<'a, str>> for Signature<'a> {
+    type Error = Error;
+
+    fn try_from(value: Cow<'a, str>) -> Result<Self> {
+        match value {
+            Cow::Borrowed(v) => Self::try_from(v),
+            Cow::Owned(v) => Self::try_from(v),
+        }
     }
 }
 
