@@ -48,6 +48,9 @@ pub mod gvariant;
 mod signature;
 pub use crate::signature::*;
 
+mod complete_type;
+pub use complete_type::*;
+
 mod str;
 pub use crate::str::*;
 

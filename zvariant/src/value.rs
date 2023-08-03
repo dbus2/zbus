@@ -985,6 +985,7 @@ mod tests {
                 (@mmn nothing, @mmmn just nothing))"
         );
 
+        #[cfg(unix)]
         assert_eq!(
             Value::new(vec![Fd::from(0), Fd::from(-100)]).to_string(),
             "[handle 0, -100]"

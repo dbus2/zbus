@@ -176,6 +176,20 @@ pub enum Address {
     /// type of `stream` is `vsock::VsockStream` with `vsock` feature and
     /// `tokio_vsock::VsockStream` with `tokio-vsock` feature.
     Vsock(VsockAddress),
+    /// A listenable address using the specified path, in which a socket file with a random file
+    /// name starting with 'dbus-' will be created by the server. See [UNIX domain socket address]
+    /// reference documentation.
+    ///
+    /// This address is mostly relevant to server (typically bus broker) implementations.
+    ///
+    /// [UNIX domain socket address]: https://dbus.freedesktop.org/doc/dbus-specification.html#transports-unix-domain-sockets-addresses
+    UnixDir(OsString),
+    /// The same as UnixDir, except that on platforms with abstract sockets, the server may attempt
+    /// to create an abstract socket whose name starts with this directory instead of a path-based
+    /// socket.
+    ///
+    /// This address is mostly relevant to server (typically bus broker) implementations.
+    UnixTmpDir(OsString),
 }
 
 #[cfg(not(feature = "tokio"))]
@@ -379,6 +393,10 @@ impl Address {
                 let addr = macos_launchd_bus_address(&env).await?;
                 addr.connect().await
             }
+            Address::UnixDir(_) | Address::UnixTmpDir(_) => {
+                // you can't connect to a unix:dir
+                Err(Error::Unsupported)
+            }
         }
     }
 
@@ -435,24 +453,25 @@ impl Address {
     // Helper for FromStr
     #[cfg(any(unix, not(feature = "tokio")))]
     fn from_unix(opts: HashMap<&str, &str>) -> Result<Self> {
-        let path = if let Some(abs) = opts.get("abstract") {
-            if opts.get("path").is_some() {
-                return Err(Error::Address(
-                    "`path` and `abstract` cannot be specified together".into(),
-                ));
+        let path = opts.get("path");
+        let abs = opts.get("abstract");
+        let dir = opts.get("dir");
+        let tmpdir = opts.get("tmpdir");
+        let addr = match (path, abs, dir, tmpdir) {
+            (Some(p), None, None, None) => Address::Unix(OsString::from(p)),
+            (None, Some(p), None, None) => {
+                let mut s = OsString::from("\0");
+                s.push(p);
+                Address::Unix(s)
             }
-            let mut s = OsString::from("\0");
-            s.push(abs);
-            s
-        } else if let Some(path) = opts.get("path") {
-            OsString::from(path)
-        } else {
-            return Err(Error::Address(
-                "unix address is missing path or abstract".to_owned(),
-            ));
+            (None, None, Some(p), None) => Address::UnixDir(OsString::from(p)),
+            (None, None, None, Some(p)) => Address::UnixTmpDir(OsString::from(p)),
+            _ => {
+                return Err(Error::Address("unix: address is invalid".to_owned()));
+            }
         };
 
-        Ok(Address::Unix(path))
+        Ok(addr)
     }
 
     #[cfg(all(feature = "vsock", not(feature = "tokio")))]
@@ -579,6 +598,29 @@ fn encode_percents(f: &mut Formatter<'_>, mut value: &[u8]) -> std::fmt::Result 
 
 impl Display for Address {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        fn fmt_unix_path(
+            f: &mut Formatter<'_>,
+            path: &OsString,
+            _is_abstract: bool,
+        ) -> std::fmt::Result {
+            #[cfg(unix)]
+            {
+                use std::os::unix::ffi::OsStrExt;
+
+                let bytes = if _is_abstract {
+                    &path.as_bytes()[1..]
+                } else {
+                    path.as_bytes()
+                };
+                encode_percents(f, bytes)?;
+            }
+
+            #[cfg(windows)]
+            write!(f, "{}", path.to_str().ok_or(std::fmt::Error)?)?;
+
+            Ok(())
+        }
+
         match self {
             Self::Tcp(addr) => {
                 f.write_str("tcp:")?;
@@ -593,15 +635,34 @@ impl Display for Address {
             }
 
             Self::Unix(path) => {
-                #[cfg(unix)]
-                {
-                    use std::os::unix::ffi::OsStrExt;
+                let is_abstract = {
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::ffi::OsStrExt;
+
+                        path.as_bytes().first() == Some(&b'\0')
+                    }
+                    #[cfg(not(unix))]
+                    false
+                };
+
+                if is_abstract {
+                    f.write_str("unix:abstract=")?;
+                } else {
                     f.write_str("unix:path=")?;
-                    encode_percents(f, path.as_bytes())?;
                 }
 
-                #[cfg(windows)]
-                write!(f, "unix:path={}", path.to_str().ok_or(std::fmt::Error)?)?;
+                fmt_unix_path(f, path, is_abstract)?;
+            }
+
+            Self::UnixDir(path) => {
+                f.write_str("unix:dir=")?;
+                fmt_unix_path(f, path, false)?;
+            }
+
+            Self::UnixTmpDir(path) => {
+                f.write_str("unix:tmpdir=")?;
+                fmt_unix_path(f, path, false)?;
             }
 
             #[cfg(any(
@@ -742,18 +803,22 @@ mod tests {
             _ => panic!(),
         }
         match Address::from_str("unix:foo=blah").unwrap_err() {
-            Error::Address(e) => assert_eq!(e, "unix address is missing path or abstract"),
+            Error::Address(e) => assert_eq!(e, "unix: address is invalid"),
             _ => panic!(),
         }
         match Address::from_str("unix:path=/tmp,abstract=foo").unwrap_err() {
             Error::Address(e) => {
-                assert_eq!(e, "`path` and `abstract` cannot be specified together")
+                assert_eq!(e, "unix: address is invalid")
             }
             _ => panic!(),
         }
         assert_eq!(
             Address::Unix("/tmp/dbus-foo".into()),
             Address::from_str("unix:path=/tmp/dbus-foo").unwrap()
+        );
+        assert_eq!(
+            Address::Unix("\0/tmp/dbus-foo".into()),
+            Address::from_str("unix:abstract=/tmp/dbus-foo").unwrap()
         );
         assert_eq!(
             Address::Unix("/tmp/dbus-foo".into()),
@@ -832,6 +897,14 @@ mod tests {
             }),
             Address::from_str("vsock:cid=98,port=2934,guid=123").unwrap()
         );
+        assert_eq!(
+            Address::UnixDir("/some/dir".into()),
+            Address::from_str("unix:dir=/some/dir").unwrap()
+        );
+        assert_eq!(
+            Address::UnixTmpDir("/some/dir".into()),
+            Address::from_str("unix:tmpdir=/some/dir").unwrap()
+        );
     }
 
     #[test]
@@ -839,6 +912,20 @@ mod tests {
         assert_eq!(
             Address::Unix("/tmp/dbus-foo".into()).to_string(),
             "unix:path=/tmp/dbus-foo"
+        );
+        assert_eq!(
+            Address::UnixDir("/tmp/dbus-foo".into()).to_string(),
+            "unix:dir=/tmp/dbus-foo"
+        );
+        assert_eq!(
+            Address::UnixTmpDir("/tmp/dbus-foo".into()).to_string(),
+            "unix:tmpdir=/tmp/dbus-foo"
+        );
+        // FIXME: figure out how to handle abstract on Windows
+        #[cfg(unix)]
+        assert_eq!(
+            Address::Unix("\0/tmp/dbus-foo".into()).to_string(),
+            "unix:abstract=/tmp/dbus-foo"
         );
         assert_eq!(
             Address::Tcp(TcpAddress {
@@ -900,7 +987,7 @@ mod tests {
                 port: 2934
             })
             .to_string(),
-            "vsock:cid=98,port=2934,guid=123",
+            "vsock:cid=98,port=2934", // no support for guid= yet..
         );
     }
 

@@ -169,12 +169,13 @@ impl ProcessToken {
         let sid = unsafe { CStr::from_ptr(pstr) };
         let ret = sid
             .to_str()
-            .map_err(|_| Error::new(ErrorKind::Other, "Invalid SID"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "Invalid SID"))?
+            .to_owned();
         unsafe {
             LocalFree(pstr as *mut _);
         }
 
-        Ok(ret.to_owned())
+        Ok(ret)
     }
 }
 

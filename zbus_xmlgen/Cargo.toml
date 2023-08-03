@@ -28,3 +28,6 @@ path = "src/main.rs"
 zbus = { path = "../zbus", version = "4.0.0", features = ["xml"] }
 zvariant = { path = "../zvariant", version = "4" }
 snakecase = "0.1.0"
+
+[dev-dependencies]
+pretty_assertions = "1.3"

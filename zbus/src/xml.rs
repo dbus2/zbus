@@ -23,11 +23,12 @@ use std::{
 
 use crate::{
     names::{InterfaceName, MemberName},
+    zvariant::CompleteType,
     Error,
 };
 
 /// Annotations are generic key/value pairs of metadata.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Annotation {
     #[serde(rename = "@name")]
     name: String,
@@ -59,29 +60,29 @@ pub enum ArgDirection {
 }
 
 /// An argument
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Arg {
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub struct Arg<'a> {
     #[serde(rename = "@name")]
     name: Option<String>,
-    #[serde(rename = "@type")]
-    r#type: String,
+    #[serde(rename = "@type", borrow)]
+    ty: CompleteType<'a>,
     #[serde(rename = "@direction")]
     direction: Option<ArgDirection>,
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
 
-assert_impl_all!(Arg: Send, Sync, Unpin);
+assert_impl_all!(Arg<'_>: Send, Sync, Unpin);
 
-impl Arg {
+impl<'a> Arg<'a> {
     /// Return the argument name, if any.
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }
 
     /// Return the argument type.
-    pub fn ty(&self) -> &str {
-        &self.r#type
+    pub fn ty(&self) -> &CompleteType<'a> {
+        &self.ty
     }
 
     /// Return the argument direction, if any.
@@ -96,12 +97,12 @@ impl Arg {
 }
 
 /// A method
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Method<'a> {
     #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
-    #[serde(rename = "arg", default)]
-    args: Vec<Arg>,
+    #[serde(rename = "arg", default, borrow)]
+    args: Vec<Arg<'a>>,
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
@@ -115,7 +116,7 @@ impl<'a> Method<'a> {
     }
 
     /// Return the method arguments.
-    pub fn args(&self) -> &[Arg] {
+    pub fn args(&self) -> &[Arg<'a>] {
         &self.args
     }
 
@@ -126,13 +127,13 @@ impl<'a> Method<'a> {
 }
 
 /// A signal
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Signal<'a> {
     #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
 
     #[serde(rename = "arg", default)]
-    args: Vec<Arg>,
+    args: Vec<Arg<'a>>,
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
@@ -146,7 +147,7 @@ impl<'a> Signal<'a> {
     }
 
     /// Return the signal arguments.
-    pub fn args(&self) -> &[Arg] {
+    pub fn args(&self) -> &[Arg<'a>] {
         &self.args
     }
 
@@ -178,13 +179,13 @@ impl PropertyAccess {
 }
 
 /// A property
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Property<'a> {
     #[serde(rename = "@name", borrow)]
     name: MemberName<'a>,
 
     #[serde(rename = "@type")]
-    r#type: String,
+    ty: CompleteType<'a>,
     #[serde(rename = "@access")]
     access: PropertyAccess,
 
@@ -201,8 +202,8 @@ impl<'a> Property<'a> {
     }
 
     /// Returns the property type.
-    pub fn ty(&self) -> &str {
-        &self.r#type
+    pub fn ty(&self) -> &CompleteType<'a> {
+        &self.ty
     }
 
     /// Returns the property access flags (should be "read", "write" or "readwrite").
@@ -217,7 +218,7 @@ impl<'a> Property<'a> {
 }
 
 /// An interface
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Interface<'a> {
     #[serde(rename = "@name", borrow)]
     name: InterfaceName<'a>,
@@ -262,7 +263,7 @@ impl<'a> Interface<'a> {
 }
 
 /// An introspection tree node (typically the root of the XML document).
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Node<'a> {
     #[serde(rename = "@name")]
     name: Option<String>,
@@ -326,64 +327,5 @@ impl<'a> TryFrom<&'a str> for Node<'a> {
         let mut deserializer = Deserializer::from_str(s);
         deserializer.event_buffer_size(Some(1024_usize.try_into().unwrap()));
         Ok(Node::deserialize(&mut deserializer)?)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{convert::TryInto, error::Error};
-    use test_log::test;
-
-    use super::{ArgDirection, Node};
-
-    static EXAMPLE: &str = r##"
-<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
-  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
- <node name="/com/example/sample_object0">
-   <node name="first"/>
-   <interface name="com.example.SampleInterface0">
-     <method name="Frobate">
-       <arg name="foo" type="i" direction="in"/>
-       <arg name="bar" type="s" direction="out"/>
-       <arg name="baz" type="a{us}" direction="out"/>
-       <annotation name="org.freedesktop.DBus.Deprecated" value="true"/>
-     </method>
-     <method name="Bazify">
-       <arg name="bar" type="(iiu)" direction="in"/>
-       <arg name="bar" type="v" direction="out"/>
-     </method>
-     <method name="Mogrify">
-       <arg name="bar" type="(iiav)" direction="in"/>
-     </method>
-     <signal name="Changed">
-       <arg name="new_value" type="b"/>
-     </signal>
-     <property name="Bar" type="y" access="readwrite"/>
-   </interface>
-   <node name="child_of_sample_object"/>
-   <node name="another_child_of_sample_object"/>
-</node>
-"##;
-
-    #[test]
-    fn serde() -> Result<(), Box<dyn Error>> {
-        let node = Node::from_reader(EXAMPLE.as_bytes())?;
-        assert_eq!(node.interfaces().len(), 1);
-        assert_eq!(node.interfaces()[0].methods().len(), 3);
-        assert_eq!(
-            node.interfaces()[0].methods()[0].args()[0]
-                .direction()
-                .unwrap(),
-            ArgDirection::In
-        );
-        assert_eq!(node.nodes().len(), 3);
-
-        let node_str: Node<'_> = EXAMPLE.try_into()?;
-        assert_eq!(node_str.interfaces().len(), 1);
-        assert_eq!(node_str.nodes().len(), 3);
-
-        let mut writer = Vec::with_capacity(128);
-        node.to_writer(&mut writer).unwrap();
-        Ok(())
     }
 }

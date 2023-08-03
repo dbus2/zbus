@@ -17,8 +17,7 @@ use zbus::{
     xml::{Interface, Node},
 };
 
-mod gen;
-use gen::GenTrait;
+use zbus_xmlgen::GenTrait;
 use zvariant::ObjectPath;
 
 fn main() -> Result<(), Box<dyn Error>> {

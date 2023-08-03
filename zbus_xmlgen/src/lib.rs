@@ -6,7 +6,7 @@ use zbus::{
     xml::{Arg, ArgDirection, Interface},
 };
 use zvariant::{
-    Basic, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
+    Basic, CompleteType, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
     DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_CHAR, STRUCT_SIG_START_CHAR, VARIANT_SIGNATURE_CHAR,
 };
 
@@ -150,7 +150,7 @@ fn parse_signal_args(args: &[Arg]) -> String {
     inputs.join(", ")
 }
 
-fn to_rust_type(ty: &str, input: bool, as_ref: bool) -> String {
+fn to_rust_type(ty: &CompleteType, input: bool, as_ref: bool) -> String {
     // can't haz recursive closure, yet
     fn iter_to_rust_type(
         it: &mut std::iter::Peekable<std::slice::Iter<'_, u8>>,
@@ -245,7 +245,7 @@ fn to_rust_type(ty: &str, input: bool, as_ref: bool) -> String {
         }
     }
 
-    let mut it = ty.as_bytes().iter().peekable();
+    let mut it = ty.signature().as_bytes().iter().peekable();
     iter_to_rust_type(&mut it, input, as_ref)
 }
 
@@ -280,60 +280,4 @@ pub fn pascal_case(s: &str) -> String {
         }
     }
     pascal
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{error::Error, result::Result};
-
-    use super::GenTrait;
-    use zbus::xml::Node;
-
-    static EXAMPLE: &str = r##"
-<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
-  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
- <node name="/com/example/sample_object0">
-   <interface name="com.example.SampleInterface0">
-     <method name="Frobate">
-       <arg name="foz" type="i"/>
-       <arg name="foo" type="i" direction="in"/>
-       <arg name="bar" type="s" direction="out"/>
-       <arg name="baz" type="a{us}" direction="out"/>
-       <annotation name="org.freedesktop.DBus.Deprecated" value="true"/>
-     </method>
-     <method name="Bazify">
-       <arg name="bar" type="(iiu)" direction="in"/>
-       <arg name="bar" type="v" direction="out"/>
-     </method>
-     <method name="MogrifyMe">
-       <arg name="bar" type="(iiav)" direction="in"/>
-     </method>
-     <signal name="Changed">
-       <arg name="new_value" type="b"/>
-     </signal>
-     <signal name="Changed2">
-       <arg name="new_value" type="b" direction="out"/>
-       <arg name="new_value2" type="b" direction="out"/>
-     </signal>
-     <property name="Bar" type="y" access="readwrite"/>
-   </interface>
-   <node name="child_of_sample_object"/>
-   <node name="another_child_of_sample_object"/>
-</node>
-"##;
-
-    #[test]
-    fn gen() -> Result<(), Box<dyn Error>> {
-        let node = Node::from_reader(EXAMPLE.as_bytes())?;
-        let t = format!(
-            "{}",
-            GenTrait {
-                interface: &node.interfaces()[0],
-                path: None,
-                service: None,
-            }
-        );
-        println!("{t}");
-        Ok(())
-    }
 }

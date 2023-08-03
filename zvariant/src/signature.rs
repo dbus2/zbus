@@ -4,11 +4,12 @@ use core::{
     str,
 };
 use serde::{
-    de::{Deserialize, Deserializer, Visitor},
+    de::{Deserialize, Deserializer},
     ser::{Serialize, Serializer},
 };
 use static_assertions::assert_impl_all;
 use std::{
+    borrow::Cow,
     ops::{Bound, RangeBounds},
     sync::Arc,
 };
@@ -68,14 +69,19 @@ impl<'b> std::ops::Deref for Bytes<'b> {
 /// // Valid signatures
 /// let s = Signature::try_from("").unwrap();
 /// assert_eq!(s, "");
+/// # assert_eq!(s.n_complete_types(), Ok(0));
 /// let s = Signature::try_from("y").unwrap();
 /// assert_eq!(s, "y");
+/// # assert_eq!(s.n_complete_types(), Ok(1));
 /// let s = Signature::try_from("xs").unwrap();
 /// assert_eq!(s, "xs");
+/// # assert_eq!(s.n_complete_types(), Ok(2));
 /// let s = Signature::try_from("(ysa{sd})").unwrap();
 /// assert_eq!(s, "(ysa{sd})");
+/// # assert_eq!(s.n_complete_types(), Ok(1));
 /// let s = Signature::try_from("a{sd}").unwrap();
 /// assert_eq!(s, "a{sd}");
+/// # assert_eq!(s.n_complete_types(), Ok(1));
 ///
 /// // Invalid signatures
 /// Signature::try_from("z").unwrap_err();
@@ -187,7 +193,7 @@ impl<'a> Signature<'a> {
     /// [`Signature::into_owned`] do not clone the underlying bytes.
     pub fn from_static_str(signature: &'static str) -> Result<Self> {
         let bytes = signature.as_bytes();
-        ensure_correct_signature_str(bytes)?;
+        SignatureParser::validate(bytes)?;
 
         Ok(Self {
             bytes: Bytes::Static(bytes),
@@ -202,7 +208,7 @@ impl<'a> Signature<'a> {
     /// `&'static [u8]`. The former will ensure that [`Signature::to_owned`] and
     /// [`Signature::into_owned`] do not clone the underlying bytes.
     pub fn from_static_bytes(bytes: &'static [u8]) -> Result<Self> {
-        ensure_correct_signature_str(bytes)?;
+        SignatureParser::validate(bytes)?;
 
         Ok(Self {
             bytes: Bytes::Static(bytes),
@@ -288,6 +294,21 @@ impl<'a> Signature<'a> {
 
         clone
     }
+
+    /// The number of complete types for the signature.
+    ///
+    /// # Errors
+    ///
+    /// If the signature is invalid, returns the first error.
+    pub fn n_complete_types(&self) -> Result<usize> {
+        let mut count = 0;
+        // SAFETY: the parser is only used to do counting
+        for s in unsafe { SignatureParser::from_bytes_unchecked(self.as_bytes())? } {
+            s?;
+            count += 1;
+        }
+        Ok(count)
+    }
 }
 
 impl<'a> Debug for Signature<'a> {
@@ -325,9 +346,9 @@ impl<'a> TryFrom<&'a [u8]> for Signature<'a> {
     type Error = Error;
 
     fn try_from(value: &'a [u8]) -> Result<Self> {
-        ensure_correct_signature_str(value)?;
+        SignatureParser::validate(value)?;
 
-        // SAFETY: ensure_correct_signature_str checks UTF8
+        // SAFETY: validate checks UTF8
         unsafe { Ok(Self::from_bytes_unchecked(value)) }
     }
 }
@@ -341,11 +362,23 @@ impl<'a> TryFrom<&'a str> for Signature<'a> {
     }
 }
 
+/// Try to create a Signature from a `Cow<str>.`
+impl<'a> TryFrom<Cow<'a, str>> for Signature<'a> {
+    type Error = Error;
+
+    fn try_from(value: Cow<'a, str>) -> Result<Self> {
+        match value {
+            Cow::Borrowed(v) => Self::try_from(v),
+            Cow::Owned(v) => Self::try_from(v),
+        }
+    }
+}
+
 impl<'a> TryFrom<String> for Signature<'a> {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
-        ensure_correct_signature_str(value.as_bytes())?;
+        SignatureParser::validate(value.as_bytes())?;
 
         Ok(Self::from_string_unchecked(value))
     }
@@ -409,50 +442,10 @@ impl<'de: 'a, 'a> Deserialize<'de> for Signature<'a> {
     where
         D: Deserializer<'de>,
     {
-        let visitor = SignatureVisitor;
+        let val = <std::borrow::Cow<'a, str>>::deserialize(deserializer)?;
 
-        deserializer.deserialize_str(visitor)
+        Self::try_from(val).map_err(serde::de::Error::custom)
     }
-}
-
-struct SignatureVisitor;
-
-impl<'de> Visitor<'de> for SignatureVisitor {
-    type Value = Signature<'de>;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("a Signature")
-    }
-
-    #[inline]
-    fn visit_borrowed_str<E>(self, value: &'de str) -> core::result::Result<Signature<'de>, E>
-    where
-        E: serde::de::Error,
-    {
-        Signature::try_from(value).map_err(serde::de::Error::custom)
-    }
-}
-
-fn ensure_correct_signature_str(signature: &[u8]) -> Result<()> {
-    if signature.len() > 255 {
-        return Err(serde::de::Error::invalid_length(
-            signature.len(),
-            &"<= 255 characters",
-        ));
-    }
-
-    if signature.is_empty() {
-        return Ok(());
-    }
-
-    // SAFETY: SignatureParser never calls as_str
-    let signature = unsafe { Signature::from_bytes_unchecked(signature) };
-    let mut parser = SignatureParser::new(signature);
-    while !parser.done() {
-        let _ = parser.parse_next_signature()?;
-    }
-
-    Ok(())
 }
 
 /// Owned [`Signature`](struct.Signature.html)
@@ -493,16 +486,22 @@ impl std::convert::From<OwnedSignature> for crate::Value<'static> {
     }
 }
 
+impl TryFrom<String> for OwnedSignature {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Ok(Self(Signature::try_from(value)?))
+    }
+}
+
 impl<'de> Deserialize<'de> for OwnedSignature {
     fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let visitor = SignatureVisitor;
+        let val = String::deserialize(deserializer)?;
 
-        deserializer
-            .deserialize_str(visitor)
-            .map(|v| OwnedSignature(v.to_owned()))
+        OwnedSignature::try_from(val).map_err(serde::de::Error::custom)
     }
 }
 
