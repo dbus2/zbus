@@ -63,6 +63,8 @@ pub enum Error {
     Failure(String),
     /// A required parameter was missing.
     MissingParameter(&'static str),
+    /// Serial number in the message header is 0 (which is invalid).
+    InvalidSerial,
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -79,6 +81,7 @@ impl PartialEq for Error {
             (Self::MethodError(_, _, _), Self::MethodError(_, _, _)) => true,
             (Self::MissingField, Self::MissingField) => true,
             (Self::InvalidGUID, Self::InvalidGUID) => true,
+            (Self::InvalidSerial, Self::InvalidSerial) => true,
             (Self::Unsupported, Self::Unsupported) => true,
             (Self::FDO(s), Self::FDO(o)) => s == o,
             (Self::NoBodySignature, Self::NoBodySignature) => true,
@@ -121,6 +124,7 @@ impl error::Error for Error {
             Error::InvalidMatchRule => None,
             Error::Failure(_) => None,
             Error::MissingParameter(_) => None,
+            Error::InvalidSerial => None,
         }
     }
 }
@@ -157,6 +161,7 @@ impl fmt::Display for Error {
             Error::MissingParameter(p) => {
                 write!(f, "Parameter `{}` was not specified but it is required", p)
             }
+            Error::InvalidSerial => write!(f, "Serial number in the message header is 0"),
         }
     }
 }
@@ -188,6 +193,7 @@ impl Clone for Error {
             Error::InvalidMatchRule => Error::InvalidMatchRule,
             Error::Failure(e) => Error::Failure(e.clone()),
             Error::MissingParameter(p) => Error::MissingParameter(p),
+            Error::InvalidSerial => Error::InvalidSerial,
         }
     }
 }

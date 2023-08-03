@@ -1332,6 +1332,10 @@ where
     fn start_send(self: Pin<&mut Self>, msg: T) -> Result<()> {
         let msg = msg.into();
 
+        if msg.primary_header().serial_num().is_none() {
+            return Err(Error::InvalidSerial);
+        }
+
         #[cfg(unix)]
         if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);
