@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -201,15 +203,12 @@ impl PrimaryHeader {
     ///
     /// **Note:** There is no setter provided for this in the public API since this is set by the
     /// [`Connection`](struct.Connection.html) the message is sent over.
-    pub fn serial_num(&self) -> Option<&u32> {
-        match &self.serial_num {
-            0 => None,
-            serial_num => Some(serial_num),
-        }
+    pub fn serial_num(&self) -> Option<NonZeroU32> {
+        NonZeroU32::new(self.serial_num)
     }
 
-    pub(crate) fn set_serial_num(&mut self, serial_num: u32) {
-        self.serial_num = serial_num;
+    pub(crate) fn set_serial_num(&mut self, serial_num: NonZeroU32) {
+        self.serial_num = serial_num.get();
     }
 }
 
@@ -310,8 +309,12 @@ impl<'m> Header<'m> {
     }
 
     /// The serial number of the message this message is a reply to.
-    pub fn reply_serial(&self) -> Result<Option<u32>, Error> {
-        get_field_u32!(self, ReplySerial)
+    pub fn reply_serial(&self) -> Result<Option<NonZeroU32>, Error> {
+        match self.fields().get_field(FieldCode::ReplySerial) {
+            Some(Field::ReplySerial(value)) => Ok(Some(*value)),
+            Some(_) => Err(Error::InvalidField),
+            None => Ok(None),
+        }
     }
 
     /// The name of the connection this message is intended for.
@@ -370,7 +373,7 @@ mod tests {
         let mut f = Fields::new();
         f.add(Field::ErrorName("org.zbus.Error".try_into()?));
         f.add(Field::Destination(":1.11".try_into()?));
-        f.add(Field::ReplySerial(88));
+        f.add(Field::ReplySerial(88.try_into()?));
         f.add(Field::Signature(Signature::from_str_unchecked("say")));
         f.add(Field::UnixFDs(12));
         let h = Header::new(PrimaryHeader::new(Type::MethodReturn, 77), f);
@@ -381,7 +384,7 @@ mod tests {
         assert_eq!(h.member()?, None);
         assert_eq!(h.error_name()?.unwrap(), "org.zbus.Error");
         assert_eq!(h.destination()?.unwrap(), ":1.11");
-        assert_eq!(h.reply_serial()?, Some(88));
+        assert_eq!(h.reply_serial()?.map(Into::into), Some(88));
         assert_eq!(h.sender()?, None);
         assert_eq!(h.signature()?, Some(&Signature::from_str_unchecked("say")));
         assert_eq!(h.unix_fds()?, Some(12));

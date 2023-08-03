@@ -1008,7 +1008,7 @@ mod tests {
     #[test]
     fn error_from_zerror() {
         let mut m = Message::method(Some(":1.2"), None::<()>, "/", None::<()>, "foo", &()).unwrap();
-        m.set_serial_num(1).unwrap();
+        m.set_serial_num(1.try_into().unwrap()).unwrap();
         let m = Message::method_error(
             None::<()>,
             &m,

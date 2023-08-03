@@ -3,7 +3,7 @@
 use enumflags2::BitFlags;
 use event_listener::EventListener;
 use static_assertions::assert_impl_all;
-use std::{io, ops::Deref, sync::Arc};
+use std::{io, num::NonZeroU32, ops::Deref, sync::Arc};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
@@ -69,7 +69,7 @@ impl Connection {
     /// The connection sets a unique serial number on the message before sending it off.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
-    pub fn send_message(&self, msg: Message) -> Result<u32> {
+    pub fn send_message(&self, msg: Message) -> Result<NonZeroU32> {
         block_on(self.inner.send_message(msg))
     }
 
@@ -143,7 +143,7 @@ impl Connection {
     /// given `body`.
     ///
     /// Returns the message serial number.
-    pub fn reply<B>(&self, call: &Message, body: &B) -> Result<u32>
+    pub fn reply<B>(&self, call: &Message, body: &B) -> Result<NonZeroU32>
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
@@ -156,7 +156,12 @@ impl Connection {
     /// with the given `error_name` and `body`.
     ///
     /// Returns the message serial number.
-    pub fn reply_error<'e, E, B>(&self, call: &Message, error_name: E, body: &B) -> Result<u32>
+    pub fn reply_error<'e, E, B>(
+        &self,
+        call: &Message,
+        error_name: E,
+        body: &B,
+    ) -> Result<NonZeroU32>
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
         E: TryInto<ErrorName<'e>>,
@@ -175,7 +180,7 @@ impl Connection {
         &self,
         call: &zbus::message::Header<'_>,
         err: impl DBusError,
-    ) -> Result<u32> {
+    ) -> Result<NonZeroU32> {
         block_on(self.inner.reply_dbus_error(call, err))
     }
 

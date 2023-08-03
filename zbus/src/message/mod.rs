@@ -1,5 +1,5 @@
 //! D-Bus Message.
-use std::{fmt, io::Cursor};
+use std::{fmt, io::Cursor, num::NonZeroU32};
 
 #[cfg(unix)]
 use std::{
@@ -355,7 +355,7 @@ impl Message {
     }
 
     /// The serial number of the message this message is a reply to.
-    pub fn reply_serial(&self) -> Option<u32> {
+    pub fn reply_serial(&self) -> Option<NonZeroU32> {
         self.quick_fields.reply_serial()
     }
 
@@ -475,7 +475,7 @@ impl Message {
         self.recv_seq
     }
 
-    pub(crate) fn set_serial_num(&mut self, serial_num: u32) -> Result<()> {
+    pub(crate) fn set_serial_num(&mut self, serial_num: NonZeroU32) -> Result<()> {
         self.modify_primary_header(|primary| {
             primary.set_serial_num(serial_num);
             Ok(())
@@ -607,7 +607,7 @@ mod tests {
             ),
         )
         .unwrap();
-        m.set_serial_num(1).unwrap();
+        m.set_serial_num(1.try_into().unwrap()).unwrap();
         assert_eq!(
             m.body_signature().unwrap().to_string(),
             if cfg!(unix) { "hs" } else { "s" }

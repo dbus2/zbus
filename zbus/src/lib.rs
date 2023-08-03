@@ -258,13 +258,13 @@ mod tests {
         assert_eq!(m.member().unwrap(), "GetMachineId");
         m.modify_primary_header(|primary| {
             primary.set_flags(BitFlags::from(Flags::NoAutoStart));
-            primary.set_serial_num(11);
+            primary.set_serial_num(11.try_into().unwrap());
 
             Ok(())
         })
         .unwrap();
         let primary = m.primary_header();
-        assert!(*primary.serial_num().unwrap() == 11);
+        assert!(primary.serial_num().unwrap().get() == 11);
         assert!(primary.flags() == Flags::NoAutoStart);
     }
 
@@ -617,7 +617,7 @@ mod tests {
         for m in stream {
             let msg = m.unwrap();
 
-            if *msg.primary_header().serial_num().unwrap() == serial {
+            if msg.primary_header().serial_num().unwrap() == serial {
                 break;
             }
         }

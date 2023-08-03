@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use static_assertions::assert_impl_all;
+use std::num::NonZeroU32;
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{ObjectPath, Type};
 
@@ -154,7 +155,7 @@ pub(crate) struct QuickFields {
     path: FieldPos,
     interface: FieldPos,
     member: FieldPos,
-    reply_serial: Option<u32>,
+    reply_serial: Option<NonZeroU32>,
 }
 
 impl QuickFields {
@@ -179,7 +180,7 @@ impl QuickFields {
         self.member.read(msg.as_bytes())
     }
 
-    pub fn reply_serial(&self) -> Option<u32> {
+    pub fn reply_serial(&self) -> Option<NonZeroU32> {
         self.reply_serial
     }
 }
@@ -206,16 +207,16 @@ mod tests {
     fn test() {
         let mut mf = Fields::new();
         assert_eq!(mf.len(), 0);
-        mf.add(Field::ReplySerial(42));
+        mf.add(Field::ReplySerial(42.try_into().unwrap()));
         assert_eq!(mf.len(), 1);
-        mf.add(Field::ReplySerial(43));
+        mf.add(Field::ReplySerial(43.try_into().unwrap()));
         assert_eq!(mf.len(), 2);
 
         let mut mf = Fields::new();
         assert_eq!(mf.len(), 0);
-        mf.replace(Field::ReplySerial(42));
+        mf.replace(Field::ReplySerial(42.try_into().unwrap()));
         assert_eq!(mf.len(), 1);
-        mf.replace(Field::ReplySerial(43));
+        mf.replace(Field::ReplySerial(43.try_into().unwrap()));
         assert_eq!(mf.len(), 1);
     }
 }
