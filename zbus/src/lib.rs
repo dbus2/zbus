@@ -258,7 +258,7 @@ mod tests {
         assert_eq!(m.member().unwrap(), "GetMachineId");
         m.modify_primary_header(|primary| {
             primary.set_flags(BitFlags::from(Flags::NoAutoStart));
-            primary.serial_num_or_init(|| 11);
+            primary.set_serial_num(11);
 
             Ok(())
         })

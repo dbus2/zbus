@@ -794,11 +794,8 @@ impl Connection {
     ///
     /// This method can fail if `msg` is corrupted.
     pub fn assign_serial_num(&self, msg: &mut Message) -> Result<u32> {
-        let mut serial = 0;
-        msg.modify_primary_header(|primary| {
-            serial = *primary.serial_num_or_init(|| self.next_serial());
-            Ok(())
-        })?;
+        let serial = self.next_serial();
+        msg.set_serial_num(serial)?;
 
         Ok(serial)
     }
