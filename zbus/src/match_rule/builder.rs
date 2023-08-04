@@ -1,4 +1,4 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 
 use static_assertions::assert_impl_all;
 
@@ -257,8 +257,7 @@ impl<'m> Builder<'m> {
             return Err(Error::InvalidMatchRule);
         }
 
-        self.0.arg0ns = Some(namespace.clone());
-        self.0.arg0namespace = InterfaceName::try_from(namespace).ok();
+        self.0.arg0ns = Some(namespace);
 
         Ok(self)
     }
@@ -274,7 +273,6 @@ impl<'m> Builder<'m> {
             destination: None,
             args: Vec::with_capacity(MAX_ARGS as usize),
             arg_paths: Vec::with_capacity(MAX_ARGS as usize),
-            arg0namespace: None,
             arg0ns: None,
         })
     }
