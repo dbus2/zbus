@@ -3,7 +3,6 @@ use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
-    convert::TryFrom,
     fmt::{self, Display, Formatter},
     ops::Deref,
     sync::Arc,

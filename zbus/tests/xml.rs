@@ -1,10 +1,7 @@
 #![cfg(feature = "xml")]
 
 use quick_xml::de::DeError;
-use std::{
-    convert::{TryFrom, TryInto},
-    error::Error,
-};
+use std::error::Error;
 use test_log::test;
 
 use zbus::xml::{ArgDirection, Node};

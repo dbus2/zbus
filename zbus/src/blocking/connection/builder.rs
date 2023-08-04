@@ -1,5 +1,4 @@
 use static_assertions::assert_impl_all;
-use std::convert::TryInto;
 #[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
 #[cfg(all(unix, not(feature = "tokio")))]

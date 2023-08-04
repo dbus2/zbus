@@ -1,7 +1,7 @@
 //! Bus match rule API.
 
 use core::panic;
-use std::{convert::TryFrom, ops::Deref};
+use std::ops::Deref;
 
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;

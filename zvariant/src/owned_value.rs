@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use static_assertions::assert_impl_all;
-use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
+use std::{collections::HashMap, hash::BuildHasher};
 
 use crate::{
     Array, Dict, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure, Type,
@@ -236,7 +236,7 @@ impl<'de> Deserialize<'de> for OwnedValue {
 #[cfg(test)]
 mod tests {
     use byteorder::LE;
-    use std::{collections::HashMap, convert::TryFrom, error::Error, result::Result};
+    use std::{collections::HashMap, error::Error, result::Result};
 
     use crate::{from_slice, to_bytes, EncodingContext, OwnedValue, Value};
 

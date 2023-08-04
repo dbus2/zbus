@@ -1,4 +1,4 @@
-use std::{collections::HashSet, convert::TryInto, marker::PhantomData, sync::Arc};
+use std::{collections::HashSet, marker::PhantomData, sync::Arc};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};

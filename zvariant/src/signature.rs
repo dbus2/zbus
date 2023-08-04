@@ -1,5 +1,4 @@
 use core::{
-    convert::TryFrom,
     fmt::{self, Debug, Display, Formatter},
     str,
 };

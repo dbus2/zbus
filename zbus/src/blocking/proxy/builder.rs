@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::ObjectPath;

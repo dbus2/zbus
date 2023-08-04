@@ -102,7 +102,6 @@ Let see how to use it:
 
 ```rust,no_run
 # use std::error::Error;
-# use std::convert::TryInto;
 # use zbus::{dbus_interface, fdo};
 #
 struct Greeter;

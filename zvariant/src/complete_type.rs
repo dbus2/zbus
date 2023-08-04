@@ -1,7 +1,4 @@
-use core::{
-    convert::TryFrom,
-    fmt::{self, Debug, Display, Formatter},
-};
+use core::fmt::{self, Debug, Display, Formatter};
 use serde::de::{Deserialize, Deserializer};
 use static_assertions::assert_impl_all;
 

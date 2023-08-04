@@ -1001,7 +1001,6 @@ mod tests {
     use crate::{fdo, message::Message, DBusError, Error};
     use futures_util::StreamExt;
     use ntest::timeout;
-    use std::convert::TryInto;
     use test_log::test;
     use tokio::runtime;
     use zbus_names::WellKnownName;

@@ -8,7 +8,6 @@ use std::net::TcpStream;
 use std::os::unix::net::UnixStream;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    convert::TryInto,
     sync::Arc,
 };
 #[cfg(feature = "tokio")]
