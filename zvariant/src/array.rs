@@ -4,10 +4,7 @@ use serde::{
     ser::{Serialize, SerializeSeq, Serializer},
 };
 use static_assertions::assert_impl_all;
-use std::{
-    convert::{TryFrom, TryInto},
-    fmt::{Display, Write},
-};
+use std::fmt::{Display, Write};
 
 use crate::{
     value::{value_display_fmt, SignatureSeed},

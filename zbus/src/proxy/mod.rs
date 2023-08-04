@@ -9,7 +9,6 @@ use ordered_stream::{join as join_streams, FromFuture, Join, OrderedStream, Poll
 use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet},
-    convert::{TryFrom, TryInto},
     future::Future,
     ops::Deref,
     pin::Pin,

@@ -1,7 +1,4 @@
-use std::{
-    convert::{Into, TryInto},
-    io::{Cursor, Write},
-};
+use std::io::{Cursor, Write};
 
 #[cfg(unix)]
 use crate::message::Fds;

@@ -1,5 +1,3 @@
-use std::convert::TryFrom;
-
 use enumflags2::{bitflags, BitFlags};
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
@@ -382,11 +380,7 @@ impl<'m> Header<'m> {
 mod tests {
     use crate::message::{Field, Fields, Header, PrimaryHeader, Type};
 
-    use std::{
-        convert::{TryFrom, TryInto},
-        error::Error,
-        result::Result,
-    };
+    use std::{error::Error, result::Result};
     use test_log::test;
     use zbus_names::{InterfaceName, MemberName};
     use zvariant::{ObjectPath, Signature};

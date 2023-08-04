@@ -1,6 +1,6 @@
 use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
-use std::{convert::TryInto, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     blocking::Connection, message::Message, utils::block_on, MatchRule, OwnedMatchRule, Result,

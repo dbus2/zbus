@@ -211,7 +211,6 @@ use zvariant::OwnedFd;
 mod tests {
     use std::{
         collections::HashMap,
-        convert::{TryFrom, TryInto},
         sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
     #[cfg(unix)]

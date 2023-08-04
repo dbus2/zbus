@@ -1,7 +1,7 @@
 #![allow(clippy::disallowed_names)]
+use std::collections::HashMap;
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
-use std::{collections::HashMap, convert::TryInto};
 #[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
 

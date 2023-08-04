@@ -4,7 +4,6 @@ use futures_util::{future::poll_fn, StreamExt};
 use nix::unistd::Uid;
 use std::{
     collections::VecDeque,
-    convert::{TryFrom, TryInto},
     fmt::{self, Debug},
     path::PathBuf,
     str::FromStr,

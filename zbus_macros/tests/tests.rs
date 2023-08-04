@@ -2,7 +2,7 @@ use futures_util::{
     future::{select, Either},
     stream::StreamExt,
 };
-use std::{convert::TryInto, future::ready};
+use std::future::ready;
 use zbus::{block_on, fdo, object_server::SignalContext, proxy::CacheProperties};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 

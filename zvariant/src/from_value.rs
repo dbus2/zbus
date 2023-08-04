@@ -8,7 +8,7 @@ use crate::{
 #[cfg(unix)]
 use crate::Fd;
 
-use std::{collections::HashMap, convert::TryFrom, hash::BuildHasher};
+use std::{collections::HashMap, hash::BuildHasher};
 
 macro_rules! value_try_from {
     ($kind:ident, $to:ty) => {

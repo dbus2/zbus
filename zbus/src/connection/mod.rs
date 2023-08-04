@@ -7,7 +7,6 @@ use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
-    convert::TryInto,
     io::{self, ErrorKind},
     ops::Deref,
     pin::Pin,

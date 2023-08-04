@@ -1,7 +1,6 @@
 use crate::{utils::*, Signature};
 use serde::de::{Deserialize, DeserializeSeed};
 use std::{
-    convert::TryInto,
     marker::PhantomData,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     path::{Path, PathBuf},

@@ -1,7 +1,6 @@
 #![deny(rust_2018_idioms)]
 
 use std::{
-    convert::TryInto,
     env::args,
     error::Error,
     fs::File,

@@ -22,7 +22,7 @@ use nix::unistd::Uid;
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
-use std::{collections::HashMap, convert::TryFrom, env, str::FromStr};
+use std::{collections::HashMap, env, str::FromStr};
 #[cfg(feature = "tokio")]
 use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "tokio"))]

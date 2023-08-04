@@ -1,7 +1,7 @@
 //! Bus match rule API.
 
 use core::panic;
-use std::{convert::TryFrom, ops::Deref};
+use std::ops::Deref;
 
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
@@ -97,7 +97,6 @@ pub struct MatchRule<'m> {
     pub(crate) destination: Option<UniqueName<'m>>,
     pub(crate) args: Vec<(u8, Str<'m>)>,
     pub(crate) arg_paths: Vec<(u8, ObjectPath<'m>)>,
-    pub(crate) arg0namespace: Option<InterfaceName<'m>>,
     pub(crate) arg0ns: Option<Str<'m>>,
 }
 
@@ -169,7 +168,6 @@ impl<'m> MatchRule<'m> {
                 .iter()
                 .map(|(i, p)| (*i, p.to_owned()))
                 .collect(),
-            arg0namespace: self.arg0namespace.as_ref().map(|a| a.to_owned()),
             arg0ns: self.arg0ns.as_ref().map(|a| a.to_owned()),
         }
     }
@@ -193,7 +191,6 @@ impl<'m> MatchRule<'m> {
                 .into_iter()
                 .map(|(i, p)| (i, p.into_owned()))
                 .collect(),
-            arg0namespace: self.arg0namespace.map(|a| a.into_owned()),
             arg0ns: self.arg0ns.map(|a| a.into_owned()),
         }
     }

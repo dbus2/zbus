@@ -4,7 +4,6 @@ use event_listener::{Event, EventListener};
 use serde::Serialize;
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},
-    convert::TryInto,
     fmt::Write,
     marker::PhantomData,
     ops::{Deref, DerefMut},

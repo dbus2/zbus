@@ -1,6 +1,5 @@
 use core::str;
 use std::{
-    convert::TryFrom,
     fmt::{Display, Write},
     marker::PhantomData,
 };

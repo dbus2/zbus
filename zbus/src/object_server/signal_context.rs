@@ -1,7 +1,6 @@
 use zbus_names::BusName;
 
 use crate::{zvariant::ObjectPath, Connection, Error, Result};
-use std::convert::TryInto;
 
 /// A signal emission context.
 ///

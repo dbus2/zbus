@@ -1,6 +1,6 @@
 use serde::ser::{Serialize, Serializer};
 use static_assertions::assert_impl_all;
-use std::{convert::TryFrom, fmt::Display};
+use std::fmt::Display;
 
 use crate::{value_display_fmt, Error, Signature, Type, Value};
 

@@ -1,10 +1,9 @@
 use core::{
     borrow::Borrow,
-    convert::TryFrom,
     fmt::{self, Display, Formatter},
     ops::Deref,
 };
-use std::{borrow::Cow, convert::TryInto, sync::Arc};
+use std::{borrow::Cow, sync::Arc};
 
 use crate::{Error, OwnedUniqueName, OwnedWellKnownName, Result, UniqueName, WellKnownName};
 use serde::{de, Deserialize, Serialize};

@@ -16,7 +16,6 @@ use quick_xml::{de::Deserializer, se::to_writer};
 use serde::{Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
-    convert::{TryFrom, TryInto},
     io::{BufReader, Read, Write},
     result::Result,
 };

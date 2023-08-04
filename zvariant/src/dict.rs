@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    convert::TryFrom,
     fmt::{Display, Write},
     hash::BuildHasher,
 };
