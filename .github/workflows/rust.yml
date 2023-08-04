@@ -101,12 +101,36 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            c:/ProgramData/chocolatey/bin/pkg-config.exe
-            c:/share/
-            c:/lib/
-            c:/bin/
-            c:/var/
-          key: ${{ runner.os }}-cache-2023-08-02.4
+            c:/share/*dbus*
+            c:/lib/libexpat.lib
+            c:/bin/libexpat.dll
+            c:/bin/xmlwf.exe
+            c:/bin/*dbus*
+            c:/lib/*dbus*
+            c:/var/lib/*dbus*
+            c:/lib/*glib*
+            c:/lib/*gio*
+            c:/lib/*gobject*
+            c:/lib/*gmodule*
+            c:/lib/*gthread*
+            c:/lib/*gspawn*
+            c:/lib/*gresource*
+            c:/lib/*pcre*
+            c:/lib/*z*
+            c:/lib/*ffi*
+            c:/lib/*intl*
+            c:/bin/*glib*
+            c:/bin/*gio*
+            c:/bin/*gobject*
+            c:/bin/*gmodule*
+            c:/bin/*gthread*
+            c:/bin/*gspawn*
+            c:/bin/*gresource*
+            c:/bin/*pcre*
+            c:/bin/*z*
+            c:/bin/*ffi*
+            c:/bin/*intl*
+          key: ${{ runner.os }}-cache
 
       - name: Install pkg-config
         if: steps.cache-deps.outputs.cache-hit != 'true'
