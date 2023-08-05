@@ -41,6 +41,8 @@ pub use dbus_error::*;
 mod error;
 pub use error::*;
 
+pub mod addr;
+
 pub mod address;
 pub use address::Address;
 

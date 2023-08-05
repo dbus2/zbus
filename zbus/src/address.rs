@@ -790,6 +790,7 @@ mod tests {
             Error::Address(e) => assert_eq!(e, "Key `opt` specified multiple times"),
             _ => panic!(),
         }
+
         match Address::from_str("tcp:host=localhost").unwrap_err() {
             Error::Address(e) => assert_eq!(e, "tcp address is missing `port`"),
             _ => panic!(),
