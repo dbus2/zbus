@@ -1,5 +1,5 @@
 //! D-Bus Message.
-use std::{fmt, io::Cursor};
+use std::{fmt, io::Cursor, num::NonZeroU32};
 
 #[cfg(unix)]
 use std::{
@@ -355,7 +355,7 @@ impl Message {
     }
 
     /// The serial number of the message this message is a reply to.
-    pub fn reply_serial(&self) -> Option<u32> {
+    pub fn reply_serial(&self) -> Option<NonZeroU32> {
         self.quick_fields.reply_serial()
     }
 
@@ -390,7 +390,16 @@ impl Message {
     /// # use zbus::message::Message;
     /// # (|| -> zbus::Result<()> {
     /// let send_body = (7i32, (2i32, "foo"), vec!["bar"]);
-    /// let message = Message::method(None::<&str>, Some("zbus.test"), "/", Some("zbus.test"), "ping", &send_body)?;
+    /// let mut message = Message::method(
+    ///     None::<&str>,
+    ///     Some("zbus.test"),
+    ///     "/",
+    ///     Some("zbus.test"),
+    ///     "ping",
+    ///     &send_body,
+    /// )?;
+    /// let conn = zbus::blocking::Connection::session()?;
+    /// conn.inner().assign_serial_num(&mut message)?;
     /// let body : zbus::zvariant::Structure = message.body()?;
     /// let fields = body.fields();
     /// assert!(matches!(fields[0], zvariant::Value::I32(7)));
@@ -464,6 +473,16 @@ impl Message {
     /// and might not be ordered at all.
     pub fn recv_position(&self) -> Sequence {
         self.recv_seq
+    }
+
+    pub(crate) fn set_serial_num(&mut self, serial_num: NonZeroU32) -> Result<()> {
+        self.modify_primary_header(|primary| {
+            primary.set_serial_num(serial_num);
+            Ok(())
+        })?;
+        self.primary_header.set_serial_num(serial_num);
+
+        Ok(())
     }
 }
 
@@ -575,7 +594,7 @@ mod tests {
     fn test() {
         #[cfg(unix)]
         let stdout = std::io::stdout();
-        let m = Message::method(
+        let mut m = Message::method(
             Some(":1.72"),
             None::<()>,
             "/",
@@ -588,6 +607,7 @@ mod tests {
             ),
         )
         .unwrap();
+        m.set_serial_num(1.try_into().unwrap()).unwrap();
         assert_eq!(
             m.body_signature().unwrap().to_string(),
             if cfg!(unix) { "hs" } else { "s" }

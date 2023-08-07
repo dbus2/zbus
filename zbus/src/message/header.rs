@@ -1,5 +1,6 @@
+use std::num::NonZeroU32;
+
 use enumflags2::{bitflags, BitFlags};
-use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -106,46 +107,6 @@ pub enum Flags {
 
 assert_impl_all!(Flags: Send, Sync, Unpin);
 
-#[derive(Clone, Debug)]
-struct SerialNum(OnceCell<u32>);
-
-// FIXME: Can use `zvariant::Type` macro after `zvariant` provides a blanket implementation for
-// `OnceCell<T>`.
-impl zvariant::Type for SerialNum {
-    fn signature() -> Signature<'static> {
-        u32::signature()
-    }
-}
-
-// Unfortunately Serde doesn't provide a blanket impl. for `Cell<T>` so we have to implement
-// manually.
-//
-// https://github.com/serde-rs/serde/issues/1952
-impl Serialize for SerialNum {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // `Message` serializes the PrimaryHeader at construct time before the user has the
-        // time to tweak it and set a correct serial_num. We should probably avoid this but
-        // for now, let's silently use a default serialized value.
-        self.0
-            .get()
-            .cloned()
-            .unwrap_or_default()
-            .serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for SerialNum {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Ok(SerialNum(OnceCell::from(u32::deserialize(deserializer)?)))
-    }
-}
-
 /// The primary message header, which is present in all D-Bus messages.
 ///
 /// This header contains all the essential information about a message, regardless of its type.
@@ -156,7 +117,7 @@ pub struct PrimaryHeader {
     flags: BitFlags<Flags>,
     protocol_version: u8,
     body_len: u32,
-    serial_num: SerialNum,
+    serial_num: u32,
 }
 
 assert_impl_all!(PrimaryHeader: Send, Sync, Unpin);
@@ -170,7 +131,7 @@ impl PrimaryHeader {
             flags: BitFlags::empty(),
             protocol_version: 1,
             body_len,
-            serial_num: SerialNum(OnceCell::new()),
+            serial_num: 0,
         }
     }
 
@@ -242,15 +203,12 @@ impl PrimaryHeader {
     ///
     /// **Note:** There is no setter provided for this in the public API since this is set by the
     /// [`Connection`](struct.Connection.html) the message is sent over.
-    pub fn serial_num(&self) -> Option<&u32> {
-        self.serial_num.0.get()
+    pub fn serial_num(&self) -> Option<NonZeroU32> {
+        NonZeroU32::new(self.serial_num)
     }
 
-    pub(crate) fn serial_num_or_init<F>(&mut self, f: F) -> &u32
-    where
-        F: FnOnce() -> u32,
-    {
-        self.serial_num.0.get_or_init(f)
+    pub(crate) fn set_serial_num(&mut self, serial_num: NonZeroU32) {
+        self.serial_num = serial_num.get();
     }
 }
 
@@ -351,8 +309,12 @@ impl<'m> Header<'m> {
     }
 
     /// The serial number of the message this message is a reply to.
-    pub fn reply_serial(&self) -> Result<Option<u32>, Error> {
-        get_field_u32!(self, ReplySerial)
+    pub fn reply_serial(&self) -> Result<Option<NonZeroU32>, Error> {
+        match self.fields().get_field(FieldCode::ReplySerial) {
+            Some(Field::ReplySerial(value)) => Ok(Some(*value)),
+            Some(_) => Err(Error::InvalidField),
+            None => Ok(None),
+        }
     }
 
     /// The name of the connection this message is intended for.
@@ -411,7 +373,7 @@ mod tests {
         let mut f = Fields::new();
         f.add(Field::ErrorName("org.zbus.Error".try_into()?));
         f.add(Field::Destination(":1.11".try_into()?));
-        f.add(Field::ReplySerial(88));
+        f.add(Field::ReplySerial(88.try_into()?));
         f.add(Field::Signature(Signature::from_str_unchecked("say")));
         f.add(Field::UnixFDs(12));
         let h = Header::new(PrimaryHeader::new(Type::MethodReturn, 77), f);
@@ -422,7 +384,7 @@ mod tests {
         assert_eq!(h.member()?, None);
         assert_eq!(h.error_name()?.unwrap(), "org.zbus.Error");
         assert_eq!(h.destination()?.unwrap(), ":1.11");
-        assert_eq!(h.reply_serial()?, Some(88));
+        assert_eq!(h.reply_serial()?.map(Into::into), Some(88));
         assert_eq!(h.sender()?, None);
         assert_eq!(h.signature()?, Some(&Signature::from_str_unchecked("say")));
         assert_eq!(h.unix_fds()?, Some(12));

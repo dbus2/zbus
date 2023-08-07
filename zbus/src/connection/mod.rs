@@ -8,6 +8,7 @@ use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
     io::{self, ErrorKind},
+    num::NonZeroU32,
     ops::Deref,
     pin::Pin,
     sync::{
@@ -226,7 +227,7 @@ assert_impl_all!(Connection: Send, Sync, Unpin);
 #[derive(Debug)]
 pub(crate) struct PendingMethodCall {
     stream: Option<MessageStream>,
-    serial: u32,
+    serial: NonZeroU32,
 }
 
 impl Future for PendingMethodCall {
@@ -299,7 +300,7 @@ impl Connection {
     /// number on the message before sending it off, for you.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
-    pub async fn send_message(&self, mut msg: Message) -> Result<u32> {
+    pub async fn send_message(&self, mut msg: Message) -> Result<NonZeroU32> {
         let serial = self.assign_serial_num(&mut msg)?;
 
         trace!("Sending message: {:?}", msg);
@@ -447,7 +448,7 @@ impl Connection {
     /// given `body`.
     ///
     /// Returns the message serial number.
-    pub async fn reply<B>(&self, call: &Message, body: &B) -> Result<u32>
+    pub async fn reply<B>(&self, call: &Message, body: &B) -> Result<NonZeroU32>
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
@@ -466,7 +467,7 @@ impl Connection {
         call: &Message,
         error_name: E,
         body: &B,
-    ) -> Result<u32>
+    ) -> Result<NonZeroU32>
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
         E: TryInto<ErrorName<'e>>,
@@ -486,7 +487,7 @@ impl Connection {
         &self,
         call: &zbus::message::Header<'_>,
         err: impl DBusError,
-    ) -> Result<u32> {
+    ) -> Result<NonZeroU32> {
         let m = err.create_reply(call);
         self.send_message(m?).await
     }
@@ -793,12 +794,12 @@ impl Connection {
     /// Assigns a serial number to `msg` that is unique to this connection.
     ///
     /// This method can fail if `msg` is corrupted.
-    pub fn assign_serial_num(&self, msg: &mut Message) -> Result<u32> {
-        let mut serial = 0;
-        msg.modify_primary_header(|primary| {
-            serial = *primary.serial_num_or_init(|| self.next_serial());
-            Ok(())
-        })?;
+    pub fn assign_serial_num(&self, msg: &mut Message) -> Result<NonZeroU32> {
+        let serial = self
+            .next_serial()
+            .try_into()
+            .map_err(|_| Error::InvalidSerial)?;
+        msg.set_serial_num(serial)?;
 
         Ok(serial)
     }
@@ -1334,6 +1335,10 @@ where
 
     fn start_send(self: Pin<&mut Self>, msg: T) -> Result<()> {
         let msg = msg.into();
+
+        if msg.primary_header().serial_num().is_none() {
+            return Err(Error::InvalidSerial);
+        }
 
         #[cfg(unix)]
         if !msg.fds().is_empty() && !self.inner.cap_unix_fd {

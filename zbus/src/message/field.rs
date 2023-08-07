@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use serde::{
     de::{Deserialize, Deserializer, Error},
     ser::{Serialize, Serializer},
@@ -103,7 +105,7 @@ pub enum Field<'f> {
     /// The name of the error that occurred, for errors
     ErrorName(ErrorName<'f>),
     /// The serial number of the message this message is a reply to.
-    ReplySerial(u32),
+    ReplySerial(NonZeroU32),
     /// The name of the connection this message is intended for.
     Destination(BusName<'f>),
     /// Unique name of the sending connection.
@@ -132,7 +134,7 @@ impl<'f> Serialize for Field<'f> {
             Field::Interface(value) => (FieldCode::Interface, value.as_str().into()),
             Field::Member(value) => (FieldCode::Member, value.as_str().into()),
             Field::ErrorName(value) => (FieldCode::ErrorName, value.as_str().into()),
-            Field::ReplySerial(value) => (FieldCode::ReplySerial, (*value).into()),
+            Field::ReplySerial(value) => (FieldCode::ReplySerial, value.get().into()),
             Field::Destination(value) => (FieldCode::Destination, value.as_str().into()),
             Field::Sender(value) => (FieldCode::Sender, value.as_str().into()),
             Field::Signature(value) => (FieldCode::Signature, value.as_ref().into()),
@@ -165,7 +167,10 @@ impl<'de: 'f, 'f> Deserialize<'de> for Field<'f> {
                     .map_err(D::Error::custom)?,
             ),
             FieldCode::ReplySerial => {
-                Field::ReplySerial(u32::try_from(value).map_err(D::Error::custom)?)
+                let value = u32::try_from(value)
+                    .map_err(D::Error::custom)
+                    .and_then(|v| v.try_into().map_err(D::Error::custom))?;
+                Field::ReplySerial(value)
             }
             FieldCode::Destination => Field::Destination(
                 BusName::try_from(value)
