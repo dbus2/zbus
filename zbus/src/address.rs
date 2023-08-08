@@ -422,7 +422,8 @@ impl Address {
                         .unwrap_or_else(|_| format!("/run/user/{}", Uid::effective()));
                     let path = format!("unix:path={runtime_dir}/bus");
 
-                    Self::from_str(&path)
+                    #[allow(clippy::needless_return)]
+                    return Self::from_str(&path);
                 }
 
                 #[cfg(target_os = "macos")]
