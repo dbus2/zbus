@@ -51,7 +51,7 @@ impl Drop for OwnedHandle {
     }
 }
 
-struct Mutex(OwnedHandle);
+pub(crate) struct Mutex(OwnedHandle);
 
 impl Mutex {
     pub fn new(name: &str) -> Result<Self, crate::Error> {
@@ -66,7 +66,7 @@ impl Mutex {
         Ok(Self(unsafe { OwnedHandle::new(handle) }))
     }
 
-    pub fn lock(&self) -> MutexGuard<'_> {
+    pub(crate) fn lock(&self) -> MutexGuard<'_> {
         match unsafe { WaitForSingleObject(self.0.get(), INFINITE) } {
             WAIT_ABANDONED | WAIT_OBJECT_0 => MutexGuard(self),
             err => panic!("WaitForSingleObject() failed: return code {}", err),
@@ -74,7 +74,7 @@ impl Mutex {
     }
 }
 
-struct MutexGuard<'a>(&'a Mutex);
+pub(crate) struct MutexGuard<'a>(&'a Mutex);
 
 impl Drop for MutexGuard<'_> {
     fn drop(&mut self) {
@@ -272,7 +272,7 @@ pub fn unix_stream_get_peer_pid(stream: &UnixStream) -> Result<DWORD, Error> {
     Ok(ret)
 }
 
-fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
+pub(crate) fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
     let handle = {
         let wide_name = OsStr::new(name)
             .encode_wide()
