@@ -3,8 +3,8 @@ use static_assertions::assert_impl_all;
 use std::{collections::HashMap, hash::BuildHasher};
 
 use crate::{
-    Array, Dict, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure, Type,
-    Value,
+    Array, Dict, NoneValue, ObjectPath, Optional, OwnedObjectPath, OwnedSignature, Signature, Str,
+    Structure, Type, Value,
 };
 
 #[cfg(unix)]
@@ -156,6 +156,18 @@ where
 {
     fn from(value: HashMap<K, V, H>) -> Self {
         Self(value.into())
+    }
+}
+
+impl<'a, T> TryFrom<OwnedValue> for Optional<T>
+where
+    T: TryFrom<Value<'a>> + NoneValue + PartialEq<<T as NoneValue>::NoneType>,
+    T::Error: Into<crate::Error>,
+{
+    type Error = crate::Error;
+
+    fn try_from(value: OwnedValue) -> Result<Self, Self::Error> {
+        Self::try_from(value.0)
     }
 }
 
