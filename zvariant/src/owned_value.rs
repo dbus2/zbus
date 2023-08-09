@@ -171,6 +171,15 @@ where
     }
 }
 
+impl<V> From<Optional<V>> for OwnedValue
+where
+    V: Into<Value<'static>> + NoneValue<NoneType = V>,
+{
+    fn from(v: Optional<V>) -> OwnedValue {
+        Self(Value::from(v))
+    }
+}
+
 // tuple conversions in `structure` module for avoiding code-duplication.
 
 impl<'a> From<Value<'a>> for OwnedValue {
