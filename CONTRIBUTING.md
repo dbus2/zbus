@@ -1,6 +1,6 @@
 # Contributing to zbus
 
-We welcomes contribution from everyone in the form of suggestions, bug reports, pull requests, and
+We welcome contributions from everyone in the form of suggestions, bug reports, pull requests, and
 feedback. This document gives some guidance if you are thinking of helping us.
 
 Please reach out here in a Github issue, or in the
@@ -12,7 +12,7 @@ you contribute.
 You can create issues [here](https://github.com/dbus2/zbus/issues/new). When
 reporting a bug or asking for help, please include enough details so that the people helping you
 can reproduce the behavior you are seeing. For some tips on how to approach this, read about how to
-produce a [Minimal, Complete, and Verifiable example](https://stackoverflow.com/help/mcve).
+produce a [Minimal, Complete, and Verifiable Example](https://stackoverflow.com/help/mcve).
 
 When making a feature request, please make it clear what problem you intend to solve with the
 feature, any ideas for how the crate in question could support solving that problem, any possible
@@ -43,11 +43,11 @@ Same rules apply here as for bug reports and feature requests. Plus:
 
 ### Legal Notice
 
-When contributing to this project, you **implicitly** declare that you:
+When contributing to this project, you **implicitly** declare that:
 
-* have authored 100% of the content.
-* have the necessary rights to the content.
-* agree to providing the content under the [project's license](LICENSE).
+* you have authored 100% of the content,
+* you have the necessary rights to the content, and
+* you agree to providing the content under the [project's license](LICENSE).
 
 ## Running the test suite
 
@@ -72,8 +72,8 @@ and clippy doesn't see anything wrong with the code:
 cargo clippy -- -D warnings
 ```
 
-Please not that there are times when clippy is wrong and you know what you are doing. In such cases,
-it's acceptable to tell clippy to
+Please note that there are times when clippy is wrong and you know what you are doing. In such
+cases, it's acceptable to tell clippy to
 [ignore the specific error or warning in the code](https://github.com/rust-lang/rust-clippy#allowingdenying-lints).
 
 If you intend to contribute often or think that's very likely, we recommend you setup the following git
