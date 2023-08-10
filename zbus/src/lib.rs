@@ -43,20 +43,23 @@ pub use error::*;
 
 pub mod addr;
 
+#[doc(hidden)]
 pub mod address;
+#[deprecated(note = "Use `addr::DBusAddress` instead")]
+#[doc(hidden)]
 pub use address::Address;
 
-#[deprecated(note = "Use `address::TcpAddress` instead")]
+#[deprecated(note = "Use `addr::transport::Tcp` instead")]
 #[doc(hidden)]
 pub use address::TcpAddress;
-#[deprecated(note = "Use `address::TcpAddressFamily` instead")]
+#[deprecated(note = "Use `addr::transport::TcpFamily` instead")]
 #[doc(hidden)]
 pub use address::TcpAddressFamily;
 #[cfg(any(
     all(feature = "vsock", not(feature = "tokio")),
     feature = "tokio-vsock"
 ))]
-#[deprecated(note = "Use `address::VsockAddress` instead")]
+#[deprecated(note = "Use `addr::transport::Vsock` instead")]
 #[doc(hidden)]
 pub use address::VsockAddress;
 
