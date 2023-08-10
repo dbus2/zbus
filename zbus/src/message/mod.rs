@@ -287,16 +287,8 @@ impl Message {
     /// syntax), D-Bus does not. Since this method gives you the signature expected on the wire by
     /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
     /// multiple arguments.
-    pub fn body_signature(&self) -> Result<Signature<'_>> {
-        match self
-            .header()?
-            .into_fields()
-            .into_field(FieldCode::Signature)
-            .ok_or(Error::NoBodySignature)?
-        {
-            Field::Signature(signature) => Ok(signature),
-            _ => Err(Error::InvalidField),
-        }
+    pub fn body_signature(&self) -> Option<Signature<'_>> {
+        self.quick_fields.signature(self)
     }
 
     pub fn primary_header(&self) -> &PrimaryHeader {
@@ -417,11 +409,9 @@ impl Message {
     where
         B: zvariant::DynamicDeserialize<'d>,
     {
-        let body_sig = match self.body_signature() {
-            Ok(sig) => sig,
-            Err(Error::NoBodySignature) => Signature::from_static_str_unchecked(""),
-            Err(e) => return Err(e),
-        };
+        let body_sig = self
+            .body_signature()
+            .unwrap_or_else(|| Signature::from_static_str_unchecked(""));
 
         {
             #[cfg(unix)]
@@ -509,7 +499,7 @@ impl fmt::Debug for Message {
                 msg.field("member", &member);
             }
         });
-        if let Ok(s) = self.body_signature() {
+        if let Some(s) = self.body_signature() {
             msg.field("body", &s);
         }
         #[cfg(unix)]
