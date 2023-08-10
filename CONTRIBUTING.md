@@ -43,11 +43,11 @@ Same rules apply here as for bug reports and feature requests. Plus:
 
 ### Legal Notice
 
-When contributing to this project, you **implicitly** declare that you:
+When contributing to this project, you **implicitly** declare that:
 
-* have authored 100% of the content.
-* have the necessary rights to the content.
-* agree to providing the content under the [project's license](LICENSE).
+* you have authored 100% of the content,
+* you have the necessary rights to the content, and
+* you agree to providing the content under the [project's license](LICENSE).
 
 ## Running the test suite
 
