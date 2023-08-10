@@ -311,9 +311,37 @@ impl Message {
     ///
     /// Note: prefer using the direct access methods if possible; they are more efficient.
     pub fn header(&self) -> Result<Header<'_>> {
-        zvariant::from_slice(&self.bytes, dbus_context!(0))
-            .map_err(Error::from)
-            .map(|h| h.0)
+        let mut fields = Fields::new();
+        let quick_fields = &self.quick_fields;
+        if let Some(p) = quick_fields.path(self) {
+            fields.add(Field::Path(p));
+        }
+        if let Some(i) = quick_fields.interface(self) {
+            fields.add(Field::Interface(i));
+        }
+        if let Some(m) = quick_fields.member(self) {
+            fields.add(Field::Member(m));
+        }
+        if let Some(e) = quick_fields.error_name(self) {
+            fields.add(Field::ErrorName(e));
+        }
+        if let Some(r) = quick_fields.reply_serial() {
+            fields.add(Field::ReplySerial(r));
+        }
+        if let Some(d) = quick_fields.destination(self) {
+            fields.add(Field::Destination(d));
+        }
+        if let Some(s) = quick_fields.sender(self) {
+            fields.add(Field::Sender(s));
+        }
+        if let Some(s) = quick_fields.signature(self) {
+            fields.add(Field::Signature(s));
+        }
+        if let Some(u) = quick_fields.unix_fds() {
+            fields.add(Field::UnixFDs(u));
+        }
+
+        Ok(Header::new(self.primary_header.clone(), fields))
     }
 
     /// Deserialize the fields.
