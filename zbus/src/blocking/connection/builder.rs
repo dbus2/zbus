@@ -13,7 +13,7 @@ use uds_windows::UnixStream;
 use zvariant::{ObjectPath, Str};
 
 use crate::{
-    address::Address,
+    addr::ToDBusAddrs,
     blocking::Connection,
     names::{UniqueName, WellKnownName},
     object_server::Interface,
@@ -42,10 +42,9 @@ impl<'a> Builder<'a> {
     /// Create a builder for connection that will use the given [D-Bus bus address].
     ///
     /// [D-Bus bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub fn address<A>(address: A) -> Result<Self>
+    pub fn address<'t, A>(address: &'t A) -> Result<Self>
     where
-        A: TryInto<Address>,
-        A::Error: Into<Error>,
+        A: ToDBusAddrs<'t> + ?Sized,
     {
         crate::connection::Builder::address(address).map(Self)
     }

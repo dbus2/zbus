@@ -2,29 +2,14 @@
 use async_io::Async;
 use event_listener::Event;
 use static_assertions::assert_impl_all;
-#[cfg(not(feature = "tokio"))]
-use std::net::TcpStream;
-#[cfg(all(unix, not(feature = "tokio")))]
-use std::os::unix::net::UnixStream;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
 };
-#[cfg(feature = "tokio")]
-use tokio::net::TcpStream;
-#[cfg(all(unix, feature = "tokio"))]
-use tokio::net::UnixStream;
-#[cfg(feature = "tokio-vsock")]
-use tokio_vsock::VsockStream;
-#[cfg(windows)]
-use uds_windows::UnixStream;
-#[cfg(all(feature = "vsock", not(feature = "tokio")))]
-use vsock::VsockStream;
-
 use zvariant::{ObjectPath, Str};
 
 use crate::{
-    address::{self, Address},
+    addr::{self, DBusAddr, ToDBusAddrs},
     async_lock::RwLock,
     names::{InterfaceName, UniqueName, WellKnownName},
     object_server::Interface,
@@ -33,13 +18,22 @@ use crate::{
 
 use super::{
     handshake::{AuthMechanism, Authenticated},
-    raw::Socket,
+    raw::{Socket, Stream, TcpStream},
 };
+
+#[cfg(any(unix, all(windows, not(feature = "tokio"))))]
+use super::raw::UnixStream;
+#[cfg(any(
+    all(feature = "vsock", not(feature = "tokio")),
+    feature = "tokio-vsock"
+))]
+use super::raw::VsockStream;
 
 const DEFAULT_MAX_QUEUED: usize = 64;
 
 #[derive(Debug)]
 enum Target {
+    #[cfg(any(unix, all(windows, not(feature = "tokio"))))]
     UnixStream(UnixStream),
     TcpStream(TcpStream),
     #[cfg(any(
@@ -47,7 +41,8 @@ enum Target {
         feature = "tokio-vsock"
     ))]
     VsockStream(VsockStream),
-    Address(Address),
+    // FIXME: we should be able to keep a <dyn ToDBusAddr + 'a> instead, but lifetime issues
+    Address(Vec<Result<DBusAddr<'static>>>),
     Socket(Box<dyn Socket>),
 }
 
@@ -78,12 +73,12 @@ assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 impl<'a> Builder<'a> {
     /// Create a builder for the session/user message bus connection.
     pub fn session() -> Result<Self> {
-        Ok(Self::new(Target::Address(Address::session()?)))
+        Self::address(&addr::session()?)
     }
 
     /// Create a builder for the system-wide message bus connection.
     pub fn system() -> Result<Self> {
-        Ok(Self::new(Target::Address(Address::system()?)))
+        Self::address(&addr::system()?)
     }
 
     /// Create a builder for connection that will use the given [D-Bus bus address].
@@ -117,14 +112,18 @@ impl<'a> Builder<'a> {
     /// current session using `ibus address` command.
     ///
     /// [D-Bus bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub fn address<A>(address: A) -> Result<Self>
+    pub fn address<'t, A>(address: &'t A) -> Result<Builder<'a>>
     where
-        A: TryInto<Address>,
-        A::Error: Into<Error>,
+        A: ToDBusAddrs<'t> + ?Sized,
     {
-        Ok(Self::new(Target::Address(
-            address.try_into().map_err(Into::into)?,
-        )))
+        let mut addr: Vec<Result<DBusAddr<'static>>> = vec![];
+        for a in address.to_dbus_addrs() {
+            match a {
+                Ok(a) => addr.push(Ok(a.to_owned())),
+                _ => continue,
+            }
+        }
+        Ok(Builder::new(Target::Address(addr)))
     }
 
     /// Create a builder for connection that will use the given unix stream.
@@ -132,6 +131,7 @@ impl<'a> Builder<'a> {
     /// If the default `async-io` feature is disabled, this method will expect
     /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
     /// argument.
+    #[cfg(any(unix, all(windows, not(feature = "tokio"))))]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self::new(Target::UnixStream(stream))
     }
@@ -339,29 +339,27 @@ impl<'a> Builder<'a> {
 
     async fn build_(self, executor: Executor<'static>) -> Result<Connection> {
         let stream = match self.target {
-            #[cfg(not(feature = "tokio"))]
-            Target::UnixStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            #[cfg(all(any(unix, windows), not(feature = "tokio")))]
+            Target::UnixStream(stream) => Box::new(Async::new(stream)?) as _,
             #[cfg(all(unix, feature = "tokio"))]
             Target::UnixStream(stream) => Box::new(stream) as Box<dyn Socket>,
-            #[cfg(all(not(unix), feature = "tokio"))]
-            Target::UnixStream(_) => return Err(Error::Unsupported),
             #[cfg(not(feature = "tokio"))]
-            Target::TcpStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            Target::TcpStream(stream) => Box::new(Async::new(stream)?) as _,
             #[cfg(feature = "tokio")]
-            Target::TcpStream(stream) => Box::new(stream) as Box<dyn Socket>,
+            Target::TcpStream(stream) => Box::new(stream) as _,
             #[cfg(all(feature = "vsock", not(feature = "tokio")))]
-            Target::VsockStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            Target::VsockStream(stream) => Box::new(Async::new(stream)?) as _,
             #[cfg(feature = "tokio-vsock")]
-            Target::VsockStream(stream) => Box::new(stream) as Box<dyn Socket>,
-            Target::Address(address) => match address.connect().await? {
-                #[cfg(any(unix, not(feature = "tokio")))]
-                address::Stream::Unix(stream) => Box::new(stream) as Box<dyn Socket>,
-                address::Stream::Tcp(stream) => Box::new(stream) as Box<dyn Socket>,
+            Target::VsockStream(stream) => Box::new(stream) as _,
+            Target::Address(address) => match Stream::connect(address).await? {
+                #[cfg(any(unix, all(windows, not(feature = "tokio"))))]
+                Stream::Unix(stream) => Box::new(stream) as _,
+                Stream::Tcp(stream) => Box::new(stream) as _,
                 #[cfg(any(
                     all(feature = "vsock", not(feature = "tokio")),
                     feature = "tokio-vsock"
                 ))]
-                address::Stream::Vsock(stream) => Box::new(stream) as Box<dyn Socket>,
+                Stream::Vsock(stream) => Box::new(stream) as _,
             },
             Target::Socket(stream) => stream,
         };
