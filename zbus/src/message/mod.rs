@@ -311,6 +311,13 @@ impl Message {
     ///
     /// Note: prefer using the direct access methods if possible; they are more efficient.
     pub fn header(&self) -> Result<Header<'_>> {
+        Ok(Header::new(self.primary_header.clone(), self.fields()?))
+    }
+
+    /// Deserialize the fields.
+    ///
+    /// Note: prefer using the direct access methods if possible; they are more efficient.
+    pub fn fields(&self) -> Result<Fields<'_>> {
         let mut fields = Fields::new();
         let quick_fields = &self.quick_fields;
         if let Some(p) = quick_fields.path(self) {
@@ -341,17 +348,7 @@ impl Message {
             fields.add(Field::UnixFDs(u));
         }
 
-        Ok(Header::new(self.primary_header.clone(), fields))
-    }
-
-    /// Deserialize the fields.
-    ///
-    /// Note: prefer using the direct access methods if possible; they are more efficient.
-    pub fn fields(&self) -> Result<Fields<'_>> {
-        let ctxt = dbus_context!(header::PRIMARY_HEADER_SIZE);
-        zvariant::from_slice(&self.bytes[header::PRIMARY_HEADER_SIZE..], ctxt)
-            .map_err(Error::from)
-            .map(|f| f.0)
+        Ok(fields)
     }
 
     /// The message type.
