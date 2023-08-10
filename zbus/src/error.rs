@@ -52,7 +52,6 @@ pub enum Error {
     #[cfg(feature = "xml")]
     /// An XML error from quick_xml
     QuickXml(DeError),
-    NoBodySignature,
     /// The requested name was already claimed by another peer.
     NameTaken,
     /// Invalid [match rule][MR] string.
@@ -84,7 +83,6 @@ impl PartialEq for Error {
             (Self::InvalidSerial, Self::InvalidSerial) => true,
             (Self::Unsupported, Self::Unsupported) => true,
             (Self::FDO(s), Self::FDO(o)) => s == o,
-            (Self::NoBodySignature, Self::NoBodySignature) => true,
             (Self::InvalidField, Self::InvalidField) => true,
             (Self::InvalidMatchRule, Self::InvalidMatchRule) => true,
             (Self::Variant(s), Self::Variant(o)) => s == o,
@@ -117,7 +115,6 @@ impl error::Error for Error {
             Error::FDO(e) => Some(e),
             #[cfg(feature = "xml")]
             Error::QuickXml(e) => Some(e),
-            Error::NoBodySignature => None,
             Error::InvalidField => None,
             Error::MissingField => None,
             Error::NameTaken => None,
@@ -154,7 +151,6 @@ impl fmt::Display for Error {
             Error::FDO(e) => write!(f, "{e}"),
             #[cfg(feature = "xml")]
             Error::QuickXml(e) => write!(f, "XML error: {e}"),
-            Error::NoBodySignature => write!(f, "missing body signature in the message"),
             Error::NameTaken => write!(f, "name already taken on the bus"),
             Error::InvalidMatchRule => write!(f, "Invalid match rule string"),
             Error::Failure(e) => write!(f, "{e}"),
@@ -188,7 +184,6 @@ impl Clone for Error {
             Error::FDO(e) => Error::FDO(e.clone()),
             #[cfg(feature = "xml")]
             Error::QuickXml(e) => Error::QuickXml(e.clone()),
-            Error::NoBodySignature => Error::NoBodySignature,
             Error::NameTaken => Error::NameTaken,
             Error::InvalidMatchRule => Error::InvalidMatchRule,
             Error::Failure(e) => Error::Failure(e.clone()),
