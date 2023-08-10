@@ -2,7 +2,7 @@ use std::{collections::HashMap, hash::BuildHasher};
 
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
-use crate::{Array, Dict, ObjectPath, Signature, Str, Structure, Type, Value};
+use crate::{Array, Dict, NoneValue, ObjectPath, Optional, Signature, Str, Structure, Type, Value};
 
 #[cfg(unix)]
 use crate::Fd;
@@ -107,6 +107,17 @@ where
 impl<'v> From<&'v String> for Value<'v> {
     fn from(v: &'v String) -> Value<'v> {
         Value::Str(v.into())
+    }
+}
+
+impl<'v, V> From<Optional<V>> for Value<'v>
+where
+    V: Into<Value<'v>> + NoneValue<NoneType = V>,
+{
+    fn from(v: Optional<V>) -> Value<'v> {
+        Option::<V>::from(v)
+            .unwrap_or_else(|| V::null_value())
+            .into()
     }
 }
 

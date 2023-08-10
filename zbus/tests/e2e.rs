@@ -19,7 +19,7 @@ use zbus::{
     object_server::ResponseDispatchNotifier,
     DBusError, MessageStream,
 };
-use zvariant::{DeserializeDict, OwnedValue, SerializeDict, Str, Type, Value};
+use zvariant::{DeserializeDict, Optional, OwnedValue, SerializeDict, Str, Type, Value};
 
 use zbus::{
     connection, dbus_interface, dbus_proxy,
@@ -107,6 +107,9 @@ trait MyIface {
 
     #[dbus_proxy(property)]
     fn fail_property(&self) -> zbus::Result<u32>;
+
+    #[dbus_proxy(property)]
+    fn optional_property(&self) -> zbus::Result<Optional<u32>>;
 
     #[dbus_proxy(no_reply)]
     fn test_no_reply(&self) -> zbus::Result<()>;
@@ -319,6 +322,13 @@ impl MyIfaceImpl {
 
     #[instrument]
     #[dbus_interface(property)]
+    fn optional_property(&self) -> Optional<u32> {
+        debug!("`OptionalAsProp` getter called.");
+        Some(42).into()
+    }
+
+    #[instrument]
+    #[dbus_interface(property)]
     fn address_data(&self) -> IP4Adress {
         debug!("`AddressData` getter called.");
         IP4Adress {
@@ -526,6 +536,8 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
             "FailProperty".into()
         )))
     );
+
+    assert_eq!(proxy.optional_property().await?, Some(42).into());
 
     #[cfg(feature = "xml")]
     {

@@ -1,8 +1,8 @@
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
 use crate::{
-    Array, Dict, Error, ObjectPath, OwnedObjectPath, OwnedSignature, Signature, Str, Structure,
-    Value,
+    Array, Dict, Error, NoneValue, ObjectPath, Optional, OwnedObjectPath, OwnedSignature,
+    Signature, Str, Structure, Value,
 };
 
 #[cfg(unix)]
@@ -162,6 +162,24 @@ where
         } else {
             Err(crate::Error::IncorrectType)
         }
+    }
+}
+
+impl<'a, T> TryFrom<Value<'a>> for Optional<T>
+where
+    T: TryFrom<Value<'a>> + NoneValue + PartialEq<<T as NoneValue>::NoneType>,
+    T::Error: Into<crate::Error>,
+{
+    type Error = crate::Error;
+
+    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+        T::try_from(value).map_err(Into::into).map(|value| {
+            if value == T::null_value() {
+                Optional::from(None)
+            } else {
+                Optional::from(Some(value))
+            }
+        })
     }
 }
 
