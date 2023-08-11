@@ -307,16 +307,18 @@ impl Message {
             .map_err(Error::from)
     }
 
-    /// Deserialize the header.
+    /// The message header.
     ///
-    /// Note: prefer using the direct access methods if possible; they are more efficient.
+    /// Note: This method does not deserialize the header but it does currently allocate so its not
+    /// zero-cost. While the allocation is small and will hopefully be removed in the future, it's
+    /// best to keep the header around if you need to access it a lot.
     pub fn header(&self) -> Result<Header<'_>> {
         Ok(Header::new(self.primary_header.clone(), self.fields()?))
     }
 
-    /// Deserialize the fields.
+    /// The message header fields.
     ///
-    /// Note: prefer using the direct access methods if possible; they are more efficient.
+    /// The note on [`Message::header`] applies here too.
     pub fn fields(&self) -> Result<Fields<'_>> {
         let mut fields = Fields::new();
         let quick_fields = &self.quick_fields;
