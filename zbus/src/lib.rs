@@ -345,15 +345,6 @@ mod tests {
             )
             .unwrap();
 
-        if reply
-            .body_signature()
-            .map(|s| s == <Fd>::signature())
-            .is_err()
-        {
-            // may throw org.freedesktop.DBus.Error.InteractiveAuthorizationRequired
-            return;
-        }
-
         let fd: Fd = reply.body().unwrap();
         let _fds = reply.take_fds();
         assert!(fd.as_raw_fd() >= 0);
