@@ -46,23 +46,6 @@ pub enum FieldCode {
 
 assert_impl_all!(FieldCode: Send, Sync, Unpin);
 
-impl From<u8> for FieldCode {
-    fn from(val: u8) -> FieldCode {
-        match val {
-            1 => FieldCode::Path,
-            2 => FieldCode::Interface,
-            3 => FieldCode::Member,
-            4 => FieldCode::ErrorName,
-            5 => FieldCode::ReplySerial,
-            6 => FieldCode::Destination,
-            7 => FieldCode::Sender,
-            8 => FieldCode::Signature,
-            9 => FieldCode::UnixFDs,
-            _ => FieldCode::Invalid,
-        }
-    }
-}
-
 impl<'f> Field<'f> {
     /// Get the associated code for this field.
     pub fn code(&self) -> FieldCode {
