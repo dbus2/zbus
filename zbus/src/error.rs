@@ -259,7 +259,7 @@ impl From<Arc<Message>> for Error {
             return Error::InvalidReply;
         }
 
-        if let Ok(Some(name)) = header.error_name() {
+        if let Some(name) = header.error_name() {
             let name = name.to_owned().into();
             match message.body_unchecked::<&str>() {
                 Ok(detail) => Error::MethodError(name, Some(String::from(detail)), message),

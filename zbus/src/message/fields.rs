@@ -166,15 +166,15 @@ pub(crate) struct QuickFields {
 impl QuickFields {
     pub fn new(buf: &[u8], header: &Header<'_>) -> Result<Self> {
         Ok(Self {
-            path: FieldPos::new(buf, header.path()?),
-            interface: FieldPos::new(buf, header.interface()?),
-            member: FieldPos::new(buf, header.member()?),
-            error_name: FieldPos::new(buf, header.error_name()?),
-            reply_serial: header.reply_serial()?,
-            destination: FieldPos::new(buf, header.destination()?),
-            sender: FieldPos::new(buf, header.sender()?),
-            signature: FieldPos::new(buf, header.signature()?),
-            unix_fds: header.unix_fds()?,
+            path: FieldPos::new(buf, header.path()),
+            interface: FieldPos::new(buf, header.interface()),
+            member: FieldPos::new(buf, header.member()),
+            error_name: FieldPos::new(buf, header.error_name()),
+            reply_serial: header.reply_serial(),
+            destination: FieldPos::new(buf, header.destination()),
+            sender: FieldPos::new(buf, header.sender()),
+            signature: FieldPos::new(buf, header.signature()),
+            unix_fds: header.unix_fds(),
         })
     }
 

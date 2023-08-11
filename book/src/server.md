@@ -69,7 +69,7 @@ while let Some(msg) = stream.try_next().await? {
     let msg_header = msg.header();
     dbg!(&msg);
 
-    match msg_header.message_type()? {
+    match msg_header.message_type() {
         zbus::message::Type::MethodCall => {
             // real code would check msg_header path(), interface() and member()
             // handle invalid calls, introspection, errors etc

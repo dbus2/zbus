@@ -219,9 +219,10 @@ macro_rules! get_field {
     ($self:ident, $kind:ident, $closure:tt) => {
         #[allow(clippy::redundant_closure_call)]
         match $self.fields().get_field(FieldCode::$kind) {
-            Some(Field::$kind(value)) => Ok(Some($closure(value))),
-            Some(_) => Err(Error::InvalidField),
-            None => Ok(None),
+            Some(Field::$kind(value)) => Some($closure(value)),
+            // SAFETY: `Deserialize` impl for `Field` ensures that the code and field match.
+            Some(_) => unreachable!("FieldCode and Field mismatch"),
+            None => None,
         }
     };
 }
@@ -269,56 +270,57 @@ impl<'m> Header<'m> {
     }
 
     /// The message type
-    pub fn message_type(&self) -> Result<Type, Error> {
-        Ok(self.primary().msg_type())
+    pub fn message_type(&self) -> Type {
+        self.primary().msg_type()
     }
 
     /// The object to send a call to, or the object a signal is emitted from.
-    pub fn path(&self) -> Result<Option<&ObjectPath<'m>>, Error> {
+    pub fn path(&self) -> Option<&ObjectPath<'m>> {
         get_field!(self, Path)
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
-    pub fn interface(&self) -> Result<Option<&InterfaceName<'m>>, Error> {
+    pub fn interface(&self) -> Option<&InterfaceName<'m>> {
         get_field!(self, Interface)
     }
 
     /// The member, either the method name or signal name.
-    pub fn member(&self) -> Result<Option<&MemberName<'m>>, Error> {
+    pub fn member(&self) -> Option<&MemberName<'m>> {
         get_field!(self, Member)
     }
 
     /// The name of the error that occurred, for errors.
-    pub fn error_name(&self) -> Result<Option<&ErrorName<'m>>, Error> {
+    pub fn error_name(&self) -> Option<&ErrorName<'m>> {
         get_field!(self, ErrorName)
     }
 
     /// The serial number of the message this message is a reply to.
-    pub fn reply_serial(&self) -> Result<Option<NonZeroU32>, Error> {
+    pub fn reply_serial(&self) -> Option<NonZeroU32> {
         match self.fields().get_field(FieldCode::ReplySerial) {
-            Some(Field::ReplySerial(value)) => Ok(Some(*value)),
-            Some(_) => Err(Error::InvalidField),
-            None => Ok(None),
+            Some(Field::ReplySerial(value)) => Some(*value),
+            // SAFETY: `Deserialize` impl for `Field` ensures that the code and field match.
+            Some(_) => unreachable!("FieldCode and Field mismatch"),
+            None => None,
         }
     }
 
     /// The name of the connection this message is intended for.
-    pub fn destination(&self) -> Result<Option<&BusName<'m>>, Error> {
+    pub fn destination(&self) -> Option<&BusName<'m>> {
         get_field!(self, Destination)
     }
 
     /// Unique name of the sending connection.
-    pub fn sender(&self) -> Result<Option<&UniqueName<'m>>, Error> {
+    pub fn sender(&self) -> Option<&UniqueName<'m>> {
         get_field!(self, Sender)
     }
 
     /// The signature of the message body.
-    pub fn signature(&self) -> Result<Option<&Signature<'m>>, Error> {
+    pub fn signature(&self) -> Option<&Signature<'m>> {
         get_field!(self, Signature)
     }
 
     /// The number of Unix file descriptors that accompany the message.
-    pub fn unix_fds(&self) -> Result<Option<u32>, Error> {
+    pub fn unix_fds(&self) -> Option<u32> {
         get_field_u32!(self, UnixFDs)
     }
 }
@@ -344,16 +346,16 @@ mod tests {
         f.add(Field::Sender(":1.84".try_into()?));
         let h = Header::new(PrimaryHeader::new(Type::Signal, 77), f);
 
-        assert_eq!(h.message_type()?, Type::Signal);
-        assert_eq!(h.path()?, Some(&path));
-        assert_eq!(h.interface()?, Some(&iface));
-        assert_eq!(h.member()?, Some(&member));
-        assert_eq!(h.error_name()?, None);
-        assert_eq!(h.destination()?, None);
-        assert_eq!(h.reply_serial()?, None);
-        assert_eq!(h.sender()?.unwrap(), ":1.84");
-        assert_eq!(h.signature()?, None);
-        assert_eq!(h.unix_fds()?, None);
+        assert_eq!(h.message_type(), Type::Signal);
+        assert_eq!(h.path(), Some(&path));
+        assert_eq!(h.interface(), Some(&iface));
+        assert_eq!(h.member(), Some(&member));
+        assert_eq!(h.error_name(), None);
+        assert_eq!(h.destination(), None);
+        assert_eq!(h.reply_serial(), None);
+        assert_eq!(h.sender().unwrap(), ":1.84");
+        assert_eq!(h.signature(), None);
+        assert_eq!(h.unix_fds(), None);
 
         let mut f = Fields::new();
         f.add(Field::ErrorName("org.zbus.Error".try_into()?));
@@ -363,16 +365,16 @@ mod tests {
         f.add(Field::UnixFDs(12));
         let h = Header::new(PrimaryHeader::new(Type::MethodReturn, 77), f);
 
-        assert_eq!(h.message_type()?, Type::MethodReturn);
-        assert_eq!(h.path()?, None);
-        assert_eq!(h.interface()?, None);
-        assert_eq!(h.member()?, None);
-        assert_eq!(h.error_name()?.unwrap(), "org.zbus.Error");
-        assert_eq!(h.destination()?.unwrap(), ":1.11");
-        assert_eq!(h.reply_serial()?.map(Into::into), Some(88));
-        assert_eq!(h.sender()?, None);
-        assert_eq!(h.signature()?, Some(&Signature::from_str_unchecked("say")));
-        assert_eq!(h.unix_fds()?, Some(12));
+        assert_eq!(h.message_type(), Type::MethodReturn);
+        assert_eq!(h.path(), None);
+        assert_eq!(h.interface(), None);
+        assert_eq!(h.member(), None);
+        assert_eq!(h.error_name().unwrap(), "org.zbus.Error");
+        assert_eq!(h.destination().unwrap(), ":1.11");
+        assert_eq!(h.reply_serial().map(Into::into), Some(88));
+        assert_eq!(h.sender(), None);
+        assert_eq!(h.signature(), Some(&Signature::from_str_unchecked("say")));
+        assert_eq!(h.unix_fds(), Some(12));
 
         Ok(())
     }

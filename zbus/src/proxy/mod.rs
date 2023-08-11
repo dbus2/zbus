@@ -1233,7 +1233,7 @@ impl<'a> SignalStream<'a> {
 
     fn filter(&mut self, msg: &Arc<Message>) -> Result<bool> {
         let header = msg.header();
-        let sender = header.sender()?;
+        let sender = header.sender();
         if sender == self.src_unique_name.as_ref() {
             return Ok(true);
         }

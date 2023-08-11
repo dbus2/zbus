@@ -999,8 +999,8 @@ impl Connection {
                             let hdr = msg.header();
                             match hdr.destination() {
                                 // Unique name is already checked by the match rule.
-                                Ok(Some(BusName::Unique(_))) | Ok(None) => (),
-                                Ok(Some(BusName::WellKnown(dest))) => {
+                                Some(BusName::Unique(_)) | None => (),
+                                Some(BusName::WellKnown(dest)) => {
                                     let names = conn.inner.registered_names.lock().await;
                                     // destination doesn't matter if no name has been registered
                                     // (probably means name it's registered through external means).
@@ -1009,11 +1009,6 @@ impl Connection {
 
                                         continue;
                                     }
-                                }
-                                Err(e) => {
-                                    warn!("Failed to parse destination: {}", e);
-
-                                    continue;
                                 }
                             }
                             let member = match msg.member() {

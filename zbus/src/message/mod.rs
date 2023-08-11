@@ -507,22 +507,20 @@ impl fmt::Debug for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut msg = f.debug_struct("Msg");
         let h = self.header();
-        if let Ok(t) = h.message_type() {
-            msg.field("type", &t);
-        }
-        if let Ok(Some(sender)) = h.sender() {
+        msg.field("type", &h.message_type());
+        if let Some(sender) = h.sender() {
             msg.field("sender", &sender);
         }
-        if let Ok(Some(serial)) = h.reply_serial() {
+        if let Some(serial) = h.reply_serial() {
             msg.field("reply-serial", &serial);
         }
-        if let Ok(Some(path)) = h.path() {
+        if let Some(path) = h.path() {
             msg.field("path", &path);
         }
-        if let Ok(Some(iface)) = h.interface() {
+        if let Some(iface) = h.interface() {
             msg.field("iface", &iface);
         }
-        if let Ok(Some(member)) = h.member() {
+        if let Some(member) = h.member() {
             msg.field("member", &member);
         }
         if let Some(s) = self.body_signature() {
@@ -543,23 +541,23 @@ impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let header = self.header();
         let (ty, error_name, sender, member) = (
-            header.message_type().ok(),
-            header.error_name().ok().flatten(),
-            header.sender().ok().flatten(),
-            header.member().ok().flatten(),
+            header.message_type(),
+            header.error_name(),
+            header.sender(),
+            header.member(),
         );
 
         match ty {
-            Some(Type::MethodCall) => {
+            Type::MethodCall => {
                 write!(f, "Method call")?;
                 if let Some(m) = member {
                     write!(f, " {m}")?;
                 }
             }
-            Some(Type::MethodReturn) => {
+            Type::MethodReturn => {
                 write!(f, "Method return")?;
             }
-            Some(Type::Error) => {
+            Type::Error => {
                 write!(f, "Error")?;
                 if let Some(e) = error_name {
                     write!(f, " {e}")?;
@@ -570,14 +568,11 @@ impl fmt::Display for Message {
                     write!(f, ": {msg}")?;
                 }
             }
-            Some(Type::Signal) => {
+            Type::Signal => {
                 write!(f, "Signal")?;
                 if let Some(m) = member {
                     write!(f, " {m}")?;
                 }
-            }
-            _ => {
-                write!(f, "Unknown message")?;
             }
         }
 

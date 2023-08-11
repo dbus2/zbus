@@ -54,7 +54,7 @@ impl Introspectable {
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: Header<'_>,
     ) -> Result<String> {
-        let path = header.path()?.ok_or(crate::Error::MissingField)?;
+        let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let node = root
             .get_child(path)
@@ -126,7 +126,7 @@ impl Properties {
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: Header<'_>,
     ) -> Result<OwnedValue> {
-        let path = header.path()?.ok_or(crate::Error::MissingField)?;
+        let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let iface = root
             .get_child(path)
@@ -152,7 +152,7 @@ impl Properties {
         #[zbus(header)] header: Header<'_>,
         #[zbus(signal_context)] ctxt: SignalContext<'_>,
     ) -> Result<()> {
-        let path = header.path()?.ok_or(crate::Error::MissingField)?;
+        let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let iface = root
             .get_child(path)
@@ -190,7 +190,7 @@ impl Properties {
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: Header<'_>,
     ) -> Result<HashMap<String, OwnedValue>> {
-        let path = header.path()?.ok_or(crate::Error::MissingField)?;
+        let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let iface = root
             .get_child(path)
@@ -292,7 +292,7 @@ impl ObjectManager {
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: Header<'_>,
     ) -> Result<ManagedObjects> {
-        let path = header.path()?.ok_or(crate::Error::MissingField)?;
+        let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let node = root
             .get_child(path)

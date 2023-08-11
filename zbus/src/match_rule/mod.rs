@@ -218,7 +218,7 @@ impl<'m> MatchRule<'m> {
         // Then check sender.
         if let Some(sender) = self.sender() {
             match sender {
-                BusName::Unique(name) if Some(name) != hdr.sender()? => {
+                BusName::Unique(name) if Some(name) != hdr.sender() => {
                     return Ok(false);
                 }
                 BusName::Unique(_) => (),
@@ -247,7 +247,7 @@ impl<'m> MatchRule<'m> {
 
         // The destination.
         if let Some(destination) = self.destination() {
-            match hdr.destination()? {
+            match hdr.destination() {
                 Some(BusName::Unique(name)) if destination != name => {
                     return Ok(false);
                 }
