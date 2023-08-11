@@ -22,8 +22,6 @@ use zvariant::{ObjectPath, Signature, Type, Value};
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Eq, Serialize_repr, Type)]
 pub enum FieldCode {
-    /// Code for [`Field::Invalid`](enum.Field.html#variant.Invalid)
-    Invalid = 0,
     /// Code for [`Field::Path`](enum.Field.html#variant.Path)
     Path = 1,
     /// Code for [`Field::Interface`](enum.Field.html#variant.Interface)
@@ -164,12 +162,6 @@ impl<'de: 'f, 'f> Deserialize<'de> for Field<'f> {
                 Field::Signature(Signature::try_from(value).map_err(D::Error::custom)?)
             }
             FieldCode::UnixFDs => Field::UnixFDs(u32::try_from(value).map_err(D::Error::custom)?),
-            FieldCode::Invalid => {
-                return Err(Error::invalid_value(
-                    serde::de::Unexpected::Unsigned(code as u64),
-                    &"A valid D-Bus message field code",
-                ));
-            }
         })
     }
 }
