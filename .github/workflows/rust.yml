@@ -134,7 +134,6 @@ jobs:
           key: ${{ runner.os }}-cache
 
       - name: Install pkg-config
-        if: steps.cache-deps.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           # This is needed for some reason: https://github.com/dbus2/zbus/actions/runs/4917893488/jobs/8783555606
