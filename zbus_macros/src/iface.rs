@@ -197,7 +197,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             quote!(match reply {
                 ::std::result::Result::Ok(r) => c.reply(m, &#ret).await,
                 ::std::result::Result::Err(e) => {
-                    let hdr = m.header()?;
+                    let hdr = m.header();
                     c.reply_dbus_error(&hdr, e).await
                 }
             })
@@ -612,7 +612,7 @@ fn get_args_from_inputs(
                 let header_arg = &input.pat;
 
                 header_arg_decl = Some(quote! {
-                    let #header_arg = m.header()?;
+                    let #header_arg = m.header();
                 });
             } else if attrs.signal_context {
                 if signal_context_arg_decl.is_some() {
@@ -630,7 +630,7 @@ fn get_args_from_inputs(
                             #zbus::object_server::SignalContext::new(c, p).expect("Infallible conversion failed")
                         }
                         ::std::option::Option::None => {
-                            let hdr = m.header()?;
+                            let hdr = m.header();
                             let err = #zbus::fdo::Error::UnknownObject("Path Required".into());
                             return c.reply_dbus_error(&hdr, err).await;
                         }
@@ -655,7 +655,7 @@ fn get_args_from_inputs(
                 match m.body() {
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
-                        let hdr = m.header()?;
+                        let hdr = m.header();
                         let err = <#zbus::fdo::Error as ::std::convert::From<_>>::from(e);
                         return c.reply_dbus_error(&hdr, err).await;
                     }

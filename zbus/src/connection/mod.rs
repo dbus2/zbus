@@ -996,14 +996,7 @@ impl Connection {
                         m.ok()
                     }) {
                         if let Some(conn) = weak_conn.upgrade() {
-                            let hdr = match msg.header() {
-                                Ok(hdr) => hdr,
-                                Err(e) => {
-                                    warn!("Failed to parse header: {}", e);
-
-                                    continue;
-                                }
-                            };
+                            let hdr = msg.header();
                             match hdr.destination() {
                                 // Unique name is already checked by the match rule.
                                 Ok(Some(BusName::Unique(_))) | Ok(None) => (),

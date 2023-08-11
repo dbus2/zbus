@@ -456,7 +456,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     while !method_returned && !signal_received {
         let msg = stream.try_next().await?.unwrap();
 
-        let hdr = msg.header()?;
+        let hdr = msg.header();
         if hdr.message_type()? == message::Type::MethodReturn && hdr.reply_serial()? == Some(serial)
         {
             assert!(!signal_received);

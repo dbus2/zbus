@@ -206,7 +206,7 @@ impl<'m> MatchRule<'m> {
     /// * `destination` in the rule when `destination` on the `msg` is a well-known name. The
     ///   `destination` on match rule is always a unique name.
     pub fn matches(&self, msg: &zbus::message::Message) -> Result<bool> {
-        let hdr = msg.header()?;
+        let hdr = msg.header();
 
         // Start with message type.
         if let Some(msg_type) = self.msg_type() {

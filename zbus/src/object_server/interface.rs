@@ -39,7 +39,7 @@ impl<'a> DispatchResult<'a> {
         E: zbus::DBusError + Send,
     {
         DispatchResult::Async(Box::pin(async move {
-            let hdr = msg.header()?;
+            let hdr = msg.header();
             let ret = f.await;
             if !hdr.primary().flags().contains(Flags::NoReplyExpected) {
                 match ret {

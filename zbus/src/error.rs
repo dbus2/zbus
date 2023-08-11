@@ -254,12 +254,7 @@ impl From<Arc<Message>> for Error {
     fn from(message: Arc<Message>) -> Error {
         // FIXME: Instead of checking this, we should have Method as trait and specific types for
         // each message type.
-        let header = match message.header() {
-            Ok(header) => header,
-            Err(e) => {
-                return e;
-            }
-        };
+        let header = message.header();
         if header.primary().msg_type() != Type::Error {
             return Error::InvalidReply;
         }

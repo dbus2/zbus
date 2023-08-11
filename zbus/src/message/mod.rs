@@ -175,7 +175,7 @@ impl Message {
         S::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = Builder::method_return(&call.header()?)?;
+        let mut b = Builder::method_return(&call.header())?;
         if let Some(sender) = sender {
             b = b.sender(sender)?;
         }
@@ -198,7 +198,7 @@ impl Message {
         E::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = Builder::error(&call.header()?, name)?;
+        let mut b = Builder::error(&call.header(), name)?;
         if let Some(sender) = sender {
             b = b.sender(sender)?;
         }
@@ -312,8 +312,8 @@ impl Message {
     /// Note: This method does not deserialize the header but it does currently allocate so its not
     /// zero-cost. While the allocation is small and will hopefully be removed in the future, it's
     /// best to keep the header around if you need to access it a lot.
-    pub fn header(&self) -> Result<Header<'_>> {
-        Ok(Header::new(self.primary_header.clone(), self.fields()))
+    pub fn header(&self) -> Header<'_> {
+        Header::new(self.primary_header.clone(), self.fields())
     }
 
     /// The message header fields.
@@ -506,26 +506,25 @@ impl Message {
 impl fmt::Debug for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut msg = f.debug_struct("Msg");
-        let _ = self.header().map(|h| {
-            if let Ok(t) = h.message_type() {
-                msg.field("type", &t);
-            }
-            if let Ok(Some(sender)) = h.sender() {
-                msg.field("sender", &sender);
-            }
-            if let Ok(Some(serial)) = h.reply_serial() {
-                msg.field("reply-serial", &serial);
-            }
-            if let Ok(Some(path)) = h.path() {
-                msg.field("path", &path);
-            }
-            if let Ok(Some(iface)) = h.interface() {
-                msg.field("iface", &iface);
-            }
-            if let Ok(Some(member)) = h.member() {
-                msg.field("member", &member);
-            }
-        });
+        let h = self.header();
+        if let Ok(t) = h.message_type() {
+            msg.field("type", &t);
+        }
+        if let Ok(Some(sender)) = h.sender() {
+            msg.field("sender", &sender);
+        }
+        if let Ok(Some(serial)) = h.reply_serial() {
+            msg.field("reply-serial", &serial);
+        }
+        if let Ok(Some(path)) = h.path() {
+            msg.field("path", &path);
+        }
+        if let Ok(Some(iface)) = h.interface() {
+            msg.field("iface", &iface);
+        }
+        if let Ok(Some(member)) = h.member() {
+            msg.field("member", &member);
+        }
         if let Some(s) = self.body_signature() {
             msg.field("body", &s);
         }
@@ -543,16 +542,12 @@ impl fmt::Debug for Message {
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let header = self.header();
-        let (ty, error_name, sender, member) = if let Ok(h) = header.as_ref() {
-            (
-                h.message_type().ok(),
-                h.error_name().ok().flatten(),
-                h.sender().ok().flatten(),
-                h.member().ok().flatten(),
-            )
-        } else {
-            (None, None, None, None)
-        };
+        let (ty, error_name, sender, member) = (
+            header.message_type().ok(),
+            header.error_name().ok().flatten(),
+            header.sender().ok().flatten(),
+            header.member().ok().flatten(),
+        );
 
         match ty {
             Some(Type::MethodCall) => {
