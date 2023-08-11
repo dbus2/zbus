@@ -57,7 +57,7 @@ than waiting for the CI servers to run tests for you.
 
 ```sh
 # Run the full test suite, including doc test and compile-tests
-cargo test --all-features
+cargo +nightly test --all-features
 ```
 
 Also please ensure that code is formatted correctly by running:
