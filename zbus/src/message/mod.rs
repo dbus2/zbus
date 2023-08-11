@@ -313,13 +313,13 @@ impl Message {
     /// zero-cost. While the allocation is small and will hopefully be removed in the future, it's
     /// best to keep the header around if you need to access it a lot.
     pub fn header(&self) -> Result<Header<'_>> {
-        Ok(Header::new(self.primary_header.clone(), self.fields()?))
+        Ok(Header::new(self.primary_header.clone(), self.fields()))
     }
 
     /// The message header fields.
     ///
     /// The note on [`Message::header`] applies here too.
-    pub fn fields(&self) -> Result<Fields<'_>> {
+    pub fn fields(&self) -> Fields<'_> {
         let mut fields = Fields::new();
         let quick_fields = &self.quick_fields;
         if let Some(p) = quick_fields.path(self) {
@@ -350,7 +350,7 @@ impl Message {
             fields.add(Field::UnixFDs(u));
         }
 
-        Ok(fields)
+        fields
     }
 
     /// The message type.
