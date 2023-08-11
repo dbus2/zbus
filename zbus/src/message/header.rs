@@ -70,19 +70,6 @@ pub enum Type {
 
 assert_impl_all!(Type: Send, Sync, Unpin);
 
-// Such a shame I've to do this manually
-impl From<u8> for Type {
-    fn from(val: u8) -> Type {
-        match val {
-            1 => Type::MethodCall,
-            2 => Type::MethodReturn,
-            3 => Type::Error,
-            4 => Type::Signal,
-            _ => Type::Invalid,
-        }
-    }
-}
-
 /// Pre-defined flags that can be passed in Message header.
 #[bitflags]
 #[repr(u8)]
