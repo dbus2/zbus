@@ -119,6 +119,7 @@ jobs:
             c:/lib/*z*
             c:/lib/*ffi*
             c:/lib/*intl*
+            c:/lib/*pkgconfig*
             c:/bin/*glib*
             c:/bin/*gio*
             c:/bin/*gobject*
