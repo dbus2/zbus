@@ -1,6 +1,5 @@
 //! Bus match rule API.
 
-use core::panic;
 use std::ops::Deref;
 
 use serde::{de, Deserialize, Serialize};
@@ -330,7 +329,6 @@ impl ToString for MatchRule<'_> {
         if let Some(msg_type) = self.msg_type() {
             let type_str = match msg_type {
                 Type::Error => "error",
-                Type::Invalid => panic!("invalid message type"),
                 Type::MethodCall => "method_call",
                 Type::MethodReturn => "method_return",
                 Type::Signal => "signal",

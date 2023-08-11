@@ -56,8 +56,6 @@ pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Little;
     Debug, Copy, Clone, Deserialize_repr, PartialEq, Eq, Hash, Serialize_repr, VariantType,
 )]
 pub enum Type {
-    /// Invalid message type. All unknown types on received messages are treated as invalid.
-    Invalid = 0,
     /// Method call. This message type may prompt a reply (and typically does).
     MethodCall = 1,
     /// A reply to a method call.
