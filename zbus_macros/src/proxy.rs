@@ -259,18 +259,20 @@ pub fn create_proxy(
     }
 
     let AsyncOpts { usage, wait, .. } = async_opts;
-    let (proxy_struct, connection, builder) = if blocking {
+    let (proxy_struct, connection, builder, proxy_trait) = if blocking {
         let connection = quote! { #zbus::blocking::Connection };
         let proxy = quote! { #zbus::blocking::Proxy };
         let builder = quote! { #zbus::blocking::proxy::Builder };
+        let proxy_trait = quote! { #zbus::blocking::proxy::ProxyImpl };
 
-        (proxy, connection, builder)
+        (proxy, connection, builder, proxy_trait)
     } else {
         let connection = quote! { #zbus::Connection };
         let proxy = quote! { #zbus::Proxy };
         let builder = quote! { #zbus::proxy::Builder };
+        let proxy_trait = quote! { #zbus::proxy::ProxyImpl };
 
-        (proxy, connection, builder)
+        (proxy, connection, builder, proxy_trait)
     };
 
     let (builder_new, proxydefault_impl, proxy_method_new) = match (&default_path, &default_service)
@@ -398,6 +400,20 @@ pub fn create_proxy(
             }
 
             #methods
+        }
+
+        impl<'c> #proxy_trait<'c> for #proxy_name<'c> {
+            fn builder(conn: &#connection) -> #builder<'c, Self> {
+                Self::builder(conn)
+            }
+
+            fn into_inner(self) -> #proxy_struct<'c> {
+                self.into_inner()
+            }
+
+            fn inner(&self) -> &#proxy_struct<'c> {
+                self.inner()
+            }
         }
 
         impl<'c> ::std::convert::From<#zbus::Proxy<'c>> for #proxy_name<'c> {
