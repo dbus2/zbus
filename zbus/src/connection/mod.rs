@@ -261,7 +261,7 @@ impl OrderedFuture for PendingMethodCall {
                         data: Ok(msg),
                         ordering,
                     }) => {
-                        if msg.reply_serial() != Some(this.serial) {
+                        if msg.header().reply_serial() != Some(this.serial) {
                             continue;
                         }
                         let res = match msg.message_type() {
@@ -1011,7 +1011,7 @@ impl Connection {
                                     }
                                 }
                             }
-                            let member = match msg.member() {
+                            let member = match hdr.member() {
                                 Some(member) => member,
                                 None => {
                                     warn!("Got a method call with no `MEMBER` field: {}", msg);

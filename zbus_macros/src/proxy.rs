@@ -989,9 +989,10 @@ fn gen_proxy_signal(
                     M: ::std::convert::Into<::std::sync::Arc<#zbus::message::Message>>,
                 {
                     let msg = msg.into();
+                    let hdr = msg.header();
                     let message_type = msg.message_type();
-                    let interface = msg.interface();
-                    let member = msg.member();
+                    let interface = hdr.interface();
+                    let member = hdr.member();
                     let interface = interface.as_ref().map(|i| i.as_str());
                     let member = member.as_ref().map(|m| m.as_str());
 

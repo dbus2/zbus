@@ -647,10 +647,11 @@ impl ObjectServer {
         connection: &Connection,
         msg: &Message,
     ) -> fdo::Result<Result<()>> {
-        let path = msg
+        let hdr = msg.header();
+        let path = hdr
             .path()
             .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
-        let iface_name = msg
+        let iface_name = hdr
             .interface()
             // TODO: In the absence of an INTERFACE field, if two or more interfaces on the same
             // object have a method with the same name, it is undefined which of those
@@ -658,7 +659,7 @@ impl ObjectServer {
             // error, or deliver the message as though it had an arbitrary one of those
             // interfaces.
             .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
-        let member = msg
+        let member = hdr
             .member()
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
 
@@ -667,7 +668,7 @@ impl ObjectServer {
         let iface = {
             let root = self.root.read().await;
             let node = root
-                .get_child(&path)
+                .get_child(path)
                 .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{path}'")))?;
 
             node.interface_lock(iface_name.as_ref()).ok_or_else(|| {

@@ -253,9 +253,10 @@ mod tests {
             &(),
         )
         .unwrap();
-        assert_eq!(m.path().unwrap(), "/org/freedesktop/DBus");
-        assert_eq!(m.interface().unwrap(), "org.freedesktop.DBus.Peer");
-        assert_eq!(m.member().unwrap(), "GetMachineId");
+        let hdr = m.header();
+        assert_eq!(hdr.path().unwrap(), "/org/freedesktop/DBus");
+        assert_eq!(hdr.interface().unwrap(), "org.freedesktop.DBus.Peer");
+        assert_eq!(hdr.member().unwrap(), "GetMachineId");
         m.modify_primary_header(|primary| {
             primary.set_flags(BitFlags::from(Flags::NoAutoStart));
             primary.set_serial_num(11.try_into().unwrap());

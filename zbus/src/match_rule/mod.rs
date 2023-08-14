@@ -229,7 +229,7 @@ impl<'m> MatchRule<'m> {
 
         // The interface.
         if let Some(interface) = self.interface() {
-            match msg.interface().as_ref() {
+            match hdr.interface() {
                 Some(msg_interface) if interface != msg_interface => return Ok(false),
                 Some(_) => (),
                 None => return Ok(false),
@@ -238,7 +238,7 @@ impl<'m> MatchRule<'m> {
 
         // The member.
         if let Some(member) = self.member() {
-            match msg.member().as_ref() {
+            match hdr.member() {
                 Some(msg_member) if member != msg_member => return Ok(false),
                 Some(_) => (),
                 None => return Ok(false),
@@ -259,12 +259,12 @@ impl<'m> MatchRule<'m> {
 
         // The path.
         if let Some(path_spec) = self.path_spec() {
-            let msg_path = match msg.path() {
+            let msg_path = match hdr.path() {
                 Some(p) => p,
                 None => return Ok(false),
             };
             match path_spec {
-                PathSpec::Path(path) if path != &msg_path => return Ok(false),
+                PathSpec::Path(path) if path != msg_path => return Ok(false),
                 PathSpec::PathNamespace(path_ns) if !msg_path.starts_with(path_ns.as_str()) => {
                     return Ok(false);
                 }
