@@ -62,15 +62,6 @@ impl<'m> Fields<'m> {
         self.0.iter().find(|f| f.code() == code)
     }
 
-    /// Consumes the `Fields` and returns a specific [`Field`] by its code.
-    ///
-    /// Returns `None` if the message has no such field.
-    ///
-    /// [`Field`]: enum.Field.html
-    pub fn into_field(self, code: FieldCode) -> Option<Field<'m>> {
-        self.0.into_iter().find(|f| f.code() == code)
-    }
-
     /// Remove the field matching the `code`.
     ///
     /// Returns `true` if a field was found and removed, `false` otherwise.
