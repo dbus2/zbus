@@ -235,7 +235,7 @@ macro_rules! get_field_u32 {
 
 impl<'m> Header<'m> {
     /// Create a new `Header` instance.
-    pub fn new(primary: PrimaryHeader, fields: Fields<'m>) -> Self {
+    pub(super) fn new(primary: PrimaryHeader, fields: Fields<'m>) -> Self {
         Self { primary, fields }
     }
 
