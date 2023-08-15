@@ -264,11 +264,6 @@ impl<'m> Header<'m> {
         &mut self.fields
     }
 
-    /// Get the message fields, consuming `self`.
-    pub fn into_fields(self) -> Fields<'m> {
-        self.fields
-    }
-
     /// The message type
     pub fn message_type(&self) -> Type {
         self.primary().msg_type()
