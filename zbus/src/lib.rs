@@ -70,16 +70,6 @@ pub use message::Builder as MessageBuilder;
 #[deprecated(note = "Use `message::EndianSig` instead")]
 #[doc(hidden)]
 pub use message::EndianSig;
-#[deprecated(note = "Use `message::Field` instead")]
-#[doc(hidden)]
-pub use message::Field as MessageField;
-#[deprecated(note = "Use `message::FieldCode` instead")]
-#[doc(hidden)]
-pub use message::FieldCode as MessageFieldCode;
-#[deprecated(note = "Use `message::Fields` instead")]
-#[doc(hidden)]
-pub use message::Fields as MessageFields;
-#[deprecated(note = "Use `message::Flags` instead")]
 #[doc(hidden)]
 pub use message::Flags as MessageFlags;
 #[deprecated(note = "Use `message::Header` instead")]

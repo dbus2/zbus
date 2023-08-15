@@ -255,12 +255,12 @@ impl<'m> Header<'m> {
     }
 
     /// Get a reference to the message fields.
-    pub fn fields(&self) -> &Fields<'m> {
+    fn fields(&self) -> &Fields<'m> {
         &self.fields
     }
 
     /// Get a mutable reference to the message fields.
-    pub fn fields_mut(&mut self) -> &mut Fields<'m> {
+    pub(super) fn fields_mut(&mut self) -> &mut Fields<'m> {
         &mut self.fields
     }
 

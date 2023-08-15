@@ -22,11 +22,10 @@ mod builder;
 pub use builder::Builder;
 
 mod field;
-pub use field::{Field, FieldCode};
+use field::{Field, FieldCode};
 
 mod fields;
-pub use fields::Fields;
-use fields::QuickFields;
+use fields::{Fields, QuickFields};
 
 pub(crate) mod header;
 use header::MIN_MESSAGE_SIZE;
@@ -313,13 +312,6 @@ impl Message {
     /// zero-cost. While the allocation is small and will hopefully be removed in the future, it's
     /// best to keep the header around if you need to access it a lot.
     pub fn header(&self) -> Header<'_> {
-        Header::new(self.primary_header.clone(), self.fields())
-    }
-
-    /// The message header fields.
-    ///
-    /// The note on [`Message::header`] applies here too.
-    pub fn fields(&self) -> Fields<'_> {
         let mut fields = Fields::new();
         let quick_fields = &self.quick_fields;
         if let Some(p) = quick_fields.path(self) {
@@ -350,7 +342,7 @@ impl Message {
             fields.add(Field::UnixFDs(u));
         }
 
-        fields
+        Header::new(self.primary_header.clone(), fields)
     }
 
     /// The message type.
