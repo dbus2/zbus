@@ -27,11 +27,9 @@ Same rules apply here as for bug reports and feature requests. Plus:
   more information, including the rationale.
 * Please try your best to follow [these guidelines](https://wiki.gnome.org/Git/CommitMessages) for
   commit messages.
-* We also prefer emoji prefixes to commit messages. Please read
-  [this excellent blog post](https://gitmoji.carloscuesta.me/) for more information, including the
-  rationale. However, the `gitmoji` CLI tool can be very
-  [slow](https://github.com/zeenix/gimoji#rationale), so we recommend using
-  [`gimoji`](https://github.com/zeenix/gimoji) instead.
+* We also prefer adding [emoji prefixes to commit messages](https://gitmoji.carloscuesta.me/). Since
+  the the `gitmoji` CLI tool can be very [slow](https://github.com/zeenix/gimoji#rationale), we
+  recommend using [`gimoji`](https://github.com/zeenix/gimoji) instead.
 * Add details to each commit about the changes it contains. PR description is for summarizing the
   overall changes in the PR, while commit logs are for describing the specific changes of the
   commit in question.
