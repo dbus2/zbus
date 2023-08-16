@@ -93,7 +93,7 @@ impl<'a> Builder<'a> {
     ///
     /// The function will return an error if invalid flags are given for the message type.
     pub fn with_flags(mut self, flag: Flags) -> Result<Self> {
-        if self.header.message_type()? != Type::MethodCall
+        if self.header.message_type() != Type::MethodCall
             && BitFlags::from_flag(flag).contains(Flags::NoReplyExpected)
         {
             return Err(Error::InvalidField);
@@ -178,7 +178,7 @@ impl<'a> Builder<'a> {
         let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
         self.header.fields_mut().replace(Field::ReplySerial(serial));
 
-        if let Some(sender) = reply_to.sender()? {
+        if let Some(sender) = reply_to.sender() {
             self.destination(sender.to_owned())
         } else {
             Ok(self)

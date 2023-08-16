@@ -276,7 +276,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///         #[zbus(object_server)]
 ///         _server: &ObjectServer,
 ///     ) -> zbus::fdo::Result<()> {
-///         let path = hdr.path()?.unwrap();
+///         let path = hdr.path().unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);
 ///         Example::bye(&ctxt, &msg).await?;
 ///

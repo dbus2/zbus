@@ -1,6 +1,5 @@
 //! Bus match rule API.
 
-use core::panic;
 use std::ops::Deref;
 
 use serde::{de, Deserialize, Serialize};
@@ -207,7 +206,7 @@ impl<'m> MatchRule<'m> {
     /// * `destination` in the rule when `destination` on the `msg` is a well-known name. The
     ///   `destination` on match rule is always a unique name.
     pub fn matches(&self, msg: &zbus::message::Message) -> Result<bool> {
-        let hdr = msg.header()?;
+        let hdr = msg.header();
 
         // Start with message type.
         if let Some(msg_type) = self.msg_type() {
@@ -219,7 +218,7 @@ impl<'m> MatchRule<'m> {
         // Then check sender.
         if let Some(sender) = self.sender() {
             match sender {
-                BusName::Unique(name) if Some(name) != hdr.sender()? => {
+                BusName::Unique(name) if Some(name) != hdr.sender() => {
                     return Ok(false);
                 }
                 BusName::Unique(_) => (),
@@ -230,7 +229,7 @@ impl<'m> MatchRule<'m> {
 
         // The interface.
         if let Some(interface) = self.interface() {
-            match msg.interface().as_ref() {
+            match hdr.interface() {
                 Some(msg_interface) if interface != msg_interface => return Ok(false),
                 Some(_) => (),
                 None => return Ok(false),
@@ -239,7 +238,7 @@ impl<'m> MatchRule<'m> {
 
         // The member.
         if let Some(member) = self.member() {
-            match msg.member().as_ref() {
+            match hdr.member() {
                 Some(msg_member) if member != msg_member => return Ok(false),
                 Some(_) => (),
                 None => return Ok(false),
@@ -248,7 +247,7 @@ impl<'m> MatchRule<'m> {
 
         // The destination.
         if let Some(destination) = self.destination() {
-            match hdr.destination()? {
+            match hdr.destination() {
                 Some(BusName::Unique(name)) if destination != name => {
                     return Ok(false);
                 }
@@ -260,12 +259,12 @@ impl<'m> MatchRule<'m> {
 
         // The path.
         if let Some(path_spec) = self.path_spec() {
-            let msg_path = match msg.path() {
+            let msg_path = match hdr.path() {
                 Some(p) => p,
                 None => return Ok(false),
             };
             match path_spec {
-                PathSpec::Path(path) if path != &msg_path => return Ok(false),
+                PathSpec::Path(path) if path != msg_path => return Ok(false),
                 PathSpec::PathNamespace(path_ns) if !msg_path.starts_with(path_ns.as_str()) => {
                     return Ok(false);
                 }
@@ -330,7 +329,6 @@ impl ToString for MatchRule<'_> {
         if let Some(msg_type) = self.msg_type() {
             let type_str = match msg_type {
                 Type::Error => "error",
-                Type::Invalid => panic!("invalid message type"),
                 Type::MethodCall => "method_call",
                 Type::MethodReturn => "method_return",
                 Type::Signal => "signal",

@@ -22,11 +22,10 @@ mod builder;
 pub use builder::Builder;
 
 mod field;
-pub use field::{Field, FieldCode};
+use field::{Field, FieldCode};
 
 mod fields;
-pub use fields::Fields;
-use fields::QuickFields;
+use fields::{Fields, QuickFields};
 
 pub(crate) mod header;
 use header::MIN_MESSAGE_SIZE;
@@ -175,7 +174,7 @@ impl Message {
         S::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = Builder::method_return(&call.header()?)?;
+        let mut b = Builder::method_return(&call.header())?;
         if let Some(sender) = sender {
             b = b.sender(sender)?;
         }
@@ -198,7 +197,7 @@ impl Message {
         E::Error: Into<Error>,
         B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = Builder::error(&call.header()?, name)?;
+        let mut b = Builder::error(&call.header(), name)?;
         if let Some(sender) = sender {
             b = b.sender(sender)?;
         }
@@ -287,16 +286,8 @@ impl Message {
     /// syntax), D-Bus does not. Since this method gives you the signature expected on the wire by
     /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
     /// multiple arguments.
-    pub fn body_signature(&self) -> Result<Signature<'_>> {
-        match self
-            .header()?
-            .into_fields()
-            .into_field(FieldCode::Signature)
-            .ok_or(Error::NoBodySignature)?
-        {
-            Field::Signature(signature) => Ok(signature),
-            _ => Err(Error::InvalidField),
-        }
+    pub fn body_signature(&self) -> Option<Signature<'_>> {
+        self.quick_fields.signature(self)
     }
 
     pub fn primary_header(&self) -> &PrimaryHeader {
@@ -315,23 +306,43 @@ impl Message {
             .map_err(Error::from)
     }
 
-    /// Deserialize the header.
+    /// The message header.
     ///
-    /// Note: prefer using the direct access methods if possible; they are more efficient.
-    pub fn header(&self) -> Result<Header<'_>> {
-        zvariant::from_slice(&self.bytes, dbus_context!(0))
-            .map_err(Error::from)
-            .map(|h| h.0)
-    }
+    /// Note: This method does not deserialize the header but it does currently allocate so its not
+    /// zero-cost. While the allocation is small and will hopefully be removed in the future, it's
+    /// best to keep the header around if you need to access it a lot.
+    pub fn header(&self) -> Header<'_> {
+        let mut fields = Fields::new();
+        let quick_fields = &self.quick_fields;
+        if let Some(p) = quick_fields.path(self) {
+            fields.add(Field::Path(p));
+        }
+        if let Some(i) = quick_fields.interface(self) {
+            fields.add(Field::Interface(i));
+        }
+        if let Some(m) = quick_fields.member(self) {
+            fields.add(Field::Member(m));
+        }
+        if let Some(e) = quick_fields.error_name(self) {
+            fields.add(Field::ErrorName(e));
+        }
+        if let Some(r) = quick_fields.reply_serial() {
+            fields.add(Field::ReplySerial(r));
+        }
+        if let Some(d) = quick_fields.destination(self) {
+            fields.add(Field::Destination(d));
+        }
+        if let Some(s) = quick_fields.sender(self) {
+            fields.add(Field::Sender(s));
+        }
+        if let Some(s) = quick_fields.signature(self) {
+            fields.add(Field::Signature(s));
+        }
+        if let Some(u) = quick_fields.unix_fds() {
+            fields.add(Field::UnixFDs(u));
+        }
 
-    /// Deserialize the fields.
-    ///
-    /// Note: prefer using the direct access methods if possible; they are more efficient.
-    pub fn fields(&self) -> Result<Fields<'_>> {
-        let ctxt = dbus_context!(header::PRIMARY_HEADER_SIZE);
-        zvariant::from_slice(&self.bytes[header::PRIMARY_HEADER_SIZE..], ctxt)
-            .map_err(Error::from)
-            .map(|f| f.0)
+        Header::new(self.primary_header.clone(), fields)
     }
 
     /// The message type.
@@ -340,21 +351,25 @@ impl Message {
     }
 
     /// The object to send a call to, or the object a signal is emitted from.
+    #[deprecated(note = "Use `Message::header` with `message::Header::path` instead")]
     pub fn path(&self) -> Option<ObjectPath<'_>> {
         self.quick_fields.path(self)
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
+    #[deprecated(note = "Use `Message::header` with `message::Header::interface` instead")]
     pub fn interface(&self) -> Option<InterfaceName<'_>> {
         self.quick_fields.interface(self)
     }
 
     /// The member, either the method name or signal name.
+    #[deprecated(note = "Use `Message::header` with `message::Header::member` instead")]
     pub fn member(&self) -> Option<MemberName<'_>> {
         self.quick_fields.member(self)
     }
 
     /// The serial number of the message this message is a reply to.
+    #[deprecated(note = "Use `Message::header` with `message::Header::reply_serial` instead")]
     pub fn reply_serial(&self) -> Option<NonZeroU32> {
         self.quick_fields.reply_serial()
     }
@@ -417,11 +432,9 @@ impl Message {
     where
         B: zvariant::DynamicDeserialize<'d>,
     {
-        let body_sig = match self.body_signature() {
-            Ok(sig) => sig,
-            Err(Error::NoBodySignature) => Signature::from_static_str_unchecked(""),
-            Err(e) => return Err(e),
-        };
+        let body_sig = self
+            .body_signature()
+            .unwrap_or_else(|| Signature::from_static_str_unchecked(""));
 
         {
             #[cfg(unix)]
@@ -489,27 +502,24 @@ impl Message {
 impl fmt::Debug for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut msg = f.debug_struct("Msg");
-        let _ = self.header().map(|h| {
-            if let Ok(t) = h.message_type() {
-                msg.field("type", &t);
-            }
-            if let Ok(Some(sender)) = h.sender() {
-                msg.field("sender", &sender);
-            }
-            if let Ok(Some(serial)) = h.reply_serial() {
-                msg.field("reply-serial", &serial);
-            }
-            if let Ok(Some(path)) = h.path() {
-                msg.field("path", &path);
-            }
-            if let Ok(Some(iface)) = h.interface() {
-                msg.field("iface", &iface);
-            }
-            if let Ok(Some(member)) = h.member() {
-                msg.field("member", &member);
-            }
-        });
-        if let Ok(s) = self.body_signature() {
+        let h = self.header();
+        msg.field("type", &h.message_type());
+        if let Some(sender) = h.sender() {
+            msg.field("sender", &sender);
+        }
+        if let Some(serial) = h.reply_serial() {
+            msg.field("reply-serial", &serial);
+        }
+        if let Some(path) = h.path() {
+            msg.field("path", &path);
+        }
+        if let Some(iface) = h.interface() {
+            msg.field("iface", &iface);
+        }
+        if let Some(member) = h.member() {
+            msg.field("member", &member);
+        }
+        if let Some(s) = self.body_signature() {
             msg.field("body", &s);
         }
         #[cfg(unix)]
@@ -526,28 +536,24 @@ impl fmt::Debug for Message {
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let header = self.header();
-        let (ty, error_name, sender, member) = if let Ok(h) = header.as_ref() {
-            (
-                h.message_type().ok(),
-                h.error_name().ok().flatten(),
-                h.sender().ok().flatten(),
-                h.member().ok().flatten(),
-            )
-        } else {
-            (None, None, None, None)
-        };
+        let (ty, error_name, sender, member) = (
+            header.message_type(),
+            header.error_name(),
+            header.sender(),
+            header.member(),
+        );
 
         match ty {
-            Some(Type::MethodCall) => {
+            Type::MethodCall => {
                 write!(f, "Method call")?;
                 if let Some(m) = member {
                     write!(f, " {m}")?;
                 }
             }
-            Some(Type::MethodReturn) => {
+            Type::MethodReturn => {
                 write!(f, "Method return")?;
             }
-            Some(Type::Error) => {
+            Type::Error => {
                 write!(f, "Error")?;
                 if let Some(e) = error_name {
                     write!(f, " {e}")?;
@@ -558,14 +564,11 @@ impl fmt::Display for Message {
                     write!(f, ": {msg}")?;
                 }
             }
-            Some(Type::Signal) => {
+            Type::Signal => {
                 write!(f, "Signal")?;
                 if let Some(m) = member {
                     write!(f, " {m}")?;
                 }
-            }
-            _ => {
-                write!(f, "Unknown message")?;
             }
         }
 

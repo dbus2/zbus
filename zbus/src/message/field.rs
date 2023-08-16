@@ -21,9 +21,7 @@ use zvariant::{ObjectPath, Signature, Type, Value};
 /// [`Fields`]: struct.Fields.html
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Eq, Serialize_repr, Type)]
-pub enum FieldCode {
-    /// Code for [`Field::Invalid`](enum.Field.html#variant.Invalid)
-    Invalid = 0,
+pub(super) enum FieldCode {
     /// Code for [`Field::Path`](enum.Field.html#variant.Path)
     Path = 1,
     /// Code for [`Field::Interface`](enum.Field.html#variant.Interface)
@@ -46,23 +44,6 @@ pub enum FieldCode {
 
 assert_impl_all!(FieldCode: Send, Sync, Unpin);
 
-impl From<u8> for FieldCode {
-    fn from(val: u8) -> FieldCode {
-        match val {
-            1 => FieldCode::Path,
-            2 => FieldCode::Interface,
-            3 => FieldCode::Member,
-            4 => FieldCode::ErrorName,
-            5 => FieldCode::ReplySerial,
-            6 => FieldCode::Destination,
-            7 => FieldCode::Sender,
-            8 => FieldCode::Signature,
-            9 => FieldCode::UnixFDs,
-            _ => FieldCode::Invalid,
-        }
-    }
-}
-
 impl<'f> Field<'f> {
     /// Get the associated code for this field.
     pub fn code(&self) -> FieldCode {
@@ -76,7 +57,6 @@ impl<'f> Field<'f> {
             Field::Sender(_) => FieldCode::Sender,
             Field::Signature(_) => FieldCode::Signature,
             Field::UnixFDs(_) => FieldCode::UnixFDs,
-            Field::Invalid => FieldCode::Invalid,
         }
     }
 }
@@ -93,9 +73,7 @@ impl<'f> Field<'f> {
 /// [are fixed]: struct.PrimaryHeader.html
 /// [Message Format]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-messages
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Field<'f> {
-    /// Not a valid field.
-    Invalid,
+pub(super) enum Field<'f> {
     /// The object to send a call to, or the object a signal is emitted from.
     Path(ObjectPath<'f>),
     /// The interface to invoke a method call on, or that a signal is emitted from.
@@ -139,8 +117,6 @@ impl<'f> Serialize for Field<'f> {
             Field::Sender(value) => (FieldCode::Sender, value.as_str().into()),
             Field::Signature(value) => (FieldCode::Signature, value.as_ref().into()),
             Field::UnixFDs(value) => (FieldCode::UnixFDs, (*value).into()),
-            // This is a programmer error
-            Field::Invalid => panic!("Attempt to serialize invalid Field"),
         };
 
         tuple.serialize(serializer)
@@ -186,12 +162,6 @@ impl<'de: 'f, 'f> Deserialize<'de> for Field<'f> {
                 Field::Signature(Signature::try_from(value).map_err(D::Error::custom)?)
             }
             FieldCode::UnixFDs => Field::UnixFDs(u32::try_from(value).map_err(D::Error::custom)?),
-            FieldCode::Invalid => {
-                return Err(Error::invalid_value(
-                    serde::de::Unexpected::Unsigned(code as u64),
-                    &"A valid D-Bus message field code",
-                ));
-            }
         })
     }
 }

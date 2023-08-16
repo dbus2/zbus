@@ -261,7 +261,7 @@ impl OrderedFuture for PendingMethodCall {
                         data: Ok(msg),
                         ordering,
                     }) => {
-                        if msg.reply_serial() != Some(this.serial) {
+                        if msg.header().reply_serial() != Some(this.serial) {
                             continue;
                         }
                         let res = match msg.message_type() {
@@ -996,18 +996,11 @@ impl Connection {
                         m.ok()
                     }) {
                         if let Some(conn) = weak_conn.upgrade() {
-                            let hdr = match msg.header() {
-                                Ok(hdr) => hdr,
-                                Err(e) => {
-                                    warn!("Failed to parse header: {}", e);
-
-                                    continue;
-                                }
-                            };
+                            let hdr = msg.header();
                             match hdr.destination() {
                                 // Unique name is already checked by the match rule.
-                                Ok(Some(BusName::Unique(_))) | Ok(None) => (),
-                                Ok(Some(BusName::WellKnown(dest))) => {
+                                Some(BusName::Unique(_)) | None => (),
+                                Some(BusName::WellKnown(dest)) => {
                                     let names = conn.inner.registered_names.lock().await;
                                     // destination doesn't matter if no name has been registered
                                     // (probably means name it's registered through external means).
@@ -1017,13 +1010,8 @@ impl Connection {
                                         continue;
                                     }
                                 }
-                                Err(e) => {
-                                    warn!("Failed to parse destination: {}", e);
-
-                                    continue;
-                                }
                             }
-                            let member = match msg.member() {
+                            let member = match hdr.member() {
                                 Some(member) => member,
                                 None => {
                                     warn!("Got a method call with no `MEMBER` field: {}", msg);

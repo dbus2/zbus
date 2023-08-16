@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::num::NonZeroU32;
-use zbus_names::{InterfaceName, MemberName};
-use zvariant::{ObjectPath, Type};
+use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
+use zvariant::{ObjectPath, Signature, Type};
 
 use crate::{
     message::{Field, FieldCode, Header, Message},
@@ -16,7 +16,7 @@ const MAX_FIELDS_IN_MESSAGE: usize = 16;
 ///
 /// [`Field`]: enum.Field.html
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct Fields<'m>(#[serde(borrow)] Vec<Field<'m>>);
+pub(super) struct Fields<'m>(#[serde(borrow)] Vec<Field<'m>>);
 
 assert_impl_all!(Fields<'_>: Send, Sync, Unpin);
 
@@ -60,15 +60,6 @@ impl<'m> Fields<'m> {
     /// [`Field`]: enum.Field.html
     pub fn get_field(&self, code: FieldCode) -> Option<&Field<'m>> {
         self.0.iter().find(|f| f.code() == code)
-    }
-
-    /// Consumes the `Fields` and returns a specific [`Field`] by its code.
-    ///
-    /// Returns `None` if the message has no such field.
-    ///
-    /// [`Field`]: enum.Field.html
-    pub fn into_field(self, code: FieldCode) -> Option<Field<'m>> {
-        self.0.into_iter().find(|f| f.code() == code)
     }
 
     /// Remove the field matching the `code`.
@@ -149,22 +140,32 @@ impl FieldPos {
     }
 }
 
-/// A cache of some commonly-used fields of the header of a Message.
+/// A cache of the Message header fields.
 #[derive(Debug, Default, Copy, Clone)]
 pub(crate) struct QuickFields {
     path: FieldPos,
     interface: FieldPos,
     member: FieldPos,
+    error_name: FieldPos,
     reply_serial: Option<NonZeroU32>,
+    destination: FieldPos,
+    sender: FieldPos,
+    signature: FieldPos,
+    unix_fds: Option<u32>,
 }
 
 impl QuickFields {
     pub fn new(buf: &[u8], header: &Header<'_>) -> Result<Self> {
         Ok(Self {
-            path: FieldPos::new(buf, header.path()?),
-            interface: FieldPos::new(buf, header.interface()?),
-            member: FieldPos::new(buf, header.member()?),
-            reply_serial: header.reply_serial()?,
+            path: FieldPos::new(buf, header.path()),
+            interface: FieldPos::new(buf, header.interface()),
+            member: FieldPos::new(buf, header.member()),
+            error_name: FieldPos::new(buf, header.error_name()),
+            reply_serial: header.reply_serial(),
+            destination: FieldPos::new(buf, header.destination()),
+            sender: FieldPos::new(buf, header.sender()),
+            signature: FieldPos::new(buf, header.signature()),
+            unix_fds: header.unix_fds(),
         })
     }
 
@@ -180,8 +181,28 @@ impl QuickFields {
         self.member.read(msg.as_bytes())
     }
 
+    pub fn error_name<'m>(&self, msg: &'m Message) -> Option<ErrorName<'m>> {
+        self.error_name.read(msg.as_bytes())
+    }
+
     pub fn reply_serial(&self) -> Option<NonZeroU32> {
         self.reply_serial
+    }
+
+    pub fn destination<'m>(&self, msg: &'m Message) -> Option<BusName<'m>> {
+        self.destination.read(msg.as_bytes())
+    }
+
+    pub fn sender<'m>(&self, msg: &'m Message) -> Option<UniqueName<'m>> {
+        self.sender.read(msg.as_bytes())
+    }
+
+    pub fn signature<'m>(&self, msg: &'m Message) -> Option<Signature<'m>> {
+        self.signature.read(msg.as_bytes())
+    }
+
+    pub fn unix_fds(&self) -> Option<u32> {
+        self.unix_fds
     }
 }
 

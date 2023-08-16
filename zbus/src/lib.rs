@@ -70,16 +70,6 @@ pub use message::Builder as MessageBuilder;
 #[deprecated(note = "Use `message::EndianSig` instead")]
 #[doc(hidden)]
 pub use message::EndianSig;
-#[deprecated(note = "Use `message::Field` instead")]
-#[doc(hidden)]
-pub use message::Field as MessageField;
-#[deprecated(note = "Use `message::FieldCode` instead")]
-#[doc(hidden)]
-pub use message::FieldCode as MessageFieldCode;
-#[deprecated(note = "Use `message::Fields` instead")]
-#[doc(hidden)]
-pub use message::Fields as MessageFields;
-#[deprecated(note = "Use `message::Flags` instead")]
 #[doc(hidden)]
 pub use message::Flags as MessageFlags;
 #[deprecated(note = "Use `message::Header` instead")]
@@ -253,9 +243,10 @@ mod tests {
             &(),
         )
         .unwrap();
-        assert_eq!(m.path().unwrap(), "/org/freedesktop/DBus");
-        assert_eq!(m.interface().unwrap(), "org.freedesktop.DBus.Peer");
-        assert_eq!(m.member().unwrap(), "GetMachineId");
+        let hdr = m.header();
+        assert_eq!(hdr.path().unwrap(), "/org/freedesktop/DBus");
+        assert_eq!(hdr.interface().unwrap(), "org.freedesktop.DBus.Peer");
+        assert_eq!(hdr.member().unwrap(), "GetMachineId");
         m.modify_primary_header(|primary| {
             primary.set_flags(BitFlags::from(Flags::NoAutoStart));
             primary.set_serial_num(11.try_into().unwrap());
@@ -720,9 +711,9 @@ mod tests {
 
             for m in stream {
                 let msg = m.unwrap();
-                let hdr = msg.header().unwrap();
+                let hdr = msg.header();
 
-                if hdr.member().unwrap().map(|m| m.as_str()) == Some("ZBusIssue122") {
+                if hdr.member().map(|m| m.as_str()) == Some("ZBusIssue122") {
                     break;
                 }
             }
@@ -950,9 +941,9 @@ mod tests {
 
         let mut stream = zbus::MessageStream::from(connection);
         while let Some(msg) = stream.try_next().await? {
-            let msg_header = msg.header()?;
+            let msg_header = msg.header();
 
-            match msg_header.message_type()? {
+            match msg_header.message_type() {
                 zbus::message::Type::MethodCall => {
                     connection.reply(&msg, &()).await?;
 
