@@ -172,7 +172,8 @@ pub fn create_proxy(
         .unwrap_or(format!("org.freedesktop.{ident}"));
     if assume_defaults.is_none() && default_path.is_none() && default_service.is_none() {
         eprintln!(
-            "#[dbus_proxy(...)] macro invocation on '{proxy_name}' without explicit defaults. Please set 'assume_defaults = true', or configure default path/service directly."
+            "#[dbus_proxy(...)] macro invocation on '{proxy_name}' without explicit defaults. \
+            Please set 'assume_defaults = true', or configure default path/service directly."
         );
     };
     let assume_defaults = assume_defaults.unwrap_or(true);
