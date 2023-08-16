@@ -99,7 +99,10 @@ use std::error::Error;
 
 use zbus::{zvariant::Value, dbus_proxy, Connection};
 
-#[dbus_proxy]
+#[dbus_proxy(
+    default_service = "org.freedesktop.Notifications",
+    default_path = "/org/freedesktop/Notifications"
+)]
 trait Notifications {
     /// Call the org.freedesktop.Notifications.Notify D-Bus method
     fn notify(&self,
