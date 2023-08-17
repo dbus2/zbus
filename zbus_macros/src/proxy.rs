@@ -274,7 +274,7 @@ pub fn create_proxy(
         (None, None) => {
             quote! {
                 /// Creates a new proxy with the given service destination and path.
-                pub #usage fn new<D, P>(conn: &#connection, destination: D, path: P) -> #zbus::Result<#proxy_name<'c>>
+                pub #usage fn new<D, P>(conn: &#connection, destination: D, path: P) -> #zbus::Result<#proxy_name<'p>>
                 where
                     D: ::std::convert::TryInto<#zbus::names::BusName<'static>>,
                     D::Error: ::std::convert::Into<#zbus::Error>,
@@ -293,7 +293,7 @@ pub fn create_proxy(
         (Some(_), None) => {
             quote! {
                 /// Creates a new proxy with the given destination, and the default path.
-                pub #usage fn new<D>(conn: &#connection, destination: D) -> #zbus::Result<#proxy_name<'c>>
+                pub #usage fn new<D>(conn: &#connection, destination: D) -> #zbus::Result<#proxy_name<'p>>
                 where
                     D: ::std::convert::TryInto<#zbus::names::BusName<'static>>,
                     D::Error: ::std::convert::Into<#zbus::Error>,
@@ -308,7 +308,7 @@ pub fn create_proxy(
         (None, Some(_)) => {
             quote! {
                 /// Creates a new proxy with the given path, and the default destination.
-                pub #usage fn new<P>(conn: &#connection, path: P) -> #zbus::Result<#proxy_name<'c>>
+                pub #usage fn new<P>(conn: &#connection, path: P) -> #zbus::Result<#proxy_name<'p>>
                 where
                     P: ::std::convert::TryInto<#zbus::zvariant::ObjectPath<'static>>,
                     P::Error: ::std::convert::Into<#zbus::Error>,
@@ -323,7 +323,7 @@ pub fn create_proxy(
         (Some(_), Some(_)) => {
             quote! {
                 /// Creates a new proxy with the default service and path.
-                pub #usage fn new(conn: &#connection) -> #zbus::Result<#proxy_name<'c>> {
+                pub #usage fn new(conn: &#connection) -> #zbus::Result<#proxy_name<'p>> {
                     Self::builder(conn).build()#wait
                 }
             }
@@ -347,13 +347,13 @@ pub fn create_proxy(
 
         #(#other_attrs)*
         #[derive(Clone, Debug)]
-        pub struct #proxy_name<'c>(#proxy_struct<'c>);
+        pub struct #proxy_name<'p>(#proxy_struct<'p>);
 
-        impl<'c> #proxy_name<'c> {
+        impl<'p> #proxy_name<'p> {
             #proxy_method_new
 
             /// Returns a customizable builder for this proxy.
-            pub fn builder(conn: &#connection) -> #builder<'c, Self> {
+            pub fn builder(conn: &#connection) -> #builder<'p, Self> {
                 let mut builder = #builder::new(conn) ;
                 if #has_properties {
                     let uncached = vec![#(#uncached_properties),*];
@@ -365,71 +365,71 @@ pub fn create_proxy(
             }
 
             /// Consumes `self`, returning the underlying `zbus::Proxy`.
-            pub fn into_inner(self) -> #proxy_struct<'c> {
+            pub fn into_inner(self) -> #proxy_struct<'p> {
                 self.0
             }
 
             /// The reference to the underlying `zbus::Proxy`.
-            pub fn inner(&self) -> &#proxy_struct<'c> {
+            pub fn inner(&self) -> &#proxy_struct<'p> {
                 &self.0
             }
 
             #methods
         }
 
-        impl<'c> #proxy_trait<'c> for #proxy_name<'c> {
-            fn builder(conn: &#connection) -> #builder<'c, Self> {
+        impl<'p> #proxy_trait<'p> for #proxy_name<'p> {
+            fn builder(conn: &#connection) -> #builder<'p, Self> {
                 Self::builder(conn)
             }
 
-            fn into_inner(self) -> #proxy_struct<'c> {
+            fn into_inner(self) -> #proxy_struct<'p> {
                 self.into_inner()
             }
 
-            fn inner(&self) -> &#proxy_struct<'c> {
+            fn inner(&self) -> &#proxy_struct<'p> {
                 self.inner()
             }
         }
 
-        impl<'c> ::std::convert::From<#zbus::Proxy<'c>> for #proxy_name<'c> {
-            fn from(proxy: #zbus::Proxy<'c>) -> Self {
+        impl<'p> ::std::convert::From<#zbus::Proxy<'p>> for #proxy_name<'p> {
+            fn from(proxy: #zbus::Proxy<'p>) -> Self {
                 #proxy_name(::std::convert::Into::into(proxy))
             }
         }
 
-        impl<'c> ::std::ops::Deref for #proxy_name<'c> {
-            type Target = #proxy_struct<'c>;
+        impl<'p> ::std::ops::Deref for #proxy_name<'p> {
+            type Target = #proxy_struct<'p>;
 
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
         }
 
-        impl<'c> ::std::ops::DerefMut for #proxy_name<'c> {
+        impl<'p> ::std::ops::DerefMut for #proxy_name<'p> {
             fn deref_mut(&mut self) -> &mut Self::Target {
                 &mut self.0
             }
         }
 
-        impl<'c> ::std::convert::AsRef<#proxy_struct<'c>> for #proxy_name<'c> {
-            fn as_ref(&self) -> &#proxy_struct<'c> {
+        impl<'p> ::std::convert::AsRef<#proxy_struct<'p>> for #proxy_name<'p> {
+            fn as_ref(&self) -> &#proxy_struct<'p> {
                 &*self
             }
         }
 
-        impl<'c> ::std::convert::AsMut<#proxy_struct<'c>> for #proxy_name<'c> {
-            fn as_mut(&mut self) -> &mut #proxy_struct<'c> {
+        impl<'p> ::std::convert::AsMut<#proxy_struct<'p>> for #proxy_name<'p> {
+            fn as_mut(&mut self) -> &mut #proxy_struct<'p> {
                 &mut *self
             }
         }
 
-        impl<'c> #zbus::zvariant::Type for #proxy_name<'c> {
+        impl<'p> #zbus::zvariant::Type for #proxy_name<'p> {
             fn signature() -> #zbus::zvariant::Signature<'static> {
                 #zbus::zvariant::OwnedObjectPath::signature()
             }
         }
 
-        impl<'c> #zbus::export::serde::ser::Serialize for #proxy_name<'c> {
+        impl<'p> #zbus::export::serde::ser::Serialize for #proxy_name<'p> {
             fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
             where
                 S: #zbus::export::serde::ser::Serializer,
@@ -558,7 +558,7 @@ fn gen_proxy_method_call(
     if let Some(proxy_path) = proxy_object {
         let proxy_path = parse_str::<Path>(&proxy_path)?;
         let signature = quote! {
-            fn #method #ty_generics(#inputs) -> #zbus::Result<#proxy_path<'c>>
+            fn #method #ty_generics(#inputs) -> #zbus::Result<#proxy_path<'p>>
             #where_clause
         };
 
@@ -729,7 +729,7 @@ fn gen_proxy_property(
                     #[doc = #gen_doc]
                     pub #usage fn #receive #ty_generics(
                         &self
-                    ) -> #prop_stream<'c, <#ret_type as #zbus::ResultAdapter>::Ok>
+                    ) -> #prop_stream<'p, <#ret_type as #zbus::ResultAdapter>::Ok>
                     #where_clause
                     {
                         self.0.receive_property_changed(#property_name)#wait

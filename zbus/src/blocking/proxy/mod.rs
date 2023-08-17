@@ -530,16 +530,16 @@ mod tests {
 
 /// This trait is implemented by all blocking proxies, which are generated with the
 /// [`dbus_proxy`](zbus::dbus_proxy) macro.
-pub trait ProxyImpl<'c>
+pub trait ProxyImpl<'p>
 where
     Self: Sized,
 {
     /// Returns a customizable builder for this proxy.
-    fn builder(conn: &Connection) -> Builder<'c, Self>;
+    fn builder(conn: &Connection) -> Builder<'p, Self>;
 
     /// Consumes `self`, returning the underlying `zbus::Proxy`.
-    fn into_inner(self) -> Proxy<'c>;
+    fn into_inner(self) -> Proxy<'p>;
 
     /// The reference to the underlying `zbus::Proxy`.
-    fn inner(&self) -> &Proxy<'c>;
+    fn inner(&self) -> &Proxy<'p>;
 }
