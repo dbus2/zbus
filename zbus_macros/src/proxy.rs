@@ -270,15 +270,9 @@ pub fn create_proxy(
         (proxy, connection, builder, proxy_trait)
     };
 
-    let (builder_new, proxydefault_impl, proxy_method_new) = match (&default_path, &default_service)
-    {
+    let proxy_method_new = match (&default_path, &default_service) {
         (None, None) => {
-            let builder_new = quote! {
-                #builder::new_bare(conn)
-                    .interface(#iface_name).expect("invalid interface name")
-            };
-            let proxydefault_impl = TokenStream::new();
-            let proxy_method_new = quote! {
+            quote! {
                 /// Creates a new proxy with the given service destination and path.
                 pub #usage fn new<D, P>(conn: &#connection, destination: D, path: P) -> #zbus::Result<#proxy_name<'c>>
                 where
@@ -294,17 +288,10 @@ pub fn create_proxy(
                         .destination(obj_destination)?
                         .build()#wait
                 }
-            };
-            (builder_new, proxydefault_impl, proxy_method_new)
+            }
         }
-        (Some(path), None) => {
-            let builder_new = quote! {
-                #builder::new_bare(conn)
-                    .interface(#iface_name).expect("invalid interface name")
-                    .path(#path).expect("invalid default path")
-            };
-            let proxydefault_impl = TokenStream::new();
-            let proxy_method_new = quote! {
+        (Some(_), None) => {
+            quote! {
                 /// Creates a new proxy with the given destination, and the default path.
                 pub #usage fn new<D>(conn: &#connection, destination: D) -> #zbus::Result<#proxy_name<'c>>
                 where
@@ -314,20 +301,12 @@ pub fn create_proxy(
                     let obj_dest = destination.try_into().map_err(::std::convert::Into::into)?;
                     Self::builder(conn)
                         .destination(obj_dest)?
-                        .path(#path)?
                         .build()#wait
                 }
-            };
-            (builder_new, proxydefault_impl, proxy_method_new)
+            }
         }
-        (None, Some(dest)) => {
-            let builder_new = quote! {
-                #builder::new_bare(conn)
-                    .interface(#iface_name).expect("invalid interface name")
-                    .destination(#dest).expect("invalid destination bus name")
-            };
-            let proxydefault_impl = TokenStream::new();
-            let proxy_method_new = quote! {
+        (None, Some(_)) => {
+            quote! {
                 /// Creates a new proxy with the given path, and the default destination.
                 pub #usage fn new<P>(conn: &#connection, path: P) -> #zbus::Result<#proxy_name<'c>>
                 where
@@ -336,34 +315,35 @@ pub fn create_proxy(
                 {
                     let obj_path = path.try_into().map_err(::std::convert::Into::into)?;
                     Self::builder(conn)
-                        .destination(#dest)?
                         .path(obj_path)?
                         .build()#wait
                 }
-            };
-            (builder_new, proxydefault_impl, proxy_method_new)
+            }
         }
-        (Some(path), Some(svc)) => {
-            let builder_new = quote! { #builder::new(conn) };
-            let proxydefault_impl = quote! {
-                impl<'a> #zbus::proxy::ProxyDefault for #proxy_name<'a> {
-                    const INTERFACE: &'static str = #iface_name;
-                    const DESTINATION: &'static str = #svc;
-                    const PATH: &'static str = #path;
-                }
-            };
-            let proxy_method_new = quote! {
+        (Some(_), Some(_)) => {
+            quote! {
                 /// Creates a new proxy with the default service and path.
                 pub #usage fn new(conn: &#connection) -> #zbus::Result<#proxy_name<'c>> {
                     Self::builder(conn).build()#wait
                 }
-            };
-            (builder_new, proxydefault_impl, proxy_method_new)
+            }
         }
+    };
+    let default_path = match default_path {
+        Some(p) => quote! { Some(#p) },
+        None => quote! { None },
+    };
+    let default_service = match default_service {
+        Some(d) => quote! { Some(#d) },
+        None => quote! { None },
     };
 
     Ok(quote! {
-        #proxydefault_impl
+        impl<'a> #zbus::proxy::ProxyDefault for #proxy_name<'a> {
+            const INTERFACE: Option<&'static str> = Some(#iface_name);
+            const DESTINATION: Option<&'static str> = #default_service;
+            const PATH: Option<&'static str> = #default_path;
+        }
 
         #(#other_attrs)*
         #[derive(Clone, Debug)]
@@ -374,7 +354,7 @@ pub fn create_proxy(
 
             /// Returns a customizable builder for this proxy.
             pub fn builder(conn: &#connection) -> #builder<'c, Self> {
-                let mut builder = #builder_new;
+                let mut builder = #builder::new(conn) ;
                 if #has_properties {
                     let uncached = vec![#(#uncached_properties),*];
                     builder.cache_properties(#zbus::proxy::CacheProperties::default())

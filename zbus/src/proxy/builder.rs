@@ -167,11 +167,11 @@ where
     pub fn new(conn: &Connection) -> Self {
         Self {
             conn: conn.clone(),
-            destination: Some(BusName::from_static_str(T::DESTINATION).expect("invalid bus name")),
-            path: Some(ObjectPath::from_static_str(T::PATH).expect("invalid default path")),
-            interface: Some(
-                InterfaceName::from_static_str(T::INTERFACE).expect("invalid interface name"),
-            ),
+            destination: T::DESTINATION
+                .map(|d| BusName::from_static_str(d).expect("invalid bus name")),
+            path: T::PATH.map(|p| ObjectPath::from_static_str(p).expect("invalid default path")),
+            interface: T::INTERFACE
+                .map(|i| InterfaceName::from_static_str(i).expect("invalid interface name")),
             cache: CacheProperties::default(),
             uncached_properties: None,
             proxy_type: PhantomData,
@@ -186,9 +186,9 @@ where
 ///
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 pub trait ProxyDefault {
-    const INTERFACE: &'static str;
-    const DESTINATION: &'static str;
-    const PATH: &'static str;
+    const INTERFACE: Option<&'static str>;
+    const DESTINATION: Option<&'static str>;
+    const PATH: Option<&'static str>;
 }
 
 #[cfg(test)]
