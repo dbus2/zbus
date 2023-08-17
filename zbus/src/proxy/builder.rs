@@ -49,22 +49,6 @@ impl<'a, T> Clone for Builder<'a, T> {
 assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
 impl<'a, T> Builder<'a, T> {
-    /// Create a new [`Builder`] for the given connection.
-    #[must_use]
-    pub fn new_bare(conn: &Connection) -> Self {
-        Self {
-            conn: conn.clone(),
-            destination: None,
-            path: None,
-            interface: None,
-            cache: CacheProperties::default(),
-            uncached_properties: None,
-            proxy_type: PhantomData,
-        }
-    }
-}
-
-impl<'a, T> Builder<'a, T> {
     /// Set the proxy destination address.
     pub fn destination<D>(mut self, destination: D) -> Result<Self>
     where
@@ -176,6 +160,16 @@ where
             uncached_properties: None,
             proxy_type: PhantomData,
         }
+    }
+
+    /// Create a new [`Builder`] for the given connection.
+    #[must_use]
+    #[deprecated(
+        since = "4.0.0",
+        note = "use `Builder::new` instead, which is now generic over the proxy type"
+    )]
+    pub fn new_bare(conn: &Connection) -> Self {
+        Self::new(conn)
     }
 }
 
