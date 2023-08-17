@@ -528,8 +528,8 @@ mod tests {
     }
 }
 
-/// This trait is implemented by all blocking proxies, which were
-/// generated with the [`dbus_proxy`](zbus::dbus_proxy) macro.
+/// This trait is implemented by all blocking proxies, which are generated with the
+/// [`dbus_proxy`](zbus::dbus_proxy) macro.
 pub trait ProxyImpl<'c>
 where
     Self: Sized,
