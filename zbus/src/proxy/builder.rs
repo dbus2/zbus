@@ -191,6 +191,12 @@ pub trait ProxyDefault {
     const PATH: Option<&'static str>;
 }
 
+impl ProxyDefault for Proxy<'_> {
+    const INTERFACE: Option<&'static str> = None;
+    const DESTINATION: Option<&'static str> = None;
+    const PATH: Option<&'static str> = None;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
