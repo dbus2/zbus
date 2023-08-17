@@ -211,7 +211,7 @@ mod tests {
     async fn builder_async() {
         let conn = Connection::session().await.unwrap();
 
-        let builder = Builder::<Proxy<'_>>::new_bare(&conn)
+        let builder = Builder::<Proxy<'_>>::new(&conn)
             .destination("org.freedesktop.DBus")
             .unwrap()
             .path("/some/path")

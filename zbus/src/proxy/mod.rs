@@ -568,7 +568,7 @@ impl<'a> Proxy<'a> {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
     {
-        Builder::new_bare(conn)
+        Builder::new(conn)
             .destination(destination)?
             .path(path)?
             .interface(interface)?
@@ -592,7 +592,7 @@ impl<'a> Proxy<'a> {
         P::Error: Into<Error>,
         I::Error: Into<Error>,
     {
-        Builder::new_bare(&conn)
+        Builder::new(&conn)
             .destination(destination)?
             .path(path)?
             .interface(interface)?
@@ -1339,7 +1339,7 @@ mod tests {
         let unique_name = dest_conn.unique_name().unwrap().clone();
 
         let well_known = "org.freedesktop.zbus.async.ProxySignalStreamTest";
-        let proxy: Proxy<'_> = Builder::new_bare(&conn)
+        let proxy: Proxy<'_> = Builder::new(&conn)
             .destination(well_known)?
             .path("/does/not/matter")?
             .interface("does.not.matter")?
