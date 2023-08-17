@@ -3,8 +3,8 @@ use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use regex::Regex;
 use syn::{
-    self, fold::Fold, parse_quote, spanned::Spanned, AttributeArgs, Error, FnArg, Ident, ItemTrait,
-    ReturnType, TraitItemMethod,
+    self, fold::Fold, parse_quote, parse_str, spanned::Spanned, AttributeArgs, Error, FnArg, Ident,
+    ItemTrait, Path, ReturnType, TraitItemMethod,
 };
 use zvariant_utils::{case, def_attrs};
 
@@ -170,12 +170,7 @@ pub fn create_proxy(
     let iface_name = iface_name
         .map(ToString::to_string)
         .unwrap_or(format!("org.freedesktop.{ident}"));
-    if assume_defaults.is_none() && default_path.is_none() && default_service.is_none() {
-        eprintln!(
-            "#[dbus_proxy(...)] macro invocation on '{proxy_name}' without explicit defaults. Please set 'assume_defaults = true', or configure default path/service directly."
-        );
-    };
-    let assume_defaults = assume_defaults.unwrap_or(true);
+    let assume_defaults = assume_defaults.unwrap_or(false);
     let (default_path, default_service) = if assume_defaults {
         let path = default_path
             .map(ToString::to_string)
@@ -252,7 +247,7 @@ pub fn create_proxy(
 
                 method
             } else {
-                gen_proxy_method_call(&member_name, &method_name, m, &attrs, &async_opts)
+                gen_proxy_method_call(&member_name, &method_name, m, &attrs, &async_opts)?
             };
             methods.extend(m);
         }
@@ -476,7 +471,7 @@ fn gen_proxy_method_call(
     m: &TraitItemMethod,
     attrs: &MethodAttributes,
     async_opts: &AsyncOpts,
-) -> TokenStream {
+) -> Result<TokenStream, Error> {
     let AsyncOpts {
         usage,
         wait,
@@ -580,14 +575,14 @@ fn gen_proxy_method_call(
     }
     let (_, ty_generics, where_clause) = generics.split_for_impl();
 
-    if let Some(proxy_name) = proxy_object {
-        let proxy = Ident::new(&proxy_name, Span::call_site());
+    if let Some(proxy_path) = proxy_object {
+        let proxy_path = parse_str::<Path>(&proxy_path)?;
         let signature = quote! {
-            fn #method #ty_generics(#inputs) -> #zbus::Result<#proxy<'c>>
+            fn #method #ty_generics(#inputs) -> #zbus::Result<#proxy_path<'c>>
             #where_clause
         };
 
-        quote! {
+        Ok(quote! {
             #(#other_attrs)*
             pub #usage #signature {
                 let object_path: #zbus::zvariant::OwnedObjectPath =
@@ -596,12 +591,12 @@ fn gen_proxy_method_call(
                         &(#(#args),*),
                     )
                     #wait?;
-                #proxy::builder(&self.0.connection())
+                #proxy_path::builder(&self.0.connection())
                     .path(object_path)?
                     .build()
                     #wait
             }
-        }
+        })
     } else {
         let body = if args.len() == 1 {
             // Wrap single arg in a tuple so if it's a struct/tuple itself, zbus will only remove
@@ -624,15 +619,15 @@ fn gen_proxy_method_call(
 
         if let Some(method_flags) = method_flags {
             if no_reply {
-                quote! {
+                Ok(quote! {
                     #(#other_attrs)*
                     pub #usage #signature {
                         self.0.call_with_flags::<_, _, ()>(#method_name, #method_flags, #body)#wait?;
                         ::std::result::Result::Ok(())
                     }
-                }
+                })
             } else {
-                quote! {
+                Ok(quote! {
                     #(#other_attrs)*
                     pub #usage #signature {
                         let reply = self.0.call_with_flags(#method_name, #method_flags, #body)#wait?;
@@ -645,16 +640,16 @@ fn gen_proxy_method_call(
                         // unwrap
                         ::std::result::Result::Ok(reply.unwrap())
                     }
-                }
+                })
             }
         } else {
-            quote! {
+            Ok(quote! {
                 #(#other_attrs)*
                 pub #usage #signature {
                     let reply = self.0.call(#method_name, #body)#wait?;
                     ::std::result::Result::Ok(reply)
                 }
-            }
+            })
         }
     }
 }

@@ -11,7 +11,7 @@ use std::{
 };
 
 use zbus::{
-    blocking::{connection, proxy::Builder as ProxyBuilder, Connection},
+    blocking::{connection, fdo::IntrospectableProxy, Connection},
     names::BusName,
     xml::{Interface, Node},
 };
@@ -22,8 +22,8 @@ use zvariant::ObjectPath;
 fn main() -> Result<(), Box<dyn Error>> {
     let input_src;
 
-    let proxy = |conn: Connection, service, path| -> zbus::blocking::fdo::IntrospectableProxy<'_> {
-        ProxyBuilder::new(&conn)
+    let proxy = |conn: Connection, service, path| -> IntrospectableProxy<'_> {
+        IntrospectableProxy::builder(&conn)
             .destination(service)
             .expect("invalid destination")
             .path(path)

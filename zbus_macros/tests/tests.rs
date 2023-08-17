@@ -6,19 +6,22 @@ use std::future::ready;
 use zbus::{block_on, fdo, object_server::SignalContext, proxy::CacheProperties};
 use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
-#[test]
-fn test_proxy() {
-    #[dbus_proxy(
+mod param {
+    #[zbus_macros::dbus_proxy(
         interface = "org.freedesktop.zbus_macros.ProxyParam",
         default_service = "org.freedesktop.zbus_macros",
         default_path = "/org/freedesktop/zbus_macros/test"
     )]
     trait ProxyParam {
-        #[dbus_proxy(object = "Test")]
+        #[dbus_proxy(object = "super::test::Test")]
         fn some_method<T>(&self, test: &T);
     }
+}
 
-    #[dbus_proxy(
+mod test {
+    use zbus::fdo;
+
+    #[zbus_macros::dbus_proxy(
         assume_defaults = false,
         interface = "org.freedesktop.zbus_macros.Test",
         default_service = "org.freedesktop.zbus_macros"
@@ -51,10 +54,13 @@ fn test_proxy() {
         where
             T: AsRef<str>;
     }
+}
 
+#[test]
+fn test_proxy() {
     block_on(async move {
         let connection = zbus::Connection::session().await.unwrap();
-        let proxy = TestProxy::builder(&connection)
+        let proxy = test::TestProxy::builder(&connection)
             .path("/org/freedesktop/zbus_macros/test")
             .unwrap()
             .cache_properties(CacheProperties::No)
