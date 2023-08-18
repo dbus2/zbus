@@ -1,7 +1,7 @@
 use pretty_assertions::assert_eq;
 use std::{env, error::Error, io::Write, path::Path, result::Result};
 
-use zbus::xml::Node;
+use zbus_xml::Node;
 use zbus_xmlgen::GenTrait;
 
 macro_rules! gen_diff {

@@ -1,10 +1,8 @@
 use snakecase::ascii::to_snakecase;
 use std::fmt::{Display, Formatter};
 
-use zbus::{
-    names::BusName,
-    xml::{Arg, ArgDirection, Interface},
-};
+use zbus::names::BusName;
+use zbus_xml::{Arg, ArgDirection, Interface};
 use zvariant::{
     Basic, CompleteType, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
     DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_CHAR, STRUCT_SIG_START_CHAR, VARIANT_SIGNATURE_CHAR,

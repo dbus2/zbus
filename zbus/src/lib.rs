@@ -172,9 +172,6 @@ pub use connection::Socket;
 
 pub mod blocking;
 
-#[cfg(feature = "xml")]
-pub mod xml;
-
 pub use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
 
 // Required for the macros to function within this crate.

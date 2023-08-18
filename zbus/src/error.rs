@@ -1,5 +1,3 @@
-#[cfg(feature = "xml")]
-use quick_xml::de::DeError;
 use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, sync::Arc};
 use zbus_names::{Error as NamesError, OwnedErrorName};
@@ -49,9 +47,6 @@ pub enum Error {
     Unsupported,
     /// A [`fdo::Error`] transformed into [`Error`].
     FDO(Box<fdo::Error>),
-    #[cfg(feature = "xml")]
-    /// An XML error from quick_xml
-    QuickXml(DeError),
     /// The requested name was already claimed by another peer.
     NameTaken,
     /// Invalid [match rule][MR] string.
@@ -89,8 +84,6 @@ impl PartialEq for Error {
             (Self::Names(s), Self::Names(o)) => s == o,
             (Self::NameTaken, Self::NameTaken) => true,
             (Error::InputOutput(_), Self::InputOutput(_)) => false,
-            #[cfg(feature = "xml")]
-            (Self::QuickXml(_), Self::QuickXml(_)) => false,
             (Self::Failure(s1), Self::Failure(s2)) => s1 == s2,
             (_, _) => false,
         }
@@ -113,8 +106,6 @@ impl error::Error for Error {
             Error::InvalidGUID => None,
             Error::Unsupported => None,
             Error::FDO(e) => Some(e),
-            #[cfg(feature = "xml")]
-            Error::QuickXml(e) => Some(e),
             Error::InvalidField => None,
             Error::MissingField => None,
             Error::NameTaken => None,
@@ -149,8 +140,6 @@ impl fmt::Display for Error {
             Error::InvalidGUID => write!(f, "Invalid GUID"),
             Error::Unsupported => write!(f, "Connection support is lacking"),
             Error::FDO(e) => write!(f, "{e}"),
-            #[cfg(feature = "xml")]
-            Error::QuickXml(e) => write!(f, "XML error: {e}"),
             Error::NameTaken => write!(f, "name already taken on the bus"),
             Error::InvalidMatchRule => write!(f, "Invalid match rule string"),
             Error::Failure(e) => write!(f, "{e}"),
@@ -182,8 +171,6 @@ impl Clone for Error {
             Error::InvalidGUID => Error::InvalidGUID,
             Error::Unsupported => Error::Unsupported,
             Error::FDO(e) => Error::FDO(e.clone()),
-            #[cfg(feature = "xml")]
-            Error::QuickXml(e) => Error::QuickXml(e.clone()),
             Error::NameTaken => Error::NameTaken,
             Error::InvalidMatchRule => Error::InvalidMatchRule,
             Error::Failure(e) => Error::Failure(e.clone()),
@@ -227,13 +214,6 @@ impl From<fdo::Error> for Error {
             fdo::Error::ZBus(e) => e,
             e => Error::FDO(Box::new(e)),
         }
-    }
-}
-
-#[cfg(feature = "xml")]
-impl From<DeError> for Error {
-    fn from(val: DeError) -> Self {
-        Error::QuickXml(val)
     }
 }
 

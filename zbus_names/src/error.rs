@@ -6,7 +6,6 @@ use zvariant::Error as VariantError;
 ///
 /// The various errors that can be reported by this crate.
 #[derive(Clone, Debug)]
-#[allow(clippy::upper_case_acronyms)]
 #[non_exhaustive]
 pub enum Error {
     Variant(VariantError),
