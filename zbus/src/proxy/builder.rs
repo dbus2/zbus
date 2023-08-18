@@ -49,22 +49,6 @@ impl<'a, T> Clone for Builder<'a, T> {
 assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
 impl<'a, T> Builder<'a, T> {
-    /// Create a new [`Builder`] for the given connection.
-    #[must_use]
-    pub fn new_bare(conn: &Connection) -> Self {
-        Self {
-            conn: conn.clone(),
-            destination: None,
-            path: None,
-            interface: None,
-            cache: CacheProperties::default(),
-            uncached_properties: None,
-            proxy_type: PhantomData,
-        }
-    }
-}
-
-impl<'a, T> Builder<'a, T> {
     /// Set the proxy destination address.
     pub fn destination<D>(mut self, destination: D) -> Result<Self>
     where
@@ -167,15 +151,25 @@ where
     pub fn new(conn: &Connection) -> Self {
         Self {
             conn: conn.clone(),
-            destination: Some(BusName::from_static_str(T::DESTINATION).expect("invalid bus name")),
-            path: Some(ObjectPath::from_static_str(T::PATH).expect("invalid default path")),
-            interface: Some(
-                InterfaceName::from_static_str(T::INTERFACE).expect("invalid interface name"),
-            ),
+            destination: T::DESTINATION
+                .map(|d| BusName::from_static_str(d).expect("invalid bus name")),
+            path: T::PATH.map(|p| ObjectPath::from_static_str(p).expect("invalid default path")),
+            interface: T::INTERFACE
+                .map(|i| InterfaceName::from_static_str(i).expect("invalid interface name")),
             cache: CacheProperties::default(),
             uncached_properties: None,
             proxy_type: PhantomData,
         }
+    }
+
+    /// Create a new [`Builder`] for the given connection.
+    #[must_use]
+    #[deprecated(
+        since = "4.0.0",
+        note = "use `Builder::new` instead, which is now generic over the proxy type"
+    )]
+    pub fn new_bare(conn: &Connection) -> Self {
+        Self::new(conn)
     }
 }
 
@@ -186,9 +180,15 @@ where
 ///
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 pub trait ProxyDefault {
-    const INTERFACE: &'static str;
-    const DESTINATION: &'static str;
-    const PATH: &'static str;
+    const INTERFACE: Option<&'static str>;
+    const DESTINATION: Option<&'static str>;
+    const PATH: Option<&'static str>;
+}
+
+impl ProxyDefault for Proxy<'_> {
+    const INTERFACE: Option<&'static str> = None;
+    const DESTINATION: Option<&'static str> = None;
+    const PATH: Option<&'static str> = None;
 }
 
 #[cfg(test)]
@@ -205,7 +205,7 @@ mod tests {
     async fn builder_async() {
         let conn = Connection::session().await.unwrap();
 
-        let builder = Builder::<Proxy<'_>>::new_bare(&conn)
+        let builder = Builder::<Proxy<'_>>::new(&conn)
             .destination("org.freedesktop.DBus")
             .unwrap()
             .path("/some/path")
