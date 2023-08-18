@@ -17,7 +17,7 @@ use zbus::{
     fdo::{ObjectManager, ObjectManagerProxy},
     message::{self, Builder},
     object_server::ResponseDispatchNotifier,
-    DBusError, MessageStream,
+    DBusError, Error, MessageStream,
 };
 use zvariant::{DeserializeDict, Optional, OwnedValue, SerializeDict, Str, Type, Value};
 
@@ -529,39 +529,35 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
 
     assert_eq!(proxy.optional_property().await?, Some(42).into());
 
-    #[cfg(feature = "xml")]
-    {
-        let xml = proxy.introspect().await?;
-        debug!("Introspection: {}", xml);
-        #[cfg(feature = "xml")]
-        let node = zbus::xml::Node::from_reader(xml.as_bytes())?;
-        let ifaces = node.interfaces();
-        let iface = ifaces
+    let xml = proxy.introspect().await?;
+    debug!("Introspection: {}", xml);
+    let node =
+        zbus_xml::Node::from_reader(xml.as_bytes()).map_err(|e| Error::Failure(e.to_string()))?;
+    let ifaces = node.interfaces();
+    let iface = ifaces
+        .iter()
+        .find(|i| i.name() == "org.freedesktop.MyIface")
+        .unwrap();
+    let methods = iface.methods();
+    for method in methods {
+        if method.name() != "TestSingleStructRet" && method.name() != "TestMultiRet" {
+            continue;
+        }
+        let args = method.args();
+        let mut out_args = args
             .iter()
-            .find(|i| i.name() == "org.freedesktop.MyIface")
-            .unwrap();
-        let methods = iface.methods();
-        for method in methods {
-            if method.name() != "TestSingleStructRet" && method.name() != "TestMultiRet" {
-                continue;
-            }
-            let args = method.args();
-            #[cfg(feature = "xml")]
-            let mut out_args = args
-                .iter()
-                .filter(|a| a.direction().unwrap() == zbus::xml::ArgDirection::Out);
+            .filter(|a| a.direction().unwrap() == zbus_xml::ArgDirection::Out);
 
-            if method.name() == "TestSingleStructRet" {
-                assert_eq!(args.len(), 1);
-                assert_eq!(out_args.next().unwrap().ty().signature(), "(is)");
-                assert!(out_args.next().is_none());
-            } else {
-                assert_eq!(args.len(), 2);
-                let foo = out_args.find(|a| a.name() == Some("foo")).unwrap();
-                assert_eq!(foo.ty().signature(), "i");
-                let bar = out_args.find(|a| a.name() == Some("bar")).unwrap();
-                assert_eq!(bar.ty().signature(), "s");
-            }
+        if method.name() == "TestSingleStructRet" {
+            assert_eq!(args.len(), 1);
+            assert_eq!(out_args.next().unwrap().ty().signature(), "(is)");
+            assert!(out_args.next().is_none());
+        } else {
+            assert_eq!(args.len(), 2);
+            let foo = out_args.find(|a| a.name() == Some("foo")).unwrap();
+            assert_eq!(foo.ty().signature(), "i");
+            let bar = out_args.find(|a| a.name() == Some("bar")).unwrap();
+            assert_eq!(bar.ty().signature(), "s");
         }
     }
     // build-time check to see if macro is doing the right thing.

@@ -1,30 +1,25 @@
-//! Introspection XML support (`xml` feature)
-//!
-//! Thanks to the [`org.freedesktop.DBus.Introspectable`] interface, objects may be introspected at
-//! runtime, returning an XML string that describes the object.
-//!
-//! This optional `xml` module provides facilities to parse the XML data into more convenient
-//! Rust structures. The XML string may be parsed to a tree with [`Node.from_reader()`].
-//!
-//! * [Introspection format] in the DBus specification
-//!
-//! [`Node.from_reader()`]: struct.Node.html#method.from_reader
-//! [Introspection format]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
-//! [`org.freedesktop.DBus.Introspectable`]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-introspectable
+#![deny(rust_2018_idioms)]
+#![doc(
+    html_logo_url = "https://storage.googleapis.com/fdo-gitlab-uploads/project/avatar/3213/zbus-logomark.png"
+)]
+#![doc = include_str!("../README.md")]
+#![doc(test(attr(
+    warn(unused),
+    deny(warnings),
+    // W/o this, we seem to get some bogus warning about `extern crate zbus`.
+    allow(unused_extern_crates),
+)))]
+
+mod error;
+pub use error::{Error, Result};
 
 use quick_xml::{de::Deserializer, se::to_writer};
 use serde::{Deserialize, Serialize};
 use static_assertions::assert_impl_all;
-use std::{
-    io::{BufReader, Read, Write},
-    result::Result,
-};
+use std::io::{BufReader, Read, Write};
 
-use crate::{
-    names::{InterfaceName, MemberName},
-    zvariant::CompleteType,
-    Error,
-};
+use zbus_names::{InterfaceName, MemberName};
+use zvariant::CompleteType;
 
 /// Annotations are generic key/value pairs of metadata.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -277,14 +272,14 @@ assert_impl_all!(Node<'_>: Send, Sync, Unpin);
 
 impl<'a> Node<'a> {
     /// Parse the introspection XML document from reader.
-    pub fn from_reader<R: Read>(reader: R) -> Result<Node<'a>, Error> {
+    pub fn from_reader<R: Read>(reader: R) -> Result<Node<'a>> {
         let mut deserializer = Deserializer::from_reader(BufReader::new(reader));
         deserializer.event_buffer_size(Some(1024_usize.try_into().unwrap()));
         Ok(Node::deserialize(&mut deserializer)?)
     }
 
     /// Write the XML document to writer.
-    pub fn to_writer<W: Write>(&self, writer: W) -> Result<(), Error> {
+    pub fn to_writer<W: Write>(&self, writer: W) -> Result<()> {
         // Need this wrapper until this is resolved: https://github.com/tafia/quick-xml/issues/499
         struct Writer<T>(T);
 
@@ -322,7 +317,7 @@ impl<'a> TryFrom<&'a str> for Node<'a> {
     type Error = Error;
 
     /// Parse the introspection XML document from `s`.
-    fn try_from(s: &'a str) -> Result<Node<'a>, Error> {
+    fn try_from(s: &'a str) -> Result<Node<'a>> {
         let mut deserializer = Deserializer::from_str(s);
         deserializer.event_buffer_size(Some(1024_usize.try_into().unwrap()));
         Ok(Node::deserialize(&mut deserializer)?)

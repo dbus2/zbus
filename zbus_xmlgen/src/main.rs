@@ -13,8 +13,8 @@ use std::{
 use zbus::{
     blocking::{connection, fdo::IntrospectableProxy, Connection},
     names::BusName,
-    xml::{Interface, Node},
 };
+use zbus_xml::{Interface, Node};
 
 use zbus_xmlgen::GenTrait;
 use zvariant::ObjectPath;
