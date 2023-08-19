@@ -43,7 +43,7 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [bus name]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(untagged)]
 pub enum BusName<'name> {
     #[serde(borrow)]
@@ -109,6 +109,21 @@ impl Deref for BusName<'_> {
 impl Borrow<str> for BusName<'_> {
     fn borrow(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl Debug for BusName<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            BusName::Unique(name) => f
+                .debug_tuple("BusName::Unique")
+                .field(&name.as_str())
+                .finish(),
+            BusName::WellKnown(name) => f
+                .debug_tuple("BusName::WellKnown")
+                .field(&name.as_str())
+                .finish(),
+        }
     }
 }
 
@@ -361,7 +376,16 @@ impl Borrow<str> for OwnedBusName {
 
 impl Debug for OwnedBusName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("OwnedBusName").field(&self.as_str()).finish()
+        match &self.0 {
+            BusName::Unique(name) => f
+                .debug_tuple("OwnedBusName::Unique")
+                .field(&name.as_str())
+                .finish(),
+            BusName::WellKnown(name) => f
+                .debug_tuple("OwnedBusName::WellKnown")
+                .field(&name.as_str())
+                .finish(),
+        }
     }
 }
 
