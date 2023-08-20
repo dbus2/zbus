@@ -30,7 +30,7 @@ use crate::{
     handshake,
     names::{InterfaceName, UniqueName, WellKnownName},
     raw::Socket,
-    AuthMechanism, Authenticated, Connection, Error, Executor, Guid, Interface, Result,
+    AuthMechanism, Authenticated, CallOnDrop, Connection, Error, Executor, Guid, Interface, Result,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -68,6 +68,7 @@ pub struct ConnectionBuilder<'a> {
     unique_name: Option<UniqueName<'a>>,
     cookie_context: Option<handshake::CookieContext<'a>>,
     cookie_id: Option<usize>,
+    socket_close_callback: CallOnDrop,
 }
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -315,6 +316,21 @@ impl<'a> ConnectionBuilder<'a> {
         Ok(self)
     }
 
+    /// XX
+    pub fn call_on_connection_close<F>(mut self, callback: F) -> Self
+    where
+        F: FnOnce() + Send + Sync + 'static,
+    {
+        if self.socket_close_callback.callback.is_some() {
+            panic!("call_on_connection_close can only be called once per ConnectionBuilder");
+        }
+        self.socket_close_callback = CallOnDrop {
+            callback: Some(Box::new(callback)),
+        };
+
+        self
+    }
+
     /// Build the connection, consuming the builder.
     ///
     /// # Errors
@@ -418,7 +434,7 @@ impl<'a> ConnectionBuilder<'a> {
         }
 
         // Start the socket reader task.
-        conn.init_socket_reader();
+        conn.init_socket_reader(self.socket_close_callback);
 
         if !self.p2p {
             // Now that the server has approved us, we must send the bus Hello, as per specs
@@ -445,6 +461,7 @@ impl<'a> ConnectionBuilder<'a> {
             unique_name: None,
             cookie_id: None,
             cookie_context: None,
+            socket_close_callback: CallOnDrop { callback: None },
         }
     }
 }

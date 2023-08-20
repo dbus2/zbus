@@ -33,7 +33,7 @@ use crate::{
     socket_reader::SocketReader,
     Authenticated, CacheProperties, ConnectionBuilder, DBusError, Error, Executor, Guid, MatchRule,
     Message, MessageBuilder, MessageFlags, MessageStream, MessageType, ObjectServer,
-    OwnedMatchRule, Result, Task,
+    OwnedMatchRule, Result, Task, CallOnDrop,
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -1293,13 +1293,17 @@ impl Connection {
         })
     }
 
-    pub(crate) fn init_socket_reader(&self) {
+    pub(crate) fn init_socket_reader(&self, call_on_exit: CallOnDrop) {
         let inner = &self.inner;
         inner
             .socket_reader_task
             .set(
-                SocketReader::new(inner.raw_conn.clone(), inner.msg_senders.clone())
-                    .spawn(&inner.executor),
+                SocketReader::new(
+                    inner.raw_conn.clone(),
+                    inner.msg_senders.clone(),
+                    call_on_exit,
+                )
+                .spawn(&inner.executor),
             )
             .expect("Attempted to set `socket_reader_task` twice");
     }
@@ -1410,10 +1414,17 @@ enum NameStatus {
 #[cfg(test)]
 mod tests {
     use futures_util::stream::TryStreamExt;
-    use ntest::timeout;
+    use ntest::{assert_false, timeout};
     use test_log::test;
 
     use crate::{fdo::DBusProxy, AuthMechanism};
+
+    #[cfg(all(unix, not(feature = "tokio")))]
+    use std::os::unix::net::UnixStream;
+    #[cfg(all(unix, feature = "tokio"))]
+    use tokio::net::UnixStream;
+    #[cfg(all(windows, not(feature = "tokio")))]
+    use uds_windows::UnixStream;
 
     use super::*;
 
@@ -1546,13 +1557,6 @@ mod tests {
 
     #[cfg(unix)]
     async fn unix_p2p_pipe() -> Result<(Connection, Connection)> {
-        #[cfg(not(feature = "tokio"))]
-        use std::os::unix::net::UnixStream;
-        #[cfg(feature = "tokio")]
-        use tokio::net::UnixStream;
-        #[cfg(all(windows, not(feature = "tokio")))]
-        use uds_windows::UnixStream;
-
         let guid = Guid::generate();
 
         let (p0, p1) = UnixStream::pair().unwrap();
@@ -1755,13 +1759,6 @@ mod tests {
         cookie_context: &'static str,
         cookie_id: Option<usize>,
     ) -> Result<()> {
-        #[cfg(all(unix, not(feature = "tokio")))]
-        use std::os::unix::net::UnixStream;
-        #[cfg(all(unix, feature = "tokio"))]
-        use tokio::net::UnixStream;
-        #[cfg(all(windows, not(feature = "tokio")))]
-        use uds_windows::UnixStream;
-
         let guid = Guid::generate();
 
         let (p0, p1) = UnixStream::pair().unwrap();
@@ -1780,5 +1777,50 @@ mod tests {
             server_builder.build(),
         )
         .map(|_| ())
+    }
+
+    #[test]
+    #[timeout(1000)]
+    fn detect_disconnection() {
+        crate::utils::block_on(test_detect_disconnection());
+    }
+
+    fn build_test_detection_server(
+        guid: &Guid,
+    ) -> (ConnectionBuilder<'_>, UnixStream, Receiver<()>) {
+        let (tx, rx) = async_broadcast::broadcast(1);
+        let (p0, p1) = UnixStream::pair().unwrap();
+        let builder = zbus::ConnectionBuilder::unix_stream(p0)
+            .server(guid)
+            .p2p()
+            .call_on_connection_close(move || {
+                tx.try_broadcast(()).unwrap();
+            });
+        (builder, p1, rx)
+    }
+
+    async fn test_detect_disconnection() {
+        {
+            let guid = Guid::generate();
+            let (builder, client_sock, mut rx) = build_test_detection_server(&guid);
+            drop(client_sock);
+            match builder.build().await {
+                Ok(_) => panic!("Did not expect successful connection."),
+                Err(_) => {},
+            };
+            assert_eq!(rx.recv().await, Ok(()));
+        }
+        {
+            let guid = Guid::generate();
+            let (builder, client_sock, mut rx) = build_test_detection_server(&guid);
+            let (_server, client) = futures_util::try_join!(
+                builder.build(),
+                ConnectionBuilder::unix_stream(client_sock).p2p().build()
+            ).unwrap();
+            assert_false!(rx.is_closed());
+            assert_eq!(rx.try_recv(), Err(async_broadcast::TryRecvError::Empty));
+            drop(client);
+            assert_eq!(rx.recv().await, Ok(()));
+        }
     }
 }

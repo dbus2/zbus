@@ -7,22 +7,28 @@ use futures_util::future::poll_fn;
 use tracing::{debug, instrument, trace};
 
 use crate::{
-    async_lock::Mutex, raw::Connection as RawConnection, Executor, MsgBroadcaster, OwnedMatchRule,
-    Socket, Task,
+    async_lock::Mutex, raw::Connection as RawConnection, CallOnDrop, Executor, MsgBroadcaster,
+    OwnedMatchRule, Socket, Task,
 };
 
 #[derive(Debug)]
 pub(crate) struct SocketReader {
     raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
     senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
+    _call_on_drop: CallOnDrop,
 }
 
 impl SocketReader {
     pub fn new(
         raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
         senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
+        call_on_exit: CallOnDrop,
     ) -> Self {
-        Self { raw_conn, senders }
+        Self {
+            raw_conn,
+            senders,
+            _call_on_drop: call_on_exit,
+        }
     }
 
     pub fn spawn(self, executor: &Executor<'_>) -> Task<()> {

@@ -46,3 +46,24 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
         });
     TOKIO_RT.block_on(future)
 }
+
+/// Utility to automatically call a callback function when the object is dropped.
+pub(crate) struct CallOnDrop {
+    pub callback: Option<Box<dyn FnOnce() + Send + Sync>>,
+}
+
+impl std::fmt::Debug for CallOnDrop {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CallOnDrop")
+            .field("callback", &self.callback.as_ref().map(|_| "FnOnce()"))
+            .finish()
+    }
+}
+
+impl Drop for CallOnDrop {
+    fn drop(&mut self) {
+        if let Some(cb) = self.callback.take() {
+            cb();
+        }
+    }
+}
