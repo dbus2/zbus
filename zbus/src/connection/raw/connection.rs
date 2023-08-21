@@ -34,13 +34,23 @@ pub struct Connection<S> {
     #[derivative(Debug = "ignore")]
     socket: S,
     event: Event,
-    in_buffer: Vec<u8>,
+    inbound: InBound,
+    outbound: OutBound,
+}
+
+#[derive(Debug)]
+pub struct InBound {
+    buffer: Vec<u8>,
     #[cfg(unix)]
-    in_fds: Vec<OwnedFd>,
-    in_pos: usize,
-    out_pos: usize,
-    out_msgs: VecDeque<Arc<Message>>,
+    fds: Vec<OwnedFd>,
+    pos: usize,
     prev_seq: u64,
+}
+
+#[derive(Debug)]
+pub struct OutBound {
+    pos: usize,
+    msgs: VecDeque<Arc<Message>>,
 }
 
 impl<S: Socket> Connection<S> {
@@ -48,13 +58,17 @@ impl<S: Socket> Connection<S> {
         Connection {
             socket,
             event: Event::new(),
-            in_pos: raw_in_buffer.len(),
-            in_buffer: raw_in_buffer,
-            #[cfg(unix)]
-            in_fds: vec![],
-            out_pos: 0,
-            out_msgs: VecDeque::new(),
-            prev_seq: 0,
+            inbound: InBound {
+                pos: raw_in_buffer.len(),
+                buffer: raw_in_buffer,
+                #[cfg(unix)]
+                fds: vec![],
+                prev_seq: 0,
+            },
+            outbound: OutBound {
+                pos: 0,
+                msgs: VecDeque::new(),
+            },
         }
     }
 
@@ -66,17 +80,21 @@ impl<S: Socket> Connection<S> {
     /// This method will thus only block if the socket is in blocking mode.
     pub fn try_flush(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
         self.event.notify(usize::MAX);
-        while let Some(msg) = self.out_msgs.front() {
+        while let Some(msg) = self.outbound.msgs.front() {
             loop {
-                let data = &msg.as_bytes()[self.out_pos..];
+                let data = &msg.as_bytes()[self.outbound.pos..];
                 if data.is_empty() {
-                    self.out_pos = 0;
-                    self.out_msgs.pop_front();
+                    self.outbound.pos = 0;
+                    self.outbound.msgs.pop_front();
                     break;
                 }
                 #[cfg(unix)]
-                let fds = if self.out_pos == 0 { msg.fds() } else { vec![] };
-                self.out_pos += ready!(self.socket.poll_sendmsg(
+                let fds = if self.outbound.pos == 0 {
+                    msg.fds()
+                } else {
+                    vec![]
+                };
+                self.outbound.pos += ready!(self.socket.poll_sendmsg(
                     cx,
                     data,
                     #[cfg(unix)]
@@ -92,7 +110,7 @@ impl<S: Socket> Connection<S> {
     /// This method will *not* write anything to the socket, you need to call
     /// `try_flush()` afterwards so that your message is actually sent out.
     pub fn enqueue_message(&mut self, msg: Arc<Message>) {
-        self.out_msgs.push_back(msg);
+        self.outbound.msgs.push_back(msg);
     }
 
     /// Attempt to read a message from the socket
@@ -105,23 +123,23 @@ impl<S: Socket> Connection<S> {
     /// `try_receive_message`.
     pub fn try_receive_message(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<Message>> {
         self.event.notify(usize::MAX);
-        if self.in_pos < MIN_MESSAGE_SIZE {
-            self.in_buffer.resize(MIN_MESSAGE_SIZE, 0);
+        if self.inbound.pos < MIN_MESSAGE_SIZE {
+            self.inbound.buffer.resize(MIN_MESSAGE_SIZE, 0);
             // We don't have enough data to make a proper message header yet.
             // Some partial read may be in raw_in_buffer, so we try to complete it
             // until we have MIN_MESSAGE_SIZE bytes
             //
             // Given that MIN_MESSAGE_SIZE is 16, this codepath is actually extremely unlikely
             // to be taken more than once
-            while self.in_pos < MIN_MESSAGE_SIZE {
+            while self.inbound.pos < MIN_MESSAGE_SIZE {
                 let res = ready!(self
                     .socket
-                    .poll_recvmsg(cx, &mut self.in_buffer[self.in_pos..]))?;
+                    .poll_recvmsg(cx, &mut self.inbound.buffer[self.inbound.pos..]))?;
                 let len = {
                     #[cfg(unix)]
                     {
                         let (len, fds) = res;
-                        self.in_fds.extend(fds);
+                        self.inbound.fds.extend(fds);
                         len
                     }
                     #[cfg(not(unix))]
@@ -129,7 +147,7 @@ impl<S: Socket> Connection<S> {
                         res
                     }
                 };
-                self.in_pos += len;
+                self.inbound.pos += len;
                 if len == 0 {
                     return Poll::Ready(Err(crate::Error::InputOutput(
                         std::io::Error::new(
@@ -142,7 +160,7 @@ impl<S: Socket> Connection<S> {
             }
         }
 
-        let (primary_header, fields_len) = PrimaryHeader::read(&self.in_buffer)?;
+        let (primary_header, fields_len) = PrimaryHeader::read(&self.inbound.buffer)?;
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_padding = padding_for_8_bytes(header_len);
         let body_len = primary_header.body_len() as usize;
@@ -153,18 +171,18 @@ impl<S: Socket> Connection<S> {
 
         // By this point we have a full primary header, so we know the exact length of the complete
         // message.
-        self.in_buffer.resize(total_len, 0);
+        self.inbound.buffer.resize(total_len, 0);
 
         // Now we have an incomplete message; read the rest
-        while self.in_buffer.len() > self.in_pos {
+        while self.inbound.buffer.len() > self.inbound.pos {
             let res = ready!(self
                 .socket
-                .poll_recvmsg(cx, &mut self.in_buffer[self.in_pos..]))?;
+                .poll_recvmsg(cx, &mut self.inbound.buffer[self.inbound.pos..]))?;
             let read = {
                 #[cfg(unix)]
                 {
                     let (read, fds) = res;
-                    self.in_fds.extend(fds);
+                    self.inbound.fds.extend(fds);
                     read
                 }
                 #[cfg(not(unix))]
@@ -172,16 +190,16 @@ impl<S: Socket> Connection<S> {
                     res
                 }
             };
-            self.in_pos += read;
+            self.inbound.pos += read;
         }
 
         // If we reach here, the message is complete; return it
-        self.in_pos = 0;
-        let bytes = std::mem::take(&mut self.in_buffer);
+        self.inbound.pos = 0;
+        let bytes = std::mem::take(&mut self.inbound.buffer);
         #[cfg(unix)]
-        let fds = std::mem::take(&mut self.in_fds);
-        let seq = self.prev_seq + 1;
-        self.prev_seq = seq;
+        let fds = std::mem::take(&mut self.inbound.fds);
+        let seq = self.inbound.prev_seq + 1;
+        self.inbound.prev_seq = seq;
         Poll::Ready(Message::from_raw_parts(
             bytes,
             #[cfg(unix)]
