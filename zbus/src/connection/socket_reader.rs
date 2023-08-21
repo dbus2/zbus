@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{self, Arc},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use futures_util::future::poll_fn;
 use tracing::{debug, instrument, trace};
@@ -12,13 +9,13 @@ use super::raw::{Connection as RawConnection, Socket};
 
 #[derive(Debug)]
 pub(crate) struct SocketReader {
-    raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
+    raw_conn: Arc<RawConnection<Box<dyn Socket>>>,
     senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
 }
 
 impl SocketReader {
     pub fn new(
-        raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
+        raw_conn: Arc<RawConnection<Box<dyn Socket>>>,
         senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
     ) -> Self {
         Self { raw_conn, senders }
@@ -34,12 +31,9 @@ impl SocketReader {
         loop {
             trace!("Waiting for message on the socket..");
             let msg = {
-                poll_fn(|cx| {
-                    let mut raw_conn = self.raw_conn.lock().expect("poisoned lock");
-                    raw_conn.try_receive_message(cx)
-                })
-                .await
-                .map(Arc::new)
+                poll_fn(|cx| self.raw_conn.try_receive_message(cx))
+                    .await
+                    .map(Arc::new)
             };
             match &msg {
                 Ok(msg) => trace!("Message received on the socket: {:?}", msg),

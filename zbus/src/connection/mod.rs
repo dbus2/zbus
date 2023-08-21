@@ -12,7 +12,6 @@ use std::{
     ops::Deref,
     pin::Pin,
     sync::{
-        self,
         atomic::{AtomicU32, Ordering::SeqCst},
         Arc, Weak,
     },
@@ -62,7 +61,7 @@ pub(crate) struct ConnectionInner {
     unique_name: OnceCell<OwnedUniqueName>,
     registered_names: Mutex<HashMap<WellKnownName<'static>, NameStatus>>,
 
-    raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
+    raw_conn: Arc<RawConnection<Box<dyn Socket>>>,
 
     // Serial number for next outgoing message
     serial: AtomicU32,
@@ -1195,7 +1194,7 @@ impl Connection {
         let msg_senders = Arc::new(Mutex::new(msg_senders));
         let subscriptions = Mutex::new(HashMap::new());
 
-        let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
+        let raw_conn = Arc::new(auth.conn);
 
         let connection = Self {
             inner: Arc::new(ConnectionInner {
@@ -1239,11 +1238,7 @@ impl Connection {
     ///
     /// This function is meant for the caller to implement idle or timeout on inactivity.
     pub fn monitor_activity(&self) -> EventListener {
-        self.inner
-            .raw_conn
-            .lock()
-            .expect("poisoned lock")
-            .monitor_activity()
+        self.inner.raw_conn.monitor_activity()
     }
 
     /// Returns the peer credentials.
@@ -1255,8 +1250,7 @@ impl Connection {
     ///
     /// Currently `unix_group_ids` and `linux_security_label` fields are not populated.
     pub async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
-        let raw_conn = self.inner.raw_conn.lock().expect("poisoned lock");
-        let socket = raw_conn.socket();
+        let socket = self.inner.raw_conn.socket();
 
         Ok(ConnectionCredentials {
             process_id: socket.peer_pid()?,
@@ -1333,25 +1327,17 @@ where
             return Err(Error::Unsupported);
         }
 
-        self.inner
-            .raw_conn
-            .lock()
-            .expect("poisoned lock")
-            .enqueue_message(msg);
+        self.inner.raw_conn.enqueue_message(msg);
 
         Ok(())
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        self.inner
-            .raw_conn
-            .lock()
-            .expect("poisoned lock")
-            .try_flush(cx)
+        self.inner.raw_conn.try_flush(cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        let mut raw_conn = self.inner.raw_conn.lock().expect("poisoned lock");
+        let raw_conn = &self.inner.raw_conn;
         let res = raw_conn.try_flush(cx);
         match ready!(res) {
             Ok(_) => (),

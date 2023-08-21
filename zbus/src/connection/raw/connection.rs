@@ -1,6 +1,7 @@
 use std::{
     collections::VecDeque,
-    sync::Arc,
+    ops::Deref,
+    sync::{Arc, Mutex, MutexGuard},
     task::{Context, Poll},
 };
 
@@ -32,10 +33,10 @@ use futures_core::ready;
 #[derivative(Debug)]
 pub struct Connection<S> {
     #[derivative(Debug = "ignore")]
-    socket: S,
+    socket: Mutex<S>,
     event: Event,
-    inbound: InBound,
-    outbound: OutBound,
+    inbound: Mutex<InBound>,
+    outbound: Mutex<OutBound>,
 }
 
 #[derive(Debug)]
@@ -56,19 +57,19 @@ pub struct OutBound {
 impl<S: Socket> Connection<S> {
     pub(crate) fn new(socket: S, raw_in_buffer: Vec<u8>) -> Connection<S> {
         Connection {
-            socket,
+            socket: Mutex::new(socket),
             event: Event::new(),
-            inbound: InBound {
+            inbound: Mutex::new(InBound {
                 pos: raw_in_buffer.len(),
                 buffer: raw_in_buffer,
                 #[cfg(unix)]
                 fds: vec![],
                 prev_seq: 0,
-            },
-            outbound: OutBound {
+            }),
+            outbound: Mutex::new(OutBound {
                 pos: 0,
                 msgs: VecDeque::new(),
-            },
+            }),
         }
     }
 
@@ -78,23 +79,23 @@ impl<S: Socket> Connection<S> {
     /// outgoing buffer into the socket, until an error is encountered.
     ///
     /// This method will thus only block if the socket is in blocking mode.
-    pub fn try_flush(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
+    pub fn try_flush(&self, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
         self.event.notify(usize::MAX);
-        while let Some(msg) = self.outbound.msgs.front() {
+        let mut outbound = self.outbound.lock().expect("lock poisoned");
+        while !outbound.msgs.is_empty() {
             loop {
-                let data = &msg.as_bytes()[self.outbound.pos..];
+                // `outbound` is locked and we just checked there is a message.
+                let msg = outbound.msgs.front().expect("no message");
+                let data = &msg.as_bytes()[outbound.pos..];
                 if data.is_empty() {
-                    self.outbound.pos = 0;
-                    self.outbound.msgs.pop_front();
+                    outbound.pos = 0;
+                    outbound.msgs.pop_front();
                     break;
                 }
                 #[cfg(unix)]
-                let fds = if self.outbound.pos == 0 {
-                    msg.fds()
-                } else {
-                    vec![]
-                };
-                self.outbound.pos += ready!(self.socket.poll_sendmsg(
+                let fds = if outbound.pos == 0 { msg.fds() } else { vec![] };
+                let mut socket = self.socket.lock().expect("lock poisoned");
+                outbound.pos += ready!(socket.poll_sendmsg(
                     cx,
                     data,
                     #[cfg(unix)]
@@ -109,8 +110,12 @@ impl<S: Socket> Connection<S> {
     ///
     /// This method will *not* write anything to the socket, you need to call
     /// `try_flush()` afterwards so that your message is actually sent out.
-    pub fn enqueue_message(&mut self, msg: Arc<Message>) {
-        self.outbound.msgs.push_back(msg);
+    pub fn enqueue_message(&self, msg: Arc<Message>) {
+        self.outbound
+            .lock()
+            .expect("lock poisoned")
+            .msgs
+            .push_back(msg);
     }
 
     /// Attempt to read a message from the socket
@@ -121,25 +126,26 @@ impl<S: Socket> Connection<S> {
     /// If the socket is in non-blocking mode, it may read a partial message. In such case it
     /// will buffer it internally and try to complete it the next time you call
     /// `try_receive_message`.
-    pub fn try_receive_message(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<Message>> {
+    pub fn try_receive_message(&self, cx: &mut Context<'_>) -> Poll<crate::Result<Message>> {
         self.event.notify(usize::MAX);
-        if self.inbound.pos < MIN_MESSAGE_SIZE {
-            self.inbound.buffer.resize(MIN_MESSAGE_SIZE, 0);
+        let mut inbound = self.inbound.lock().expect("lock poisoned");
+        if inbound.pos < MIN_MESSAGE_SIZE {
+            inbound.buffer.resize(MIN_MESSAGE_SIZE, 0);
             // We don't have enough data to make a proper message header yet.
             // Some partial read may be in raw_in_buffer, so we try to complete it
             // until we have MIN_MESSAGE_SIZE bytes
             //
             // Given that MIN_MESSAGE_SIZE is 16, this codepath is actually extremely unlikely
             // to be taken more than once
-            while self.inbound.pos < MIN_MESSAGE_SIZE {
-                let res = ready!(self
-                    .socket
-                    .poll_recvmsg(cx, &mut self.inbound.buffer[self.inbound.pos..]))?;
+            while inbound.pos < MIN_MESSAGE_SIZE {
+                let mut socket = self.socket.lock().expect("lock poisoned");
+                let pos = inbound.pos;
+                let res = ready!(socket.poll_recvmsg(cx, &mut inbound.buffer[pos..]))?;
                 let len = {
                     #[cfg(unix)]
                     {
                         let (len, fds) = res;
-                        self.inbound.fds.extend(fds);
+                        inbound.fds.extend(fds);
                         len
                     }
                     #[cfg(not(unix))]
@@ -147,7 +153,7 @@ impl<S: Socket> Connection<S> {
                         res
                     }
                 };
-                self.inbound.pos += len;
+                inbound.pos += len;
                 if len == 0 {
                     return Poll::Ready(Err(crate::Error::InputOutput(
                         std::io::Error::new(
@@ -160,7 +166,7 @@ impl<S: Socket> Connection<S> {
             }
         }
 
-        let (primary_header, fields_len) = PrimaryHeader::read(&self.inbound.buffer)?;
+        let (primary_header, fields_len) = PrimaryHeader::read(&inbound.buffer)?;
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_padding = padding_for_8_bytes(header_len);
         let body_len = primary_header.body_len() as usize;
@@ -171,18 +177,18 @@ impl<S: Socket> Connection<S> {
 
         // By this point we have a full primary header, so we know the exact length of the complete
         // message.
-        self.inbound.buffer.resize(total_len, 0);
+        inbound.buffer.resize(total_len, 0);
 
         // Now we have an incomplete message; read the rest
-        while self.inbound.buffer.len() > self.inbound.pos {
-            let res = ready!(self
-                .socket
-                .poll_recvmsg(cx, &mut self.inbound.buffer[self.inbound.pos..]))?;
+        while inbound.buffer.len() > inbound.pos {
+            let mut socket = self.socket.lock().expect("lock poisoned");
+            let pos = inbound.pos;
+            let res = ready!(socket.poll_recvmsg(cx, &mut inbound.buffer[pos..]))?;
             let read = {
                 #[cfg(unix)]
                 {
                     let (read, fds) = res;
-                    self.inbound.fds.extend(fds);
+                    inbound.fds.extend(fds);
                     read
                 }
                 #[cfg(not(unix))]
@@ -190,16 +196,16 @@ impl<S: Socket> Connection<S> {
                     res
                 }
             };
-            self.inbound.pos += read;
+            inbound.pos += read;
         }
 
         // If we reach here, the message is complete; return it
-        self.inbound.pos = 0;
-        let bytes = std::mem::take(&mut self.inbound.buffer);
+        inbound.pos = 0;
+        let bytes = std::mem::take(&mut inbound.buffer);
         #[cfg(unix)]
-        let fds = std::mem::take(&mut self.inbound.fds);
-        let seq = self.inbound.prev_seq + 1;
-        self.inbound.prev_seq = seq;
+        let fds = std::mem::take(&mut inbound.fds);
+        let seq = inbound.prev_seq + 1;
+        inbound.prev_seq = seq;
         Poll::Ready(Message::from_raw_parts(
             bytes,
             #[cfg(unix)]
@@ -223,8 +229,25 @@ impl<S: Socket> Connection<S> {
     ///
     /// You should not try to read or write from it directly, as it may corrupt the internal state
     /// of this wrapper.
-    pub fn socket(&self) -> &S {
-        &self.socket
+    pub fn socket(&self) -> impl Deref<Target = S> + '_ {
+        pub struct SocketDeref<'s, S> {
+            socket: MutexGuard<'s, S>,
+        }
+
+        impl<S> Deref for SocketDeref<'_, S>
+        where
+            S: Socket,
+        {
+            type Target = S;
+
+            fn deref(&self) -> &Self::Target {
+                &self.socket
+            }
+        }
+
+        SocketDeref {
+            socket: self.socket.lock().expect("lock poisoned"),
+        }
     }
 
     pub(crate) fn monitor_activity(&self) -> EventListener {
@@ -258,8 +281,8 @@ mod tests {
         #[cfg(feature = "tokio")]
         let (p0, p1) = tokio::net::UnixStream::pair().unwrap();
 
-        let mut conn0 = Connection::new(p0, vec![]);
-        let mut conn1 = Connection::new(p1, vec![]);
+        let conn0 = Connection::new(p0, vec![]);
+        let conn1 = Connection::new(p1, vec![]);
 
         let msg = Message::method(
             None::<()>,
