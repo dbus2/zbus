@@ -34,10 +34,10 @@ pub struct Connection<S> {
     #[derivative(Debug = "ignore")]
     socket: S,
     event: Event,
-    raw_in_buffer: Vec<u8>,
+    in_buffer: Vec<u8>,
     #[cfg(unix)]
-    raw_in_fds: Vec<OwnedFd>,
-    raw_in_pos: usize,
+    in_fds: Vec<OwnedFd>,
+    in_pos: usize,
     out_pos: usize,
     out_msgs: VecDeque<Arc<Message>>,
     prev_seq: u64,
@@ -48,10 +48,10 @@ impl<S: Socket> Connection<S> {
         Connection {
             socket,
             event: Event::new(),
-            raw_in_pos: raw_in_buffer.len(),
-            raw_in_buffer,
+            in_pos: raw_in_buffer.len(),
+            in_buffer: raw_in_buffer,
             #[cfg(unix)]
-            raw_in_fds: vec![],
+            in_fds: vec![],
             out_pos: 0,
             out_msgs: VecDeque::new(),
             prev_seq: 0,
@@ -105,23 +105,23 @@ impl<S: Socket> Connection<S> {
     /// `try_receive_message`.
     pub fn try_receive_message(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<Message>> {
         self.event.notify(usize::MAX);
-        if self.raw_in_pos < MIN_MESSAGE_SIZE {
-            self.raw_in_buffer.resize(MIN_MESSAGE_SIZE, 0);
+        if self.in_pos < MIN_MESSAGE_SIZE {
+            self.in_buffer.resize(MIN_MESSAGE_SIZE, 0);
             // We don't have enough data to make a proper message header yet.
             // Some partial read may be in raw_in_buffer, so we try to complete it
             // until we have MIN_MESSAGE_SIZE bytes
             //
             // Given that MIN_MESSAGE_SIZE is 16, this codepath is actually extremely unlikely
             // to be taken more than once
-            while self.raw_in_pos < MIN_MESSAGE_SIZE {
+            while self.in_pos < MIN_MESSAGE_SIZE {
                 let res = ready!(self
                     .socket
-                    .poll_recvmsg(cx, &mut self.raw_in_buffer[self.raw_in_pos..]))?;
+                    .poll_recvmsg(cx, &mut self.in_buffer[self.in_pos..]))?;
                 let len = {
                     #[cfg(unix)]
                     {
                         let (len, fds) = res;
-                        self.raw_in_fds.extend(fds);
+                        self.in_fds.extend(fds);
                         len
                     }
                     #[cfg(not(unix))]
@@ -129,7 +129,7 @@ impl<S: Socket> Connection<S> {
                         res
                     }
                 };
-                self.raw_in_pos += len;
+                self.in_pos += len;
                 if len == 0 {
                     return Poll::Ready(Err(crate::Error::InputOutput(
                         std::io::Error::new(
@@ -142,7 +142,7 @@ impl<S: Socket> Connection<S> {
             }
         }
 
-        let (primary_header, fields_len) = PrimaryHeader::read(&self.raw_in_buffer)?;
+        let (primary_header, fields_len) = PrimaryHeader::read(&self.in_buffer)?;
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_padding = padding_for_8_bytes(header_len);
         let body_len = primary_header.body_len() as usize;
@@ -153,18 +153,18 @@ impl<S: Socket> Connection<S> {
 
         // By this point we have a full primary header, so we know the exact length of the complete
         // message.
-        self.raw_in_buffer.resize(total_len, 0);
+        self.in_buffer.resize(total_len, 0);
 
         // Now we have an incomplete message; read the rest
-        while self.raw_in_buffer.len() > self.raw_in_pos {
+        while self.in_buffer.len() > self.in_pos {
             let res = ready!(self
                 .socket
-                .poll_recvmsg(cx, &mut self.raw_in_buffer[self.raw_in_pos..]))?;
+                .poll_recvmsg(cx, &mut self.in_buffer[self.in_pos..]))?;
             let read = {
                 #[cfg(unix)]
                 {
                     let (read, fds) = res;
-                    self.raw_in_fds.extend(fds);
+                    self.in_fds.extend(fds);
                     read
                 }
                 #[cfg(not(unix))]
@@ -172,14 +172,14 @@ impl<S: Socket> Connection<S> {
                     res
                 }
             };
-            self.raw_in_pos += read;
+            self.in_pos += read;
         }
 
         // If we reach here, the message is complete; return it
-        self.raw_in_pos = 0;
-        let bytes = std::mem::take(&mut self.raw_in_buffer);
+        self.in_pos = 0;
+        let bytes = std::mem::take(&mut self.in_buffer);
         #[cfg(unix)]
-        let fds = std::mem::take(&mut self.raw_in_fds);
+        let fds = std::mem::take(&mut self.in_fds);
         let seq = self.prev_seq + 1;
         self.prev_seq = seq;
         Poll::Ready(Message::from_raw_parts(
