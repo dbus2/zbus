@@ -1,6 +1,5 @@
 use std::{
     collections::VecDeque,
-    io,
     sync::Arc,
     task::{Context, Poll},
 };
@@ -65,7 +64,7 @@ impl<S: Socket> Connection<S> {
     /// outgoing buffer into the socket, until an error is encountered.
     ///
     /// This method will thus only block if the socket is in blocking mode.
-    pub fn try_flush(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    pub fn try_flush(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
         self.event.notify(usize::MAX);
         while let Some(msg) = self.out_msgs.front() {
             loop {
@@ -212,14 +211,6 @@ impl<S: Socket> Connection<S> {
 
     pub(crate) fn monitor_activity(&self) -> EventListener {
         self.event.listen()
-    }
-}
-
-impl Connection<Box<dyn Socket>> {
-    /// Same as `try_flush` above, except it wraps the method for use in [`std::future::Future`]
-    /// impls.
-    pub(crate) fn flush(&mut self, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
-        self.try_flush(cx).map_err(Into::into)
     }
 }
 
