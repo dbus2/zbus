@@ -34,7 +34,7 @@ use futures_core::ready;
 pub struct Connection<S> {
     #[derivative(Debug = "ignore")]
     socket: Mutex<S>,
-    event: Event,
+    activity_event: Event,
     inbound: Mutex<InBound>,
     outbound: Mutex<OutBound>,
 }
@@ -58,7 +58,7 @@ impl<S: Socket> Connection<S> {
     pub(crate) fn new(socket: S, raw_in_buffer: Vec<u8>) -> Connection<S> {
         Connection {
             socket: Mutex::new(socket),
-            event: Event::new(),
+            activity_event: Event::new(),
             inbound: Mutex::new(InBound {
                 pos: raw_in_buffer.len(),
                 buffer: raw_in_buffer,
@@ -80,7 +80,7 @@ impl<S: Socket> Connection<S> {
     ///
     /// This method will thus only block if the socket is in blocking mode.
     pub fn try_flush(&self, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
-        self.event.notify(usize::MAX);
+        self.activity_event.notify(usize::MAX);
         let mut outbound = self.outbound.lock().expect("lock poisoned");
         while !outbound.msgs.is_empty() {
             loop {
@@ -127,7 +127,7 @@ impl<S: Socket> Connection<S> {
     /// will buffer it internally and try to complete it the next time you call
     /// `try_receive_message`.
     pub fn try_receive_message(&self, cx: &mut Context<'_>) -> Poll<crate::Result<Message>> {
-        self.event.notify(usize::MAX);
+        self.activity_event.notify(usize::MAX);
         let mut inbound = self.inbound.lock().expect("lock poisoned");
         if inbound.pos < MIN_MESSAGE_SIZE {
             inbound.buffer.resize(MIN_MESSAGE_SIZE, 0);
@@ -218,7 +218,7 @@ impl<S: Socket> Connection<S> {
     ///
     /// After this call, all reading and writing operations will fail.
     pub fn close(&self) -> crate::Result<()> {
-        self.event.notify(usize::MAX);
+        self.activity_event.notify(usize::MAX);
         self.socket().close().map_err(|e| e.into())
     }
 
@@ -251,7 +251,7 @@ impl<S: Socket> Connection<S> {
     }
 
     pub(crate) fn monitor_activity(&self) -> EventListener {
-        self.event.listen()
+        self.activity_event.listen()
     }
 }
 
