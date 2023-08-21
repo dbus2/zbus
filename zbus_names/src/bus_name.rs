@@ -1,6 +1,6 @@
 use core::{
     borrow::Borrow,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
 };
 use std::{borrow::Cow, sync::Arc};
@@ -330,7 +330,7 @@ impl<'a> From<&'a OwnedWellKnownName> for BusName<'a> {
 }
 
 /// Owned sibling of [`BusName`].
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord, Type)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord, Type)]
 pub struct OwnedBusName(#[serde(borrow)] BusName<'static>);
 
 impl OwnedBusName {
@@ -359,9 +359,15 @@ impl Borrow<str> for OwnedBusName {
     }
 }
 
+impl Debug for OwnedBusName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("OwnedBusName").field(&self.as_str()).finish()
+    }
+}
+
 impl Display for OwnedBusName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        BusName::from(self).fmt(f)
+        Display::fmt(&BusName::from(self), f)
     }
 }
 

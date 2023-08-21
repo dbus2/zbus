@@ -3,7 +3,7 @@ use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
     sync::Arc,
 };
@@ -239,9 +239,7 @@ impl<'name> NoneValue for ErrorName<'name> {
 }
 
 /// Owned sibling of [`ErrorName`].
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedErrorName(#[serde(borrow)] ErrorName<'static>);
 
 assert_impl_all!(OwnedErrorName: Send, Sync, Unpin);
@@ -319,9 +317,17 @@ impl PartialEq<ErrorName<'_>> for OwnedErrorName {
     }
 }
 
+impl Debug for OwnedErrorName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("OwnedErrorName")
+            .field(&self.as_str())
+            .finish()
+    }
+}
+
 impl Display for OwnedErrorName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        ErrorName::from(self).fmt(f)
+        Display::fmt(&ErrorName::from(self), f)
     }
 }
 

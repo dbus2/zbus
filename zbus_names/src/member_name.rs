@@ -3,7 +3,7 @@ use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
     sync::Arc,
 };
@@ -215,9 +215,7 @@ impl<'name> NoneValue for MemberName<'name> {
 }
 
 /// Owned sibling of [`MemberName`].
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedMemberName(#[serde(borrow)] MemberName<'static>);
 
 assert_impl_all!(OwnedMemberName: Send, Sync, Unpin);
@@ -295,9 +293,17 @@ impl PartialEq<MemberName<'_>> for OwnedMemberName {
     }
 }
 
+impl Debug for OwnedMemberName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("OwnedMemberName")
+            .field(&self.as_str())
+            .finish()
+    }
+}
+
 impl Display for OwnedMemberName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        MemberName::from(self).fmt(f)
+        Display::fmt(&MemberName::from(self), f)
     }
 }
 

@@ -3,7 +3,7 @@ use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
     sync::Arc,
 };
@@ -231,9 +231,7 @@ impl<'name> NoneValue for UniqueName<'name> {
 }
 
 /// Owned sibling of [`UniqueName`].
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedUniqueName(#[serde(borrow)] UniqueName<'static>);
 
 assert_impl_all!(OwnedUniqueName: Send, Sync, Unpin);
@@ -326,8 +324,16 @@ impl NoneValue for OwnedUniqueName {
     }
 }
 
+impl Debug for OwnedUniqueName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("OwnedUniqueName")
+            .field(&self.as_str())
+            .finish()
+    }
+}
+
 impl Display for OwnedUniqueName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        UniqueName::from(self).fmt(f)
+        Display::fmt(&UniqueName::from(self), f)
     }
 }
