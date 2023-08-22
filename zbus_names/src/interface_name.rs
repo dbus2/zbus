@@ -3,7 +3,7 @@ use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
     sync::Arc,
 };
@@ -237,9 +237,7 @@ impl<'name> NoneValue for InterfaceName<'name> {
 }
 
 /// Owned sibling of [`InterfaceName`].
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedInterfaceName(#[serde(borrow)] InterfaceName<'static>);
 
 assert_impl_all!(OwnedInterfaceName: Send, Sync, Unpin);
@@ -317,9 +315,17 @@ impl PartialEq<InterfaceName<'_>> for OwnedInterfaceName {
     }
 }
 
+impl Debug for OwnedInterfaceName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("OwnedInterfaceName")
+            .field(&self.as_str())
+            .finish()
+    }
+}
+
 impl Display for OwnedInterfaceName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        InterfaceName::from(self).fmt(f)
+        Display::fmt(&InterfaceName::from(self), f)
     }
 }
 

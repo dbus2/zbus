@@ -3,7 +3,7 @@ use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
     sync::Arc,
 };
@@ -232,9 +232,7 @@ impl<'name> NoneValue for WellKnownName<'name> {
 }
 
 /// Owned sibling of [`WellKnownName`].
-#[derive(
-    Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
-)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedWellKnownName(#[serde(borrow)] WellKnownName<'static>);
 
 assert_impl_all!(OwnedWellKnownName: Send, Sync, Unpin);
@@ -271,9 +269,17 @@ impl AsRef<str> for OwnedWellKnownName {
     }
 }
 
+impl Debug for OwnedWellKnownName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("OwnedWellKnownName")
+            .field(&self.as_str())
+            .finish()
+    }
+}
+
 impl Display for OwnedWellKnownName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        WellKnownName::from(self).fmt(f)
+        Display::fmt(&WellKnownName::from(self), f)
     }
 }
 

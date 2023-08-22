@@ -1,6 +1,6 @@
 use core::{
     borrow::Borrow,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
     ops::Deref,
 };
 use std::{borrow::Cow, sync::Arc};
@@ -43,7 +43,7 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 /// ```
 ///
 /// [bus name]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(untagged)]
 pub enum BusName<'name> {
     #[serde(borrow)]
@@ -109,6 +109,21 @@ impl Deref for BusName<'_> {
 impl Borrow<str> for BusName<'_> {
     fn borrow(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl Debug for BusName<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            BusName::Unique(name) => f
+                .debug_tuple("BusName::Unique")
+                .field(&name.as_str())
+                .finish(),
+            BusName::WellKnown(name) => f
+                .debug_tuple("BusName::WellKnown")
+                .field(&name.as_str())
+                .finish(),
+        }
     }
 }
 
@@ -330,7 +345,7 @@ impl<'a> From<&'a OwnedWellKnownName> for BusName<'a> {
 }
 
 /// Owned sibling of [`BusName`].
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord, Type)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord, Type)]
 pub struct OwnedBusName(#[serde(borrow)] BusName<'static>);
 
 impl OwnedBusName {
@@ -359,9 +374,24 @@ impl Borrow<str> for OwnedBusName {
     }
 }
 
+impl Debug for OwnedBusName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self.0 {
+            BusName::Unique(name) => f
+                .debug_tuple("OwnedBusName::Unique")
+                .field(&name.as_str())
+                .finish(),
+            BusName::WellKnown(name) => f
+                .debug_tuple("OwnedBusName::WellKnown")
+                .field(&name.as_str())
+                .finish(),
+        }
+    }
+}
+
 impl Display for OwnedBusName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        BusName::from(self).fmt(f)
+        Display::fmt(&BusName::from(self), f)
     }
 }
 

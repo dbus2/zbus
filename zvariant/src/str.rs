@@ -17,11 +17,11 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 /// [`Value`]: enum.Value.html#variant.Str
 /// [`&str`]: https://doc.rust-lang.org/std/str/index.html
 /// [`String`]: https://doc.rust-lang.org/std/string/struct.String.html
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize)]
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Serialize, Deserialize)]
 #[serde(rename(serialize = "zvariant::Str", deserialize = "zvariant::Str"))]
 pub struct Str<'a>(#[serde(borrow)] Inner<'a>);
 
-#[derive(Debug, Eq, Clone)]
+#[derive(Eq, Clone)]
 enum Inner<'a> {
     Static(&'static str),
     Borrowed(&'a str),
@@ -205,9 +205,15 @@ impl<'a> PartialEq<&str> for Str<'a> {
     }
 }
 
+impl<'a> std::fmt::Debug for Str<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self.as_str(), f)
+    }
+}
+
 impl<'a> std::fmt::Display for Str<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.as_str().fmt(f)
+        std::fmt::Display::fmt(self.as_str(), f)
     }
 }
 
