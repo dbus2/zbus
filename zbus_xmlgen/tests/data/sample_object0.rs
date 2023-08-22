@@ -21,5 +21,6 @@ trait SampleInterface0 {
     /// Bar property
     #[dbus_proxy(property)]
     fn bar(&self) -> zbus::Result<u8>;
+    #[dbus_proxy(property)]
     fn set_bar(&self, value: u8) -> zbus::Result<()>;
 }
