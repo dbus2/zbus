@@ -11,7 +11,7 @@
 )))]
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, AttributeArgs, DeriveInput, ItemImpl, ItemTrait};
+use syn::{parse_macro_input, punctuated::Punctuated, DeriveInput};
 
 mod error;
 mod iface;
@@ -192,8 +192,8 @@ mod utils;
 /// [dbus_emits_changed_signal]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
 #[proc_macro_attribute]
 pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr as AttributeArgs);
-    let input = parse_macro_input!(item as ItemTrait);
+    let args = parse_macro_input!(attr with Punctuated::parse_terminated);
+    let input = parse_macro_input!(item);
     proxy::expand(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
@@ -323,8 +323,8 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [`Interface`]: https://docs.rs/zbus/latest/zbus/object_server/trait.Interface.html
 #[proc_macro_attribute]
 pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr as AttributeArgs);
-    let input = syn::parse_macro_input!(item as ItemImpl);
+    let args = parse_macro_input!(attr with Punctuated::parse_terminated);
+    let input = syn::parse_macro_input!(item);
     iface::expand(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
