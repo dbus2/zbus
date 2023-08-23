@@ -10,9 +10,9 @@ returns an instance of the connection (if all went well). Similarly, to connect 
 (to communicate with services such as [NetworkManager], [BlueZ] or [PID1]), use
 `Connection::system()`.
 
-Moreover, it also implements [`futures::sink::Sink`] and can be converted to a [`MessageStream`]
-that implements [`futures::stream::Stream`], which can be used to conveniently send and receive
-messages, for the times when low-level API is more appropriate for your use case.
+Moreover, it can be converted to a [`MessageStream`] that implements [`futures::stream::Stream`],
+which can be used to conveniently receive messages, for the times when low-level API is
+more appropriate for your use case.
 
 **Note:** it is common for a D-Bus library to provide a "shared" connection to a bus for a process:
 all `session()` share the same underlying connection for example. At the time of this writing,
@@ -71,7 +71,6 @@ let (client_conn, server_conn) = futures_util::try_join!(
 [BlueZ]: https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc
 [PID1]: https://www.freedesktop.org/wiki/Software/systemd/dbus/
 [`futures::stream::Stream`]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
-[`futures::sink::Sink`]: https://docs.rs/futures/latest/futures/sink/trait.Sink.html
 [`MessageStream`]: https://docs.rs/zbus/latest/zbus/struct.MessageStream.html
 [`Builder::address`]: https://docs.rs/zbus/latest/zbus/connection/struct.ConnectionBuilder.html#method.address
 [dspec]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses

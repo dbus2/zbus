@@ -7,6 +7,7 @@ use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
+    future::poll_fn,
     io::{self, ErrorKind},
     num::NonZeroU32,
     ops::Deref,
@@ -21,9 +22,8 @@ use tracing::{debug, info_span, instrument, trace, trace_span, warn, Instrument}
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
-use futures_core::{ready, Future};
-use futures_sink::Sink;
-use futures_util::{sink::SinkExt, StreamExt};
+use futures_core::Future;
+use futures_util::StreamExt;
 
 use crate::{
     async_lock::Mutex,
@@ -115,24 +115,10 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 /// [`crate::blocking::MessageIterator`] instances are continuously polled and iterated on,
 /// respectively.
 ///
-/// For sending messages you can either use [`Connection::send_message`] method or make use of the
-/// [`Sink`] implementation. For latter, you might find [`SinkExt`] API very useful. Keep in mind
-/// that [`Connection`] will not manage the serial numbers (cookies) on the messages for you when
-/// they are sent through the [`Sink`] implementation. You can manually assign unique serial numbers
-/// to them using the [`Connection::assign_serial_num`] method before sending them off, if needed.
-/// Having said that, the [`Sink`] is mainly useful for sending out signals, as they do not expect
-/// a reply, and serial numbers are not very useful for signals either for the same reason.
-///
-/// Since you do not need exclusive access to a `zbus::Connection` to send messages on the bus,
-/// [`Sink`] is also implemented on `&Connection`.
-///
-/// # Caveats
-///
-/// At the moment, a simultaneous [flush request] from multiple tasks/threads could
-/// potentially create a busy loop, thus wasting CPU time. This limitation may be removed in the
-/// future.
-///
-/// [flush request]: https://docs.rs/futures/0.3.15/futures/sink/trait.SinkExt.html#method.flush
+/// For sending messages you can either use [`Connection::send_message`] or [`Connection::send`]
+/// method. While the former sets the serial numbers (cookies) on the messages for you, the latter
+/// does not. You can manually assign unique serial numbers to messages using the
+/// [`Connection::assign_serial_num`] method when using `send` method to send them off.
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
@@ -295,18 +281,45 @@ impl OrderedFuture for PendingMethodCall {
 impl Connection {
     /// Send `msg` to the peer.
     ///
-    /// Unlike our [`Sink`] implementation, this method sets a unique (to this connection) serial
-    /// number on the message before sending it off, for you.
+    /// Unlike [`Connection::send`], this method sets a unique (to this connection) serial number on
+    /// the message before sending it off, for you.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
     pub async fn send_message(&self, mut msg: Message) -> Result<NonZeroU32> {
         let serial = self.assign_serial_num(&mut msg)?;
 
         trace!("Sending message: {:?}", msg);
-        (&mut &*self).send(msg).await?;
+        self.send(Arc::new(msg)).await?;
         trace!("Sent message with serial: {}", serial);
 
         Ok(serial)
+    }
+
+    /// Send `msg` to the peer.
+    ///
+    /// Same as [`Connection::send_message`] except it doesn't sets the unique serial number on the
+    /// message for you. It expects a serial number to be already set on the message.
+    pub async fn send<M>(&self, msg: M) -> Result<()>
+    where
+        M: Into<Arc<Message>>,
+    {
+        let msg = msg.into();
+
+        #[cfg(unix)]
+        if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
+            return Err(Error::Unsupported);
+        }
+        let serial = msg
+            .primary_header()
+            .serial_num()
+            .ok_or(Error::InvalidSerial)?;
+
+        trace!("Sending message: {:?}", msg);
+        self.inner.raw_conn.enqueue_message(msg);
+        poll_fn(|cx| self.inner.raw_conn.try_flush(cx)).await?;
+        trace!("Sent message with serial: {}", serial);
+
+        Ok(())
     }
 
     /// Send a method call.
@@ -1281,73 +1294,6 @@ impl Connection {
     }
 }
 
-impl<T> Sink<T> for Connection
-where
-    T: Into<Arc<Message>>,
-{
-    type Error = Error;
-
-    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        <&Connection as Sink<Arc<Message>>>::poll_ready(Pin::new(&mut &*self), cx)
-    }
-
-    fn start_send(self: Pin<&mut Self>, msg: T) -> Result<()> {
-        Pin::new(&mut &*self).start_send(msg)
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        <&Connection as Sink<Arc<Message>>>::poll_flush(Pin::new(&mut &*self), cx)
-    }
-
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        <&Connection as Sink<Arc<Message>>>::poll_close(Pin::new(&mut &*self), cx)
-    }
-}
-
-impl<'a, T> Sink<T> for &'a Connection
-where
-    T: Into<Arc<Message>>,
-{
-    type Error = Error;
-
-    fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
-        // TODO: We should have a max queue length in raw::Socket for outgoing messages.
-        Poll::Ready(Ok(()))
-    }
-
-    fn start_send(self: Pin<&mut Self>, msg: T) -> Result<()> {
-        let msg = msg.into();
-
-        if msg.primary_header().serial_num().is_none() {
-            return Err(Error::InvalidSerial);
-        }
-
-        #[cfg(unix)]
-        if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
-            return Err(Error::Unsupported);
-        }
-
-        self.inner.raw_conn.enqueue_message(msg);
-
-        Ok(())
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        self.inner.raw_conn.try_flush(cx)
-    }
-
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        let raw_conn = &self.inner.raw_conn;
-        let res = raw_conn.try_flush(cx);
-        match ready!(res) {
-            Ok(_) => (),
-            Err(e) => return Poll::Ready(Err(e)),
-        }
-
-        Poll::Ready(raw_conn.close())
-    }
-}
-
 impl From<crate::blocking::Connection> for Connection {
     fn from(conn: crate::blocking::Connection) -> Self {
         conn.into_inner()
@@ -1393,17 +1339,31 @@ mod tests {
 
     use super::*;
 
-    // Same numbered client and server are already paired up. We make use of the
-    // `futures_util::stream::Forward` to connect the two pipes and hence test one of the benefits
-    // of our Stream and Sink impls.
+    // Same numbered client and server are already paired up.
     async fn test_p2p(
         server1: Connection,
         client1: Connection,
         server2: Connection,
         client2: Connection,
     ) -> Result<()> {
-        let forward1 = MessageStream::from(server1.clone()).forward(client2.clone());
-        let forward2 = MessageStream::from(&client2).forward(server1);
+        let forward1 = {
+            let stream = MessageStream::from(server1.clone());
+            let sink = client2.clone();
+
+            stream.try_for_each(move |msg| {
+                let sink = sink.clone();
+                async move { sink.send(msg).await }
+            })
+        };
+        let forward2 = {
+            let stream = MessageStream::from(client2.clone());
+            let sink = server1.clone();
+
+            stream.try_for_each(move |msg| {
+                let sink = sink.clone();
+                async move { sink.send(msg).await }
+            })
+        };
         let _forward_task = client1.executor().spawn(
             async move { futures_util::try_join!(forward1, forward2) },
             "forward_task",

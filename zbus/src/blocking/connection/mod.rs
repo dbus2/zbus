@@ -20,10 +20,7 @@ pub use builder::Builder;
 
 /// A blocking wrapper of [`zbus::Connection`].
 ///
-/// Most of the API is very similar to [`zbus::Connection`], except it's blocking. One
-/// notable difference is that there is no equivalent of [`Sink`] implementation provided.
-///
-/// [`Sink`]: https://docs.rs/futures/0.3.17/futures/sink/trait.Sink.html
+/// Most of the API is very similar to [`zbus::Connection`], except it's blocking.
 #[derive(derivative::Derivative, Clone)]
 #[derivative(Debug)]
 #[must_use = "Dropping a `Connection` will close the underlying socket."]
