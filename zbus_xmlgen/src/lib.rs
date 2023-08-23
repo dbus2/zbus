@@ -65,21 +65,22 @@ impl<'i> Display for GenTrait<'i> {
         props.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
         for p in props {
             let name = to_identifier(&to_snakecase(p.name().as_str()));
+            let fn_attribute = if pascal_case(&name) != p.name().as_str() {
+                format!("    #[dbus_proxy(property, name = \"{}\")]", p.name())
+            } else {
+                "    #[dbus_proxy(property)]".to_string()
+            };
 
             writeln!(f)?;
             writeln!(f, "    /// {} property", p.name())?;
-            if pascal_case(&name) != p.name().as_str() {
-                writeln!(f, "    #[dbus_proxy(property, name = \"{}\")]", p.name())?;
-            } else {
-                writeln!(f, "    #[dbus_proxy(property)]")?;
-            }
-
             if p.access().read() {
+                writeln!(f, "{}", fn_attribute)?;
                 let output = to_rust_type(p.ty(), false, false);
                 writeln!(f, "    fn {name}(&self) -> zbus::Result<{output}>;",)?;
             }
 
             if p.access().write() {
+                writeln!(f, "{}", fn_attribute)?;
                 let input = to_rust_type(p.ty(), true, true);
                 writeln!(
                     f,
