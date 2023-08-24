@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 
-use futures_util::future::poll_fn;
 use tracing::{debug, instrument, trace};
 
 use crate::{async_lock::Mutex, connection::MsgBroadcaster, Executor, OwnedMatchRule, Task};
@@ -33,11 +32,7 @@ impl SocketReader {
     async fn receive_msg(self) {
         loop {
             trace!("Waiting for message on the socket..");
-            let msg = {
-                poll_fn(|cx| self.raw_conn.try_receive_message(cx))
-                    .await
-                    .map(Arc::new)
-            };
+            let msg = self.raw_conn.try_receive_message().await.map(Arc::new);
             match &msg {
                 Ok(msg) => trace!("Message received on the socket: {:?}", msg),
                 Err(e) => trace!("Error reading from the socket: {:?}", e),

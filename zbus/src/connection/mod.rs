@@ -7,7 +7,6 @@ use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
-    future::poll_fn,
     io::{self, ErrorKind},
     num::NonZeroU32,
     ops::Deref,
@@ -315,8 +314,8 @@ impl Connection {
             .ok_or(Error::InvalidSerial)?;
 
         trace!("Sending message: {:?}", msg);
-        self.inner.raw_conn.enqueue_message(msg);
-        poll_fn(|cx| self.inner.raw_conn.try_flush(cx)).await?;
+        self.inner.raw_conn.enqueue_message(msg).await;
+        self.inner.raw_conn.try_flush().await?;
         trace!("Sent message with serial: {}", serial);
 
         Ok(())
@@ -1263,7 +1262,7 @@ impl Connection {
     ///
     /// Currently `unix_group_ids` and `linux_security_label` fields are not populated.
     pub async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
-        let socket = self.inner.raw_conn.socket_read();
+        let socket = self.inner.raw_conn.socket_read().await;
 
         Ok(ConnectionCredentials {
             process_id: socket.peer_pid()?,
@@ -1286,7 +1285,7 @@ impl Connection {
     ///
     /// After this call, all reading and writing operations will fail.
     pub async fn close(self) -> Result<()> {
-        poll_fn(|cx| self.inner.raw_conn.close(cx)).await
+        self.inner.raw_conn.close().await
     }
 
     pub(crate) fn init_socket_reader(&self) {
