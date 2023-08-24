@@ -19,6 +19,16 @@ use zbus_xml::{Interface, Node};
 use zbus_xmlgen::GenTrait;
 use zvariant::ObjectPath;
 
+fn usage() {
+    eprintln!(
+        r#"Usage:
+  zbus-xmlgen <interface.xml>
+  zbus-xmlgen --system|--session <service> <object_path>
+  zbus-xmlgen --address <address> <service> <object_path>
+"#
+    );
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let input_src;
 
@@ -84,6 +94,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Some(path),
             )
         }
+        Some(help) if help == "--help" || help == "-h" => {
+            usage();
+            return Ok(());
+        }
         Some(path) => {
             input_src = Path::new(&path)
                 .file_name()
@@ -94,13 +108,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             (Node::from_reader(f)?, None, None)
         }
         None => {
-            eprintln!(
-                r#"Usage:
-  zbus-xmlgen <interface.xml>
-  zbus-xmlgen --system|--session <service> <object_path>
-  zbus-xmlgen --address <address> <service> <object_path>
-"#
-            );
+            usage();
             return Ok(());
         }
     };
