@@ -1,20 +1,14 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
-#[cfg(not(feature = "tokio"))]
-use futures_core::ready;
 #[cfg(unix)]
 use std::io::{IoSlice, IoSliceMut};
-#[cfg(feature = "tokio")]
-use std::pin::Pin;
 use std::{
     io,
+    pin::Pin,
     task::{Context, Poll},
 };
 #[cfg(not(feature = "tokio"))]
-use std::{
-    io::{Read, Write},
-    net::TcpStream,
-};
+use std::{net::TcpStream, sync::Arc, task::ready};
 
 #[cfg(all(windows, not(feature = "tokio")))]
 use uds_windows::UnixStream;
@@ -160,6 +154,10 @@ type PollRecvmsg = Poll<io::Result<usize>>;
 
 /// Trait representing some transport layer over which the DBus protocol can be used
 ///
+/// In order to allow simultaneous reading and writing, this trait requires you to split the socket
+/// into a read half and a write half. The reader and writer halves can be any types that implement
+/// [`ReadHalf`] and [`WriteHalf`] respectively.
+///
 /// The crate provides implementations for `async_io` and `tokio`'s `UnixStream` wrappers if you
 /// enable the corresponding crate features (`async_io` is enabled by default).
 ///
@@ -168,17 +166,52 @@ type PollRecvmsg = Poll<io::Result<usize>>;
 /// rules don't force the use of a wrapper struct (and to avoid duplicating the work across many
 /// projects).
 pub trait Socket: std::fmt::Debug + Send + Sync {
-    /// Supports passing file descriptors.
-    fn can_pass_unix_fd(&self) -> bool {
-        true
-    }
+    type ReadHalf: ReadHalf + std::fmt::Debug + Send + Sync;
+    type WriteHalf: WriteHalf + std::fmt::Debug + Send + Sync;
 
+    /// Split the socket into a read half and a write half.
+    fn split(self) -> Split<Self::ReadHalf, Self::WriteHalf>
+    where
+        Self: Sized;
+}
+
+/// The read half of a socket.
+///
+/// See [`Socket`] for more details.
+pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
     /// Attempt to receive a message from the socket.
     ///
     /// On success, returns the number of bytes read as well as a `Vec` containing
     /// any associated file descriptors.
     fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg;
 
+    /// Supports passing file descriptors.
+    fn can_pass_unix_fd(&self) -> bool {
+        true
+    }
+
+    /// Return the peer PID.
+    fn peer_pid(&self) -> io::Result<Option<u32>> {
+        Ok(None)
+    }
+
+    /// Return the peer process SID, if any.
+    #[cfg(windows)]
+    fn peer_sid(&self) -> Option<String> {
+        None
+    }
+
+    /// Return the User ID, if any.
+    #[cfg(unix)]
+    fn uid(&self) -> io::Result<Option<u32>> {
+        Ok(None)
+    }
+}
+
+/// The write half of a socket.
+///
+/// See [`Socket`] for more details.
+pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     /// Attempt to send a message on the socket
     ///
     /// On success, return the number of bytes written. There may be a partial write, in
@@ -197,28 +230,6 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
         #[cfg(unix)] fds: &[RawFd],
     ) -> Poll<io::Result<usize>>;
 
-    /// Close the socket.
-    ///
-    /// After this call, it is valid for all reading and writing operations to fail.
-    fn close(&self) -> io::Result<()>;
-
-    /// Return the peer PID.
-    fn peer_pid(&self) -> io::Result<Option<u32>> {
-        Ok(None)
-    }
-
-    /// Return the peer process SID, if any.
-    #[cfg(windows)]
-    fn peer_sid(&self) -> Option<String> {
-        None
-    }
-
-    /// Return the User ID, if any.
-    #[cfg(unix)]
-    fn uid(&self) -> io::Result<Option<u32>> {
-        Ok(None)
-    }
-
     /// The dbus daemon on `freebsd` and `dragonfly` currently requires sending the zero byte
     /// as a separate message with SCM_CREDS, as part of the `EXTERNAL` authentication on unix
     /// sockets. This method is used by the authentication machinery in zbus to send this
@@ -227,33 +238,66 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
     fn send_zero_byte(&self) -> io::Result<Option<usize>> {
         Ok(None)
     }
+
+    /// Close the socket.
+    ///
+    /// After this call, it is valid for all reading and writing operations to fail.
+    fn close(&self) -> io::Result<()>;
 }
 
-impl Socket for Box<dyn Socket> {
+/// A pair of socket read and write halves.
+#[derive(Debug)]
+pub struct Split<R: ReadHalf, W: WriteHalf> {
+    read: R,
+    write: W,
+}
+
+impl<R: ReadHalf, W: WriteHalf> Split<R, W> {
+    /// Create a new boxed `Split` from `socket`.
+    pub fn new_boxed<S: Socket<ReadHalf = R, WriteHalf = W>>(
+        socket: S,
+    ) -> Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>> {
+        let split = socket.split();
+
+        Split {
+            read: Box::new(split.read),
+            write: Box::new(split.write),
+        }
+    }
+
+    /// Reference to the read half.
+    pub fn read(&self) -> &R {
+        &self.read
+    }
+
+    /// Mutable reference to the read half.
+    pub fn read_mut(&mut self) -> &mut R {
+        &mut self.read
+    }
+
+    /// Reference to the write half.
+    pub fn write(&self) -> &W {
+        &self.write
+    }
+
+    /// Mutable reference to the write half.
+    pub fn write_mut(&mut self) -> &mut W {
+        &mut self.write
+    }
+
+    /// Take the read and write halves.
+    pub fn take(self) -> (R, W) {
+        (self.read, self.write)
+    }
+}
+
+impl ReadHalf for Box<dyn ReadHalf> {
     fn can_pass_unix_fd(&self) -> bool {
         (**self).can_pass_unix_fd()
     }
 
     fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
         (**self).poll_recvmsg(cx, buf)
-    }
-
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buffer: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
-        (**self).poll_sendmsg(
-            cx,
-            buffer,
-            #[cfg(unix)]
-            fds,
-        )
-    }
-
-    fn close(&self) -> io::Result<()> {
-        (**self).close()
     }
 
     fn peer_pid(&self) -> io::Result<Option<u32>> {
@@ -269,15 +313,54 @@ impl Socket for Box<dyn Socket> {
     fn uid(&self) -> io::Result<Option<u32>> {
         (**self).uid()
     }
+}
+
+impl WriteHalf for Box<dyn WriteHalf> {
+    fn poll_sendmsg(
+        &mut self,
+        cx: &mut Context<'_>,
+        buffer: &[u8],
+        #[cfg(unix)] fds: &[RawFd],
+    ) -> Poll<io::Result<usize>> {
+        (**self).poll_sendmsg(
+            cx,
+            buffer,
+            #[cfg(unix)]
+            fds,
+        )
+    }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
     fn send_zero_byte(&self) -> io::Result<Option<usize>> {
         (**self).send_zero_byte()
     }
+
+    fn close(&self) -> io::Result<()> {
+        (**self).close()
+    }
+}
+
+#[cfg(not(feature = "tokio"))]
+impl<T> Socket for Async<T>
+where
+    T: std::fmt::Debug + Send + Sync,
+    Arc<Async<T>>: ReadHalf + WriteHalf,
+{
+    type ReadHalf = Arc<Async<T>>;
+    type WriteHalf = Arc<Async<T>>;
+
+    fn split(self) -> Split<Self::ReadHalf, Self::WriteHalf> {
+        let arc = Arc::new(self);
+
+        Split {
+            read: arc.clone(),
+            write: arc,
+        }
+    }
 }
 
 #[cfg(all(unix, not(feature = "tokio")))]
-impl Socket for Async<UnixStream> {
+impl ReadHalf for Arc<Async<UnixStream>> {
     fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
         let (len, fds) = loop {
             match fd_recvmsg(self.as_raw_fd(), buf) {
@@ -292,6 +375,18 @@ impl Socket for Async<UnixStream> {
         Poll::Ready(Ok((len, fds)))
     }
 
+    fn peer_pid(&self) -> io::Result<Option<u32>> {
+        get_unix_pid(self)
+    }
+
+    #[cfg(unix)]
+    fn uid(&self) -> io::Result<Option<u32>> {
+        get_unix_uid(self)
+    }
+}
+
+#[cfg(all(unix, not(feature = "tokio")))]
+impl WriteHalf for Arc<Async<UnixStream>> {
     fn poll_sendmsg(
         &mut self,
         cx: &mut Context<'_>,
@@ -319,15 +414,6 @@ impl Socket for Async<UnixStream> {
         self.get_ref().shutdown(std::net::Shutdown::Both)
     }
 
-    fn peer_pid(&self) -> io::Result<Option<u32>> {
-        get_unix_pid(self)
-    }
-
-    #[cfg(unix)]
-    fn uid(&self) -> io::Result<Option<u32>> {
-        get_unix_uid(self)
-    }
-
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
     fn send_zero_byte(&self) -> io::Result<Option<usize>> {
         send_zero_byte(self).map(Some)
@@ -336,13 +422,29 @@ impl Socket for Async<UnixStream> {
 
 #[cfg(all(unix, feature = "tokio"))]
 impl Socket for tokio::net::UnixStream {
+    type ReadHalf = tokio::net::unix::OwnedReadHalf;
+    type WriteHalf = tokio::net::unix::OwnedWriteHalf;
+
+    fn split(self) -> Split<Self::ReadHalf, Self::WriteHalf> {
+        let (read, write) = self.into_split();
+
+        Split { read, write }
+    }
+}
+
+#[cfg(all(unix, feature = "tokio"))]
+impl ReadHalf for tokio::net::unix::OwnedReadHalf {
     fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
+        let stream = self.as_ref();
         loop {
-            match self.try_io(tokio::io::Interest::READABLE, || {
-                fd_recvmsg(self.as_raw_fd(), buf)
+            match stream.try_io(tokio::io::Interest::READABLE, || {
+                // We use own custom function for reading because we need to receive file
+                // descriptors too.
+                fd_recvmsg(stream.as_raw_fd(), buf)
             }) {
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => match self.poll_read_ready(cx) {
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => match stream.poll_read_ready(cx)
+                {
                     Poll::Pending => return Poll::Pending,
                     Poll::Ready(res) => res?,
                 },
@@ -351,16 +453,29 @@ impl Socket for tokio::net::UnixStream {
         }
     }
 
+    fn peer_pid(&self) -> io::Result<Option<u32>> {
+        get_unix_pid(self.as_ref())
+    }
+
+    #[cfg(unix)]
+    fn uid(&self) -> io::Result<Option<u32>> {
+        get_unix_uid(self.as_ref())
+    }
+}
+
+#[cfg(all(unix, feature = "tokio"))]
+impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
     fn poll_sendmsg(
         &mut self,
         cx: &mut Context<'_>,
         buffer: &[u8],
         #[cfg(unix)] fds: &[RawFd],
     ) -> Poll<io::Result<usize>> {
+        let stream = self.as_ref();
         loop {
-            match self.try_io(tokio::io::Interest::WRITABLE, || {
+            match stream.try_io(tokio::io::Interest::WRITABLE, || {
                 fd_sendmsg(
-                    self.as_raw_fd(),
+                    stream.as_raw_fd(),
                     buffer,
                     #[cfg(unix)]
                     fds,
@@ -368,7 +483,7 @@ impl Socket for tokio::net::UnixStream {
             }) {
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    match self.poll_write_ready(cx) {
+                    match stream.poll_write_ready(cx) {
                         Poll::Pending => return Poll::Pending,
                         Poll::Ready(res) => res?,
                     }
@@ -384,53 +499,20 @@ impl Socket for tokio::net::UnixStream {
         Ok(())
     }
 
-    fn peer_pid(&self) -> io::Result<Option<u32>> {
-        get_unix_pid(self)
-    }
-
-    #[cfg(unix)]
-    fn uid(&self) -> io::Result<Option<u32>> {
-        get_unix_uid(self)
-    }
-
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
     fn send_zero_byte(&self) -> io::Result<Option<usize>> {
-        send_zero_byte(self).map(Some)
+        send_zero_byte(self.as_ref()).map(Some)
     }
 }
 
 #[cfg(all(windows, not(feature = "tokio")))]
-impl Socket for Async<UnixStream> {
+impl ReadHalf for Arc<Async<UnixStream>> {
     fn can_pass_unix_fd(&self) -> bool {
         false
     }
 
     fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        loop {
-            match (&mut *self).get_mut().read(buf) {
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-                Err(e) => return Poll::Ready(Err(e)),
-                Ok(len) => {
-                    let ret = len;
-                    return Poll::Ready(Ok(ret));
-                }
-            }
-            ready!(self.poll_readable(cx))?;
-        }
-    }
-
-    fn poll_sendmsg(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
-        loop {
-            match (&mut *self).get_mut().write(buf) {
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-                res => return Poll::Ready(res),
-            }
-            ready!(self.poll_writable(cx))?;
-        }
-    }
-
-    fn close(&self) -> io::Result<()> {
-        self.get_ref().shutdown(std::net::Shutdown::Both)
+        futures_util::AsyncRead::poll_read(Pin::new(&mut self.as_ref()), cx, buf)
     }
 
     #[cfg(windows)]
@@ -464,6 +546,17 @@ impl Socket for Async<UnixStream> {
     fn uid(&self) -> io::Result<Option<u32>> {
         get_unix_uid(self)
     }
+}
+
+#[cfg(all(windows, not(feature = "tokio")))]
+impl WriteHalf for Arc<Async<UnixStream>> {
+    fn poll_sendmsg(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+        futures_util::AsyncWrite::poll_write(Pin::new(&mut self.as_ref()), cx, buf)
+    }
+
+    fn close(&self) -> io::Result<()> {
+        self.get_ref().shutdown(std::net::Shutdown::Both)
+    }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
     fn send_zero_byte(&self) -> io::Result<Option<usize>> {
@@ -472,56 +565,26 @@ impl Socket for Async<UnixStream> {
 }
 
 #[cfg(not(feature = "tokio"))]
-impl Socket for Async<TcpStream> {
+impl ReadHalf for Arc<Async<TcpStream>> {
     fn can_pass_unix_fd(&self) -> bool {
         false
     }
 
     fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        #[cfg(unix)]
-        let fds = vec![];
-
-        loop {
-            match (*self).get_mut().read(buf) {
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-                Err(e) => return Poll::Ready(Err(e)),
-                Ok(len) => {
-                    #[cfg(unix)]
-                    let ret = (len, fds);
-                    #[cfg(not(unix))]
-                    let ret = len;
-                    return Poll::Ready(Ok(ret));
-                }
+        match ready!(futures_util::AsyncRead::poll_read(
+            Pin::new(&mut self.as_ref()),
+            cx,
+            buf,
+        )) {
+            Err(e) => Poll::Ready(Err(e)),
+            Ok(len) => {
+                #[cfg(unix)]
+                let ret = (len, vec![]);
+                #[cfg(not(unix))]
+                let ret = len;
+                Poll::Ready(Ok(ret))
             }
-            ready!(self.poll_readable(cx))?;
         }
-    }
-
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
-        #[cfg(unix)]
-        if !fds.is_empty() {
-            return Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "fds cannot be sent with a tcp stream",
-            )));
-        }
-
-        loop {
-            match (*self).get_mut().write(buf) {
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-                res => return Poll::Ready(res),
-            }
-            ready!(self.poll_writable(cx))?;
-        }
-    }
-
-    fn close(&self) -> io::Result<()> {
-        self.get_ref().shutdown(std::net::Shutdown::Both)
     }
 
     #[cfg(windows)]
@@ -538,8 +601,44 @@ impl Socket for Async<TcpStream> {
     }
 }
 
+#[cfg(not(feature = "tokio"))]
+impl WriteHalf for Arc<Async<TcpStream>> {
+    fn poll_sendmsg(
+        &mut self,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+        #[cfg(unix)] fds: &[RawFd],
+    ) -> Poll<io::Result<usize>> {
+        #[cfg(unix)]
+        if !fds.is_empty() {
+            return Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "fds cannot be sent with a tcp stream",
+            )));
+        }
+
+        futures_util::AsyncWrite::poll_write(Pin::new(&mut self.as_ref()), cx, buf)
+    }
+
+    fn close(&self) -> io::Result<()> {
+        self.get_ref().shutdown(std::net::Shutdown::Both)
+    }
+}
+
 #[cfg(feature = "tokio")]
 impl Socket for tokio::net::TcpStream {
+    type ReadHalf = tokio::net::tcp::OwnedReadHalf;
+    type WriteHalf = tokio::net::tcp::OwnedWriteHalf;
+
+    fn split(self) -> Split<Self::ReadHalf, Self::WriteHalf> {
+        let (read, write) = self.into_split();
+
+        Split { read, write }
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl ReadHalf for tokio::net::tcp::OwnedReadHalf {
     fn can_pass_unix_fd(&self) -> bool {
         false
     }
@@ -559,6 +658,27 @@ impl Socket for tokio::net::TcpStream {
         })
     }
 
+    #[cfg(windows)]
+    fn peer_sid(&self) -> Option<String> {
+        use crate::win32::{socket_addr_get_pid, ProcessToken};
+
+        let peer_addr = match self.peer_addr() {
+            Ok(addr) => addr,
+            Err(_) => return None,
+        };
+
+        if let Ok(pid) = socket_addr_get_pid(&peer_addr) {
+            if let Ok(process_token) = ProcessToken::open(if pid != 0 { Some(pid) } else { None }) {
+                return process_token.sid().ok();
+            }
+        }
+
+        None
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl WriteHalf for tokio::net::tcp::OwnedWriteHalf {
     fn poll_sendmsg(
         &mut self,
         cx: &mut Context<'_>,
@@ -583,52 +703,34 @@ impl Socket for tokio::net::TcpStream {
         // async-friendly. At the next API break, we should fix this.
         Ok(())
     }
-
-    #[cfg(windows)]
-    fn peer_sid(&self) -> Option<String> {
-        use crate::win32::{socket_addr_get_pid, ProcessToken};
-
-        let peer_addr = match self.peer_addr() {
-            Ok(addr) => addr,
-            Err(_) => return None,
-        };
-
-        if let Ok(pid) = socket_addr_get_pid(&peer_addr) {
-            if let Ok(process_token) = ProcessToken::open(if pid != 0 { Some(pid) } else { None }) {
-                return process_token.sid().ok();
-            }
-        }
-
-        None
-    }
 }
 
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
-impl Socket for Async<vsock::VsockStream> {
+impl ReadHalf for Arc<Async<vsock::VsockStream>> {
     fn can_pass_unix_fd(&self) -> bool {
         false
     }
 
     fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        #[cfg(unix)]
-        let fds = vec![];
-
-        loop {
-            match (*self).get_mut().read(buf) {
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-                Err(e) => return Poll::Ready(Err(e)),
-                Ok(len) => {
-                    #[cfg(unix)]
-                    let ret = (len, fds);
-                    #[cfg(not(unix))]
-                    let ret = len;
-                    return Poll::Ready(Ok(ret));
-                }
+        match ready!(futures_util::AsyncRead::poll_read(
+            Pin::new(&mut self.as_ref()),
+            cx,
+            buf,
+        )) {
+            Err(e) => return Poll::Ready(Err(e)),
+            Ok(len) => {
+                #[cfg(unix)]
+                let ret = (len, vec![]);
+                #[cfg(not(unix))]
+                let ret = len;
+                Poll::Ready(Ok(ret))
             }
-            ready!(self.poll_readable(cx))?;
         }
     }
+}
 
+#[cfg(all(feature = "vsock", not(feature = "tokio")))]
+impl WriteHalf for Arc<Async<vsock::VsockStream>> {
     fn poll_sendmsg(
         &mut self,
         cx: &mut Context<'_>,
@@ -643,13 +745,7 @@ impl Socket for Async<vsock::VsockStream> {
             )));
         }
 
-        loop {
-            match (*self).get_mut().write(buf) {
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-                res => return Poll::Ready(res),
-            }
-            ready!(self.poll_writable(cx))?;
-        }
+        futures_util::AsyncWrite::poll_write(Pin::new(&mut self.as_ref()), cx, buf)
     }
 
     fn close(&self) -> io::Result<()> {
@@ -659,6 +755,18 @@ impl Socket for Async<vsock::VsockStream> {
 
 #[cfg(feature = "tokio-vsock")]
 impl Socket for tokio_vsock::VsockStream {
+    type ReadHalf = tokio_vsock::ReadHalf;
+    type WriteHalf = tokio_vsock::WriteHalf;
+
+    fn split(self) -> Split<Self::ReadHalf, Self::WriteHalf> {
+        let (read, write) = self.split();
+
+        Split { read, write }
+    }
+}
+
+#[cfg(feature = "tokio-vsock")]
+impl ReadHalf for tokio_vsock::ReadHalf {
     fn can_pass_unix_fd(&self) -> bool {
         false
     }
@@ -677,7 +785,10 @@ impl Socket for tokio_vsock::VsockStream {
             })
         })
     }
+}
 
+#[cfg(feature = "tokio-vsock")]
+impl WriteHalf for tokio_vsock::WriteHalf {
     fn poll_sendmsg(
         &mut self,
         cx: &mut Context<'_>,
@@ -698,6 +809,11 @@ impl Socket for tokio_vsock::VsockStream {
     }
 
     fn close(&self) -> io::Result<()> {
-        self.shutdown(std::net::Shutdown::Both)
+        // FIXME: This should be:
+        //
+        // tokio::io::AsyncWriteExt::shutdown(self);
+        //
+        // but that requires this call to be async. At the next API break, we should fix this.
+        Ok(())
     }
 }

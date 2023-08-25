@@ -17,25 +17,27 @@ use crate::{
     utils::padding_for_8_bytes,
 };
 
-use super::Socket;
+use super::socket::{ReadHalf, Split, WriteHalf};
 
 use futures_core::ready;
 
 /// A low-level representation of a D-Bus connection
 ///
-/// This wrapper is agnostic on the actual transport, using the `Socket` trait
-/// to abstract it. It is compatible with sockets both in blocking or non-blocking
+/// This wrapper is agnostic on the actual transport, using the `socket::{ReadHalf, WriteHalf}`
+/// traits to abstract it. It is compatible with sockets both in blocking or non-blocking
 /// mode.
 ///
 /// This wrapper abstracts away the serialization & buffering considerations of the
 /// protocol, and allows interaction based on messages, rather than bytes.
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
-pub struct Connection<S> {
-    #[derivative(Debug = "ignore")]
-    socket: Mutex<S>,
+pub struct Connection<R, W> {
     activity_event: Event,
+
+    read_socket: Mutex<R>,
     inbound: Mutex<InBound>,
+
+    write_socket: Mutex<W>,
     outbound: Mutex<OutBound>,
 }
 
@@ -54,11 +56,12 @@ pub struct OutBound {
     msgs: VecDeque<Arc<Message>>,
 }
 
-impl<S: Socket> Connection<S> {
-    pub(crate) fn new(socket: S, raw_in_buffer: Vec<u8>) -> Connection<S> {
+impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
+    pub(crate) fn new(socket: Split<R, W>, raw_in_buffer: Vec<u8>) -> Connection<R, W> {
+        let (read, write) = socket.take();
         Connection {
-            socket: Mutex::new(socket),
             activity_event: Event::new(),
+            read_socket: Mutex::new(read),
             inbound: Mutex::new(InBound {
                 pos: raw_in_buffer.len(),
                 buffer: raw_in_buffer,
@@ -66,6 +69,7 @@ impl<S: Socket> Connection<S> {
                 fds: vec![],
                 prev_seq: 0,
             }),
+            write_socket: Mutex::new(write),
             outbound: Mutex::new(OutBound {
                 pos: 0,
                 msgs: VecDeque::new(),
@@ -82,6 +86,7 @@ impl<S: Socket> Connection<S> {
     pub fn try_flush(&self, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
         self.activity_event.notify(usize::MAX);
         let mut outbound = self.outbound.lock().expect("lock poisoned");
+        let mut write = self.write_socket.lock().expect("lock poisoned");
         while !outbound.msgs.is_empty() {
             loop {
                 // `outbound` is locked and we just checked there is a message.
@@ -94,8 +99,7 @@ impl<S: Socket> Connection<S> {
                 }
                 #[cfg(unix)]
                 let fds = if outbound.pos == 0 { msg.fds() } else { vec![] };
-                let mut socket = self.socket.lock().expect("lock poisoned");
-                outbound.pos += ready!(socket.poll_sendmsg(
+                outbound.pos += ready!(write.poll_sendmsg(
                     cx,
                     data,
                     #[cfg(unix)]
@@ -129,6 +133,7 @@ impl<S: Socket> Connection<S> {
     pub fn try_receive_message(&self, cx: &mut Context<'_>) -> Poll<crate::Result<Message>> {
         self.activity_event.notify(usize::MAX);
         let mut inbound = self.inbound.lock().expect("lock poisoned");
+        let mut read = self.read_socket.lock().expect("lock poisoned");
         if inbound.pos < MIN_MESSAGE_SIZE {
             inbound.buffer.resize(MIN_MESSAGE_SIZE, 0);
             // We don't have enough data to make a proper message header yet.
@@ -138,9 +143,8 @@ impl<S: Socket> Connection<S> {
             // Given that MIN_MESSAGE_SIZE is 16, this codepath is actually extremely unlikely
             // to be taken more than once
             while inbound.pos < MIN_MESSAGE_SIZE {
-                let mut socket = self.socket.lock().expect("lock poisoned");
                 let pos = inbound.pos;
-                let res = ready!(socket.poll_recvmsg(cx, &mut inbound.buffer[pos..]))?;
+                let res = ready!(read.poll_recvmsg(cx, &mut inbound.buffer[pos..]))?;
                 let len = {
                     #[cfg(unix)]
                     {
@@ -181,9 +185,8 @@ impl<S: Socket> Connection<S> {
 
         // Now we have an incomplete message; read the rest
         while inbound.buffer.len() > inbound.pos {
-            let mut socket = self.socket.lock().expect("lock poisoned");
             let pos = inbound.pos;
-            let res = ready!(socket.poll_recvmsg(cx, &mut inbound.buffer[pos..]))?;
+            let res = ready!(read.poll_recvmsg(cx, &mut inbound.buffer[pos..]))?;
             let read = {
                 #[cfg(unix)]
                 {
@@ -219,26 +222,30 @@ impl<S: Socket> Connection<S> {
     /// After this call, all reading and writing operations will fail.
     pub fn close(&self) -> crate::Result<()> {
         self.activity_event.notify(usize::MAX);
-        self.socket().close().map_err(|e| e.into())
+        self.write_socket
+            .lock()
+            .expect("lock poisoned")
+            .close()
+            .map_err(|e| e.into())
     }
 
-    /// Access the underlying socket
+    /// Access the underlying read half of the socket.
     ///
     /// This method is intended to provide access to the socket in order to access certain
     /// properties (e.g peer credentials).
     ///
-    /// You should not try to read or write from it directly, as it may corrupt the internal state
-    /// of this wrapper.
-    pub fn socket(&self) -> impl Deref<Target = S> + '_ {
-        pub struct SocketDeref<'s, S> {
-            socket: MutexGuard<'s, S>,
+    /// You should not try to read from it directly, as it may corrupt the internal state of this
+    /// wrapper.
+    pub fn socket_read(&self) -> impl Deref<Target = R> + '_ {
+        pub struct SocketDeref<'s, R: ReadHalf> {
+            socket: MutexGuard<'s, R>,
         }
 
-        impl<S> Deref for SocketDeref<'_, S>
+        impl<R> Deref for SocketDeref<'_, R>
         where
-            S: Socket,
+            R: ReadHalf,
         {
-            type Target = S;
+            type Target = R;
 
             fn deref(&self) -> &Self::Target {
                 &self.socket
@@ -246,7 +253,7 @@ impl<S: Socket> Connection<S> {
         }
 
         SocketDeref {
-            socket: self.socket.lock().expect("lock poisoned"),
+            socket: self.read_socket.lock().expect("lock poisoned"),
         }
     }
 
@@ -258,7 +265,7 @@ impl<S: Socket> Connection<S> {
 #[cfg(unix)]
 #[cfg(test)]
 mod tests {
-    use super::{Arc, Connection};
+    use super::{super::socket::Socket, Arc, Connection};
     use crate::message::Message;
     use futures_util::future::poll_fn;
     use test_log::test;
@@ -281,8 +288,8 @@ mod tests {
         #[cfg(feature = "tokio")]
         let (p0, p1) = tokio::net::UnixStream::pair().unwrap();
 
-        let conn0 = Connection::new(p0, vec![]);
-        let conn1 = Connection::new(p1, vec![]);
+        let conn0 = Connection::new(p0.split(), vec![]);
+        let conn1 = Connection::new(p1.split(), vec![]);
 
         let msg = Message::method(
             None::<()>,

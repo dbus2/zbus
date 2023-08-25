@@ -5,17 +5,20 @@ use tracing::{debug, instrument, trace};
 
 use crate::{async_lock::Mutex, connection::MsgBroadcaster, Executor, OwnedMatchRule, Task};
 
-use super::raw::{Connection as RawConnection, Socket};
+use super::raw::{
+    socket::{ReadHalf, WriteHalf},
+    Connection as RawConnection,
+};
 
 #[derive(Debug)]
 pub(crate) struct SocketReader {
-    raw_conn: Arc<RawConnection<Box<dyn Socket>>>,
+    raw_conn: Arc<RawConnection<Box<dyn ReadHalf>, Box<dyn WriteHalf>>>,
     senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
 }
 
 impl SocketReader {
     pub fn new(
-        raw_conn: Arc<RawConnection<Box<dyn Socket>>>,
+        raw_conn: Arc<RawConnection<Box<dyn ReadHalf>, Box<dyn WriteHalf>>>,
         senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
     ) -> Self {
         Self { raw_conn, senders }

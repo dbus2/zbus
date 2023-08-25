@@ -33,7 +33,7 @@ use crate::{
 
 use super::{
     handshake::{AuthMechanism, Authenticated},
-    raw::Socket,
+    socket::{ReadHalf, Socket, Split, WriteHalf},
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -48,7 +48,7 @@ enum Target {
     ))]
     VsockStream(VsockStream),
     Address(Address),
-    Socket(Box<dyn Socket>),
+    Socket(Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>>),
 }
 
 type Interfaces<'a> =
@@ -160,7 +160,7 @@ impl<'a> Builder<'a> {
 
     /// Create a builder for connection that will use the given socket.
     pub fn socket<S: Socket + 'static>(socket: S) -> Self {
-        Self::new(Target::Socket(Box::new(socket)))
+        Self::new(Target::Socket(Split::new_boxed(socket)))
     }
 
     /// Specify the mechanisms to use during authentication.
@@ -340,28 +340,28 @@ impl<'a> Builder<'a> {
     async fn build_(self, executor: Executor<'static>) -> Result<Connection> {
         let stream = match self.target {
             #[cfg(not(feature = "tokio"))]
-            Target::UnixStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            Target::UnixStream(stream) => Split::new_boxed(Async::new(stream)?),
             #[cfg(all(unix, feature = "tokio"))]
-            Target::UnixStream(stream) => Box::new(stream) as Box<dyn Socket>,
+            Target::UnixStream(stream) => Split::new_boxed(stream),
             #[cfg(all(not(unix), feature = "tokio"))]
             Target::UnixStream(_) => return Err(Error::Unsupported),
             #[cfg(not(feature = "tokio"))]
-            Target::TcpStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            Target::TcpStream(stream) => Split::new_boxed(Async::new(stream)?),
             #[cfg(feature = "tokio")]
-            Target::TcpStream(stream) => Box::new(stream) as Box<dyn Socket>,
+            Target::TcpStream(stream) => Split::new_boxed(stream),
             #[cfg(all(feature = "vsock", not(feature = "tokio")))]
-            Target::VsockStream(stream) => Box::new(Async::new(stream)?) as Box<dyn Socket>,
+            Target::VsockStream(stream) => Split::new_boxed(Async::new(stream)?),
             #[cfg(feature = "tokio-vsock")]
-            Target::VsockStream(stream) => Box::new(stream) as Box<dyn Socket>,
+            Target::VsockStream(stream) => Split::new_boxed(stream),
             Target::Address(address) => match address.connect().await? {
                 #[cfg(any(unix, not(feature = "tokio")))]
-                address::Stream::Unix(stream) => Box::new(stream) as Box<dyn Socket>,
-                address::Stream::Tcp(stream) => Box::new(stream) as Box<dyn Socket>,
+                address::Stream::Unix(stream) => Split::new_boxed(stream),
+                address::Stream::Tcp(stream) => Split::new_boxed(stream),
                 #[cfg(any(
                     all(feature = "vsock", not(feature = "tokio")),
                     feature = "tokio-vsock"
                 ))]
-                address::Stream::Vsock(stream) => Box::new(stream) as Box<dyn Socket>,
+                address::Stream::Vsock(stream) => Split::new_boxed(stream),
             },
             Target::Socket(stream) => stream,
         };
@@ -376,10 +376,10 @@ impl<'a> Builder<'a> {
                 }
 
                 #[cfg(unix)]
-                let client_uid = stream.uid()?;
+                let client_uid = stream.read().uid()?;
 
                 #[cfg(windows)]
-                let client_sid = stream.peer_sid();
+                let client_sid = stream.read().peer_sid();
 
                 Authenticated::server(
                     stream,

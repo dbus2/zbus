@@ -39,8 +39,8 @@ mod builder;
 pub use builder::Builder;
 
 mod raw;
+pub use raw::socket::{self, Socket};
 use raw::Connection as RawConnection;
-pub use raw::Socket;
 
 mod socket_reader;
 use socket_reader::SocketReader;
@@ -61,7 +61,7 @@ pub(crate) struct ConnectionInner {
     unique_name: OnceCell<OwnedUniqueName>,
     registered_names: Mutex<HashMap<WellKnownName<'static>, NameStatus>>,
 
-    raw_conn: Arc<RawConnection<Box<dyn Socket>>>,
+    raw_conn: Arc<RawConnection<Box<dyn socket::ReadHalf>, Box<dyn socket::WriteHalf>>>,
 
     // Serial number for next outgoing message
     serial: AtomicU32,
@@ -1173,7 +1173,7 @@ impl Connection {
     }
 
     pub(crate) async fn new(
-        auth: Authenticated<Box<dyn Socket>>,
+        auth: Authenticated<Box<dyn socket::ReadHalf>, Box<dyn socket::WriteHalf>>,
         bus_connection: bool,
         executor: Executor<'static>,
     ) -> Result<Self> {
@@ -1263,7 +1263,7 @@ impl Connection {
     ///
     /// Currently `unix_group_ids` and `linux_security_label` fields are not populated.
     pub async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
-        let socket = self.inner.raw_conn.socket();
+        let socket = self.inner.raw_conn.socket_read();
 
         Ok(ConnectionCredentials {
             process_id: socket.peer_pid()?,
