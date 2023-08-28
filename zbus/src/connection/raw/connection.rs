@@ -1,5 +1,5 @@
 use crate::async_lock::{Mutex, MutexGuard};
-use std::{collections::VecDeque, future::poll_fn, ops::Deref, sync::Arc};
+use std::{future::poll_fn, ops::Deref};
 
 use event_listener::{Event, EventListener};
 
@@ -30,18 +30,12 @@ pub struct Connection<R, W> {
     inbound: Mutex<InBound>,
 
     write_socket: Mutex<W>,
-    outbound: Mutex<OutBound>,
 }
 
 #[derive(Debug)]
 pub struct InBound {
     already_received_bytes: Option<Vec<u8>>,
     prev_seq: u64,
-}
-
-#[derive(Debug)]
-pub struct OutBound {
-    msgs: VecDeque<Arc<Message>>,
 }
 
 impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
@@ -55,48 +49,31 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
                 prev_seq: 0,
             }),
             write_socket: Mutex::new(write),
-            outbound: Mutex::new(OutBound {
-                msgs: VecDeque::new(),
-            }),
         }
     }
 
-    /// Attempt to flush the outgoing buffer
-    ///
-    /// This will try to write as many messages as possible from the
-    /// outgoing buffer into the socket, until an error is encountered.
+    /// Attempt to send a message.
     ///
     /// This method will thus only block if the socket is in blocking mode.
-    pub async fn try_flush(&self) -> crate::Result<()> {
+    pub async fn send_message(&self, msg: &Message) -> crate::Result<()> {
         self.activity_event.notify(usize::MAX);
-        let mut outbound = self.outbound.lock().await;
         let mut write = self.write_socket.lock().await;
-        while let Some(msg) = outbound.msgs.pop_front() {
-            let mut pos = 0;
-            let data = msg.as_bytes();
-            while pos < data.len() {
-                #[cfg(unix)]
-                let fds = if pos == 0 { msg.fds() } else { vec![] };
-                pos += poll_fn(|cx| {
-                    write.poll_sendmsg(
-                        cx,
-                        &data[pos..],
-                        #[cfg(unix)]
-                        &fds,
-                    )
-                })
-                .await?;
-            }
+        let mut pos = 0;
+        let data = msg.as_bytes();
+        while pos < data.len() {
+            #[cfg(unix)]
+            let fds = if pos == 0 { msg.fds() } else { vec![] };
+            pos += poll_fn(|cx| {
+                write.poll_sendmsg(
+                    cx,
+                    &data[pos..],
+                    #[cfg(unix)]
+                    &fds,
+                )
+            })
+            .await?;
         }
         Ok(())
-    }
-
-    /// Enqueue a message to be sent out to the socket
-    ///
-    /// This method will *not* write anything to the socket, you need to call
-    /// `try_flush()` afterwards so that your message is actually sent out.
-    pub async fn enqueue_message(&self, msg: Arc<Message>) {
-        self.outbound.lock().await.msgs.push_back(msg.clone());
     }
 
     /// Attempt to read a message from the socket
@@ -247,7 +224,7 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
 #[cfg(unix)]
 #[cfg(test)]
 mod tests {
-    use super::{super::socket::Socket, Arc, Connection};
+    use super::{super::socket::Socket, Connection};
     use crate::message::Message;
     use test_log::test;
 
@@ -282,8 +259,7 @@ mod tests {
         )
         .unwrap();
 
-        conn0.enqueue_message(Arc::new(msg)).await;
-        conn0.try_flush().await.unwrap();
+        conn0.send_message(&msg).await.unwrap();
 
         let ret = conn1.try_receive_message().await.unwrap();
         assert_eq!(ret.to_string(), "Method call Test");

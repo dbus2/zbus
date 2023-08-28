@@ -288,7 +288,7 @@ impl Connection {
         let serial = self.assign_serial_num(&mut msg)?;
 
         trace!("Sending message: {:?}", msg);
-        self.send(Arc::new(msg)).await?;
+        self.send(&msg).await?;
         trace!("Sent message with serial: {}", serial);
 
         Ok(serial)
@@ -298,12 +298,7 @@ impl Connection {
     ///
     /// Same as [`Connection::send_message`] except it doesn't sets the unique serial number on the
     /// message for you. It expects a serial number to be already set on the message.
-    pub async fn send<M>(&self, msg: M) -> Result<()>
-    where
-        M: Into<Arc<Message>>,
-    {
-        let msg = msg.into();
-
+    pub async fn send(&self, msg: &Message) -> Result<()> {
         #[cfg(unix)]
         if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);
@@ -314,8 +309,7 @@ impl Connection {
             .ok_or(Error::InvalidSerial)?;
 
         trace!("Sending message: {:?}", msg);
-        self.inner.raw_conn.enqueue_message(msg).await;
-        self.inner.raw_conn.try_flush().await?;
+        self.inner.raw_conn.send_message(msg).await?;
         trace!("Sent message with serial: {}", serial);
 
         Ok(())
@@ -1358,7 +1352,7 @@ mod tests {
 
             stream.try_for_each(move |msg| {
                 let sink = sink.clone();
-                async move { sink.send(msg).await }
+                async move { sink.send(&msg).await }
             })
         };
         let forward2 = {
@@ -1367,7 +1361,7 @@ mod tests {
 
             stream.try_for_each(move |msg| {
                 let sink = sink.clone();
-                async move { sink.send(msg).await }
+                async move { sink.send(&msg).await }
             })
         };
         let _forward_task = client1.executor().spawn(
