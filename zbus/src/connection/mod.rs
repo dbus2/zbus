@@ -1282,6 +1282,13 @@ impl Connection {
         })
     }
 
+    /// Close the connection.
+    ///
+    /// After this call, all reading and writing operations will fail.
+    pub async fn close(self) -> Result<()> {
+        self.inner.raw_conn.close()
+    }
+
     pub(crate) fn init_socket_reader(&self) {
         let inner = &self.inner;
         inner

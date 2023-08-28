@@ -267,6 +267,13 @@ impl Connection {
     pub fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
         block_on(self.inner.peer_credentials())
     }
+
+    /// Close the connection.
+    ///
+    /// After this call, all reading and writing operations will fail.
+    pub fn close(self) -> Result<()> {
+        block_on(self.inner.close())
+    }
 }
 
 impl From<crate::Connection> for Connection {
