@@ -32,7 +32,7 @@ impl SocketReader {
     async fn receive_msg(self) {
         loop {
             trace!("Waiting for message on the socket..");
-            let msg = self.raw_conn.try_receive_message().await.map(Arc::new);
+            let msg = self.raw_conn.receive_message().await.map(Arc::new);
             match &msg {
                 Ok(msg) => trace!("Message received on the socket: {:?}", msg),
                 Err(e) => trace!("Error reading from the socket: {:?}", e),

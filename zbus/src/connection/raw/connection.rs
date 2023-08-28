@@ -84,7 +84,7 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
     /// If the socket is in non-blocking mode, it may read a partial message. In such case it
     /// will buffer it internally and try to complete it the next time you call
     /// `try_receive_message`.
-    pub async fn try_receive_message(&self) -> crate::Result<Message> {
+    pub async fn receive_message(&self) -> crate::Result<Message> {
         self.activity_event.notify(usize::MAX);
         let mut inbound = self.inbound.lock().await;
         let mut bytes = inbound
@@ -261,7 +261,7 @@ mod tests {
 
         conn0.send_message(&msg).await.unwrap();
 
-        let ret = conn1.try_receive_message().await.unwrap();
+        let ret = conn1.receive_message().await.unwrap();
         assert_eq!(ret.to_string(), "Method call Test");
     }
 }
