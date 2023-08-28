@@ -220,12 +220,12 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
     /// Close the connection.
     ///
     /// After this call, all reading and writing operations will fail.
-    pub fn close(&self) -> crate::Result<()> {
+    pub fn close(&self, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
         self.activity_event.notify(usize::MAX);
         self.write_socket
             .lock()
             .expect("lock poisoned")
-            .close()
+            .close(cx)
             .map_err(|e| e.into())
     }
 

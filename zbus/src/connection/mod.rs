@@ -1286,7 +1286,7 @@ impl Connection {
     ///
     /// After this call, all reading and writing operations will fail.
     pub async fn close(self) -> Result<()> {
-        self.inner.raw_conn.close()
+        poll_fn(|cx| self.inner.raw_conn.close(cx)).await
     }
 
     pub(crate) fn init_socket_reader(&self) {

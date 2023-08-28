@@ -242,7 +242,7 @@ pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     /// Close the socket.
     ///
     /// After this call, it is valid for all reading and writing operations to fail.
-    fn close(&self) -> io::Result<()>;
+    fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>>;
 }
 
 /// A pair of socket read and write halves.
@@ -335,8 +335,8 @@ impl WriteHalf for Box<dyn WriteHalf> {
         (**self).send_zero_byte()
     }
 
-    fn close(&self) -> io::Result<()> {
-        (**self).close()
+    fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        (**self).close(cx)
     }
 }
 
@@ -410,8 +410,8 @@ impl WriteHalf for Arc<Async<UnixStream>> {
         }
     }
 
-    fn close(&self) -> io::Result<()> {
-        self.get_ref().shutdown(std::net::Shutdown::Both)
+    fn close(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(self.get_ref().shutdown(std::net::Shutdown::Both))
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
@@ -493,10 +493,8 @@ impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
         }
     }
 
-    fn close(&self) -> io::Result<()> {
-        // FIXME: This should call `tokio::net::UnixStream::poll_shutdown` but this method is not
-        // async-friendly. At the next API break, we should fix this.
-        Ok(())
+    fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        tokio::io::AsyncWrite::poll_shutdown(Pin::new(self), cx)
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
@@ -554,8 +552,8 @@ impl WriteHalf for Arc<Async<UnixStream>> {
         futures_util::AsyncWrite::poll_write(Pin::new(&mut self.as_ref()), cx, buf)
     }
 
-    fn close(&self) -> io::Result<()> {
-        self.get_ref().shutdown(std::net::Shutdown::Both)
+    fn close(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(self.get_ref().shutdown(std::net::Shutdown::Both))
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
@@ -620,8 +618,8 @@ impl WriteHalf for Arc<Async<TcpStream>> {
         futures_util::AsyncWrite::poll_write(Pin::new(&mut self.as_ref()), cx, buf)
     }
 
-    fn close(&self) -> io::Result<()> {
-        self.get_ref().shutdown(std::net::Shutdown::Both)
+    fn close(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(self.get_ref().shutdown(std::net::Shutdown::Both))
     }
 }
 
@@ -698,10 +696,8 @@ impl WriteHalf for tokio::net::tcp::OwnedWriteHalf {
         Pin::new(self).poll_write(cx, buf)
     }
 
-    fn close(&self) -> io::Result<()> {
-        // FIXME: This should call `tokio::net::TcpStream::poll_shutdown` but this method is not
-        // async-friendly. At the next API break, we should fix this.
-        Ok(())
+    fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        tokio::io::AsyncWrite::poll_shutdown(Pin::new(self), cx)
     }
 }
 
@@ -808,12 +804,7 @@ impl WriteHalf for tokio_vsock::WriteHalf {
         Pin::new(self).poll_write(cx, buf)
     }
 
-    fn close(&self) -> io::Result<()> {
-        // FIXME: This should be:
-        //
-        // tokio::io::AsyncWriteExt::shutdown(self);
-        //
-        // but that requires this call to be async. At the next API break, we should fix this.
-        Ok(())
+    fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        tokio::io::AsyncWrite::poll_shutdown(Pin::new(self), cx)
     }
 }
