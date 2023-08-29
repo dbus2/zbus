@@ -375,11 +375,11 @@ impl<'a> Builder<'a> {
                     return Err(Error::Unsupported);
                 }
 
+                let creds = stream.read().peer_credentials()?;
                 #[cfg(unix)]
-                let client_uid = stream.read().uid()?;
-
+                let client_uid = creds.unix_user_id();
                 #[cfg(windows)]
-                let client_sid = stream.read().peer_sid();
+                let client_sid = creds.into_windows_sid();
 
                 Authenticated::server(
                     stream,

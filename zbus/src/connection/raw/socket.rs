@@ -24,6 +24,7 @@ use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 
+use crate::fdo::ConnectionCredentials;
 #[cfg(unix)]
 use crate::{utils::FDS_MAX, OwnedFd};
 
@@ -77,14 +78,18 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
 }
 
 #[cfg(unix)]
-fn get_unix_pid(fd: &impl AsRawFd) -> io::Result<Option<u32>> {
+fn get_unix_peer_creds(fd: &impl AsRawFd) -> io::Result<ConnectionCredentials> {
     #[cfg(any(target_os = "android", target_os = "linux"))]
     {
         use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
 
         let fd = fd.as_raw_fd();
         getsockopt(fd, PeerCredentials)
-            .map(|creds| Some(creds.pid() as _))
+            .map(|creds| {
+                ConnectionCredentials::default()
+                    .set_process_id(creds.pid() as _)
+                    .set_unix_user_id(creds.uid())
+            })
             .map_err(|e| e.into())
     }
 
@@ -97,37 +102,10 @@ fn get_unix_pid(fd: &impl AsRawFd) -> io::Result<Option<u32>> {
         target_os = "netbsd"
     ))]
     {
-        let _ = fd;
-        // FIXME
-        Ok(None)
-    }
-}
-
-#[cfg(unix)]
-fn get_unix_uid(fd: &impl AsRawFd) -> io::Result<Option<u32>> {
-    let fd = fd.as_raw_fd();
-
-    #[cfg(any(target_os = "android", target_os = "linux"))]
-    {
-        use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
-
-        getsockopt(fd, PeerCredentials)
-            .map(|creds| Some(creds.uid()))
-            .map_err(|e| e.into())
-    }
-
-    #[cfg(any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "openbsd",
-        target_os = "netbsd"
-    ))]
-    {
-        nix::unistd::getpeereid(fd)
-            .map(|(uid, _)| Some(uid.into()))
-            .map_err(|e| e.into())
+        let fd = fd.as_raw_fd();
+        let uid = nix::unistd::getpeereid(fd).map(|(uid, _)| uid.into())?;
+        // FIXME: Handle pid fetching too.
+        Ok(ConnectionCredentials::default().set_unix_user_id(uid))
     }
 }
 
@@ -190,21 +168,9 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
         true
     }
 
-    /// Return the peer PID.
-    fn peer_pid(&self) -> io::Result<Option<u32>> {
-        Ok(None)
-    }
-
-    /// Return the peer process SID, if any.
-    #[cfg(windows)]
-    fn peer_sid(&self) -> Option<String> {
-        None
-    }
-
-    /// Return the User ID, if any.
-    #[cfg(unix)]
-    fn uid(&self) -> io::Result<Option<u32>> {
-        Ok(None)
+    /// Return the peer credentials.
+    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        Ok(ConnectionCredentials::default())
     }
 }
 
@@ -300,18 +266,8 @@ impl ReadHalf for Box<dyn ReadHalf> {
         (**self).poll_recvmsg(cx, buf)
     }
 
-    fn peer_pid(&self) -> io::Result<Option<u32>> {
-        (**self).peer_pid()
-    }
-
-    #[cfg(windows)]
-    fn peer_sid(&self) -> Option<String> {
-        (&**self).peer_sid()
-    }
-
-    #[cfg(unix)]
-    fn uid(&self) -> io::Result<Option<u32>> {
-        (**self).uid()
+    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        (**self).peer_credentials()
     }
 }
 
@@ -375,13 +331,8 @@ impl ReadHalf for Arc<Async<UnixStream>> {
         Poll::Ready(Ok((len, fds)))
     }
 
-    fn peer_pid(&self) -> io::Result<Option<u32>> {
-        get_unix_pid(self)
-    }
-
-    #[cfg(unix)]
-    fn uid(&self) -> io::Result<Option<u32>> {
-        get_unix_uid(self)
+    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        get_unix_peer_creds(self)
     }
 }
 
@@ -453,13 +404,8 @@ impl ReadHalf for tokio::net::unix::OwnedReadHalf {
         }
     }
 
-    fn peer_pid(&self) -> io::Result<Option<u32>> {
-        get_unix_pid(self.as_ref())
-    }
-
-    #[cfg(unix)]
-    fn uid(&self) -> io::Result<Option<u32>> {
-        get_unix_uid(self.as_ref())
+    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        get_unix_peer_creds(self.as_ref())
     }
 }
 
@@ -513,36 +459,15 @@ impl ReadHalf for Arc<Async<UnixStream>> {
         futures_util::AsyncRead::poll_read(Pin::new(&mut self.as_ref()), cx, buf)
     }
 
-    #[cfg(windows)]
-    fn peer_sid(&self) -> Option<String> {
-        use crate::win32::ProcessToken;
+    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        use crate::win32::{unix_stream_get_peer_pid, ProcessToken};
 
-        if let Ok(Some(pid)) = self.peer_pid() {
-            if let Ok(process_token) =
-                ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
-            {
-                return process_token.sid().ok();
-            }
-        }
-
-        None
-    }
-
-    fn peer_pid(&self) -> io::Result<Option<u32>> {
-        #[cfg(windows)]
-        {
-            use crate::win32::unix_stream_get_peer_pid;
-
-            Ok(Some(unix_stream_get_peer_pid(&self.get_ref())? as _))
-        }
-
-        #[cfg(unix)]
-        get_unix_pid(self)
-    }
-
-    #[cfg(unix)]
-    fn uid(&self) -> io::Result<Option<u32>> {
-        get_unix_uid(self)
+        let pid = unix_stream_get_peer_pid(&self.get_ref())? as _;
+        let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
+            .and_then(|process_token| process_token.sid())?;
+        Ok(ConnectionCredentials::default()
+            .set_process_id(pid)
+            .set_windows_sid(sid))
     }
 }
 
@@ -585,17 +510,20 @@ impl ReadHalf for Arc<Async<TcpStream>> {
         }
     }
 
-    #[cfg(windows)]
-    fn peer_sid(&self) -> Option<String> {
-        use crate::win32::{tcp_stream_get_peer_pid, ProcessToken};
+    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        #[cfg(windows)]
+        {
+            use crate::win32::{tcp_stream_get_peer_pid, ProcessToken};
 
-        if let Ok(pid) = tcp_stream_get_peer_pid(&self.get_ref()) {
-            if let Ok(process_token) = ProcessToken::open(if pid != 0 { Some(pid) } else { None }) {
-                return process_token.sid().ok();
-            }
+            let pid = tcp_stream_get_peer_pid(&self.get_ref())? as _;
+            let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
+                .and_then(|process_token| process_token.sid())?;
+            Ok(ConnectionCredentials::default()
+                .set_process_id(pid)
+                .set_windows_sid(sid))
         }
-
-        None
+        #[cfg(not(windows))]
+        Ok(ConnectionCredentials::default())
     }
 }
 

@@ -1256,23 +1256,7 @@ impl Connection {
     ///
     /// Currently `unix_group_ids` and `linux_security_label` fields are not populated.
     pub async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
-        let socket = self.inner.raw_conn.socket_read().await;
-
-        Ok(ConnectionCredentials {
-            process_id: socket.peer_pid()?,
-            #[cfg(unix)]
-            unix_user_id: socket.uid()?,
-            #[cfg(not(unix))]
-            unix_user_id: None,
-            // Should we beother providing all the groups of user? What's the use case?
-            unix_group_ids: None,
-            #[cfg(windows)]
-            windows_sid: socket.peer_sid(),
-            #[cfg(not(windows))]
-            windows_sid: None,
-            // TODO: Populate this field (see the field docs for pointers).
-            linux_security_label: None,
-        })
+        self.inner.raw_conn.socket_read().await.peer_credentials()
     }
 
     /// Close the connection.
