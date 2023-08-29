@@ -104,7 +104,7 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
             // Given that MIN_MESSAGE_SIZE is 16, this codepath is actually extremely unlikely
             // to be taken more than once
             while pos < MIN_MESSAGE_SIZE {
-                let res = poll_fn(|cx| read.poll_recvmsg(cx, &mut bytes[pos..])).await?;
+                let res = read.recvmsg(&mut bytes[pos..]).await?;
                 let len = {
                     #[cfg(unix)]
                     {
@@ -144,7 +144,7 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
 
         // Now we have an incomplete message; read the rest
         while pos < total_len {
-            let res = poll_fn(|cx| read.poll_recvmsg(cx, &mut bytes[pos..])).await?;
+            let res = read.recvmsg(&mut bytes[pos..]).await?;
             let read = {
                 #[cfg(unix)]
                 {

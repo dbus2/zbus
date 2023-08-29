@@ -1,14 +1,17 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
 #[cfg(unix)]
-use std::io::{IoSlice, IoSliceMut};
+use std::{
+    future::poll_fn,
+    io::{IoSlice, IoSliceMut},
+};
 use std::{
     io,
     pin::Pin,
     task::{Context, Poll},
 };
 #[cfg(not(feature = "tokio"))]
-use std::{net::TcpStream, sync::Arc, task::ready};
+use std::{net::TcpStream, sync::Arc};
 
 #[cfg(all(windows, not(feature = "tokio")))]
 use uds_windows::UnixStream;
@@ -125,10 +128,10 @@ fn send_zero_byte(fd: &impl AsRawFd) -> io::Result<usize> {
 }
 
 #[cfg(unix)]
-type PollRecvmsg = Poll<io::Result<(usize, Vec<OwnedFd>)>>;
+type RecvmsgResult = io::Result<(usize, Vec<OwnedFd>)>;
 
 #[cfg(not(unix))]
-type PollRecvmsg = Poll<io::Result<usize>>;
+type RecvmsgResult = io::Result<usize>;
 
 /// Trait representing some transport layer over which the DBus protocol can be used
 ///
@@ -156,12 +159,13 @@ pub trait Socket: std::fmt::Debug + Send + Sync {
 /// The read half of a socket.
 ///
 /// See [`Socket`] for more details.
+#[async_trait::async_trait]
 pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
     /// Attempt to receive a message from the socket.
     ///
     /// On success, returns the number of bytes read as well as a `Vec` containing
     /// any associated file descriptors.
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg;
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult;
 
     /// Supports passing file descriptors.
     fn can_pass_unix_fd(&self) -> bool {
@@ -257,13 +261,14 @@ impl<R: ReadHalf, W: WriteHalf> Split<R, W> {
     }
 }
 
+#[async_trait::async_trait]
 impl ReadHalf for Box<dyn ReadHalf> {
     fn can_pass_unix_fd(&self) -> bool {
         (**self).can_pass_unix_fd()
     }
 
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        (**self).poll_recvmsg(cx, buf)
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
+        (**self).recvmsg(buf).await
     }
 
     fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
@@ -316,19 +321,24 @@ where
 }
 
 #[cfg(all(unix, not(feature = "tokio")))]
+#[async_trait::async_trait]
 impl ReadHalf for Arc<Async<UnixStream>> {
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        let (len, fds) = loop {
-            match fd_recvmsg(self.as_raw_fd(), buf) {
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => match self.poll_readable(cx) {
-                    Poll::Pending => return Poll::Pending,
-                    Poll::Ready(res) => res?,
-                },
-                v => break v?,
-            }
-        };
-        Poll::Ready(Ok((len, fds)))
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
+        poll_fn(|cx| {
+            let (len, fds) = loop {
+                match fd_recvmsg(self.as_raw_fd(), buf) {
+                    Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => match self.poll_readable(cx)
+                    {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready(res) => res?,
+                    },
+                    v => break v?,
+                }
+            };
+            Poll::Ready(Ok((len, fds)))
+        })
+        .await
     }
 
     fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
@@ -384,24 +394,29 @@ impl Socket for tokio::net::UnixStream {
 }
 
 #[cfg(all(unix, feature = "tokio"))]
+#[async_trait::async_trait]
 impl ReadHalf for tokio::net::unix::OwnedReadHalf {
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
         let stream = self.as_ref();
-        loop {
-            match stream.try_io(tokio::io::Interest::READABLE, || {
-                // We use own custom function for reading because we need to receive file
-                // descriptors too.
-                fd_recvmsg(stream.as_raw_fd(), buf)
-            }) {
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => match stream.poll_read_ready(cx)
-                {
-                    Poll::Pending => return Poll::Pending,
-                    Poll::Ready(res) => res?,
-                },
-                v => return Poll::Ready(v),
+        poll_fn(|cx| {
+            loop {
+                match stream.try_io(tokio::io::Interest::READABLE, || {
+                    // We use own custom function for reading because we need to receive file
+                    // descriptors too.
+                    fd_recvmsg(stream.as_raw_fd(), buf)
+                }) {
+                    Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                        match stream.poll_read_ready(cx) {
+                            Poll::Pending => return Poll::Pending,
+                            Poll::Ready(res) => res?,
+                        }
+                    }
+                    v => return Poll::Ready(v),
+                }
             }
-        }
+        })
+        .await
     }
 
     fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
@@ -450,13 +465,23 @@ impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
 }
 
 #[cfg(all(windows, not(feature = "tokio")))]
+#[async_trait::async_trait]
 impl ReadHalf for Arc<Async<UnixStream>> {
     fn can_pass_unix_fd(&self) -> bool {
         false
     }
 
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        futures_util::AsyncRead::poll_read(Pin::new(&mut self.as_ref()), cx, buf)
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
+        match futures_util::AsyncReadExt::read(&mut self.as_ref(), buf).await {
+            Err(e) => Err(e),
+            Ok(len) => {
+                #[cfg(unix)]
+                let ret = (len, vec![]);
+                #[cfg(not(unix))]
+                let ret = len;
+                Ok(ret)
+            }
+        }
     }
 
     fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
@@ -488,24 +513,21 @@ impl WriteHalf for Arc<Async<UnixStream>> {
 }
 
 #[cfg(not(feature = "tokio"))]
+#[async_trait::async_trait]
 impl ReadHalf for Arc<Async<TcpStream>> {
     fn can_pass_unix_fd(&self) -> bool {
         false
     }
 
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        match ready!(futures_util::AsyncRead::poll_read(
-            Pin::new(&mut self.as_ref()),
-            cx,
-            buf,
-        )) {
-            Err(e) => Poll::Ready(Err(e)),
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
+        match futures_util::AsyncReadExt::read(&mut self.as_ref(), buf).await {
+            Err(e) => Err(e),
             Ok(len) => {
                 #[cfg(unix)]
                 let ret = (len, vec![]);
                 #[cfg(not(unix))]
                 let ret = len;
-                Poll::Ready(Ok(ret))
+                Ok(ret)
             }
         }
     }
@@ -564,23 +586,22 @@ impl Socket for tokio::net::TcpStream {
 }
 
 #[cfg(feature = "tokio")]
+#[async_trait::async_trait]
 impl ReadHalf for tokio::net::tcp::OwnedReadHalf {
     fn can_pass_unix_fd(&self) -> bool {
         false
     }
 
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        use tokio::io::{AsyncRead, ReadBuf};
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
+        use tokio::io::{AsyncReadExt, ReadBuf};
 
         let mut read_buf = ReadBuf::new(buf);
-        Pin::new(self).poll_read(cx, &mut read_buf).map(|res| {
-            res.map(|_| {
-                let ret = read_buf.filled().len();
-                #[cfg(unix)]
-                let ret = (ret, vec![]);
+        self.read_buf(&mut read_buf).await.map(|_| {
+            let ret = read_buf.filled().len();
+            #[cfg(unix)]
+            let ret = (ret, vec![]);
 
-                ret
-            })
+            ret
         })
     }
 
@@ -630,24 +651,21 @@ impl WriteHalf for tokio::net::tcp::OwnedWriteHalf {
 }
 
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+#[async_trait::async_trait]
 impl ReadHalf for Arc<Async<vsock::VsockStream>> {
     fn can_pass_unix_fd(&self) -> bool {
         false
     }
 
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        match ready!(futures_util::AsyncRead::poll_read(
-            Pin::new(&mut self.as_ref()),
-            cx,
-            buf,
-        )) {
-            Err(e) => return Poll::Ready(Err(e)),
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
+        match futures_util::AsyncReadExt::read(&mut self.as_ref(), buf).await {
+            Err(e) => Err(e),
             Ok(len) => {
                 #[cfg(unix)]
                 let ret = (len, vec![]);
                 #[cfg(not(unix))]
                 let ret = len;
-                Poll::Ready(Ok(ret))
+                Ok(ret)
             }
         }
     }
@@ -690,23 +708,22 @@ impl Socket for tokio_vsock::VsockStream {
 }
 
 #[cfg(feature = "tokio-vsock")]
+#[async_trait::async_trait]
 impl ReadHalf for tokio_vsock::ReadHalf {
     fn can_pass_unix_fd(&self) -> bool {
         false
     }
 
-    fn poll_recvmsg(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> PollRecvmsg {
-        use tokio::io::{AsyncRead, ReadBuf};
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
+        use tokio::io::{AsyncReadExt, ReadBuf};
 
         let mut read_buf = ReadBuf::new(buf);
-        Pin::new(self).poll_read(cx, &mut read_buf).map(|res| {
-            res.map(|_| {
-                let ret = read_buf.filled().len();
-                #[cfg(unix)]
-                let ret = (ret, vec![]);
+        self.read_buf(&mut read_buf).await.map(|_| {
+            let ret = read_buf.filled().len();
+            #[cfg(unix)]
+            let ret = (ret, vec![]);
 
-                ret
-            })
+            ret
         })
     }
 }

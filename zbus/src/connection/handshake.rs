@@ -699,9 +699,7 @@ impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ServerHandshake<'_, R, W> {
                 ServerHandshakeStep::WaitingForNull => {
                     trace!("Waiting for NULL");
                     let mut buffer = [0; 1];
-                    let read =
-                        poll_fn(|cx| self.common.socket.read_mut().poll_recvmsg(cx, &mut buffer))
-                            .await?;
+                    let read = self.common.socket.read_mut().recvmsg(&mut buffer).await?;
                     #[cfg(unix)]
                     let read = read.0;
                     // recvmsg cannot return anything else than Ok(1) or Err
@@ -978,7 +976,7 @@ impl<R: ReadHalf, W: WriteHalf> HandshakeCommon<R, W> {
             }
 
             let mut buf = [0; 64];
-            let res = poll_fn(|cx| self.socket.read_mut().poll_recvmsg(cx, &mut buf)).await?;
+            let res = self.socket.read_mut().recvmsg(&mut buf).await?;
             let read = {
                 #[cfg(unix)]
                 {
