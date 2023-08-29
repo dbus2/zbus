@@ -402,6 +402,7 @@ impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ClientHandshake<R, W> {
                         .socket
                         .write()
                         .send_zero_byte()
+                        .await
                         .map_err(|e| {
                             Error::Handshake(format!(
                                 "Could not send zero byte with credentials: {}",

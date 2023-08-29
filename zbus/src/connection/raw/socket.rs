@@ -84,6 +84,8 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
 #[cfg(unix)]
 async fn get_unix_peer_creds(fd: &impl AsRawFd) -> io::Result<ConnectionCredentials> {
     let fd = fd.as_raw_fd();
+    // FIXME: Is it likely enough for sending of 1 byte to block, to justify a task (possibly
+    // launching a thread in turn)?
     crate::Task::spawn_blocking(move || get_unix_peer_creds_blocking(fd), "peer credentials").await
 }
 
@@ -121,8 +123,13 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<ConnectionCredentials> 
 
 // Send 0 byte as a separate SCM_CREDS message.
 #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-fn send_zero_byte(fd: &impl AsRawFd) -> io::Result<usize> {
+async fn send_zero_byte(fd: &impl AsRawFd) -> io::Result<usize> {
     let fd = fd.as_raw_fd();
+    crate::Task::spawn_blocking(move || send_zero_byte_blocking(fd), "send zero byte").await
+}
+
+#[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+fn send_zero_byte_blocking(fd: RawFd) -> io::Result<usize> {
     let iov = [std::io::IoSlice::new(b"\0")];
     sendmsg::<()>(
         fd,
@@ -208,7 +215,7 @@ pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     /// sockets. This method is used by the authentication machinery in zbus to send this
     /// zero byte. Socket implementations based on unix sockets should implement this method.
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-    fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+    async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
         Ok(None)
     }
 
@@ -292,8 +299,8 @@ impl WriteHalf for Box<dyn WriteHalf> {
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-    fn send_zero_byte(&self) -> io::Result<Option<usize>> {
-        (**self).send_zero_byte()
+    async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+        (**self).send_zero_byte().await
     }
 
     fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
@@ -373,8 +380,8 @@ impl WriteHalf for Arc<Async<UnixStream>> {
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-    fn send_zero_byte(&self) -> io::Result<Option<usize>> {
-        send_zero_byte(self).map(Some)
+    async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+        send_zero_byte(self).await.map(Some)
     }
 }
 
@@ -453,8 +460,8 @@ impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-    fn send_zero_byte(&self) -> io::Result<Option<usize>> {
-        send_zero_byte(self.as_ref()).map(Some)
+    async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+        send_zero_byte(self.as_ref()).await.map(Some)
     }
 }
 
@@ -509,8 +516,8 @@ impl WriteHalf for Arc<Async<UnixStream>> {
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-    fn send_zero_byte(&self) -> io::Result<Option<usize>> {
-        send_zero_byte(self).map(Some)
+    async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+        send_zero_byte(self).await.map(Some)
     }
 }
 
