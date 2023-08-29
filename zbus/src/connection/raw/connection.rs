@@ -1,5 +1,5 @@
 use crate::async_lock::{Mutex, MutexGuard};
-use std::{future::poll_fn, ops::Deref};
+use std::ops::Deref;
 
 use event_listener::{Event, EventListener};
 
@@ -182,8 +182,12 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
     /// After this call, all reading and writing operations will fail.
     pub async fn close(&self) -> crate::Result<()> {
         self.activity_event.notify(usize::MAX);
-        let mut write = self.write_socket.lock().await;
-        poll_fn(|cx| write.close(cx).map_err(|e| e.into())).await
+        self.write_socket
+            .lock()
+            .await
+            .close()
+            .await
+            .map_err(Into::into)
     }
 
     /// Access the underlying read half of the socket.

@@ -1,15 +1,11 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
-#[cfg(feature = "tokio")]
-use std::pin::Pin;
+use std::io;
 #[cfg(unix)]
 use std::{
     future::poll_fn,
     io::{IoSlice, IoSliceMut},
-};
-use std::{
-    io,
-    task::{Context, Poll},
+    task::Poll,
 };
 #[cfg(not(feature = "tokio"))]
 use std::{net::TcpStream, sync::Arc};
@@ -222,7 +218,7 @@ pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     /// Close the socket.
     ///
     /// After this call, it is valid for all reading and writing operations to fail.
-    fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>>;
+    async fn close(&mut self) -> io::Result<()>;
 }
 
 /// A pair of socket read and write halves.
@@ -303,8 +299,8 @@ impl WriteHalf for Box<dyn WriteHalf> {
         (**self).send_zero_byte().await
     }
 
-    fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        (**self).close(cx)
+    async fn close(&mut self) -> io::Result<()> {
+        (**self).close().await
     }
 }
 
@@ -375,8 +371,13 @@ impl WriteHalf for Arc<Async<UnixStream>> {
         .await
     }
 
-    fn close(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Poll::Ready(self.get_ref().shutdown(std::net::Shutdown::Both))
+    async fn close(&mut self) -> io::Result<()> {
+        let stream = self.clone();
+        crate::Task::spawn_blocking(
+            move || stream.get_ref().shutdown(std::net::Shutdown::Both),
+            "close socket",
+        )
+        .await
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
@@ -455,8 +456,8 @@ impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
         .await
     }
 
-    fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        tokio::io::AsyncWrite::poll_shutdown(Pin::new(self), cx)
+    async fn close(&mut self) -> io::Result<()> {
+        tokio::io::AsyncWriteExt::shutdown(self).await
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
@@ -511,8 +512,13 @@ impl WriteHalf for Arc<Async<UnixStream>> {
         futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
-    fn close(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Poll::Ready(self.get_ref().shutdown(std::net::Shutdown::Both))
+    async fn close(&mut self) -> io::Result<()> {
+        let stream = self.clone();
+        crate::Task::spawn_blocking(
+            move || stream.get_ref().shutdown(std::net::Shutdown::Both),
+            "close socket",
+        )
+        .await
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
@@ -585,8 +591,13 @@ impl WriteHalf for Arc<Async<TcpStream>> {
         futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
-    fn close(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Poll::Ready(self.get_ref().shutdown(std::net::Shutdown::Both))
+    async fn close(&mut self) -> io::Result<()> {
+        let stream = self.clone();
+        crate::Task::spawn_blocking(
+            move || stream.get_ref().shutdown(std::net::Shutdown::Both),
+            "close socket",
+        )
+        .await
     }
 }
 
@@ -658,8 +669,8 @@ impl WriteHalf for tokio::net::tcp::OwnedWriteHalf {
         self.write(buf).await
     }
 
-    fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        tokio::io::AsyncWrite::poll_shutdown(Pin::new(self), cx)
+    async fn close(&mut self) -> io::Result<()> {
+        tokio::io::AsyncWriteExt::shutdown(self).await
     }
 }
 
@@ -699,8 +710,13 @@ impl WriteHalf for Arc<Async<vsock::VsockStream>> {
         futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
-    fn close(&self) -> io::Result<()> {
-        self.get_ref().shutdown(std::net::Shutdown::Both)
+    async fn close(&self) -> io::Result<()> {
+        let stream = self.clone();
+        crate::Task::spawn_blocking(
+            move || stream.get_ref().shutdown(std::net::Shutdown::Both),
+            "close socket",
+        )
+        .await
     }
 }
 
@@ -754,7 +770,7 @@ impl WriteHalf for tokio_vsock::WriteHalf {
         self.write(buf).await
     }
 
-    fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        tokio::io::AsyncWrite::poll_shutdown(Pin::new(self), cx)
+    async fn close(&mut self) -> io::Result<()> {
+        tokio::io::AsyncWriteExt::shutdown(self).await
     }
 }
