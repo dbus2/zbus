@@ -375,7 +375,7 @@ impl<'a> Builder<'a> {
                     return Err(Error::Unsupported);
                 }
 
-                let creds = stream.read().peer_credentials()?;
+                let creds = stream.read().peer_credentials().await?;
                 #[cfg(unix)]
                 let client_uid = creds.unix_user_id();
                 #[cfg(windows)]

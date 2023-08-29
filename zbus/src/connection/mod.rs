@@ -1256,7 +1256,12 @@ impl Connection {
     ///
     /// Currently `unix_group_ids` and `linux_security_label` fields are not populated.
     pub async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
-        self.inner.raw_conn.socket_read().await.peer_credentials()
+        self.inner
+            .raw_conn
+            .socket_read()
+            .await
+            .peer_credentials()
+            .await
     }
 
     /// Close the connection.

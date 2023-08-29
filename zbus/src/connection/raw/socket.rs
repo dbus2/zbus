@@ -81,7 +81,13 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
 }
 
 #[cfg(unix)]
-fn get_unix_peer_creds(fd: &impl AsRawFd) -> io::Result<ConnectionCredentials> {
+async fn get_unix_peer_creds(fd: &impl AsRawFd) -> io::Result<ConnectionCredentials> {
+    let fd = fd.as_raw_fd();
+    crate::Task::spawn_blocking(move || get_unix_peer_creds_blocking(fd), "peer credentials").await
+}
+
+#[cfg(unix)]
+fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<ConnectionCredentials> {
     #[cfg(any(target_os = "android", target_os = "linux"))]
     {
         use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
@@ -173,7 +179,7 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
     }
 
     /// Return the peer credentials.
-    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
         Ok(ConnectionCredentials::default())
     }
 }
@@ -271,8 +277,8 @@ impl ReadHalf for Box<dyn ReadHalf> {
         (**self).recvmsg(buf).await
     }
 
-    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
-        (**self).peer_credentials()
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        (**self).peer_credentials().await
     }
 }
 
@@ -341,8 +347,8 @@ impl ReadHalf for Arc<Async<UnixStream>> {
         .await
     }
 
-    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
-        get_unix_peer_creds(self)
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        get_unix_peer_creds(self).await
     }
 }
 
@@ -419,8 +425,8 @@ impl ReadHalf for tokio::net::unix::OwnedReadHalf {
         .await
     }
 
-    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
-        get_unix_peer_creds(self.as_ref())
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        get_unix_peer_creds(self.as_ref()).await
     }
 }
 
@@ -484,15 +490,22 @@ impl ReadHalf for Arc<Async<UnixStream>> {
         }
     }
 
-    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
-        use crate::win32::{unix_stream_get_peer_pid, ProcessToken};
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        let stream = self.clone();
+        crate::Task::spawn_blocking(
+            move || {
+                use crate::win32::{unix_stream_get_peer_pid, ProcessToken};
 
-        let pid = unix_stream_get_peer_pid(&self.get_ref())? as _;
-        let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
-            .and_then(|process_token| process_token.sid())?;
-        Ok(ConnectionCredentials::default()
-            .set_process_id(pid)
-            .set_windows_sid(sid))
+                let pid = unix_stream_get_peer_pid(&stream.get_ref())? as _;
+                let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
+                    .and_then(|process_token| process_token.sid())?;
+                Ok(ConnectionCredentials::default()
+                    .set_process_id(pid)
+                    .set_windows_sid(sid))
+            },
+            "peer credentials",
+        )
+        .await
     }
 }
 
@@ -532,20 +545,32 @@ impl ReadHalf for Arc<Async<TcpStream>> {
         }
     }
 
-    fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
         #[cfg(windows)]
-        {
-            use crate::win32::{tcp_stream_get_peer_pid, ProcessToken};
+        let creds = {
+            let stream = self.clone();
+            crate::Task::spawn_blocking(
+                move || {
+                    use crate::win32::{tcp_stream_get_peer_pid, ProcessToken};
 
-            let pid = tcp_stream_get_peer_pid(&self.get_ref())? as _;
-            let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
-                .and_then(|process_token| process_token.sid())?;
-            Ok(ConnectionCredentials::default()
-                .set_process_id(pid)
-                .set_windows_sid(sid))
-        }
+                    let pid = tcp_stream_get_peer_pid(&stream.get_ref())? as _;
+                    let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
+                        .and_then(|process_token| process_token.sid())?;
+                    io::Result::Ok(
+                        ConnectionCredentials::default()
+                            .set_process_id(pid)
+                            .set_windows_sid(sid),
+                    )
+                },
+                "peer credentials",
+            )
+            .await
+        }?;
+
         #[cfg(not(windows))]
-        Ok(ConnectionCredentials::default())
+        let creds = ConnectionCredentials::default();
+
+        Ok(creds)
     }
 }
 
