@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use futures_util::{future::poll_fn, StreamExt};
+use futures_util::StreamExt;
 #[cfg(unix)]
 use nix::unistd::Uid;
 use std::{
@@ -417,15 +417,16 @@ impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ClientHandshake<R, W> {
 
                     // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
                     #[cfg(not(any(target_os = "freebsd", target_os = "dragonfly")))]
-                    let written = poll_fn(|cx| {
-                        self.common.socket.write_mut().poll_sendmsg(
-                            cx,
+                    let written = self
+                        .common
+                        .socket
+                        .write_mut()
+                        .sendmsg(
                             &[b'\0'],
                             #[cfg(unix)]
                             &[],
                         )
-                    })
-                    .await?;
+                        .await?;
 
                     if written != 1 {
                         return Err(Error::Handshake(
@@ -946,15 +947,15 @@ impl<R: ReadHalf, W: WriteHalf> HandshakeCommon<R, W> {
     async fn write_command(&mut self, command: Command) -> Result<()> {
         let mut send_buffer = Vec::<u8>::from(command);
         while !send_buffer.is_empty() {
-            let written = poll_fn(|cx| {
-                self.socket.write_mut().poll_sendmsg(
-                    cx,
+            let written = self
+                .socket
+                .write_mut()
+                .sendmsg(
                     &send_buffer,
                     #[cfg(unix)]
                     &[],
                 )
-            })
-            .await?;
+                .await?;
             send_buffer.drain(..written);
         }
         Ok(())

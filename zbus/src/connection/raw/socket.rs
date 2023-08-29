@@ -1,5 +1,7 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
+#[cfg(feature = "tokio")]
+use std::pin::Pin;
 #[cfg(unix)]
 use std::{
     future::poll_fn,
@@ -7,7 +9,6 @@ use std::{
 };
 use std::{
     io,
-    pin::Pin,
     task::{Context, Poll},
 };
 #[cfg(not(feature = "tokio"))]
@@ -187,6 +188,7 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
 /// The write half of a socket.
 ///
 /// See [`Socket`] for more details.
+#[async_trait::async_trait]
 pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     /// Attempt to send a message on the socket
     ///
@@ -199,12 +201,7 @@ pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     ///
     /// If the underlying transport does not support transmitting file descriptors, this
     /// will return `Err(ErrorKind::InvalidInput)`.
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buffer: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>>;
+    async fn sendmsg(&mut self, buffer: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize>;
 
     /// The dbus daemon on `freebsd` and `dragonfly` currently requires sending the zero byte
     /// as a separate message with SCM_CREDS, as part of the `EXTERNAL` authentication on unix
@@ -282,19 +279,16 @@ impl ReadHalf for Box<dyn ReadHalf> {
     }
 }
 
+#[async_trait::async_trait]
 impl WriteHalf for Box<dyn WriteHalf> {
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buffer: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
-        (**self).poll_sendmsg(
-            cx,
-            buffer,
-            #[cfg(unix)]
-            fds,
-        )
+    async fn sendmsg(&mut self, buffer: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
+        (**self)
+            .sendmsg(
+                buffer,
+                #[cfg(unix)]
+                fds,
+            )
+            .await
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
@@ -353,14 +347,10 @@ impl ReadHalf for Arc<Async<UnixStream>> {
 }
 
 #[cfg(all(unix, not(feature = "tokio")))]
+#[async_trait::async_trait]
 impl WriteHalf for Arc<Async<UnixStream>> {
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buffer: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
-        loop {
+    async fn sendmsg(&mut self, buffer: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
+        poll_fn(|cx| loop {
             match fd_sendmsg(
                 self.as_raw_fd(),
                 buffer,
@@ -374,7 +364,8 @@ impl WriteHalf for Arc<Async<UnixStream>> {
                 },
                 v => return Poll::Ready(v),
             }
-        }
+        })
+        .await
     }
 
     fn close(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
@@ -431,15 +422,11 @@ impl ReadHalf for tokio::net::unix::OwnedReadHalf {
 }
 
 #[cfg(all(unix, feature = "tokio"))]
+#[async_trait::async_trait]
 impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buffer: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
+    async fn sendmsg(&mut self, buffer: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
         let stream = self.as_ref();
-        loop {
+        poll_fn(|cx| loop {
             match stream.try_io(tokio::io::Interest::WRITABLE, || {
                 fd_sendmsg(
                     stream.as_raw_fd(),
@@ -457,7 +444,8 @@ impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
                 }
                 v => return Poll::Ready(v),
             }
-        }
+        })
+        .await
     }
 
     fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
@@ -510,9 +498,10 @@ impl ReadHalf for Arc<Async<UnixStream>> {
 }
 
 #[cfg(all(windows, not(feature = "tokio")))]
+#[async_trait::async_trait]
 impl WriteHalf for Arc<Async<UnixStream>> {
-    fn poll_sendmsg(&mut self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
-        futures_util::AsyncWrite::poll_write(Pin::new(&mut self.as_ref()), cx, buf)
+    async fn sendmsg(&mut self, buf: &[u8], #[cfg(unix)] _fds: &[RawFd]) -> io::Result<usize> {
+        futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
     fn close(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
@@ -575,22 +564,18 @@ impl ReadHalf for Arc<Async<TcpStream>> {
 }
 
 #[cfg(not(feature = "tokio"))]
+#[async_trait::async_trait]
 impl WriteHalf for Arc<Async<TcpStream>> {
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
+    async fn sendmsg(&mut self, buf: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
         #[cfg(unix)]
         if !fds.is_empty() {
-            return Poll::Ready(Err(io::Error::new(
+            return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "fds cannot be sent with a tcp stream",
-            )));
+            ));
         }
 
-        futures_util::AsyncWrite::poll_write(Pin::new(&mut self.as_ref()), cx, buf)
+        futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
     fn close(&mut self, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
@@ -650,24 +635,20 @@ impl ReadHalf for tokio::net::tcp::OwnedReadHalf {
 }
 
 #[cfg(feature = "tokio")]
+#[async_trait::async_trait]
 impl WriteHalf for tokio::net::tcp::OwnedWriteHalf {
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
-        use tokio::io::AsyncWrite;
+    async fn sendmsg(&mut self, buf: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
+        use tokio::io::AsyncWriteExt;
 
         #[cfg(unix)]
         if !fds.is_empty() {
-            return Poll::Ready(Err(io::Error::new(
+            return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "fds cannot be sent with a tcp stream",
-            )));
+            ));
         }
 
-        Pin::new(self).poll_write(cx, buf)
+        self.write(buf).await
     }
 
     fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
@@ -697,22 +678,18 @@ impl ReadHalf for Arc<Async<vsock::VsockStream>> {
 }
 
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+#[async_trait::async_trait]
 impl WriteHalf for Arc<Async<vsock::VsockStream>> {
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
+    async fn sendmsg(&mut self, buf: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
         #[cfg(unix)]
         if !fds.is_empty() {
-            return Poll::Ready(Err(io::Error::new(
+            return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "fds cannot be sent with a tcp stream",
-            )));
+            ));
         }
 
-        futures_util::AsyncWrite::poll_write(Pin::new(&mut self.as_ref()), cx, buf)
+        futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
     fn close(&self) -> io::Result<()> {
@@ -754,24 +731,20 @@ impl ReadHalf for tokio_vsock::ReadHalf {
 }
 
 #[cfg(feature = "tokio-vsock")]
+#[async_trait::async_trait]
 impl WriteHalf for tokio_vsock::WriteHalf {
-    fn poll_sendmsg(
-        &mut self,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-        #[cfg(unix)] fds: &[RawFd],
-    ) -> Poll<io::Result<usize>> {
-        use tokio::io::AsyncWrite;
+    async fn sendmsg(&mut self, buf: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
+        use tokio::io::AsyncWriteExt;
 
         #[cfg(unix)]
         if !fds.is_empty() {
-            return Poll::Ready(Err(io::Error::new(
+            return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "fds cannot be sent with a tcp stream",
-            )));
+            ));
         }
 
-        Pin::new(self).poll_write(cx, buf)
+        self.write(buf).await
     }
 
     fn close(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {

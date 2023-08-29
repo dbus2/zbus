@@ -63,15 +63,13 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
         while pos < data.len() {
             #[cfg(unix)]
             let fds = if pos == 0 { msg.fds() } else { vec![] };
-            pos += poll_fn(|cx| {
-                write.poll_sendmsg(
-                    cx,
+            pos += write
+                .sendmsg(
                     &data[pos..],
                     #[cfg(unix)]
                     &fds,
                 )
-            })
-            .await?;
+                .await?;
         }
         Ok(())
     }
