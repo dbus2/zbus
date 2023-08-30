@@ -37,9 +37,9 @@ type RecvmsgResult = io::Result<usize>;
 /// free to submit pull requests to add support for more runtimes to zbus itself so rust's orphan
 /// rules don't force the use of a wrapper struct (and to avoid duplicating the work across many
 /// projects).
-pub trait Socket: std::fmt::Debug + Send + Sync {
-    type ReadHalf: ReadHalf + std::fmt::Debug + Send + Sync;
-    type WriteHalf: WriteHalf + std::fmt::Debug + Send + Sync;
+pub trait Socket {
+    type ReadHalf: ReadHalf;
+    type WriteHalf: WriteHalf;
 
     /// Split the socket into a read half and a write half.
     fn split(self) -> Split<Self::ReadHalf, Self::WriteHalf>
