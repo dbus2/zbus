@@ -740,7 +740,7 @@ impl WriteHalf for Arc<Async<vsock::VsockStream>> {
         if !fds.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "fds cannot be sent with a tcp stream",
+                "fds cannot be sent with a vsock stream",
             ));
         }
 
@@ -796,7 +796,7 @@ impl WriteHalf for tokio_vsock::WriteHalf {
         if !fds.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "fds cannot be sent with a tcp stream",
+                "fds cannot be sent with a vsock stream",
             ));
         }
 
