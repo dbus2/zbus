@@ -60,7 +60,7 @@ pub(crate) struct ConnectionInner {
     unique_name: OnceCell<OwnedUniqueName>,
     registered_names: Mutex<HashMap<WellKnownName<'static>, NameStatus>>,
 
-    raw_conn: Arc<RawConnection<Box<dyn socket::ReadHalf>, Box<dyn socket::WriteHalf>>>,
+    raw_conn: Arc<RawConnection<Box<dyn socket::WriteHalf>>>,
 
     // Serial number for next outgoing message
     serial: AtomicU32,
@@ -1271,13 +1271,22 @@ impl Connection {
         self.inner.raw_conn.close().await
     }
 
-    pub(crate) fn init_socket_reader(&self) {
+    pub(crate) fn init_socket_reader(
+        &self,
+        socket_read: Box<dyn socket::ReadHalf>,
+        already_read: Vec<u8>,
+    ) {
         let inner = &self.inner;
         inner
             .socket_reader_task
             .set(
-                SocketReader::new(inner.raw_conn.clone(), inner.msg_senders.clone())
-                    .spawn(&inner.executor),
+                SocketReader::new(
+                    socket_read,
+                    inner.msg_senders.clone(),
+                    already_read,
+                    inner.raw_conn.activity_event(),
+                )
+                .spawn(&inner.executor),
             )
             .expect("Attempted to set `socket_reader_task` twice");
     }
