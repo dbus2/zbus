@@ -213,7 +213,7 @@ pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     /// sockets. This method is used by the authentication machinery in zbus to send this
     /// zero byte. Socket implementations based on unix sockets should implement this method.
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-    async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+    async fn send_zero_byte(&mut self) -> io::Result<Option<usize>> {
         Ok(None)
     }
 
@@ -309,7 +309,7 @@ impl WriteHalf for Box<dyn WriteHalf> {
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-    async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+    async fn send_zero_byte(&mut self) -> io::Result<Option<usize>> {
         (**self).send_zero_byte().await
     }
 
@@ -408,7 +408,7 @@ impl WriteHalf for Arc<Async<UnixStream>> {
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-    async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+    async fn send_zero_byte(&mut self) -> io::Result<Option<usize>> {
         send_zero_byte(self).await.map(Some)
     }
 
@@ -502,7 +502,7 @@ impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-    async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+    async fn send_zero_byte(&mut self) -> io::Result<Option<usize>> {
         send_zero_byte(self.as_ref()).await.map(Some)
     }
 
@@ -568,7 +568,7 @@ impl WriteHalf for Arc<Async<UnixStream>> {
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-    async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
+    async fn send_zero_byte(&mut self) -> io::Result<Option<usize>> {
         send_zero_byte(self).await.map(Some)
     }
 

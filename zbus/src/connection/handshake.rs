@@ -400,7 +400,7 @@ impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ClientHandshake<R, W> {
                     let written = self
                         .common
                         .socket
-                        .write()
+                        .write_mut()
                         .send_zero_byte()
                         .await
                         .map_err(|e| {
