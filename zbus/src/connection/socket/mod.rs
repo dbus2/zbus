@@ -567,11 +567,6 @@ impl WriteHalf for Arc<Async<UnixStream>> {
         .await
     }
 
-    #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-    async fn send_zero_byte(&mut self) -> io::Result<Option<usize>> {
-        send_zero_byte(self).await.map(Some)
-    }
-
     async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         ReadHalf::peer_credentials(self).await
     }
