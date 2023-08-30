@@ -338,7 +338,7 @@ impl<'a> Builder<'a> {
     }
 
     async fn build_(self, executor: Executor<'static>) -> Result<Connection> {
-        let stream = match self.target {
+        let mut stream = match self.target {
             #[cfg(not(feature = "tokio"))]
             Target::UnixStream(stream) => Split::new_boxed(Async::new(stream)?),
             #[cfg(all(unix, feature = "tokio"))]
@@ -365,7 +365,7 @@ impl<'a> Builder<'a> {
             },
             Target::Socket(stream) => stream,
         };
-        let auth = match self.guid {
+        let mut auth = match self.guid {
             None => {
                 // SASL Handshake
                 Authenticated::client(stream, self.auth_mechanisms).await?
@@ -375,7 +375,7 @@ impl<'a> Builder<'a> {
                     return Err(Error::Unsupported);
                 }
 
-                let creds = stream.read().peer_credentials().await?;
+                let creds = stream.read_mut().peer_credentials().await?;
                 #[cfg(unix)]
                 let client_uid = creds.unix_user_id();
                 #[cfg(windows)]
@@ -395,6 +395,9 @@ impl<'a> Builder<'a> {
                 .await?
             }
         };
+        // SAFETY: `Authenticated` is always built with these fields set to `Some`.
+        let socket_read = auth.socket_read.take().unwrap();
+        let already_received_bytes = auth.already_received_bytes.take().unwrap();
 
         let mut conn = Connection::new(auth, !self.p2p, executor).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
@@ -421,7 +424,7 @@ impl<'a> Builder<'a> {
         }
 
         // Start the socket reader task.
-        conn.init_socket_reader();
+        conn.init_socket_reader(socket_read, already_received_bytes);
 
         if !self.p2p {
             // Now that the server has approved us, we must send the bus Hello, as per specs

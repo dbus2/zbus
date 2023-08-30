@@ -19,10 +19,7 @@ use xdg_home::home_dir;
 use crate::win32;
 use crate::{file::FileLines, guid::Guid, Error, Result};
 
-use super::raw::{
-    socket::{ReadHalf, Split, WriteHalf},
-    Connection,
-};
+use super::socket::{ReadHalf, Split, WriteHalf};
 
 /// Authentication mechanisms
 ///
@@ -53,12 +50,15 @@ pub enum AuthMechanism {
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
 pub struct Authenticated<R, W> {
-    pub(crate) conn: Connection<R, W>,
+    pub(crate) socket_write: W,
     /// The server Guid
     pub(crate) server_guid: Guid,
     /// Whether file descriptor passing has been accepted by both sides
     #[cfg(unix)]
     pub(crate) cap_unix_fd: bool,
+
+    pub(crate) socket_read: Option<R>,
+    pub(crate) already_received_bytes: Option<Vec<u8>>,
 }
 
 impl<R, W> Authenticated<R, W>
@@ -400,7 +400,7 @@ impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ClientHandshake<R, W> {
                     let written = self
                         .common
                         .socket
-                        .write()
+                        .write_mut()
                         .send_zero_byte()
                         .await
                         .map_err(|e| {
@@ -496,11 +496,14 @@ impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ClientHandshake<R, W> {
                 }
                 Done => {
                     trace!("Handshake done");
+                    let (read, write) = self.common.socket.take();
                     return Ok(Authenticated {
-                        conn: Connection::new(self.common.socket, self.common.recv_buffer),
+                        socket_write: write,
+                        socket_read: Some(read),
                         server_guid: self.common.server_guid.unwrap(),
                         #[cfg(unix)]
                         cap_unix_fd: self.common.cap_unix_fd,
+                        already_received_bytes: Some(self.common.recv_buffer),
                     });
                 }
             };
@@ -786,13 +789,16 @@ impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ServerHandshake<'_, R, W> {
                 }
                 ServerHandshakeStep::Done => {
                     trace!("Handshake done");
+                    let (read, write) = self.common.socket.take();
                     return Ok(Authenticated {
-                        conn: Connection::new(self.common.socket, self.common.recv_buffer),
+                        socket_write: write,
+                        socket_read: Some(read),
                         // SAFETY: We know that the server GUID is set because we set it in the
                         // constructor.
                         server_guid: self.common.server_guid.expect("Server GUID not set"),
                         #[cfg(unix)]
                         cap_unix_fd: self.common.cap_unix_fd,
+                        already_received_bytes: Some(self.common.recv_buffer),
                     });
                 }
             }
