@@ -10,7 +10,7 @@ use crate::{
     padding_for_8_bytes, Executor, Message, OwnedMatchRule, Task,
 };
 
-use super::raw::socket::ReadHalf;
+use super::socket::ReadHalf;
 
 #[derive(Debug)]
 pub(crate) struct SocketReader {

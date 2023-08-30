@@ -37,8 +37,8 @@ use crate::{
 mod builder;
 pub use builder::Builder;
 
-mod raw;
-pub use raw::socket::{self, Socket};
+pub mod socket;
+pub use socket::Socket;
 
 mod socket_reader;
 use socket_reader::SocketReader;

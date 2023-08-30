@@ -19,7 +19,7 @@ use xdg_home::home_dir;
 use crate::win32;
 use crate::{file::FileLines, guid::Guid, Error, Result};
 
-use super::raw::socket::{ReadHalf, Split, WriteHalf};
+use super::socket::{ReadHalf, Split, WriteHalf};
 
 /// Authentication mechanisms
 ///
