@@ -178,8 +178,10 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
     async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult;
 
     /// Supports passing file descriptors.
+    ///
+    /// Default implementation returns `false`.
     fn can_pass_unix_fd(&self) -> bool {
-        true
+        false
     }
 
     /// Return the peer credentials.
@@ -344,6 +346,11 @@ impl ReadHalf for Arc<Async<UnixStream>> {
         .await
     }
 
+    /// Supports passing file descriptors.
+    fn can_pass_unix_fd(&self) -> bool {
+        true
+    }
+
     async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
         get_unix_peer_creds(self).await
     }
@@ -424,6 +431,11 @@ impl ReadHalf for tokio::net::unix::OwnedReadHalf {
         .await
     }
 
+    /// Supports passing file descriptors.
+    fn can_pass_unix_fd(&self) -> bool {
+        true
+    }
+
     async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
         get_unix_peer_creds(self.as_ref()).await
     }
@@ -469,10 +481,6 @@ impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
 #[cfg(all(windows, not(feature = "tokio")))]
 #[async_trait::async_trait]
 impl ReadHalf for Arc<Async<UnixStream>> {
-    fn can_pass_unix_fd(&self) -> bool {
-        false
-    }
-
     async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
         match futures_util::AsyncReadExt::read(&mut self.as_ref(), buf).await {
             Err(e) => Err(e),
@@ -530,10 +538,6 @@ impl WriteHalf for Arc<Async<UnixStream>> {
 #[cfg(not(feature = "tokio"))]
 #[async_trait::async_trait]
 impl ReadHalf for Arc<Async<TcpStream>> {
-    fn can_pass_unix_fd(&self) -> bool {
-        false
-    }
-
     async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
         match futures_util::AsyncReadExt::read(&mut self.as_ref(), buf).await {
             Err(e) => Err(e),
@@ -616,10 +620,6 @@ impl Socket for tokio::net::TcpStream {
 #[cfg(feature = "tokio")]
 #[async_trait::async_trait]
 impl ReadHalf for tokio::net::tcp::OwnedReadHalf {
-    fn can_pass_unix_fd(&self) -> bool {
-        false
-    }
-
     async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
         use tokio::io::{AsyncReadExt, ReadBuf};
 
@@ -677,10 +677,6 @@ impl WriteHalf for tokio::net::tcp::OwnedWriteHalf {
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
 #[async_trait::async_trait]
 impl ReadHalf for Arc<Async<vsock::VsockStream>> {
-    fn can_pass_unix_fd(&self) -> bool {
-        false
-    }
-
     async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
         match futures_util::AsyncReadExt::read(&mut self.as_ref(), buf).await {
             Err(e) => Err(e),
@@ -735,10 +731,6 @@ impl Socket for tokio_vsock::VsockStream {
 #[cfg(feature = "tokio-vsock")]
 #[async_trait::async_trait]
 impl ReadHalf for tokio_vsock::ReadHalf {
-    fn can_pass_unix_fd(&self) -> bool {
-        false
-    }
-
     async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
         use tokio::io::{AsyncReadExt, ReadBuf};
 
