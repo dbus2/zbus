@@ -185,7 +185,7 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
     }
 
     /// Return the peer credentials.
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         Ok(ConnectionCredentials::default())
     }
 }
@@ -230,7 +230,7 @@ pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     }
 
     /// Return the peer credentials.
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         Ok(ConnectionCredentials::default())
     }
 }
@@ -291,7 +291,7 @@ impl ReadHalf for Box<dyn ReadHalf> {
         (**self).recvmsg(buf).await
     }
 
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         (**self).peer_credentials().await
     }
 }
@@ -321,7 +321,7 @@ impl WriteHalf for Box<dyn WriteHalf> {
         (**self).can_pass_unix_fd()
     }
 
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         (**self).peer_credentials().await
     }
 }
@@ -371,7 +371,7 @@ impl ReadHalf for Arc<Async<UnixStream>> {
         true
     }
 
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         get_unix_peer_creds(self).await
     }
 }
@@ -417,7 +417,7 @@ impl WriteHalf for Arc<Async<UnixStream>> {
         true
     }
 
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         get_unix_peer_creds(self).await
     }
 }
@@ -465,7 +465,7 @@ impl ReadHalf for tokio::net::unix::OwnedReadHalf {
         true
     }
 
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         get_unix_peer_creds(self.as_ref()).await
     }
 }
@@ -511,7 +511,7 @@ impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
         true
     }
 
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         get_unix_peer_creds(self.as_ref()).await
     }
 }
@@ -532,7 +532,7 @@ impl ReadHalf for Arc<Async<UnixStream>> {
         }
     }
 
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         let stream = self.clone();
         crate::Task::spawn_blocking(
             move || {
@@ -572,7 +572,7 @@ impl WriteHalf for Arc<Async<UnixStream>> {
         send_zero_byte(self).await.map(Some)
     }
 
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         ReadHalf::peer_credentials(self).await
     }
 }
@@ -593,7 +593,7 @@ impl ReadHalf for Arc<Async<TcpStream>> {
         }
     }
 
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         #[cfg(windows)]
         let creds = {
             let stream = self.clone();
@@ -646,7 +646,7 @@ impl WriteHalf for Arc<Async<TcpStream>> {
         .await
     }
 
-    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         ReadHalf::peer_credentials(self).await
     }
 }

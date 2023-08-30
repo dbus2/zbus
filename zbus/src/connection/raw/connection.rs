@@ -1,5 +1,5 @@
 use crate::async_lock::{Mutex, MutexGuard};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use event_listener::{Event, EventListener};
 
@@ -197,7 +197,7 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
     ///
     /// You should not try to read from it directly, as it may corrupt the internal state of this
     /// wrapper.
-    pub async fn socket_read(&self) -> impl Deref<Target = R> + '_ {
+    pub async fn socket_read(&self) -> impl DerefMut<Target = R> + '_ {
         pub struct SocketDeref<'s, R: ReadHalf> {
             socket: MutexGuard<'s, R>,
         }
@@ -210,6 +210,15 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
 
             fn deref(&self) -> &Self::Target {
                 &self.socket
+            }
+        }
+
+        impl<R> DerefMut for SocketDeref<'_, R>
+        where
+            R: ReadHalf,
+        {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.socket
             }
         }
 

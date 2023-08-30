@@ -338,7 +338,7 @@ impl<'a> Builder<'a> {
     }
 
     async fn build_(self, executor: Executor<'static>) -> Result<Connection> {
-        let stream = match self.target {
+        let mut stream = match self.target {
             #[cfg(not(feature = "tokio"))]
             Target::UnixStream(stream) => Split::new_boxed(Async::new(stream)?),
             #[cfg(all(unix, feature = "tokio"))]
@@ -375,7 +375,7 @@ impl<'a> Builder<'a> {
                     return Err(Error::Unsupported);
                 }
 
-                let creds = stream.read().peer_credentials().await?;
+                let creds = stream.read_mut().peer_credentials().await?;
                 #[cfg(unix)]
                 let client_uid = creds.unix_user_id();
                 #[cfg(windows)]
