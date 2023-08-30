@@ -13,9 +13,7 @@ in panics and hangs. This is not a limitation of zbus but rather a
 
 The only difference to that of [asynchronous `Connection` API] is that you use
 [`blocking::Connection`] type instead. This type's API is almost identical to that of `Connection`,
-except all its methods are blocking. One notable difference is that there is no equivalent of
-[`futures::sink::Sink`] implementation provided. There is however [`blocking::MessageIterator`]
-type, that implements [`std::iter::Iterator`].
+except all its methods are blocking.
 
 ## Client
 
@@ -201,7 +199,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 [asynchronous `Connection` API]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html
 [`blocking::Connection`]: https://docs.rs/zbus/latest/zbus/blocking/connection/struct.Connection.html
-[`futures::sink::Sink`]: https://docs.rs/futures/latest/futures/sink/trait.Sink.html
 [`std::iter::Iterator`]: https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html
 [blocking module]: https://docs.rs/zbus/latest/zbus/blocking/index.html
 [wkgp]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich

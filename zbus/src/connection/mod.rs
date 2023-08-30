@@ -12,7 +12,6 @@ use std::{
     ops::Deref,
     pin::Pin,
     sync::{
-        self,
         atomic::{AtomicU32, Ordering::SeqCst},
         Arc, Weak,
     },
@@ -22,9 +21,8 @@ use tracing::{debug, info_span, instrument, trace, trace_span, warn, Instrument}
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
-use futures_core::{ready, Future};
-use futures_sink::Sink;
-use futures_util::{sink::SinkExt, StreamExt};
+use futures_core::Future;
+use futures_util::StreamExt;
 
 use crate::{
     async_lock::Mutex,
@@ -40,8 +38,8 @@ mod builder;
 pub use builder::Builder;
 
 mod raw;
+pub use raw::socket::{self, Socket};
 use raw::Connection as RawConnection;
-pub use raw::Socket;
 
 mod socket_reader;
 use socket_reader::SocketReader;
@@ -62,7 +60,7 @@ pub(crate) struct ConnectionInner {
     unique_name: OnceCell<OwnedUniqueName>,
     registered_names: Mutex<HashMap<WellKnownName<'static>, NameStatus>>,
 
-    raw_conn: Arc<sync::Mutex<RawConnection<Box<dyn Socket>>>>,
+    raw_conn: Arc<RawConnection<Box<dyn socket::ReadHalf>, Box<dyn socket::WriteHalf>>>,
 
     // Serial number for next outgoing message
     serial: AtomicU32,
@@ -116,24 +114,10 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 /// [`crate::blocking::MessageIterator`] instances are continuously polled and iterated on,
 /// respectively.
 ///
-/// For sending messages you can either use [`Connection::send_message`] method or make use of the
-/// [`Sink`] implementation. For latter, you might find [`SinkExt`] API very useful. Keep in mind
-/// that [`Connection`] will not manage the serial numbers (cookies) on the messages for you when
-/// they are sent through the [`Sink`] implementation. You can manually assign unique serial numbers
-/// to them using the [`Connection::assign_serial_num`] method before sending them off, if needed.
-/// Having said that, the [`Sink`] is mainly useful for sending out signals, as they do not expect
-/// a reply, and serial numbers are not very useful for signals either for the same reason.
-///
-/// Since you do not need exclusive access to a `zbus::Connection` to send messages on the bus,
-/// [`Sink`] is also implemented on `&Connection`.
-///
-/// # Caveats
-///
-/// At the moment, a simultaneous [flush request] from multiple tasks/threads could
-/// potentially create a busy loop, thus wasting CPU time. This limitation may be removed in the
-/// future.
-///
-/// [flush request]: https://docs.rs/futures/0.3.15/futures/sink/trait.SinkExt.html#method.flush
+/// For sending messages you can either use [`Connection::send_message`] or [`Connection::send`]
+/// method. While the former sets the serial numbers (cookies) on the messages for you, the latter
+/// does not. You can manually assign unique serial numbers to messages using the
+/// [`Connection::assign_serial_num`] method when using `send` method to send them off.
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
@@ -296,18 +280,39 @@ impl OrderedFuture for PendingMethodCall {
 impl Connection {
     /// Send `msg` to the peer.
     ///
-    /// Unlike our [`Sink`] implementation, this method sets a unique (to this connection) serial
-    /// number on the message before sending it off, for you.
+    /// Unlike [`Connection::send`], this method sets a unique (to this connection) serial number on
+    /// the message before sending it off, for you.
     ///
     /// On successfully sending off `msg`, the assigned serial number is returned.
     pub async fn send_message(&self, mut msg: Message) -> Result<NonZeroU32> {
         let serial = self.assign_serial_num(&mut msg)?;
 
         trace!("Sending message: {:?}", msg);
-        (&mut &*self).send(msg).await?;
+        self.send(&msg).await?;
         trace!("Sent message with serial: {}", serial);
 
         Ok(serial)
+    }
+
+    /// Send `msg` to the peer.
+    ///
+    /// Same as [`Connection::send_message`] except it doesn't sets the unique serial number on the
+    /// message for you. It expects a serial number to be already set on the message.
+    pub async fn send(&self, msg: &Message) -> Result<()> {
+        #[cfg(unix)]
+        if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
+            return Err(Error::Unsupported);
+        }
+        let serial = msg
+            .primary_header()
+            .serial_num()
+            .ok_or(Error::InvalidSerial)?;
+
+        trace!("Sending message: {:?}", msg);
+        self.inner.raw_conn.send_message(msg).await?;
+        trace!("Sent message with serial: {}", serial);
+
+        Ok(())
     }
 
     /// Send a method call.
@@ -1161,7 +1166,7 @@ impl Connection {
     }
 
     pub(crate) async fn new(
-        auth: Authenticated<Box<dyn Socket>>,
+        auth: Authenticated<Box<dyn socket::ReadHalf>, Box<dyn socket::WriteHalf>>,
         bus_connection: bool,
         executor: Executor<'static>,
     ) -> Result<Self> {
@@ -1195,7 +1200,7 @@ impl Connection {
         let msg_senders = Arc::new(Mutex::new(msg_senders));
         let subscriptions = Mutex::new(HashMap::new());
 
-        let raw_conn = Arc::new(sync::Mutex::new(auth.conn));
+        let raw_conn = Arc::new(auth.conn);
 
         let connection = Self {
             inner: Arc::new(ConnectionInner {
@@ -1239,11 +1244,7 @@ impl Connection {
     ///
     /// This function is meant for the caller to implement idle or timeout on inactivity.
     pub fn monitor_activity(&self) -> EventListener {
-        self.inner
-            .raw_conn
-            .lock()
-            .expect("poisoned lock")
-            .monitor_activity()
+        self.inner.raw_conn.monitor_activity()
     }
 
     /// Returns the peer credentials.
@@ -1255,24 +1256,19 @@ impl Connection {
     ///
     /// Currently `unix_group_ids` and `linux_security_label` fields are not populated.
     pub async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
-        let raw_conn = self.inner.raw_conn.lock().expect("poisoned lock");
-        let socket = raw_conn.socket();
+        self.inner
+            .raw_conn
+            .socket_read()
+            .await
+            .peer_credentials()
+            .await
+    }
 
-        Ok(ConnectionCredentials {
-            process_id: socket.peer_pid()?,
-            #[cfg(unix)]
-            unix_user_id: socket.uid()?,
-            #[cfg(not(unix))]
-            unix_user_id: None,
-            // Should we beother providing all the groups of user? What's the use case?
-            unix_group_ids: None,
-            #[cfg(windows)]
-            windows_sid: socket.peer_sid(),
-            #[cfg(not(windows))]
-            windows_sid: None,
-            // TODO: Populate this field (see the field docs for pointers).
-            linux_security_label: None,
-        })
+    /// Close the connection.
+    ///
+    /// After this call, all reading and writing operations will fail.
+    pub async fn close(self) -> Result<()> {
+        self.inner.raw_conn.close().await
     }
 
     pub(crate) fn init_socket_reader(&self) {
@@ -1284,77 +1280,6 @@ impl Connection {
                     .spawn(&inner.executor),
             )
             .expect("Attempted to set `socket_reader_task` twice");
-    }
-}
-
-impl<T> Sink<T> for Connection
-where
-    T: Into<Arc<Message>>,
-{
-    type Error = Error;
-
-    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        <&Connection as Sink<Arc<Message>>>::poll_ready(Pin::new(&mut &*self), cx)
-    }
-
-    fn start_send(self: Pin<&mut Self>, msg: T) -> Result<()> {
-        Pin::new(&mut &*self).start_send(msg)
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        <&Connection as Sink<Arc<Message>>>::poll_flush(Pin::new(&mut &*self), cx)
-    }
-
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        <&Connection as Sink<Arc<Message>>>::poll_close(Pin::new(&mut &*self), cx)
-    }
-}
-
-impl<'a, T> Sink<T> for &'a Connection
-where
-    T: Into<Arc<Message>>,
-{
-    type Error = Error;
-
-    fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
-        // TODO: We should have a max queue length in raw::Socket for outgoing messages.
-        Poll::Ready(Ok(()))
-    }
-
-    fn start_send(self: Pin<&mut Self>, msg: T) -> Result<()> {
-        let msg = msg.into();
-
-        if msg.primary_header().serial_num().is_none() {
-            return Err(Error::InvalidSerial);
-        }
-
-        #[cfg(unix)]
-        if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
-            return Err(Error::Unsupported);
-        }
-
-        self.inner
-            .raw_conn
-            .lock()
-            .expect("poisoned lock")
-            .enqueue_message(msg);
-
-        Ok(())
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        self.inner.raw_conn.lock().expect("poisoned lock").flush(cx)
-    }
-
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        let mut raw_conn = self.inner.raw_conn.lock().expect("poisoned lock");
-        let res = raw_conn.flush(cx);
-        match ready!(res) {
-            Ok(_) => (),
-            Err(e) => return Poll::Ready(Err(e)),
-        }
-
-        Poll::Ready(raw_conn.close())
     }
 }
 
@@ -1403,17 +1328,31 @@ mod tests {
 
     use super::*;
 
-    // Same numbered client and server are already paired up. We make use of the
-    // `futures_util::stream::Forward` to connect the two pipes and hence test one of the benefits
-    // of our Stream and Sink impls.
+    // Same numbered client and server are already paired up.
     async fn test_p2p(
         server1: Connection,
         client1: Connection,
         server2: Connection,
         client2: Connection,
     ) -> Result<()> {
-        let forward1 = MessageStream::from(server1.clone()).forward(client2.clone());
-        let forward2 = MessageStream::from(&client2).forward(server1);
+        let forward1 = {
+            let stream = MessageStream::from(server1.clone());
+            let sink = client2.clone();
+
+            stream.try_for_each(move |msg| {
+                let sink = sink.clone();
+                async move { sink.send(&msg).await }
+            })
+        };
+        let forward2 = {
+            let stream = MessageStream::from(client2.clone());
+            let sink = server1.clone();
+
+            stream.try_for_each(move |msg| {
+                let sink = sink.clone();
+                async move { sink.send(&msg).await }
+            })
+        };
         let _forward_task = client1.executor().spawn(
             async move { futures_util::try_join!(forward1, forward2) },
             "forward_task",

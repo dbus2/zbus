@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use futures_util::{future::poll_fn, StreamExt};
+use futures_util::StreamExt;
 #[cfg(unix)]
 use nix::unistd::Uid;
 use std::{
@@ -19,7 +19,10 @@ use xdg_home::home_dir;
 use crate::win32;
 use crate::{file::FileLines, guid::Guid, Error, Result};
 
-use super::raw::{Connection, Socket};
+use super::raw::{
+    socket::{ReadHalf, Split, WriteHalf},
+    Connection,
+};
 
 /// Authentication mechanisms
 ///
@@ -49,8 +52,8 @@ pub enum AuthMechanism {
 /// [`ServerHandshake`]: struct.ServerHandshake.html
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
-pub struct Authenticated<S> {
-    pub(crate) conn: Connection<S>,
+pub struct Authenticated<R, W> {
+    pub(crate) conn: Connection<R, W>,
     /// The server Guid
     pub(crate) server_guid: Guid,
     /// Whether file descriptor passing has been accepted by both sides
@@ -58,12 +61,16 @@ pub struct Authenticated<S> {
     pub(crate) cap_unix_fd: bool,
 }
 
-impl<S> Authenticated<S>
+impl<R, W> Authenticated<R, W>
 where
-    S: Socket + Unpin,
+    R: ReadHalf + Unpin,
+    W: WriteHalf + Unpin,
 {
     /// Create a client-side `Authenticated` for the given `socket`.
-    pub async fn client(socket: S, mechanisms: Option<VecDeque<AuthMechanism>>) -> Result<Self> {
+    pub async fn client(
+        socket: Split<R, W>,
+        mechanisms: Option<VecDeque<AuthMechanism>>,
+    ) -> Result<Self> {
         ClientHandshake::new(socket, mechanisms).perform().await
     }
 
@@ -71,7 +78,7 @@ where
     ///
     /// The function takes `client_uid` on Unix only. On Windows, it takes `client_sid` instead.
     pub async fn server(
-        socket: S,
+        socket: Split<R, W>,
         guid: Guid,
         #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
@@ -142,23 +149,26 @@ enum Command {
 /// [`Authenticated`]: struct.AUthenticated.html
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
-pub struct ClientHandshake<S> {
-    common: HandshakeCommon<S>,
+pub struct ClientHandshake<R: ReadHalf, W: WriteHalf> {
+    common: HandshakeCommon<R, W>,
     step: ClientHandshakeStep,
 }
 
 #[async_trait]
-pub trait Handshake<S> {
+pub trait Handshake<R: ReadHalf, W: WriteHalf> {
     /// Perform the handshake.
     ///
     /// On a successful handshake, you get an `Authenticated`. If you need to send a Bus Hello,
     /// this remains to be done.
-    async fn perform(mut self) -> Result<Authenticated<S>>;
+    async fn perform(mut self) -> Result<Authenticated<R, W>>;
 }
 
-impl<S: Socket> ClientHandshake<S> {
+impl<R: ReadHalf, W: WriteHalf> ClientHandshake<R, W> {
     /// Start a handshake on this client socket
-    pub fn new(socket: S, mechanisms: Option<VecDeque<AuthMechanism>>) -> ClientHandshake<S> {
+    pub fn new(
+        socket: Split<R, W>,
+        mechanisms: Option<VecDeque<AuthMechanism>>,
+    ) -> ClientHandshake<R, W> {
         let mechanisms = mechanisms.unwrap_or_else(|| {
             let mut mechanisms = VecDeque::new();
             mechanisms.push_back(AuthMechanism::External);
@@ -374,9 +384,9 @@ impl Default for CookieContext<'_> {
 }
 
 #[async_trait]
-impl<S: Socket> Handshake<S> for ClientHandshake<S> {
+impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ClientHandshake<R, W> {
     #[instrument(skip(self))]
-    async fn perform(mut self) -> Result<Authenticated<S>> {
+    async fn perform(mut self) -> Result<Authenticated<R, W>> {
         use ClientHandshakeStep::*;
         loop {
             let (next_step, cmd) = match self.step {
@@ -390,7 +400,9 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                     let written = self
                         .common
                         .socket
+                        .write()
                         .send_zero_byte()
+                        .await
                         .map_err(|e| {
                             Error::Handshake(format!(
                                 "Could not send zero byte with credentials: {}",
@@ -406,15 +418,16 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
 
                     // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
                     #[cfg(not(any(target_os = "freebsd", target_os = "dragonfly")))]
-                    let written = poll_fn(|cx| {
-                        self.common.socket.poll_sendmsg(
-                            cx,
+                    let written = self
+                        .common
+                        .socket
+                        .write_mut()
+                        .sendmsg(
                             &[b'\0'],
                             #[cfg(unix)]
                             &[],
                         )
-                    })
-                    .await?;
+                        .await?;
 
                     if written != 1 {
                         return Err(Error::Handshake(
@@ -448,7 +461,7 @@ impl<S: Socket> Handshake<S> for ClientHandshake<S> {
                         (WaitingForOK, Command::Ok(guid)) => {
                             trace!("Received OK from server");
                             self.common.server_guid = Some(guid);
-                            if self.common.socket.can_pass_unix_fd() {
+                            if self.common.socket.read_mut().can_pass_unix_fd() {
                                 (WaitingForAgreeUnixFD, Command::NegotiateUnixFD)
                             } else {
                                 (Done, Command::Begin)
@@ -527,8 +540,8 @@ enum ServerHandshakeStep {
 /// [`Authenticated`]: struct.Authenticated.html
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
-pub struct ServerHandshake<'s, S> {
-    common: HandshakeCommon<S>,
+pub struct ServerHandshake<'s, R: ReadHalf, W: WriteHalf> {
+    common: HandshakeCommon<R, W>,
     step: ServerHandshakeStep,
     #[cfg(unix)]
     client_uid: Option<u32>,
@@ -538,16 +551,16 @@ pub struct ServerHandshake<'s, S> {
     cookie_context: CookieContext<'s>,
 }
 
-impl<'s, S: Socket> ServerHandshake<'s, S> {
+impl<'s, R: ReadHalf, W: WriteHalf> ServerHandshake<'s, R, W> {
     pub fn new(
-        socket: S,
+        socket: Split<R, W>,
         guid: Guid,
         #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
         cookie_id: Option<usize>,
         cookie_context: CookieContext<'s>,
-    ) -> Result<ServerHandshake<'s, S>> {
+    ) -> Result<ServerHandshake<'s, R, W>> {
         let mechanisms = match mechanisms {
             Some(mechanisms) => mechanisms,
             None => {
@@ -680,16 +693,15 @@ impl<'s, S: Socket> ServerHandshake<'s, S> {
 }
 
 #[async_trait]
-impl<S: Socket> Handshake<S> for ServerHandshake<'_, S> {
+impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ServerHandshake<'_, R, W> {
     #[instrument(skip(self))]
-    async fn perform(mut self) -> Result<Authenticated<S>> {
+    async fn perform(mut self) -> Result<Authenticated<R, W>> {
         loop {
             match self.step {
                 ServerHandshakeStep::WaitingForNull => {
                     trace!("Waiting for NULL");
                     let mut buffer = [0; 1];
-                    let read =
-                        poll_fn(|cx| self.common.socket.poll_recvmsg(cx, &mut buffer)).await?;
+                    let read = self.common.socket.read_mut().recvmsg(&mut buffer).await?;
                     #[cfg(unix)]
                     let read = read.0;
                     // recvmsg cannot return anything else than Ok(1) or Err
@@ -907,8 +919,8 @@ impl FromStr for Command {
 
 // Common code for the client and server side of the handshake.
 #[derive(Debug)]
-pub struct HandshakeCommon<S> {
-    socket: S,
+pub struct HandshakeCommon<R: ReadHalf, W: WriteHalf> {
+    socket: Split<R, W>,
     recv_buffer: Vec<u8>,
     server_guid: Option<Guid>,
     cap_unix_fd: bool,
@@ -916,9 +928,13 @@ pub struct HandshakeCommon<S> {
     mechanisms: VecDeque<AuthMechanism>,
 }
 
-impl<S: Socket> HandshakeCommon<S> {
+impl<R: ReadHalf, W: WriteHalf> HandshakeCommon<R, W> {
     /// Start a handshake on this client socket
-    pub fn new(socket: S, mechanisms: VecDeque<AuthMechanism>, server_guid: Option<Guid>) -> Self {
+    pub fn new(
+        socket: Split<R, W>,
+        mechanisms: VecDeque<AuthMechanism>,
+        server_guid: Option<Guid>,
+    ) -> Self {
         Self {
             socket,
             recv_buffer: Vec::new(),
@@ -932,15 +948,15 @@ impl<S: Socket> HandshakeCommon<S> {
     async fn write_command(&mut self, command: Command) -> Result<()> {
         let mut send_buffer = Vec::<u8>::from(command);
         while !send_buffer.is_empty() {
-            let written = poll_fn(|cx| {
-                self.socket.poll_sendmsg(
-                    cx,
+            let written = self
+                .socket
+                .write_mut()
+                .sendmsg(
                     &send_buffer,
                     #[cfg(unix)]
                     &[],
                 )
-            })
-            .await?;
+                .await?;
             send_buffer.drain(..written);
         }
         Ok(())
@@ -962,7 +978,7 @@ impl<S: Socket> HandshakeCommon<S> {
             }
 
             let mut buf = [0; 64];
-            let res = poll_fn(|cx| self.socket.poll_recvmsg(cx, &mut buf)).await?;
+            let res = self.socket.read_mut().recvmsg(&mut buf).await?;
             let read = {
                 #[cfg(unix)]
                 {
@@ -1016,7 +1032,7 @@ mod tests {
 
     use super::*;
 
-    use crate::Guid;
+    use crate::{Guid, Socket};
 
     fn create_async_socket_pair() -> (impl AsyncWrite + Socket, impl AsyncWrite + Socket) {
         // Tokio needs us to call the sync function from async context. :shrug:
@@ -1041,9 +1057,9 @@ mod tests {
     fn handshake() {
         let (p0, p1) = create_async_socket_pair();
 
-        let client = ClientHandshake::new(p0, None);
+        let client = ClientHandshake::new(p0.split(), None);
         let server = ServerHandshake::new(
-            p1,
+            p1.split(),
             Guid::generate(),
             Some(Uid::effective().into()),
             None,
@@ -1067,7 +1083,7 @@ mod tests {
     fn pipelined_handshake() {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
-            p1,
+            p1.split(),
             Guid::generate(),
             Some(Uid::effective().into()),
             None,
@@ -1096,7 +1112,7 @@ mod tests {
     fn separate_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
-            p1,
+            p1.split(),
             Guid::generate(),
             Some(Uid::effective().into()),
             None,
@@ -1123,7 +1139,7 @@ mod tests {
     fn missing_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
-            p1,
+            p1.split(),
             Guid::generate(),
             Some(Uid::effective().into()),
             None,
@@ -1141,7 +1157,7 @@ mod tests {
     fn anonymous_handshake() {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
-            p1,
+            p1.split(),
             Guid::generate(),
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
@@ -1159,7 +1175,7 @@ mod tests {
     fn separate_anonymous_data() {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
-            p1,
+            p1.split(),
             Guid::generate(),
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
