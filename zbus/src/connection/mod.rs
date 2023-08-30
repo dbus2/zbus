@@ -39,7 +39,6 @@ pub use builder::Builder;
 
 mod raw;
 pub use raw::socket::{self, Socket};
-use raw::Connection as RawConnection;
 
 mod socket_reader;
 use socket_reader::SocketReader;
@@ -60,7 +59,8 @@ pub(crate) struct ConnectionInner {
     unique_name: OnceCell<OwnedUniqueName>,
     registered_names: Mutex<HashMap<WellKnownName<'static>, NameStatus>>,
 
-    raw_conn: Arc<RawConnection<Box<dyn socket::WriteHalf>>>,
+    activity_event: Arc<Event>,
+    socket_write: Mutex<Box<dyn socket::WriteHalf>>,
 
     // Serial number for next outgoing message
     serial: AtomicU32,
@@ -309,7 +309,21 @@ impl Connection {
             .ok_or(Error::InvalidSerial)?;
 
         trace!("Sending message: {:?}", msg);
-        self.inner.raw_conn.send_message(msg).await?;
+        self.inner.activity_event.notify(usize::MAX);
+        let mut write = self.inner.socket_write.lock().await;
+        let mut pos = 0;
+        let data = msg.as_bytes();
+        while pos < data.len() {
+            #[cfg(unix)]
+            let fds = if pos == 0 { msg.fds() } else { vec![] };
+            pos += write
+                .sendmsg(
+                    &data[pos..],
+                    #[cfg(unix)]
+                    &fds,
+                )
+                .await?;
+        }
         trace!("Sent message with serial: {}", serial);
 
         Ok(())
@@ -1200,11 +1214,10 @@ impl Connection {
         let msg_senders = Arc::new(Mutex::new(msg_senders));
         let subscriptions = Mutex::new(HashMap::new());
 
-        let raw_conn = Arc::new(auth.conn);
-
         let connection = Self {
             inner: Arc::new(ConnectionInner {
-                raw_conn,
+                activity_event: Arc::new(Event::new()),
+                socket_write: Mutex::new(auth.socket_write),
                 server_guid: auth.server_guid,
                 #[cfg(unix)]
                 cap_unix_fd,
@@ -1244,7 +1257,7 @@ impl Connection {
     ///
     /// This function is meant for the caller to implement idle or timeout on inactivity.
     pub fn monitor_activity(&self) -> EventListener {
-        self.inner.raw_conn.monitor_activity()
+        self.inner.activity_event.listen()
     }
 
     /// Returns the peer credentials.
@@ -1257,8 +1270,8 @@ impl Connection {
     /// Currently `unix_group_ids` and `linux_security_label` fields are not populated.
     pub async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
         self.inner
-            .raw_conn
-            .socket_write()
+            .socket_write
+            .lock()
             .await
             .peer_credentials()
             .await
@@ -1268,7 +1281,14 @@ impl Connection {
     ///
     /// After this call, all reading and writing operations will fail.
     pub async fn close(self) -> Result<()> {
-        self.inner.raw_conn.close().await
+        self.inner.activity_event.notify(usize::MAX);
+        self.inner
+            .socket_write
+            .lock()
+            .await
+            .close()
+            .await
+            .map_err(Into::into)
     }
 
     pub(crate) fn init_socket_reader(
@@ -1284,7 +1304,7 @@ impl Connection {
                     socket_read,
                     inner.msg_senders.clone(),
                     already_read,
-                    inner.raw_conn.activity_event(),
+                    inner.activity_event.clone(),
                 )
                 .spawn(&inner.executor),
             )

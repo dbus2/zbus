@@ -19,10 +19,7 @@ use xdg_home::home_dir;
 use crate::win32;
 use crate::{file::FileLines, guid::Guid, Error, Result};
 
-use super::raw::{
-    socket::{ReadHalf, Split, WriteHalf},
-    Connection,
-};
+use super::raw::socket::{ReadHalf, Split, WriteHalf};
 
 /// Authentication mechanisms
 ///
@@ -53,7 +50,7 @@ pub enum AuthMechanism {
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
 pub struct Authenticated<R, W> {
-    pub(crate) conn: Connection<W>,
+    pub(crate) socket_write: W,
     /// The server Guid
     pub(crate) server_guid: Guid,
     /// Whether file descriptor passing has been accepted by both sides
@@ -501,7 +498,7 @@ impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ClientHandshake<R, W> {
                     trace!("Handshake done");
                     let (read, write) = self.common.socket.take();
                     return Ok(Authenticated {
-                        conn: Connection::new(write),
+                        socket_write: write,
                         socket_read: Some(read),
                         server_guid: self.common.server_guid.unwrap(),
                         #[cfg(unix)]
@@ -794,7 +791,7 @@ impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ServerHandshake<'_, R, W> {
                     trace!("Handshake done");
                     let (read, write) = self.common.socket.take();
                     return Ok(Authenticated {
-                        conn: Connection::new(write),
+                        socket_write: write,
                         socket_read: Some(read),
                         // SAFETY: We know that the server GUID is set because we set it in the
                         // constructor.
