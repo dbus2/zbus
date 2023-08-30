@@ -190,32 +190,32 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
             .map_err(Into::into)
     }
 
-    /// Access the underlying read half of the socket.
+    /// Access the underlying write half of the socket.
     ///
     /// This method is intended to provide access to the socket in order to access certain
     /// properties (e.g peer credentials).
     ///
-    /// You should not try to read from it directly, as it may corrupt the internal state of this
+    /// You should not try to write to it directly, as it may corrupt the internal state of this
     /// wrapper.
-    pub async fn socket_read(&self) -> impl DerefMut<Target = R> + '_ {
-        pub struct SocketDeref<'s, R: ReadHalf> {
-            socket: MutexGuard<'s, R>,
+    pub async fn socket_write(&self) -> impl DerefMut<Target = W> + '_ {
+        pub struct SocketDeref<'s, W: WriteHalf> {
+            socket: MutexGuard<'s, W>,
         }
 
-        impl<R> Deref for SocketDeref<'_, R>
+        impl<W> Deref for SocketDeref<'_, W>
         where
-            R: ReadHalf,
+            W: WriteHalf,
         {
-            type Target = R;
+            type Target = W;
 
             fn deref(&self) -> &Self::Target {
                 &self.socket
             }
         }
 
-        impl<R> DerefMut for SocketDeref<'_, R>
+        impl<W> DerefMut for SocketDeref<'_, W>
         where
-            R: ReadHalf,
+            W: WriteHalf,
         {
             fn deref_mut(&mut self) -> &mut Self::Target {
                 &mut self.socket
@@ -223,7 +223,7 @@ impl<R: ReadHalf, W: WriteHalf> Connection<R, W> {
         }
 
         SocketDeref {
-            socket: self.read_socket.lock().await,
+            socket: self.write_socket.lock().await,
         }
     }
 

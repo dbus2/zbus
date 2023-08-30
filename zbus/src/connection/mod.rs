@@ -1258,7 +1258,7 @@ impl Connection {
     pub async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
         self.inner
             .raw_conn
-            .socket_read()
+            .socket_write()
             .await
             .peer_credentials()
             .await
