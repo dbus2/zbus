@@ -221,6 +221,18 @@ pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     ///
     /// After this call, it is valid for all reading and writing operations to fail.
     async fn close(&mut self) -> io::Result<()>;
+
+    /// Supports passing file descriptors.
+    ///
+    /// Default implementation returns `false`.
+    fn can_pass_unix_fd(&self) -> bool {
+        false
+    }
+
+    /// Return the peer credentials.
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        Ok(ConnectionCredentials::default())
+    }
 }
 
 /// A pair of socket read and write halves.
@@ -303,6 +315,14 @@ impl WriteHalf for Box<dyn WriteHalf> {
 
     async fn close(&mut self) -> io::Result<()> {
         (**self).close().await
+    }
+
+    fn can_pass_unix_fd(&self) -> bool {
+        (**self).can_pass_unix_fd()
+    }
+
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        (**self).peer_credentials().await
     }
 }
 
@@ -391,6 +411,15 @@ impl WriteHalf for Arc<Async<UnixStream>> {
     async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
         send_zero_byte(self).await.map(Some)
     }
+
+    /// Supports passing file descriptors.
+    fn can_pass_unix_fd(&self) -> bool {
+        true
+    }
+
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        get_unix_peer_creds(self).await
+    }
 }
 
 #[cfg(all(unix, feature = "tokio"))]
@@ -476,6 +505,15 @@ impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
     async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
         send_zero_byte(self.as_ref()).await.map(Some)
     }
+
+    /// Supports passing file descriptors.
+    fn can_pass_unix_fd(&self) -> bool {
+        true
+    }
+
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        get_unix_peer_creds(self.as_ref()).await
+    }
 }
 
 #[cfg(all(windows, not(feature = "tokio")))]
@@ -532,6 +570,10 @@ impl WriteHalf for Arc<Async<UnixStream>> {
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
     async fn send_zero_byte(&self) -> io::Result<Option<usize>> {
         send_zero_byte(self).await.map(Some)
+    }
+
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        ReadHalf::peer_credentials(self).await
     }
 }
 
@@ -602,6 +644,10 @@ impl WriteHalf for Arc<Async<TcpStream>> {
             "close socket",
         )
         .await
+    }
+
+    async fn peer_credentials(&self) -> io::Result<ConnectionCredentials> {
+        ReadHalf::peer_credentials(self).await
     }
 }
 
