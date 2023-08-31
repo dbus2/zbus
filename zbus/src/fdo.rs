@@ -93,7 +93,7 @@ macro_rules! gen_properties_proxy {
             /// Get all properties.
             async fn get_all(
                 &self,
-                interface_name: InterfaceName<'_>,
+                interface_name: Optional<InterfaceName<'_>>,
             ) -> Result<HashMap<String, OwnedValue>>;
 
             #[dbus_proxy(signal)]
