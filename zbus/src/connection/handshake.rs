@@ -779,9 +779,19 @@ impl<R: ReadHalf, W: WriteHalf> Handshake<R, W> for ServerHandshake<'_, R, W> {
                         #[cfg(unix)]
                         Command::NegotiateUnixFD => {
                             trace!("Received NEGOTIATE_UNIX_FD command from the client");
-                            self.common.cap_unix_fd = true;
-                            trace!("Sending AGREE_UNIX_FD to the client");
-                            self.common.write_command(Command::AgreeUnixFD).await?;
+                            if self.common.socket.read().can_pass_unix_fd() {
+                                self.common.cap_unix_fd = true;
+                                trace!("Sending AGREE_UNIX_FD to the client");
+                                self.common.write_command(Command::AgreeUnixFD).await?;
+                            } else {
+                                trace!(
+                                    "FD transmission not possible on this socket type. Rejecting.."
+                                );
+                                let cmd = Command::Error(
+                                    "FD-passing not possible on this socket type".to_string(),
+                                );
+                                self.common.write_command(cmd).await?;
+                            }
                             self.step = ServerHandshakeStep::WaitingForBegin;
                         }
                         _ => self.unsupported_command_error().await?,
