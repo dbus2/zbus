@@ -98,29 +98,35 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     });
 
     // Now GVariant.
-    let ctxt = Context::<LE>::new_gvariant(0);
+    #[cfg(feature = "gvariant")]
+    {
+        let ctxt = Context::<LE>::new_gvariant(0);
 
-    c.bench_function("big_array_ser_gvariant", |b| {
-        b.iter(|| {
-            let encoded =
-                to_bytes_for_signature(black_box(ctxt), black_box(&signature), black_box(&element))
-                    .unwrap();
-            black_box(encoded);
-        })
-    });
+        c.bench_function("big_array_ser_gvariant", |b| {
+            b.iter(|| {
+                let encoded = to_bytes_for_signature(
+                    black_box(ctxt),
+                    black_box(&signature),
+                    black_box(&element),
+                )
+                .unwrap();
+                black_box(encoded);
+            })
+        });
 
-    let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
-    c.bench_function("big_array_de_gvariant", |b| {
-        b.iter(|| {
-            let (s, _): (ZVStruct, _) = from_slice_for_signature(
-                black_box(&encoded),
-                black_box(ctxt),
-                black_box(&signature),
-            )
-            .unwrap();
-            black_box(s);
-        })
-    });
+        let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
+        c.bench_function("big_array_de_gvariant", |b| {
+            b.iter(|| {
+                let (s, _): (ZVStruct, _) = from_slice_for_signature(
+                    black_box(&encoded),
+                    black_box(ctxt),
+                    black_box(&signature),
+                )
+                .unwrap();
+                black_box(s);
+            })
+        });
+    }
 }
 
 criterion_group!(benches, big_array_ser_and_de, fixed_size_array);

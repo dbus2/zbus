@@ -1052,10 +1052,13 @@ mod tests {
         assert_eq!(encoded.len(), 1);
         let _decoded: NoFields = from_slice(&encoded, ctxt).unwrap().0;
 
-        let ctxt = Context::<LE>::new_gvariant(0);
-        let encoded = to_bytes(ctxt, &NoFields {}).unwrap();
-        assert_eq!(encoded.len(), 1);
-        let _decoded: NoFields = from_slice(&encoded, ctxt).unwrap().0;
+        #[cfg(feature = "gvariant")]
+        {
+            let ctxt = Context::<LE>::new_gvariant(0);
+            let encoded = to_bytes(ctxt, &NoFields {}).unwrap();
+            assert_eq!(encoded.len(), 1);
+            let _decoded: NoFields = from_slice(&encoded, ctxt).unwrap().0;
+        }
     }
 
     #[test]
