@@ -5,7 +5,7 @@
 This crate provides API for encoding/decoding of data to/from [D-Bus wire format][dwf]. This binary
 wire format is simple and very efficient and hence useful outside of D-Bus context as well. A
 modified form of this format, [GVariant] is very commonly used for efficient storage of arbitrary
-data and is also supported by this crate.
+data and is also supported by this crate (if you enable `gvariant` cargo feature).
 
 Since version 2.0, the API is [serde]-based and hence you'll find it very intuitive if you're
 already familiar with serde. If you're not familiar with serde, you may want to first read its
@@ -160,6 +160,7 @@ accomplish. However, community contribution can change that. 😊
 
 | Feature | Description |
 | ---     | ----------- |
+| gvariant | Enable [GVariant] format support |
 | arrayvec | Implement `Type` for [`arrayvec::ArrayVec`] and [`arrayvec::ArrayString`] |
 | enumflags2 | Implement `Type` for [`enumflags2::BitFlags`]`<F>` |
 

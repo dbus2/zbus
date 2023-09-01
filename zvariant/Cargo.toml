@@ -13,11 +13,7 @@ categories = ["data-structures", "encoding", "parsing"]
 readme = "README.md"
 
 [features]
-# If you want to completely avoid compiling glib even when compiling tests or
-# examples, disable the gvariant default feature and comment out the glib
-# dev-dependency below. Dev-dependencies can't be made optional, and hence can't
-# be disabled with a feature so you have to do it manually.
-default = ["gvariant"]
+default = []
 # Also allow disabling D-Bus support
 gvariant = []
 ostree-tests = ["gvariant"]
@@ -41,6 +37,9 @@ chrono = { version = "0.4.23", features = [
 [dev-dependencies]
 serde_json = "1.0"
 serde_repr = "0.1.9"
+# If you want to avoid compiling glib even when compiling tests or examples, comment out the glib
+# dev-dependency. Dev-dependencies can't be made optional, and hence can't be disabled with a
+# feature so you have to do it manually. Also, don't enable the gvariant default feature.
 glib = "0.17.9"
 rand = "0.8.5"
 criterion = "0.4"
