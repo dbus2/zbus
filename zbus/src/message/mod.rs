@@ -93,8 +93,6 @@ assert_impl_all!(Message: Send, Sync, Unpin);
 // TODO: Handle non-native byte order: https://github.com/dbus2/zbus/issues/19
 impl Message {
     /// Create a builder for message of type [`Type::MethodCall`].
-    ///
-    /// [`Type::MethodCall`]: enum.Type.html#variant.MethodCall
     pub fn method<'b, 'p: 'b, 'm: 'b, P, M>(path: P, method_name: M) -> Result<Builder<'b>>
     where
         P: TryInto<ObjectPath<'p>>,
@@ -106,8 +104,6 @@ impl Message {
     }
 
     /// Create a builder for message of type [`Type::Signal`].
-    ///
-    /// [`Type::Signal`]: enum.Type.html#variant.Signal
     pub fn signal<'b, 'p: 'b, 'i: 'b, 'm: 'b, P, I, M>(
         path: P,
         iface: I,
@@ -125,15 +121,11 @@ impl Message {
     }
 
     /// Create a builder for message of type [`Type::MethodReturn`].
-    ///
-    /// [`Type::MethodReturn`]: enum.Type.html#variant.MethodReturn
     pub fn method_reply(call: &Self) -> Result<Builder<'_>> {
         Builder::method_return(&call.header())
     }
 
     /// Create a builder for message of type [`Type::MethodError`].
-    ///
-    /// [`Type::MethodError`]: enum.Type.html#variant.MethodError
     pub fn method_error<'b, 'e: 'b, E>(call: &Self, name: E) -> Result<Builder<'b>>
     where
         E: TryInto<ErrorName<'e>>,
