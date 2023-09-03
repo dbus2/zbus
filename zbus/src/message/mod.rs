@@ -8,7 +8,7 @@ use std::{
 };
 
 use static_assertions::assert_impl_all;
-use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
+use zbus_names::{ErrorName, InterfaceName, MemberName, UniqueName};
 
 #[cfg(unix)]
 use crate::OwnedFd;
@@ -108,36 +108,20 @@ impl Message {
     /// Create a message of type [`Type::Signal`].
     ///
     /// [`Type::Signal`]: enum.Type.html#variant.Signal
-    pub fn signal<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
-        sender: Option<S>,
-        destination: Option<D>,
+    pub fn signal<'b, 'p: 'b, 'i: 'b, 'm: 'b, P, I, M>(
         path: P,
         iface: I,
         signal_name: M,
-        body: &B,
-    ) -> Result<Self>
+    ) -> Result<Builder<'b>>
     where
-        S: TryInto<UniqueName<'s>>,
-        D: TryInto<BusName<'d>>,
         P: TryInto<ObjectPath<'p>>,
         I: TryInto<InterfaceName<'i>>,
         M: TryInto<MemberName<'m>>,
-        S::Error: Into<Error>,
-        D::Error: Into<Error>,
         P::Error: Into<Error>,
         I::Error: Into<Error>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = Builder::signal(path, iface, signal_name)?;
-
-        if let Some(sender) = sender {
-            b = b.sender(sender)?;
-        }
-        if let Some(destination) = destination {
-            b = b.destination(destination)?;
-        }
-        b.build(body)
+        Builder::signal(path, iface, signal_name)
     }
 
     /// Create a message of type [`Type::MethodReturn`].

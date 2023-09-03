@@ -449,14 +449,14 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let m = Message::signal(
-            self.unique_name(),
-            destination,
-            path,
-            interface,
-            signal_name,
-            body,
-        )?;
+        let mut b = Message::signal(path, interface, signal_name)?;
+        if let Some(sender) = self.unique_name() {
+            b = b.sender(sender)?;
+        }
+        if let Some(destination) = destination {
+            b = b.destination(destination)?;
+        }
+        let m = b.build(body)?;
 
         self.send_message(m).await.map(|_| ())
     }
