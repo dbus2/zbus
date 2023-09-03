@@ -1014,13 +1014,10 @@ mod tests {
             .build(&())
             .unwrap();
         m.set_serial_num(1.try_into().unwrap()).unwrap();
-        let m = Message::method_error(
-            None::<()>,
-            &m,
-            "org.freedesktop.DBus.Error.TimedOut",
-            &("so long"),
-        )
-        .unwrap();
+        let m = Message::method_error(&m, "org.freedesktop.DBus.Error.TimedOut")
+            .unwrap()
+            .build(&("so long"))
+            .unwrap();
         let e: Error = m.into();
         let e: fdo::Error = e.try_into().unwrap();
         assert_eq!(e, fdo::Error::TimedOut("so long".to_string()),);

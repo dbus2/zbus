@@ -496,7 +496,11 @@ impl Connection {
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
-        let m = Message::method_error(self.unique_name(), call, error_name, body)?;
+        let mut b = Message::method_error(call, error_name)?;
+        if let Some(sender) = self.unique_name() {
+            b = b.sender(sender)?;
+        }
+        let m = b.build(body)?;
         self.send_message(m).await
     }
 

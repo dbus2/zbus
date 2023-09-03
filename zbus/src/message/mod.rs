@@ -8,13 +8,13 @@ use std::{
 };
 
 use static_assertions::assert_impl_all;
-use zbus_names::{ErrorName, InterfaceName, MemberName, UniqueName};
+use zbus_names::{ErrorName, InterfaceName, MemberName};
 
 #[cfg(unix)]
 use crate::OwnedFd;
 use crate::{
     utils::padding_for_8_bytes,
-    zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type as VariantType},
+    zvariant::{EncodingContext, ObjectPath, Signature, Type as VariantType},
     Error, Result,
 };
 
@@ -131,27 +131,15 @@ impl Message {
         Builder::method_return(&call.header())
     }
 
-    /// Create a message of type [`Type::MethodError`].
+    /// Create a builder for message of type [`Type::MethodError`].
     ///
     /// [`Type::MethodError`]: enum.Type.html#variant.MethodError
-    pub fn method_error<'s, 'e, S, E, B>(
-        sender: Option<S>,
-        call: &Self,
-        name: E,
-        body: &B,
-    ) -> Result<Self>
+    pub fn method_error<'b, 'e: 'b, E>(call: &Self, name: E) -> Result<Builder<'b>>
     where
-        S: TryInto<UniqueName<'s>>,
-        S::Error: Into<Error>,
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
-        B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = Builder::error(&call.header(), name)?;
-        if let Some(sender) = sender {
-            b = b.sender(sender)?;
-        }
-        b.build(body)
+        Builder::error(&call.header(), name)
     }
 
     /// Create a message from bytes.
@@ -573,13 +561,10 @@ mod tests {
             .build(&("all fine!"))
             .unwrap();
         assert_eq!(r.to_string(), "Method return");
-        let e = Message::method_error(
-            None::<()>,
-            &m,
-            "org.freedesktop.zbus.Error",
-            &("kaboom!", 32),
-        )
-        .unwrap();
+        let e = Message::method_error(&m, "org.freedesktop.zbus.Error")
+            .unwrap()
+            .build(&("kaboom!", 32))
+            .unwrap();
         assert_eq!(e.to_string(), "Error org.freedesktop.zbus.Error: kaboom!");
     }
 }
