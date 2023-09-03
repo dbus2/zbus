@@ -471,7 +471,11 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let m = Message::method_reply(self.unique_name(), call, body)?;
+        let mut b = Message::method_reply(call)?;
+        if let Some(sender) = self.unique_name() {
+            b = b.sender(sender)?;
+        }
+        let m = b.build(body)?;
         self.send_message(m).await
     }
 

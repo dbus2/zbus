@@ -105,7 +105,7 @@ impl Message {
         Builder::method_call(path, method_name)
     }
 
-    /// Create a message of type [`Type::Signal`].
+    /// Create a builder for message of type [`Type::Signal`].
     ///
     /// [`Type::Signal`]: enum.Type.html#variant.Signal
     pub fn signal<'b, 'p: 'b, 'i: 'b, 'm: 'b, P, I, M>(
@@ -124,20 +124,11 @@ impl Message {
         Builder::signal(path, iface, signal_name)
     }
 
-    /// Create a message of type [`Type::MethodReturn`].
+    /// Create a builder for message of type [`Type::MethodReturn`].
     ///
     /// [`Type::MethodReturn`]: enum.Type.html#variant.MethodReturn
-    pub fn method_reply<'s, S, B>(sender: Option<S>, call: &Self, body: &B) -> Result<Self>
-    where
-        S: TryInto<UniqueName<'s>>,
-        S::Error: Into<Error>,
-        B: serde::ser::Serialize + DynamicType,
-    {
-        let mut b = Builder::method_return(&call.header())?;
-        if let Some(sender) = sender {
-            b = b.sender(sender)?;
-        }
-        b.build(body)
+    pub fn method_reply(call: &Self) -> Result<Builder<'_>> {
+        Builder::method_return(&call.header())
     }
 
     /// Create a message of type [`Type::MethodError`].
@@ -376,7 +367,7 @@ impl Message {
     /// assert!(matches!(fields[1], zvariant::Value::Structure(_)));
     /// assert!(matches!(fields[2], zvariant::Value::Array(_)));
     ///
-    /// let reply_msg = Message::method_reply(None::<&str>, &message, &body)?;
+    /// let reply_msg = Message::method_reply(&message)?.build(&body)?;
     /// let reply_value : (i32, (i32, &str), Vec<String>) = reply_msg.body()?;
     ///
     /// assert_eq!(reply_value.0, 7);
@@ -577,7 +568,10 @@ mod tests {
         ));
 
         assert_eq!(m.to_string(), "Method call do from :1.72");
-        let r = Message::method_reply(None::<()>, &m, &("all fine!")).unwrap();
+        let r = Message::method_reply(&m)
+            .unwrap()
+            .build(&("all fine!"))
+            .unwrap();
         assert_eq!(r.to_string(), "Method return");
         let e = Message::method_error(
             None::<()>,
