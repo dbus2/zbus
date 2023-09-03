@@ -125,7 +125,7 @@ impl Message {
         Builder::method_return(&call.header())
     }
 
-    /// Create a builder for message of type [`Type::MethodError`].
+    /// Create a builder for message of type [`Type::Error`].
     pub fn method_error<'b, 'e: 'b, E>(call: &Self, name: E) -> Result<Builder<'b>>
     where
         E: TryInto<ErrorName<'e>>,
