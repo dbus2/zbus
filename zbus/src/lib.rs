@@ -231,15 +231,14 @@ mod tests {
 
     #[test]
     fn msg() {
-        let mut m = Message::method(
-            None::<()>,
-            Some("org.freedesktop.DBus"),
-            "/org/freedesktop/DBus",
-            Some("org.freedesktop.DBus.Peer"),
-            "GetMachineId",
-            &(),
-        )
-        .unwrap();
+        let mut m = Message::method("/org/freedesktop/DBus", "GetMachineId")
+            .unwrap()
+            .destination("org.freedesktop.DBus")
+            .unwrap()
+            .interface("org.freedesktop.DBus.Peer")
+            .unwrap()
+            .build(&())
+            .unwrap();
         let hdr = m.header();
         assert_eq!(hdr.path().unwrap(), "/org/freedesktop/DBus");
         assert_eq!(hdr.interface().unwrap(), "org.freedesktop.DBus.Peer");
@@ -576,16 +575,15 @@ mod tests {
 
         // Send a message as client before service starts to process messages
         let client_conn = blocking::Connection::session().unwrap();
-        let destination = conn.unique_name().map(UniqueName::<'_>::from);
-        let msg = Message::method(
-            None::<()>,
-            destination,
-            "/org/freedesktop/Issue68",
-            Some("org.freedesktop.Issue68"),
-            "Ping",
-            &(),
-        )
-        .unwrap();
+        let destination = conn.unique_name().map(UniqueName::<'_>::from).unwrap();
+        let msg = Message::method("/org/freedesktop/Issue68", "Ping")
+            .unwrap()
+            .destination(destination)
+            .unwrap()
+            .interface("org.freedesktop.Issue68")
+            .unwrap()
+            .build(&())
+            .unwrap();
         let serial = client_conn.send_message(msg).unwrap();
 
         crate::blocking::fdo::DBusProxy::new(&conn)
@@ -726,16 +724,13 @@ mod tests {
         // when we send a message.
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        let destination = conn.unique_name().map(UniqueName::<'_>::from);
-        let msg = Message::method(
-            None::<()>,
-            destination,
-            "/does/not/matter",
-            None::<()>,
-            "ZBusIssue122",
-            &(),
-        )
-        .unwrap();
+        let destination = conn.unique_name().map(UniqueName::<'_>::from).unwrap();
+        let msg = Message::method("/does/not/matter", "ZBusIssue122")
+            .unwrap()
+            .destination(destination)
+            .unwrap()
+            .build(&())
+            .unwrap();
         conn.send_message(msg).unwrap();
 
         child.join().unwrap();

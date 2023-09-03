@@ -92,42 +92,17 @@ assert_impl_all!(Message: Send, Sync, Unpin);
 
 // TODO: Handle non-native byte order: https://github.com/dbus2/zbus/issues/19
 impl Message {
-    /// Create a message of type [`Type::MethodCall`].
+    /// Create a builder for message of type [`Type::MethodCall`].
     ///
     /// [`Type::MethodCall`]: enum.Type.html#variant.MethodCall
-    pub fn method<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
-        sender: Option<S>,
-        destination: Option<D>,
-        path: P,
-        iface: Option<I>,
-        method_name: M,
-        body: &B,
-    ) -> Result<Self>
+    pub fn method<'b, 'p: 'b, 'm: 'b, P, M>(path: P, method_name: M) -> Result<Builder<'b>>
     where
-        S: TryInto<UniqueName<'s>>,
-        D: TryInto<BusName<'d>>,
         P: TryInto<ObjectPath<'p>>,
-        I: TryInto<InterfaceName<'i>>,
         M: TryInto<MemberName<'m>>,
-        S::Error: Into<Error>,
-        D::Error: Into<Error>,
         P::Error: Into<Error>,
-        I::Error: Into<Error>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = Builder::method_call(path, method_name)?;
-
-        if let Some(sender) = sender {
-            b = b.sender(sender)?;
-        }
-        if let Some(destination) = destination {
-            b = b.destination(destination)?;
-        }
-        if let Some(iface) = iface {
-            b = b.interface(iface)?;
-        }
-        b.build(body)
+        Builder::method_call(path, method_name)
     }
 
     /// Create a message of type [`Type::Signal`].
@@ -405,14 +380,10 @@ impl Message {
     /// # use zbus::message::Message;
     /// # (|| -> zbus::Result<()> {
     /// let send_body = (7i32, (2i32, "foo"), vec!["bar"]);
-    /// let mut message = Message::method(
-    ///     None::<&str>,
-    ///     Some("zbus.test"),
-    ///     "/",
-    ///     Some("zbus.test"),
-    ///     "ping",
-    ///     &send_body,
-    /// )?;
+    /// let mut message = Message::method("/", "ping")?
+    ///     .destination("zbus.test")?
+    ///     .interface("zbus.test")?
+    ///     .build(&send_body)?;
     /// let conn = zbus::blocking::Connection::session()?;
     /// conn.inner().assign_serial_num(&mut message)?;
     /// let body : zbus::zvariant::Structure = message.body()?;
@@ -597,19 +568,16 @@ mod tests {
     fn test() {
         #[cfg(unix)]
         let stdout = std::io::stdout();
-        let mut m = Message::method(
-            Some(":1.72"),
-            None::<()>,
-            "/",
-            None::<()>,
-            "do",
-            &(
+        let mut m = Message::method("/", "do")
+            .unwrap()
+            .sender(":1.72")
+            .unwrap()
+            .build(&(
                 #[cfg(unix)]
                 Fd::from(&stdout),
                 "foo",
-            ),
-        )
-        .unwrap();
+            ))
+            .unwrap();
         m.set_serial_num(1.try_into().unwrap()).unwrap();
         assert_eq!(
             m.body_signature().unwrap().to_string(),
