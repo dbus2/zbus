@@ -118,6 +118,7 @@ impl Message {
         I::Error: Into<Error>,
         M::Error: Into<Error>,
     {
+        #[allow(deprecated)]
         Builder::signal(path, iface, signal_name)
     }
 

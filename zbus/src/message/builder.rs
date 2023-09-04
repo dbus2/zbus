@@ -59,6 +59,7 @@ impl<'a> Builder<'a> {
     }
 
     /// Create a message of type [`Type::Signal`].
+    #[deprecated(since = "4.0.0", note = "Please use `Message::signal` instead")]
     pub fn signal<'p: 'a, 'i: 'a, 'm: 'a, P, I, M>(path: P, interface: I, name: M) -> Result<Self>
     where
         P: TryInto<ObjectPath<'p>>,
@@ -350,14 +351,14 @@ impl<'m> From<Header<'m>> for Builder<'m> {
 
 #[cfg(test)]
 mod tests {
-    use super::Builder;
+    use super::Message;
     use crate::Error;
     use test_log::test;
 
     #[test]
     fn test_raw() -> Result<(), Error> {
         let raw_body: &[u8] = &[16, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0];
-        let message_builder = Builder::signal("/", "test.test", "test")?;
+        let message_builder = Message::signal("/", "test.test", "test")?;
         let message = unsafe {
             message_builder.build_raw_body(
                 raw_body,
