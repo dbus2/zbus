@@ -134,6 +134,7 @@ impl Message {
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
+        #[allow(deprecated)]
         Builder::error(&call.header(), name)
     }
 

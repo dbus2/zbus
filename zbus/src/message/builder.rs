@@ -82,6 +82,7 @@ impl<'a> Builder<'a> {
     }
 
     /// Create a message of type [`Type::Error`].
+    #[deprecated(since = "4.0.0", note = "Please use `Message::method_error` instead")]
     pub fn error<'e: 'a, E>(reply_to: &Header<'_>, name: E) -> Result<Self>
     where
         E: TryInto<ErrorName<'e>>,
