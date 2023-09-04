@@ -244,15 +244,10 @@ fn test_interface() {
             // check compilation
             let c = zbus::Connection::session().await.unwrap();
             let s = c.object_server();
-            let m = zbus::message::Message::method(
-                None::<()>,
-                None::<()>,
-                "/",
-                None::<()>,
-                "StrU32",
-                &(42,),
-            )
-            .unwrap();
+            let m = zbus::message::Message::method("/", "StrU32")
+                .unwrap()
+                .build(&(42,))
+                .unwrap();
             let _ = t.call(&s, &c, &m, "StrU32".try_into().unwrap());
             let ctxt = SignalContext::new(&c, "/does/not/matter").unwrap();
             block_on(Test::<u32>::signal(&ctxt, 23, "ergo sum")).unwrap();
@@ -263,7 +258,7 @@ fn test_interface() {
 mod signal_from_message {
     use super::*;
     use std::sync::Arc;
-    use zbus::message::Builder;
+    use zbus::message::Message;
 
     #[dbus_proxy(
         interface = "org.freedesktop.zbus_macros.Test",
@@ -281,7 +276,7 @@ mod signal_from_message {
     #[test]
     fn signal_u8() {
         let message = Arc::new(
-            Builder::signal(
+            Message::signal(
                 "/org/freedesktop/zbus_macros/test",
                 "org.freedesktop.zbus_macros.Test",
                 "SignalU8",
@@ -304,7 +299,7 @@ mod signal_from_message {
     #[test]
     fn signal_string() {
         let message = Arc::new(
-            Builder::signal(
+            Message::signal(
                 "/org/freedesktop/zbus_macros/test",
                 "org.freedesktop.zbus_macros.Test",
                 "SignalString",
@@ -327,7 +322,7 @@ mod signal_from_message {
     #[test]
     fn wrong_data() {
         let message = Arc::new(
-            Builder::signal(
+            Message::signal(
                 "/org/freedesktop/zbus_macros/test",
                 "org.freedesktop.zbus_macros.Test",
                 "SignalU8",

@@ -8,13 +8,13 @@ use std::{
 };
 
 use static_assertions::assert_impl_all;
-use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
+use zbus_names::{ErrorName, InterfaceName, MemberName};
 
 #[cfg(unix)]
 use crate::OwnedFd;
 use crate::{
     utils::padding_for_8_bytes,
-    zvariant::{DynamicType, EncodingContext, ObjectPath, Signature, Type as VariantType},
+    zvariant::{EncodingContext, ObjectPath, Signature, Type as VariantType},
     Error, Result,
 };
 
@@ -92,116 +92,50 @@ assert_impl_all!(Message: Send, Sync, Unpin);
 
 // TODO: Handle non-native byte order: https://github.com/dbus2/zbus/issues/19
 impl Message {
-    /// Create a message of type [`Type::MethodCall`].
-    ///
-    /// [`Type::MethodCall`]: enum.Type.html#variant.MethodCall
-    pub fn method<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
-        sender: Option<S>,
-        destination: Option<D>,
-        path: P,
-        iface: Option<I>,
-        method_name: M,
-        body: &B,
-    ) -> Result<Self>
+    /// Create a builder for message of type [`Type::MethodCall`].
+    pub fn method<'b, 'p: 'b, 'm: 'b, P, M>(path: P, method_name: M) -> Result<Builder<'b>>
     where
-        S: TryInto<UniqueName<'s>>,
-        D: TryInto<BusName<'d>>,
         P: TryInto<ObjectPath<'p>>,
-        I: TryInto<InterfaceName<'i>>,
         M: TryInto<MemberName<'m>>,
-        S::Error: Into<Error>,
-        D::Error: Into<Error>,
         P::Error: Into<Error>,
-        I::Error: Into<Error>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = Builder::method_call(path, method_name)?;
-
-        if let Some(sender) = sender {
-            b = b.sender(sender)?;
-        }
-        if let Some(destination) = destination {
-            b = b.destination(destination)?;
-        }
-        if let Some(iface) = iface {
-            b = b.interface(iface)?;
-        }
-        b.build(body)
+        #[allow(deprecated)]
+        Builder::method_call(path, method_name)
     }
 
-    /// Create a message of type [`Type::Signal`].
-    ///
-    /// [`Type::Signal`]: enum.Type.html#variant.Signal
-    pub fn signal<'s, 'd, 'p, 'i, 'm, S, D, P, I, M, B>(
-        sender: Option<S>,
-        destination: Option<D>,
+    /// Create a builder for message of type [`Type::Signal`].
+    pub fn signal<'b, 'p: 'b, 'i: 'b, 'm: 'b, P, I, M>(
         path: P,
         iface: I,
         signal_name: M,
-        body: &B,
-    ) -> Result<Self>
+    ) -> Result<Builder<'b>>
     where
-        S: TryInto<UniqueName<'s>>,
-        D: TryInto<BusName<'d>>,
         P: TryInto<ObjectPath<'p>>,
         I: TryInto<InterfaceName<'i>>,
         M: TryInto<MemberName<'m>>,
-        S::Error: Into<Error>,
-        D::Error: Into<Error>,
         P::Error: Into<Error>,
         I::Error: Into<Error>,
         M::Error: Into<Error>,
-        B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = Builder::signal(path, iface, signal_name)?;
-
-        if let Some(sender) = sender {
-            b = b.sender(sender)?;
-        }
-        if let Some(destination) = destination {
-            b = b.destination(destination)?;
-        }
-        b.build(body)
+        #[allow(deprecated)]
+        Builder::signal(path, iface, signal_name)
     }
 
-    /// Create a message of type [`Type::MethodReturn`].
-    ///
-    /// [`Type::MethodReturn`]: enum.Type.html#variant.MethodReturn
-    pub fn method_reply<'s, S, B>(sender: Option<S>, call: &Self, body: &B) -> Result<Self>
-    where
-        S: TryInto<UniqueName<'s>>,
-        S::Error: Into<Error>,
-        B: serde::ser::Serialize + DynamicType,
-    {
-        let mut b = Builder::method_return(&call.header())?;
-        if let Some(sender) = sender {
-            b = b.sender(sender)?;
-        }
-        b.build(body)
+    /// Create a builder for message of type [`Type::MethodReturn`].
+    pub fn method_reply(call: &Self) -> Result<Builder<'_>> {
+        #[allow(deprecated)]
+        Builder::method_return(&call.header())
     }
 
-    /// Create a message of type [`Type::MethodError`].
-    ///
-    /// [`Type::MethodError`]: enum.Type.html#variant.MethodError
-    pub fn method_error<'s, 'e, S, E, B>(
-        sender: Option<S>,
-        call: &Self,
-        name: E,
-        body: &B,
-    ) -> Result<Self>
+    /// Create a builder for message of type [`Type::Error`].
+    pub fn method_error<'b, 'e: 'b, E>(call: &Self, name: E) -> Result<Builder<'b>>
     where
-        S: TryInto<UniqueName<'s>>,
-        S::Error: Into<Error>,
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
-        B: serde::ser::Serialize + DynamicType,
     {
-        let mut b = Builder::error(&call.header(), name)?;
-        if let Some(sender) = sender {
-            b = b.sender(sender)?;
-        }
-        b.build(body)
+        #[allow(deprecated)]
+        Builder::error(&call.header(), name)
     }
 
     /// Create a message from bytes.
@@ -405,14 +339,10 @@ impl Message {
     /// # use zbus::message::Message;
     /// # (|| -> zbus::Result<()> {
     /// let send_body = (7i32, (2i32, "foo"), vec!["bar"]);
-    /// let mut message = Message::method(
-    ///     None::<&str>,
-    ///     Some("zbus.test"),
-    ///     "/",
-    ///     Some("zbus.test"),
-    ///     "ping",
-    ///     &send_body,
-    /// )?;
+    /// let mut message = Message::method("/", "ping")?
+    ///     .destination("zbus.test")?
+    ///     .interface("zbus.test")?
+    ///     .build(&send_body)?;
     /// let conn = zbus::blocking::Connection::session()?;
     /// conn.inner().assign_serial_num(&mut message)?;
     /// let body : zbus::zvariant::Structure = message.body()?;
@@ -421,7 +351,7 @@ impl Message {
     /// assert!(matches!(fields[1], zvariant::Value::Structure(_)));
     /// assert!(matches!(fields[2], zvariant::Value::Array(_)));
     ///
-    /// let reply_msg = Message::method_reply(None::<&str>, &message, &body)?;
+    /// let reply_msg = Message::method_reply(&message)?.build(&body)?;
     /// let reply_value : (i32, (i32, &str), Vec<String>) = reply_msg.body()?;
     ///
     /// assert_eq!(reply_value.0, 7);
@@ -597,19 +527,16 @@ mod tests {
     fn test() {
         #[cfg(unix)]
         let stdout = std::io::stdout();
-        let mut m = Message::method(
-            Some(":1.72"),
-            None::<()>,
-            "/",
-            None::<()>,
-            "do",
-            &(
+        let mut m = Message::method("/", "do")
+            .unwrap()
+            .sender(":1.72")
+            .unwrap()
+            .build(&(
                 #[cfg(unix)]
                 Fd::from(&stdout),
                 "foo",
-            ),
-        )
-        .unwrap();
+            ))
+            .unwrap();
         m.set_serial_num(1.try_into().unwrap()).unwrap();
         assert_eq!(
             m.body_signature().unwrap().to_string(),
@@ -625,15 +552,15 @@ mod tests {
         ));
 
         assert_eq!(m.to_string(), "Method call do from :1.72");
-        let r = Message::method_reply(None::<()>, &m, &("all fine!")).unwrap();
+        let r = Message::method_reply(&m)
+            .unwrap()
+            .build(&("all fine!"))
+            .unwrap();
         assert_eq!(r.to_string(), "Method return");
-        let e = Message::method_error(
-            None::<()>,
-            &m,
-            "org.freedesktop.zbus.Error",
-            &("kaboom!", 32),
-        )
-        .unwrap();
+        let e = Message::method_error(&m, "org.freedesktop.zbus.Error")
+            .unwrap()
+            .build(&("kaboom!", 32))
+            .unwrap();
         assert_eq!(e.to_string(), "Error org.freedesktop.zbus.Error: kaboom!");
     }
 }

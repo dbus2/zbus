@@ -28,7 +28,7 @@ use crate::{
     async_lock::Mutex,
     blocking,
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
-    message::{self, Flags, Message, Type},
+    message::{Flags, Message, Type},
     proxy::CacheProperties,
     DBusError, Error, Executor, Guid, MatchRule, MessageStream, ObjectServer, OwnedMatchRule,
     Result, Task,
@@ -397,7 +397,7 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let mut builder = message::Builder::method_call(path, method_name)?;
+        let mut builder = Message::method(path, method_name)?;
         if let Some(sender) = self.unique_name() {
             builder = builder.sender(sender)?
         }
@@ -449,14 +449,14 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let m = Message::signal(
-            self.unique_name(),
-            destination,
-            path,
-            interface,
-            signal_name,
-            body,
-        )?;
+        let mut b = Message::signal(path, interface, signal_name)?;
+        if let Some(sender) = self.unique_name() {
+            b = b.sender(sender)?;
+        }
+        if let Some(destination) = destination {
+            b = b.destination(destination)?;
+        }
+        let m = b.build(body)?;
 
         self.send_message(m).await.map(|_| ())
     }
@@ -471,7 +471,11 @@ impl Connection {
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let m = Message::method_reply(self.unique_name(), call, body)?;
+        let mut b = Message::method_reply(call)?;
+        if let Some(sender) = self.unique_name() {
+            b = b.sender(sender)?;
+        }
+        let m = b.build(body)?;
         self.send_message(m).await
     }
 
@@ -492,7 +496,11 @@ impl Connection {
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
-        let m = Message::method_error(self.unique_name(), call, error_name, body)?;
+        let mut b = Message::method_error(call, error_name)?;
+        if let Some(sender) = self.unique_name() {
+            b = b.sender(sender)?;
+        }
+        let m = b.build(body)?;
         self.send_message(m).await
     }
 
