@@ -77,11 +77,21 @@ assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
 impl<'a> Builder<'a> {
     /// Create a builder for the session/user message bus connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error::Address`](zbus::error::Error::Address) error if parsing the session bus
+    /// address fails.
     pub fn session() -> Result<Self> {
         Ok(Self::new(Target::Address(Address::session()?)))
     }
 
     /// Create a builder for the system-wide message bus connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error::Address`](zbus::error::Error::Address) error if parsing the system bus
+    /// address fails.
     pub fn system() -> Result<Self> {
         Ok(Self::new(Target::Address(Address::system()?)))
     }
@@ -266,6 +276,10 @@ impl<'a> Builder<'a> {
     /// interfaces available immediately after the connection is established. Typically, this is
     /// exactly what you'd want. Also in contrast to [`zbus::ObjectServer::at`], this method will
     /// replace any previously added interface with the same name at the same path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parsing `path` into an [`ObjectPath`] fails.
     pub fn serve_at<P, I>(mut self, path: P, iface: I) -> Result<Self>
     where
         I: Interface,
