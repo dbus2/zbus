@@ -124,6 +124,7 @@ impl Message {
 
     /// Create a builder for message of type [`Type::MethodReturn`].
     pub fn method_reply(call: &Self) -> Result<Builder<'_>> {
+        #[allow(deprecated)]
         Builder::method_return(&call.header())
     }
 

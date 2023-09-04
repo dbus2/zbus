@@ -76,6 +76,7 @@ impl<'a> Builder<'a> {
     }
 
     /// Create a message of type [`Type::MethodReturn`].
+    #[deprecated(since = "4.0.0", note = "Please use `Message::method_reply` instead")]
     pub fn method_return(reply_to: &Header<'_>) -> Result<Self> {
         Self::new(Type::MethodReturn).reply_to(reply_to)
     }
