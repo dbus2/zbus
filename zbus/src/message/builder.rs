@@ -47,6 +47,7 @@ impl<'a> Builder<'a> {
     }
 
     /// Create a message of type [`Type::MethodCall`].
+    #[deprecated(since = "4.0.0", note = "Please use `Message::method` instead")]
     pub fn method_call<'p: 'a, 'm: 'a, P, M>(path: P, method_name: M) -> Result<Self>
     where
         P: TryInto<ObjectPath<'p>>,

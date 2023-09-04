@@ -28,7 +28,7 @@ use crate::{
     async_lock::Mutex,
     blocking,
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
-    message::{self, Flags, Message, Type},
+    message::{Flags, Message, Type},
     proxy::CacheProperties,
     DBusError, Error, Executor, Guid, MatchRule, MessageStream, ObjectServer, OwnedMatchRule,
     Result, Task,
@@ -397,7 +397,7 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        let mut builder = message::Builder::method_call(path, method_name)?;
+        let mut builder = Message::method(path, method_name)?;
         if let Some(sender) = self.unique_name() {
             builder = builder.sender(sender)?
         }

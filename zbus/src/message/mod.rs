@@ -100,6 +100,7 @@ impl Message {
         P::Error: Into<Error>,
         M::Error: Into<Error>,
     {
+        #[allow(deprecated)]
         Builder::method_call(path, method_name)
     }
 
