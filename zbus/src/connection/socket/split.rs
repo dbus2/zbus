@@ -9,9 +9,7 @@ pub struct Split<R: ReadHalf, W: WriteHalf> {
 
 impl<R: ReadHalf, W: WriteHalf> Split<R, W> {
     /// Create a new boxed `Split` from `socket`.
-    pub fn new_boxed<S: Socket<ReadHalf = R, WriteHalf = W>>(
-        socket: S,
-    ) -> Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>> {
+    pub fn new_boxed<S: Socket<ReadHalf = R, WriteHalf = W>>(socket: S) -> BoxedSplit {
         let split = socket.split();
 
         Split {
@@ -45,3 +43,6 @@ impl<R: ReadHalf, W: WriteHalf> Split<R, W> {
         (self.read, self.write)
     }
 }
+
+/// A boxed `Split`.
+pub type BoxedSplit = Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>>;

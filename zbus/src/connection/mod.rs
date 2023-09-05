@@ -1188,7 +1188,7 @@ impl Connection {
     }
 
     pub(crate) async fn new(
-        auth: Authenticated<Box<dyn socket::ReadHalf>, Box<dyn socket::WriteHalf>>,
+        auth: Authenticated,
         bus_connection: bool,
         executor: Executor<'static>,
     ) -> Result<Self> {

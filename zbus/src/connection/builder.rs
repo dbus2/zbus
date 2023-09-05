@@ -33,7 +33,7 @@ use crate::{
 
 use super::{
     handshake::{AuthMechanism, Authenticated},
-    socket::{ReadHalf, Socket, Split, WriteHalf},
+    socket::{BoxedSplit, ReadHalf, Socket, Split, WriteHalf},
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -59,7 +59,7 @@ type Interfaces<'a> =
 #[derivative(Debug)]
 #[must_use]
 pub struct Builder<'a> {
-    target: Target,
+    target: Option<Target>,
     max_queued: Option<usize>,
     guid: Option<&'a Guid>,
     p2p: bool,
@@ -337,34 +337,8 @@ impl<'a> Builder<'a> {
         Ok(conn)
     }
 
-    async fn build_(self, executor: Executor<'static>) -> Result<Connection> {
-        let mut stream = match self.target {
-            #[cfg(not(feature = "tokio"))]
-            Target::UnixStream(stream) => Split::new_boxed(Async::new(stream)?),
-            #[cfg(all(unix, feature = "tokio"))]
-            Target::UnixStream(stream) => Split::new_boxed(stream),
-            #[cfg(all(not(unix), feature = "tokio"))]
-            Target::UnixStream(_) => return Err(Error::Unsupported),
-            #[cfg(not(feature = "tokio"))]
-            Target::TcpStream(stream) => Split::new_boxed(Async::new(stream)?),
-            #[cfg(feature = "tokio")]
-            Target::TcpStream(stream) => Split::new_boxed(stream),
-            #[cfg(all(feature = "vsock", not(feature = "tokio")))]
-            Target::VsockStream(stream) => Split::new_boxed(Async::new(stream)?),
-            #[cfg(feature = "tokio-vsock")]
-            Target::VsockStream(stream) => Split::new_boxed(stream),
-            Target::Address(address) => match address.connect().await? {
-                #[cfg(any(unix, not(feature = "tokio")))]
-                address::Stream::Unix(stream) => Split::new_boxed(stream),
-                address::Stream::Tcp(stream) => Split::new_boxed(stream),
-                #[cfg(any(
-                    all(feature = "vsock", not(feature = "tokio")),
-                    feature = "tokio-vsock"
-                ))]
-                address::Stream::Vsock(stream) => Split::new_boxed(stream),
-            },
-            Target::Socket(stream) => stream,
-        };
+    async fn build_(mut self, executor: Executor<'static>) -> Result<Connection> {
+        let mut stream = self.stream_for_target().await?;
         let mut auth = match self.guid {
             None => {
                 // SASL Handshake
@@ -440,7 +414,7 @@ impl<'a> Builder<'a> {
 
     fn new(target: Target) -> Self {
         Self {
-            target,
+            target: Some(target),
             p2p: false,
             max_queued: None,
             guid: None,
@@ -452,6 +426,38 @@ impl<'a> Builder<'a> {
             cookie_id: None,
             cookie_context: None,
         }
+    }
+
+    async fn stream_for_target(&mut self) -> Result<BoxedSplit> {
+        // SAFETY: `self.target` is always `Some` from the beginning and this methos is only called
+        // once.
+        Ok(match self.target.take().unwrap() {
+            #[cfg(not(feature = "tokio"))]
+            Target::UnixStream(stream) => Split::new_boxed(Async::new(stream)?),
+            #[cfg(all(unix, feature = "tokio"))]
+            Target::UnixStream(stream) => Split::new_boxed(stream),
+            #[cfg(all(not(unix), feature = "tokio"))]
+            Target::UnixStream(_) => return Err(Error::Unsupported),
+            #[cfg(not(feature = "tokio"))]
+            Target::TcpStream(stream) => Split::new_boxed(Async::new(stream)?),
+            #[cfg(feature = "tokio")]
+            Target::TcpStream(stream) => Split::new_boxed(stream),
+            #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+            Target::VsockStream(stream) => Split::new_boxed(Async::new(stream)?),
+            #[cfg(feature = "tokio-vsock")]
+            Target::VsockStream(stream) => Split::new_boxed(stream),
+            Target::Address(address) => match address.connect().await? {
+                #[cfg(any(unix, not(feature = "tokio")))]
+                address::Stream::Unix(stream) => Split::new_boxed(stream),
+                address::Stream::Tcp(stream) => Split::new_boxed(stream),
+                #[cfg(any(
+                    all(feature = "vsock", not(feature = "tokio")),
+                    feature = "tokio-vsock"
+                ))]
+                address::Stream::Vsock(stream) => Split::new_boxed(stream),
+            },
+            Target::Socket(stream) => stream,
+        })
     }
 }
 

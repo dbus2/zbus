@@ -1,5 +1,5 @@
 mod split;
-pub use split::Split;
+pub use split::{BoxedSplit, Split};
 
 mod tcp;
 mod unix;
