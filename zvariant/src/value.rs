@@ -972,58 +972,61 @@ mod tests {
             "((true,), (true, false), (true, true, false))"
         );
 
-        assert_eq!(
-            Value::new((
-                (Some(0_i16), Some(Some(0_i16)), Some(Some(Some(0_i16))),),
-                (None::<i16>, Some(None::<i16>), Some(Some(None::<i16>)),),
-                (None::<Option<i16>>, Some(None::<Option<i16>>)),
-            ))
-            .to_string(),
-            "((@mn 0, @mmn 0, @mmmn 0), \
+        #[cfg(feature = "gvariant")]
+        {
+            assert_eq!(
+                Value::new((
+                    (Some(0_i16), Some(Some(0_i16)), Some(Some(Some(0_i16))),),
+                    (None::<i16>, Some(None::<i16>), Some(Some(None::<i16>)),),
+                    (None::<Option<i16>>, Some(None::<Option<i16>>)),
+                ))
+                .to_string(),
+                "((@mn 0, @mmn 0, @mmmn 0), \
                 (@mn nothing, @mmn just nothing, @mmmn just just nothing), \
                 (@mmn nothing, @mmmn just nothing))"
-        );
+            );
 
-        #[cfg(unix)]
-        assert_eq!(
-            Value::new(vec![Fd::from(0), Fd::from(-100)]).to_string(),
-            "[handle 0, -100]"
-        );
+            #[cfg(unix)]
+            assert_eq!(
+                Value::new(vec![Fd::from(0), Fd::from(-100)]).to_string(),
+                "[handle 0, -100]"
+            );
 
-        assert_eq!(
-            Value::new((
-                None::<bool>,
-                None::<bool>,
-                Some(
-                    vec![("size", Value::new((800, 600)))]
-                        .into_iter()
-                        .collect::<HashMap<_, _>>()
-                ),
-                vec![
-                    Value::new(1),
-                    Value::new(
-                        vec![(
-                            "dimension",
-                            Value::new((
-                                vec![2.4, 1.],
-                                Some(Some(200_i16)),
-                                Value::new((3_u8, "Hello!"))
-                            ))
-                        )]
-                        .into_iter()
-                        .collect::<HashMap<_, _>>()
-                    )
-                ],
-                7777,
-                ObjectPath::from_static_str("/").unwrap(),
-                8888
-            ))
-            .to_string(),
-            "(@mb nothing, @mb nothing, \
+            assert_eq!(
+                Value::new((
+                    None::<bool>,
+                    None::<bool>,
+                    Some(
+                        vec![("size", Value::new((800, 600)))]
+                            .into_iter()
+                            .collect::<HashMap<_, _>>()
+                    ),
+                    vec![
+                        Value::new(1),
+                        Value::new(
+                            vec![(
+                                "dimension",
+                                Value::new((
+                                    vec![2.4, 1.],
+                                    Some(Some(200_i16)),
+                                    Value::new((3_u8, "Hello!"))
+                                ))
+                            )]
+                            .into_iter()
+                            .collect::<HashMap<_, _>>()
+                        )
+                    ],
+                    7777,
+                    ObjectPath::from_static_str("/").unwrap(),
+                    8888
+                ))
+                .to_string(),
+                "(@mb nothing, @mb nothing, \
                 @ma{sv} {\"size\": <(800, 600)>}, \
                 [<1>, <{\"dimension\": <([2.4, 1.], \
                 @mmn 200, <(byte 0x03, \"Hello!\")>)>}>], \
                 7777, objectpath \"/\", 8888)"
-        );
+            );
+        }
     }
 }

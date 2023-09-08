@@ -13,6 +13,7 @@ byteorder = "*"
 
 [dependencies.zvariant]
 path = ".."
+features = ["gvariant"]
 
 # Prevent this from interfering with workspaces
 [workspace]
