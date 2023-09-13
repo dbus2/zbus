@@ -238,12 +238,34 @@ where
         visitor.visit_borrowed_str(s)
     }
 
-    fn deserialize_option<V>(self, _visitor: V) -> Result<V::Value>
+    fn deserialize_option<V>(self, #[allow(unused)] visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
+        #[cfg(feature = "option-as-array")]
+        {
+            let c = self.0.sig_parser.next_char()?;
+            if c != ARRAY_SIGNATURE_CHAR {
+                return Err(de::Error::invalid_type(
+                    de::Unexpected::Char(c),
+                    &ARRAY_SIGNATURE_STR,
+                ));
+            }
+            self.0.sig_parser.skip_char()?;
+            // This takes care of parsing all the padding and getting the byte length.
+            let len = ArrayDeserializer::new(self)?.len;
+            if len == 0 {
+                self.0.sig_parser.parse_next_signature()?;
+
+                visitor.visit_none()
+            } else {
+                visitor.visit_some(self)
+            }
+        }
+
+        #[cfg(not(feature = "option-as-array"))]
         Err(de::Error::custom(
-            "D-Bus format does not support optional values",
+            "Can only decode Option<T> from D-Bus format if `option-as-array` feature is enabled",
         ))
     }
 

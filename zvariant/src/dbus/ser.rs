@@ -192,14 +192,33 @@ where
     }
 
     fn serialize_none(self) -> Result<()> {
-        unreachable!("Option<T> can not be encoded in D-Bus format");
+        #[cfg(feature = "option-as-array")]
+        {
+            let seq = self.serialize_seq(Some(0))?;
+            seq.end()
+        }
+
+        #[cfg(not(feature = "option-as-array"))]
+        unreachable!(
+            "Can only encode Option<T> in D-Bus format if `option-as-array` feature is enabled",
+        );
     }
 
-    fn serialize_some<T>(self, _value: &T) -> Result<()>
+    fn serialize_some<T>(self, #[allow(unused)] value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        unreachable!("Option<T> can not be encoded in D-Bus format");
+        #[cfg(feature = "option-as-array")]
+        {
+            let mut seq = self.serialize_seq(Some(1))?;
+            seq.serialize_element(value)?;
+            seq.end()
+        }
+
+        #[cfg(not(feature = "option-as-array"))]
+        unreachable!(
+            "Can only encode Option<T> in D-Bus format if `option-as-array` feature is enabled",
+        );
     }
 
     fn serialize_unit(self) -> Result<()> {
