@@ -110,8 +110,52 @@ method.
 For more information about all the possible values for `emits_changed_signal` refer
  to [`dbus_proxy`](https://docs.rs/zbus/latest/zbus/attr.dbus_proxy.html) documentation.
 
+## How do I use `Option<T>`` with zbus?
+
+While `Option<T>` is a very commonly used type in Rust, there is unfortunately [no concept of a
+nullable-type in the D-Bus protocol][nonull]. However, there are two ways to simulate it:
+
+### 1. Designation of a special value as `None`
+
+This is the simplest way to simulate `Option<T>`. Typically the
+default value for the type in question is a good choice. For example the empty string (`""`) is
+often used as `None` for strings and string-based types. Note however that this solution can not
+work for all types, for example `bool`.
+
+Since this is the most widely used solution in the D-Bus world and is even used by the [D-Bus
+standard interfaces][dsi], `zvariant` provides a custom type for this, [`Optional<T>`] that makes
+it super easy to simulate a nullable type, especially if the contained type implements the `Default`
+trait.
+
+### 2. Encoding as an array (`a?`)
+
+The idea here is to represent `None` case with 0 elements (empty array) and the `Some` case with 1
+element. `zvariant` and `zbus` provide `option-as-array` Cargo feature, which when enabled, allows
+the (de)serialization of `Option<T>`. Unlike the previous solution, this solution can be used with
+all types. However, it does come with some caveats and limitations:
+  1. Since the D-Bus type signature does not provide any hints about the array being in fact a
+    nullable type, this can be confusing for users of generic tools like [`d-feet`]. It is therefore
+    highly recommended that service authors document each use of `Option<T>` in their D-Bus
+    interface documentation.
+  2. Currently it is not possible to use `Option<T>` for `dbus_interface` and `dbus_proxy` property
+    methods.
+  3. Both the sender and receiver must agree on use of this encoding. If the sender sends `T`, the
+    receiver will not be able to decode it successfully as `Option<T>` and vice versa.
+  4. While `zvariant::Value` can be converted into `Option<T>`, the reverse is currently not
+    possible.
+
+Due to these limitations, `option-as-array` feature is not enabled by default and must be explicitly
+enabled.
+
+**Note**: We hope to be able to remove #2 and #4, once [specialization] lands in stable Rust.
+
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
 [`Type`]: https://docs.rs/zvariant/latest/zvariant/derive.Type.html
 [`SerializeDict`]: https://docs.rs/zvariant/latest/zvariant/derive.SerializeDict.html
 [`DeserializeDict`]: https://docs.rs/zvariant/latest/zvariant/derive.DeserializeDict.html
 [`MessageStream`]: https://docs.rs/zbus/latest/zbus/struct.MessageStream.html
+[nonull]: https://gitlab.freedesktop.org/dbus/dbus/-/issues/25
+[dsi]: http://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces
+[`Optional<T>`]: https://docs.rs/zvariant/latest/zvariant/struct.Optional.html
+[`d-feet`]: https://wiki.gnome.org/Apps/DFeet
+[specialization]: https://rust-lang.github.io/rfcs/1210-impl-specialization.html
