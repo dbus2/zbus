@@ -565,7 +565,7 @@ There you have it, a Rust-friendly binding for your D-Bus service!
 
 [`busctl`]: https://www.freedesktop.org/software/systemd/man/busctl.html
 [developer-friendly tool]: https://crates.io/crates/zbus_xmlgen
-[`gdbus-codegen`]: https://developer.gnome.org/gio/stable/gdbus-codegen.html
+[`gdbus-codegen`]: https://docs.gtk.org/gio/migrating-gdbus.html#generating-code-and-docs
 [`pkg-config`]: https://www.freedesktop.org/wiki/Software/pkg-config/
 [cob]: blocking.html
 [`Stream`]: https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html
