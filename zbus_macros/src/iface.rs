@@ -123,6 +123,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         method
             .attrs
             .retain(|attr| !attr.path.is_ident("dbus_interface"));
+        let cfg_attrs: Vec<_> = method
+            .attrs
+            .iter()
+            .filter(|a| a.path.is_ident("cfg"))
+            .collect();
 
         let docs = get_doc_attrs(&method.attrs)
             .iter()
@@ -184,8 +189,9 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         };
 
         let mut intro_args = quote!();
-        intro_args.extend(introspect_input_args(&typed_inputs, is_signal));
-        let is_result_output = introspect_add_output_args(&mut intro_args, output, out_args)?;
+        intro_args.extend(introspect_input_args(&typed_inputs, is_signal, &cfg_attrs));
+        let is_result_output =
+            introspect_add_output_args(&mut intro_args, output, out_args, &cfg_attrs)?;
 
         let (args_from_msg, args_names) = get_args_from_inputs(&typed_inputs, &zbus)?;
 
@@ -313,6 +319,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
                 if is_mut {
                     let q = quote!(
+                        #(#cfg_attrs)*
                         #member_name => {
                             ::std::option::Option::Some(#do_set)
                         }
@@ -320,11 +327,13 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     set_mut_dispatch.extend(q);
 
                     let q = quote!(
+                        #(#cfg_attrs)*
                         #member_name => #zbus::object_server::DispatchResult::RequiresMut,
                     );
                     set_dispatch.extend(q);
                 } else {
                     let q = quote!(
+                        #(#cfg_attrs)*
                         #member_name => {
                             #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {
                                 #do_set
@@ -351,6 +360,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 };
 
                 let q = quote!(
+                    #(#cfg_attrs)*
                     #member_name => {
                         ::std::option::Option::Some(#inner)
                     },
@@ -425,6 +435,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             introspect.extend(introspect_method(&member_name, &intro_args));
 
             let m = quote! {
+                #(#cfg_attrs)*
                 #member_name => {
                     let future = async move {
                         #args_from_msg
@@ -439,6 +450,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             if is_mut {
                 call_dispatch.extend(quote! {
+                    #(#cfg_attrs)*
                     #member_name => #zbus::object_server::DispatchResult::RequiresMut,
                 });
                 call_mut_dispatch.extend(m);
@@ -699,10 +711,11 @@ fn introspect_method(name: &str, args: &TokenStream) -> TokenStream {
     )
 }
 
-fn introspect_input_args(
-    inputs: &[PatType],
+fn introspect_input_args<'i>(
+    inputs: &'i [PatType],
     is_signal: bool,
-) -> impl Iterator<Item = TokenStream> + '_ {
+    cfg_attrs: &'i [&'i syn::Attribute],
+) -> impl Iterator<Item = TokenStream> + 'i {
     inputs
         .iter()
         .filter_map(move |pat_type @ PatType { ty, attrs, .. }| {
@@ -739,19 +752,25 @@ fn introspect_input_args(
             let arg_name = quote!(#ident).to_string();
             let dir = if is_signal { "" } else { " direction=\"in\"" };
             Some(quote!(
+                #(#cfg_attrs)*
                 ::std::writeln!(writer, "{:indent$}<arg name=\"{}\" type=\"{}\"{}/>", "",
                          #arg_name, <#ty>::signature(), #dir, indent = level).unwrap();
             ))
         })
 }
 
-fn introspect_output_arg(ty: &Type, arg_name: Option<&String>) -> TokenStream {
+fn introspect_output_arg(
+    ty: &Type,
+    arg_name: Option<&String>,
+    cfg_attrs: &[&syn::Attribute],
+) -> TokenStream {
     let arg_name = match arg_name {
         Some(name) => format!("name=\"{name}\" "),
         None => String::from(""),
     };
 
     quote!(
+        #(#cfg_attrs)*
         ::std::writeln!(writer, "{:indent$}<arg {}type=\"{}\" direction=\"out\"/>", "",
                  #arg_name, <#ty>::signature(), indent = level).unwrap();
     )
@@ -777,6 +796,7 @@ fn introspect_add_output_args(
     args: &mut TokenStream,
     output: &ReturnType,
     arg_names: Option<&[String]>,
+    cfg_attrs: &[&syn::Attribute],
 ) -> syn::Result<bool> {
     let mut is_result_output = false;
 
@@ -805,10 +825,10 @@ fn introspect_add_output_args(
             }
             for i in 0..t.elems.len() {
                 let name = arg_names.map(|names| &names[i]);
-                args.extend(introspect_output_arg(&t.elems[i], name));
+                args.extend(introspect_output_arg(&t.elems[i], name, cfg_attrs));
             }
         } else {
-            args.extend(introspect_output_arg(ty, None));
+            args.extend(introspect_output_arg(ty, None, cfg_attrs));
         }
     }
 
