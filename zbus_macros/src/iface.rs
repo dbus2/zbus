@@ -2,10 +2,14 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use syn::{
-    self, parse_quote, punctuated::Punctuated, spanned::Spanned, AngleBracketedGenericArguments,
-    AttributeArgs, Error, FnArg, GenericArgument, ImplItem, ItemImpl, Lit::Str, Meta,
-    Meta::NameValue, MetaList, MetaNameValue, NestedMeta, PatType, PathArguments, ReturnType,
-    Signature, Token, Type, TypePath,
+    self,
+    parse::{Parse, ParseStream},
+    parse_quote,
+    punctuated::Punctuated,
+    spanned::Spanned,
+    AngleBracketedGenericArguments, Attribute, Error, Expr, ExprLit, FnArg, GenericArgument,
+    ImplItem, ImplItemFn, ItemImpl, Lit, Meta, MetaNameValue, PatType, PathArguments, ReturnType,
+    Signature, Token, Type, TypePath, Visibility,
 };
 use zvariant_utils::{case, def_attrs};
 
@@ -64,7 +68,7 @@ impl<'a> Property<'a> {
     }
 }
 
-pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
+pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Result<TokenStream> {
     let zbus = zbus_path();
 
     let self_ty = &input.self_ty;
@@ -92,7 +96,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
     let iface_name =
         {
-            let TraitAttributes { name, interface } = TraitAttributes::parse_nested_metas(&args)?;
+            let TraitAttributes { name, interface } = TraitAttributes::parse_nested_metas(args)?;
 
             match (name, interface) {
                 (Some(name), None) | (None, Some(name)) => name,
@@ -104,9 +108,27 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             }
         };
 
-    for method in &mut input.items {
-        let method = match method {
-            ImplItem::Method(m) => m,
+    for item in &mut input.items {
+        let (method, is_signal) = match item {
+            ImplItem::Fn(m) => (m, false),
+            // Since signals do not have a function body, they don't parse as ImplItemFn…
+            ImplItem::Verbatim(tokens) => {
+                // … thus parse them ourselves and construct an ImplItemFn from that
+                let decl = syn::parse2::<ImplItemSignal>(tokens.clone())?;
+                let ImplItemSignal { attrs, vis, sig } = decl;
+                *item = ImplItem::Fn(ImplItemFn {
+                    attrs,
+                    vis,
+                    defaultness: None,
+                    sig,
+                    // This empty block will be replaced below.
+                    block: parse_quote!({}),
+                });
+                match item {
+                    ImplItem::Fn(m) => (m, true),
+                    _ => unreachable!(),
+                }
+            }
             _ => continue,
         };
 
@@ -122,24 +144,36 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         let attrs = MethodAttributes::parse(&method.attrs)?;
         method
             .attrs
-            .retain(|attr| !attr.path.is_ident("dbus_interface"));
+            .retain(|attr| !attr.path().is_ident("dbus_interface"));
+
+        if is_signal && !attrs.signal {
+            return Err(syn::Error::new_spanned(
+                item,
+                "methods that are not signals must have a body",
+            ));
+        }
 
         let docs = get_doc_attrs(&method.attrs)
             .iter()
             .filter_map(|attr| {
-                if let Ok(NameValue(MetaNameValue { lit: Str(s), .. })) = attr.parse_meta() {
-                    Some(s.value())
-                } else {
+                match attr.meta.require_name_value() {
+                    // #[doc = "..."] attribute
+                    Ok(MetaNameValue {
+                        value:
+                            Expr::Lit(ExprLit {
+                                lit: Lit::Str(s), ..
+                            }),
+                        ..
+                    }) => Some(s.value()),
                     // non #[doc = "..."] attributes are not our concern
                     // we leave them for rustc to handle
-                    None
+                    _ => None,
                 }
             })
             .collect();
 
         let doc_comments = to_xml_docs(docs);
         let is_property = attrs.property;
-        let is_signal = attrs.signal;
         let out_args = attrs.out_args.as_deref();
         assert!(!is_property || !is_signal);
 
@@ -672,7 +706,7 @@ fn get_args_from_inputs(
 fn clean_input_args(inputs: &mut Punctuated<FnArg, Token![,]>) {
     for input in inputs {
         if let FnArg::Typed(t) = input {
-            t.attrs.retain(|attr| !attr.path.is_ident("zbus"));
+            t.attrs.retain(|attr| !attr.path().is_ident("zbus"));
         }
     }
 }
@@ -707,25 +741,24 @@ fn introspect_input_args(
         .iter()
         .filter_map(move |pat_type @ PatType { ty, attrs, .. }| {
             let is_special_arg = attrs.iter().any(|attr| {
-                if !attr.path.is_ident("zbus") {
+                if !attr.path().is_ident("zbus") {
                     return false;
                 }
 
-                let meta = match attr.parse_meta() {
-                    ::std::result::Result::Ok(meta) => meta,
-                    ::std::result::Result::Err(_) => return false,
-                };
+                let meta =
+                    match attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated) {
+                        Ok(meta) => meta,
+                        Err(_) => return false,
+                    };
 
-                let nested = match meta {
-                    Meta::List(MetaList { nested, .. }) => nested,
-                    _ => return false,
-                };
-
-                let res = nested.iter().any(|nested_meta| {
+                let res = meta.iter().any(|nested_meta| {
                     matches!(
                         nested_meta,
-                        NestedMeta::Meta(Meta::Path(path))
-                        if path.is_ident("object_server") || path.is_ident("connection") || path.is_ident("header") || path.is_ident("signal_context")
+                        Meta::Path(path)
+                        if path.is_ident("object_server") ||
+                            path.is_ident("connection") ||
+                            path.is_ident("header") ||
+                            path.is_ident("signal_context")
                     )
                 });
 
@@ -903,4 +936,22 @@ pub fn to_xml_docs(lines: Vec<String>) -> TokenStream {
     docs.extend(quote!(::std::writeln!(writer, "{:indent$} -->", "", indent = level).unwrap();));
 
     docs
+}
+
+// Like ImplItemFn, but with a semicolon at the end instead of a body block
+struct ImplItemSignal {
+    attrs: Vec<Attribute>,
+    vis: Visibility,
+    sig: Signature,
+}
+
+impl Parse for ImplItemSignal {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let attrs = input.call(Attribute::parse_outer)?;
+        let vis = input.parse()?;
+        let sig = input.parse()?;
+        let _: Token![;] = input.parse()?;
+
+        Ok(ImplItemSignal { attrs, vis, sig })
+    }
 }
