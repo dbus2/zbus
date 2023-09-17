@@ -121,12 +121,28 @@ where
     }
 }
 
-#[cfg(feature = "gvariant")]
+#[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
 impl<'v, V> From<Option<V>> for Value<'v>
 where
     Option<V>: Into<Maybe<'v>>,
 {
     fn from(v: Option<V>) -> Value<'v> {
         Value::Maybe(v.into())
+    }
+}
+
+#[cfg(feature = "option-as-array")]
+impl<'v, V> From<Option<V>> for Value<'v>
+where
+    V: Into<Value<'v>> + Type,
+{
+    fn from(v: Option<V>) -> Value<'v> {
+        let mut array = Array::new(V::signature());
+        if let Some(v) = v {
+            // We got the signature from the `Type` impl, so this should never panic.
+            array.append(v.into()).expect("signature mismatch");
+        }
+
+        array.into()
     }
 }

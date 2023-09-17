@@ -972,8 +972,16 @@ mod tests {
             "((true,), (true, false), (true, true, false))"
         );
 
-        #[cfg(feature = "gvariant")]
+        #[cfg(any(feature = "gvariant", feature = "option-as-array"))]
         {
+            #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+            let s = "((@mn 0, @mmn 0, @mmmn 0), \
+                (@mn nothing, @mmn just nothing, @mmmn just just nothing), \
+                (@mmn nothing, @mmmn just nothing))";
+            #[cfg(feature = "option-as-array")]
+            let s = "(([int16 0], [[int16 0]], [[[int16 0]]]), \
+                (@an [], [@an []], [[@an []]]), \
+                (@aan [], [@aan []]))";
             assert_eq!(
                 Value::new((
                     (Some(0_i16), Some(Some(0_i16)), Some(Some(Some(0_i16))),),
@@ -981,9 +989,7 @@ mod tests {
                     (None::<Option<i16>>, Some(None::<Option<i16>>)),
                 ))
                 .to_string(),
-                "((@mn 0, @mmn 0, @mmmn 0), \
-                (@mn nothing, @mmn just nothing, @mmmn just just nothing), \
-                (@mmn nothing, @mmmn just nothing))"
+                s,
             );
 
             #[cfg(unix)]
@@ -992,6 +998,16 @@ mod tests {
                 "[handle 0, -100]"
             );
 
+            #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+            let s = "(@mb nothing, @mb nothing, \
+                @ma{sv} {\"size\": <(800, 600)>}, \
+                [<1>, <{\"dimension\": <([2.4, 1.], \
+                @mmn 200, <(byte 0x03, \"Hello!\")>)>}>], \
+                7777, objectpath \"/\", 8888)";
+            #[cfg(feature = "option-as-array")]
+            let s = "(@ab [], @ab [], [{\"size\": <(800, 600)>}], \
+                [<1>, <{\"dimension\": <([2.4, 1.], [[int16 200]], \
+                <(byte 0x03, \"Hello!\")>)>}>], 7777, objectpath \"/\", 8888)";
             assert_eq!(
                 Value::new((
                     None::<bool>,
@@ -1021,11 +1037,7 @@ mod tests {
                     8888
                 ))
                 .to_string(),
-                "(@mb nothing, @mb nothing, \
-                @ma{sv} {\"size\": <(800, 600)>}, \
-                [<1>, <{\"dimension\": <([2.4, 1.], \
-                @mmn 200, <(byte 0x03, \"Hello!\")>)>}>], \
-                7777, objectpath \"/\", 8888)"
+                s,
             );
         }
     }

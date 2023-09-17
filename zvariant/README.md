@@ -163,6 +163,9 @@ accomplish. However, community contribution can change that. 😊
 | gvariant | Enable [GVariant] format support |
 | arrayvec | Implement `Type` for [`arrayvec::ArrayVec`] and [`arrayvec::ArrayString`] |
 | enumflags2 | Implement `Type` for [`enumflags2::BitFlags`]`<F>` |
+| option-as-array | Enable `Option<T>` (de)serialization using array encoding |
+
+`gvariant` features conflicts with `option-as-array` and hence should not be enabled together.
 
 [dwf]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-marshaling
 [GVariant]: https://developer.gnome.org/documentation/specifications/gvariant-specification-1.0.html

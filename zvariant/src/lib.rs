@@ -1615,94 +1615,157 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "gvariant")]
+    #[cfg(any(feature = "gvariant", feature = "option-as-array"))]
     fn option_value() {
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
         let ctxt = Context::<NativeEndian>::new_gvariant(0);
+        #[cfg(feature = "option-as-array")]
+        let ctxt = Context::<NativeEndian>::new_dbus(0);
 
         // First a Some fixed-sized value
         let mn = Some(16i16);
         let encoded = to_bytes(ctxt, &mn).unwrap();
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
         assert_eq!(encoded.len(), 2);
+        #[cfg(feature = "option-as-array")]
+        assert_eq!(encoded.len(), 6);
         let decoded: Option<i16> = from_slice(&encoded, ctxt).unwrap().0;
         assert_eq!(decoded, mn);
 
-        // Check encoding against GLib
-        let bytes = Bytes::from_owned(encoded);
-        let variant = Variant::from_bytes::<Option<i16>>(&bytes);
-        assert_eq!(variant.get::<Option<i16>>().unwrap(), mn);
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+        {
+            // Check encoding against GLib
+            let bytes = Bytes::from_owned(encoded);
+            let variant = Variant::from_bytes::<Option<i16>>(&bytes);
+            assert_eq!(variant.get::<Option<i16>>().unwrap(), mn);
+        }
 
         // As Value
         let v: Value<'_> = mn.into();
         let encoded = to_bytes(ctxt, &v).unwrap();
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
         assert_eq!(encoded.len(), 5);
+        #[cfg(feature = "option-as-array")]
+        assert_eq!(encoded.len(), 10);
         let decoded: Value<'_> = from_slice(&encoded, ctxt).unwrap().0;
-        if let Value::Maybe(maybe) = decoded {
-            assert_eq!(maybe.get().unwrap(), mn);
-        } else {
-            panic!();
+        match decoded {
+            #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+            Value::Maybe(maybe) => assert_eq!(maybe.get().unwrap(), mn),
+            #[cfg(feature = "option-as-array")]
+            Value::Array(array) => {
+                assert_eq!(i16::try_from(array.get()[0].clone()).unwrap(), 16i16)
+            }
+            _ => panic!("unexpected value {decoded:?}"),
         }
 
-        // Check encoding against GLib
-        let bytes = Bytes::from_owned(encoded);
-        let variant = Variant::from_bytes::<Variant>(&bytes);
-        let decoded = variant.child_value(0).get::<Option<i16>>().unwrap();
-        assert_eq!(decoded, mn);
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+        {
+            // Check encoding against GLib
+            let bytes = Bytes::from_owned(encoded);
+            let variant = Variant::from_bytes::<Variant>(&bytes);
+            let decoded = variant.child_value(0).get::<Option<i16>>().unwrap();
+            assert_eq!(decoded, mn);
+        }
 
         // Now a None of the same type
         let mn: Option<i16> = None;
         let encoded = to_bytes(ctxt, &mn).unwrap();
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
         assert_eq!(encoded.len(), 0);
+        #[cfg(feature = "option-as-array")]
+        assert_eq!(encoded.len(), 4);
         let decoded: Option<i16> = from_slice(&encoded, ctxt).unwrap().0;
         assert!(decoded.is_none());
 
-        // Check encoding against GLib
-        let bytes = Bytes::from_owned(encoded);
-        let variant = Variant::from_bytes::<Option<i16>>(&bytes);
-        assert!(variant.get::<Option<i16>>().unwrap().is_none());
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+        {
+            // Check encoding against GLib
+            let bytes = Bytes::from_owned(encoded);
+            let variant = Variant::from_bytes::<Option<i16>>(&bytes);
+            assert!(variant.get::<Option<i16>>().unwrap().is_none());
+        }
 
         // Next a Some variable-sized value
         let ms = Some("hello world");
         let encoded = to_bytes(ctxt, &ms).unwrap();
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
         assert_eq!(encoded.len(), 13);
+        #[cfg(feature = "option-as-array")]
+        assert_eq!(encoded.len(), 20);
         let decoded: Option<&str> = from_slice(&encoded, ctxt).unwrap().0;
         assert_eq!(decoded, ms);
 
-        // Check encoding against GLib
-        let bytes = Bytes::from_owned(encoded);
-        let variant = Variant::from_bytes::<Option<String>>(&bytes);
-        assert_eq!(
-            &variant.get::<Option<String>>().unwrap().unwrap(),
-            ms.unwrap()
-        );
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+        {
+            // Check encoding against GLib
+            let bytes = Bytes::from_owned(encoded);
+            let variant = Variant::from_bytes::<Option<String>>(&bytes);
+            assert_eq!(
+                &variant.get::<Option<String>>().unwrap().unwrap(),
+                ms.unwrap()
+            );
+        }
 
         // As Value
         let v: Value<'_> = ms.into();
-        let encoded = to_bytes(ctxt, &v).unwrap();
-        assert_eq!(encoded.len(), 16);
-        let decoded: Value<'_> = from_slice(&encoded, ctxt).unwrap().0;
-        if let Value::Maybe(maybe) = decoded {
-            assert_eq!(maybe.get::<String>().unwrap().as_deref(), ms);
-        } else {
-            panic!();
+        #[cfg(feature = "option-as-array")]
+        match &v {
+            Value::Array(array) => {
+                assert_eq!(
+                    String::try_from(array.get()[0].clone()).unwrap(),
+                    ms.unwrap()
+                )
+            }
+            _ => panic!("unexpected value {v:?}"),
         }
 
-        // Check encoding against GLib
-        let bytes = Bytes::from_owned(encoded);
-        let variant = Variant::from_bytes::<Variant>(&bytes);
-        let decoded = variant.child_value(0).get::<Option<String>>().unwrap();
-        assert_eq!(decoded.as_deref(), ms);
+        let encoded = to_bytes(ctxt, &v).unwrap();
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+        assert_eq!(encoded.len(), 16);
+        #[cfg(feature = "option-as-array")]
+        assert_eq!(encoded.len(), 24);
+        let decoded: Value<'_> = from_slice(&encoded, ctxt).unwrap().0;
+        match decoded {
+            #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+            Value::Maybe(maybe) => {
+                assert_eq!(maybe.get::<String>().unwrap().as_deref(), ms);
+            }
+            #[cfg(feature = "option-as-array")]
+            Value::Array(array) => {
+                assert_eq!(
+                    String::try_from(array.get()[0].clone()).unwrap(),
+                    ms.unwrap()
+                )
+            }
+            _ => panic!("unexpected value {decoded:?}"),
+        }
+
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+        {
+            // Check encoding against GLib
+            let bytes = Bytes::from_owned(encoded);
+            let variant = Variant::from_bytes::<Variant>(&bytes);
+            let decoded = variant.child_value(0).get::<Option<String>>().unwrap();
+            assert_eq!(decoded.as_deref(), ms);
+        }
 
         // Now a None of the same type
         let ms: Option<&str> = None;
         let encoded = to_bytes(ctxt, &ms).unwrap();
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
         assert_eq!(encoded.len(), 0);
+        #[cfg(feature = "option-as-array")]
+        assert_eq!(encoded.len(), 4);
         let decoded: Option<&str> = from_slice(&encoded, ctxt).unwrap().0;
         assert!(decoded.is_none());
 
-        // Check encoding against GLib
-        let bytes = Bytes::from_owned(encoded);
-        let variant = Variant::from_bytes::<Option<String>>(&bytes);
-        assert!(variant.get::<Option<String>>().unwrap().is_none());
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+        {
+            // Check encoding against GLib
+            let bytes = Bytes::from_owned(encoded);
+            let variant = Variant::from_bytes::<Option<String>>(&bytes);
+            assert!(variant.get::<Option<String>>().unwrap().is_none());
+        }
 
         // In a seq type
         let ams = vec![
@@ -1710,60 +1773,84 @@ mod tests {
             Some(String::from("bye world")),
         ];
         let encoded = to_bytes(ctxt, &ams).unwrap();
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
         assert_eq!(encoded.len(), 26);
+        #[cfg(feature = "option-as-array")]
+        assert_eq!(encoded.len(), 42);
         let decoded: Vec<Option<String>> = from_slice(&encoded, ctxt).unwrap().0;
         assert_eq!(decoded, ams);
 
-        // Check encoding against GLib
-        let bytes = Bytes::from_owned(encoded);
-        let variant = Variant::from_bytes::<Vec<Option<String>>>(&bytes);
-        let decoded = variant.get::<Vec<Option<String>>>().unwrap();
-        assert_eq!(decoded, ams);
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+        {
+            // Check encoding against GLib
+            let bytes = Bytes::from_owned(encoded);
+            let variant = Variant::from_bytes::<Vec<Option<String>>>(&bytes);
+            let decoded = variant.get::<Vec<Option<String>>>().unwrap();
+            assert_eq!(decoded, ams);
+        }
 
         // As Value
         let v: Value<'_> = ams.clone().into();
         let encoded = to_bytes(ctxt, &v).unwrap();
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
         assert_eq!(encoded.len(), 30);
+        #[cfg(feature = "option-as-array")]
+        assert_eq!(encoded.len(), 50);
         let decoded: Value<'_> = from_slice(&encoded, ctxt).unwrap().0;
         assert_eq!(v, decoded);
 
-        // Check encoding against GLib
-        let bytes = Bytes::from_owned(encoded);
-        let variant = Variant::from_bytes::<Variant>(&bytes);
-        let decoded = variant.child_value(0).get::<Vec<Option<String>>>().unwrap();
-        assert_eq!(decoded, ams);
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+        {
+            // Check encoding against GLib
+            let bytes = Bytes::from_owned(encoded);
+            let variant = Variant::from_bytes::<Variant>(&bytes);
+            let decoded = variant.child_value(0).get::<Vec<Option<String>>>().unwrap();
+            assert_eq!(decoded, ams);
+        }
 
         // In a struct
         let structure: (Option<String>, u64, Option<String>) =
             (Some(String::from("hello world")), 42u64, None);
         let encoded = to_bytes(ctxt, &structure).unwrap();
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
         assert_eq!(encoded.len(), 25);
+        #[cfg(feature = "option-as-array")]
+        assert_eq!(encoded.len(), 36);
         let decoded: (Option<String>, u64, Option<String>) = from_slice(&encoded, ctxt).unwrap().0;
         assert_eq!(decoded, structure);
 
-        // Check encoding against GLib
-        let bytes = Bytes::from_owned(encoded);
-        let variant = Variant::from_bytes::<(Option<String>, u64, Option<String>)>(&bytes);
-        let decoded = variant
-            .get::<(Option<String>, u64, Option<String>)>()
-            .unwrap();
-        assert_eq!(decoded, structure);
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+        {
+            // Check encoding against GLib
+            let bytes = Bytes::from_owned(encoded);
+            let variant = Variant::from_bytes::<(Option<String>, u64, Option<String>)>(&bytes);
+            let decoded = variant
+                .get::<(Option<String>, u64, Option<String>)>()
+                .unwrap();
+            assert_eq!(decoded, structure);
+        }
 
         // As Value
         let v: Value<'_> = structure.clone().into();
         let encoded = to_bytes(ctxt, &v).unwrap();
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
         assert_eq!(encoded.len(), 33);
+        #[cfg(feature = "option-as-array")]
+        assert_eq!(encoded.len(), 52);
         let decoded: Value<'_> = from_slice(&encoded, ctxt).unwrap().0;
         assert_eq!(v, decoded);
 
-        // Check encoding against GLib
-        let bytes = Bytes::from_owned(encoded);
-        let variant = Variant::from_bytes::<Variant>(&bytes);
-        let decoded = variant
-            .child_value(0)
-            .get::<(Option<String>, u64, Option<String>)>()
-            .unwrap();
-        assert_eq!(decoded, structure);
+        #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+        {
+            // Check encoding against GLib
+            let bytes = Bytes::from_owned(encoded);
+            let variant = Variant::from_bytes::<Variant>(&bytes);
+            let decoded = variant
+                .child_value(0)
+                .get::<(Option<String>, u64, Option<String>)>()
+                .unwrap();
+            assert_eq!(decoded, structure);
+        }
     }
 
     #[test]

@@ -167,11 +167,6 @@ where
     }
 }
 
-// This would be great but somehow it conflicts with some blanket generic implementations from
-// core:
-//
-// impl<'a, T> TryFrom<Maybe<'a>> for Option<T>
-
 impl<'a> Serialize for Maybe<'a> {
     fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where

@@ -18,6 +18,8 @@ uuid = ["zvariant/uuid"]
 url = ["zvariant/url"]
 time = ["zvariant/time"]
 chrono = ["zvariant/chrono"]
+# Enables ser/de of `Option<T>` as an array of 0 or 1 elements.
+option-as-array = ["zvariant/option-as-array"]
 windows-gdbus = []
 async-io = [
   "dep:async-io",

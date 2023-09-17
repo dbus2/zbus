@@ -218,7 +218,7 @@ deref_impl!(T, <T: ?Sized + Type> Type for RwLock<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Box<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Rc<T>);
 
-#[cfg(feature = "gvariant")]
+#[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
 impl<T> Type for Option<T>
 where
     T: Type,
@@ -226,6 +226,17 @@ where
     #[inline]
     fn signature() -> Signature<'static> {
         Signature::from_string_unchecked(format!("m{}", T::signature()))
+    }
+}
+
+#[cfg(feature = "option-as-array")]
+impl<T> Type for Option<T>
+where
+    T: Type,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        Signature::from_string_unchecked(format!("a{}", T::signature()))
     }
 }
 

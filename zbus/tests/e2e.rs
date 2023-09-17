@@ -75,6 +75,10 @@ trait MyIface {
 
     fn destroy_obj(&self, key: &str) -> zbus::Result<()>;
 
+    #[cfg(feature = "option-as-array")]
+    // Optional params and return values.
+    fn optional_args(&self, key: Option<&str>) -> zbus::Result<Option<String>>;
+
     #[dbus_proxy(property)]
     fn count(&self) -> zbus::Result<u32>;
 
@@ -285,6 +289,13 @@ impl MyIfaceImpl {
             .send(NextAction::DestroyObj(key))
             .await
             .unwrap();
+    }
+
+    #[cfg(feature = "option-as-array")]
+    #[instrument]
+    async fn optional_args(&self, arg: Option<&str>) -> zbus::fdo::Result<Option<String>> {
+        debug!("`OptionalArgs` called.");
+        Ok(arg.map(|s| format!("Hello {}", s)))
     }
 
     #[instrument]
@@ -588,6 +599,15 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         },
     )
     .await;
+
+    #[cfg(feature = "option-as-array")]
+    {
+        assert!(proxy.optional_args(None).await.unwrap().is_none());
+        assert_eq!(
+            proxy.optional_args(Some("🚌")).await.unwrap().unwrap(),
+            "Hello 🚌",
+        );
+    }
 
     assert_eq!(ifaces_added.args()?.object_path(), "/zbus/test/MyObj");
     let args = ifaces_added.args()?;
