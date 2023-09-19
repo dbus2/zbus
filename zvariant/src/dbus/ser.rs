@@ -99,9 +99,9 @@ where
             Fd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
                 self.0.add_padding(u32::alignment(EncodingFormat::DBus))?;
-                let v = self.0.add_fd(v);
+                let idx = self.0.add_fd(v);
                 self.0
-                    .write_u32::<B>(v)
+                    .write_u32::<B>(idx)
                     .map_err(|e| Error::InputOutput(e.into()))
             }
             _ => {
