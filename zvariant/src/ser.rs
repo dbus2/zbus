@@ -8,13 +8,14 @@ use std::{
 };
 
 #[cfg(unix)]
-use std::os::unix::io::RawFd;
+use std::os::fd::OwnedFd;
 
 #[cfg(feature = "gvariant")]
 use crate::gvariant::{self, Serializer as GVSerializer};
 use crate::{
     container_depths::ContainerDepths,
     dbus::{self, Serializer as DBusSerializer},
+    serialized::{Data, Size},
     signature_parser::SignatureParser,
     utils::*,
     Basic, DynamicType, EncodingContext, EncodingFormat, Error, Result, Signature,
@@ -40,11 +41,6 @@ impl Seek for NullWriteSeek {
 
 /// Calculate the serialized size of `T`.
 ///
-/// # Panics
-///
-/// This function will panic if the value to serialize contains file descriptors. Use
-/// [`serialized_size_fds`] if `T` (potentially) contains FDs.
-///
 /// # Examples
 ///
 /// ```
@@ -52,14 +48,12 @@ impl Seek for NullWriteSeek {
 ///
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// let len = serialized_size(ctxt, "hello world").unwrap();
-/// assert_eq!(len, 16);
+/// assert_eq!(*len, 16);
 ///
 /// let len = serialized_size(ctxt, &("hello world!", 42_u64)).unwrap();
-/// assert_eq!(len, 32);
+/// assert_eq!(*len, 32);
 /// ```
-///
-/// [`serialized_size_fds`]: fn.serialized_size_fds.html
-pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<usize>
+pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Size<B>>
 where
     B: byteorder::ByteOrder,
     T: Serialize + DynamicType,
@@ -69,34 +63,7 @@ where
     to_writer(&mut null, ctxt, value)
 }
 
-/// Calculate the serialized size of `T` that (potentially) contains FDs.
-///
-/// Returns the serialized size of `T` and the number of FDs.
-///
-/// This function is not available on Windows.
-#[cfg(unix)]
-pub fn serialized_size_fds<B, T: ?Sized>(
-    ctxt: EncodingContext<B>,
-    value: &T,
-) -> Result<(usize, usize)>
-where
-    B: byteorder::ByteOrder,
-    T: Serialize + DynamicType,
-{
-    let mut null = NullWriteSeek;
-
-    let (len, fds) = to_writer_fds(&mut null, ctxt, value)?;
-    Ok((len, fds.len()))
-}
-
 /// Serialize `T` to the given `writer`.
-///
-/// This function returns the number of bytes written to the given `writer`.
-///
-/// # Panics
-///
-/// This function will panic if the value to serialize contains file descriptors. Use
-/// [`to_writer_fds`] if you'd want to potentially pass FDs.
 ///
 /// # Examples
 ///
@@ -115,7 +82,7 @@ pub fn to_writer<B, W, T: ?Sized>(
     writer: &mut W,
     ctxt: EncodingContext<B>,
     value: &T,
-) -> Result<usize>
+) -> Result<Size<B>>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -126,75 +93,26 @@ where
     to_writer_for_signature(writer, ctxt, &signature, value)
 }
 
-/// Serialize `T` that (potentially) contains FDs, to the given `writer`.
-///
-/// This function returns the number of bytes written to the given `writer` and the file descriptor
-/// vector, which needs to be transferred via an out-of-band platform specific mechanism.
-///
-/// This function is not available on Windows.
-#[cfg(unix)]
-pub fn to_writer_fds<B, W, T: ?Sized>(
-    writer: &mut W,
-    ctxt: EncodingContext<B>,
-    value: &T,
-) -> Result<(usize, Vec<RawFd>)>
-where
-    B: byteorder::ByteOrder,
-    W: Write + Seek,
-    T: Serialize + DynamicType,
-{
-    let signature = value.dynamic_signature();
-
-    to_writer_fds_for_signature(writer, ctxt, &signature, value)
-}
-
 /// Serialize `T` as a byte vector.
 ///
 /// See [`from_slice`] documentation for an example of how to use this function.
 ///
-/// # Panics
-///
-/// This function will panic if the value to serialize contains file descriptors. Use
-/// [`to_bytes_fds`] if you'd want to potentially pass FDs.
-///
-/// [`to_bytes_fds`]: fn.to_bytes_fds.html
 /// [`from_slice`]: fn.from_slice.html#examples
-pub fn to_bytes<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Vec<u8>>
-where
-    B: byteorder::ByteOrder,
-    T: Serialize + DynamicType,
-{
-    let mut cursor = std::io::Cursor::new(vec![]);
-    to_writer(&mut cursor, ctxt, value)?;
-    Ok(cursor.into_inner())
-}
-
-/// Serialize `T` that (potentially) contains FDs, as a byte vector.
-///
-/// The returned file descriptor needs to be transferred via an out-of-band platform specific
-/// mechanism.
-///
-/// This function is not available on Windows.
-#[cfg(unix)]
-pub fn to_bytes_fds<B, T: ?Sized>(
+pub fn to_bytes<B, T: ?Sized>(
     ctxt: EncodingContext<B>,
     value: &T,
-) -> Result<(Vec<u8>, Vec<RawFd>)>
+) -> Result<Data<'static, 'static, B>>
 where
     B: byteorder::ByteOrder,
     T: Serialize + DynamicType,
 {
-    let mut cursor = std::io::Cursor::new(vec![]);
-    let (_, fds) = to_writer_fds(&mut cursor, ctxt, value)?;
-    Ok((cursor.into_inner(), fds))
+    to_bytes_for_signature(ctxt, value.dynamic_signature(), value)
 }
 
 /// Serialize `T` that has the given signature, to the given `writer`.
 ///
 /// Use this function instead of [`to_writer`] if the value being serialized does not implement
 /// [`Type`].
-///
-/// This function returns the number of bytes written to the given `writer`.
 ///
 /// [`to_writer`]: fn.to_writer.html
 /// [`Type`]: trait.Type.html
@@ -203,7 +121,7 @@ pub fn to_writer_for_signature<'s, B, W, S, T: ?Sized>(
     ctxt: EncodingContext<B>,
     signature: S,
     value: &T,
-) -> Result<usize>
+) -> Result<Size<B>>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -212,73 +130,38 @@ where
     T: Serialize,
 {
     #[cfg(unix)]
-    {
-        let (len, fds) = to_writer_fds_for_signature(writer, ctxt, signature, value)?;
-        if !fds.is_empty() {
-            panic!("can't serialize with FDs")
-        }
-        Ok(len)
-    }
-
-    #[cfg(not(unix))]
-    {
-        match ctxt.format() {
-            EncodingFormat::DBus => {
-                let mut ser = DBusSerializer::<B, W>::new(signature, writer, ctxt)?;
-                value.serialize(&mut ser)?;
-                Ok(ser.0.bytes_written)
-            }
-            #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => {
-                let mut ser = GVSerializer::<B, W>::new(signature, writer, ctxt)?;
-                value.serialize(&mut ser)?;
-                Ok(ser.0.bytes_written)
-            }
-        }
-    }
-}
-
-/// Serialize `T` that (potentially) contains FDs and has the given signature, to the given
-/// `writer`.
-///
-/// Use this function instead of [`to_writer_fds`] if the value being serialized does not implement
-/// [`Type`].
-///
-/// This function returns the number of bytes written to the given `writer` and the file descriptor
-/// vector, which needs to be transferred via an out-of-band platform specific mechanism.
-///
-/// This function is not available on Windows.
-///
-/// [`to_writer_fds`]: fn.to_writer_fds.html
-/// [`Type`]: trait.Type.html
-#[cfg(unix)]
-pub fn to_writer_fds_for_signature<'s, B, W, S, T: ?Sized>(
-    writer: &mut W,
-    ctxt: EncodingContext<B>,
-    signature: S,
-    value: &T,
-) -> Result<(usize, Vec<RawFd>)>
-where
-    B: byteorder::ByteOrder,
-    W: Write + Seek,
-    S: TryInto<Signature<'s>>,
-    S::Error: Into<Error>,
-    T: Serialize,
-{
     let mut fds = vec![];
-    match ctxt.format() {
+    let len = match ctxt.format() {
         EncodingFormat::DBus => {
-            let mut ser = DBusSerializer::<B, W>::new(signature, writer, &mut fds, ctxt)?;
+            let mut ser = DBusSerializer::<B, W>::new(
+                signature,
+                writer,
+                #[cfg(unix)]
+                &mut fds,
+                ctxt,
+            )?;
             value.serialize(&mut ser)?;
-            Ok((ser.0.bytes_written, fds))
+            ser.0.bytes_written
         }
         #[cfg(feature = "gvariant")]
         EncodingFormat::GVariant => {
-            let mut ser = GVSerializer::<B, W>::new(signature, writer, &mut fds, ctxt)?;
+            let mut ser = GVSerializer::<B, W>::new(
+                signature,
+                writer,
+                #[cfg(unix)]
+                &mut fds,
+                ctxt,
+            )?;
             value.serialize(&mut ser)?;
-            Ok((ser.0.bytes_written, fds))
+            ser.0.bytes_written
         }
-    }
+    };
+
+    let size = Size::new(len, ctxt);
+    #[cfg(unix)]
+    let size = size.set_fds(fds);
+
+    Ok(size)
 }
 
 /// Serialize `T` that has the given signature, to a new byte vector.
@@ -287,11 +170,6 @@ where
 /// [`Type`]. See [`from_slice_for_signature`] documentation for an example of how to use this
 /// function.
 ///
-/// # Panics
-///
-/// This function will panic if the value to serialize contains file descriptors. Use
-/// [`to_bytes_fds_for_signature`] if you'd want to potentially pass FDs.
-///
 /// [`to_bytes`]: fn.to_bytes.html
 /// [`Type`]: trait.Type.html
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html#examples
@@ -299,49 +177,7 @@ pub fn to_bytes_for_signature<'s, B, S, T: ?Sized>(
     ctxt: EncodingContext<B>,
     signature: S,
     value: &T,
-) -> Result<Vec<u8>>
-where
-    B: byteorder::ByteOrder,
-    S: TryInto<Signature<'s>>,
-    S::Error: Into<Error>,
-    T: Serialize,
-{
-    #[cfg(unix)]
-    {
-        let (bytes, fds) = to_bytes_fds_for_signature(ctxt, signature, value)?;
-        if !fds.is_empty() {
-            panic!("can't serialize with FDs")
-        }
-        Ok(bytes)
-    }
-
-    #[cfg(not(unix))]
-    {
-        let mut cursor = std::io::Cursor::new(vec![]);
-        to_writer_for_signature(&mut cursor, ctxt, signature, value)?;
-        Ok(cursor.into_inner())
-    }
-}
-
-/// Serialize `T` that (potentially) contains FDs and has the given signature, to a new byte vector.
-///
-/// Use this function instead of [`to_bytes_fds`] if the value being serialized does not implement
-/// [`Type`].
-///
-/// Please note that the serialized bytes only contain the indices of the file descriptors from the
-/// returned file descriptor vector, which needs to be transferred via an out-of-band platform
-/// specific mechanism.
-///
-/// This function is not available on Windows.
-///
-/// [`to_bytes_fds`]: fn.to_bytes_fds.html
-/// [`Type`]: trait.Type.html
-#[cfg(unix)]
-pub fn to_bytes_fds_for_signature<'s, B, S, T: ?Sized>(
-    ctxt: EncodingContext<B>,
-    signature: S,
-    value: &T,
-) -> Result<(Vec<u8>, Vec<RawFd>)>
+) -> Result<Data<'static, 'static, B>>
 where
     B: byteorder::ByteOrder,
     S: TryInto<Signature<'s>>,
@@ -349,8 +185,16 @@ where
     T: Serialize,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let (_, fds) = to_writer_fds_for_signature(&mut cursor, ctxt, signature, value)?;
-    Ok((cursor.into_inner(), fds))
+    let ret = to_writer_for_signature(&mut cursor, ctxt, signature, value)?;
+    #[cfg(unix)]
+    let encoded = Data::new_fds(cursor.into_inner(), ctxt, ret.into_fds());
+    #[cfg(not(unix))]
+    let encoded = {
+        let _ = ret;
+        Data::new(cursor.into_inner(), ctxt)
+    };
+
+    Ok(encoded)
 }
 
 /// Context for all our serializers and provides shared functionality.
@@ -359,7 +203,7 @@ pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
     pub(crate) writer: &'ser mut W,
     pub(crate) bytes_written: usize,
     #[cfg(unix)]
-    pub(crate) fds: &'ser mut Vec<RawFd>,
+    pub(crate) fds: &'ser mut Vec<OwnedFd>,
 
     pub(crate) sig_parser: SignatureParser<'sig>,
 
@@ -392,7 +236,7 @@ where
     pub fn new<'w: 'ser, 'f: 'ser, S>(
         signature: S,
         writer: &'w mut W,
-        #[cfg(unix)] fds: &'f mut Vec<RawFd>,
+        #[cfg(unix)] fds: &'f mut Vec<OwnedFd>,
         ctxt: EncodingContext<B>,
     ) -> Result<Self>
     where
@@ -437,14 +281,19 @@ where
     W: Write + Seek,
 {
     #[cfg(unix)]
-    pub(crate) fn add_fd(&mut self, fd: RawFd) -> u32 {
-        if let Some(idx) = self.fds.iter().position(|&x| x == fd) {
-            return idx as u32;
+    pub(crate) fn add_fd(&mut self, fd: std::os::fd::RawFd) -> Result<u32> {
+        use std::os::fd::{AsRawFd, BorrowedFd};
+
+        if let Some(idx) = self.fds.iter().position(|x| x.as_raw_fd() == fd) {
+            return Ok(idx as u32);
         }
         let idx = self.fds.len();
+        // Cloning implies dup and is unfortunate but we need to return owned fds
+        // and dup is not expensive (at least on Linux).
+        let fd = unsafe { BorrowedFd::borrow_raw(fd) }.try_clone_to_owned()?;
         self.fds.push(fd);
 
-        idx as u32
+        Ok(idx as u32)
     }
 
     pub(crate) fn add_padding(&mut self, alignment: usize) -> Result<usize> {

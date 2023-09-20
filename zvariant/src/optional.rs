@@ -54,7 +54,7 @@ where
 /// let ctxt = EncodingContext::<LE>::new_dbus(0);
 /// let s = Optional::<&str>::default();
 /// let encoded = to_bytes(ctxt, &s).unwrap();
-/// assert_eq!(encoded, &[0, 0, 0, 0, 0]);
+/// assert_eq!(encoded.bytes(), &[0, 0, 0, 0, 0]);
 /// let s: Optional<&str> = from_slice(&encoded, ctxt).unwrap().0;
 /// assert_eq!(*s, None);
 ///

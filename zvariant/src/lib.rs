@@ -129,11 +129,11 @@ mod tests {
     use glib::{Bytes, FromVariant, Variant};
     use serde::{Deserialize, Serialize};
 
+    #[cfg(unix)]
+    use crate::from_slice_fds;
     use crate::{
         from_slice, from_slice_for_signature, to_bytes, to_bytes_for_signature, MaxDepthExceeded,
     };
-    #[cfg(unix)]
-    use crate::{from_slice_fds, to_bytes_fds};
 
     #[cfg(unix)]
     use crate::Fd;
@@ -148,9 +148,6 @@ mod tests {
         ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr, $expected_ty:ty, $align:literal) => {{
             // Lie that we're starting at byte 1 in the overall message to test padding
             let ctxt = Context::<$trait>::new(EncodingFormat::$format, 1);
-            #[cfg(unix)]
-            let (encoded, fds) = to_bytes_fds(ctxt, &$test_value).unwrap();
-            #[cfg(not(unix))]
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             let padding = crate::padding_for_n_bytes(1, $align);
             assert_eq!(
@@ -159,10 +156,12 @@ mod tests {
                 "invalid encoding using `to_bytes`"
             );
             #[cfg(unix)]
+            let fds: Vec<_> = encoded
+                .fds()
+                .map(|fd| std::os::fd::AsRawFd::as_raw_fd(&fd))
+                .collect();
             let (decoded, parsed): ($expected_ty, _) =
                 from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
-            #[cfg(not(unix))]
-            let (decoded, parsed): ($expected_ty, _) = from_slice(&encoded, ctxt).unwrap();
             assert!(
                 decoded == $test_value,
                 "invalid decoding using `from_slice`"
@@ -174,9 +173,6 @@ mod tests {
 
             // Now encode w/o padding
             let ctxt = Context::<$trait>::new(EncodingFormat::$format, 0);
-            #[cfg(unix)]
-            let (encoded, _) = to_bytes_fds(ctxt, &$test_value).unwrap();
-            #[cfg(not(unix))]
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
@@ -212,9 +208,6 @@ mod tests {
     macro_rules! value_test {
         ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr) => {{
             let ctxt = Context::<$trait>::new(EncodingFormat::$format, 0);
-            #[cfg(unix)]
-            let (encoded, fds) = to_bytes_fds(ctxt, &$test_value).unwrap();
-            #[cfg(not(unix))]
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
@@ -222,8 +215,12 @@ mod tests {
                 "invalid encoding using `to_bytes`"
             );
             #[cfg(unix)]
-            let (decoded, parsed): (Value<'_>, _) =
-                from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
+            let (decoded, parsed): (Value<'_>, _) = {
+                use std::os::fd::AsRawFd;
+
+                let fds: Vec<_> = encoded.fds().map(|fd| AsRawFd::as_raw_fd(&fd)).collect();
+                from_slice_fds(&encoded, Some(&fds), ctxt).unwrap()
+            };
             #[cfg(not(unix))]
             let (decoded, parsed): (Value<'_>, _) = from_slice(&encoded, ctxt).unwrap();
             assert!(
@@ -244,7 +241,7 @@ mod tests {
         value: f64,
         expected_len: usize,
         expected_value_len: usize,
-    ) -> Vec<u8> {
+    ) -> crate::serialized::Data<'static, 'static, NativeEndian> {
         // Lie that we're starting at byte 1 in the overall message to test padding
         let ctxt = Context::<NativeEndian>::new(format, 1);
         let encoded = to_bytes(ctxt, &value).unwrap();
@@ -359,11 +356,70 @@ mod tests {
     }
 
     #[cfg(unix)]
+    macro_rules! fd_value_test {
+        ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr, $align:literal, $expected_value_len:expr) => {{
+            use std::os::fd::AsFd;
+
+            // Lie that we're starting at byte 1 in the overall message to test padding
+            let ctxt = Context::<$trait>::new(EncodingFormat::$format, 1);
+            let encoded = to_bytes(ctxt, &$test_value).unwrap();
+            let padding = crate::padding_for_n_bytes(1, $align);
+            assert_eq!(
+                encoded.len(),
+                $expected_len + padding,
+                "invalid encoding using `to_bytes`"
+            );
+            #[cfg(unix)]
+            let fds: Vec<_> = encoded.fds().map(|fd| AsRawFd::as_raw_fd(&fd)).collect();
+            let (_, parsed): (Fd, _) = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
+            assert!(
+                parsed == encoded.len(),
+                "invalid parsing using `from_slice`"
+            );
+
+            // Now encode w/o padding
+            let ctxt = Context::<$trait>::new(EncodingFormat::$format, 0);
+            let encoded = to_bytes(ctxt, &$test_value).unwrap();
+            assert_eq!(
+                encoded.len(),
+                $expected_len,
+                "invalid encoding using `to_bytes`"
+            );
+
+            // As Value
+            let v: Value<'_> = $test_value.into();
+            assert_eq!(v.value_signature(), Fd::SIGNATURE_STR);
+            assert_eq!(v, Value::Fd($test_value));
+            let encoded = to_bytes(ctxt, &v).unwrap();
+            assert_eq!(encoded.fds().len(), 1, "invalid encoding using `to_bytes`");
+            assert_eq!(
+                encoded.len(),
+                $expected_value_len,
+                "invalid encoding using `to_bytes`"
+            );
+            let (decoded, parsed): (Value<'_>, _) =
+                from_slice_fds(&encoded, Some(&fds), ctxt).unwrap();
+            assert_eq!(
+                decoded,
+                Fd::from(encoded.fds()[0].as_fd().as_raw_fd()).into(),
+                "invalid decoding using `from_slice`"
+            );
+            assert_eq!(parsed, encoded.len(), "invalid parsing using `from_slice`");
+
+            let v: Fd = v.try_into().unwrap();
+            assert_eq!(v, $test_value);
+        }};
+    }
+
+    #[cfg(unix)]
     #[test]
     fn fd_value() {
-        basic_type_test!(LE, DBus, Fd::from(42), 4, Fd, 4, Fd, 8);
+        use std::os::fd::AsRawFd;
+
+        let fd = std::io::stdout().as_raw_fd();
+        fd_value_test!(LE, DBus, Fd::from(fd), 4, 4, 8);
         #[cfg(feature = "gvariant")]
-        basic_type_test!(LE, GVariant, Fd::from(42), 4, Fd, 4, Fd, 6);
+        fd_value_test!(LE, GVariant, Fd::from(fd), 4, 4, 6);
     }
 
     #[test]
@@ -582,9 +638,12 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unit_fds() {
+        use std::os::fd::AsRawFd;
+
         let ctxt = Context::<BE>::new_dbus(0);
-        let (encoded, fds) = to_bytes_fds(ctxt, &()).unwrap();
+        let encoded = to_bytes(ctxt, &()).unwrap();
         assert_eq!(encoded.len(), 0, "invalid encoding using `to_bytes`");
+        let fds: Vec<_> = encoded.fds().map(|fd| AsRawFd::as_raw_fd(&fd)).collect();
         let _: () = from_slice_fds(&encoded, Some(&fds), ctxt)
             .expect("invalid decoding using `from_slice`")
             .0;
@@ -966,7 +1025,7 @@ mod tests {
             assert_eq!(gv_encoded.len(), 258);
 
             // Check encoding against GLib
-            let bytes = Bytes::from_owned(gv_encoded.clone());
+            let bytes = Bytes::from_owned(gv_encoded.to_owned());
             let variant = Variant::from_bytes::<Vec<String>>(&bytes);
             assert_eq!(variant.n_children(), 2);
             assert_eq!(variant.child_value(0).get::<String>().unwrap(), as_[0]);
@@ -1535,21 +1594,22 @@ mod tests {
     fn serialized_size() {
         let ctxt = Context::<LE>::new_dbus(0);
         let l = crate::serialized_size(ctxt, &()).unwrap();
-        assert_eq!(l, 0);
+        assert_eq!(*l, 0);
 
         #[cfg(unix)]
         {
             let stdout = std::io::stdout();
-            let l = crate::serialized_size_fds(ctxt, &Fd::from(&stdout)).unwrap();
-            assert_eq!(l, (4, 1));
+            let l = crate::serialized_size(ctxt, &Fd::from(&stdout)).unwrap();
+            assert_eq!(*l, 4);
+            assert_eq!(l.fds().len(), 1);
         }
 
         let l = crate::serialized_size(ctxt, &('a', "abc", &(1_u32, 2))).unwrap();
-        assert_eq!(l, 24);
+        assert_eq!(*l, 24);
 
         let v = vec![1, 2];
         let l = crate::serialized_size(ctxt, &('a', "abc", &v)).unwrap();
-        assert_eq!(l, 28);
+        assert_eq!(*l, 28);
     }
 
     #[test]

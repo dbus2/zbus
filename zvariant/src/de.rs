@@ -31,13 +31,16 @@ use crate::Fd;
 /// # Examples
 ///
 /// ```
-/// use zvariant::{to_bytes_fds, from_slice_fds};
+/// use zvariant::{to_bytes, from_slice_fds};
 /// use zvariant::{EncodingContext, Fd};
+/// use std::os::fd::AsRawFd;
 ///
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
-/// let (encoded, fds) = to_bytes_fds(ctxt, &Fd::from(42)).unwrap();
-/// let decoded: Fd = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap().0;
-/// assert_eq!(decoded, Fd::from(42));
+/// let fd: Fd = std::io::stdout().as_raw_fd().into();
+/// let encoded = to_bytes(ctxt, &fd).unwrap();
+/// let fd = encoded.fds().next().unwrap().as_raw_fd();
+/// let decoded: Fd = from_slice_fds(&encoded, Some(&[fd]), ctxt).unwrap().0;
+/// assert_eq!(decoded, fd.into());
 /// ```
 ///
 /// # Return value

@@ -7,7 +7,7 @@ use std::{
 };
 
 #[cfg(unix)]
-use std::os::unix::io::RawFd;
+use std::os::fd::OwnedFd;
 
 use crate::{
     container_depths::ContainerDepths, framing_offset_size::FramingOffsetSize,
@@ -31,7 +31,7 @@ where
     pub fn new<'w: 'ser, 'f: 'ser, S>(
         signature: S,
         writer: &'w mut W,
-        #[cfg(unix)] fds: &'f mut Vec<RawFd>,
+        #[cfg(unix)] fds: &'f mut Vec<OwnedFd>,
         ctxt: EncodingContext<B>,
     ) -> Result<Self>
     where

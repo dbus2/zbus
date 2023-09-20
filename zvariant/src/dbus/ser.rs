@@ -8,7 +8,7 @@ use std::{
 };
 
 #[cfg(unix)]
-use std::os::unix::io::RawFd;
+use std::os::fd::OwnedFd;
 
 use crate::{
     container_depths::ContainerDepths, signature_parser::SignatureParser, utils::*, Basic,
@@ -34,7 +34,7 @@ where
     pub fn new<'w: 'ser, 'f: 'ser, S>(
         signature: S,
         writer: &'w mut W,
-        #[cfg(unix)] fds: &'f mut Vec<RawFd>,
+        #[cfg(unix)] fds: &'f mut Vec<OwnedFd>,
         ctxt: EncodingContext<B>,
     ) -> Result<Self>
     where
@@ -99,7 +99,7 @@ where
             Fd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
                 self.0.add_padding(u32::alignment(EncodingFormat::DBus))?;
-                let idx = self.0.add_fd(v);
+                let idx = self.0.add_fd(v)?;
                 self.0
                     .write_u32::<B>(idx)
                     .map_err(|e| Error::InputOutput(e.into()))

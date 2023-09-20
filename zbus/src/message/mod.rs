@@ -34,13 +34,6 @@ macro_rules! dbus_context {
     };
 }
 
-#[cfg(unix)]
-#[derive(Debug, Eq, PartialEq)]
-pub(crate) enum Fds {
-    Owned(Vec<OwnedFd>),
-    Raw(Vec<RawFd>),
-}
-
 /// A position in the stream of [`Message`] objects received by a single [`zbus::Connection`].
 ///
 /// Note: the relative ordering of values obtained from distinct [`zbus::Connection`] objects is
@@ -82,7 +75,7 @@ pub(super) struct Inner {
     pub(crate) bytes: Vec<u8>,
     pub(crate) body_offset: usize,
     #[cfg(unix)]
-    pub(crate) fds: Fds,
+    pub(crate) fds: Vec<OwnedFd>,
     pub(crate) recv_seq: Sequence,
 }
 
@@ -172,7 +165,6 @@ impl Message {
         let (primary_header, fields_len) = PrimaryHeader::read(&bytes)?;
         let (header, _) = zvariant::from_slice(&bytes, dbus_context!(0))?;
         #[cfg(unix)]
-        let fds = Fds::Owned(fds);
 
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_offset = header_len + padding_for_8_bytes(header_len);
@@ -357,10 +349,7 @@ impl Message {
 
     #[cfg(unix)]
     pub(crate) fn fds(&self) -> Vec<RawFd> {
-        match &self.inner.fds {
-            Fds::Raw(fds) => fds.clone(),
-            Fds::Owned(fds) => fds.iter().map(|f| f.as_raw_fd()).collect(),
-        }
+        self.inner.fds.iter().map(|f| f.as_raw_fd()).collect()
     }
 
     /// Get a reference to the byte encoding of the message.
@@ -474,8 +463,6 @@ mod tests {
     #[cfg(unix)]
     use zvariant::Fd;
 
-    #[cfg(unix)]
-    use super::Fds;
     use super::Message;
     use crate::Error;
 
@@ -498,7 +485,12 @@ mod tests {
             if cfg!(unix) { "hs" } else { "s" }
         );
         #[cfg(unix)]
-        assert_eq!(m.inner.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
+        {
+            let fds: Vec<_> = m.inner.fds.iter().map(|fd| fd.as_raw_fd()).collect();
+            assert_eq!(fds.len(), 1);
+            // FDs get dup'ed so it has to be a different FD now.
+            assert_ne!(fds[0], stdout.as_raw_fd());
+        }
 
         let body: Result<u32, Error> = m.body();
         assert!(matches!(

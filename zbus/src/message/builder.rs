@@ -1,12 +1,9 @@
+#[cfg(unix)]
+use std::os::fd::OwnedFd;
 use std::{
     io::{Cursor, Write},
     sync::Arc,
 };
-
-#[cfg(unix)]
-use crate::message::Fds;
-#[cfg(unix)]
-use std::os::unix::io::RawFd;
 
 use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
@@ -21,7 +18,7 @@ use crate::{
 use crate::message::{fields::QuickFields, header::MAX_MESSAGE_SIZE};
 
 #[cfg(unix)]
-type BuildGenericResult = Vec<RawFd>;
+type BuildGenericResult = Vec<OwnedFd>;
 
 #[cfg(not(unix))]
 type BuildGenericResult = ();
@@ -207,10 +204,10 @@ impl<'a> Builder<'a> {
 
         // Note: this iterates the body twice, but we prefer efficient handling of large messages
         // to efficient handling of ones that are complex to serialize.
+        let body_size = zvariant::serialized_size(ctxt, body)?;
+        let body_len = body_size.size();
         #[cfg(unix)]
-        let (body_len, fds_len) = zvariant::serialized_size_fds(ctxt, body)?;
-        #[cfg(not(unix))]
-        let body_len = zvariant::serialized_size(ctxt, body)?;
+        let fds_len = body_size.fds().len();
 
         let signature = body.dynamic_signature();
 
@@ -218,16 +215,19 @@ impl<'a> Builder<'a> {
             signature,
             body_len,
             move |cursor| {
-                #[cfg(unix)]
-                {
-                    let (_, fds) = zvariant::to_writer_fds(cursor, ctxt, body)?;
-                    Ok::<Vec<RawFd>, Error>(fds)
-                }
-                #[cfg(not(unix))]
-                {
-                    zvariant::to_writer(cursor, ctxt, body)?;
-                    Ok::<(), Error>(())
-                }
+                zvariant::to_writer(cursor, ctxt, body)
+                    .map(|s| {
+                        #[cfg(unix)]
+                        {
+                            s.into_fds()
+                        }
+                        #[cfg(not(unix))]
+                        {
+                            let _ = s;
+                            ()
+                        }
+                    })
+                    .map_err(Into::into)
             },
             #[cfg(unix)]
             fds_len,
@@ -244,7 +244,7 @@ impl<'a> Builder<'a> {
         self,
         body_bytes: &[u8],
         signature: S,
-        #[cfg(unix)] fds: Vec<RawFd>,
+        #[cfg(unix)] fds: Vec<OwnedFd>,
     ) -> Result<Message>
     where
         S: TryInto<Signature<'b>>,
@@ -261,7 +261,7 @@ impl<'a> Builder<'a> {
                 cursor.write_all(body_bytes)?;
 
                 #[cfg(unix)]
-                return Ok::<Vec<RawFd>, Error>(fds);
+                return Ok::<Vec<OwnedFd>, Error>(fds);
 
                 #[cfg(not(unix))]
                 return Ok::<(), Error>(());
@@ -303,7 +303,7 @@ impl<'a> Builder<'a> {
             }
         }
 
-        let hdr_len = zvariant::serialized_size(ctxt, &header)?;
+        let hdr_len = *zvariant::serialized_size(ctxt, &header)?;
         // We need to align the body to 8-byte boundary.
         let body_padding = padding_for_8_bytes(hdr_len);
         let body_offset = hdr_len + body_padding;
@@ -319,7 +319,10 @@ impl<'a> Builder<'a> {
             cursor.write_all(&[0u8])?;
         }
         #[cfg(unix)]
-        let fds = write_body(&mut cursor)?;
+        let fds = write_body(&mut cursor)?
+            .into_iter()
+            .map(Into::into)
+            .collect();
         #[cfg(not(unix))]
         write_body(&mut cursor)?;
 
@@ -335,7 +338,7 @@ impl<'a> Builder<'a> {
                 bytes,
                 body_offset,
                 #[cfg(unix)]
-                fds: Fds::Raw(fds),
+                fds,
                 recv_seq: Sequence::default(),
             }),
         })
