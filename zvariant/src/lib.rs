@@ -27,6 +27,8 @@ pub use dict::*;
 mod encoding_context;
 pub use encoding_context::*;
 
+pub mod serialized;
+
 #[cfg(unix)]
 mod fd;
 #[cfg(unix)]
