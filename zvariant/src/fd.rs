@@ -1,6 +1,6 @@
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use static_assertions::assert_impl_all;
-use std::os::unix::io;
+use std::os::{fd::IntoRawFd, unix::io};
 
 use crate::{Basic, EncodingFormat, Signature, Type};
 
@@ -145,6 +145,23 @@ impl io::IntoRawFd for OwnedFd {
         let fd = self.inner;
         std::mem::forget(self);
         fd
+    }
+}
+
+impl From<std::os::fd::OwnedFd> for OwnedFd {
+    fn from(value: std::os::fd::OwnedFd) -> Self {
+        Self {
+            inner: value.into_raw_fd(),
+        }
+    }
+}
+
+impl From<OwnedFd> for std::os::fd::OwnedFd {
+    fn from(value: OwnedFd) -> std::os::fd::OwnedFd {
+        use std::os::fd::FromRawFd;
+
+        // SAFETY: `IntoRawFd` impl ensures the fd is not freed after `into_raw_fd` call.
+        unsafe { std::os::fd::OwnedFd::from_raw_fd(value.into_raw_fd()) }
     }
 }
 
