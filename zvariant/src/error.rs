@@ -1,6 +1,6 @@
 use serde::{de, ser};
 use static_assertions::assert_impl_all;
-use std::{convert::Infallible, error, fmt, result, sync::Arc};
+use std::{convert::Infallible, error, fmt, io, result, sync::Arc};
 
 /// Enum representing the max depth exceeded error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,7 +40,7 @@ pub enum Error {
     Message(String),
 
     /// Wrapper for [`std::io::Error`](https://doc.rust-lang.org/std/io/struct.Error.html)
-    InputOutput(Arc<std::io::Error>),
+    InputOutput(Arc<io::Error>),
     /// Type conversions errors.
     IncorrectType,
     /// Wrapper for [`std::str::Utf8Error`](https://doc.rust-lang.org/std/str/struct.Utf8Error.html)
@@ -164,6 +164,12 @@ impl ser::Error for Error {
         T: fmt::Display,
     {
         Error::Message(msg.to_string())
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(val: io::Error) -> Self {
+        Error::InputOutput(Arc::new(val))
     }
 }
 
