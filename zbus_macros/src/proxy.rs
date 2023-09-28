@@ -329,20 +329,28 @@ pub fn create_proxy(
             }
         }
     };
+    let lazy = quote! { #zbus::export::once_cell::sync::Lazy };
     let default_path = match default_path {
-        Some(p) => quote! { Some(#p) },
-        None => quote! { None },
+        Some(p) => {
+            quote! {  #lazy::new(|| #zbus::zvariant::ObjectPath::from_static_str(#p).ok()) }
+        }
+        None => quote! { #lazy::new(|| None) },
     };
     let default_service = match default_service {
-        Some(d) => quote! { Some(#d) },
-        None => quote! { None },
+        Some(d) => {
+            quote! { #lazy::new(|| #zbus::names::BusName::from_static_str(#d).ok()) }
+        }
+        None => quote! { #lazy::new(|| None) },
+    };
+    let default_iface = quote! {
+        #lazy::new(|| #zbus::names::InterfaceName::from_static_str(#iface_name).ok())
     };
 
     Ok(quote! {
         impl<'a> #zbus::proxy::ProxyDefault for #proxy_name<'a> {
-            const INTERFACE: Option<&'static str> = Some(#iface_name);
-            const DESTINATION: Option<&'static str> = #default_service;
-            const PATH: Option<&'static str> = #default_path;
+            const INTERFACE: #lazy<Option<#zbus::names::InterfaceName<'static>>> = #default_iface;
+            const DESTINATION: #lazy<Option<#zbus::names::BusName<'static>>> = #default_service;
+            const PATH: #lazy<Option<#zbus::zvariant::ObjectPath<'static>>> = #default_path;
         }
 
         #(#other_attrs)*

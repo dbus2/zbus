@@ -1,5 +1,6 @@
 use std::{collections::HashSet, marker::PhantomData, sync::Arc};
 
+use once_cell::sync::Lazy;
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::{ObjectPath, Str};
@@ -151,11 +152,9 @@ where
     pub fn new(conn: &Connection) -> Self {
         Self {
             conn: conn.clone(),
-            destination: T::DESTINATION
-                .map(|d| BusName::from_static_str(d).expect("invalid bus name")),
-            path: T::PATH.map(|p| ObjectPath::from_static_str(p).expect("invalid default path")),
-            interface: T::INTERFACE
-                .map(|i| InterfaceName::from_static_str(i).expect("invalid interface name")),
+            destination: T::DESTINATION.as_ref().cloned(),
+            path: T::PATH.as_ref().cloned(),
+            interface: T::INTERFACE.as_ref().cloned(),
             cache: CacheProperties::default(),
             uncached_properties: None,
             proxy_type: PhantomData,
@@ -180,15 +179,15 @@ where
 ///
 /// [`dbus_proxy`]: attr.dbus_proxy.html
 pub trait ProxyDefault {
-    const INTERFACE: Option<&'static str>;
-    const DESTINATION: Option<&'static str>;
-    const PATH: Option<&'static str>;
+    const INTERFACE: Lazy<Option<zbus_names::InterfaceName<'static>>>;
+    const DESTINATION: Lazy<Option<zbus_names::BusName<'static>>>;
+    const PATH: Lazy<Option<zvariant::ObjectPath<'static>>>;
 }
 
 impl ProxyDefault for Proxy<'_> {
-    const INTERFACE: Option<&'static str> = None;
-    const DESTINATION: Option<&'static str> = None;
-    const PATH: Option<&'static str> = None;
+    const INTERFACE: Lazy<Option<zbus_names::InterfaceName<'static>>> = Lazy::new(|| None);
+    const DESTINATION: Lazy<Option<zbus_names::BusName<'static>>> = Lazy::new(|| None);
+    const PATH: Lazy<Option<zvariant::ObjectPath<'static>>> = Lazy::new(|| None);
 }
 
 #[cfg(test)]
