@@ -99,9 +99,10 @@ winapi = { version = "0.3", features = [
 uds_windows = "1.0.2"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.26.0", default-features = false, features = [
+nix = { version = "0.27", default-features = false, features = [
   "socket",
   "uio",
+  "user",
 ] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
