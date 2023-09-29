@@ -44,7 +44,7 @@ serde_repr = "0.1.9"
 # feature so you have to do it manually. Also, don't enable the gvariant default feature.
 glib = "0.17.9"
 rand = "0.8.5"
-criterion = "0.4"
+criterion = "0.5"
 
 [lib]
 bench = false
