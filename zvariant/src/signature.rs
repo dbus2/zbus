@@ -96,7 +96,7 @@ impl<'b> std::ops::Deref for Bytes<'b> {
 ///
 /// [identifies]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
 /// [`slice`]: #method.slice
-#[derive(Eq, Hash, Clone)]
+#[derive(Hash, Clone)]
 pub struct Signature<'a> {
     bytes: Bytes<'a>,
     pos: usize,
@@ -403,9 +403,35 @@ impl<'a> std::ops::Deref for Signature<'a> {
     }
 }
 
+/// Checks whether the string slice has balanced parentheses.
+fn has_balanced_parentheses(signature_str: &str) -> bool {
+    signature_str.chars().fold(0, |count, ch| match ch {
+        '(' => count + 1,
+        ')' if count != 0 => count - 1,
+        _ => count,
+    }) == 0
+}
+
+/// Determines whether the signature has outer parentheses and if so, return the
+/// string slice without those parentheses.
+fn without_outer_parentheses<'a, 'b>(sig: &'a Signature<'b>) -> &'a str
+where
+    'b: 'a,
+{
+    let sig_str = sig.as_str();
+
+    if let Some(subslice) = sig_str.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
+        if has_balanced_parentheses(subslice) {
+            return subslice;
+        }
+    }
+    sig_str
+}
+
+/// Evaluate equality of two signatures, ignoring outer parentheses if needed.
 impl<'a, 'b> PartialEq<Signature<'a>> for Signature<'b> {
     fn eq(&self, other: &Signature<'_>) -> bool {
-        self.as_bytes() == other.as_bytes()
+        without_outer_parentheses(self) == without_outer_parentheses(other)
     }
 }
 
@@ -420,6 +446,10 @@ impl<'a> PartialEq<&str> for Signature<'a> {
         self.as_bytes() == other.as_bytes()
     }
 }
+
+// According to the docs, `Eq` derive should only be used on structs if all its fields are
+// are `Eq`. Hence the manual implementation.
+impl Eq for Signature<'_> {}
 
 impl<'a> Display for Signature<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -529,5 +559,20 @@ mod tests {
         assert_eq!(slice.len(), 1);
         assert_eq!(slice, "t");
         assert_eq!(slice.slice(1..), "");
+    }
+
+    #[test]
+    fn signature_equality() {
+        let sig_a = Signature::from_str_unchecked("(asta{sv})");
+        let sig_b = Signature::from_str_unchecked("asta{sv}");
+        assert_eq!(sig_a, sig_b);
+
+        let sig_a = Signature::from_str_unchecked("((so)ii(uu))");
+        let sig_b = Signature::from_str_unchecked("(so)ii(uu)");
+        assert_eq!(sig_a, sig_b);
+
+        let sig_a = Signature::from_str_unchecked("(so)i");
+        let sig_b = Signature::from_str_unchecked("(so)u");
+        assert_ne!(sig_a, sig_b);
     }
 }
