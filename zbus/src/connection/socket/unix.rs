@@ -1,6 +1,8 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
 use std::io;
+#[cfg(any(target_os = "android", target_os = "linux"))]
+use std::os::unix::io::BorrowedFd;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 #[cfg(all(unix, not(feature = "tokio")))]
@@ -319,8 +321,11 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<ConnectionCredentials> 
     {
         use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
 
-        let fd = fd.as_raw_fd();
-        getsockopt(fd, PeerCredentials)
+        // TODO: get this BorrowedFd directly from get_unix_peer_creds(), but this requires a
+        // 'static lifetime due to the Task.
+        let fd = unsafe { BorrowedFd::borrow_raw(fd) };
+
+        getsockopt(&fd, PeerCredentials)
             .map(|creds| {
                 ConnectionCredentials::default()
                     .set_process_id(creds.pid() as _)
