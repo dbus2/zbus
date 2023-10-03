@@ -68,12 +68,13 @@ where
 /// # Examples
 ///
 /// ```
-/// use zvariant::{EncodingContext, from_slice, to_writer};
+/// use zvariant::{EncodingContext, serialized::Data, to_writer};
 ///
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// let mut cursor = std::io::Cursor::new(vec![]);
 /// to_writer(&mut cursor, ctxt, &42u32).unwrap();
-/// let value: u32 = from_slice(cursor.get_ref(), ctxt).unwrap().0;
+/// let encoded = Data::new(cursor.get_ref(), ctxt);
+/// let value: u32 = encoded.deserialize().unwrap().0;
 /// assert_eq!(value, 42);
 /// ```
 ///
@@ -95,9 +96,7 @@ where
 
 /// Serialize `T` as a byte vector.
 ///
-/// See [`from_slice`] documentation for an example of how to use this function.
-///
-/// [`from_slice`]: fn.from_slice.html#examples
+/// See [`Data::deserialize`] documentation for an example of how to use this function.
 pub fn to_bytes<B, T: ?Sized>(
     ctxt: EncodingContext<B>,
     value: &T,
