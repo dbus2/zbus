@@ -4,6 +4,7 @@ use std::{
 };
 
 use futures_util::future::poll_fn;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, instrument, trace};
 
 use crate::{
@@ -25,23 +26,36 @@ impl SocketReader {
         Self { raw_conn, senders }
     }
 
-    pub fn spawn(self, executor: &Executor<'_>) -> Task<()> {
-        executor.spawn(self.receive_msg(), "socket reader")
+    pub fn spawn(self, executor: &Executor<'_>, cancellation_token: Option<CancellationToken>) -> Task<()> {
+        executor.spawn(self.receive_msg(cancellation_token), "socket reader")
     }
 
     // Keep receiving messages and put them on the queue.
     #[instrument(name = "socket reader", skip(self))]
-    async fn receive_msg(self) {
+    async fn receive_msg(self, cancellation_token: Option<CancellationToken>) {
         loop {
             trace!("Waiting for message on the socket..");
-            let msg = {
-                poll_fn(|cx| {
-                    let mut raw_conn = self.raw_conn.lock().expect("poisoned lock");
-                    raw_conn.try_receive_message(cx)
-                })
-                .await
-                .map(Arc::new)
+
+            let poll_task = poll_fn(|cx| {
+                let mut raw_conn = self.raw_conn.lock().expect("poisoned lock");
+                raw_conn.try_receive_message(cx)
+            });
+
+            // Stop receiving new messages from dbus.
+            let msg = match &cancellation_token {
+                Some(token) => {
+                    tokio::select! {
+                        _ = token.cancelled() => {
+                            self.senders.lock().await.clear();
+                            trace!("Socket reading task stopped with token");
+
+                            return;
+                        },
+                        x = poll_task => x.map(Arc::new)
+                    }},
+                None => poll_task.await.map(Arc::new)
             };
+
             match &msg {
                 Ok(msg) => trace!("Message received on the socket: {:?}", msg),
                 Err(e) => trace!("Error reading from the socket: {:?}", e),

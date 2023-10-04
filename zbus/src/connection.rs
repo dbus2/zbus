@@ -4,6 +4,10 @@ use event_listener::{Event, EventListener};
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
+#[cfg(feature = "tokio")]
+use tokio_util::sync::CancellationToken;
+#[cfg(not(feature = "tokio"))]
+type CancellationToken = ();
 use std::{
     collections::HashMap,
     convert::TryInto,
@@ -69,6 +73,8 @@ pub(crate) struct ConnectionInner {
 
     object_server: OnceCell<blocking::ObjectServer>,
     object_server_dispatch_task: OnceCell<Task<()>>,
+
+    cancellation_token: Option<CancellationToken>,
 }
 
 type Subscriptions = HashMap<OwnedMatchRule, (u64, InactiveReceiver<Result<Arc<Message>>>)>;
@@ -1163,6 +1169,7 @@ impl Connection {
         auth: Authenticated<Box<dyn Socket>>,
         bus_connection: bool,
         executor: Executor<'static>,
+        cancellation_token: Option<CancellationToken>
     ) -> Result<Self> {
         #[cfg(unix)]
         let cap_unix_fd = auth.cap_unix_fd;
@@ -1217,6 +1224,7 @@ impl Connection {
                 msg_receiver,
                 method_return_receiver,
                 registered_names: Mutex::new(HashMap::new()),
+                cancellation_token,
             }),
         };
 
@@ -1298,8 +1306,13 @@ impl Connection {
         inner
             .socket_reader_task
             .set(
+                #[cfg(feature = "tokio")]
                 SocketReader::new(inner.raw_conn.clone(), inner.msg_senders.clone())
-                    .spawn(&inner.executor),
+                    .spawn(&inner.executor, self.inner.cancellation_token.clone()),
+
+                #[cfg(not(feature = "tokio"))]
+                SocketReader::new(inner.raw_conn.clone(), inner.msg_senders.clone())
+                    .spawn(&inner.executor, None),
             )
             .expect("Attempted to set `socket_reader_task` twice");
     }

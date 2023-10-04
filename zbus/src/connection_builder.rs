@@ -15,6 +15,10 @@ use std::{
 use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
+#[cfg(feature = "tokio")]
+use tokio_util::sync::CancellationToken;
+#[cfg(not(feature = "tokio"))]
+type CancellationToken = ();
 #[cfg(feature = "tokio-vsock")]
 use tokio_vsock::VsockStream;
 #[cfg(windows)]
@@ -68,6 +72,7 @@ pub struct ConnectionBuilder<'a> {
     unique_name: Option<UniqueName<'a>>,
     cookie_context: Option<handshake::CookieContext<'a>>,
     cookie_id: Option<usize>,
+    cancellation_token: Option<CancellationToken>,
 }
 
 assert_impl_all!(ConnectionBuilder<'_>: Send, Sync, Unpin);
@@ -315,6 +320,17 @@ impl<'a> ConnectionBuilder<'a> {
         Ok(self)
     }
 
+    /// Sets the cancellation token for the connection. Once the token is cancelled, the message receiver
+    /// is closed and after all outstanding messages are drained from the message channel, the dbus interfaces
+    /// are deregistered.
+    ///
+    /// Only available when using tokio.
+    #[cfg(feature = "tokio")]
+    pub fn with_cancellation_token(mut self, token: CancellationToken) -> Self {
+        self.cancellation_token = Some(token);
+        self
+    }
+
     /// Build the connection, consuming the builder.
     ///
     /// # Errors
@@ -393,7 +409,7 @@ impl<'a> ConnectionBuilder<'a> {
             }
         };
 
-        let mut conn = Connection::new(auth, !self.p2p, executor).await?;
+        let mut conn = Connection::new(auth, !self.p2p, executor, self.cancellation_token).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
         if let Some(unique_name) = self.unique_name {
             conn.set_unique_name(unique_name)?;
@@ -445,6 +461,7 @@ impl<'a> ConnectionBuilder<'a> {
             unique_name: None,
             cookie_id: None,
             cookie_context: None,
+            cancellation_token: None,
         }
     }
 }
