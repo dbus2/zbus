@@ -7,8 +7,12 @@ use std::{
 };
 
 use byteorder::ByteOrder;
+use serde::{de::DeserializeSeed, Deserialize};
 
-use crate::EncodingContext;
+use crate::{
+    de::Deserializer, DynamicDeserialize, DynamicType, EncodingContext, EncodingFormat, Error,
+    Result, Signature, Type,
+};
 
 /// Represents serialized bytes in a specific format.
 ///
@@ -111,6 +115,202 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
             context,
             range,
         }
+    }
+
+    /// Deserialize `T` from `self`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use zvariant::to_bytes;
+    /// use zvariant::EncodingContext;
+    ///
+    /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+    /// let encoded = to_bytes(ctxt, "hello world").unwrap();
+    /// let decoded: &str = encoded.deserialize().unwrap().0;
+    /// assert_eq!(decoded, "hello world");
+    /// ```
+    ///
+    /// # Return value
+    ///
+    /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
+    pub fn deserialize<'d, T: ?Sized>(&'d self) -> Result<(T, usize)>
+    where
+        B: byteorder::ByteOrder,
+        T: Deserialize<'d> + Type,
+    {
+        let signature = T::signature();
+        self.deserialize_for_signature(&signature)
+    }
+
+    /// Deserialize `T` from `self` with the given signature.
+    ///
+    /// Use this method instead of [`Data::deserialize`] if the value being deserialized does not
+    /// implement [`Type`].
+    ///
+    /// # Examples
+    ///
+    /// While `Type` derive supports enums, for this example, let's supposed it doesn't and we don't
+    /// want to manually implement `Type` trait either:
+    ///
+    /// ```
+    /// use serde::{Deserialize, Serialize};
+    ///
+    /// use zvariant::to_bytes_for_signature;
+    /// use zvariant::EncodingContext;
+    ///
+    /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+    /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    /// enum Unit {
+    ///     Variant1,
+    ///     Variant2,
+    ///     Variant3,
+    /// }
+    ///
+    /// let encoded = to_bytes_for_signature(ctxt, "u", &Unit::Variant2).unwrap();
+    /// assert_eq!(encoded.len(), 4);
+    /// let decoded: Unit = encoded.deserialize_for_signature("u").unwrap().0;
+    /// assert_eq!(decoded, Unit::Variant2);
+    ///
+    /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    /// enum NewType<'s> {
+    ///     Variant1(&'s str),
+    ///     Variant2(&'s str),
+    ///     Variant3(&'s str),
+    /// }
+    ///
+    /// let signature = "(us)";
+    /// let encoded =
+    ///     to_bytes_for_signature(ctxt, signature, &NewType::Variant2("hello")).unwrap();
+    /// assert_eq!(encoded.len(), 14);
+    /// let decoded: NewType<'_> = encoded.deserialize_for_signature(signature).unwrap().0;
+    /// assert_eq!(decoded, NewType::Variant2("hello"));
+    ///
+    /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+    /// enum Structs {
+    ///     Tuple(u8, u64),
+    ///     Struct { y: u8, t: u64 },
+    /// }
+    ///
+    /// let signature = "(u(yt))";
+    /// let encoded = to_bytes_for_signature(ctxt, signature, &Structs::Tuple(42, 42)).unwrap();
+    /// assert_eq!(encoded.len(), 24);
+    /// let decoded: Structs = encoded.deserialize_for_signature(signature).unwrap().0;
+    /// assert_eq!(decoded, Structs::Tuple(42, 42));
+    ///
+    /// let s = Structs::Struct { y: 42, t: 42 };
+    /// let encoded = to_bytes_for_signature(ctxt, signature, &s).unwrap();
+    /// assert_eq!(encoded.len(), 24);
+    /// let decoded: Structs = encoded.deserialize_for_signature(signature).unwrap().0;
+    /// assert_eq!(decoded, Structs::Struct { y: 42, t: 42 });
+    /// ```
+    ///
+    /// # Return value
+    ///
+    /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
+    pub fn deserialize_for_signature<'d, S, T: ?Sized>(&'d self, signature: S) -> Result<(T, usize)>
+    where
+        T: Deserialize<'d>,
+        S: TryInto<Signature<'d>>,
+        S::Error: Into<Error>,
+    {
+        let signature = signature.try_into().map_err(Into::into)?;
+
+        #[cfg(unix)]
+        let fds = self
+            .inner
+            .fds
+            .iter()
+            .map(std::os::fd::AsRawFd::as_raw_fd)
+            .collect::<Vec<_>>();
+        let mut de = match self.context.format() {
+            #[cfg(feature = "gvariant")]
+            EncodingFormat::GVariant => crate::gvariant::Deserializer::new(
+                self.bytes(),
+                #[cfg(unix)]
+                Some(&fds),
+                signature,
+                self.context,
+            )
+            .map(Deserializer::GVariant)?,
+            EncodingFormat::DBus => crate::dbus::Deserializer::new(
+                self.bytes(),
+                #[cfg(unix)]
+                Some(&fds),
+                signature,
+                self.context,
+            )
+            .map(Deserializer::DBus)?,
+        };
+
+        T::deserialize(&mut de).map(|t| match de {
+            #[cfg(feature = "gvariant")]
+            Deserializer::GVariant(de) => (t, de.0.pos),
+            Deserializer::DBus(de) => (t, de.0.pos),
+        })
+    }
+
+    /// Deserialize `T` from `self`, with the given dynamic signature.
+    ///
+    /// # Return value
+    ///
+    /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
+    pub fn deserialize_for_dynamic_signature<'d, S, T>(&'d self, signature: S) -> Result<(T, usize)>
+    where
+        B: byteorder::ByteOrder,
+        T: DynamicDeserialize<'d>,
+        S: TryInto<Signature<'d>>,
+        S::Error: Into<Error>,
+    {
+        let seed = T::deserializer_for_signature(signature)?;
+
+        self.deserialize_with_seed(seed)
+    }
+
+    /// Deserialize `T` from `self`, using the given seed.
+    ///
+    /// # Return value
+    ///
+    /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
+    pub fn deserialize_with_seed<'d, S>(&'d self, seed: S) -> Result<(S::Value, usize)>
+    where
+        B: byteorder::ByteOrder,
+        S: DeserializeSeed<'d> + DynamicType,
+    {
+        let signature = S::dynamic_signature(&seed).to_owned();
+
+        #[cfg(unix)]
+        let fds = self
+            .inner
+            .fds
+            .iter()
+            .map(std::os::fd::AsRawFd::as_raw_fd)
+            .collect::<Vec<_>>();
+        let mut de = match self.context.format() {
+            #[cfg(feature = "gvariant")]
+            EncodingFormat::GVariant => crate::gvariant::Deserializer::new(
+                self.bytes(),
+                #[cfg(unix)]
+                Some(&fds),
+                signature,
+                self.context,
+            )
+            .map(Deserializer::GVariant)?,
+            EncodingFormat::DBus => crate::dbus::Deserializer::new(
+                self.bytes(),
+                #[cfg(unix)]
+                Some(&fds),
+                signature,
+                self.context,
+            )
+            .map(Deserializer::DBus)?,
+        };
+
+        seed.deserialize(&mut de).map(|t| match de {
+            #[cfg(feature = "gvariant")]
+            Deserializer::GVariant(de) => (t, de.0.pos),
+            Deserializer::DBus(de) => (t, de.0.pos),
+        })
     }
 }
 
