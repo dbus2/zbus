@@ -1,5 +1,5 @@
 //! D-Bus Message.
-use std::{fmt, io::Cursor, num::NonZeroU32};
+use std::{fmt, num::NonZeroU32};
 
 #[cfg(unix)]
 use std::{
@@ -228,18 +228,6 @@ impl Message {
         &self.primary_header
     }
 
-    pub(crate) fn modify_primary_header<F>(&mut self, mut modifier: F) -> Result<()>
-    where
-        F: FnMut(&mut PrimaryHeader) -> Result<()>,
-    {
-        modifier(&mut self.primary_header)?;
-
-        let mut cursor = Cursor::new(&mut self.bytes);
-        zvariant::to_writer(&mut cursor, dbus_context!(0), &self.primary_header)
-            .map(|_| ())
-            .map_err(Error::from)
-    }
-
     /// The message header.
     ///
     /// Note: This method does not deserialize the header but it does currently allocate so its not
@@ -339,12 +327,10 @@ impl Message {
     /// # use zbus::message::Message;
     /// # (|| -> zbus::Result<()> {
     /// let send_body = (7i32, (2i32, "foo"), vec!["bar"]);
-    /// let mut message = Message::method("/", "ping")?
+    /// let message = Message::method("/", "ping")?
     ///     .destination("zbus.test")?
     ///     .interface("zbus.test")?
     ///     .build(&send_body)?;
-    /// let conn = zbus::blocking::Connection::session()?;
-    /// conn.inner().assign_serial_num(&mut message)?;
     /// let body : zbus::zvariant::Structure = message.body()?;
     /// let fields = body.fields();
     /// assert!(matches!(fields[0], zvariant::Value::I32(7)));
@@ -416,16 +402,6 @@ impl Message {
     /// and might not be ordered at all.
     pub fn recv_position(&self) -> Sequence {
         self.recv_seq
-    }
-
-    pub(crate) fn set_serial_num(&mut self, serial_num: NonZeroU32) -> Result<()> {
-        self.modify_primary_header(|primary| {
-            primary.set_serial_num(serial_num);
-            Ok(())
-        })?;
-        self.primary_header.set_serial_num(serial_num);
-
-        Ok(())
     }
 }
 
@@ -527,7 +503,7 @@ mod tests {
     fn test() {
         #[cfg(unix)]
         let stdout = std::io::stdout();
-        let mut m = Message::method("/", "do")
+        let m = Message::method("/", "do")
             .unwrap()
             .sender(":1.72")
             .unwrap()
@@ -537,7 +513,6 @@ mod tests {
                 "foo",
             ))
             .unwrap();
-        m.set_serial_num(1.try_into().unwrap()).unwrap();
         assert_eq!(
             m.body_signature().unwrap().to_string(),
             if cfg!(unix) { "hs" } else { "s" }

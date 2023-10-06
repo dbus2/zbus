@@ -443,7 +443,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         #reply
                     };
                     #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {
-                        future.await.map(|_seq: ::std::num::NonZeroU32| ())
+                        future.await
                     }))
                 },
             };

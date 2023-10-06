@@ -179,7 +179,7 @@ impl<'a> Builder<'a> {
     }
 
     fn reply_to(mut self, reply_to: &Header<'_>) -> Result<Self> {
-        let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
+        let serial = reply_to.primary().serial_num();
         self.header.fields_mut().replace(Field::ReplySerial(serial));
 
         if let Some(sender) = reply_to.sender() {

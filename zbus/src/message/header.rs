@@ -1,4 +1,7 @@
-use std::num::NonZeroU32;
+use std::{
+    num::NonZeroU32,
+    sync::atomic::{AtomicU32, Ordering::SeqCst},
+};
 
 use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
@@ -102,7 +105,7 @@ pub struct PrimaryHeader {
     flags: BitFlags<Flags>,
     protocol_version: u8,
     body_len: u32,
-    serial_num: u32,
+    serial_num: NonZeroU32,
 }
 
 assert_impl_all!(PrimaryHeader: Send, Sync, Unpin);
@@ -116,7 +119,7 @@ impl PrimaryHeader {
             flags: BitFlags::empty(),
             protocol_version: 1,
             body_len,
-            serial_num: 0,
+            serial_num: SERIAL_NUM.fetch_add(1, SeqCst).try_into().unwrap(),
         }
     }
 
@@ -182,18 +185,18 @@ impl PrimaryHeader {
         self.body_len = len;
     }
 
-    /// The serial number of the message (if set).
+    /// The serial number of the message.
     ///
     /// This is used to match a reply to a method call.
-    ///
-    /// **Note:** There is no setter provided for this in the public API since this is set by the
-    /// [`Connection`](struct.Connection.html) the message is sent over.
-    pub fn serial_num(&self) -> Option<NonZeroU32> {
-        NonZeroU32::new(self.serial_num)
+    pub fn serial_num(&self) -> NonZeroU32 {
+        self.serial_num
     }
 
-    pub(crate) fn set_serial_num(&mut self, serial_num: NonZeroU32) {
-        self.serial_num = serial_num.get();
+    /// Set the serial number of the message.
+    ///
+    /// This is used to match a reply to a method call.
+    pub fn set_serial_num(&mut self, serial_num: NonZeroU32) {
+        self.serial_num = serial_num;
     }
 }
 
@@ -319,6 +322,8 @@ impl<'m> Header<'m> {
         get_field_u32!(self, UnixFDs)
     }
 }
+
+static SERIAL_NUM: AtomicU32 = AtomicU32::new(1);
 
 #[cfg(test)]
 mod tests {
