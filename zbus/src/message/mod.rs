@@ -4,7 +4,7 @@ use std::{fmt, num::NonZeroU32};
 #[cfg(unix)]
 use std::{
     os::unix::io::{AsRawFd, RawFd},
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
 use static_assertions::assert_impl_all;
@@ -30,9 +30,6 @@ use fields::{Fields, QuickFields};
 pub(crate) mod header;
 use header::MIN_MESSAGE_SIZE;
 pub use header::{EndianSig, Flags, Header, PrimaryHeader, Type, NATIVE_ENDIAN_SIG};
-
-#[cfg(unix)]
-const LOCK_PANIC_MSG: &str = "lock poisoned";
 
 macro_rules! dbus_context {
     ($n_bytes_before: expr) => {
@@ -71,11 +68,11 @@ impl Sequence {
 /// very advanced use cases as typically you will want to create a message for immediate dispatch
 /// and hence use the API provided by [`Connection`], even when using the low-level API.
 ///
-/// **Note**: The message owns the received FDs and will close them when dropped. You can call
-/// [`take_fds`] after deserializing to `RawFD` using [`body`] if you want to take the ownership.
+/// **Note**: The message owns the received FDs and will close them when dropped. You can
+/// deserialize to [`OwnedFd`] using [`body`] if you want to keep the FDs around after the
+/// containing message is dropped.
 ///
 /// [`body`]: #method.body
-/// [`take_fds`]: #method.take_fds
 /// [`Connection`]: struct.Connection#method.call_method
 #[derive(Clone)]
 pub struct Message {
@@ -84,7 +81,7 @@ pub struct Message {
     pub(crate) bytes: Vec<u8>,
     pub(crate) body_offset: usize,
     #[cfg(unix)]
-    pub(crate) fds: Arc<RwLock<Fds>>,
+    pub(crate) fds: Arc<Fds>,
     pub(crate) recv_seq: Sequence,
 }
 
@@ -174,7 +171,7 @@ impl Message {
         let (primary_header, fields_len) = PrimaryHeader::read(&bytes)?;
         let (header, _) = zvariant::from_slice(&bytes, dbus_context!(0))?;
         #[cfg(unix)]
-        let fds = Arc::new(RwLock::new(Fds::Owned(fds)));
+        let fds = Arc::new(Fds::Owned(fds));
 
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_offset = header_len + padding_for_8_bytes(header_len);
@@ -189,29 +186,6 @@ impl Message {
             fds,
             recv_seq: Sequence { recv_seq },
         })
-    }
-
-    /// Take ownership of the associated file descriptors in the message.
-    ///
-    /// When a message is received over a AF_UNIX socket, it may contain associated FDs. To prevent
-    /// the message from closing those FDs on drop, call this method that returns all the received
-    /// FDs with their ownership.
-    ///
-    /// This function is Unix-specific.
-    ///
-    /// Note: the message will continue to reference the files, so you must keep them open for as
-    /// long as the message itself.
-    #[cfg(unix)]
-    pub fn take_fds(&self) -> Vec<OwnedFd> {
-        let mut fds_lock = self.fds.write().expect(LOCK_PANIC_MSG);
-        if let Fds::Owned(ref mut fds) = *fds_lock {
-            // From now on, it's the caller responsibility to close the fds
-            let fds = std::mem::take(&mut *fds);
-            *fds_lock = Fds::Raw(fds.iter().map(|fd| fd.as_raw_fd()).collect());
-            fds
-        } else {
-            vec![]
-        }
     }
 
     /// The signature of the body.
@@ -377,7 +351,7 @@ impl Message {
 
     #[cfg(unix)]
     pub(crate) fn fds(&self) -> Vec<RawFd> {
-        match &*self.fds.read().expect(LOCK_PANIC_MSG) {
+        match &*self.fds {
             Fds::Raw(fds) => fds.clone(),
             Fds::Owned(fds) => fds.iter().map(|f| f.as_raw_fd()).collect(),
         }
@@ -518,7 +492,7 @@ mod tests {
             if cfg!(unix) { "hs" } else { "s" }
         );
         #[cfg(unix)]
-        assert_eq!(*m.fds.read().unwrap(), Fds::Raw(vec![stdout.as_raw_fd()]));
+        assert_eq!(*m.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
 
         let body: Result<u32, Error> = m.body();
         assert!(matches!(

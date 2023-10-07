@@ -3,10 +3,7 @@ use std::io::{Cursor, Write};
 #[cfg(unix)]
 use crate::message::Fds;
 #[cfg(unix)]
-use std::{
-    os::unix::io::RawFd,
-    sync::{Arc, RwLock},
-};
+use std::{os::unix::io::RawFd, sync::Arc};
 
 use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
@@ -334,7 +331,7 @@ impl<'a> Builder<'a> {
             bytes,
             body_offset,
             #[cfg(unix)]
-            fds: Arc::new(RwLock::new(Fds::Raw(fds))),
+            fds: Arc::new(Fds::Raw(fds)),
             recv_seq: Sequence::default(),
         })
     }
