@@ -8,7 +8,7 @@ on:
 
 jobs:
   MSRV:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-large
     env:
       RUSTFLAGS: -D warnings
       MSRV: 1.66.0
@@ -31,7 +31,7 @@ jobs:
         # cargo check --all-features
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-large
     env:
       RUSTFLAGS: -D warnings
       RUST_BACKTRACE: full
@@ -49,7 +49,7 @@ jobs:
         run: cargo clippy -- -D warnings -D clippy::large_futures
 
   linux_test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-large
     needs: lint
     env:
       RUSTFLAGS: -D warnings
@@ -82,7 +82,7 @@ jobs:
           dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
 
   windows_test:
-    runs-on: windows-latest
+    runs-on: windows-large
     needs: lint
     env:
       RUSTFLAGS: -D warnings
@@ -203,7 +203,7 @@ jobs:
           cargo test --features zbus/windows-gdbus
 
   cross_check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-large
     env:
       RUSTFLAGS: -D warnings
     steps:
@@ -220,7 +220,7 @@ jobs:
           cargo check --target x86_64-unknown-netbsd
 
   zvariant_fuzz:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-large
     env:
       RUSTFLAGS: -D warnings
       RUST_BACKTRACE: full
@@ -237,7 +237,7 @@ jobs:
           cargo fuzz run --fuzz-dir zvariant/fuzz gvariant -- -max_total_time=30 -max_len=100M
 
   doc_build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-large
     env:
       RUSTDOCFLAGS: -D warnings
     steps:
