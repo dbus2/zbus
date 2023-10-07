@@ -112,7 +112,7 @@ assert_impl_all!(PropertiesProxy<'_>: Send, Sync, Unpin);
 
 /// Server-side implementation for the `org.freedesktop.DBus.Properties` interface.
 /// This interface is implemented automatically for any object registered to the
-/// [ObjectServer](crate::ObjectServer).
+/// [ObjectServer].
 pub struct Properties;
 
 assert_impl_all!(Properties: Send, Sync, Unpin);
