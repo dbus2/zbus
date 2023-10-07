@@ -452,7 +452,8 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         .interface("org.freedesktop.MyIface")?
         .destination("org.freedesktop.MyService")?
         .build(&())?;
-    let serial = conn.send_message(method).await?;
+    let serial = method.primary_header().serial_num();
+    conn.send(&method).await?;
     let mut method_returned = false;
     let mut signal_received = false;
     while !method_returned && !signal_received {

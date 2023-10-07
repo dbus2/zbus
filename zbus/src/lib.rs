@@ -220,7 +220,7 @@ mod tests {
     use crate::{
         blocking::{self, MessageIterator},
         fdo::{RequestNameFlags, RequestNameReply},
-        message::{Flags, Message},
+        message::Message,
         object_server::SignalContext,
         Connection, Result,
     };
@@ -231,7 +231,7 @@ mod tests {
 
     #[test]
     fn msg() {
-        let mut m = Message::method("/org/freedesktop/DBus", "GetMachineId")
+        let m = Message::method("/org/freedesktop/DBus", "GetMachineId")
             .unwrap()
             .destination("org.freedesktop.DBus")
             .unwrap()
@@ -243,16 +243,6 @@ mod tests {
         assert_eq!(hdr.path().unwrap(), "/org/freedesktop/DBus");
         assert_eq!(hdr.interface().unwrap(), "org.freedesktop.DBus.Peer");
         assert_eq!(hdr.member().unwrap(), "GetMachineId");
-        m.modify_primary_header(|primary| {
-            primary.set_flags(BitFlags::from(Flags::NoAutoStart));
-            primary.set_serial_num(11.try_into().unwrap());
-
-            Ok(())
-        })
-        .unwrap();
-        let primary = m.primary_header();
-        assert!(primary.serial_num().unwrap().get() == 11);
-        assert!(primary.flags() == Flags::NoAutoStart);
     }
 
     #[test]
@@ -333,7 +323,6 @@ mod tests {
             .unwrap();
 
         let fd: Fd = reply.body().unwrap();
-        let _fds = reply.take_fds();
         assert!(fd.as_raw_fd() >= 0);
         let f = unsafe { File::from_raw_fd(fd.as_raw_fd()) };
         f.metadata().unwrap();
@@ -584,7 +573,8 @@ mod tests {
             .unwrap()
             .build(&())
             .unwrap();
-        let serial = client_conn.send_message(msg).unwrap();
+        let serial = msg.primary_header().serial_num();
+        client_conn.send(&msg).unwrap();
 
         crate::blocking::fdo::DBusProxy::new(&conn)
             .unwrap()
@@ -594,7 +584,7 @@ mod tests {
         for m in stream {
             let msg = m.unwrap();
 
-            if msg.primary_header().serial_num().unwrap() == serial {
+            if msg.primary_header().serial_num() == serial {
                 break;
             }
         }
@@ -731,7 +721,7 @@ mod tests {
             .unwrap()
             .build(&())
             .unwrap();
-        conn.send_message(msg).unwrap();
+        conn.send(&msg).unwrap();
 
         child.join().unwrap();
     }

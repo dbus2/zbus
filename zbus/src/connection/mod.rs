@@ -11,10 +11,7 @@ use std::{
     num::NonZeroU32,
     ops::Deref,
     pin::Pin,
-    sync::{
-        atomic::{AtomicU32, Ordering::SeqCst},
-        Arc, Weak,
-    },
+    sync::{Arc, Weak},
     task::{Context, Poll},
 };
 use tracing::{debug, info_span, instrument, trace, trace_span, warn, Instrument};
@@ -61,9 +58,6 @@ pub(crate) struct ConnectionInner {
 
     activity_event: Arc<Event>,
     socket_write: Mutex<Box<dyn socket::WriteHalf>>,
-
-    // Serial number for next outgoing message
-    serial: AtomicU32,
 
     // Our executor
     executor: Executor<'static>,
@@ -114,10 +108,7 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
 /// [`crate::blocking::MessageIterator`] instances are continuously polled and iterated on,
 /// respectively.
 ///
-/// For sending messages you can either use [`Connection::send_message`] or [`Connection::send`]
-/// method. While the former sets the serial numbers (cookies) on the messages for you, the latter
-/// does not. You can manually assign unique serial numbers to messages using the
-/// [`Connection::assign_serial_num`] method when using `send` method to send them off.
+/// For sending messages you can either use [`Connection::send`] method.
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
@@ -279,34 +270,12 @@ impl OrderedFuture for PendingMethodCall {
 
 impl Connection {
     /// Send `msg` to the peer.
-    ///
-    /// Unlike [`Connection::send`], this method sets a unique (to this connection) serial number on
-    /// the message before sending it off, for you.
-    ///
-    /// On successfully sending off `msg`, the assigned serial number is returned.
-    pub async fn send_message(&self, mut msg: Message) -> Result<NonZeroU32> {
-        let serial = self.assign_serial_num(&mut msg)?;
-
-        trace!("Sending message: {:?}", msg);
-        self.send(&msg).await?;
-        trace!("Sent message with serial: {}", serial);
-
-        Ok(serial)
-    }
-
-    /// Send `msg` to the peer.
-    ///
-    /// Same as [`Connection::send_message`] except it doesn't sets the unique serial number on the
-    /// message for you. It expects a serial number to be already set on the message.
     pub async fn send(&self, msg: &Message) -> Result<()> {
         #[cfg(unix)]
         if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);
         }
-        let serial = msg
-            .primary_header()
-            .serial_num()
-            .ok_or(Error::InvalidSerial)?;
+        let serial = msg.primary_header().serial_num();
 
         trace!("Sending message: {:?}", msg);
         self.inner.activity_event.notify(usize::MAX);
@@ -419,7 +388,8 @@ impl Connection {
             None,
             self,
         ));
-        let serial = self.send_message(msg).await?;
+        let serial = msg.primary_header().serial_num();
+        self.send(&msg).await?;
         if flags.contains(Flags::NoReplyExpected) {
             Ok(None)
         } else {
@@ -458,16 +428,14 @@ impl Connection {
         }
         let m = b.build(body)?;
 
-        self.send_message(m).await.map(|_| ())
+        self.send(&m).await
     }
 
     /// Reply to a message.
     ///
     /// Given an existing message (likely a method call), send a reply back to the caller with the
     /// given `body`.
-    ///
-    /// Returns the message serial number.
-    pub async fn reply<B>(&self, call: &Message, body: &B) -> Result<NonZeroU32>
+    pub async fn reply<B>(&self, call: &Message, body: &B) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
@@ -476,21 +444,14 @@ impl Connection {
             b = b.sender(sender)?;
         }
         let m = b.build(body)?;
-        self.send_message(m).await
+        self.send(&m).await
     }
 
     /// Reply an error to a message.
     ///
     /// Given an existing message (likely a method call), send an error reply back to the caller
     /// with the given `error_name` and `body`.
-    ///
-    /// Returns the message serial number.
-    pub async fn reply_error<'e, E, B>(
-        &self,
-        call: &Message,
-        error_name: E,
-        body: &B,
-    ) -> Result<NonZeroU32>
+    pub async fn reply_error<'e, E, B>(&self, call: &Message, error_name: E, body: &B) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
         E: TryInto<ErrorName<'e>>,
@@ -501,22 +462,20 @@ impl Connection {
             b = b.sender(sender)?;
         }
         let m = b.build(body)?;
-        self.send_message(m).await
+        self.send(&m).await
     }
 
     /// Reply an error to a message.
     ///
     /// Given an existing message (likely a method call), send an error reply back to the caller
     /// using one of the standard interface reply types.
-    ///
-    /// Returns the message serial number.
     pub async fn reply_dbus_error(
         &self,
         call: &zbus::message::Header<'_>,
         err: impl DBusError,
-    ) -> Result<NonZeroU32> {
-        let m = err.create_reply(call);
-        self.send_message(m?).await
+    ) -> Result<()> {
+        let m = err.create_reply(call)?;
+        self.send(&m).await
     }
 
     /// Register a well-known name for this connection.
@@ -816,19 +775,6 @@ impl Connection {
     /// This will return `false` for p2p connections.
     pub fn is_bus(&self) -> bool {
         self.inner.bus_conn
-    }
-
-    /// Assigns a serial number to `msg` that is unique to this connection.
-    ///
-    /// This method can fail if `msg` is corrupted.
-    pub fn assign_serial_num(&self, msg: &mut Message) -> Result<NonZeroU32> {
-        let serial = self
-            .next_serial()
-            .try_into()
-            .map_err(|_| Error::InvalidSerial)?;
-        msg.set_serial_num(serial)?;
-
-        Ok(serial)
     }
 
     /// The unique name of the connection, if set/applicable.
@@ -1230,7 +1176,6 @@ impl Connection {
                 #[cfg(unix)]
                 cap_unix_fd,
                 bus_conn: bus_connection,
-                serial: AtomicU32::new(1),
                 unique_name: OnceCell::new(),
                 subscriptions,
                 object_server: OnceCell::new(),
@@ -1245,10 +1190,6 @@ impl Connection {
         };
 
         Ok(connection)
-    }
-
-    fn next_serial(&self) -> u32 {
-        self.inner.serial.fetch_add(1, SeqCst)
     }
 
     /// Create a `Connection` to the session/user message bus.
@@ -1583,21 +1524,6 @@ mod tests {
                 .build(),
             Builder::vsock_stream(client).p2p().build(),
         )
-    }
-
-    #[test]
-    #[timeout(15000)]
-    fn serial_monotonically_increases() {
-        crate::utils::block_on(test_serial_monotonically_increases());
-    }
-
-    async fn test_serial_monotonically_increases() {
-        let c = Connection::session().await.unwrap();
-        let serial = c.next_serial() + 1;
-
-        for next in serial..serial + 10 {
-            assert_eq!(next, c.next_serial());
-        }
     }
 
     #[cfg(all(windows, feature = "windows-gdbus"))]

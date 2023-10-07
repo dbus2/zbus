@@ -1007,13 +1007,12 @@ mod tests {
 
     #[test]
     fn error_from_zerror() {
-        let mut m = Message::method("/", "foo")
+        let m = Message::method("/", "foo")
             .unwrap()
             .destination(":1.2")
             .unwrap()
             .build(&())
             .unwrap();
-        m.set_serial_num(1.try_into().unwrap()).unwrap();
         let m = Message::method_error(&m, "org.freedesktop.DBus.Error.TimedOut")
             .unwrap()
             .build(&("so long"))

@@ -3,10 +3,7 @@ use std::io::{Cursor, Write};
 #[cfg(unix)]
 use crate::message::Fds;
 #[cfg(unix)]
-use std::{
-    os::unix::io::RawFd,
-    sync::{Arc, RwLock},
-};
+use std::{os::unix::io::RawFd, sync::Arc};
 
 use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
@@ -179,7 +176,7 @@ impl<'a> Builder<'a> {
     }
 
     fn reply_to(mut self, reply_to: &Header<'_>) -> Result<Self> {
-        let serial = reply_to.primary().serial_num().ok_or(Error::MissingField)?;
+        let serial = reply_to.primary().serial_num();
         self.header.fields_mut().replace(Field::ReplySerial(serial));
 
         if let Some(sender) = reply_to.sender() {
@@ -334,7 +331,7 @@ impl<'a> Builder<'a> {
             bytes,
             body_offset,
             #[cfg(unix)]
-            fds: Arc::new(RwLock::new(Fds::Raw(fds))),
+            fds: Arc::new(Fds::Raw(fds)),
             recv_seq: Sequence::default(),
         })
     }
