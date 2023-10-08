@@ -24,6 +24,9 @@ use field::{Field, FieldCode};
 mod fields;
 use fields::{Fields, QuickFields};
 
+mod body;
+pub use body::Body;
+
 pub(crate) mod header;
 use header::MIN_MESSAGE_SIZE;
 pub use header::{EndianSig, Flags, Header, PrimaryHeader, Type, NATIVE_ENDIAN_SIG};
@@ -66,7 +69,7 @@ impl Sequence {
 /// [`Connection`]: struct.Connection#method.call_method
 #[derive(Clone)]
 pub struct Message {
-    inner: Arc<Inner>,
+    pub(super) inner: Arc<Inner>,
 }
 
 pub(super) struct Inner {
