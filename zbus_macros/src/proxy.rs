@@ -935,20 +935,6 @@ fn gen_proxy_signal(
             #[derive(Debug, Clone)]
             pub struct #signal_name_ident(#zbus::message::Message);
 
-            impl ::std::ops::Deref for #signal_name_ident {
-                type Target = #zbus::message::Message;
-
-                fn deref(&self) -> &#zbus::message::Message {
-                    &self.0
-                }
-            }
-
-            impl ::std::convert::AsRef<#zbus::message::Message> for #signal_name_ident {
-                fn as_ref(&self) -> &#zbus::message::Message {
-                    &self.0
-                }
-            }
-
             impl #signal_name_ident {
                 #[doc = "Try to construct a "]
                 #[doc = #signal_name]
@@ -971,6 +957,12 @@ fn gen_proxy_signal(
                     }
                 }
             }
+
+            impl ::std::convert::From<#signal_name_ident> for ::std::sync::Arc<#zbus::message::Message> {
+                fn from(signal: #signal_name_ident) -> Self {
+                    signal.0
+                }
+            }
         }
     } else {
         quote!()
@@ -990,7 +982,7 @@ fn gen_proxy_signal(
                 pub fn args #ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
                 #where_clause
                 {
-                    ::std::convert::TryFrom::try_from(&**self)
+                    ::std::convert::TryFrom::try_from(&*self.0)
                 }
             }
 
