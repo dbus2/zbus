@@ -1,9 +1,12 @@
-use std::io::{Cursor, Write};
+use std::{
+    io::{Cursor, Write},
+    sync::Arc,
+};
 
 #[cfg(unix)]
 use crate::message::Fds;
 #[cfg(unix)]
-use std::{os::unix::io::RawFd, sync::Arc};
+use std::os::unix::io::RawFd;
 
 use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
@@ -326,13 +329,15 @@ impl<'a> Builder<'a> {
         let quick_fields = QuickFields::new(&bytes, &header)?;
 
         Ok(Message {
-            primary_header,
-            quick_fields,
-            bytes,
-            body_offset,
-            #[cfg(unix)]
-            fds: Arc::new(Fds::Raw(fds)),
-            recv_seq: Sequence::default(),
+            inner: Arc::new(super::Inner {
+                primary_header,
+                quick_fields,
+                bytes,
+                body_offset,
+                #[cfg(unix)]
+                fds: Fds::Raw(fds),
+                recv_seq: Sequence::default(),
+            }),
         })
     }
 }
