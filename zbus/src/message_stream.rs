@@ -165,7 +165,7 @@ impl MessageStream {
     }
 
     pub(crate) fn for_subscription_channel(
-        msg_receiver: ActiveReceiver<Result<Arc<Message>>>,
+        msg_receiver: ActiveReceiver<Result<Message>>,
         rule: Option<OwnedMatchRule>,
         conn: &Connection,
     ) -> Self {
@@ -182,7 +182,7 @@ impl MessageStream {
 }
 
 impl stream::Stream for MessageStream {
-    type Item = Result<Arc<Message>>;
+    type Item = Result<Message>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
@@ -192,7 +192,7 @@ impl stream::Stream for MessageStream {
 }
 
 impl OrderedStream for MessageStream {
-    type Data = Result<Arc<Message>>;
+    type Data = Result<Message>;
     type Ordering = Sequence;
 
     fn poll_next_before(
@@ -274,7 +274,7 @@ impl From<&MessageStream> for Connection {
 #[derive(Clone, Debug)]
 struct Inner {
     conn_inner: Arc<ConnectionInner>,
-    msg_receiver: ActiveReceiver<Result<Arc<Message>>>,
+    msg_receiver: ActiveReceiver<Result<Message>>,
     match_rule: Option<OwnedMatchRule>,
 }
 

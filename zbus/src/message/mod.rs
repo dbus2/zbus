@@ -1,11 +1,8 @@
 //! D-Bus Message.
-use std::{fmt, num::NonZeroU32};
+use std::{fmt, num::NonZeroU32, sync::Arc};
 
 #[cfg(unix)]
-use std::{
-    os::unix::io::{AsRawFd, RawFd},
-    sync::Arc,
-};
+use std::os::unix::io::{AsRawFd, RawFd};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{ErrorName, InterfaceName, MemberName};
@@ -76,12 +73,16 @@ impl Sequence {
 /// [`Connection`]: struct.Connection#method.call_method
 #[derive(Clone)]
 pub struct Message {
+    inner: Arc<Inner>,
+}
+
+pub(super) struct Inner {
     pub(crate) primary_header: PrimaryHeader,
     pub(crate) quick_fields: QuickFields,
     pub(crate) bytes: Vec<u8>,
     pub(crate) body_offset: usize,
     #[cfg(unix)]
-    pub(crate) fds: Arc<Fds>,
+    pub(crate) fds: Fds,
     pub(crate) recv_seq: Sequence,
 }
 
@@ -171,20 +172,22 @@ impl Message {
         let (primary_header, fields_len) = PrimaryHeader::read(&bytes)?;
         let (header, _) = zvariant::from_slice(&bytes, dbus_context!(0))?;
         #[cfg(unix)]
-        let fds = Arc::new(Fds::Owned(fds));
+        let fds = Fds::Owned(fds);
 
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_offset = header_len + padding_for_8_bytes(header_len);
         let quick_fields = QuickFields::new(&bytes, &header)?;
 
         Ok(Self {
-            primary_header,
-            quick_fields,
-            bytes,
-            body_offset,
-            #[cfg(unix)]
-            fds,
-            recv_seq: Sequence { recv_seq },
+            inner: Arc::new(Inner {
+                primary_header,
+                quick_fields,
+                bytes,
+                body_offset,
+                #[cfg(unix)]
+                fds,
+                recv_seq: Sequence { recv_seq },
+            }),
         })
     }
 
@@ -195,11 +198,11 @@ impl Message {
     /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
     /// multiple arguments.
     pub fn body_signature(&self) -> Option<Signature<'_>> {
-        self.quick_fields.signature(self)
+        self.inner.quick_fields.signature(self)
     }
 
     pub fn primary_header(&self) -> &PrimaryHeader {
-        &self.primary_header
+        &self.inner.primary_header
     }
 
     /// The message header.
@@ -209,7 +212,7 @@ impl Message {
     /// best to keep the header around if you need to access it a lot.
     pub fn header(&self) -> Header<'_> {
         let mut fields = Fields::new();
-        let quick_fields = &self.quick_fields;
+        let quick_fields = &self.inner.quick_fields;
         if let Some(p) = quick_fields.path(self) {
             fields.add(Field::Path(p));
         }
@@ -238,36 +241,36 @@ impl Message {
             fields.add(Field::UnixFDs(u));
         }
 
-        Header::new(self.primary_header.clone(), fields)
+        Header::new(self.inner.primary_header.clone(), fields)
     }
 
     /// The message type.
     pub fn message_type(&self) -> Type {
-        self.primary_header.msg_type()
+        self.inner.primary_header.msg_type()
     }
 
     /// The object to send a call to, or the object a signal is emitted from.
     #[deprecated(note = "Use `Message::header` with `message::Header::path` instead")]
     pub fn path(&self) -> Option<ObjectPath<'_>> {
-        self.quick_fields.path(self)
+        self.inner.quick_fields.path(self)
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
     #[deprecated(note = "Use `Message::header` with `message::Header::interface` instead")]
     pub fn interface(&self) -> Option<InterfaceName<'_>> {
-        self.quick_fields.interface(self)
+        self.inner.quick_fields.interface(self)
     }
 
     /// The member, either the method name or signal name.
     #[deprecated(note = "Use `Message::header` with `message::Header::member` instead")]
     pub fn member(&self) -> Option<MemberName<'_>> {
-        self.quick_fields.member(self)
+        self.inner.quick_fields.member(self)
     }
 
     /// The serial number of the message this message is a reply to.
     #[deprecated(note = "Use `Message::header` with `message::Header::reply_serial` instead")]
     pub fn reply_serial(&self) -> Option<NonZeroU32> {
-        self.quick_fields.reply_serial()
+        self.inner.quick_fields.reply_serial()
     }
 
     /// Deserialize the body (without checking signature matching).
@@ -279,14 +282,17 @@ impl Message {
             #[cfg(unix)]
             {
                 zvariant::from_slice_fds(
-                    &self.bytes[self.body_offset..],
+                    &self.inner.bytes[self.inner.body_offset..],
                     Some(&self.fds()),
                     dbus_context!(0),
                 )
             }
             #[cfg(not(unix))]
             {
-                zvariant::from_slice(&self.bytes[self.body_offset..], dbus_context!(0))
+                zvariant::from_slice(
+                    &self.inner.bytes[self.inner.body_offset..],
+                    dbus_context!(0),
+                )
             }
         }
         .map_err(Error::from)
@@ -330,7 +336,7 @@ impl Message {
             #[cfg(unix)]
             {
                 zvariant::from_slice_fds_for_dynamic_signature(
-                    &self.bytes[self.body_offset..],
+                    &self.inner.bytes[self.inner.body_offset..],
                     Some(&self.fds()),
                     dbus_context!(0),
                     &body_sig,
@@ -339,7 +345,7 @@ impl Message {
             #[cfg(not(unix))]
             {
                 zvariant::from_slice_for_dynamic_signature(
-                    &self.bytes[self.body_offset..],
+                    &self.inner.bytes[self.inner.body_offset..],
                     dbus_context!(0),
                     &body_sig,
                 )
@@ -351,7 +357,7 @@ impl Message {
 
     #[cfg(unix)]
     pub(crate) fn fds(&self) -> Vec<RawFd> {
-        match &*self.fds {
+        match &self.inner.fds {
             Fds::Raw(fds) => fds.clone(),
             Fds::Owned(fds) => fds.iter().map(|f| f.as_raw_fd()).collect(),
         }
@@ -359,12 +365,12 @@ impl Message {
 
     /// Get a reference to the byte encoding of the message.
     pub fn as_bytes(&self) -> &[u8] {
-        &self.bytes
+        &self.inner.bytes
     }
 
     /// Get a reference to the byte encoding of the body of the message.
     pub fn body_as_bytes(&self) -> Result<&[u8]> {
-        Ok(&self.bytes[self.body_offset..])
+        Ok(&self.inner.bytes[self.inner.body_offset..])
     }
 
     /// Get the receive ordering of a message.
@@ -375,7 +381,7 @@ impl Message {
     /// This is completely unrelated to the serial number on the message, which is set by the peer
     /// and might not be ordered at all.
     pub fn recv_position(&self) -> Sequence {
-        self.recv_seq
+        self.inner.recv_seq
     }
 }
 
@@ -492,7 +498,7 @@ mod tests {
             if cfg!(unix) { "hs" } else { "s" }
         );
         #[cfg(unix)]
-        assert_eq!(*m.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
+        assert_eq!(m.inner.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
 
         let body: Result<u32, Error> = m.body();
         assert!(matches!(

@@ -3,7 +3,7 @@
 use enumflags2::BitFlags;
 use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
-use std::{ops::Deref, sync::Arc};
+use std::ops::Deref;
 use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
@@ -207,7 +207,7 @@ impl<'a> Proxy<'a> {
     /// allocation/copying, by deserializing the reply to an unowned type).
     ///
     /// [`call`]: struct.Proxy.html#method.call
-    pub fn call_method<'m, M, B>(&self, method_name: M, body: &B) -> Result<Arc<Message>>
+    pub fn call_method<'m, M, B>(&self, method_name: M, body: &B) -> Result<Message>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
@@ -393,7 +393,7 @@ impl<'a> SignalIterator<'a> {
 assert_impl_all!(SignalIterator<'_>: Send, Sync, Unpin);
 
 impl std::iter::Iterator for SignalIterator<'_> {
-    type Item = Arc<Message>;
+    type Item = Message;
 
     fn next(&mut self) -> Option<Self::Item> {
         block_on(self.0.as_mut().expect("`SignalStream` is `None`").next())
