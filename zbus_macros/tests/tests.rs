@@ -257,7 +257,6 @@ fn test_interface() {
 
 mod signal_from_message {
     use super::*;
-    use std::sync::Arc;
     use zbus::message::Message;
 
     #[dbus_proxy(
@@ -275,16 +274,14 @@ mod signal_from_message {
 
     #[test]
     fn signal_u8() {
-        let message = Arc::new(
-            Message::signal(
-                "/org/freedesktop/zbus_macros/test",
-                "org.freedesktop.zbus_macros.Test",
-                "SignalU8",
-            )
-            .expect("Failed to create signal message builder")
-            .build(&(1u8,))
-            .expect("Failed to build signal message"),
-        );
+        let message = Message::signal(
+            "/org/freedesktop/zbus_macros/test",
+            "org.freedesktop.zbus_macros.Test",
+            "SignalU8",
+        )
+        .expect("Failed to create signal message builder")
+        .build(&(1u8,))
+        .expect("Failed to build signal message");
 
         assert!(
             SignalU8::from_message(message.clone()).is_some(),
@@ -298,16 +295,14 @@ mod signal_from_message {
 
     #[test]
     fn signal_string() {
-        let message = Arc::new(
-            Message::signal(
-                "/org/freedesktop/zbus_macros/test",
-                "org.freedesktop.zbus_macros.Test",
-                "SignalString",
-            )
-            .expect("Failed to create signal message builder")
-            .build(&(String::from("test"),))
-            .expect("Failed to build signal message"),
-        );
+        let message = Message::signal(
+            "/org/freedesktop/zbus_macros/test",
+            "org.freedesktop.zbus_macros.Test",
+            "SignalString",
+        )
+        .expect("Failed to create signal message builder")
+        .build(&(String::from("test"),))
+        .expect("Failed to build signal message");
 
         assert!(
             SignalString::from_message(message.clone()).is_some(),
@@ -321,16 +316,14 @@ mod signal_from_message {
 
     #[test]
     fn wrong_data() {
-        let message = Arc::new(
-            Message::signal(
-                "/org/freedesktop/zbus_macros/test",
-                "org.freedesktop.zbus_macros.Test",
-                "SignalU8",
-            )
-            .expect("Failed to create signal message builder")
-            .build(&(String::from("test"),))
-            .expect("Failed to build signal message"),
-        );
+        let message = Message::signal(
+            "/org/freedesktop/zbus_macros/test",
+            "org.freedesktop.zbus_macros.Test",
+            "SignalU8",
+        )
+        .expect("Failed to create signal message builder")
+        .build(&(String::from("test"),))
+        .expect("Failed to build signal message");
 
         let signal = SignalU8::from_message(message).expect("Message is a SignalU8");
         signal

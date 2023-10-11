@@ -933,18 +933,12 @@ fn gen_proxy_signal(
         quote! {
             #[doc = #args_struct_gen_doc]
             #[derive(Debug, Clone)]
-            pub struct #signal_name_ident(::std::sync::Arc<#zbus::message::Message>);
+            pub struct #signal_name_ident(#zbus::message::Message);
 
             impl ::std::ops::Deref for #signal_name_ident {
                 type Target = #zbus::message::Message;
 
                 fn deref(&self) -> &#zbus::message::Message {
-                    &self.0
-                }
-            }
-
-            impl ::std::convert::AsRef<::std::sync::Arc<#zbus::message::Message>> for #signal_name_ident {
-                fn as_ref(&self) -> &::std::sync::Arc<#zbus::message::Message> {
                     &self.0
                 }
             }
@@ -961,7 +955,7 @@ fn gen_proxy_signal(
                 #[doc = " from a [::zbus::message::Message]."]
                 pub fn from_message<M>(msg: M) -> ::std::option::Option<Self>
                 where
-                    M: ::std::convert::Into<::std::sync::Arc<#zbus::message::Message>>,
+                    M: ::std::convert::Into<#zbus::message::Message>,
                 {
                     let msg = msg.into();
                     let hdr = msg.header();

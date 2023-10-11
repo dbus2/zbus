@@ -3,7 +3,7 @@
 use enumflags2::BitFlags;
 use event_listener::EventListener;
 use static_assertions::assert_impl_all;
-use std::{io, ops::Deref, sync::Arc};
+use std::{io, ops::Deref};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
@@ -84,7 +84,7 @@ impl Connection {
         iface: Option<I>,
         method_name: M,
         body: &B,
-    ) -> Result<Arc<Message>>
+    ) -> Result<Message>
     where
         D: TryInto<BusName<'d>>,
         P: TryInto<ObjectPath<'p>>,

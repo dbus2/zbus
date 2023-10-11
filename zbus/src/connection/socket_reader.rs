@@ -94,7 +94,7 @@ impl SocketReader {
     }
 
     #[instrument]
-    async fn read_socket(&mut self) -> crate::Result<Arc<Message>> {
+    async fn read_socket(&mut self) -> crate::Result<Message> {
         self.activity_event.notify(usize::MAX);
         let mut bytes = self
             .already_received_bytes
@@ -185,6 +185,5 @@ impl SocketReader {
             fds,
             seq,
         )
-        .map(Arc::new)
     }
 }

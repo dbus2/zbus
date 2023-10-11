@@ -801,7 +801,7 @@ impl<'a> Proxy<'a> {
     /// allocation/copying, by deserializing the reply to an unowned type).
     ///
     /// [`call`]: struct.Proxy.html#method.call
-    pub async fn call_method<'m, M, B>(&self, method_name: M, body: &B) -> Result<Arc<Message>>
+    pub async fn call_method<'m, M, B>(&self, method_name: M, body: &B) -> Result<Message>
     where
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
@@ -1231,7 +1231,7 @@ impl<'a> SignalStream<'a> {
         })
     }
 
-    fn filter(&mut self, msg: &Arc<Message>) -> Result<bool> {
+    fn filter(&mut self, msg: &Message) -> Result<bool> {
         let header = msg.header();
         let sender = header.sender();
         if sender == self.src_unique_name.as_ref() {
@@ -1251,7 +1251,7 @@ impl<'a> SignalStream<'a> {
 assert_impl_all!(SignalStream<'_>: Send, Sync, Unpin);
 
 impl<'a> stream::Stream for SignalStream<'a> {
-    type Item = Arc<Message>;
+    type Item = Message;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         OrderedStream::poll_next_before(self, cx, None).map(|res| res.into_data())
@@ -1259,7 +1259,7 @@ impl<'a> stream::Stream for SignalStream<'a> {
 }
 
 impl<'a> OrderedStream for SignalStream<'a> {
-    type Data = Arc<Message>;
+    type Data = Message;
     type Ordering = Sequence;
 
     fn poll_next_before(

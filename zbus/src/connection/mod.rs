@@ -66,8 +66,8 @@ pub(crate) struct ConnectionInner {
     #[allow(unused)]
     socket_reader_task: OnceCell<Task<()>>,
 
-    pub(crate) msg_receiver: InactiveReceiver<Result<Arc<Message>>>,
-    pub(crate) method_return_receiver: InactiveReceiver<Result<Arc<Message>>>,
+    pub(crate) msg_receiver: InactiveReceiver<Result<Message>>,
+    pub(crate) method_return_receiver: InactiveReceiver<Result<Message>>,
     msg_senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
 
     subscriptions: Mutex<Subscriptions>,
@@ -76,9 +76,9 @@ pub(crate) struct ConnectionInner {
     object_server_dispatch_task: OnceCell<Task<()>>,
 }
 
-type Subscriptions = HashMap<OwnedMatchRule, (u64, InactiveReceiver<Result<Arc<Message>>>)>;
+type Subscriptions = HashMap<OwnedMatchRule, (u64, InactiveReceiver<Result<Message>>)>;
 
-pub(crate) type MsgBroadcaster = Broadcaster<Result<Arc<Message>>>;
+pub(crate) type MsgBroadcaster = Broadcaster<Result<Message>>;
 
 /// A D-Bus connection.
 ///
@@ -206,7 +206,7 @@ pub(crate) struct PendingMethodCall {
 }
 
 impl Future for PendingMethodCall {
-    type Output = Result<Arc<Message>>;
+    type Output = Result<Message>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.poll_before(cx, None).map(|ret| {
@@ -220,7 +220,7 @@ impl Future for PendingMethodCall {
 }
 
 impl OrderedFuture for PendingMethodCall {
-    type Output = Result<Arc<Message>>;
+    type Output = Result<Message>;
     type Ordering = zbus::message::Sequence;
 
     fn poll_before(
@@ -311,7 +311,7 @@ impl Connection {
         interface: Option<I>,
         method_name: M,
         body: &B,
-    ) -> Result<Arc<Message>>
+    ) -> Result<Message>
     where
         D: TryInto<BusName<'d>>,
         P: TryInto<ObjectPath<'p>>,
@@ -1028,7 +1028,7 @@ impl Connection {
         &self,
         rule: OwnedMatchRule,
         max_queued: Option<usize>,
-    ) -> Result<Receiver<Result<Arc<Message>>>> {
+    ) -> Result<Receiver<Result<Message>>> {
         use std::collections::hash_map::Entry;
 
         if self.inner.msg_senders.lock().await.is_empty() {

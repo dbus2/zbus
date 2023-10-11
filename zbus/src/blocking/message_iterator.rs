@@ -1,6 +1,5 @@
 use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
-use std::sync::Arc;
 
 use crate::{
     blocking::Connection, message::Message, utils::block_on, MatchRule, OwnedMatchRule, Result,
@@ -112,7 +111,7 @@ impl MessageIterator {
 }
 
 impl Iterator for MessageIterator {
-    type Item = Result<Arc<Message>>;
+    type Item = Result<Message>;
 
     fn next(&mut self) -> Option<Self::Item> {
         block_on(self.azync.as_mut().expect("Inner stream is `None`").next())
