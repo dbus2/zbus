@@ -127,7 +127,7 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Message>>;
 ///
 /// let connection = Connection::session().await?;
 ///
-/// let reply = connection
+/// let reply_body = connection
 ///     .call_method(
 ///         Some("org.freedesktop.DBus"),
 ///         "/org/freedesktop/DBus",
@@ -135,9 +135,10 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Message>>;
 ///         "GetId",
 ///         &(),
 ///     )
-///     .await?;
+///     .await?
+///     .body();
 ///
-/// let id: &str = reply.body()?;
+/// let id: &str = reply_body.deserialize()?;
 /// println!("Unique ID of the bus: {}", id);
 /// # Ok::<(), zbus::Error>(())
 /// # }).unwrap();
@@ -1372,7 +1373,7 @@ mod tests {
             let m = stream.try_next().await?.unwrap();
             client_done.notify(1);
             assert_eq!(m.to_string(), "Signal ASignalForYou");
-            reply.body::<String>()
+            reply.body().deserialize::<String>()
         };
 
         let (val, _) = futures_util::try_join!(client_future, server_future,)?;

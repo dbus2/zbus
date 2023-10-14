@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use event_listener::Event;
 use tracing::{debug, instrument, trace};
+use zvariant::{serialized, EncodingContext};
 
 use crate::{
     async_lock::Mutex,
@@ -116,7 +117,7 @@ impl SocketReader {
                 let len = {
                     #[cfg(unix)]
                     {
-                        fds.extend(res.1);
+                        fds.extend(res.1.into_iter().map(Into::into));
                         res.0
                     }
                     #[cfg(not(unix))]
@@ -156,7 +157,7 @@ impl SocketReader {
             let read = {
                 #[cfg(unix)]
                 {
-                    fds.extend(res.1);
+                    fds.extend(res.1.into_iter().map(Into::into));
                     res.0
                 }
                 #[cfg(not(unix))]
@@ -179,11 +180,11 @@ impl SocketReader {
         // If we reach here, the message is complete; return it
         let seq = self.prev_seq + 1;
         self.prev_seq = seq;
-        Message::from_raw_parts(
-            bytes,
-            #[cfg(unix)]
-            fds,
-            seq,
-        )
+        let ctxt = EncodingContext::<byteorder::NativeEndian>::new_dbus(0);
+        #[cfg(unix)]
+        let bytes = serialized::Data::new_fds(bytes, ctxt, fds);
+        #[cfg(not(unix))]
+        let bytes = serialized::Data::new(bytes, ctxt);
+        Message::from_raw_parts(bytes, seq)
     }
 }

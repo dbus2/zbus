@@ -7,6 +7,7 @@ use std::{
 
 use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
+use zvariant::serialized;
 
 use crate::{
     message::{Field, FieldCode, Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
@@ -327,7 +328,11 @@ impl<'a> Builder<'a> {
         write_body(&mut cursor)?;
 
         let primary_header = header.into_primary();
-        let (header, actual_hdr_len): (Header<'_>, _) = zvariant::from_slice(&bytes, ctxt)?;
+        #[cfg(unix)]
+        let bytes = serialized::Data::new_fds(bytes, ctxt, fds);
+        #[cfg(not(unix))]
+        let bytes = serialized::Data::new(bytes, ctxt);
+        let (header, actual_hdr_len): (Header<'_>, _) = bytes.deserialize()?;
         assert_eq!(hdr_len, actual_hdr_len);
         let quick_fields = QuickFields::new(&bytes, &header)?;
 
@@ -337,8 +342,6 @@ impl<'a> Builder<'a> {
                 quick_fields,
                 bytes,
                 body_offset,
-                #[cfg(unix)]
-                fds,
                 recv_seq: Sequence::default(),
             }),
         })
@@ -375,7 +378,7 @@ mod tests {
             )?
         };
 
-        let output: Vec<i32> = message.body()?;
+        let output: Vec<i32> = message.body().deserialize()?;
         assert_eq!(output, vec![1, 2, 3, 4]);
 
         Ok(())

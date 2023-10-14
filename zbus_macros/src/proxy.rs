@@ -933,7 +933,7 @@ fn gen_proxy_signal(
         quote! {
             #[doc = #args_struct_gen_doc]
             #[derive(Debug, Clone)]
-            pub struct #signal_name_ident(#zbus::message::Message);
+            pub struct #signal_name_ident(#zbus::message::Body);
 
             impl #signal_name_ident {
                 #[doc = "Try to construct a "]
@@ -952,15 +952,17 @@ fn gen_proxy_signal(
                     let member = member.as_ref().map(|m| m.as_str());
 
                     match (message_type, interface, member) {
-                        (#zbus::message::Type::Signal, Some(#iface_name), Some(#signal_name)) => Some(Self(msg)),
+                        (#zbus::message::Type::Signal, Some(#iface_name), Some(#signal_name)) => {
+                            Some(Self(msg.body()))
+                        }
                         _ => None,
                     }
                 }
             }
 
-            impl ::std::convert::From<#signal_name_ident> for ::std::sync::Arc<#zbus::message::Message> {
+            impl ::std::convert::From<#signal_name_ident> for #zbus::message::Message {
                 fn from(signal: #signal_name_ident) -> Self {
-                    signal.0
+                    signal.0.message().clone()
                 }
             }
         }
@@ -982,7 +984,7 @@ fn gen_proxy_signal(
                 pub fn args #ty_generics(&'s self) -> #zbus::Result<#signal_args #ty_generics>
                 #where_clause
                 {
-                    ::std::convert::TryFrom::try_from(&*self.0)
+                    ::std::convert::TryFrom::try_from(&self.0)
                 }
             }
 
@@ -1016,13 +1018,13 @@ fn gen_proxy_signal(
                 }
             }
 
-            impl #impl_generics ::std::convert::TryFrom<&'s #zbus::message::Message> for #signal_args #ty_generics
+            impl #impl_generics ::std::convert::TryFrom<&'s #zbus::message::Body> for #signal_args #ty_generics
                 #where_clause
             {
                 type Error = #zbus::Error;
 
-                fn try_from(message: &'s #zbus::message::Message) -> #zbus::Result<Self> {
-                    message.body::<(#(#input_types),*)>()
+                fn try_from(msg_body: &'s #zbus::message::Body) -> #zbus::Result<Self> {
+                    msg_body.deserialize::<(#(#input_types),*)>()
                         .map_err(::std::convert::Into::into)
                         .map(|args| {
                             #signal_args {
@@ -1041,7 +1043,7 @@ fn gen_proxy_signal(
 
                 fn next(&mut self) -> ::std::option::Option<Self::Item> {
                     ::std::iter::Iterator::next(&mut self.0)
-                        .map(#signal_name_ident)
+                        .map(|msg| #signal_name_ident(msg.body()))
                 }
             }
         }
@@ -1058,7 +1060,7 @@ fn gen_proxy_signal(
                         ::std::pin::Pin::new(&mut self.get_mut().0),
                         cx,
                     )
-                    .map(|msg| msg.map(#signal_name_ident))
+                    .map(|msg| msg.map(|msg| #signal_name_ident(msg.body())))
                 }
             }
 
@@ -1076,7 +1078,7 @@ fn gen_proxy_signal(
                         cx,
                         before,
                     )
-                    .map(|msg| msg.map_data(#signal_name_ident))
+                    .map(|msg| msg.map_data(|msg| #signal_name_ident(msg.body())))
                 }
             }
 

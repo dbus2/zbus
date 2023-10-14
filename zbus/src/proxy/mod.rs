@@ -52,7 +52,8 @@ pub use builder::{Builder, CacheProperties, ProxyDefault};
 ///     // owned return value
 ///     let _id: String = p.call("GetId", &()).await?;
 ///     // borrowed return value
-///     let _id: &str = p.call_method("GetId", &()).await?.body()?;
+///     let body = p.call_method("GetId", &()).await?.body();
+///     let _id: &str = body.deserialize()?;
 ///
 ///     Ok(())
 /// }
@@ -351,7 +352,7 @@ impl PropertiesCache {
                     // discard updates prior to the initial population
                 }
                 Some(Either::Right(populate)) => {
-                    populate?.body().map(|values| {
+                    populate?.body().deserialize().map(|values| {
                         self.update_cache(&uncached_properties, &values, Vec::new(), &interface);
                     })?;
                     break;
@@ -834,7 +835,7 @@ impl<'a> Proxy<'a> {
     {
         let reply = self.call_method(method_name, body).await?;
 
-        reply.body()
+        reply.body().deserialize()
     }
 
     /// Call a method and return the reply body, optionally supplying a set of
@@ -873,7 +874,7 @@ impl<'a> Proxy<'a> {
             )
             .await?
         {
-            Some(reply) => reply.await?.body().map(Some),
+            Some(reply) => reply.await?.body().deserialize().map(Some),
             None => Ok(None),
         }
     }
@@ -1176,7 +1177,7 @@ impl<'a> SignalStream<'a> {
                         }
                         Some(Either::Left(Err(_))) => (),
                         Some(Either::Right(Ok(response))) => {
-                            break Some(response.body::<UniqueName<'_>>()?.to_owned())
+                            break Some(response.body().deserialize::<UniqueName<'_>>()?.to_owned())
                         }
                         Some(Either::Right(Err(e))) => {
                             // Probably the name is not owned. Not a problem but let's still log it.
@@ -1371,7 +1372,10 @@ mod tests {
         assert_eq!(&new_owner.unwrap().unwrap(), &*unique_name);
 
         let acquired_signal = acquired_signal.unwrap();
-        assert_eq!(acquired_signal.body::<&str>().unwrap(), well_known);
+        assert_eq!(
+            acquired_signal.body().deserialize::<&str>().unwrap(),
+            well_known
+        );
 
         let proxy = Proxy::new(&conn, &unique_name, "/does/not/matter", "does.not.matter").await?;
         let mut unique_name_changed_stream = proxy.receive_owner_changed().await?;

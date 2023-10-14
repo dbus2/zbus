@@ -32,6 +32,6 @@ fn main() {
         )
         .unwrap();
 
-    let (percent, _) = reply.body::<(i32, &str)>().unwrap();
+    let (percent, _) = reply.body().deserialize::<(i32, &str)>().unwrap();
     println!("New level: {percent}%");
 }
