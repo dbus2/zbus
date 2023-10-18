@@ -113,13 +113,13 @@ where
 /// let connection = Connection::session()?;
 ///
 /// let quit_event = Event::new();
-/// let quit_listener = quit_event.listen();
+/// let mut quit_listener = quit_event.listen();
 /// let interface = Example::new(quit_event);
 /// connection
 ///     .object_server()
 ///     .at("/org/zbus/path", interface)?;
 ///
-/// quit_listener.wait();
+/// quit_listener.as_mut().wait();
 /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
 #[derive(Debug)]

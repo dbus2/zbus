@@ -1213,7 +1213,7 @@ impl Connection {
     ///
     /// This function is meant for the caller to implement idle or timeout on inactivity.
     pub fn monitor_activity(&self) -> EventListener {
-        self.inner.activity_event.listen()
+        EventListener::new(&self.inner.activity_event)
     }
 
     /// Returns the peer credentials.
