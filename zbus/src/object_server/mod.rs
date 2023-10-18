@@ -811,7 +811,7 @@ impl<R> ResponseDispatchNotifier<R> {
     /// Create a new `NotifyResponse`.
     pub fn new(response: R) -> (Self, EventListener) {
         let event = Event::new();
-        let listener = event.listen();
+        let listener = EventListener::new(&event);
         (
             Self {
                 response,
