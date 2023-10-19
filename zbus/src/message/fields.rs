@@ -170,19 +170,19 @@ impl QuickFields {
     }
 
     pub fn path<'m>(&self, msg: &'m Message) -> Option<ObjectPath<'m>> {
-        self.path.read(msg.as_bytes())
+        self.path.read(msg.data())
     }
 
     pub fn interface<'m>(&self, msg: &'m Message) -> Option<InterfaceName<'m>> {
-        self.interface.read(msg.as_bytes())
+        self.interface.read(msg.data())
     }
 
     pub fn member<'m>(&self, msg: &'m Message) -> Option<MemberName<'m>> {
-        self.member.read(msg.as_bytes())
+        self.member.read(msg.data())
     }
 
     pub fn error_name<'m>(&self, msg: &'m Message) -> Option<ErrorName<'m>> {
-        self.error_name.read(msg.as_bytes())
+        self.error_name.read(msg.data())
     }
 
     pub fn reply_serial(&self) -> Option<NonZeroU32> {
@@ -190,15 +190,15 @@ impl QuickFields {
     }
 
     pub fn destination<'m>(&self, msg: &'m Message) -> Option<BusName<'m>> {
-        self.destination.read(msg.as_bytes())
+        self.destination.read(msg.data())
     }
 
     pub fn sender<'m>(&self, msg: &'m Message) -> Option<UniqueName<'m>> {
-        self.sender.read(msg.as_bytes())
+        self.sender.read(msg.data())
     }
 
     pub fn signature<'m>(&self, msg: &'m Message) -> Option<Signature<'m>> {
-        self.signature.read(msg.as_bytes())
+        self.signature.read(msg.data())
     }
 
     pub fn unix_fds(&self) -> Option<u32> {

@@ -276,8 +276,8 @@ impl Message {
         self.inner.bytes.fds().map(|f| f.as_raw_fd()).collect()
     }
 
-    /// Get a reference to the byte encoding of the message.
-    pub fn as_bytes(&self) -> &[u8] {
+    /// Get a reference to the underlying byte encoding of the message.
+    pub fn data(&self) -> &serialized::Data<'static, 'static, NativeEndian> {
         &self.inner.bytes
     }
 

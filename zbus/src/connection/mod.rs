@@ -282,7 +282,7 @@ impl Connection {
         self.inner.activity_event.notify(usize::MAX);
         let mut write = self.inner.socket_write.lock().await;
         let mut pos = 0;
-        let data = msg.as_bytes();
+        let data = msg.data();
         while pos < data.len() {
             #[cfg(unix)]
             let fds = if pos == 0 { msg.fds() } else { vec![] };
