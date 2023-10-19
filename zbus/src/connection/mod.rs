@@ -5,6 +5,8 @@ use event_listener::{Event, EventListener};
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
+#[cfg(unix)]
+use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::HashMap,
     io::{self, ErrorKind},
@@ -272,8 +274,9 @@ impl OrderedFuture for PendingMethodCall {
 impl Connection {
     /// Send `msg` to the peer.
     pub async fn send(&self, msg: &Message) -> Result<()> {
+        let data = msg.data();
         #[cfg(unix)]
-        if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
+        if !data.fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);
         }
         let serial = msg.primary_header().serial_num();
@@ -282,10 +285,13 @@ impl Connection {
         self.inner.activity_event.notify(usize::MAX);
         let mut write = self.inner.socket_write.lock().await;
         let mut pos = 0;
-        let data = msg.data();
         while pos < data.len() {
             #[cfg(unix)]
-            let fds = if pos == 0 { msg.fds() } else { vec![] };
+            let fds = if pos == 0 {
+                data.fds().iter().map(|f| f.as_fd().as_raw_fd()).collect()
+            } else {
+                vec![]
+            };
             pos += write
                 .sendmsg(
                     &data[pos..],

@@ -1,9 +1,6 @@
 //! D-Bus Message.
 use std::{fmt, num::NonZeroU32, sync::Arc};
 
-#[cfg(unix)]
-use std::os::unix::io::{AsRawFd, RawFd};
-
 use byteorder::NativeEndian;
 use static_assertions::assert_impl_all;
 use zbus_names::{ErrorName, InterfaceName, MemberName};
@@ -271,11 +268,6 @@ impl Message {
         )
     }
 
-    #[cfg(unix)]
-    pub(crate) fn fds(&self) -> Vec<RawFd> {
-        self.inner.bytes.fds().map(|f| f.as_raw_fd()).collect()
-    }
-
     /// Get a reference to the underlying byte encoding of the message.
     pub fn data(&self) -> &serialized::Data<'static, 'static, NativeEndian> {
         &self.inner.bytes
@@ -318,10 +310,7 @@ impl fmt::Debug for Message {
         }
         #[cfg(unix)]
         {
-            let fds = self.fds();
-            if !fds.is_empty() {
-                msg.field("fds", &fds);
-            }
+            msg.field("fds", &self.data().fds());
         }
         msg.finish()
     }
@@ -378,7 +367,7 @@ impl fmt::Display for Message {
 #[cfg(test)]
 mod tests {
     #[cfg(unix)]
-    use std::os::unix::io::AsRawFd;
+    use std::os::fd::{AsFd, AsRawFd};
     use test_log::test;
     #[cfg(unix)]
     use zvariant::Fd;
@@ -406,10 +395,10 @@ mod tests {
         );
         #[cfg(unix)]
         {
-            let fds = m.fds();
+            let fds = m.data().fds();
             assert_eq!(fds.len(), 1);
             // FDs get dup'ed so it has to be a different FD now.
-            assert_ne!(fds[0], stdout.as_raw_fd());
+            assert_ne!(fds[0].as_fd().as_raw_fd(), stdout.as_raw_fd());
         }
 
         let body: Result<u32, Error> = m.body().deserialize();
