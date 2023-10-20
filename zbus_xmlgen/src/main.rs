@@ -4,9 +4,9 @@ use std::{
     env::args,
     error::Error,
     fs::File,
-    io::Write,
+    io::{Read, Write},
     path::Path,
-    process::{Command, Stdio},
+    process::{ChildStdin, Command, Stdio},
     result::Result,
 };
 
@@ -124,7 +124,36 @@ fn main() -> Result<(), Box<dyn Error>> {
         .iter()
         .partition(|&i| i.name().starts_with(fdo_iface_prefix));
 
-    if let Some((first_iface, following_ifaces)) = needed_ifaces.split_first() {
+    write_doc_header(
+        rustfmt_stdin,
+        &needed_ifaces,
+        &fdo_standard_ifaces,
+        &input_src,
+    )?;
+
+    for iface in &needed_ifaces {
+        writeln!(rustfmt_stdin)?;
+        let gen = GenTrait {
+            interface: iface,
+            service: service.as_ref(),
+            path: path.as_ref(),
+        }
+        .to_string();
+        rustfmt_stdin.write_all(gen.as_bytes())?;
+    }
+    process.wait()?;
+    Ok(())
+}
+
+/// Write a doc header, listing the included Interfaces and how the
+/// code was generated.
+fn write_doc_header(
+    rustfmt_stdin: &mut ChildStdin,
+    interfaces: &[&Interface<'_>],
+    standard_interfaces: &[&Interface<'_>],
+    input_src: &str,
+) -> std::io::Result<()> {
+    if let Some((first_iface, following_ifaces)) = interfaces.split_first() {
         if following_ifaces.is_empty() {
             writeln!(
                 rustfmt_stdin,
@@ -161,14 +190,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         env!("CARGO_PKG_VERSION"),
         input_src,
     )?;
-    if !fdo_standard_ifaces.is_empty() {
+
+    if !standard_interfaces.is_empty() {
         write!(rustfmt_stdin,
             "//! This DBus object implements
              //! [standard DBus interfaces](https://dbus.freedesktop.org/doc/dbus-specification.html),
              //! (`org.freedesktop.DBus.*`) for which the following zbus proxies can be used:
              //!
             ")?;
-        for iface in &fdo_standard_ifaces {
+        for iface in standard_interfaces {
             let idx = iface.name().rfind('.').unwrap() + 1;
             let name = &iface.name()[idx..];
             writeln!(rustfmt_stdin, "//! * [`zbus::fdo::{name}Proxy`]")?;
@@ -181,22 +211,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             env!("CARGO_BIN_NAME")
         )?;
     }
+
     write!(
         rustfmt_stdin,
         "
         use zbus::dbus_proxy;
         "
     )?;
-    for iface in &needed_ifaces {
-        writeln!(rustfmt_stdin)?;
-        let gen = GenTrait {
-            interface: iface,
-            service: service.as_ref(),
-            path: path.as_ref(),
-        }
-        .to_string();
-        rustfmt_stdin.write_all(gen.as_bytes())?;
-    }
-    process.wait()?;
+
     Ok(())
 }
