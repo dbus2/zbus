@@ -10,8 +10,8 @@ use std::os::unix::io::RawFd;
 use crate::gvariant::Deserializer as GVDeserializer;
 use crate::{
     container_depths::ContainerDepths, dbus::Deserializer as DBusDeserializer,
-    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error,
-    ObjectPath, Result, Signature,
+    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, Error, ObjectPath, Result,
+    Signature,
 };
 
 #[cfg(unix)]
@@ -42,52 +42,13 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B> {
 /// Using this deserializer involves an redirection to the actual deserializer. It's best
 /// to use the serialization functions, e.g [`crate::to_bytes`] or specific serializers,
 /// [`crate::dbus::Deserializer`] or [`crate::zvariant::Deserializer`].
-pub enum Deserializer<'ser, 'sig, 'f, B> {
+pub(crate) enum Deserializer<'ser, 'sig, 'f, B> {
     DBus(DBusDeserializer<'ser, 'sig, 'f, B>),
     #[cfg(feature = "gvariant")]
     GVariant(GVDeserializer<'ser, 'sig, 'f, B>),
 }
 
 assert_impl_all!(Deserializer<'_, '_, '_, u8>: Send, Sync, Unpin);
-
-impl<'de, 'sig, 'f, B> Deserializer<'de, 'sig, 'f, B>
-where
-    B: byteorder::ByteOrder,
-{
-    /// Create a Deserializer struct instance.
-    ///
-    /// On Windows, there is no `fds` argument.
-    pub fn new<'r: 'de, S>(
-        bytes: &'r [u8],
-        #[cfg(unix)] fds: Option<&'f [RawFd]>,
-        signature: S,
-        ctxt: EncodingContext<B>,
-    ) -> Result<Self>
-    where
-        S: TryInto<Signature<'sig>>,
-        S::Error: Into<Error>,
-    {
-        match ctxt.format() {
-            #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => GVDeserializer::new(
-                bytes,
-                #[cfg(unix)]
-                fds,
-                signature,
-                ctxt,
-            )
-            .map(Deserializer::GVariant),
-            EncodingFormat::DBus => DBusDeserializer::new(
-                bytes,
-                #[cfg(unix)]
-                fds,
-                signature,
-                ctxt,
-            )
-            .map(Deserializer::DBus),
-        }
-    }
-}
 
 impl<'de, 'sig, 'f, B> DeserializerCommon<'de, 'sig, 'f, B>
 where

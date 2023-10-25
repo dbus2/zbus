@@ -41,7 +41,6 @@ mod ser;
 pub use ser::*;
 
 mod de;
-pub use de::*;
 
 pub mod dbus;
 #[cfg(feature = "gvariant")]

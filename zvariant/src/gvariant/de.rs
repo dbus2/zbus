@@ -7,14 +7,17 @@ use std::{ffi::CStr, marker::PhantomData, str};
 use std::os::unix::io::RawFd;
 
 use crate::{
-    de::ValueParseStage, framing_offset_size::FramingOffsetSize, framing_offsets::FramingOffsets,
-    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, EncodingFormat, Error,
-    Result, Signature,
+    de::{DeserializerCommon, ValueParseStage},
+    framing_offset_size::FramingOffsetSize,
+    framing_offsets::FramingOffsets,
+    signature_parser::SignatureParser,
+    utils::*,
+    Basic, EncodingContext, EncodingFormat, Error, Result, Signature,
 };
 
 /// Our GVariant deserialization implementation.
 #[derive(Debug)]
-pub struct Deserializer<'de, 'sig, 'f, B>(pub(crate) crate::DeserializerCommon<'de, 'sig, 'f, B>);
+pub struct Deserializer<'de, 'sig, 'f, B>(pub(crate) DeserializerCommon<'de, 'sig, 'f, B>);
 
 assert_impl_all!(Deserializer<'_, '_,'_, i32>: Send, Sync, Unpin);
 
@@ -39,7 +42,7 @@ where
 
         let signature = signature.try_into().map_err(Into::into)?;
         let sig_parser = SignatureParser::new(signature);
-        Ok(Self(crate::DeserializerCommon {
+        Ok(Self(DeserializerCommon {
             ctxt,
             sig_parser,
             bytes,
@@ -62,7 +65,7 @@ macro_rules! deserialize_basic {
         {
             let ctxt = EncodingContext::new_dbus(self.0.ctxt.position() + self.0.pos);
 
-            let mut dbus_de = crate::dbus::Deserializer::<B>(crate::DeserializerCommon::<B> {
+            let mut dbus_de = crate::dbus::Deserializer::<B>(DeserializerCommon::<B> {
                 ctxt,
                 sig_parser: self.0.sig_parser.clone(),
                 bytes: subslice(self.0.bytes, self.0.pos..)?,
@@ -222,7 +225,7 @@ where
                 self.0.bytes.len() - 1
             };
 
-            let mut de = Deserializer::<B>(crate::DeserializerCommon {
+            let mut de = Deserializer::<B>(DeserializerCommon {
                 ctxt,
                 sig_parser: self.0.sig_parser.clone(),
                 bytes: subslice(self.0.bytes, self.0.pos..end)?,
@@ -537,7 +540,7 @@ where
         );
         let end = self.element_end(true)?;
 
-        let mut de = Deserializer::<B>(crate::DeserializerCommon {
+        let mut de = Deserializer::<B>(DeserializerCommon {
             ctxt,
             sig_parser: self.de.0.sig_parser.clone(),
             bytes: subslice(self.de.0.bytes, self.de.0.pos..end)?,
@@ -604,7 +607,7 @@ where
             None => element_end,
         };
 
-        let mut de = Deserializer::<B>(crate::DeserializerCommon {
+        let mut de = Deserializer::<B>(DeserializerCommon {
             ctxt,
             sig_parser: self.de.0.sig_parser.clone(),
             bytes: subslice(self.de.0.bytes, self.de.0.pos..key_end)?,
@@ -644,7 +647,7 @@ where
         // Skip key signature (always 1 char)
         sig_parser.skip_char()?;
 
-        let mut de = Deserializer::<B>(crate::DeserializerCommon {
+        let mut de = Deserializer::<B>(DeserializerCommon {
             ctxt,
             sig_parser,
             bytes: subslice(self.de.0.bytes, self.de.0.pos..value_end)?,
@@ -729,7 +732,7 @@ where
         };
 
         let sig_parser = self.de.0.sig_parser.clone();
-        let mut de = Deserializer::<B>(crate::DeserializerCommon {
+        let mut de = Deserializer::<B>(DeserializerCommon {
             ctxt,
             sig_parser,
             bytes: subslice(self.de.0.bytes, self.de.0.pos..element_end)?,
@@ -828,7 +831,7 @@ where
                 let signature = Signature::from_static_str_unchecked(VARIANT_SIGNATURE_STR);
                 let sig_parser = SignatureParser::new(signature);
 
-                let mut de = Deserializer::<B>(crate::DeserializerCommon {
+                let mut de = Deserializer::<B>(DeserializerCommon {
                     // No padding in signatures so just pass the same context
                     ctxt: self.de.0.ctxt,
                     sig_parser,
@@ -853,7 +856,7 @@ where
                     self.de.0.ctxt.format(),
                     self.de.0.ctxt.position() + self.value_start,
                 );
-                let mut de = Deserializer::<B>(crate::DeserializerCommon {
+                let mut de = Deserializer::<B>(DeserializerCommon {
                     ctxt,
                     sig_parser,
                     bytes: subslice(self.de.0.bytes, self.value_start..self.value_end)?,
@@ -879,7 +882,7 @@ impl<'de, 'd, 'sig, 'f, B> crate::de::GetDeserializeCommon<'de, 'sig, 'f, B>
 where
     B: byteorder::ByteOrder,
 {
-    fn common_mut<'dr>(self) -> &'dr mut crate::de::DeserializerCommon<'de, 'sig, 'f, B>
+    fn common_mut<'dr>(self) -> &'dr mut DeserializerCommon<'de, 'sig, 'f, B>
     where
         Self: 'dr,
     {

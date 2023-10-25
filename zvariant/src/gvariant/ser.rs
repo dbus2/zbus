@@ -16,7 +16,9 @@ use crate::{
 };
 
 /// Our serialization implementation.
-pub struct Serializer<'ser, 'sig, B, W>(pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>);
+pub(crate) struct Serializer<'ser, 'sig, B, W>(
+    pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>,
+);
 
 assert_impl_all!(Serializer<'_, '_, i32, i32>: Send, Sync, Unpin);
 

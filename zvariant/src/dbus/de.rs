@@ -7,8 +7,10 @@ use std::{marker::PhantomData, str};
 use std::os::unix::io::RawFd;
 
 use crate::{
-    de::ValueParseStage, signature_parser::SignatureParser, utils::*, Basic, EncodingContext,
-    EncodingFormat, Error, ObjectPath, Result, Signature,
+    de::{DeserializerCommon, ValueParseStage},
+    signature_parser::SignatureParser,
+    utils::*,
+    Basic, EncodingContext, EncodingFormat, Error, ObjectPath, Result, Signature,
 };
 
 #[cfg(unix)]
@@ -16,7 +18,7 @@ use crate::Fd;
 
 /// Our D-Bus deserialization implementation.
 #[derive(Debug)]
-pub struct Deserializer<'de, 'sig, 'f, B>(pub(crate) crate::DeserializerCommon<'de, 'sig, 'f, B>);
+pub(crate) struct Deserializer<'de, 'sig, 'f, B>(pub(crate) DeserializerCommon<'de, 'sig, 'f, B>);
 
 assert_impl_all!(Deserializer<'_, '_, '_, i32>: Send, Sync, Unpin);
 
@@ -41,7 +43,7 @@ where
 
         let signature = signature.try_into().map_err(Into::into)?;
         let sig_parser = SignatureParser::new(signature);
-        Ok(Self(crate::DeserializerCommon {
+        Ok(Self(DeserializerCommon {
             ctxt,
             sig_parser,
             bytes,
@@ -440,7 +442,7 @@ where
     {
         let ctxt = EncodingContext::new_dbus(self.de.0.ctxt.position() + self.de.0.pos);
 
-        let mut de = Deserializer::<B>(crate::DeserializerCommon {
+        let mut de = Deserializer::<B>(DeserializerCommon {
             ctxt,
             sig_parser,
             bytes: subslice(self.de.0.bytes, self.de.0.pos..)?,
@@ -631,7 +633,7 @@ where
                     EncodingFormat::DBus,
                     self.de.0.ctxt.position() + value_start,
                 );
-                let mut de = Deserializer::<B>(crate::DeserializerCommon {
+                let mut de = Deserializer::<B>(DeserializerCommon {
                     ctxt,
                     sig_parser,
                     bytes: subslice(self.de.0.bytes, value_start..)?,
@@ -656,7 +658,7 @@ impl<'de, 'd, 'sig, 'f, B> crate::de::GetDeserializeCommon<'de, 'sig, 'f, B>
 where
     B: byteorder::ByteOrder,
 {
-    fn common_mut<'dr>(self) -> &'dr mut crate::de::DeserializerCommon<'de, 'sig, 'f, B>
+    fn common_mut<'dr>(self) -> &'dr mut DeserializerCommon<'de, 'sig, 'f, B>
     where
         Self: 'dr,
     {
