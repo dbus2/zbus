@@ -1,20 +1,18 @@
 use byteorder::WriteBytesExt;
-use serde::{ser, Serialize};
-use static_assertions::assert_impl_all;
+use serde::Serialize;
 use std::{
     io::{Seek, Write},
     marker::PhantomData,
-    str,
 };
 
 #[cfg(unix)]
 use std::os::fd::OwnedFd;
 
 #[cfg(feature = "gvariant")]
-use crate::gvariant::{self, Serializer as GVSerializer};
+use crate::gvariant::Serializer as GVSerializer;
 use crate::{
     container_depths::ContainerDepths,
-    dbus::{self, Serializer as DBusSerializer},
+    dbus::Serializer as DBusSerializer,
     serialized::{Data, Size},
     signature_parser::SignatureParser,
     utils::*,
@@ -213,67 +211,6 @@ pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
     pub(crate) b: PhantomData<B>,
 }
 
-/// Our serialization implementation.
-///
-/// Using this serializer involves an redirection to the actual serializer. It's best to use the
-/// serialization functions, e.g [`to_bytes`] or specific serializers, [`dbus::Serializer`] or
-/// [`zvariant::Serializer`].
-pub enum Serializer<'ser, 'sig, B, W> {
-    DBus(DBusSerializer<'ser, 'sig, B, W>),
-    #[cfg(feature = "gvariant")]
-    GVariant(GVSerializer<'ser, 'sig, B, W>),
-}
-
-assert_impl_all!(Serializer<'_, '_, i32, i32>: Send, Sync, Unpin);
-
-impl<'ser, 'sig, B, W> Serializer<'ser, 'sig, B, W>
-where
-    B: byteorder::ByteOrder,
-    W: Write + Seek,
-{
-    /// Create a Serializer struct instance.
-    pub fn new<'w: 'ser, 'f: 'ser, S>(
-        signature: S,
-        writer: &'w mut W,
-        #[cfg(unix)] fds: &'f mut Vec<OwnedFd>,
-        ctxt: EncodingContext<B>,
-    ) -> Result<Self>
-    where
-        S: TryInto<Signature<'sig>>,
-        S::Error: Into<Error>,
-    {
-        match ctxt.format() {
-            #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => GVSerializer::new(
-                signature,
-                writer,
-                #[cfg(unix)]
-                fds,
-                ctxt,
-            )
-            .map(Self::GVariant),
-            EncodingFormat::DBus => DBusSerializer::new(
-                signature,
-                writer,
-                #[cfg(unix)]
-                fds,
-                ctxt,
-            )
-            .map(Self::DBus),
-        }
-    }
-
-    /// Unwrap the `Writer` reference from the `Serializer`.
-    #[inline]
-    pub fn into_inner(self) -> &'ser mut W {
-        match self {
-            #[cfg(feature = "gvariant")]
-            Self::GVariant(ser) => ser.0.writer,
-            Self::DBus(ser) => ser.0.writer,
-        }
-    }
-}
-
 impl<'ser, 'sig, B, W> SerializerCommon<'ser, 'sig, B, W>
 where
     B: byteorder::ByteOrder,
@@ -367,172 +304,3 @@ where
         self.writer.flush()
     }
 }
-
-macro_rules! serialize_method {
-    ($method:ident($($arg:ident: $type:ty),*)) => {
-        serialize_method!(; $method($($arg: $type),*) => () =);
-    };
-    ($($generic:ident),* ; $method:ident($($arg:ident: $type:ty),*)) => {
-        serialize_method!($($generic),*; $method($($arg: $type),*) => () =);
-    };
-    ($($generic:ident),* ; $method:ident($($arg:ident: $type:ty),*) => $ret:ty = $($map:ident)*) => {
-        #[inline]
-        fn $method<$($generic),*>(self, $($arg: $type),*) -> Result<$ret>
-        where
-            $($generic: ?Sized + Serialize),*
-        {
-            match self {
-                #[cfg(feature = "gvariant")]
-                Serializer::GVariant(ser) => {
-                    ser.$method($($arg),*)$(.map($map::GVariant))*
-                }
-                Serializer::DBus(ser) => {
-                    ser.$method($($arg),*)$(.map($map::DBus))*
-                }
-            }
-        }
-    }
-}
-
-impl<'ser, 'sig, 'b, B, W> ser::Serializer for &'b mut Serializer<'ser, 'sig, B, W>
-where
-    B: byteorder::ByteOrder,
-    W: Write + Seek,
-{
-    type Ok = ();
-    type Error = Error;
-
-    type SerializeSeq = SeqSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeTuple = StructSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeTupleStruct = StructSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeTupleVariant = StructSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeMap = SeqSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeStruct = StructSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeStructVariant = StructSerializer<'ser, 'sig, 'b, B, W>;
-
-    serialize_method!(serialize_bool(b: bool));
-    serialize_method!(serialize_i8(i: i8));
-    serialize_method!(serialize_i16(i: i16));
-    serialize_method!(serialize_i32(i: i32));
-    serialize_method!(serialize_i64(i: i64));
-    serialize_method!(serialize_u8(u: u8));
-    serialize_method!(serialize_u16(u: u16));
-    serialize_method!(serialize_u32(u: u32));
-    serialize_method!(serialize_u64(u: u64));
-    serialize_method!(serialize_f32(f: f32));
-    serialize_method!(serialize_f64(f: f64));
-    serialize_method!(serialize_char(c: char));
-    serialize_method!(serialize_str(s: &str));
-    serialize_method!(serialize_bytes(b: &[u8]));
-    serialize_method!(T; serialize_some(v: &T));
-    serialize_method!(serialize_none());
-    serialize_method!(serialize_unit());
-    serialize_method!(serialize_unit_struct(s: &'static str));
-    serialize_method!(serialize_unit_variant(
-        n: &'static str,
-        i: u32,
-        v: &'static str
-    ));
-    serialize_method!(T; serialize_newtype_struct(n: &'static str, v: &T));
-    serialize_method!(T; serialize_newtype_variant(n: &'static str, i: u32, va: &'static str, v: &T));
-    serialize_method!(; serialize_seq(l: Option<usize>) => Self::SerializeSeq = SeqSerializer);
-    serialize_method!(; serialize_tuple_variant(
-        n: &'static str,
-        i: u32,
-        v: &'static str,
-        l: usize
-    ) => Self::SerializeTupleVariant = StructSerializer);
-    serialize_method!(;serialize_struct_variant(
-        n: &'static str,
-        i: u32,
-        v: &'static str,
-        l: usize
-    ) => Self::SerializeStructVariant = StructSerializer);
-    serialize_method!(; serialize_tuple(l: usize) => Self::SerializeTuple = StructSerializer);
-    serialize_method!(; serialize_tuple_struct(
-        n: &'static str,
-        l: usize
-    ) => Self::SerializeTupleStruct = StructSerializer);
-    serialize_method!(; serialize_map(l: Option<usize>) => Self::SerializeMap = SeqSerializer);
-    serialize_method!(; serialize_struct(
-        n: &'static str,
-        l: usize
-    ) => Self::SerializeStruct = StructSerializer);
-
-    fn is_human_readable(&self) -> bool {
-        false
-    }
-}
-
-macro_rules! serialize_impl {
-    ($trait:ident, $impl:ident, $($method:ident($($arg:ident: $type:ty),*))+) => {
-        impl<'ser, 'sig, 'b, B, W> ser::$trait for $impl<'ser, 'sig, 'b, B, W>
-        where
-            B: byteorder::ByteOrder,
-            W: Write + Seek,
-        {
-            type Ok = ();
-            type Error = Error;
-
-            $(
-                fn $method<T>(&mut self, $($arg: $type),*) -> Result<()>
-                where
-                    T: ?Sized + Serialize,
-                {
-                    match self {
-                        #[cfg(feature = "gvariant")]
-                        $impl::GVariant(ser) => ser.$method($($arg),*),
-                        $impl::DBus(ser) => ser.$method($($arg),*),
-                    }
-                }
-            )*
-
-            fn end(self) -> Result<()> {
-                match self {
-                    #[cfg(feature = "gvariant")]
-                    $impl::GVariant(ser) => ser.end(),
-                    $impl::DBus(ser) => ser.end(),
-                }
-            }
-        }
-    }
-}
-
-#[doc(hidden)]
-pub enum SeqSerializer<'ser, 'sig, 'b, B, W> {
-    DBus(dbus::SeqSerializer<'ser, 'sig, 'b, B, W>),
-    #[cfg(feature = "gvariant")]
-    GVariant(gvariant::SeqSerializer<'ser, 'sig, 'b, B, W>),
-}
-
-serialize_impl!(SerializeSeq, SeqSerializer, serialize_element(value: &T));
-
-#[doc(hidden)]
-pub enum StructSerializer<'ser, 'sig, 'b, B, W> {
-    DBus(dbus::StructSeqSerializer<'ser, 'sig, 'b, B, W>),
-    #[cfg(feature = "gvariant")]
-    GVariant(gvariant::StructSeqSerializer<'ser, 'sig, 'b, B, W>),
-}
-
-serialize_impl!(SerializeTuple, StructSerializer, serialize_element(v: &T));
-serialize_impl!(
-    SerializeTupleStruct,
-    StructSerializer,
-    serialize_field(v: &T)
-);
-serialize_impl!(
-    SerializeTupleVariant,
-    StructSerializer,
-    serialize_field(v: &T)
-);
-serialize_impl!(
-    SerializeStruct,
-    StructSerializer,
-    serialize_field(k: &'static str, v: &T)
-);
-serialize_impl!(
-    SerializeStructVariant,
-    StructSerializer,
-    serialize_field(k: &'static str, v: &T)
-);
-serialize_impl!(SerializeMap, SeqSerializer, serialize_key(v: &T) serialize_value(v: &T));
