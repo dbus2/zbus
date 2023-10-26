@@ -4,7 +4,7 @@ use static_assertions::assert_impl_all;
 use std::{marker::PhantomData, str};
 
 #[cfg(unix)]
-use std::os::unix::io::RawFd;
+use std::os::fd::{AsFd, AsRawFd};
 
 #[cfg(feature = "gvariant")]
 use crate::gvariant::Deserializer as GVDeserializer;
@@ -19,14 +19,14 @@ use crate::Fd;
 
 /// Our deserialization implementation.
 #[derive(Debug)]
-pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B> {
+pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B, F> {
     pub(crate) ctxt: EncodingContext<B>,
     pub(crate) bytes: &'de [u8],
 
     #[cfg(unix)]
-    pub(crate) fds: Option<&'f [RawFd]>,
+    pub(crate) fds: Option<&'f [F]>,
     #[cfg(not(unix))]
-    pub(crate) fds: PhantomData<&'f ()>,
+    pub(crate) fds: PhantomData<&'f F>,
 
     pub(crate) pos: usize,
 
@@ -42,26 +42,30 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B> {
 /// Using this deserializer involves an redirection to the actual deserializer. It's best
 /// to use the serialization functions, e.g [`crate::to_bytes`] or specific serializers,
 /// [`crate::dbus::Deserializer`] or [`crate::zvariant::Deserializer`].
-pub(crate) enum Deserializer<'ser, 'sig, 'f, B> {
-    DBus(DBusDeserializer<'ser, 'sig, 'f, B>),
+pub(crate) enum Deserializer<'ser, 'sig, 'f, B, F> {
+    DBus(DBusDeserializer<'ser, 'sig, 'f, B, F>),
     #[cfg(feature = "gvariant")]
-    GVariant(GVDeserializer<'ser, 'sig, 'f, B>),
+    GVariant(GVDeserializer<'ser, 'sig, 'f, B, F>),
 }
 
-assert_impl_all!(Deserializer<'_, '_, '_, u8>: Send, Sync, Unpin);
+assert_impl_all!(Deserializer<'_, '_, '_, u8, ()>: Send, Sync, Unpin);
 
-impl<'de, 'sig, 'f, B> DeserializerCommon<'de, 'sig, 'f, B>
+#[cfg(unix)]
+impl<'de, 'sig, 'f, B, F> DeserializerCommon<'de, 'sig, 'f, B, F>
+where
+    F: AsFd,
+{
+    pub fn get_fd(&self, idx: u32) -> Result<i32> {
+        self.fds
+            .and_then(|fds| fds.get(idx as usize).map(|fd| fd.as_fd().as_raw_fd()))
+            .ok_or(Error::UnknownFd)
+    }
+}
+
+impl<'de, 'sig, 'f, B, F> DeserializerCommon<'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
-    #[cfg(unix)]
-    pub fn get_fd(&self, idx: u32) -> Result<i32> {
-        self.fds
-            .and_then(|fds| fds.get(idx as usize))
-            .copied()
-            .ok_or(Error::UnknownFd)
-    }
-
     pub fn parse_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
@@ -142,7 +146,8 @@ macro_rules! deserialize_method {
     }
 }
 
-impl<'de, 'd, 'sig, 'f, B> de::Deserializer<'de> for &'d mut Deserializer<'de, 'sig, 'f, B>
+impl<'de, 'd, 'sig, 'f, B, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
+    for &'d mut Deserializer<'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
@@ -232,26 +237,26 @@ where
     }
 }
 
-pub(crate) trait GetDeserializeCommon<'de, 'sig, 'f, B>
+pub(crate) trait GetDeserializeCommon<'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
-    fn common_mut<'d>(self) -> &'d mut DeserializerCommon<'de, 'sig, 'f, B>
+    fn common_mut<'d>(self) -> &'d mut DeserializerCommon<'de, 'sig, 'f, B, F>
     where
         Self: 'd;
 }
 
 // Enum handling is very generic so it can be here and specific deserializers can use this.
-pub(crate) struct Enum<B, D> {
+pub(crate) struct Enum<B, D, F> {
     pub(crate) de: D,
     pub(crate) name: &'static str,
-    pub(crate) phantom: PhantomData<B>,
+    pub(crate) _phantoms: (PhantomData<B>, PhantomData<F>),
 }
 
-impl<'de, 'sig, 'f, B, D> VariantAccess<'de> for Enum<B, D>
+impl<'de, 'sig, 'f, B, D, F> VariantAccess<'de> for Enum<B, D, F>
 where
     B: byteorder::ByteOrder,
-    D: de::Deserializer<'de, Error = Error> + GetDeserializeCommon<'de, 'sig, 'f, B>,
+    D: de::Deserializer<'de, Error = Error> + GetDeserializeCommon<'de, 'sig, 'f, B, F>,
 {
     type Error = Error;
 

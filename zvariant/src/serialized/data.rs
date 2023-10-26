@@ -217,29 +217,39 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
         let signature = signature.try_into().map_err(Into::into)?;
 
         #[cfg(unix)]
-        let fds = self
-            .inner
-            .fds
-            .iter()
-            .map(std::os::fd::AsRawFd::as_raw_fd)
-            .collect::<Vec<_>>();
+        let fds = &self.inner.fds;
         let mut de = match self.context.format() {
             #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => crate::gvariant::Deserializer::new(
-                self.bytes(),
+            EncodingFormat::GVariant => {
                 #[cfg(unix)]
-                Some(&fds),
-                signature,
-                self.context,
-            )
+                {
+                    crate::gvariant::Deserializer::new(
+                        self.bytes(),
+                        Some(fds),
+                        signature,
+                        self.context,
+                    )
+                }
+                #[cfg(not(unix))]
+                {
+                    crate::gvariant::Deserializer::<_, ()>::new(
+                        self.bytes(),
+                        signature,
+                        self.context,
+                    )
+                }
+            }
             .map(Deserializer::GVariant)?,
-            EncodingFormat::DBus => crate::dbus::Deserializer::new(
-                self.bytes(),
+            EncodingFormat::DBus => {
                 #[cfg(unix)]
-                Some(&fds),
-                signature,
-                self.context,
-            )
+                {
+                    crate::dbus::Deserializer::new(self.bytes(), Some(fds), signature, self.context)
+                }
+                #[cfg(not(unix))]
+                {
+                    crate::dbus::Deserializer::<_, ()>::new(self.bytes(), signature, self.context)
+                }
+            }
             .map(Deserializer::DBus)?,
         };
 
@@ -280,29 +290,39 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
         let signature = S::dynamic_signature(&seed).to_owned();
 
         #[cfg(unix)]
-        let fds = self
-            .inner
-            .fds
-            .iter()
-            .map(std::os::fd::AsRawFd::as_raw_fd)
-            .collect::<Vec<_>>();
+        let fds = &self.inner.fds;
         let mut de = match self.context.format() {
             #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => crate::gvariant::Deserializer::new(
-                self.bytes(),
+            EncodingFormat::GVariant => {
                 #[cfg(unix)]
-                Some(&fds),
-                signature,
-                self.context,
-            )
+                {
+                    crate::gvariant::Deserializer::new(
+                        self.bytes(),
+                        Some(fds),
+                        signature,
+                        self.context,
+                    )
+                }
+                #[cfg(not(unix))]
+                {
+                    crate::gvariant::Deserializer::<_, ()>::new(
+                        self.bytes(),
+                        signature,
+                        self.context,
+                    )
+                }
+            }
             .map(Deserializer::GVariant)?,
-            EncodingFormat::DBus => crate::dbus::Deserializer::new(
-                self.bytes(),
+            EncodingFormat::DBus => {
                 #[cfg(unix)]
-                Some(&fds),
-                signature,
-                self.context,
-            )
+                {
+                    crate::dbus::Deserializer::new(self.bytes(), Some(fds), signature, self.context)
+                }
+                #[cfg(not(unix))]
+                {
+                    crate::dbus::Deserializer::<_, ()>::new(self.bytes(), signature, self.context)
+                }
+            }
             .map(Deserializer::DBus)?,
         };
 

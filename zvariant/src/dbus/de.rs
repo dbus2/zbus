@@ -4,7 +4,7 @@ use static_assertions::assert_impl_all;
 use std::{marker::PhantomData, str};
 
 #[cfg(unix)]
-use std::os::unix::io::RawFd;
+use std::os::fd::AsFd;
 
 use crate::{
     de::{DeserializerCommon, ValueParseStage},
@@ -18,11 +18,13 @@ use crate::Fd;
 
 /// Our D-Bus deserialization implementation.
 #[derive(Debug)]
-pub(crate) struct Deserializer<'de, 'sig, 'f, B>(pub(crate) DeserializerCommon<'de, 'sig, 'f, B>);
+pub(crate) struct Deserializer<'de, 'sig, 'f, B, F>(
+    pub(crate) DeserializerCommon<'de, 'sig, 'f, B, F>,
+);
 
-assert_impl_all!(Deserializer<'_, '_, '_, i32>: Send, Sync, Unpin);
+assert_impl_all!(Deserializer<'_, '_, '_, i32, ()>: Send, Sync, Unpin);
 
-impl<'de, 'sig, 'f, B> Deserializer<'de, 'sig, 'f, B>
+impl<'de, 'sig, 'f, B, F> Deserializer<'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
@@ -31,7 +33,7 @@ where
     /// On Windows, there is no `fds` argument.
     pub fn new<'r: 'de, S>(
         bytes: &'r [u8],
-        #[cfg(unix)] fds: Option<&'f [RawFd]>,
+        #[cfg(unix)] fds: Option<&'f [F]>,
         signature: S,
         ctxt: EncodingContext<B>,
     ) -> Result<Self>
@@ -86,7 +88,8 @@ macro_rules! deserialize_as {
     }
 }
 
-impl<'de, 'd, 'sig, 'f, B> de::Deserializer<'de> for &'d mut Deserializer<'de, 'sig, 'f, B>
+impl<'de, 'd, 'sig, 'f, B, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
+    for &'d mut Deserializer<'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
@@ -367,7 +370,7 @@ where
         let v = visitor.visit_enum(crate::de::Enum {
             de: &mut *self,
             name,
-            phantom: PhantomData,
+            _phantoms: (PhantomData, PhantomData),
         })?;
 
         if non_unit {
@@ -394,8 +397,8 @@ where
     }
 }
 
-struct ArrayDeserializer<'d, 'de, 'sig, 'f, B> {
-    de: &'d mut Deserializer<'de, 'sig, 'f, B>,
+struct ArrayDeserializer<'d, 'de, 'sig, 'f, B, F> {
+    de: &'d mut Deserializer<'de, 'sig, 'f, B, F>,
     len: usize,
     start: usize,
     // alignment of element
@@ -404,11 +407,12 @@ struct ArrayDeserializer<'d, 'de, 'sig, 'f, B> {
     element_signature_len: usize,
 }
 
-impl<'d, 'de, 'sig, 'f, B> ArrayDeserializer<'d, 'de, 'sig, 'f, B>
+impl<'d, 'de, 'sig, 'f, B, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
+    ArrayDeserializer<'d, 'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
-    fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>) -> Result<Self> {
+    fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B, F>) -> Result<Self> {
         de.0.parse_padding(ARRAY_ALIGNMENT_DBUS)?;
         de.0.container_depths = de.0.container_depths.inc_array()?;
 
@@ -442,7 +446,7 @@ where
     {
         let ctxt = EncodingContext::new_dbus(self.de.0.ctxt.position() + self.de.0.pos);
 
-        let mut de = Deserializer::<B>(DeserializerCommon {
+        let mut de = Deserializer::<B, F>(DeserializerCommon {
             ctxt,
             sig_parser,
             bytes: subslice(self.de.0.bytes, self.de.0.pos..)?,
@@ -493,7 +497,9 @@ where
     }
 }
 
-fn deserialize_ay<'de, B>(de: &mut Deserializer<'de, '_, '_, B>) -> Result<&'de [u8]>
+fn deserialize_ay<'de, B, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>(
+    de: &mut Deserializer<'de, '_, '_, B, F>,
+) -> Result<&'de [u8]>
 where
     B: byteorder::ByteOrder,
 {
@@ -508,9 +514,10 @@ where
     de.0.next_slice(len)
 }
 
-struct ArraySeqDeserializer<'d, 'de, 'sig, 'f, B>(ArrayDeserializer<'d, 'de, 'sig, 'f, B>);
+struct ArraySeqDeserializer<'d, 'de, 'sig, 'f, B, F>(ArrayDeserializer<'d, 'de, 'sig, 'f, B, F>);
 
-impl<'d, 'de, 'sig, 'f, B> SeqAccess<'de> for ArraySeqDeserializer<'d, 'de, 'sig, 'f, B>
+impl<'d, 'de, 'sig, 'f, B, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
+    for ArraySeqDeserializer<'d, 'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
@@ -525,9 +532,10 @@ where
     }
 }
 
-struct ArrayMapDeserializer<'d, 'de, 'sig, 'f, B>(ArrayDeserializer<'d, 'de, 'sig, 'f, B>);
+struct ArrayMapDeserializer<'d, 'de, 'sig, 'f, B, F>(ArrayDeserializer<'d, 'de, 'sig, 'f, B, F>);
 
-impl<'d, 'de, 'sig, 'f, B> MapAccess<'de> for ArrayMapDeserializer<'d, 'de, 'sig, 'f, B>
+impl<'d, 'de, 'sig, 'f, B, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> MapAccess<'de>
+    for ArrayMapDeserializer<'d, 'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
@@ -553,11 +561,12 @@ where
 }
 
 #[derive(Debug)]
-struct StructureDeserializer<'d, 'de, 'sig, 'f, B> {
-    de: &'d mut Deserializer<'de, 'sig, 'f, B>,
+struct StructureDeserializer<'d, 'de, 'sig, 'f, B, F> {
+    de: &'d mut Deserializer<'de, 'sig, 'f, B, F>,
 }
 
-impl<'d, 'de, 'sig, 'f, B> SeqAccess<'de> for StructureDeserializer<'d, 'de, 'sig, 'f, B>
+impl<'d, 'de, 'sig, 'f, B, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
+    for StructureDeserializer<'d, 'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
@@ -579,19 +588,20 @@ where
 }
 
 #[derive(Debug)]
-struct ValueDeserializer<'d, 'de, 'sig, 'f, B> {
-    de: &'d mut Deserializer<'de, 'sig, 'f, B>,
+struct ValueDeserializer<'d, 'de, 'sig, 'f, B, F> {
+    de: &'d mut Deserializer<'de, 'sig, 'f, B, F>,
     stage: ValueParseStage,
     sig_start: usize,
 }
 
-impl<'d, 'de, 'sig, 'f, B> ValueDeserializer<'d, 'de, 'sig, 'f, B>
+impl<'d, 'de, 'sig, 'f, B, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
+    ValueDeserializer<'d, 'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
-    fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B>) -> Self {
+    fn new(de: &'d mut Deserializer<'de, 'sig, 'f, B, F>) -> Self {
         let sig_start = de.0.pos;
-        ValueDeserializer::<B> {
+        ValueDeserializer::<B, F> {
             de,
             stage: ValueParseStage::Signature,
             sig_start,
@@ -599,7 +609,8 @@ where
     }
 }
 
-impl<'d, 'de, 'sig, 'f, B> SeqAccess<'de> for ValueDeserializer<'d, 'de, 'sig, 'f, B>
+impl<'d, 'de, 'sig, 'f, B, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
+    for ValueDeserializer<'d, 'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
@@ -633,7 +644,7 @@ where
                     EncodingFormat::DBus,
                     self.de.0.ctxt.position() + value_start,
                 );
-                let mut de = Deserializer::<B>(DeserializerCommon {
+                let mut de = Deserializer::<B, F>(DeserializerCommon {
                     ctxt,
                     sig_parser,
                     bytes: subslice(self.de.0.bytes, value_start..)?,
@@ -653,12 +664,12 @@ where
     }
 }
 
-impl<'de, 'd, 'sig, 'f, B> crate::de::GetDeserializeCommon<'de, 'sig, 'f, B>
-    for &'d mut Deserializer<'de, 'sig, 'f, B>
+impl<'de, 'd, 'sig, 'f, B, F> crate::de::GetDeserializeCommon<'de, 'sig, 'f, B, F>
+    for &'d mut Deserializer<'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
-    fn common_mut<'dr>(self) -> &'dr mut DeserializerCommon<'de, 'sig, 'f, B>
+    fn common_mut<'dr>(self) -> &'dr mut DeserializerCommon<'de, 'sig, 'f, B, F>
     where
         Self: 'dr,
     {
@@ -666,8 +677,8 @@ where
     }
 }
 
-impl<'de, 'd, 'sig, 'f, B> EnumAccess<'de>
-    for crate::de::Enum<B, &'d mut Deserializer<'de, 'sig, 'f, B>>
+impl<'de, 'd, 'sig, 'f, B, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> EnumAccess<'de>
+    for crate::de::Enum<B, &'d mut Deserializer<'de, 'sig, 'f, B, F>, F>
 where
     B: byteorder::ByteOrder,
 {
