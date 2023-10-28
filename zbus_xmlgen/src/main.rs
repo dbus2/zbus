@@ -32,6 +32,7 @@ fn usage() {
 enum OutputTarget {
     SingleFile(File),
     Stdout,
+    MultipleFiles,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -139,7 +140,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .expect("Failed to open file");
             OutputTarget::SingleFile(file)
         }
-        _ => OutputTarget::Stdout,
+        _ => OutputTarget::MultipleFiles,
     };
 
     for interface in needed_ifaces {
@@ -155,6 +156,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                 file.write_all(output.as_bytes())?;
             }
             OutputTarget::Stdout => println!("{:?}", output),
+            OutputTarget::MultipleFiles => {
+                std::fs::write(
+                    format!(
+                        "{}.rs",
+                        interface
+                            .name()
+                            .split('.')
+                            .last()
+                            .expect("Failed to split name")
+                    ),
+                    output,
+                )?;
+            }
         };
     }
 
