@@ -6,7 +6,7 @@ use std::{
     fs::File,
     io::{Read, Write},
     path::Path,
-    process::{ChildStdin, Command, Stdio},
+    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     result::Result,
 };
 
@@ -113,36 +113,59 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let mut process = match Command::new("rustfmt").stdin(Stdio::piped()).spawn() {
-        Err(why) => panic!("couldn't spawn rustfmt: {}", why),
-        Ok(process) => process,
-    };
-    let rustfmt_stdin = process.stdin.as_mut().unwrap();
     let fdo_iface_prefix = "org.freedesktop.DBus";
     let (fdo_standard_ifaces, needed_ifaces): (Vec<&Interface<'_>>, Vec<&Interface<'_>>) = node
         .interfaces()
         .iter()
         .partition(|&i| i.name().starts_with(fdo_iface_prefix));
 
-    write_doc_header(
-        rustfmt_stdin,
+    let output = write_interfaces(
         &needed_ifaces,
         &fdo_standard_ifaces,
+        service,
+        path,
         &input_src,
     )?;
+    println!("{}", output);
 
-    for iface in &needed_ifaces {
+    Ok(())
+}
+
+fn write_interfaces(
+    interfaces: &[&Interface<'_>],
+    standard_interfaces: &[&Interface<'_>],
+    service: Option<BusName<'_>>,
+    path: Option<ObjectPath<'_>>,
+    input_src: &str,
+) -> Result<String, Box<dyn Error>> {
+    let mut process = match Command::new("rustfmt")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+    {
+        Err(why) => panic!("couldn't spawn rustfmt: {}", why),
+        Ok(process) => process,
+    };
+    let rustfmt_stdin = process.stdin.as_mut().unwrap();
+    let mut rustfmt_stdout = process.stdout.take().unwrap();
+
+    write_doc_header(rustfmt_stdin, interfaces, standard_interfaces, input_src)?;
+
+    for interface in interfaces {
         writeln!(rustfmt_stdin)?;
         let gen = GenTrait {
-            interface: iface,
+            interface,
             service: service.as_ref(),
             path: path.as_ref(),
         }
         .to_string();
         rustfmt_stdin.write_all(gen.as_bytes())?;
     }
+
     process.wait()?;
-    Ok(())
+    let mut buffer = String::new();
+    rustfmt_stdout.read_to_string(&mut buffer)?;
+    Ok(buffer)
 }
 
 /// Write a doc header, listing the included Interfaces and how the
