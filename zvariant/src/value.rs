@@ -1,7 +1,8 @@
-use core::str;
-use std::{
+use core::{
+    cmp::Ordering,
     fmt::{Display, Write},
     marker::PhantomData,
+    str,
 };
 
 use serde::{
@@ -72,7 +73,7 @@ use crate::Fd;
 /// ```
 ///
 /// [D-Bus specification]: https://dbus.freedesktop.org/doc/dbus-specification.html#container-types
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Value<'a> {
     // Simple types
     U8(u8),
@@ -98,6 +99,22 @@ pub enum Value<'a> {
 
     #[cfg(unix)]
     Fd(Fd),
+}
+
+impl Eq for Value<'_> {}
+
+impl Ord for Value<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other)
+            .unwrap_or_else(|| match (self, other) {
+                (Self::F64(lhs), Self::F64(rhs)) => lhs.total_cmp(rhs),
+                // `partial_cmp` returns `Some(_)` if either the discriminants are different
+                // or if both the left hand side and right hand side is `Self::F64(_)`,
+                // because `f64` is the only type in this enum, that does not implement `Ord`.
+                // This `match`-arm is therefore unreachable.
+                _ => unreachable!(),
+            })
+    }
 }
 
 assert_impl_all!(Value<'_>: Send, Sync, Unpin);

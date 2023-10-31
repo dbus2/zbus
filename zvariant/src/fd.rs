@@ -16,7 +16,7 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
 /// [deserializer]: fn.from_slice_fds.html
 /// [serializer]: fn.to_bytes_fds.html
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Clone, Copy)]
 pub struct Fd(io::RawFd);
 
 macro_rules! fd_impl {

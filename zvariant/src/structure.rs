@@ -155,7 +155,7 @@ impl<'de> Visitor<'de> for StructureVisitor<'de> {
 /// API is provided to convert from, and to tuples.
 ///
 /// [`Value`]: enum.Value.html
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Structure<'a> {
     fields: Vec<Value<'a>>,
     signature: Signature<'a>,

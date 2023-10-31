@@ -20,7 +20,7 @@ use crate::{signature_parser::SignatureParser, Basic, EncodingFormat, Error, Res
 // breakage.
 //
 // [`bytes::Bytes`]: https://docs.rs/bytes/0.5.6/bytes/struct.Bytes.html
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 enum Bytes<'b> {
     Borrowed(&'b [u8]),
     Static(&'static [u8]),
@@ -96,7 +96,7 @@ impl<'b> std::ops::Deref for Bytes<'b> {
 ///
 /// [identifies]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
 /// [`slice`]: #method.slice
-#[derive(Hash, Clone)]
+#[derive(Hash, Clone, PartialOrd, Ord)]
 pub struct Signature<'a> {
     bytes: Bytes<'a>,
     pos: usize,

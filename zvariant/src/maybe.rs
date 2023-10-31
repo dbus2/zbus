@@ -9,7 +9,7 @@ use crate::{value_display_fmt, Error, Signature, Type, Value};
 /// API is provided to convert from, and to `Option<T>`.
 ///
 /// [`Value`]: enum.Value.html
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Maybe<'a> {
     value: Box<Option<Value<'a>>>,
     value_signature: Signature<'a>,

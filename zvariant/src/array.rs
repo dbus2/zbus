@@ -17,7 +17,7 @@ use crate::{
 ///
 /// [`Value`]: enum.Value.html#variant.Array
 /// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Array<'a> {
     element_signature: Signature<'a>,
     elements: Vec<Value<'a>>,
