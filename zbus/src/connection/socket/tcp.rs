@@ -4,7 +4,7 @@ use crate::fdo::ConnectionCredentials;
 use async_io::Async;
 use std::io;
 #[cfg(unix)]
-use std::os::unix::io::RawFd;
+use std::os::fd::BorrowedFd;
 #[cfg(not(feature = "tokio"))]
 use std::{net::TcpStream, sync::Arc};
 
@@ -60,7 +60,11 @@ impl ReadHalf for Arc<Async<TcpStream>> {
 #[cfg(not(feature = "tokio"))]
 #[async_trait::async_trait]
 impl WriteHalf for Arc<Async<TcpStream>> {
-    async fn sendmsg(&mut self, buf: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
+    async fn sendmsg(
+        &mut self,
+        buf: &[u8],
+        #[cfg(unix)] fds: &[BorrowedFd<'_>],
+    ) -> io::Result<usize> {
         #[cfg(unix)]
         if !fds.is_empty() {
             return Err(io::Error::new(
@@ -136,7 +140,11 @@ impl ReadHalf for tokio::net::tcp::OwnedReadHalf {
 #[cfg(feature = "tokio")]
 #[async_trait::async_trait]
 impl WriteHalf for tokio::net::tcp::OwnedWriteHalf {
-    async fn sendmsg(&mut self, buf: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
+    async fn sendmsg(
+        &mut self,
+        buf: &[u8],
+        #[cfg(unix)] fds: &[BorrowedFd<'_>],
+    ) -> io::Result<usize> {
         use tokio::io::AsyncWriteExt;
 
         #[cfg(unix)]

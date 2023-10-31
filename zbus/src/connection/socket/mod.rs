@@ -11,12 +11,9 @@ use std::io;
 #[cfg(not(feature = "tokio"))]
 use std::sync::Arc;
 
-#[cfg(unix)]
-use std::os::unix::io::RawFd;
-
 use crate::fdo::ConnectionCredentials;
 #[cfg(unix)]
-use std::os::fd::OwnedFd;
+use std::os::fd::{BorrowedFd, OwnedFd};
 
 #[cfg(unix)]
 type RecvmsgResult = io::Result<(usize, Vec<OwnedFd>)>;
@@ -87,7 +84,11 @@ pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     ///
     /// If the underlying transport does not support transmitting file descriptors, this
     /// will return `Err(ErrorKind::InvalidInput)`.
-    async fn sendmsg(&mut self, buffer: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize>;
+    async fn sendmsg(
+        &mut self,
+        buffer: &[u8],
+        #[cfg(unix)] fds: &[BorrowedFd<'_>],
+    ) -> io::Result<usize>;
 
     /// The dbus daemon on `freebsd` and `dragonfly` currently requires sending the zero byte
     /// as a separate message with SCM_CREDS, as part of the `EXTERNAL` authentication on unix
@@ -133,7 +134,11 @@ impl ReadHalf for Box<dyn ReadHalf> {
 
 #[async_trait::async_trait]
 impl WriteHalf for Box<dyn WriteHalf> {
-    async fn sendmsg(&mut self, buffer: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
+    async fn sendmsg(
+        &mut self,
+        buffer: &[u8],
+        #[cfg(unix)] fds: &[BorrowedFd<'_>],
+    ) -> io::Result<usize> {
         (**self)
             .sendmsg(
                 buffer,

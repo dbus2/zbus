@@ -6,7 +6,7 @@ use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 #[cfg(unix)]
-use std::os::fd::{AsFd, AsRawFd};
+use std::os::fd::AsFd;
 use std::{
     collections::HashMap,
     io::{self, ErrorKind},
@@ -288,7 +288,7 @@ impl Connection {
         while pos < data.len() {
             #[cfg(unix)]
             let fds = if pos == 0 {
-                data.fds().iter().map(|f| f.as_fd().as_raw_fd()).collect()
+                data.fds().iter().map(|f| f.as_fd()).collect()
             } else {
                 vec![]
             };

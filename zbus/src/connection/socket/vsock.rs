@@ -24,7 +24,7 @@ impl super::WriteHalf for std::sync::Arc<async_io::Async<vsock::VsockStream>> {
     async fn sendmsg(
         &mut self,
         buf: &[u8],
-        #[cfg(unix)] fds: &[std::os::unix::io::RawFd],
+        #[cfg(unix)] fds: &[std::os::fd::BorrowedFd<'_>],
     ) -> std::io::Result<usize> {
         use std::io;
 
@@ -84,7 +84,7 @@ impl super::WriteHalf for tokio_vsock::WriteHalf {
     async fn sendmsg(
         &mut self,
         buf: &[u8],
-        #[cfg(unix)] fds: &[std::os::unix::io::RawFd],
+        #[cfg(unix)] fds: &[std::os::fd::BorrowedFd<'_>],
     ) -> std::io::Result<usize> {
         use std::io;
         use tokio::io::AsyncWriteExt;

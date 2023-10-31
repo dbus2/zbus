@@ -1,10 +1,8 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
 use std::io;
-#[cfg(any(target_os = "android", target_os = "linux"))]
-use std::os::unix::io::BorrowedFd;
 #[cfg(unix)]
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, BorrowedFd, FromRawFd, RawFd};
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 #[cfg(not(feature = "tokio"))]
@@ -66,7 +64,11 @@ impl ReadHalf for Arc<Async<UnixStream>> {
 #[cfg(all(unix, not(feature = "tokio")))]
 #[async_trait::async_trait]
 impl WriteHalf for Arc<Async<UnixStream>> {
-    async fn sendmsg(&mut self, buffer: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
+    async fn sendmsg(
+        &mut self,
+        buffer: &[u8],
+        #[cfg(unix)] fds: &[BorrowedFd<'_>],
+    ) -> io::Result<usize> {
         poll_fn(|cx| loop {
             match fd_sendmsg(
                 self.as_raw_fd(),
@@ -160,7 +162,11 @@ impl ReadHalf for tokio::net::unix::OwnedReadHalf {
 #[cfg(all(unix, feature = "tokio"))]
 #[async_trait::async_trait]
 impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
-    async fn sendmsg(&mut self, buffer: &[u8], #[cfg(unix)] fds: &[RawFd]) -> io::Result<usize> {
+    async fn sendmsg(
+        &mut self,
+        buffer: &[u8],
+        #[cfg(unix)] fds: &[BorrowedFd<'_>],
+    ) -> io::Result<usize> {
         let stream = self.as_ref();
         poll_fn(|cx| loop {
             match stream.try_io(tokio::io::Interest::WRITABLE, || {
@@ -241,7 +247,11 @@ impl ReadHalf for Arc<Async<UnixStream>> {
 #[cfg(all(windows, not(feature = "tokio")))]
 #[async_trait::async_trait]
 impl WriteHalf for Arc<Async<UnixStream>> {
-    async fn sendmsg(&mut self, buf: &[u8], #[cfg(unix)] _fds: &[RawFd]) -> io::Result<usize> {
+    async fn sendmsg(
+        &mut self,
+        buf: &[u8],
+        #[cfg(unix)] _fds: &[BorrowedFd<'_>],
+    ) -> io::Result<usize> {
         futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
@@ -290,9 +300,13 @@ fn fd_recvmsg(fd: RawFd, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)>
 }
 
 #[cfg(unix)]
-fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[RawFd]) -> io::Result<usize> {
+fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[BorrowedFd<'_>]) -> io::Result<usize> {
+    // FIXME: Remove this conversion once nix supports BorrowedFd here.
+    //
+    // Tracking issue: https://github.com/nix-rust/nix/issues/1750
+    let fds: Vec<_> = fds.iter().map(|f| f.as_raw_fd()).collect();
     let cmsg = if !fds.is_empty() {
-        vec![ControlMessage::ScmRights(fds)]
+        vec![ControlMessage::ScmRights(&fds)]
     } else {
         vec![]
     };
