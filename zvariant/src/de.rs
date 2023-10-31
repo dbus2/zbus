@@ -1,419 +1,32 @@
-use serde::{
-    de::{self, DeserializeSeed, VariantAccess, Visitor},
-    Deserialize,
-};
+use serde::de::{self, DeserializeSeed, VariantAccess, Visitor};
 use static_assertions::assert_impl_all;
 
 use std::{marker::PhantomData, str};
 
 #[cfg(unix)]
-use std::os::unix::io::RawFd;
+use std::os::fd::{AsFd, AsRawFd};
 
 #[cfg(feature = "gvariant")]
 use crate::gvariant::Deserializer as GVDeserializer;
 use crate::{
     container_depths::ContainerDepths, dbus::Deserializer as DBusDeserializer,
-    signature_parser::SignatureParser, utils::*, Basic, DynamicDeserialize, DynamicType,
-    EncodingContext, EncodingFormat, Error, ObjectPath, Result, Signature, Type,
+    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, Error, ObjectPath, Result,
+    Signature,
 };
 
 #[cfg(unix)]
 use crate::Fd;
 
-/// Deserialize `T` from a given slice of bytes, containing file descriptor indices.
-///
-/// Please note that actual file descriptors are not part of the encoding and need to be transferred
-/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
-/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
-///
-/// This function is not available on Windows.
-///
-/// # Examples
-///
-/// ```
-/// use zvariant::{to_bytes_fds, from_slice_fds};
-/// use zvariant::{EncodingContext, Fd};
-///
-/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
-/// let (encoded, fds) = to_bytes_fds(ctxt, &Fd::from(42)).unwrap();
-/// let decoded: Fd = from_slice_fds(&encoded, Some(&fds), ctxt).unwrap().0;
-/// assert_eq!(decoded, Fd::from(42));
-/// ```
-///
-/// # Return value
-///
-/// A tuple containing the deserialized value and numbe number of bytes parsed from the `bytes`.
-///
-/// [`from_slice`]: fn.from_slice.html
-#[cfg(unix)]
-pub fn from_slice_fds<'d, 'r: 'd, B, T: ?Sized>(
-    bytes: &'r [u8],
-    fds: Option<&[RawFd]>,
-    ctxt: EncodingContext<B>,
-) -> Result<(T, usize)>
-where
-    B: byteorder::ByteOrder,
-    T: Deserialize<'d> + Type,
-{
-    let signature = T::signature();
-    from_slice_fds_for_signature(bytes, fds, ctxt, &signature)
-}
-
-/// Deserialize `T` from a given slice of bytes.
-///
-/// If `T` is an, or (potentially) contains an [`Fd`], use [`from_slice_fds`] instead.
-///
-/// # Examples
-///
-/// ```
-/// use zvariant::{to_bytes, from_slice};
-/// use zvariant::EncodingContext;
-///
-/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
-/// let encoded = to_bytes(ctxt, "hello world").unwrap();
-/// let decoded: &str = from_slice(&encoded, ctxt).unwrap().0;
-/// assert_eq!(decoded, "hello world");
-/// ```
-///
-/// # Return value
-///
-/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
-///
-/// [`Fd`]: struct.Fd.html
-/// [`from_slice_fds`]: fn.from_slice_fds.html
-pub fn from_slice<'d, 'r: 'd, B, T: ?Sized>(
-    bytes: &'r [u8],
-    ctxt: EncodingContext<B>,
-) -> Result<(T, usize)>
-where
-    B: byteorder::ByteOrder,
-    T: Deserialize<'d> + Type,
-{
-    let signature = T::signature();
-    from_slice_for_signature(bytes, ctxt, &signature)
-}
-
-/// Deserialize `T` from a given slice of bytes with the given signature.
-///
-/// Use this function instead of [`from_slice`] if the value being deserialized does not implement
-/// [`Type`]. Also, if `T` is an, or (potentially) contains an [`Fd`], use
-/// [`from_slice_fds_for_signature`] instead.
-///
-/// # Examples
-///
-/// While `Type` derive supports enums, for this example, let's supposed it doesn't and we don't
-/// want to manually implement `Type` trait either:
-///
-/// ```
-/// use serde::{Deserialize, Serialize};
-///
-/// use zvariant::{to_bytes_for_signature, from_slice_for_signature};
-/// use zvariant::EncodingContext;
-///
-/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
-/// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-/// enum Unit {
-///     Variant1,
-///     Variant2,
-///     Variant3,
-/// }
-///
-/// let encoded = to_bytes_for_signature(ctxt, "u", &Unit::Variant2).unwrap();
-/// assert_eq!(encoded.len(), 4);
-/// let decoded: Unit = from_slice_for_signature(&encoded, ctxt, "u").unwrap().0;
-/// assert_eq!(decoded, Unit::Variant2);
-///
-/// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-/// enum NewType<'s> {
-///     Variant1(&'s str),
-///     Variant2(&'s str),
-///     Variant3(&'s str),
-/// }
-///
-/// let signature = "(us)";
-/// let encoded =
-///     to_bytes_for_signature(ctxt, signature, &NewType::Variant2("hello")).unwrap();
-/// assert_eq!(encoded.len(), 14);
-/// let decoded: NewType<'_> = from_slice_for_signature(&encoded, ctxt, signature).unwrap().0;
-/// assert_eq!(decoded, NewType::Variant2("hello"));
-///
-/// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-/// enum Structs {
-///     Tuple(u8, u64),
-///     Struct { y: u8, t: u64 },
-/// }
-///
-/// let signature = "(u(yt))";
-/// let encoded = to_bytes_for_signature(ctxt, signature, &Structs::Tuple(42, 42)).unwrap();
-/// assert_eq!(encoded.len(), 24);
-/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, signature).unwrap().0;
-/// assert_eq!(decoded, Structs::Tuple(42, 42));
-///
-/// let s = Structs::Struct { y: 42, t: 42 };
-/// let encoded = to_bytes_for_signature(ctxt, signature, &s).unwrap();
-/// assert_eq!(encoded.len(), 24);
-/// let decoded: Structs = from_slice_for_signature(&encoded, ctxt, signature).unwrap().0;
-/// assert_eq!(decoded, Structs::Struct { y: 42, t: 42 });
-/// ```
-///
-/// # Return value
-///
-/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
-///
-/// [`Type`]: trait.Type.html
-/// [`Fd`]: struct.Fd.html
-/// [`from_slice_fds_for_signature`]: fn.from_slice_fds_for_signature.html
-pub fn from_slice_for_signature<'d, 'r: 'd, B, S, T: ?Sized>(
-    bytes: &'r [u8],
-    ctxt: EncodingContext<B>,
-    signature: S,
-) -> Result<(T, usize)>
-where
-    B: byteorder::ByteOrder,
-    T: Deserialize<'d>,
-    S: TryInto<Signature<'d>>,
-    S::Error: Into<Error>,
-{
-    _from_slice_fds_for_signature(
-        bytes,
-        #[cfg(unix)]
-        None,
-        ctxt,
-        signature,
-    )
-}
-
-/// Deserialize `T` from a given slice of bytes containing file descriptor indices, with the given
-/// signature.
-///
-/// Please note that actual file descriptors are not part of the encoding and need to be transferred
-/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
-/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
-///
-/// This function is not available on Windows.
-///
-/// # Return value
-///
-/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
-///
-/// [`from_slice`]: fn.from_slice.html
-/// [`from_slice_for_signature`]: fn.from_slice_for_signature.html
-#[cfg(unix)]
-pub fn from_slice_fds_for_signature<'d, 'r: 'd, B, S, T: ?Sized>(
-    bytes: &'r [u8],
-    fds: Option<&[RawFd]>,
-    ctxt: EncodingContext<B>,
-    signature: S,
-) -> Result<(T, usize)>
-where
-    B: byteorder::ByteOrder,
-    T: Deserialize<'d>,
-    S: TryInto<Signature<'d>>,
-    S::Error: Into<Error>,
-{
-    _from_slice_fds_for_signature(bytes, fds, ctxt, signature)
-}
-
-fn _from_slice_fds_for_signature<'d, 'r: 'd, B, S, T: ?Sized>(
-    bytes: &'r [u8],
-    #[cfg(unix)] fds: Option<&[RawFd]>,
-    ctxt: EncodingContext<B>,
-    signature: S,
-) -> Result<(T, usize)>
-where
-    B: byteorder::ByteOrder,
-    T: Deserialize<'d>,
-    S: TryInto<Signature<'d>>,
-    S::Error: Into<Error>,
-{
-    let signature = signature.try_into().map_err(Into::into)?;
-
-    let mut de = match ctxt.format() {
-        #[cfg(feature = "gvariant")]
-        EncodingFormat::GVariant => GVDeserializer::new(
-            bytes,
-            #[cfg(unix)]
-            fds,
-            signature,
-            ctxt,
-        )
-        .map(Deserializer::GVariant)?,
-        EncodingFormat::DBus => DBusDeserializer::new(
-            bytes,
-            #[cfg(unix)]
-            fds,
-            signature,
-            ctxt,
-        )
-        .map(Deserializer::DBus)?,
-    };
-
-    T::deserialize(&mut de).map(|t| match de {
-        #[cfg(feature = "gvariant")]
-        Deserializer::GVariant(de) => (t, de.0.pos),
-        Deserializer::DBus(de) => (t, de.0.pos),
-    })
-}
-
-/// Deserialize `T` from a given slice of bytes containing file descriptor indices, with the given
-/// signature.
-///
-/// Please note that actual file descriptors are not part of the encoding and need to be transferred
-/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
-/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
-///
-/// # Return value
-///
-/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
-pub fn from_slice_for_dynamic_signature<'d, B, S, T>(
-    bytes: &'d [u8],
-    ctxt: EncodingContext<B>,
-    signature: S,
-) -> Result<(T, usize)>
-where
-    B: byteorder::ByteOrder,
-    T: DynamicDeserialize<'d>,
-    S: TryInto<Signature<'d>>,
-    S::Error: Into<Error>,
-{
-    let seed = T::deserializer_for_signature(signature)?;
-
-    from_slice_with_seed(bytes, ctxt, seed)
-}
-
-/// Deserialize `T` from a given slice of bytes containing file descriptor indices, with the given
-/// signature.
-///
-/// Please note that actual file descriptors are not part of the encoding and need to be transferred
-/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
-/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
-///
-/// This function is not available on Windows.
-///
-/// # Return value
-///
-/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
-#[cfg(unix)]
-pub fn from_slice_fds_for_dynamic_signature<'d, B, S, T>(
-    bytes: &'d [u8],
-    fds: Option<&[RawFd]>,
-    ctxt: EncodingContext<B>,
-    signature: S,
-) -> Result<(T, usize)>
-where
-    B: byteorder::ByteOrder,
-    T: DynamicDeserialize<'d>,
-    S: TryInto<Signature<'d>>,
-    S::Error: Into<Error>,
-{
-    let seed = T::deserializer_for_signature(signature)?;
-
-    from_slice_fds_with_seed(bytes, fds, ctxt, seed)
-}
-
-/// Deserialize `T` from a given slice of bytes containing file descriptor indices, using the given
-/// seed.
-///
-/// Please note that actual file descriptors are not part of the encoding and need to be transferred
-/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
-/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
-///
-/// # Return value
-///
-/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
-pub fn from_slice_with_seed<'d, B, S>(
-    bytes: &'d [u8],
-    ctxt: EncodingContext<B>,
-    seed: S,
-) -> Result<(S::Value, usize)>
-where
-    B: byteorder::ByteOrder,
-    S: DeserializeSeed<'d> + DynamicType,
-{
-    _from_slice_fds_with_seed(
-        bytes,
-        #[cfg(unix)]
-        None,
-        ctxt,
-        seed,
-    )
-}
-
-/// Deserialize `T` from a given slice of bytes containing file descriptor indices, using the given
-/// seed.
-///
-/// Please note that actual file descriptors are not part of the encoding and need to be transferred
-/// via an out-of-band platform specific mechanism. The encoding only contain the indices of the
-/// file descriptors and hence the reason, caller must pass a slice of file descriptors.
-///
-/// This function is not available on Windows.
-///
-/// # Return value
-///
-/// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
-#[cfg(unix)]
-pub fn from_slice_fds_with_seed<'d, B, S>(
-    bytes: &'d [u8],
-    fds: Option<&[RawFd]>,
-    ctxt: EncodingContext<B>,
-    seed: S,
-) -> Result<(S::Value, usize)>
-where
-    B: byteorder::ByteOrder,
-    S: DeserializeSeed<'d> + DynamicType,
-{
-    _from_slice_fds_with_seed(bytes, fds, ctxt, seed)
-}
-
-fn _from_slice_fds_with_seed<'d, B, S>(
-    bytes: &'d [u8],
-    #[cfg(unix)] fds: Option<&[RawFd]>,
-    ctxt: EncodingContext<B>,
-    seed: S,
-) -> Result<(S::Value, usize)>
-where
-    B: byteorder::ByteOrder,
-    S: DeserializeSeed<'d> + DynamicType,
-{
-    let signature = S::dynamic_signature(&seed).to_owned();
-
-    let mut de = match ctxt.format() {
-        #[cfg(feature = "gvariant")]
-        EncodingFormat::GVariant => GVDeserializer::new(
-            bytes,
-            #[cfg(unix)]
-            fds,
-            signature,
-            ctxt,
-        )
-        .map(Deserializer::GVariant)?,
-        EncodingFormat::DBus => DBusDeserializer::new(
-            bytes,
-            #[cfg(unix)]
-            fds,
-            signature,
-            ctxt,
-        )
-        .map(Deserializer::DBus)?,
-    };
-
-    seed.deserialize(&mut de).map(|t| match de {
-        #[cfg(feature = "gvariant")]
-        Deserializer::GVariant(de) => (t, de.0.pos),
-        Deserializer::DBus(de) => (t, de.0.pos),
-    })
-}
-
 /// Our deserialization implementation.
 #[derive(Debug)]
-pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B> {
+pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B, F> {
     pub(crate) ctxt: EncodingContext<B>,
     pub(crate) bytes: &'de [u8],
 
     #[cfg(unix)]
-    pub(crate) fds: Option<&'f [RawFd]>,
+    pub(crate) fds: Option<&'f [F]>,
     #[cfg(not(unix))]
-    pub(crate) fds: PhantomData<&'f ()>,
+    pub(crate) fds: PhantomData<&'f F>,
 
     pub(crate) pos: usize,
 
@@ -429,65 +42,30 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B> {
 /// Using this deserializer involves an redirection to the actual deserializer. It's best
 /// to use the serialization functions, e.g [`crate::to_bytes`] or specific serializers,
 /// [`crate::dbus::Deserializer`] or [`crate::zvariant::Deserializer`].
-pub enum Deserializer<'ser, 'sig, 'f, B> {
-    DBus(DBusDeserializer<'ser, 'sig, 'f, B>),
+pub(crate) enum Deserializer<'ser, 'sig, 'f, B, F> {
+    DBus(DBusDeserializer<'ser, 'sig, 'f, B, F>),
     #[cfg(feature = "gvariant")]
-    GVariant(GVDeserializer<'ser, 'sig, 'f, B>),
+    GVariant(GVDeserializer<'ser, 'sig, 'f, B, F>),
 }
 
-assert_impl_all!(Deserializer<'_, '_, '_, u8>: Send, Sync, Unpin);
+assert_impl_all!(Deserializer<'_, '_, '_, u8, ()>: Send, Sync, Unpin);
 
-impl<'de, 'sig, 'f, B> Deserializer<'de, 'sig, 'f, B>
+#[cfg(unix)]
+impl<'de, 'sig, 'f, B, F> DeserializerCommon<'de, 'sig, 'f, B, F>
 where
-    B: byteorder::ByteOrder,
+    F: AsFd,
 {
-    /// Create a Deserializer struct instance.
-    ///
-    /// On Windows, there is no `fds` argument.
-    pub fn new<'r: 'de, S>(
-        bytes: &'r [u8],
-        #[cfg(unix)] fds: Option<&'f [RawFd]>,
-        signature: S,
-        ctxt: EncodingContext<B>,
-    ) -> Result<Self>
-    where
-        S: TryInto<Signature<'sig>>,
-        S::Error: Into<Error>,
-    {
-        match ctxt.format() {
-            #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => GVDeserializer::new(
-                bytes,
-                #[cfg(unix)]
-                fds,
-                signature,
-                ctxt,
-            )
-            .map(Deserializer::GVariant),
-            EncodingFormat::DBus => DBusDeserializer::new(
-                bytes,
-                #[cfg(unix)]
-                fds,
-                signature,
-                ctxt,
-            )
-            .map(Deserializer::DBus),
-        }
-    }
-}
-
-impl<'de, 'sig, 'f, B> DeserializerCommon<'de, 'sig, 'f, B>
-where
-    B: byteorder::ByteOrder,
-{
-    #[cfg(unix)]
     pub fn get_fd(&self, idx: u32) -> Result<i32> {
         self.fds
-            .and_then(|fds| fds.get(idx as usize))
-            .copied()
+            .and_then(|fds| fds.get(idx as usize).map(|fd| fd.as_fd().as_raw_fd()))
             .ok_or(Error::UnknownFd)
     }
+}
 
+impl<'de, 'sig, 'f, B, F> DeserializerCommon<'de, 'sig, 'f, B, F>
+where
+    B: byteorder::ByteOrder,
+{
     pub fn parse_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
@@ -568,7 +146,8 @@ macro_rules! deserialize_method {
     }
 }
 
-impl<'de, 'd, 'sig, 'f, B> de::Deserializer<'de> for &'d mut Deserializer<'de, 'sig, 'f, B>
+impl<'de, 'd, 'sig, 'f, B, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
+    for &'d mut Deserializer<'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
@@ -658,26 +237,26 @@ where
     }
 }
 
-pub(crate) trait GetDeserializeCommon<'de, 'sig, 'f, B>
+pub(crate) trait GetDeserializeCommon<'de, 'sig, 'f, B, F>
 where
     B: byteorder::ByteOrder,
 {
-    fn common_mut<'d>(self) -> &'d mut DeserializerCommon<'de, 'sig, 'f, B>
+    fn common_mut<'d>(self) -> &'d mut DeserializerCommon<'de, 'sig, 'f, B, F>
     where
         Self: 'd;
 }
 
 // Enum handling is very generic so it can be here and specific deserializers can use this.
-pub(crate) struct Enum<B, D> {
+pub(crate) struct Enum<B, D, F> {
     pub(crate) de: D,
     pub(crate) name: &'static str,
-    pub(crate) phantom: PhantomData<B>,
+    pub(crate) _phantoms: (PhantomData<B>, PhantomData<F>),
 }
 
-impl<'de, 'sig, 'f, B, D> VariantAccess<'de> for Enum<B, D>
+impl<'de, 'sig, 'f, B, D, F> VariantAccess<'de> for Enum<B, D, F>
 where
     B: byteorder::ByteOrder,
-    D: de::Deserializer<'de, Error = Error> + GetDeserializeCommon<'de, 'sig, 'f, B>,
+    D: de::Deserializer<'de, Error = Error> + GetDeserializeCommon<'de, 'sig, 'f, B, F>,
 {
     type Error = Error;
 

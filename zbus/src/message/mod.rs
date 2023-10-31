@@ -1,19 +1,12 @@
 //! D-Bus Message.
 use std::{fmt, num::NonZeroU32, sync::Arc};
 
-#[cfg(unix)]
-use std::os::unix::io::{AsRawFd, RawFd};
-
+use byteorder::NativeEndian;
 use static_assertions::assert_impl_all;
 use zbus_names::{ErrorName, InterfaceName, MemberName};
+use zvariant::serialized;
 
-#[cfg(unix)]
-use crate::OwnedFd;
-use crate::{
-    utils::padding_for_8_bytes,
-    zvariant::{EncodingContext, ObjectPath, Signature, Type as VariantType},
-    Error, Result,
-};
+use crate::{utils::padding_for_8_bytes, zvariant::ObjectPath, Error, Result};
 
 mod builder;
 pub use builder::Builder;
@@ -24,22 +17,12 @@ use field::{Field, FieldCode};
 mod fields;
 use fields::{Fields, QuickFields};
 
+mod body;
+pub use body::Body;
+
 pub(crate) mod header;
 use header::MIN_MESSAGE_SIZE;
 pub use header::{EndianSig, Flags, Header, PrimaryHeader, Type, NATIVE_ENDIAN_SIG};
-
-macro_rules! dbus_context {
-    ($n_bytes_before: expr) => {
-        EncodingContext::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
-    };
-}
-
-#[cfg(unix)]
-#[derive(Debug, Eq, PartialEq)]
-pub(crate) enum Fds {
-    Owned(Vec<OwnedFd>),
-    Raw(Vec<RawFd>),
-}
 
 /// A position in the stream of [`Message`] objects received by a single [`zbus::Connection`].
 ///
@@ -57,32 +40,29 @@ impl Sequence {
 
 /// A D-Bus Message.
 ///
-/// The content of the message are stored in serialized format. To deserialize the body of the
-/// message, use the [`body`] method. You may also access the header and other details with the
-/// various other getters.
+/// The content of the message are stored in serialized format. To get the body of the message, use
+/// the [`Message::body`] method, and use [`Body`] methods to deserialize it. You may also access
+/// the header and other details with the various other getters.
 ///
 /// Also provided are constructors for messages of different types. These will mainly be useful for
 /// very advanced use cases as typically you will want to create a message for immediate dispatch
 /// and hence use the API provided by [`Connection`], even when using the low-level API.
 ///
 /// **Note**: The message owns the received FDs and will close them when dropped. You can
-/// deserialize to [`OwnedFd`] using [`body`] if you want to keep the FDs around after the
-/// containing message is dropped.
+/// deserialize to [`zbus::OwnedFd`] the body (that you get using [`Message::body`]) if you want to
+/// keep the FDs around after the containing message is dropped.
 ///
-/// [`body`]: #method.body
 /// [`Connection`]: struct.Connection#method.call_method
 #[derive(Clone)]
 pub struct Message {
-    inner: Arc<Inner>,
+    pub(super) inner: Arc<Inner>,
 }
 
 pub(super) struct Inner {
     pub(crate) primary_header: PrimaryHeader,
     pub(crate) quick_fields: QuickFields,
-    pub(crate) bytes: Vec<u8>,
+    pub(crate) bytes: serialized::Data<'static, 'static, NativeEndian>,
     pub(crate) body_offset: usize,
-    #[cfg(unix)]
-    pub(crate) fds: Fds,
     pub(crate) recv_seq: Sequence,
 }
 
@@ -150,19 +130,15 @@ impl Message {
     /// # Safety
     ///
     /// This method is unsafe as bytes may have an invalid encoding.
-    pub unsafe fn from_bytes(bytes: Vec<u8>, #[cfg(unix)] fds: Vec<OwnedFd>) -> Result<Self> {
-        Self::from_raw_parts(
-            bytes,
-            #[cfg(unix)]
-            fds,
-            0,
-        )
+    pub unsafe fn from_bytes(
+        bytes: serialized::Data<'static, 'static, NativeEndian>,
+    ) -> Result<Self> {
+        Self::from_raw_parts(bytes, 0)
     }
 
     /// Create a message from its full contents
     pub(crate) fn from_raw_parts(
-        bytes: Vec<u8>,
-        #[cfg(unix)] fds: Vec<OwnedFd>,
+        bytes: serialized::Data<'static, 'static, NativeEndian>,
         recv_seq: u64,
     ) -> Result<Self> {
         if EndianSig::try_from(bytes[0])? != NATIVE_ENDIAN_SIG {
@@ -170,9 +146,7 @@ impl Message {
         }
 
         let (primary_header, fields_len) = PrimaryHeader::read(&bytes)?;
-        let (header, _) = zvariant::from_slice(&bytes, dbus_context!(0))?;
-        #[cfg(unix)]
-        let fds = Fds::Owned(fds);
+        let (header, _) = bytes.deserialize()?;
 
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_offset = header_len + padding_for_8_bytes(header_len);
@@ -184,21 +158,9 @@ impl Message {
                 quick_fields,
                 bytes,
                 body_offset,
-                #[cfg(unix)]
-                fds,
                 recv_seq: Sequence { recv_seq },
             }),
         })
-    }
-
-    /// The signature of the body.
-    ///
-    /// **Note:** While zbus treats multiple arguments as a struct (to allow you to use the tuple
-    /// syntax), D-Bus does not. Since this method gives you the signature expected on the wire by
-    /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
-    /// multiple arguments.
-    pub fn body_signature(&self) -> Option<Signature<'_>> {
-        self.inner.quick_fields.signature(self)
     }
 
     pub fn primary_header(&self) -> &PrimaryHeader {
@@ -273,33 +235,7 @@ impl Message {
         self.inner.quick_fields.reply_serial()
     }
 
-    /// Deserialize the body (without checking signature matching).
-    pub fn body_unchecked<'d, 'm: 'd, B>(&'m self) -> Result<B>
-    where
-        B: serde::de::Deserialize<'d> + VariantType,
-    {
-        {
-            #[cfg(unix)]
-            {
-                zvariant::from_slice_fds(
-                    &self.inner.bytes[self.inner.body_offset..],
-                    Some(&self.fds()),
-                    dbus_context!(0),
-                )
-            }
-            #[cfg(not(unix))]
-            {
-                zvariant::from_slice(
-                    &self.inner.bytes[self.inner.body_offset..],
-                    dbus_context!(0),
-                )
-            }
-        }
-        .map_err(Error::from)
-        .map(|b| b.0)
-    }
-
-    /// Deserialize the body using the contained signature.
+    /// The body that you can deserialize using [`Body::deserialize`].
     ///
     /// # Example
     ///
@@ -311,66 +247,30 @@ impl Message {
     ///     .destination("zbus.test")?
     ///     .interface("zbus.test")?
     ///     .build(&send_body)?;
-    /// let body : zbus::zvariant::Structure = message.body()?;
+    /// let body = message.body();
+    /// let body: zbus::zvariant::Structure = body.deserialize()?;
     /// let fields = body.fields();
     /// assert!(matches!(fields[0], zvariant::Value::I32(7)));
     /// assert!(matches!(fields[1], zvariant::Value::Structure(_)));
     /// assert!(matches!(fields[2], zvariant::Value::Array(_)));
     ///
-    /// let reply_msg = Message::method_reply(&message)?.build(&body)?;
-    /// let reply_value : (i32, (i32, &str), Vec<String>) = reply_msg.body()?;
+    /// let reply_body = Message::method_reply(&message)?.build(&body)?.body();
+    /// let reply_value : (i32, (i32, &str), Vec<String>) = reply_body.deserialize()?;
     ///
     /// assert_eq!(reply_value.0, 7);
     /// assert_eq!(reply_value.2.len(), 1);
     /// # Ok(()) })().unwrap()
     /// ```
-    pub fn body<'d, 'm: 'd, B>(&'m self) -> Result<B>
-    where
-        B: zvariant::DynamicDeserialize<'d>,
-    {
-        let body_sig = self
-            .body_signature()
-            .unwrap_or_else(|| Signature::from_static_str_unchecked(""));
-
-        {
-            #[cfg(unix)]
-            {
-                zvariant::from_slice_fds_for_dynamic_signature(
-                    &self.inner.bytes[self.inner.body_offset..],
-                    Some(&self.fds()),
-                    dbus_context!(0),
-                    &body_sig,
-                )
-            }
-            #[cfg(not(unix))]
-            {
-                zvariant::from_slice_for_dynamic_signature(
-                    &self.inner.bytes[self.inner.body_offset..],
-                    dbus_context!(0),
-                    &body_sig,
-                )
-            }
-        }
-        .map_err(Error::from)
-        .map(|b| b.0)
+    pub fn body(&self) -> Body {
+        Body::new(
+            self.inner.bytes.slice(self.inner.body_offset..),
+            self.clone(),
+        )
     }
 
-    #[cfg(unix)]
-    pub(crate) fn fds(&self) -> Vec<RawFd> {
-        match &self.inner.fds {
-            Fds::Raw(fds) => fds.clone(),
-            Fds::Owned(fds) => fds.iter().map(|f| f.as_raw_fd()).collect(),
-        }
-    }
-
-    /// Get a reference to the byte encoding of the message.
-    pub fn as_bytes(&self) -> &[u8] {
+    /// Get a reference to the underlying byte encoding of the message.
+    pub fn data(&self) -> &serialized::Data<'static, 'static, NativeEndian> {
         &self.inner.bytes
-    }
-
-    /// Get a reference to the byte encoding of the body of the message.
-    pub fn body_as_bytes(&self) -> Result<&[u8]> {
-        Ok(&self.inner.bytes[self.inner.body_offset..])
     }
 
     /// Get the receive ordering of a message.
@@ -405,15 +305,12 @@ impl fmt::Debug for Message {
         if let Some(member) = h.member() {
             msg.field("member", &member);
         }
-        if let Some(s) = self.body_signature() {
+        if let Some(s) = self.body().signature() {
             msg.field("body", &s);
         }
         #[cfg(unix)]
         {
-            let fds = self.fds();
-            if !fds.is_empty() {
-                msg.field("fds", &fds);
-            }
+            msg.field("fds", &self.data().fds());
         }
         msg.finish()
     }
@@ -445,7 +342,8 @@ impl fmt::Display for Message {
                     write!(f, " {e}")?;
                 }
 
-                let msg = self.body_unchecked::<&str>();
+                let body = self.body();
+                let msg = body.deserialize_unchecked::<&str>();
                 if let Ok(msg) = msg {
                     write!(f, ": {msg}")?;
                 }
@@ -469,13 +367,11 @@ impl fmt::Display for Message {
 #[cfg(test)]
 mod tests {
     #[cfg(unix)]
-    use std::os::unix::io::AsRawFd;
+    use std::os::fd::{AsFd, AsRawFd};
     use test_log::test;
     #[cfg(unix)]
     use zvariant::Fd;
 
-    #[cfg(unix)]
-    use super::Fds;
     use super::Message;
     use crate::Error;
 
@@ -494,13 +390,18 @@ mod tests {
             ))
             .unwrap();
         assert_eq!(
-            m.body_signature().unwrap().to_string(),
+            m.body().signature().unwrap().to_string(),
             if cfg!(unix) { "hs" } else { "s" }
         );
         #[cfg(unix)]
-        assert_eq!(m.inner.fds, Fds::Raw(vec![stdout.as_raw_fd()]));
+        {
+            let fds = m.data().fds();
+            assert_eq!(fds.len(), 1);
+            // FDs get dup'ed so it has to be a different FD now.
+            assert_ne!(fds[0].as_fd().as_raw_fd(), stdout.as_raw_fd());
+        }
 
-        let body: Result<u32, Error> = m.body();
+        let body: Result<u32, Error> = m.body().deserialize();
         assert!(matches!(
             body.unwrap_err(),
             Error::Variant(zvariant::Error::SignatureMismatch { .. })

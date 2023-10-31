@@ -7,7 +7,7 @@ use std::{
 };
 
 #[cfg(unix)]
-use std::os::unix::io::RawFd;
+use std::os::fd::OwnedFd;
 
 use crate::{
     container_depths::ContainerDepths, framing_offset_size::FramingOffsetSize,
@@ -16,7 +16,9 @@ use crate::{
 };
 
 /// Our serialization implementation.
-pub struct Serializer<'ser, 'sig, B, W>(pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>);
+pub(crate) struct Serializer<'ser, 'sig, B, W>(
+    pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>,
+);
 
 assert_impl_all!(Serializer<'_, '_, i32, i32>: Send, Sync, Unpin);
 
@@ -31,7 +33,7 @@ where
     pub fn new<'w: 'ser, 'f: 'ser, S>(
         signature: S,
         writer: &'w mut W,
-        #[cfg(unix)] fds: &'f mut Vec<RawFd>,
+        #[cfg(unix)] fds: &'f mut Vec<OwnedFd>,
         ctxt: EncodingContext<B>,
     ) -> Result<Self>
     where

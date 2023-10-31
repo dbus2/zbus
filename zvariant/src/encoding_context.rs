@@ -40,15 +40,15 @@ impl std::fmt::Display for EncodingFormat {
 /// use byteorder::LE;
 ///
 /// use zvariant::EncodingContext as Context;
-/// use zvariant::{from_slice, to_bytes};
+/// use zvariant::to_bytes;
 ///
 /// let str_vec = vec!["Hello", "World"];
 /// let ctxt = Context::<LE>::new_dbus(0);
 /// let encoded = to_bytes(ctxt, &str_vec).unwrap();
 ///
 /// // Let's decode the 2nd element of the array only
-/// let ctxt = Context::<LE>::new_dbus(14);
-/// let decoded: &str = from_slice(&encoded[14..], ctxt).unwrap().0;
+/// let slice = encoded.slice(14..);
+/// let decoded: &str = slice.deserialize().unwrap().0;
 /// assert_eq!(decoded, "World");
 /// ```
 ///

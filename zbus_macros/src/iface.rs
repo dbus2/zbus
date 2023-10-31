@@ -655,6 +655,7 @@ fn get_args_from_inputs(
 
         let args_from_msg = quote! {
             let hdr = m.header();
+            let msg_body = m.body();
 
             #server_arg_decl
 
@@ -665,7 +666,7 @@ fn get_args_from_inputs(
             #signal_context_arg_decl
 
             let (#(#args_names),*): (#(#tys),*) =
-                match m.body() {
+                match msg_body.deserialize() {
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
                         let err = <#zbus::fdo::Error as ::std::convert::From<_>>::from(e);

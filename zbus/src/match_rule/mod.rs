@@ -274,7 +274,7 @@ impl<'m> MatchRule<'m> {
 
         // The arg0 namespace.
         if let Some(arg0_ns) = self.arg0ns() {
-            if let Ok(arg0) = msg.body_unchecked::<BusName<'_>>() {
+            if let Ok(arg0) = msg.body().deserialize_unchecked::<BusName<'_>>() {
                 match arg0.strip_prefix(arg0_ns.as_str()) {
                     None => return Ok(false),
                     Some(s) if !s.is_empty() && !s.starts_with('.') => return Ok(false),
@@ -289,7 +289,8 @@ impl<'m> MatchRule<'m> {
         if self.args().is_empty() && self.arg_paths().is_empty() {
             return Ok(true);
         }
-        let structure = match msg.body::<Structure<'_>>() {
+        let body = msg.body();
+        let structure = match body.deserialize::<Structure<'_>>() {
             Ok(s) => s,
             Err(_) => return Ok(false),
         };

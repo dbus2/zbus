@@ -9,7 +9,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{EncodingContext, ObjectPath, Signature, Type as VariantType};
+use zvariant::{serialized, EncodingContext, ObjectPath, Signature, Type as VariantType};
 
 use crate::{
     message::{Field, FieldCode, Fields},
@@ -125,9 +125,10 @@ impl PrimaryHeader {
 
     pub(crate) fn read(buf: &[u8]) -> Result<(PrimaryHeader, u32), Error> {
         let ctx = EncodingContext::<byteorder::NativeEndian>::new_dbus(0);
-        let (primary_header, size) = zvariant::from_slice(buf, ctx)?;
+        let data = serialized::Data::new(buf, ctx);
+        let (primary_header, size) = data.deserialize()?;
         assert_eq!(size, PRIMARY_HEADER_SIZE);
-        let (fields_len, _) = zvariant::from_slice(&buf[PRIMARY_HEADER_SIZE..], ctx)?;
+        let (fields_len, _) = data.slice(PRIMARY_HEADER_SIZE..).deserialize()?;
         Ok((primary_header, fields_len))
     }
 

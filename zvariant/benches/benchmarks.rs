@@ -4,9 +4,7 @@ use std::collections::HashMap;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use zvariant::{
-    from_slice_for_signature, to_bytes_for_signature, EncodingContext as Context, Type, Value,
-};
+use zvariant::{to_bytes_for_signature, EncodingContext as Context, Type, Value};
 
 fn fixed_size_array(c: &mut Criterion) {
     let ay = vec![77u8; 100_000];
@@ -20,9 +18,9 @@ fn fixed_size_array(c: &mut Criterion) {
     let enc = to_bytes_for_signature(ctxt, &signature, &ay).unwrap();
     c.bench_function("byte_array_de", |b| {
         b.iter(|| {
-            let _: (Vec<u8>, _) =
-                from_slice_for_signature(black_box(&enc), black_box(ctxt), black_box(&signature))
-                    .unwrap();
+            let _: (Vec<u8>, _) = enc
+                .deserialize_for_signature(black_box(&signature))
+                .unwrap();
         })
     });
 }
@@ -87,12 +85,9 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
     c.bench_function("big_array_de_dbus", |b| {
         b.iter(|| {
-            let (s, _): (ZVStruct, _) = from_slice_for_signature(
-                black_box(&encoded),
-                black_box(ctxt),
-                black_box(&signature),
-            )
-            .unwrap();
+            let (s, _): (ZVStruct, _) = encoded
+                .deserialize_for_signature(black_box(&signature))
+                .unwrap();
             black_box(s);
         })
     });
@@ -117,12 +112,9 @@ fn big_array_ser_and_de(c: &mut Criterion) {
         let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
         c.bench_function("big_array_de_gvariant", |b| {
             b.iter(|| {
-                let (s, _): (ZVStruct, _) = from_slice_for_signature(
-                    black_box(&encoded),
-                    black_box(ctxt),
-                    black_box(&signature),
-                )
-                .unwrap();
+                let (s, _): (ZVStruct, _) = encoded
+                    .deserialize_for_signature(black_box(&signature))
+                    .unwrap();
                 black_box(s);
             })
         });

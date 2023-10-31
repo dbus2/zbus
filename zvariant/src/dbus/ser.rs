@@ -8,7 +8,7 @@ use std::{
 };
 
 #[cfg(unix)]
-use std::os::unix::io::RawFd;
+use std::os::fd::OwnedFd;
 
 use crate::{
     container_depths::ContainerDepths, signature_parser::SignatureParser, utils::*, Basic,
@@ -19,7 +19,9 @@ use crate::{
 use crate::Fd;
 
 /// Our D-Bus serialization implementation.
-pub struct Serializer<'ser, 'sig, B, W>(pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>);
+pub(crate) struct Serializer<'ser, 'sig, B, W>(
+    pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>,
+);
 
 assert_impl_all!(Serializer<'_, '_, i32, i32>: Send, Sync, Unpin);
 
@@ -34,7 +36,7 @@ where
     pub fn new<'w: 'ser, 'f: 'ser, S>(
         signature: S,
         writer: &'w mut W,
-        #[cfg(unix)] fds: &'f mut Vec<RawFd>,
+        #[cfg(unix)] fds: &'f mut Vec<OwnedFd>,
         ctxt: EncodingContext<B>,
     ) -> Result<Self>
     where
@@ -99,9 +101,9 @@ where
             Fd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
                 self.0.add_padding(u32::alignment(EncodingFormat::DBus))?;
-                let v = self.0.add_fd(v);
+                let idx = self.0.add_fd(v)?;
                 self.0
-                    .write_u32::<B>(v)
+                    .write_u32::<B>(idx)
                     .map_err(|e| Error::InputOutput(e.into()))
             }
             _ => {

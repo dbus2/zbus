@@ -73,7 +73,8 @@ while let Some(msg) = stream.try_next().await? {
         zbus::message::Type::MethodCall => {
             // real code would check msg_header path(), interface() and member()
             // handle invalid calls, introspection, errors etc
-            let arg: &str = msg.body()?;
+            let body = msg.body();
+            let arg: &str = body.deserialize()?;
             connection.reply(&msg, &(format!("Hello {}!", arg))).await?;
 
             break;

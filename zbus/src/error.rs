@@ -235,7 +235,7 @@ impl From<Message> for Error {
 
         if let Some(name) = header.error_name() {
             let name = name.to_owned().into();
-            match message.body_unchecked::<&str>() {
+            match message.body().deserialize_unchecked::<&str>() {
                 Ok(detail) => Error::MethodError(name, Some(String::from(detail)), message),
                 Err(_) => Error::MethodError(name, None, message),
             }

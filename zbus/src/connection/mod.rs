@@ -5,6 +5,8 @@ use event_listener::{Event, EventListener};
 use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
+#[cfg(unix)]
+use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::HashMap,
     io::{self, ErrorKind},
@@ -127,7 +129,7 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Message>>;
 ///
 /// let connection = Connection::session().await?;
 ///
-/// let reply = connection
+/// let reply_body = connection
 ///     .call_method(
 ///         Some("org.freedesktop.DBus"),
 ///         "/org/freedesktop/DBus",
@@ -135,9 +137,10 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Message>>;
 ///         "GetId",
 ///         &(),
 ///     )
-///     .await?;
+///     .await?
+///     .body();
 ///
-/// let id: &str = reply.body()?;
+/// let id: &str = reply_body.deserialize()?;
 /// println!("Unique ID of the bus: {}", id);
 /// # Ok::<(), zbus::Error>(())
 /// # }).unwrap();
@@ -271,8 +274,9 @@ impl OrderedFuture for PendingMethodCall {
 impl Connection {
     /// Send `msg` to the peer.
     pub async fn send(&self, msg: &Message) -> Result<()> {
+        let data = msg.data();
         #[cfg(unix)]
-        if !msg.fds().is_empty() && !self.inner.cap_unix_fd {
+        if !data.fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);
         }
         let serial = msg.primary_header().serial_num();
@@ -281,10 +285,13 @@ impl Connection {
         self.inner.activity_event.notify(usize::MAX);
         let mut write = self.inner.socket_write.lock().await;
         let mut pos = 0;
-        let data = msg.as_bytes();
         while pos < data.len() {
             #[cfg(unix)]
-            let fds = if pos == 0 { msg.fds() } else { vec![] };
+            let fds = if pos == 0 {
+                data.fds().iter().map(|f| f.as_fd().as_raw_fd()).collect()
+            } else {
+                vec![]
+            };
             pos += write
                 .sendmsg(
                     &data[pos..],
@@ -1372,7 +1379,7 @@ mod tests {
             let m = stream.try_next().await?.unwrap();
             client_done.notify(1);
             assert_eq!(m.to_string(), "Signal ASignalForYou");
-            reply.body::<String>()
+            reply.body().deserialize::<String>()
         };
 
         let (val, _) = futures_util::try_join!(client_future, server_future,)?;

@@ -39,7 +39,8 @@ pub use builder::Builder;
 ///     // owned return value
 ///     let _id: String = p.call("GetId", &())?;
 ///     // borrowed return value
-///     let _id: &str = p.call_method("GetId", &())?.body()?;
+///     let body = p.call_method("GetId", &())?.body();
+///     let _id: &str = body.deserialize()?;
 ///     Ok(())
 /// }
 /// ```
