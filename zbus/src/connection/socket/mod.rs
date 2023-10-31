@@ -16,7 +16,7 @@ use std::os::unix::io::RawFd;
 
 use crate::fdo::ConnectionCredentials;
 #[cfg(unix)]
-use crate::OwnedFd;
+use std::os::fd::OwnedFd;
 
 #[cfg(unix)]
 type RecvmsgResult = io::Result<(usize, Vec<OwnedFd>)>;

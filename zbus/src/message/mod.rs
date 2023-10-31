@@ -49,8 +49,8 @@ impl Sequence {
 /// and hence use the API provided by [`Connection`], even when using the low-level API.
 ///
 /// **Note**: The message owns the received FDs and will close them when dropped. You can
-/// deserialize to [`zbus::OwnedFd`] the body (that you get using [`Message::body`]) if you want to
-/// keep the FDs around after the containing message is dropped.
+/// deserialize to [`zvariant::OwnedFd`] the body (that you get using [`Message::body`]) if you want
+/// to keep the FDs around after the containing message is dropped.
 ///
 /// [`Connection`]: struct.Connection#method.call_method
 #[derive(Clone)]

@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::{
     future::poll_fn,
     io::{IoSlice, IoSliceMut},
+    os::fd::OwnedFd,
     task::Poll,
 };
 #[cfg(all(windows, not(feature = "tokio")))]
@@ -29,7 +30,7 @@ use super::{ReadHalf, RecvmsgResult, WriteHalf};
 use super::{Socket, Split};
 use crate::fdo::ConnectionCredentials;
 #[cfg(unix)]
-use crate::{utils::FDS_MAX, OwnedFd};
+use crate::utils::FDS_MAX;
 
 #[cfg(all(unix, not(feature = "tokio")))]
 #[async_trait::async_trait]
