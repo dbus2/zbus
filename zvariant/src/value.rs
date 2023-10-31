@@ -1,7 +1,9 @@
 use core::{
     cmp::Ordering,
     fmt::{Display, Write},
+    hash::{Hash, Hasher},
     marker::PhantomData,
+    mem::discriminant,
     str,
 };
 
@@ -99,6 +101,34 @@ pub enum Value<'a> {
 
     #[cfg(unix)]
     Fd(Fd),
+}
+
+impl Hash for Value<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        discriminant(self).hash(state);
+        match self {
+            Self::U8(inner) => inner.hash(state),
+            Self::Bool(inner) => inner.hash(state),
+            Self::I16(inner) => inner.hash(state),
+            Self::U16(inner) => inner.hash(state),
+            Self::I32(inner) => inner.hash(state),
+            Self::U32(inner) => inner.hash(state),
+            Self::I64(inner) => inner.hash(state),
+            Self::U64(inner) => inner.hash(state),
+            Self::F64(inner) => inner.to_le_bytes().hash(state),
+            Self::Str(inner) => inner.hash(state),
+            Self::Signature(inner) => inner.hash(state),
+            Self::ObjectPath(inner) => inner.hash(state),
+            Self::Value(inner) => inner.hash(state),
+            Self::Array(inner) => inner.hash(state),
+            Self::Dict(inner) => inner.hash(state),
+            Self::Structure(inner) => inner.hash(state),
+            #[cfg(feature = "gvariant")]
+            Self::Maybe(inner) => inner.hash(state),
+            #[cfg(unix)]
+            Self::Fd(inner) => inner.hash(state),
+        }
+    }
 }
 
 impl Eq for Value<'_> {}

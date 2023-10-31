@@ -15,7 +15,7 @@ use crate::{value_display_fmt, Basic, DynamicType, Error, Signature, Type, Value
 ///
 /// [`Value`]: enum.Value.html#variant.Dict
 /// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Debug, Clone, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Dict<'k, 'v> {
     entries: BTreeSet<DictEntry<'k, 'v>>,
     key_signature: Signature<'k>,
@@ -261,7 +261,7 @@ where
 
 // TODO: Conversion of Dict from/to BTreeMap
 
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 struct DictEntry<'k, 'v> {
     key: Value<'k>,
     value: Value<'v>,
