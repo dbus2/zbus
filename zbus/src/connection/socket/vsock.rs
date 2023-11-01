@@ -39,7 +39,7 @@ impl super::WriteHalf for std::sync::Arc<async_io::Async<vsock::VsockStream>> {
         futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
-    async fn close(&self) -> io::Result<()> {
+    async fn close(&mut self) -> std::io::Result<()> {
         let stream = self.clone();
         crate::Task::spawn_blocking(
             move || stream.get_ref().shutdown(std::net::Shutdown::Both),
