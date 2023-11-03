@@ -489,6 +489,15 @@ impl OwnedSignature {
     }
 }
 
+impl Basic for OwnedSignature {
+    const SIGNATURE_CHAR: char = Signature::SIGNATURE_CHAR;
+    const SIGNATURE_STR: &'static str = Signature::SIGNATURE_STR;
+
+    fn alignment(format: EncodingFormat) -> usize {
+        Signature::alignment(format)
+    }
+}
+
 impl std::ops::Deref for OwnedSignature {
     type Target = Signature<'static>;
 

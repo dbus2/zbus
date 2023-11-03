@@ -312,6 +312,15 @@ impl OwnedObjectPath {
     }
 }
 
+impl Basic for OwnedObjectPath {
+    const SIGNATURE_CHAR: char = ObjectPath::SIGNATURE_CHAR;
+    const SIGNATURE_STR: &'static str = ObjectPath::SIGNATURE_STR;
+
+    fn alignment(format: EncodingFormat) -> usize {
+        ObjectPath::alignment(format)
+    }
+}
+
 impl std::ops::Deref for OwnedObjectPath {
     type Target = ObjectPath<'static>;
 
